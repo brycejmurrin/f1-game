@@ -11,21 +11,49 @@ window.ScreenRegions = (function () {
     screens[id] = { label, root, regions };
   }
 
-  screen("pmsettings", "Settings", { navigation: part("#pm-settings-index", "Navigation"), content: part(".pm-groups", "Settings"), actions });
-  screen("career", "Career", { navigation: part("#cr-left", "Career navigation"), calendar: part("#cr-right", "Calendar"), actions });
+  // These stable IDs double as region keys. Keep their order broad-to-specific
+  // so an individual action can override its group's saved appearance.
+  function parts(prefix, labels) {
+    return Object.fromEntries(Object.entries(labels).map(([key, label]) => [key, part("#" + prefix + key, label)]));
+  }
+  screen("pmsettings", "Settings", { heading, navigation: part("#pm-settings-index", "Navigation"), content: part(".pm-groups", "Settings"), actions });
+  for (const [page, label, root, regions] of [
+    ["controls", "Controls", "#pm-panel-controls", parts("pm-", { "steer-item": "Steering", throttlemode: "Pedals", "keys-section": "Keyboard", "pad-section": "Gamepad" })],
+    ["driving", "Driving aids", "#pm-panel-driving", { presets: part(".preset-row", "Presets"), ...parts("pm-", { gears: "Gears", aero: "Aero", coach: "Coach" }) }],
+    ["display", "HUD and camera", "#pm-panel-display"], ["graphics", "Graphics", "#pm-panel-graphics"],
+    ["appearance", "Appearance", "#pm-panel-appearance", { studio: part("#appearance-studio", "Appearance Studio"), ...parts("pm-", { "appearance-menu": "Menu colours", "appearance-hud": "HUD colours", general: "Readability" }) }],
+    ["a11y", "Accessibility", "#pm-panel-a11y"], ["advanced", "Advanced input and handling", "#advanced"],
+    ["audio", "Audio settings", "#audioset"], ["files", "Saves and data", "#pm-panel-files"],
+    ["visual", "Visual Studio", "#pm-panel-visual"], ["progress", "Progress", "#pm-panel-progress"],
+    ["credits", "About and credits", "#pm-panel-credits", parts("credits-", { data: "Data sources", software: "Software", fonts: "Fonts", assets: "Assets" })],
+    ["practice", "Practice", "#pm-panel-practice"], ["strategy", "Pit strategy", "#pm-panel-strategy"], ["review", "Session review", "#pm-panel-review"],
+  ]) {
+    const id = "pm-panel-" + page;
+    screen(id, label, { panel: part(root, "Page controls"), ...regions }, root);
+    screens[id].settingsPage = page;
+  }
+  screen("career", "Career", { heading, navigation: part("#cr-left", "Career navigation"), calendar: part("#cr-right", "Calendar"), actions });
   screen("carsetup", "Garage", { panel: { ...part("#cs-inner", "Setup panel"), maxWidth: 65, maxHeight: 70, scale: false, constraint: "Width and height reserve room for the car. Use these to resize the panel at its current text size." }, camera: part("#cs-stack", "Car view controls") });
   screen("select", "Track selector", { tracks: part("#sel-shelf", "Circuit list"), preview: part("#sel-track-section", "Circuit preview"), actions });
   screen("track-detail", "Circuit detail", { heading, map: part("#track-detail-canvas-wrap", "Track map"), details: part("#track-detail-panel", "Track details") });
-  screen("pausemenu", "Pause", { summary: part("#pm-race-context", "Race summary"), tools: part("#pm-quick-doors", "Race tools"), music: part("#pm-now-card", "Now playing") });
+  screen("pausemenu", "Pause", { heading, ...parts("pm-", { resume: "Resume", restart: "Restart race", settings: "Settings", quit: "Quit to menu" }), summary: part("#pm-race-context", "Race summary"), tools: part("#pm-quick-doors", "Race tools"), music: part("#pm-now-card", "Now playing") });
   screen("season-setup", "Season setup", { calendar: part("#ss-cal", "Calendar"), circuits: part("#ss-pool", "Available circuits"), actions });
-  screen("race-settings", "Race settings", { heading, content, actions });
-  screen("results", "Race results", { summary: part("#res-winner", "Winner"), classification: part("#results-table", "Classification"), actions });
+  screen("race-settings", "Race settings", {
+    heading, content, actions, presets: part("#rs-presets", "Preset buttons"),
+    ...parts("rs-preset-", { quick: "Quick race", weekend: "Full weekend", endurance: "Endurance" }),
+    ...parts("rs-", { laps: "Laps", weather: "Weather", mixed: "Conditions", time: "Time of day",
+      "fold-field": "Field settings", "fold-assists": "Assists and wear", diff: "Difficulty", quali: "Grid", duel: "Duel",
+      caution: "Cautions", reliab: "Reliability", line: "Driving line", tyres: "Tyre wear", dirty: "Dirty air", plan: "Strategy" }),
+    back: part("#rs-cancel", "Back"), start: part("#rs-go", "Start race"),
+  });
+  screen("results", "Race results", { heading, summary: part("#res-winner", "Winner"), classification: part("#results-table", "Classification"), actions, menu: part("#res-menu", "Menu"), next: part("#res-next", "Continue") });
   screen("datahub", "Data Hub", { navigation: part(".dh-tabs", "Tabs"), content: part("#dh-panel", "Data and filters") });
   screen("telemetry-detail", "Telemetry detail", { heading: part(".dh-tpopup-hdr", "Drivers and session"), traces: part(".dh-tpopup-body", "Telemetry traces") }, "dialog.dh-tpopup");
   screen("share-card-preview", "Share card", { preview: part("#scp-img", "Card preview"), size: part('[aria-label="Card size"]', "Card size"), actions });
   screen("trackdesigner", "Track Designer", { canvas: part(".td-stage", "Drawing area"), controls: part(".td-rail", "Designer controls") });
   // The guide belongs to the export crop. Only the UI in front of it moves.
   screen("photo-studio", "Photo Studio", { panel: part("#ps-panel", "Studio panel"), shots: part("#ps-shots", "Shot presets"), actions });
+  screen("campicker", "Camera view picker", { views: part("#campicker", "Camera buttons") });
   screen("photo-controls", "Photo controls", { move: part(".pc-move-wrap", "Movement stick"), look: part(".pc-look-wrap", "Look stick"), actions: part("#pc-bar", "Camera controls") });
   screen("watch", "WATCH replay", { controls: part('[data-wt="controls"]', "Transport"), timeline: part('[data-wt="timeline"]', "Timeline"), chapters: part('[data-wt="chapters"]', "Chapters"),
     timing: part("#bc-tower", "Timing tower"), picture: part("#bc-pip", "Picture in picture") }, "body.watch-controls-on");
@@ -41,6 +69,20 @@ window.ScreenRegions = (function () {
     ["lighting", "Lighting", "lt"], ["camtune", "Camera tuning", "ct"], ["flyby", "Flyby", "fb"],
     ["freecam", "Free camera", "fc"], ["garrival", "Garage arrival", "ga"],
   ]) screen(id, label, { heading: part("#" + prefix + "-head", "Heading"), content: part("#" + prefix + "-rows", "Controls"), actions });
+
+  // TitleLayout already owns the title's placement, group width and scale.
+  const homePart = (selector, label) => ({
+    ...part(selector, label), x: false, y: false, width: false, height: false, scale: false,
+    constraint: "Use Arrange Home to move or scale the title layout."
+  });
+  screen("home-style", "Home text and buttons", {
+    buttons: homePart("#menu-buttons", "All menu buttons"),
+    career: homePart("#mb-career", "Career Modes"),
+    retention: homePart("#menu-retention", "Continue and Daily Time Trial"),
+    create: homePart("#menu-create", "Studio and designer buttons"),
+    utilities: homePart("#menu-secondary", "Settings and utilities"),
+    info: homePart("#menu-meta", "Sound and notice"),
+  }, "div#overlay");
 
   screen("pair", "Pair phone", { instructions: part("#pair-copy p", "Instructions"), scan: part("#scan", "Scan QR code"), code: part("#code", "Room code"), connect: part("#connect", "Connect") });
   screen("menupad", "Phone menu pad", { pad: part("#dpad", "Direction pad"), status: part("#mp-mid", "Status and pause"), actions: part("#ab", "Back and select") });
@@ -83,8 +125,15 @@ window.ScreenRegions = (function () {
       const id = target.value;
       const label = target.selectedOptions[0].text;
       go.textContent = "Arrange " + label;
-      go.disabled = id === "home" && !atHome();
+      go.disabled = (id === "home" || id === "home-style") && !atHome();
+      if (screens[id]?.settingsPage && typeof SettingsNav !== "undefined" && SettingsNav.routes[screens[id].settingsPage]?.scope === "session" && atHome()) {
+        go.disabled = true;
+        note.textContent = "Pause during a session to arrange " + label + ".";
+        return;
+      }
       note.textContent = go.disabled ? "Open Appearance from Home to arrange Home." :
+        id === "pausemenu" ? "Edit the Pause menu. Apply or Cancel returns to Appearance." :
+        id === "home-style" ? "Edit the title menu’s text and button dimensions." :
         id === "home" || id === "hud" || id === "pmsettings" ? "" :
         "The editor opens when " + label + " is on screen.";
     }
@@ -119,6 +168,51 @@ window.ScreenRegions = (function () {
         describe();
         if (!window.ScreenArranger) { note.textContent = "Layout editor could not load. Try again."; return; }
         if (target.value !== id || !go.getClientRects().length) return;
+      }
+      if (id === "pausemenu") {
+        // Keep the Appearance navigation stack. The real pause card can render
+        // its no-race summary at Home without starting or resuming a session.
+        const pause = document.getElementById("pausemenu");
+        const wasInert = pause.inert;
+        const restorePicker = () => {
+          pause.hidden = true;
+          pause.inert = wasInert;
+          // The race can end or resume externally (e.g. a controller).
+          // closeSettings invalidates the route; do not resurrect it.
+          if (SettingsNav.current() !== "appearance") return;
+          settings.hidden = false;
+          // TopModal mirrors hidden onto native dialogs in a microtask.
+          queueMicrotask(() => go.focus({ preventScroll: true }));
+        };
+        pause.inert = true;
+        settings.hidden = true;
+        pause.hidden = false;
+        queueMicrotask(() => {
+          if (!window.ScreenArranger.open(id, go, restorePicker)) {
+            restorePicker();
+            note.textContent = "Pause could not be displayed. Try again.";
+          }
+        });
+        return;
+      }
+      const route = screens[id]?.settingsPage;
+      if (route) {
+        // The settings router owns each page's lazy content and availability.
+        SettingsNav.show(route, true, () => {
+          requestAnimationFrame(() => {
+            if (settings.hidden || SettingsNav.current() !== route) return;
+            const returnToPicker = () => {
+              if (settings.hidden || SettingsNav.current() !== route) return;
+              SettingsNav.show("appearance", false);
+              go.focus({ preventScroll: true });
+            };
+            if (!window.ScreenArranger.open(id, go, returnToPicker)) {
+              returnToPicker();
+              note.textContent = "No visible regions on this page.";
+            }
+          });
+        });
+        return;
       }
       const back = document.getElementById("pm-settings-close");
       if (id === "pmsettings") {

@@ -1,0 +1,1 @@
+New: Customize text size, button width, and minimum button height by menu region and orientation in Appearance. Race Settings includes individual presets and actions. Arrange Pause directly from Appearance.

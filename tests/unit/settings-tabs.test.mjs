@@ -43,7 +43,7 @@ test("Controls loads only its touch form, mounts before search focuses it, and r
   assert.equal(nav.current(), "controls");
   assert.equal(dom.byId("pm-touch-offline").hidden, false);
   nav.show("home", false);
-  nav.show("controls", false, () => { visits.push("search target"); });
+  ctx.SettingsNav.show("controls", false, () => { visits.push("search target"); });
   await tick();
   assert.deepEqual(visits, ["mounted", "search target"]);
   assert.equal(dom.byId("pm-touch-offline").hidden, true);

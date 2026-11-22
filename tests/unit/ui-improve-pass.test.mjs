@@ -1056,6 +1056,20 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
   assert.match(fnBody(game, "setPaused", "game entry"), /hideCamPicker\(\s*\)/);
 });
 
+test("camera picker stays visible while adjusting its controls and closes on an outside press", () => {
+  const h = bootCamModes();
+  const picker = h.open();
+  const toolbar = h.dom.makeElement("dialog", "screen-arranger");
+  toolbar.setAttribute("data-editing-screen", "campicker");
+  h.dom.body.appendChild(toolbar);
+  const width = h.dom.makeElement("button");
+  toolbar.appendChild(width);
+  h.dom.dispatch(width, { type: "pointerdown", bubbles: true });
+  assert.equal(picker.hidden, false);
+  h.dom.dispatch(h.dom.body, { type: "pointerdown", bubbles: true });
+  assert.equal(picker.hidden, true);
+});
+
 test("camera picker refuses hidden, paused and inactive race layers, including queued holds", () => {
   const blocked = [
     ["hidden document", (h) => { h.dom.document.hidden = true; }],

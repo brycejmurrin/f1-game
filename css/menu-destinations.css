@@ -44,7 +44,7 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero .bigbtn > span { align-items: center; }
 @media (max-height: 460px) {
   #overlay #menu-buttons #menu-retention .mb-sub { display: none; }
-  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { min-height: 40px; font-size: max(calc(min(var(--fs-4)*.84, 15.5px)*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
+  :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn { min-height: 40px; font-size: max(calc(min(var(--fs-4)*.84, calc(15.5px * var(--arrange-text-size, 1)))*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
   :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .bigbtn { white-space: nowrap; font-size: max(calc(min(var(--fs-4)*.74, var(--fs-micro))*var(--ui-compact-text, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1)*clamp(0, calc((var(--ui-compact-text, 1) - 1)*2), 1))); }
 }
 @media (max-height: 400px) { #overlay #menu-buttons #menu-hero .mb-sub { display: none; } }
@@ -59,15 +59,15 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .mb-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
   display: inline-flex; justify-content: center; align-items: center; gap: calc(var(--gap)/8);
-  font-size: clamp(.7rem, calc(1.6*var(--vwz)), var(--fs-micro)); line-height: 1.05; text-align: center; font-style: normal; font-weight: 700;
+  font-size: clamp(calc(.7rem * var(--arrange-text-size, 1)), calc(1.6*var(--vwz) * var(--arrange-text-size, 1)), var(--fs-micro)); line-height: 1.05; text-align: center; font-style: normal; font-weight: 700;
   padding: calc(var(--gap)/10) calc(var(--gap)/8); min-height: 40px; box-sizing: border-box;
   height: auto; max-height: none; min-width: 0; letter-spacing: 0; white-space: normal; text-wrap: balance; overflow-wrap: normal; overflow: hidden;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn .btn-ico { width: .85em; height: .85em; flex: none; margin: 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .btn-ico { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn:not([hidden]) { flex: 1 1 auto; min-width: min-content; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(.6rem, calc(1.25*var(--vwz)), var(--fs-micro)); }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(.7rem, calc(1.7*var(--vwz)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary:has(#mb-standings:not([hidden])) > .bigbtn { font-size: clamp(calc(.6rem * var(--arrange-text-size, 1)), calc(1.25*var(--vwz) * var(--arrange-text-size, 1)), var(--fs-micro)); }
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .bigbtn { font-size: clamp(calc(.7rem * var(--arrange-text-size, 1)), calc(1.7*var(--vwz) * var(--arrange-text-size, 1)), calc(var(--fs-4)*var(--ui-compact-text, 1))); }
 @media (max-width: 700px) { :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create .btn-ico { display: none; } }
 /* Dense Home (portrait, desktop, tablet): one 2-column grid, a tile per door, flex rows for pairs and utilities.
    Phone landscape keeps its rules above. */
@@ -83,7 +83,7 @@ body #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #men
 body #overlay #menu-buttons :is(#menu-retention, #menu-explore, #menu-create, #menu-secondary) { display: flex; flex-wrap: wrap; gap: var(--hg); width: 100%; }
 body #overlay #menu-buttons .bigbtn {
   display: flex; align-items: center; justify-content: center; gap: .4em; width: 100%; min-width: 0; min-height: var(--hrow); box-sizing: border-box;
-  margin: 0; padding: calc(var(--gap) * .3) calc(var(--gap) * .5); font-size: clamp(var(--fs-micro), calc(4.3 * var(--vwz)), var(--fs-4)); line-height: 1.15; letter-spacing: 0; text-align: center;
+  margin: 0; padding: calc(var(--gap) * .3) calc(var(--gap) * .5); font-size: clamp(var(--fs-micro), calc(4.3 * var(--vwz) * var(--arrange-text-size, 1)), var(--fs-4)); line-height: 1.15; letter-spacing: 0; text-align: center;
   white-space: normal; text-wrap: balance; overflow-wrap: normal; hyphens: none; overflow: hidden;
 }
 body #overlay #menu-buttons .bigbtn > span { align-items: center; text-align: center; max-width: 100%; }
@@ -101,7 +101,7 @@ body #overlay #menu-buttons :is(#mb-career, #menu-retention, #menu-explore, #men
 body #overlay #menu-buttons { margin-bottom: 0; padding-bottom: var(--gap); scroll-padding-bottom: var(--gap); }
 body:has(> #install-chip:not([hidden])) #overlay #menu-buttons,
 body:has(> :where(#overlay) > #home-motion:not([hidden])) #overlay #menu-buttons { margin-bottom: calc(var(--tap) + var(--gap) * .5); }
-body #overlay #menu-buttons #menu-create > .bigbtn { font-size: clamp(var(--fs-micro), calc(3.4 * var(--vwz)), calc(var(--fs-4) * .88)); padding-inline: calc(var(--gap) * .2); }
+body #overlay #menu-buttons #menu-create > .bigbtn { font-size: clamp(var(--fs-micro), calc(3.4 * var(--vwz) * var(--arrange-text-size, 1)), calc(var(--fs-4) * .88)); padding-inline: calc(var(--gap) * .2); }
 body #overlay #menu-buttons #mb-career { min-height: calc(var(--hrow) * 1.2); }
 /* Scrolling is the fallback (small phone, UI SIZE 200%): the utility row stays pinned so SETTINGS is never below the fold. */
 body #overlay #menu-buttons.sf-scroll { --sfade-b: 0px; scroll-padding-bottom: calc(var(--tap) * 2.2 + var(--gap)); }
@@ -111,7 +111,7 @@ body #overlay #menu-buttons.sf-scroll #menu-secondary { position: sticky; bottom
 @media ((max-width: 899px) or (max-height: 699px)) and ((min-height: 520px) or (max-aspect-ratio: 1/1)) {
 body[data-density="compact"] #overlay #menu-buttons { grid-template-columns: repeat(auto-fit, minmax(max(calc(7.5rem * var(--ui-compact-text, 1)), calc(50% - var(--hg))), 1fr)); }
 body[data-density="compact"] #overlay #menu-buttons :is(#menu-retention, #menu-explore) > .bigbtn { flex-basis: calc(7.5rem * var(--ui-compact-text, 1)); }
-body[data-density="compact"] #overlay #menu-buttons .bigbtn { font-size: max(calc(clamp(var(--fs-micro), calc(4.3 * var(--vwz)), var(--fs-4)) * var(--ui-compact-text, 1)), calc(var(--fs-4) * var(--ui-compact-text, 1) * clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2), 1))); }
+body[data-density="compact"] #overlay #menu-buttons .bigbtn { font-size: max(calc(clamp(var(--fs-micro), calc(4.3 * var(--vwz) * var(--arrange-text-size, 1)), var(--fs-4)) * var(--ui-compact-text, 1)), calc(var(--fs-4) * var(--ui-compact-text, 1) * clamp(0, calc((var(--ui-compact-text, 1) - 1) * 2), 1))); }
 }
 body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-basis: calc(50% - var(--hg)); }
 :where(body[data-shape="tall"]) #overlay #menu-brand { padding-block: calc(var(--gap) * .5); }
@@ -252,7 +252,7 @@ html:not([data-home-live]) :where(body:not(.desktop)[data-shape="wide"]) #overla
   body #overlay #menu-buttons { --hg: 6px; --hrow: 44px; }
   body #overlay #menu-buttons .bigbtn {
     padding-inline: calc(var(--gap) * 0.45);
-    font-size: max(var(--fs-micro), 14px);
+    font-size: max(var(--fs-micro), calc(14px * var(--arrange-text-size, 1)));
     min-height: 44px;
   }
   /* The utility row sticks over the rooms under it. A 92% scrim let
@@ -346,10 +346,12 @@ body #overlay #menu-buttons #menu-secondary > .bigbtn {
   }
   :root:not([data-title-layout]) [data-shape="wide"] > #overlay #menu-buttons {
     --hrow: max(44px, 9svh);
-    --home-label: clamp(var(--fs-4), 1.85vw, 2.25rem);
     width: 100%; justify-self: stretch; align-self: center;
   }
-  :root:not([data-title-layout]) #overlay #menu-buttons .bigbtn { font-size: var(--home-label); }
+  :root:not([data-title-layout]) #overlay #menu-buttons .bigbtn {
+    --home-label: clamp(var(--fs-4), calc(1.85vw * var(--arrange-text-size, 1)), calc(2.25rem * var(--arrange-text-size, 1)));
+    font-size: var(--home-label);
+  }
   :root:not([data-title-layout]) #overlay #menu-buttons :is(#menu-secondary, #menu-create) > .bigbtn {
     font-size: max(var(--fs-micro), calc(var(--home-label) * .84)); min-height: var(--hrow);
   }
@@ -456,12 +458,14 @@ body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons :is(#menu-create, #
 @media (pointer: coarse) {
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) {
   --home-b: max(1, var(--ui-compact-scale));
-  /* The doors' text rung, held at its 70 % size (#5452): --fs-micro grows as 12px / --ui-scale to undo a menu zoom the
-     floor does not apply, so under 70 % the labels outgrew their doors and no row count fit (USE AS CONTROLLER 108/104). */
-  --home-fs: min(var(--fs-micro), calc(12px / .7));
   zoom: calc(var(--home-b) * max(1, var(--tl-btns-size, 1)) * var(--tf, 1));
 }
-body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn { min-height: calc(44.2px / var(--home-b)); }
+body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn {
+  /* The doors' text rung, held at its 70 % size (#5452): --fs-micro grows as 12px / --ui-scale to undo a menu zoom the
+     floor does not apply, so under 70 % the labels outgrew their doors and no row count fit (USE AS CONTROLLER 108/104). */
+  --home-fs: min(var(--fs-micro), calc(12px / .7 * var(--arrange-text-size, 1)));
+  min-height: calc(44.2px / var(--home-b));
+}
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-create .bigbtn { font-size: max(calc(var(--home-fs) * .74 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #menu-secondary .bigbtn { font-size: max(calc(var(--home-fs) * .64 * var(--ui-compact-text, 1)), calc(var(--home-fs) * .86 / var(--home-b))); }
 /* Keep Career full width and Continue / Daily beneath it at every fit tier.

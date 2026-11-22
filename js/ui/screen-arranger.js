@@ -6,7 +6,7 @@ window.ScreenArranger = (function () {
   const clone = value => JSON.parse(JSON.stringify(value));
   let active = null;
 
-  function open(id, invoker = document.activeElement) {
+  function open(id, invoker = document.activeElement, onClose) {
     if (active) active();
     const screen = window.ScreenRegions[id];
     const root = screen && document.querySelector(screen.root);
@@ -109,6 +109,7 @@ window.ScreenArranger = (function () {
     }
     function move(name, amount) {
       const [dx, dy] = directions[name];
+      if (screen.regions[key][dx ? "x" : "y"] === false) return;
       change(() => {
         const r = region();
         offset(r, r.x || 0, r.y || 0, dx * amount, dy * amount);
@@ -137,6 +138,33 @@ window.ScreenArranger = (function () {
         sizing.push({btn, prop});
       }
     }
+    // Only measure a button when changing a dimension. A drag never needs its size.
+    const styleRow = row();
+    const buttonSelector = "button:not(.screen-arrange-entry), [role=button], input[type=button], input[type=submit], input[type=reset]";
+    function firstButton() {
+      const part = element(key);
+      return part.matches(buttonSelector) ? part : part.querySelector(buttonSelector);
+    }
+    const appearanceButtons = [];
+    for (const [prop, label] of [["textSize", "Text size"], ["buttonWidth", "Button width"], ["buttonHeight", "Button height"]]) {
+      for (const sign of [-1, 1]) {
+        const btn = button(styleRow, label + (sign < 0 ? " −" : " +"), () => change(() => {
+          const r = region(), increment = Number(step.value) * sign;
+          if (prop === "textSize") r[prop] = fieldValue(prop, (r[prop] || 1) + increment * .05);
+          else {
+            const control = firstButton();
+            let parent = control.parentElement;
+            while (parent && !parent.clientWidth) parent = parent.parentElement;
+            const current = prop === "buttonWidth"
+              ? control.offsetWidth * 100 / Math.max(1, parent?.clientWidth || control.offsetWidth)
+              : control.offsetHeight;
+            const baseline = r[prop] ?? fieldValue(prop, current);
+            r[prop] = fieldValue(prop, baseline + increment * 2);
+          }
+        }));
+        if (prop !== "textSize") appearanceButtons.push(btn);
+      }
+    }
     const status = node("output", controls);
     status.setAttribute("aria-live", "polite");
     const edits = row();
@@ -155,6 +183,7 @@ window.ScreenArranger = (function () {
     }));
     button(actions, "Cancel", () => finish(false)).id = "screen-arranger-cancel";
     button(actions, "Apply", () => finish(true));
+    let checkedKey;
     function render() {
       placement.apply(id, drafts[side]);
       if (marked) marked.classList.remove("arrange-selection");
@@ -165,10 +194,20 @@ window.ScreenArranger = (function () {
       copy.textContent = "Copy from " + (side === "portrait" ? "landscape" : "portrait");
       undo.disabled = !history.length;
       for (const {btn, prop} of sizing) btn.disabled = screen.regions[key][prop] === false;
+      arrows.hidden = screen.regions[key].x === false && screen.regions[key].y === false;
+      sizes.hidden = sizing.every(({btn}) => btn.disabled);
+      if (checkedKey !== key) {
+        const available = !!firstButton();
+        for (const btn of appearanceButtons) btn.hidden = !available;
+        checkedKey = key;
+      }
       const r = drafts[side][key] || {};
       status.textContent = "X " + (r.x || 0) + "% · Y " + (r.y || 0) + "% · Width " +
         (r.width ? r.width + "%" : "auto") + " · Height " + (r.height ? r.height + "%" : "auto") +
         " · Scale " + Math.round((r.scale || 1) * 100) + "%" +
+        " · Text " + Math.round((r.textSize || 1) * 100) + "%" +
+        (!appearanceButtons[0].hidden ? " · Button width " + (r.buttonWidth ? r.buttonWidth + "%" : "auto") +
+          " · Minimum button height " + (r.buttonHeight ? r.buttonHeight + " px" : "auto") : "") +
         (screen.regions[key].constraint ? " · " + screen.regions[key].constraint : "") +
         (resetLegacy ? " · Reset covers both orientations" : "");
     }
@@ -212,6 +251,7 @@ window.ScreenArranger = (function () {
       if (!hit.length) return;
       key = hit[0].k;
       render();
+      if (screen.regions[key].x === false && screen.regions[key].y === false) { clearSelection(); return; }
       const r = drafts[side][key] || {};
       drag = {id:e.pointerId, startX:e.clientX, startY:e.clientY, dx:0, dy:0,
         ...viewport(), x:r.x || 0, y:r.y || 0, changed:false};
@@ -277,7 +317,8 @@ window.ScreenArranger = (function () {
         notice.setAttribute("role", "status");
         window.setTimeout(() => notice.remove(), 8000);
       }
-      if (invoker?.isConnected && !invoker.closest("[hidden]")) invoker.focus({preventScroll:true});
+      if (onClose) onClose();
+      else if (invoker?.isConnected && !invoker.closest("[hidden]")) invoker.focus({preventScroll:true});
     }
     const observer = new MutationObserver(() => {
       if (!root.isConnected || root.hidden || !root.matches(screen.root) || (root.tagName === "DIALOG" && !root.open)) finish(false);

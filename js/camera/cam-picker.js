@@ -130,7 +130,7 @@ const CamPicker = (function () {
       });
       // Tap anywhere outside the grid closes it.
       document.addEventListener("pointerdown", (e) => {
-        if (camPicker.visible() && e.target !== b && !e.target.closest("#campicker")) camPicker.hide();
+        if (camPicker.visible() && e.target !== b && !e.target.closest('#campicker, #screen-arranger[data-editing-screen="campicker"]')) camPicker.hide();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) camPicker.hide();

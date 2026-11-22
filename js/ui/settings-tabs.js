@@ -408,7 +408,7 @@ const SettingsNav = (function () {
 
   return {
     create, routes, panel, breadcrumb,
-    show: (id, focus) => { if (live) live.show(id, focus); },
+    show: (id, focus, after) => { if (live) live.show(id, focus, after); },
     current: () => live ? live.current() : "home",
     showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },

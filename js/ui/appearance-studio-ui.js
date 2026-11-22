@@ -117,7 +117,7 @@ const AppearanceStudioBody = (function () {
     const next = normalizeSnapshot(value), before = snapshot(), keys = keysFor(options.scope || "global");
     if (options.scope === "screen" && (next.screenPlacement || before.screenPlacement)) {
       const screens = { ...(before.screenPlacement && before.screenPlacement.screens) };
-      const id = ({ garage: "carsetup", race: "race-settings", pause: "pausemenu" })[previewPage] || previewPage;
+      const id = ({ home: "home-style", garage: "carsetup", race: "race-settings", pause: "pausemenu" })[previewPage] || previewPage;
       const selected = next.screenPlacement && next.screenPlacement.screens[id];
       if (selected) screens[id] = selected;
       else delete screens[id];

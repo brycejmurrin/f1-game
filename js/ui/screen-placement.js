@@ -6,7 +6,10 @@ window.ScreenPlacement = (function () {
 
   const KEY = "screenPlacement";
   const SHAPES = ["portrait", "landscape"];
-  const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [0.5, 2] };
+  const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [0.5, 2],
+    textSize: [0.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104] };
+  const fontSteps = ["micro", "1", "2", "3", "4", "5", "6"];
+  const buttons = ':is(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"])';
   const sheets = new Map();
   let garageRevision = 0, garagePanelMoved = false;
   let editorZoom = new WeakMap();
@@ -33,7 +36,7 @@ window.ScreenPlacement = (function () {
       for (const key of Object.keys(limits)) {
         const value = raw[region][key];
         if (!Number.isFinite(value) || config[key] === false) continue;
-        if ((key === "x" || key === "y") && !value || key === "scale" && value === 1) continue;
+        if ((key === "x" || key === "y") && !value || (key === "scale" || key === "textSize") && value === 1) continue;
         fields[key] = fieldValue(key, value, config);
       }
       if (Object.keys(fields).length) out[region] = fields;
@@ -88,6 +91,11 @@ window.ScreenPlacement = (function () {
       if (!zoom) { zoom = new Map(); editorZoom.set(editor, zoom); }
     }
     const rules = [];
+    if (Object.values(map).some(fields => fields.textSize)) {
+      // Resolve the global accessibility ladder on the root, before overriding
+      // the same tokens in a region. Theme and text-size changes stay live.
+      rules.push(':root{' + fontSteps.map(step => '--arrange-base-' + step + ':var(--fs-' + step + ',1rem)').join(';') + '}');
+    }
     for (const [region, fields] of Object.entries(map)) {
       const part = config.regions[region].selector;
       const target = ':is(' + config.root + ') :is(' + part + '), :is(' + config.root + '):is(' + part + ')';
@@ -120,7 +128,30 @@ window.ScreenPlacement = (function () {
       }
       if (fields.height) declarations.push('height:' + fields.height / z + 'vh', 'overflow:auto');
       if (fields.scale) declarations.push('scale:' + fields.scale);
-      rules.push(target + '{' + declarations.map(d => d + ' !important').join(';') + '}');
+      const scope = ':is(' + target + ')';
+      if (fields.textSize) {
+        declarations.push('--arrange-text-size:' + fields.textSize);
+        for (const step of fontSteps) declarations.push('--fs-' + step + ':max(var(--fs-floor,0px),calc(var(--arrange-base-' + step + ') * ' + fields.textSize + '))');
+        // Give inherited body copy a size too. A heading or button that owns a
+        // font rule keeps that rule, including its relative size in the ladder.
+        rules.push('@layer reset{:where(' + target + '){font-size:calc(1em * ' + fields.textSize + ')}}');
+      }
+      if (declarations.length) rules.push(target + '{' + declarations.map(d => d + ' !important').join(';') + '}');
+      if (fields.buttonWidth || fields.buttonHeight) {
+        const style = [];
+        const tap = Math.max(44, 44 / z) + 'px';
+        if (fields.buttonWidth) {
+          style.push('width:' + fields.buttonWidth + '%', 'max-width:100%', 'box-sizing:border-box',
+            'min-width:min(100%,max(' + tap + ',var(--tap-paint,44px)))', 'flex-basis:auto', 'flex-grow:0');
+          // A chevron/select group normally shrink-wraps its contents. Give the
+          // percentage a definite base and wrap the group at larger widths.
+          const group = '.set-row > div:has(> button[data-step])';
+          rules.push(scope + ' ' + group + ',' + scope + group + ',' + group + ':has(> ' + scope +
+            '){width:100% !important;flex-wrap:wrap !important}');
+        }
+        if (fields.buttonHeight) style.push('min-height:max(' + fields.buttonHeight + 'px,' + tap + ',var(--tap-paint,44px))');
+        rules.push(scope + buttons + ',' + scope + ' ' + buttons + '{' + style.map(d => d + ' !important').join(';') + '}');
+      }
     }
     if (!sheet) {
       sheet = document.createElement("style");

@@ -703,6 +703,26 @@ test("region saves validate input, preserve both orientation and screen boundari
   assert.deepEqual(plain(model.read("garage", "portrait")), {});
 });
 
+test("region control sizes survive import while defaults, nonnumeric values and unknown regions stay absent", () => {
+  const { model } = bootPlacement();
+  const source = { v: 1, screens: {
+    garage: {
+      landscape: { panel: { x: 3, textSize: 2, buttonWidth: 150, buttonHeight: 16 } },
+      portrait: { panel: { textSize: 0.1, buttonWidth: -10, buttonHeight: 150 }, removed: { textSize: 1.2 } },
+    },
+    career: { landscape: { calendar: { textSize: 1, buttonWidth: "50", buttonHeight: null, scale: 1.1 } } },
+  } };
+  const result = plain(model.normalize(source));
+  assert.deepEqual(result.screens, {
+    garage: {
+      landscape: { panel: { x: 3, textSize: 1.8, buttonWidth: 100, buttonHeight: 44 } },
+      portrait: { panel: { textSize: 0.8, buttonWidth: 10, buttonHeight: 104 } },
+    },
+    career: { landscape: { calendar: { scale: 1.1 } } },
+  });
+  assert.deepEqual(plain(model.normalize(JSON.parse(JSON.stringify(result)))), result);
+});
+
 test("a Garage geometry reset previews shipped placement, preserves style and touch settings, and only writes on Apply", () => {
   const garage = { side: "left", pw: 140, ph: 60, btn: 120, glass: "glass" };
   const { M, data, html } = boot({ stored: { lookGarage: garage, lookCareer: { side: "swapped" } } });

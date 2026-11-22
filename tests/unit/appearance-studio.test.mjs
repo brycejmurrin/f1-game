@@ -835,8 +835,13 @@ test("combined profiles restore placement, touch docks and cockpit while earlier
     DockLayout: dock, SettingsExport: { normalizePlacement: v => v } };
   const customized = { L: { x: -0.02, y: 0.1 }, gap: 32, layout: "pedal-row", controls: { "btn-brake": { shape: "round", size: 140 } } };
   const mine = { hudLayout: LIVE.hudLayout, hudBtnShape: "square", dockLayout: plain(dock.normalize({ buttons: customized })),
-    screenPlacement: { v: 1, screens: { carsetup: { portrait: { panel: { width: 50 } } } } } };
+    screenPlacement: { v: 1, screens: { carsetup: { portrait: { panel: { width: 50 } } },
+      "home-style": { landscape: { buttons: { textSize: 1.15, buttonHeight: 64 } } } } } };
   const { studio, values } = load({ ...mine, appearanceProfiles: [{ id: "old", name: "Earlier", values: { uiTheme: "light" } }] }, true, false, undefined, globals);
+  studio.reset("screen");
+  assert.deepEqual(plain(values.screenPlacement.screens), { carsetup: mine.screenPlacement.screens.carsetup });
+  studio.undo();
+  assert.deepEqual(plain(values.screenPlacement), mine.screenPlacement);
   studio.saveProfile("Phone");
   studio.applyPreset("focus");
   assert.equal(values.hudBtnShape, "square");

@@ -319,3 +319,6 @@ button[role="tab"][aria-selected="true"] {
   letter-spacing: .08em;
 }
 }
+
+/* Some menus keep placement in a dedicated editor. */
+#screen-arranger .arrange-row[hidden] { display: none; }

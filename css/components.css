@@ -260,7 +260,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   color: var(--text); margin: 0;
   overflow-wrap: anywhere;
   /* The floor is the TEXT SIZE ladder (#5215): 15 px at the default rung as before, never under the body text above it. */
-  font-size: clamp(var(--fs-2), calc(3.6 * var(--vhz)), 24px);
+  font-size: clamp(var(--fs-2), calc(3.6 * var(--vhz) * var(--arrange-text-size, 1)), calc(24px * var(--arrange-text-size, 1)));
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
@@ -322,7 +322,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   gap: calc(var(--gap) * 0.6);
 }
 /* Min 14px: at UI SIZE 90% (.sheet zoom ≈0.9) painted type stays ≥12px. */
-.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(var(--fs-micro), calc(3 * var(--vhz)), 18px); }
+.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(var(--fs-micro), calc(3 * var(--vhz) * var(--arrange-text-size, 1)), calc(18px * var(--arrange-text-size, 1))); }
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
@@ -330,7 +330,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
-  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz)), 20px);   /* floor on the TEXT SIZE ladder (#5215) */
+  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz) * var(--arrange-text-size, 1)), calc(20px * var(--arrange-text-size, 1)));   /* floor on the TEXT SIZE ladder (#5215) */
   /* --vhz like the font-size above — same zoomed element, one line apart.
      Leading-edge +4px so the skewed label stays optically column-centred. */
   padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
