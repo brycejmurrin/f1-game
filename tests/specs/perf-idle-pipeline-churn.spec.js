@@ -8,7 +8,7 @@
 // backends alike; counts are exact on a software adapter even where ms are not).
 //
 // What this pins: TLX on three's WebGPU backend, monza, GAS held on the real keyboard, no BOOST, 120 warm
-// frames, a warm pass over the counted stretch, a jump back to its start, then 6 windows of 60 frames over road
+// frames, a warm pass over the counted stretch, a seeded field reset to its start, then 6 windows of 60 frames over road
 // already drawn (#5387), with the performance governor's render scale pinned and its tier held across both passes
 // (a governor step re-creates the post targets: a resize, an intended cost of its own, not steady-state churn)
 // — every window builds 0 pipelines. Driver:
@@ -29,7 +29,7 @@ test("TLX WebGPU: steady driving builds no render pipelines after warm-up", asyn
   // The counted windows must stay on the stretch the warm pass drew, or new scenery enters and a first draw reads
   // as churn (#5387): the census says how far each pass went.
   testInfo.annotations.push({ type: "replay", description: JSON.stringify(replay) });
-  expect(replay.jumped, "the census must jump back to the warm pass's start (__apex.jump)").toBe(true);
+  expect(replay.countedStart, "both passes must start at the same race progress").toBe(replay.warmStart);
   expect(replay.countedM, `the counted windows drove past the warmed stretch (${JSON.stringify(replay)})`).toBeLessThanOrEqual(replay.warmM);
   // The governor was held for both passes (#5387): a scale step or a tier shed inside them would be a resize or a
   // feature change, not steady driving. The pin must have held.
