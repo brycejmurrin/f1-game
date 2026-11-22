@@ -17,7 +17,7 @@ import { brycePhone, readProfile } from "../lib/bryce-phone.mjs";
 const ROOT = path.resolve(import.meta.dirname, "../..");
 // SURVEY_PROFILE=live|legacy (default legacy, the file the report notes were measured on); live = his phone today.
 const EXPORT = readProfile(process.env.SURVEY_PROFILE || "legacy");
-// Survey geometry at 1×. Window C preserves the original short-toolbar stress case.
+// Survey geometry at 1×. Window C uses the measured short Safari tab.
 const contractWindow = (window) => {
   const { contextOptions, viewport, insets } = brycePhone({ window, profile: false, dpr: 1 });
   return { contextOptions, w: viewport.width, h: viewport.height, l: insets.left, r: insets.right, t: insets.top, b: insets.bottom };
@@ -25,7 +25,7 @@ const contractWindow = (window) => {
 const landscape = contractWindow("standalone");
 const WINDOWS = {
   A: { ...landscape, standalone: true },
-  C: { ...landscape, h: 283, b: 0 },
+  C: contractWindow("safari-short"),
   D: { ...contractWindow("w844"), standalone: true },
   As: { ...landscape, standalone: true, stale: true },
 };

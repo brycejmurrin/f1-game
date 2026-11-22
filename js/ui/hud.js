@@ -1316,12 +1316,12 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const steerDock = _dockMir ? _dockR : _dockL;   // #dock-left wherever MIRROR paints it
   const groups = (d) => {
     if (!d) return { h: 0, w: 0, stack: 0 };
-    const z = zoomDiv(d, d === steerDock ? zDockPubS : zDockPub);
     let h = 0, w = 0, stack = 0, n = 0;
     for (const g of d.children) {
-      const r = g.getBoundingClientRect();
-      if (!r.width) continue;
-      h = Math.max(h, r.height / z); w += r.width / z; stack += r.height / z; n++;
+      // Painted bounds depend on the previous fit and can oscillate at fractional zoom.
+      const width = g.offsetWidth, height = g.offsetHeight;
+      if (!width) continue;
+      h = Math.max(h, height); w += width; stack += height; n++;
     }
     const cs = getComputedStyle(d);
     const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;

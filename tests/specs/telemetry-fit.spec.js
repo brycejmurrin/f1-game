@@ -135,7 +135,7 @@ test.describe("portrait 390x844", () => {
 
 /* ── THE DATA HUB HEAD on a phone held sideways (UI contract gap 15, PR #5156) ──
  * The contract's windows: A an iPhone 15 (notch left, home indicator), C the
- * legacy 283 px toolbar stress case, D a notch-less 844x390. At
+ * measured 283 px Safari tab, D a notch-less 844x390. At
  * every cell the head is ONE row — title, the tab strip, ⋯, ✕ — the ✕ is the
  * LAST thing on it, and the strip is the row's scroller (nowrap, overflow-x
  * auto, pan-x) instead of wrapping under the title or pushing ✕ off the card.
@@ -143,7 +143,7 @@ test.describe("portrait 390x844", () => {
  * bottom 275 of 283 (C), one row in all 15 cells. */
 const HEAD_WINDOWS = [
   { name: "A 852x393 notch", ...ownerLandscape },
-  { name: "C 852x283 Safari toolbar", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
+  { name: "C 852x283 Safari toolbar", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom },
   { name: "D 844x390", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 },
 ];
 // [textSize, uiScale %]: the export's own (large, UI 109 % by the coarse-pointer default), then the grid.

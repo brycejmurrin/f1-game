@@ -7,7 +7,7 @@
  * function handed to page.evaluate: no closure over this module.
  *
  * GEOS are Bryce's phone as the iOS home-screen app and as a Safari tab (852x393
- * and the MEASURED 852x368, both 59/21/59; tests/data/phone-windows.json is the one
+ * and 852x368; tests/data/phone-windows.json is the one
  * record, #5218), the 844x390 house geometry and a Pro Max. Insets land through CDP Emulation.setSafeAreaInsetsOverride, which
  * is what env(safe-area-inset-*) reads. PROFILES are what a phone BOOTS with:
  * a fresh profile, the legacy export (tools/lib/bryce-phone.mjs `legacy`, the

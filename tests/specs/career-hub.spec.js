@@ -712,8 +712,8 @@ test.describe.parallel("Career — #cr-left fits phone viewports", () => {
 });
 
 // ── UI contract cells (#5153 gap 11, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.7) ──
-// The hub in three contract windows — A the iOS Home Screen app (852x393, insets 59/21/59),
-// C the legacy toolbar stress case (852x283), D the spec phone (844x390) — seeded from Bryce's own export, whose
+// The hub in the owner's three windows — A the iOS Home Screen app (852x393, insets 59/20/59),
+// C the Safari tab (852x283), D the spec phone (844x390) — seeded from Bryce's own export, whose
 // career DENSITY is ROOMY. Measured before the fix (docs/notes/UI-PR-D-MEASURE-2026-11-06.md):
 // ROOMY turned the sheet normal, which paired it at 657 own px (a 73-115 px left pane) and at
 // 552 left no scroller at all. On a phone-sized window ROOMY is a request the box clamps: the

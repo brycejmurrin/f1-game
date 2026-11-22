@@ -22,6 +22,7 @@
 // is 399px at 130 %" goes stale the moment the type scale is retuned, which is
 // exactly what the component restructure is about to do. Every check here is
 // relative or a containment test.
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { LANDSCAPE, PORTRAIT } from "../helpers/iphone15.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { readFileSync } from "node:fs";
@@ -1806,7 +1807,7 @@ test.describe("Factory Home on touch", () => {
     const cells = [
       { ...LANDSCAPE, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { ...LANDSCAPE, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
-      { ...LANDSCAPE, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { ...LANDSCAPE, safe: BRYCE_WINDOWS.standalone.insets, returning: true },
       { width: 1280, height: 590, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
       { width: 667, height: 320, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
       { ...PORTRAIT, safe: { top: 0, right: 0, bottom: 0, left: 0 } },

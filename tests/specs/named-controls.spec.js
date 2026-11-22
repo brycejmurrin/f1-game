@@ -9,7 +9,7 @@
 // on the phone — the mutations of issue #5242 §T1, which 127 CSS-reading unit
 // files survived — and asserts the judge names the control. A gate that cannot fail is not a gate.
 //
-// The cell: iPhone Home Screen app in landscape, 852x393, real env() insets 59/21/59 through CDP, touch, the
+// The cell: iPhone Home Screen app in landscape, 852x393, real env() insets 59/20/59 through CDP, touch, the
 // legacy settings export (tools/lib/bryce-phone.mjs `legacy`: BUTTON 245 %, HUD 155 %, buttons steering; the
 // October 2026 file, a heavy fixture, not his phone today). The renderer stays the fixture's pinned GLX: this is
 // a layout cell.

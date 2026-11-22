@@ -447,12 +447,12 @@ const CamFeel = (function () {
     body.setAttribute("aria-label", "Camera feel");
     fold.appendChild(sum);
     fold.appendChild(body);
-    // Sit with COCKPIT, ahead of ADVANCED VISUALS when that fold exists.
+    // Keep the HUD & CAMERA order when these sections mount at the lazy gate.
+    const vr = document.getElementById("pm-xr-block");
+    const cockpit = document.getElementById("pm-cockpit");
     const tools = document.getElementById("pm-visual-tuners");
-    const cock = document.getElementById("pm-cockpit");
-    if (cock && cock.parentNode === host) host.insertBefore(fold, cock.nextSibling);
-    else if (tools && tools.parentNode === host) host.insertBefore(fold, tools);
-    else host.appendChild(fold);
+    const before = [vr, cockpit, tools].find(el => el && el.parentNode === host);
+    host.insertBefore(fold, before || null);
 
     const help = (text) => {
       const p = document.createElement("p");
@@ -482,11 +482,11 @@ const CamFeel = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
-      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+    const atGate = () => {
       if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
-    }, { once: true });
-    else initUI();
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", atGate, { once: true });
+    else atGate();
   }
 
   return {

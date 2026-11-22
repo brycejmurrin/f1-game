@@ -3,12 +3,9 @@
 //
 // The shared device record keeps viewport units, capture density and safe areas consistent across UI tools.
 //
-// WHAT IS MEASURED AND WHAT IS NOT. The `standalone` window (the installed Home Screen app: 852x393 CSS px, DPR 3,
-// env() insets left 59 / right 59 / bottom 21 / top 0) is the Chromium emulation the geometry hunt booted and read
-// back (PR #5216). The `safari` window's SIZE (852x368, DPR 3) was measured on his iPhone over the phone bridge on
-// 2026-11-10 02:40Z (#5218); its insets were not, and are assumed equal to the standalone window's. `w844` (844x390,
-// insets 47/21/47) is NOT his phone: it is the cell most reports and specs were written against, kept so a finding
-// can be compared across the two. `display-mode: standalone` cannot be emulated through CDP; no CSS rule keys on it.
+// Standalone viewport and env() insets come from the owner's Home Screen bridge reading (#6049).
+// Safari has two measured heights: 368 (#5218, assumed insets) and 283 (#6049, measured insets).
+// w844 is an iPhone 12–14 comparison cell. CDP emulates the safe area; display-mode stays browser.
 //
 // THE PROFILE. `live` is tests/data/settings-live-export-2026-11-10.json, his CURRENT export from the installed Home
 // Screen app (#5218): UI SIZE 70 %, BUTTON SIZE 143.25 %, HUD SIZE / button opacity unset = the defaults, resMode high,
@@ -79,7 +76,7 @@ export function storeEntries(store) {
 
 /**
  * The preset. Pure apart from reading the export.
- * @param {{ window?: "portrait"|"standalone"|"safari"|"w844", dpr?: number, profile?: boolean|"live"|"legacy", uiScale?: number|null, root?: string }} [o]
+ * @param {{ window?: "portrait"|"standalone"|"safari"|"safari-short"|"w844", dpr?: number, profile?: boolean|"live"|"legacy", uiScale?: number|null, root?: string }} [o]
  *   `dpr` below 3 is for a software-GL box (at DPR 3 the 10 Hz HUD tick starves here: measure HUD fit at 1 or under
  *   `__apex.headless(true)`); CSS geometry does not depend on it. `profile` true = `live`; false = a fresh boot.
  *   `uiScale` (percent, the unit the store keeps) overrides the profile's UI SIZE.
