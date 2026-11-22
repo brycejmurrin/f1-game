@@ -114,6 +114,23 @@ link. The designer's HOW TO tab walks through it; the long form is
   and with **TILT**. **BUTTONS** and **TOUCH** keep gears automatic.
 - Rebind keyboard and controller actions in **SETTINGS › CONTROLS**.
 
+#### Touch buttons
+
+Open **Settings › Controls › Touch Button Response** and choose Left, Right, Gas or Brake. Each button remembers its own response.
+
+| Setting | What you feel or see |
+| --- | --- |
+| First Touch | **Instant** requests full input on contact. Slide up a pedal or inward on an arrow to ease off. **Progressive** starts at 12%. Slide away from the landing point in any direction to build input, or back toward it to ease off. Lift to release in Hold mode. |
+| Slide Distance | This is thumb travel in screen pixels. At 40 px, a progressive pedal reaches full input quickly. At 160 px there is more room to make small changes. |
+| Slide onto Pedal | Applies when your thumb crosses from one pedal onto the other without lifting. **Instant** fully presses the receiving pedal. **Ease** starts it at 12% and reaches full input over another 40 px. **Default** follows the global **Pedal Slide** choice. On a paired controller, **Stay on Original Pedal** keeps the pedal you first pressed. |
+| Adaptive Buttons | Applies to the steering arrows. Higher levels soften a short tap at speed. Holding the arrow builds more steering. **1** turns speed smoothing off, **10** gives the most, and **Follow Global** uses the level in Driving Aids. |
+| On-button Feedback | The whole button brightens with input. A tread pattern on Gas warns of wheelspin. Brake can show a lock-up cue. The cockpit wheel’s T and B bars show the demands applied to the car. |
+| Throttle mode | **Hold** gives manual Gas until you lift. **Latch** toggles full Gas on each tap. **Auto** manages acceleration while you steer and brake. |
+| Reset | In Touch Button Response, reset restores only the selected button’s response. |
+
+During a race, pause and open **Settings › Controls › Reposition Touch Controls**. Drag the arrows or the driving controls as a group, or choose a button to move, resize or reshape independently. Choose **Steering buttons** to adjust the space between the arrows. Choose **Driving buttons** to put the pedals side by side, the actions side by side, or the two groups in separate rows. Choose **Gas + Brake** to move or size both pedals together, or **Race actions** for controls such as Boost, Overtake and Aero. Individual size is a percentage of the main Button Size setting. **Auto** restores the automatic row arrangement. With a button focused, the arrow keys move it 2 px, or 16 px with Shift. **Done** returns to Settings. Positions and customizations are saved for the active steering scheme.
+
+
 The **CAM** button (top-right, next to pause) cycles cameras the same
 way `C` and **View** do. The choice is remembered. Boost is a tap that
 toggles; overtake is a tap that activates; look back is held.

@@ -19306,7 +19306,9 @@
     "js/ui/dock-layout.js": {
       "apply": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/dock-layout.test.mjs"
+        "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/dock-layout.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ],
       "applyShape": [
         "tests/unit/dock-layout.test.mjs"
@@ -19320,19 +19322,27 @@
       ],
       "create": [
         "tests/specs/ui-button-touch.spec.js",
+        "tests/unit/appearance-studio.test.mjs",
         "tests/unit/dock-layout.test.mjs",
-        "tests/unit/hud-arrange-door.test.mjs"
+        "tests/unit/hud-arrange-door.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ],
       "isIdentity": [
         "tests/unit/dock-layout.test.mjs"
       ],
       "load": [
         "tests/specs/ui-button-touch.spec.js",
+        "tests/unit/appearance-studio.test.mjs",
         "tests/unit/dock-layout.test.mjs",
-        "tests/unit/hud-arrange-door.test.mjs"
+        "tests/unit/hud-arrange-door.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ],
       "normalize": [
+        "tests/unit/appearance-studio.test.mjs",
         "tests/unit/dock-layout.test.mjs"
+      ],
+      "paint": [
+        "tests/unit/appearance-studio.test.mjs"
       ],
       "save": [
         "tests/unit/dock-layout.test.mjs"
@@ -19346,8 +19356,20 @@
       "sizeStep": [
         "tests/unit/dock-layout.test.mjs"
       ],
+      "translate": [
+        "tests/specs/ui-button-touch.spec.js",
+        "tests/unit/dock-layout.test.mjs"
+      ],
       "usablePad": [
         "tests/unit/dock-layout.test.mjs"
+      ]
+    },
+    "js/ui/dock-toolbar.js": {
+      "create": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs"
       ]
     },
     "js/ui/dom.js": {

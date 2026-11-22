@@ -137,7 +137,7 @@ not tabled: they move with every edit and nothing reads them.
 | `cz-` | `race-setup.css` | `components.css`, `settings-controls.css` |  |
 | `arrange-` | `screen-arranger.css` | — | Live layout editor controls and selection |
 | `dh-` | `data.css` | `components.css`, `dialog-platform.css`, `screen-arranger.css`, `tokens.css` |  |
-| `dock-` | `touch-controls.css` | — |  |
+| `dock-` | `touch-controls.css` | `overlays.css` |  |
 | `duel-` | `race-setup.css` | — |  |
 | `editor-` | `tuner.css` | — | shared tuner workspace: the Preview/Edit container |
 | `ew-` | `tuner.css` | — | shared tuner workspace: toolbar, scope note and disclosure |
@@ -151,7 +151,7 @@ not tabled: they move with every edit and nothing reads them.
 | `lt-` | `tuner.css` | `components.css`, `hud.css` |  |
 | `mb-` | `menu-destinations.css` | `experience.css`, `menus.css` |  |
 | `menu-` | `menu-destinations.css` | — | title destination headings and groups |
-| `mirror-` | `touch-controls.css` | `hud.css` |  |
+| `mirror-` | `touch-controls.css` | `hud.css`, `overlays.css` |  |
 | `music-` | `tuner.css` | — |  |
 | `opt-` | `tuner.css` | `components.css`, `settings-controls.css`, `settings.css` |  |
 | `ot-` | `hud.css` | — |  |
@@ -264,8 +264,9 @@ missing class, a file that left, or a file that joined.
 - `.touchbtn` — `hud` + `overlays` + `tokens` + `touch-controls` + `watch-transport`
 - `.hud-hidden` — `helmet-visor` + `hud` + `responsive` + `touch-controls`. Hides the driving HUD, including manually positioned instruments detached from the bottom cluster; the visor refraction filter also steps aside so a clean frame stays unbent.
 - `.hud-hide-map` — `hud` + `overlays`. Body class for MAP OFF: `hud` parks the gap strip in the map's corner; the ≥1200px tier in `overlays` (which wins the layer order whatever the specificity) steps aside with `body:not(.hud-hide-map)` so its 178px beside-the-map anchor cannot leave the strip floating.
-- `.dock` — `hud` + `touch-controls`. The touch-controls dock: laid out in `touch-controls`; `hud` hides it with the rest of the chrome and stills it under reduced motion.
-- `.mirror-controls` — `hud` + `touch-controls`. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
+- `.dock-grp` — `overlays` + `touch-controls`. Custom row layouts arrange the same button groups as the shipped dock.
+- `.dock` — `hud` + `overlays` + `touch-controls`. The touch-controls dock: laid out in `touch-controls`; `hud` hides it with the rest of the chrome and stills it under reduced motion.
+- `.mirror-controls` — `hud` + `overlays` + `touch-controls`. Custom pedal rows follow the mirrored dock. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
 - `.bc-on` — `helmet-visor` + `hud`. Body class for the broadcast HUD (a REAL RACE WATCH / HIGHLIGHTS run): `hud` hides the driving chrome, the touch buttons and CAM; `helmet-visor` skips refraction while broadcast is up.
 - `.bc-head` — `hud` + `watch-transport`. Timing header button semantics.
 - `.watch-controls-on` — `helmet-visor` + `hud` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `hud` folds it into the AERO / BRAKE BIAS and RELATIVE / STRATEGY / INPUTS hide rules; `helmet-visor` also drops the world refraction filter so the replay view is not bent.

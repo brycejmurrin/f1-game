@@ -4885,6 +4885,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/dock-toolbar.js",
+      "global": "DockToolbar",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/dom.js",
       "global": "Dom",
       "roster": "tag"

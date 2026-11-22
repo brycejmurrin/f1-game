@@ -5,9 +5,10 @@ const DockLayout = (function () {
   const KEY = "dockLayout";
   const SCHEMES = Object.freeze(["tilt", "buttons", "touch"]);
   const SIDES = Object.freeze(["L", "R"]);
-  // Max travel from the default corner — enough to clear a thumb, not enough
-  // to park a primary control under the notch or off-screen.
-  const MAX = 0.35;
+  // Stored deltas are fractions of the usable viewport. Actual limits depend
+  // on the painted control sizes, home positions, safe insets and handedness.
+  const MAX = 1;
+  const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero", "shift-up", "shift-down"];
   const ZERO = Object.freeze({ x: 0, y: 0 });
 
   function clamp01(n, lo, hi) {
@@ -15,11 +16,10 @@ const DockLayout = (function () {
     if (!isFinite(v)) return 0;
     return v < lo ? lo : v > hi ? hi : v;
   }
-  // Safe-area corners are the origin. Only inward and upward offsets are valid.
   function clampXY(xy) {
     return {
-      x: clamp01(xy && xy.x, 0, MAX),
-      y: clamp01(xy && xy.y, 0, MAX),
+      x: clamp01(xy && xy.x, -MAX, MAX),
+      y: clamp01(xy && xy.y, -MAX, MAX),
     };
   }
   function emptyScheme() { return { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } }; }
@@ -49,6 +49,20 @@ const DockLayout = (function () {
       const src = raw && raw[s];
       out[s] = emptyScheme();
       if (!src || typeof src !== "object") continue;
+      if (Number.isFinite(src.gap)) out[s].gap = clamp01(src.gap, 0, 80);
+      if (["pedal-row", "tap-row", "stack"].includes(src.layout)) out[s].layout = src.layout;
+      for (const id of CONTROL_IDS) {
+        const values = src.controls?.[id];
+        if (!values || typeof values !== "object") continue;
+        const control = {};
+        if (Number.isFinite(values.size) && values.size !== 100) control.size = clamp01(values.size, 50, 175);
+        const shape = shapeOf(values.shape);
+        if (shape !== "auto") control.shape = shape;
+        for (const axis of ["x", "y"]) {
+          if (Number.isFinite(values[axis]) && values[axis]) control[axis] = clamp01(values[axis], -MAX, MAX);
+        }
+        if (Object.keys(control).length) (out[s].controls || (out[s].controls = {}))[id] = control;
+      }
       for (const side of SIDES) {
         if (src[side] && typeof src[side] === "object") out[s][side] = clampXY(src[side]);
       }
@@ -65,6 +79,7 @@ const DockLayout = (function () {
   }
   function isIdentity(scheme) {
     if (!scheme) return true;
+    if (scheme.gap != null || scheme.layout || Object.keys(scheme.controls || {}).length) return false;
     for (const side of SIDES) {
       const p = scheme[side] || ZERO;
       if (Math.abs(p.x) > 1e-6 || Math.abs(p.y) > 1e-6) return false;
@@ -82,7 +97,7 @@ const DockLayout = (function () {
     const de = (typeof document !== "undefined" && document.documentElement) || null;
     const vw = (de && de.clientWidth > 0) ? de.clientWidth : (typeof window !== "undefined" ? window.innerWidth : 390);
     const vh = (de && de.clientHeight > 0) ? de.clientHeight : (typeof window !== "undefined" ? window.innerHeight : 844);
-    return { w: Math.max(1, vw - sal - sar), h: Math.max(1, vh - sat - sab) };
+    return { w: Math.max(1, vw - sal - sar), h: Math.max(1, vh - sat - sab), vw, vh, sal, sar, sat, sab };
   }
 
   // Undo the effective CSS zoom before writing a viewport-pixel translation.
@@ -100,26 +115,97 @@ const DockLayout = (function () {
     return (side === "L") !== m ? 1 : -1;
   }
 
-  // opts.pad: a pad measured earlier (a drag caches it at pointerdown);
-  // opts.fit === false: the caller invalidates the fit itself (once per frame).
-  function apply(schemeName, bag, docks, opts) {
-    const scheme = (bag && bag[schemeName]) || emptyScheme();
-    const root = (typeof document !== "undefined") ? document.documentElement : null;
-    const pad = (opts && opts.pad) || usablePad(root);
+  const translations = new WeakMap();
+  const fullRange = () => ({ left: -Infinity, right: Infinity, top: -Infinity, bottom: Infinity });
+  function intersect(a, b) {
+    a.left = Math.max(a.left, b.left); a.right = Math.min(a.right, b.right);
+    a.top = Math.max(a.top, b.top); a.bottom = Math.min(a.bottom, b.bottom);
+  }
+  // Keep the whole button on the display and a 44px target inside the safe
+  // area on each axis. A smaller button must remain fully inside that area.
+  function limits(pad, r, dx, dy) {
+    const left = r.left - dx, right = r.right - dx, top = r.top - dy, bottom = r.bottom - dy;
+    const w = Math.min(44, r.width), h = Math.min(44, r.height);
+    return {
+      left: Math.max(-left, pad.sal + w - right), right: Math.min(pad.vw - right, pad.vw - pad.sar - w - left),
+      top: Math.max(-top, pad.sat + h - bottom), bottom: Math.min(pad.vh - bottom, pad.vh - pad.sab - h - top),
+    };
+  }
+  function measurePad(docks) {
+    const pad = usablePad(typeof document !== "undefined" ? document.documentElement : null);
     for (const side of SIDES) {
-      const el = docks && docks[side];
-      if (!el || !el.style) continue;
-      const p = clampXY(scheme[side] || ZERO);
-      if (Math.abs(p.x) < 1e-6 && Math.abs(p.y) < 1e-6) {
-        el.style.removeProperty("transform");
+      const el = docks?.[side];
+      if (!el) continue;
+      const z = zoomOf(el), home = translations.get(el) || ZERO;
+      const g = pad[side] = { z, base: fullRange(), drag: fullRange(), controls: {} };
+      for (const button of el.querySelectorAll?.(".touchbtn") || []) {
+        const bz = zoomOf(button), pos = translations.get(button) || ZERO;
+        const entry = g.controls[button.id] = { el: button, z: bz };
+        const r = typeof CssZoom !== "undefined" && CssZoom.viewportRect ? CssZoom.viewportRect(button) : button.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0)) continue;
+        // Subtract the old CSS translations at TODAY's zoom: size, shape,
+        // rotation and a new fit may have changed the untransformed anchor.
+        entry.range = limits(pad, r, home.x * z + pos.x * bz, home.y * z + pos.y * bz);
+        intersect(g.base, entry.range);
+        intersect(g.drag, limits(pad, r, home.x * z, home.y * z));
+      }
+      intersect(g.drag, g.base);
+    }
+    return pad;
+  }
+  function withinRange(value, side, pad, range, group) {
+    const p = clampXY(value);
+    if (!range) return p;
+    const sx = inboard(side) * pad.w, sy = -pad.h;
+    const gx = group.x * sx, gy = group.y * sy;
+    return {
+      x: clamp01(p.x * sx + gx, range.left, range.right) / sx - group.x,
+      y: clamp01(p.y * sy + gy, range.top, range.bottom) / sy - group.y,
+    };
+  }
+  function boundedXY(value, side, pad) {
+    return withinRange(value, side, pad, pad[side]?.drag, ZERO);
+  }
+  function boundedControlXY(value, side, pad, id, group) {
+    const anchor = withinRange(group, side, pad, pad[side]?.base, ZERO);
+    return withinRange(value, side, pad, pad[side]?.controls[id]?.range, anchor);
+  }
+  function translate(el, x, y, individual) {
+    const previous = translations.get(el), property = individual ? "translate" : "transform";
+    if (!x && !y) {
+      if (previous || el.style[property]) el.style.removeProperty(property);
+      translations.delete(el);
+    } else {
+      const tx = +x.toFixed(1), ty = +y.toFixed(1);
+      if (previous && previous.x === tx && previous.y === ty) return;
+      translations.set(el, { x: tx, y: ty });
+      el.style[property] = individual ? tx + "px " + ty + "px" : "translate(" + tx.toFixed(1) + "px, " + ty.toFixed(1) + "px)";
+    }
+  }
+  // A gesture passes geometry measured at touchdown. Repaint without further
+  // layout reads; normal paints re-evaluate bounds after a rotation or refit.
+  function apply(schemeName, bag, docks, opts) {
+    const scheme = bag?.[schemeName] || emptyScheme();
+    if (!opts?.pad) applyControls(scheme, docks);
+    const pad = opts?.pad || (!isIdentity(scheme) ? measurePad(docks) : null);
+    for (const side of SIDES) {
+      const el = docks?.[side];
+      if (!el?.style) continue;
+      if (!pad) {
+        translate(el, 0, 0, false);
+        for (const button of el.querySelectorAll?.(".touchbtn") || []) translate(button, 0, 0, true);
         continue;
       }
-      // +x = inboard (inboard() above); +y = up from the bottom.
-      const sx = inboard(side);
-      const z = zoomOf(el);
-      const tx = (p.x * pad.w * sx / z).toFixed(1);
-      const ty = (-p.y * pad.h / z).toFixed(1);
-      el.style.transform = "translate(" + tx + "px, " + ty + "px)";
+      const g = pad[side], p = withinRange(scheme[side], side, pad, g?.base, ZERO);
+      const sx = inboard(side) * pad.w, sy = -pad.h, z = g?.z || zoomOf(el);
+      translate(el, p.x * sx / z, p.y * sy / z, false);
+      for (const [id, b] of Object.entries(g?.controls || {})) {
+        const value = scheme.controls?.[id];
+        // A layout wider than the new viewport cannot fit as one rigid group.
+        // Keep each target reachable even when the player only moved its dock.
+        const q = withinRange(value, side, pad, b.range, p);
+        translate(b.el, q.x * sx / b.z, q.y * sy / b.z, true);
+      }
     }
     // The fit (dock cap, --dock-r-w, the radio lane) budgets from the docks'
     // rects; without this it kept the pre-drag boxes for up to 3 s.
@@ -130,6 +216,7 @@ const DockLayout = (function () {
   function create(G) {
     Log.info("ui", "DockLayout.create");
     const { $, store } = G;
+    let toolbar = null, pending = null;
     let bag = load(store);
     let editing = false;
     let drag = null;   // { side, startX, startY, orig }
@@ -154,112 +241,59 @@ const DockLayout = (function () {
       if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
       else fitNow();
     }
-    // The modal sheets must close during a drag; restore the ones open at entry.
-    let shown = null;      // { settings, pause } — hidden by us on entry
-    let doneBtn = null, toolsButton = null, expanded = false;
-    let editBar = null;    // the floating SIZE / SHAPE / DONE toolbar
     let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
     function setShape(v) {
       shape = applyShape(v);
       if (store && store.set) store.set(SHAPE_KEY, shape === "auto" ? null : shape);
       if (typeof SettingRow !== "undefined" && SettingRow.paint && $("pm-btnshape")) SettingRow.paint("pm-btnshape", shape, SHAPES);
-      paintBar();
+      toolbar?.paint();
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
       return shape;
     }
-    // SIZE steps drive the SETTINGS slider itself (its input handler stores,
-    // clamps and applies in js/ui/scale.js), so there is one writer of BUTTON SIZE.
-    function stepSize(dir) {
-      const el = $("pm-btnscale");
-      if (!el) return;
-      el.value = String(sizeStep(+el.value, dir, +el.min || 40, +el.max || 300));
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      // The editor runs over a PAUSED race, where the HUD tick returns before
-      // the fit: force one so the dock caps (and repaints) at the new size now,
-      // then re-run the slider's paint so its "fits N%" reads the fresh cap.
-      if (G.refreshHud) G.refreshHud(true);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-      paintBar();
+    function record(id, name = schemeOf()) {
+      const scheme = bag[name];
+      scheme.controls ||= {};
+      return scheme.controls[id] ||= {};
     }
-    function paintBar() {
-      if (!editBar) return;
-      toolsButton.setAttribute("aria-expanded", String(expanded));
-      toolsButton.textContent = expanded ? "Hide tools" : "Size & shape";
-      for (const k of ["smaller", "size", "bigger", "shape"]) editBar.querySelector("[data-k=" + k + "]").hidden = !expanded;
-      const out = $("pm-btnscale-v");
-      editBar.querySelector("[data-k=size]").textContent = "SIZE " + ((out && out.textContent) || "");
-      editBar.querySelector("[data-k=shape]").textContent = "SHAPE: " + SHAPES.find((s) => s[0] === shape)[1];
-    }
-    function hideDialogs() {
-      const settings = $("pmsettings"), pause = $("pausemenu");
-      shown = { settings: !!settings && !settings.hidden, pause: !!pause && !pause.hidden };
-      if (settings) settings.hidden = true;
-      if (pause) pause.hidden = true;
-    }
-    function restoreDialogs() {
-      const settings = $("pmsettings"), pause = $("pausemenu"), was = shown;
-      shown = null;
-      if (!was) return;
-      if (was.settings && settings) settings.hidden = false;
-      if (was.pause && pause) pause.hidden = false;
-    }
-    // The editor's floating toolbar: SIZE − / + and SHAPE change the controls
-    // in place, on the race HUD, while the player can see them (the SETTINGS
-    // rows are hidden during the edit). DONE keeps its id and label.
-    function ensureDone() {
-      if (doneBtn || typeof document === "undefined" || !document.createElement || !document.body || !document.body.appendChild) return;
-      editBar = document.createElement("div");
-      editBar.id = "dock-edit-bar";
-      editBar.setAttribute("role", "toolbar");
-      editBar.setAttribute("aria-label", "Touch controls");
-      // Center within the safe area. Expanded controls wrap and scroll on short phones.
-      editBar.style.cssText = "position:fixed;top:var(--safe-t);left:var(--safe-l);right:var(--safe-r);margin-inline:auto;" +
-        "width:max-content;max-width:var(--safe-w);max-height:calc(100svh - var(--safe-t) - var(--safe-b));" +
-        "z-index:9999;display:flex;flex-wrap:wrap;gap:4px;align-items:center;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;";
-      const mk = (k, label, aria, onclick) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.dataset.k = k;
-        b.textContent = label;
-        if (aria) b.setAttribute("aria-label", aria);
-        b.style.cssText = "min-width:44px;min-height:44px;padding:0 12px;font:inherit;font-weight:700;" +
-          "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);border-radius:8px;";
-        b.onclick = onclick;
-        editBar.appendChild(b);
-        return b;
-      };
-      toolsButton = mk("tools", "Size & shape", "", () => { expanded = !expanded; paintBar(); });
-      doneBtn = mk("done", "Done", "Done repositioning touch controls", () => setEditing(false));
-      doneBtn.id = "dock-edit-done";
-      mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
-      // The readout is text, not a control: a disabled button paints see-through
-      // over the timing tower (measured 844x390), so it is an opaque span.
-      const size = document.createElement("span");
-      size.dataset.k = "size";
-      size.setAttribute("aria-live", "polite");
-      size.style.cssText = "padding:0 10px;line-height:40px;font-weight:700;background:var(--bg,#111);color:var(--text,#fff);border-radius:8px;";
-      editBar.appendChild(size);
-      mk("bigger", "+", "Bigger buttons", () => stepSize(1));
-      mk("shape", "SHAPE", "Next button shape", () => {
-        const i = SHAPES.findIndex((s) => s[0] === shape);
-        setShape(SHAPES[(i + 1) % SHAPES.length][0]);
-      });
-      editBar.hidden = true;
-      document.body.appendChild(editBar);
+    function commitLayout() {
+      save(store, bag);
+      paint();
+      G.refreshHud?.(true);
+      toolbar?.paint();
     }
     // restore=false when something else opened a dialog while we were editing:
     // stacking SETTINGS back on top of it would show two.
     function setEditing(on, restore) {
+      if (on && !toolbar) {
+        if (typeof DockToolbar !== "undefined") {
+          toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
+            docks, measurePad, inboard, boundedControlXY, getShape: () => shape, setShape, record, close: () => setEditing(false) });
+        } else {
+          if (pending || typeof ScriptLoader === "undefined") return;
+          const door = $("pm-dock-reposition"), origin = [$("pmsettings"), $("pausemenu")].find(el => el && !el.hidden);
+          const request = ScriptLoader.create().load(["js/ui/dock-toolbar.js"], [], { strict: true });
+          pending = request;
+          door?.setAttribute("aria-busy", "true");
+          request.catch(() => false).then(ok => {
+            if (pending !== request) return;
+            pending = null;
+            door?.removeAttribute("aria-busy");
+            if (!ok || typeof DockToolbar === "undefined") {
+              Log.warn("ui", "The touch layout editor could not load.");
+              G.announce?.("Could not open the touch editor. Tap Reposition Touch Controls to retry.", 3, "coach");
+            } else if (!origin || !origin.hidden) setEditing(true);
+          });
+          return;
+        }
+      }
+      if (!on && pending) { pending = null; $("pm-dock-reposition")?.removeAttribute("aria-busy"); }
       const was = editing;
       editing = !!on;
       if (typeof document !== "undefined") {
         if (editing) document.body.setAttribute("data-dock-edit", "1");
         else document.body.removeAttribute("data-dock-edit");
       }
-      if (editing && !was) { expanded = false; ensureDone(); hideDialogs(); }
-      if (!editing && was) { if (restore === false) shown = null; else restoreDialogs(); }
-      if (editBar) { editBar.hidden = !editing; if (editing) paintBar(); }
-      if (editing && !was && toolsButton) toolsButton.focus?.({ preventScroll: true });
+      if (editing !== was) toolbar?.show(editing, restore);
       const btn = $("pm-dock-reposition");
       if (btn) {
         btn.setAttribute("aria-pressed", editing ? "true" : "false");
@@ -292,7 +326,7 @@ const DockLayout = (function () {
       const tip = document.createElement("p");
       tip.className = "adv-help";
       tip.id = "pm-dock-reposition-help";
-      tip.textContent = "Drag the on-screen pedal and steer groups. Layout is saved per STEERING INPUT (tilt, buttons, touch). RESET clears only the current scheme.";
+      tip.textContent = "Drag a group, or tap a button to edit it on its own. In Size & shape, choose Steering buttons for arrow spacing or Driving buttons for layout. Select Gas + Brake or Race actions to move, size and shape that set together. Individual sizes are relative to Button Size. With a button focused, arrow keys move it 2 px. Hold Shift for 16 px. Reset Dock Layout restores the current steering mode.";
       const reset = document.createElement("button");
       reset.id = "pm-dock-reset";
       reset.type = "button";
@@ -361,13 +395,12 @@ const DockLayout = (function () {
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       if (drag || e.isPrimary === false) return;
       const s = schemeOf();
+      const hit = t.closest(".touchbtn")?.id;
+      const pad = measurePad(docks()), before = bag[s][side];
       drag = {
-        side,
-        startX: e.clientX, startY: e.clientY,
-        orig: Object.assign({}, bag[s][side]),
-        scheme: s,
-        pid: e.pointerId,
-        pad: usablePad(document.documentElement),
+        side, hit, buttons: toolbar.buttonDrag(hit, side, pad), before, moved: false,
+        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
+        scheme: s, pid: e.pointerId, pad,
       };
       try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
     }
@@ -377,24 +410,28 @@ const DockLayout = (function () {
       const sx = inboard(drag.side);
       const dx = ((e.clientX - drag.startX) / pad.w) * sx;
       const dy = -((e.clientY - drag.startY) / pad.h);
-      bag[drag.scheme][drag.side] = clampXY({
-        x: drag.orig.x + dx,
-        y: drag.orig.y + dy,
-      });
+      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
+      drag.moved = true;
+      if (drag.buttons) drag.buttons.move(dx, dy);
+      else bag[drag.scheme][drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
       paintDrag(pad);
     }
     function onPointerUp(e) {
       if (!drag || e.pointerId !== drag.pid) return;
-      save(store, bag);
+      const finished = drag;
       drag = null;
+      if (finished.moved) save(store, bag);
+      else toolbar.pick(finished.hit, true);
       fitNow();
     }
     function cancelDrag(e) {
-      if (!drag || (e.pointerId != null && drag.pid !== e.pointerId)) return;
-      bag[drag.scheme][drag.side] = drag.orig;
+      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
+      if (drag.buttons) drag.buttons.cancel();
+      else bag[drag.scheme][drag.side] = drag.before;
       drag = null;
       paint();
     }
+    function viewportChanged() { if (drag) cancelDrag(); else paint(); }
     if (typeof document !== "undefined") {
       document.addEventListener("pointerdown", onPointerDown, true);
       document.addEventListener("pointermove", onPointerMove, true);
@@ -414,43 +451,29 @@ const DockLayout = (function () {
         });
         for (const e of watched) mo.observe(e, { attributes: true, attributeFilter: ["hidden"] });
       }
-      document.addEventListener("keydown", (e) => {
-        if (!editing || e.key !== "Escape") return;
-        e.preventDefault();
-        e.stopPropagation();   // Input's Escape would otherwise toggle pause under the editor
-        setEditing(false);
-      }, true);
+
     }
     // apply() bakes the fractions into PIXELS of the pad at paint time, so a
     // rotation must repaint: a portrait offset kept its pixels in landscape and
     // pushed the dock off the top (the header promises relative placement).
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("blur", cancelDrag);
-      window.addEventListener("resize", paint, { passive: true });
-      window.addEventListener("orientationchange", paint, { passive: true });
+      window.addEventListener("resize", viewportChanged, { passive: true });
+      window.addEventListener("orientationchange", viewportChanged, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
-        window.visualViewport.addEventListener("resize", paint, { passive: true });
+        window.visualViewport.addEventListener("resize", viewportChanged, { passive: true });
     }
     // LEFT-HANDED flips a body class with no resize: repaint or a moved group sits off screen.
     if (typeof MutationObserver !== "undefined" && typeof document !== "undefined" && document.body) {
       let mirrored = inboard("L") < 0;
       new MutationObserver(() => {
         const m = inboard("L") < 0;
-        if (m !== mirrored) { mirrored = m; paint(); }
+        if (m !== mirrored) { mirrored = m; viewportChanged(); }
       }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }
     // The offset divides by the dock's zoom, which changes at race start with no resize.
     if (typeof ResizeObserver !== "undefined") {
-      const usedZ = { L: 0, R: 0 };
-      const ro = new ResizeObserver(() => {
-        const d = docks();
-        let changed = false;
-        for (const side of SIDES) {
-          const z = d[side] ? zoomOf(d[side]) : 0;
-          if (z !== usedZ[side]) { usedZ[side] = z; changed = true; }
-        }
-        if (changed && !drag) paint();
-      });
+      const ro = new ResizeObserver(() => { if (!drag) paint(); });
       const d = docks();
       for (const side of SIDES) if (d[side]) ro.observe(d[side]);
     }
@@ -465,10 +488,11 @@ const DockLayout = (function () {
           if (v !== shape) setShape(v);
         }
         const hit = (k) => k === "steerMode" || k === KEY;
-        if (hit(change.key)) { bag = load(store); paint(); return; }
-        if (Array.isArray(change.keys) && change.keys.some(hit)) {
+        if (hit(change.key) || change.keys?.some(hit)) {
+          cancelDrag();
           bag = load(store);
           paint();
+          toolbar?.paint();
         }
       });
     }
@@ -484,6 +508,35 @@ const DockLayout = (function () {
       shape: () => shape,
       setShape,
     };
+  }
+
+  // Read preferences on a layout change. The drag path only updates translations.
+  function applyControls(scheme, docks) {
+    if (typeof document === "undefined" || !document.querySelectorAll) return;
+    function attr(el, key, value) {
+      if (!el?.getAttribute || el.getAttribute(key) === value) return;
+      if (value === null) el.removeAttribute(key);
+      else el.setAttribute(key, value);
+    }
+    function prop(el, key, value) {
+      if (!el?.style?.getPropertyValue || el.style.getPropertyValue(key) === value) return;
+      if (value) el.style.setProperty(key, value);
+      else el.style.removeProperty(key);
+    }
+    const custom = !isIdentity(scheme) || document.body?.hasAttribute?.("data-dock-edit");
+    for (const dock of Object.values(docks || {})) {
+      attr(dock, "data-drive-layout", scheme.layout || null);
+      attr(dock, "data-dock-custom", custom ? "" : null);
+    }
+    const steer = document.getElementById("grp-steer");
+    attr(steer, "data-steer-gap", scheme.gap == null ? null : "");
+    prop(steer, "--steer-gap", scheme.gap == null ? "" : scheme.gap + "px");
+    for (const el of document.querySelectorAll(".dock-grp .touchbtn")) {
+      const control = scheme.controls?.[el.id];
+      prop(el, "--control-scale", control?.size ? String(control.size / 100) : "");
+      attr(el, "data-control-size", control?.size ? "" : null);
+      attr(el, "data-control-shape", control?.shape || null);
+    }
   }
 
   /** ARRANGE HUD's pause-card door (create() opens it). js/ui/hud-arrange.js is LAZY_UI_PRESETS: the first

@@ -22,6 +22,9 @@ const TouchButtonSettings = (() => {
     }
     host.textContent = "";
     const button = choice("button", "BUTTON", ids.map(id => [id, id.toUpperCase()]));
+    const scope = node("p", "Changes save as you go. Reset restores the response of the selected button only.");
+    scope.className = "adv-help"; scope.id = host.id + "-scope";
+    button.setAttribute("aria-describedby", scope.id); host.appendChild(scope);
     const press = choice("press", "FIRST TOUCH", [["instant", "INSTANT"], ["progressive", "PROGRESSIVE"]]);
     const help = node("p"); help.className = "adv-help"; help.id = host.id + "-help";
     press.setAttribute("aria-describedby", help.id); host.appendChild(help);
@@ -29,14 +32,18 @@ const TouchButtonSettings = (() => {
     travelRow.className = "tune-row"; title.className = "tune-label"; title.appendChild(amount);
     travel.type = "range"; travel.min = "40"; travel.max = "160"; travel.step = "1"; travel.dataset.field = "travel";
     travel.setAttribute("aria-label", "Slide distance"); travelRow.append(title, travel); host.appendChild(travelRow);
+    const travelHelp = node("p", "Choose 40–160 screen pixels of thumb movement. A shorter slide changes input faster. A longer slide gives finer control.");
+    travelHelp.className = "adv-help"; travelHelp.id = host.id + "-travel-help";
+    travel.setAttribute("aria-describedby", travelHelp.id); host.appendChild(travelHelp);
     const slide = choice("slide", "SLIDE ONTO PEDAL", [["inherit", standalone ? "STAY ON ORIGINAL PEDAL" : "DEFAULT"], ["instant", "INSTANT"], ["ease", "EASE"]]);
-    const slideHelp = node("p", standalone
-      ? "By default, your thumb stays on its original pedal. Choose Instant or Ease to transfer input when you slide onto the selected pedal."
-      : "Default follows Pedal Slide. Ease builds input as you slide onto this pedal.");
+    const slideHelp = node("p", (standalone
+      ? "Stay on Original Pedal keeps the first pedal held when you cross onto this one. "
+      : "Default uses the Pedal Slide setting above. ") +
+      "Crossing onto this pedal with Instant gives full input immediately. Ease starts at 12% and reaches full input after another 40 pixels.");
     slideHelp.className = "adv-help"; slideHelp.id = host.id + "-slide-help"; slide.setAttribute("aria-describedby", slideHelp.id); host.appendChild(slideHelp);
     const strengths = Array.from({ length: 10 }, (_, i) => [String(i + 1), i ? String(i + 1) : "1 · OFF"]);
     const adaptive = choice("adaptive", "ADAPTIVE BUTTONS", [["inherit", "FOLLOW GLOBAL"], ...strengths]);
-    const adaptiveHelp = node("p", "Higher levels soften this arrow’s steering taps at speed. Follow Global uses Adaptive Buttons in Driving Aids.");
+    const adaptiveHelp = node("p", "At speed, a short tap gives a smaller turn. Hold the arrow longer to build steering. Level 1 turns speed smoothing off and 10 gives the most smoothing. Follow Global uses Adaptive Buttons in Driving Aids.");
     adaptiveHelp.className = "adv-help"; adaptiveHelp.id = host.id + "-adaptive-help"; adaptive.setAttribute("aria-describedby", adaptiveHelp.id); host.appendChild(adaptiveHelp);
     const feedback = choice("feedback", "ON-BUTTON FEEDBACK", [["on", "ON"], ["off", "OFF"]]);
     const feedbackHelp = node("p"); feedbackHelp.className = "adv-help"; feedbackHelp.id = host.id + "-feedback-help";
@@ -57,16 +64,16 @@ const TouchButtonSettings = (() => {
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
       slide.parentElement.parentElement.hidden = !pedal; slideHelp.hidden = !pedal;
       feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
-      if (profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
+      if (id !== "gas" && profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
       const overrides = PedalTravel.buttonOverrides(id);
       slide.value = overrides.slide || "inherit";
       adaptive.parentElement.parentElement.hidden = pedal; adaptiveHelp.hidden = pedal;
       adaptive.value = String(overrides.adaptive || "inherit");
       feedback.value = profile.feedback ? "on" : "off";
       help.textContent = profile.press === "progressive"
-        ? "Start light. Slide away from where you touched to build input, then slide back to ease off."
-        : pedal ? "Start at full input. Slide up to ease off." : "Start at full steering input. Slide toward the other arrow to ease off.";
-      if (id === "gas" && !standalone) help.textContent += " Use HOLD throttle for manual gas input.";
+        ? "Touch for 12% input. Slide away from that spot in any direction to reach 100% over your Slide Distance. Slide back to ease off."
+        : pedal ? "Touch for full input. Slide upward to ease off, or move back down toward your starting point to press harder." : "Touch for a full turn. Slide toward the other arrow to ease off. At the default distance, the global Adaptive Buttons level controls how much this slide eases steering.";
+      if (id === "gas" && !standalone) help.textContent += " Hold throttle gives manual control until you lift. Latch toggles full throttle with each tap. Auto handles throttle while you steer and brake.";
       reset.textContent = "RESET " + id.toUpperCase();
     }
     function change(patch) {
@@ -95,7 +102,7 @@ const TouchButtonSettings = (() => {
     const built = SettingRow.build("pm-pedalslide", "PEDAL SLIDE", SLIDE_VALUES);
     const help = document.createElement("p");
     help.className = "adv-help"; help.id = "pm-pedalslide-help";
-    help.textContent = "Sliding a thumb from GAS onto BRAKE, or back. INSTANT presses it fully at once. EASE builds it up over a short slide, so sliding off GAS cannot slam the brakes.";
+    help.textContent = "Sets the default when you slide from Gas to Brake or back without lifting. Instant fully presses the new pedal on entry. Ease starts it at 12% and builds to full over 40 more pixels. Override either pedal in Touch Button Response.";
     built.sel.setAttribute("aria-describedby", help.id);
     mirrorHelp.after(built.row, help);
     SettingRow.wire("pm-pedalslide", { values: SLIDE_VALUES, read: Input.pedalSlide,
