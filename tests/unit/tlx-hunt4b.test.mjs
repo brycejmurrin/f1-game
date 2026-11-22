@@ -817,15 +817,20 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
 
 // Execute the production uniform derivation with its real uniform defaults;
 // this tests CPU illumination inputs, not the shader's per-ray If branches.
-function skyDeriveHarness() {
+function skyUniformHarness() {
   const source = read("js/render/three/tsl-sky.js");
   const uniforms = source.slice(source.indexOf("    const U = {"), source.indexOf("    const C = ctx"));
   const helpers = source.slice(source.indexOf("    const sstep ="), source.indexOf("    function derive()"));
   const context = vm.createContext({ THREE, uniform: (value) => ({ value }), C: null });
   vm.runInContext(uniforms + helpers + fnSource(source, "function derive()") +
-    "\n;globalThis.api = { U, D, derive };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+    fnSource(source, "function updateClock()") + fnSource(source, "function update(sky)") +
+    "\n;globalThis.api = { U, D, derive, update };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+  return context.api;
+}
+
+function skyDeriveHarness() {
+  const { U, D, derive } = skyUniformHarness();
   return (stars, y) => {
-    const { U, D, derive } = context.api;
     U.stars.value = stars;
     U.sunDir.value.set(Math.sqrt(1 - y * y), y, 0);
     U.cloud.value = 1;
@@ -838,6 +843,33 @@ function skyDeriveHarness() {
       daytime: D.daytime.value };
   };
 }
+
+test("clock-only sky updates advance clouds and dither while reusing lighting", () => {
+  const { U, D, update } = skyUniformHarness();
+  const frame = { time: 1, zenith: [0.2, 0.3, 0.6], cloudDef: 0.5 };
+  let lightingWrites = 0;
+  const zenith = D.zenithO.value;
+  const set = zenith.set.bind(zenith);
+  zenith.set = (...args) => { lightingWrites++; return set(...args); };
+
+  update(frame);
+  const original = zenith.toArray();
+  const drift = D.drift1.value.x;
+  const dither = D.dthOff.value;
+  frame.time = 2;
+  update(frame);
+  assert.equal(lightingWrites, 1);
+  assert.equal(D.drift1.value.x, drift * 2);
+  assert.notEqual(D.dthOff.value, dither);
+  frame.zenith[0] = 0.8;
+  update(frame);
+  assert.equal(lightingWrites, 2);
+  assert.notDeepEqual(zenith.toArray(), original);
+  delete frame.cloudDef;
+  update(frame);
+  assert.equal(U.cloudDef.value, 1);
+  assert.equal(lightingWrites, 3);
+});
 
 test("sky derivation suppresses solar scattering for low and high night moon keys", () => {
   const derive = skyDeriveHarness();

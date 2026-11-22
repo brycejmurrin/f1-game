@@ -246,8 +246,8 @@
     /* UNIFORM-ONLY TERMS, hoisted (TLX perf hunt E5). Every value below is a
      * pure function of the U uniforms, so the GPU used to evaluate it once per
      * uncovered sky pixel (~0.5 M a frame at 1080p, again in the mirror). They
-     * are derived ONCE per update() in derive(), in the same arithmetic as the
-     * per-pixel graph did (glsl-sky.js SKY_FS still spells them per pixel and
+     * now update when lighting changes, while drift and dither follow the clock.
+     * The arithmetic matches the per-pixel graph (glsl-sky.js SKY_FS still spells them per pixel and
      * stays the source of truth; only float rounding may differ in the last
      * ulp). The noise, the ray and every per-pixel term are untouched. */
     const v3 = () => uniform(new THREE.Vector3());
@@ -285,10 +285,19 @@
     const lerp = (a, b, t) => a + (b - a) * t;
     const set3 = (u, x, y, z) => u.value.set(x, y, z);
     const lid = (a, b) => (a + b) * 1.25;
-    // update()'s frameSky readers, hoisted: update + derive run every frame, so
+    // update()'s frameSky readers, hoisted: update runs every frame, so
     // no closure or array is minted per call (#3115 F8/F9).
-    const s3 = (u, a) => { if (a) u.value.set(a[0], a[1], a[2]); };
-    const s1 = (u, v, def) => { u.value = v !== undefined ? v : def; };
+    let lightingChanged = false;
+    const s3 = (u, a) => {
+      if (a && (u.value.x !== a[0] || u.value.y !== a[1] || u.value.z !== a[2])) {
+        u.value.set(a[0], a[1], a[2]);
+        lightingChanged = true;
+      }
+    };
+    const s1 = (u, v, def) => {
+      const next = v !== undefined ? v : def;
+      if (u.value !== next) { u.value = next; lightingChanged = true; }
+    };
     const NO_GLOW = Object.freeze([0, 0, 0]);
     function derive() {
       const sd = U.sunDir.value, sc = U.sunColor.value, ze = U.zenith.value, ho = U.horizon.value;
@@ -324,12 +333,7 @@
       D.lowK.value = (1 - sstep(0.0, 0.60, sunE)) * (1 - overcast * 0.85);
       const lc = clamp01(sunE * 3.0);
       set3(D.lowColor, lerp(0.90, 1.0, lc), lerp(0.26, 0.66, lc), lerp(0.03, 0.12, lc));
-      // Clouds: drift, coverage window, enrichment gates, the lit model's colours.
-      const cT = U.time.value * U.cloudSpeed.value;
-      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
-      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
-      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
-      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      // Clouds: coverage window, enrichment gates, the lit model's colours.
       D.covLo.value = 0.50 - cloud * 0.42;
       const rich = Math.max(daytime, twilight);
       D.cloudRich.value = rich;
@@ -374,11 +378,8 @@
       D.discOut.value = lerp(0.018, 0.028, golden) * U.sunDiscSize.value;
       D.discIn.value = U.sunDiscSize.value * 0.006;
       set3(D.discCore, lerp(2.3, sw0 * 2.8, golden), lerp(2.2, sw1 * 2.8, golden), lerp(1.9, sw2 * 2.8, golden));
-      // Star spawn window; the dither's time step (float32 like the GPU's floor).
+      // Star spawn window.
       D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
-      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
-      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
-      if (C) cacheSync();
       if (A.on) atmoDerive(night, overcast, rich);
     }
     // SKY ATMO's per-frame uniforms. The exposure march (SkyAtmo.exposure, ~50 exp) re-runs only when
@@ -610,7 +611,20 @@
         fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead } : null;
     }
     function dispose() { retireCache(); }
+    // A steady sky still animates clouds and dithering as the clock advances.
+    function updateClock() {
+      const cT = U.time.value * U.cloudSpeed.value;
+      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
+      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
+      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
+      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      // Match the GPU's float32 time step.
+      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
+      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+      if (C) cacheSync();
+    }
     derive();
+    updateClock();
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
      * js/render/glx/glx.js upload exactly (each frameSky field maps to the same-
@@ -623,9 +637,9 @@
       s3(U.horizon, sky.horizon);
       s3(U.sunDir, sky.sunDir);
       s3(U.sunColor, sky.sunColor);
-      U.stars.value = sky.stars ? 1 : 0;
+      s1(U.stars, sky.stars ? 1 : 0, 0);
       s1(U.cloud, sky.cloud, 0);
-      s1(U.time, sky.time, 0);
+      U.time.value = sky.time !== undefined ? sky.time : 0;
       s1(U.moon, sky.moon, 0);
       s3(U.cityGlow, sky.cityGlow || NO_GLOW);
       s1(U.starBright, sky.starBright, 1);
@@ -646,7 +660,8 @@
       s1(U.cityGlowReach, sky.cityGlowReach, 1);
       s1(U.cloudDef, sky.cloudDef, 1);
       s1(U.lightning, sky.lightning, 0);
-      derive();
+      updateClock();
+      if (lightingChanged) { derive(); lightingChanged = false; }
     }
 
     /* SKY ATMO: the TSL twin of SkyAtmo.scatter (top of this file), built only when ATMO is on. One
