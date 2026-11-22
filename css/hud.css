@@ -856,7 +856,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   top: calc(8px + var(--sat) / var(--hud-z));
   width: 128px; height: 128px;
   opacity: 1;
-  background: var(--hud-strip-bg); box-shadow: inset 0 0 0 2px var(--you), 0 2px 8px rgba(0,0,0,0.6);
+  background: var(--hud-strip-bg); box-shadow: inset 0 0 0 2px var(--map-frame-color, var(--you)), 0 2px 8px rgba(0,0,0,0.6);
 }
 /* PHONE PORTRAIT: the centred POS/LAP/TIME/BEST row is wider than the slot
    beside #minimap (survey 390×844: tower x=31–359 vs map x=10–138, ranked
@@ -1790,11 +1790,7 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
    dialog, where the up/down buttons landed across QUIT TO MENU. Nothing here is
    usable while a dialog is open anyway — you cannot fly a paused game — so the
    whole fly-cam overlay stands down until it closes. */
-body:has(> .screen.dim:not([hidden])) #photo-controls { display: none; }
-/* Pause owns paused navigation. JS already hideCamPicker()s on setPaused; this
-   is the CSS twin so #campicker cannot paint in the dim beside the pause card
-   if the hidden attribute lags. Same :has() as #photo-controls above. */
-body:has(> .screen.dim:not([hidden])) #campicker { display: none; }
+body:has(> .screen.dim:not([hidden])) :is(#photo-controls, #campicker) { display: none; }
 /* …and off the race: endRace drops body.in-race, and an open grid painted
    through the results card (UI hunt 2026-10-29 row 2). cam-picker.js also
    hides it when #btn-cam hides; this is the twin if that lags. */

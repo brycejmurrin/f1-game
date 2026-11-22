@@ -10,9 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
+const EDITOR = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout-editor.js"), "utf8");
 const POLICY = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
 const ROW = fs.readFileSync(path.join(ROOT, "js/ui/setting-row.js"), "utf8");
 
@@ -22,7 +24,9 @@ function visibilityPolicy(elements, stored = {}, rows = {}, environment = {}) {
     getElementById: id => rows[id] || null, addEventListener() {} }, HudElements: elements,
     Event: class { constructor(type) { this.type = type; } },
     GameStore: { store: { get: (k, d) => k in stored ? stored[k] : d, set: (k, v) => { stored[k] = v; } } }, ...environment };
-  vm.createContext(ctx); vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
+  vm.createContext(ctx);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
+  vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
   return ctx.HudLayout;
 }
 
@@ -199,7 +203,7 @@ function editor(pieceId = "piece", options = {}) {
   const viewport = { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
   const policy = visibilityPolicy(elements, preferences, rows, { window: viewport, root: {},
     getComputedStyle: () => ({ getPropertyValue: key => options.insets?.[key] || '0px' }) });
-  Object.assign(layout, { relativeSize: policy.relativeSize, LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
+  Object.assign(layout, { colors: policy.colors, relativeSize: policy.relativeSize, LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
     screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   const ctx = { document: doc, window: viewport,
@@ -509,7 +513,7 @@ test('only the widget picker, tools, cancel and apply occupy the initial HUD str
   assert.deepEqual(visible(), compact);
   toggle.onclick();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  for (const name of ['left', 'right', 'up', 'down', 'larger', 'smaller', 'undo', 'reset-screen']) {
+  for (const name of ['left', 'right', 'up', 'down', 'larger', 'smaller', 'undo', 'reset-screen', 'color-reset']) {
     assert.ok(visible().includes('hud-arrange-' + name));
   }
   toggle.onclick();

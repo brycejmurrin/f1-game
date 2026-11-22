@@ -15,6 +15,7 @@ const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8")
 // hud-layout reads CamGroups at eval (tools/manifest.cjs HARD_EDGES), so every
 // harness evaluates the two together, in load order.
 const SRC = CAMG + "\n" + fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+const EDITOR = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout-editor.js"), "utf8");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
 
 test("HUD browser helper atomically holds producers, selects camera and refreshes the controlled HUD", async () => {
@@ -121,9 +122,35 @@ function load(stored = {}, opts = {}) {
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
+  if (extra.editor) vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
-  return { H: ctx.HudLayout, written, els };
+  return { H: ctx.HudLayout, written, els, ctx };
 }
+
+test("a cold HUD shares the editor request, retries after failure and restores saved race colors", async () => {
+  let attempts = 0, finish;
+  const loader = { create: () => ({ load(files) {
+    assert.deepEqual([...files], ["js/ui/hud-layout-editor.js"]);
+    attempts++;
+    return new Promise(resolve => { finish = resolve; });
+  } }) };
+  const { H, ctx } = load({ hudColors: { "map-ghost": "#aabbcc" } }, { ctx: { ScriptLoader: loader } });
+  assert.equal(attempts, 1, "saved colors request the policy before opening Settings");
+  const waiting = H.ensureEditor();
+  assert.equal(H.ensureEditor(), waiting, "a fast second request shares the first attempt");
+  finish(false);
+  assert.equal(await waiting, false);
+  const retry = H.ensureEditor();
+  assert.equal(attempts, 2);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
+  finish(true);
+  assert.equal(await retry, true);
+  assert.equal(H.colors.value("map-ghost"), "#aabbcc");
+  assert.equal(await H.ensureEditor(), true);
+  assert.equal(attempts, 2, "the warm editor is reused");
+  load({}, { ctx: { ScriptLoader: loader } });
+  assert.equal(attempts, 2, "an ordinary race without customized colors needs no color policy");
+});
 
 test("standard phone placements apply when fresh, respect explicit empty sets, and reset per camera", () => {
   const { H, written, els } = load({}, true);
@@ -1495,6 +1522,7 @@ function visibilityEditor(phone = false) {
     host.appendChild(built.row);
   }
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/hud-elements.js'), 'utf8') + '; this.HudElements = HudElements;', ctx, { filename: absSrc("js/ui/hud-elements.js") });
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
   ctx.HudLayout.build();
   const choose = (id, value) => { const el = document.getElementById(id); assert.ok(el, id); el.value = value; dom.dispatch(el, { type: 'change', bubbles: true }); };
@@ -1803,4 +1831,28 @@ test("the factory phone seed keeps the screen-fit caps; a player's own placement
   assert.equal(decl(rules, "[data-hl][data-hl-v4]", "--hud-z"), "var(--hl-z-seed, var(--hud-scale)) !important");
   assert.equal(decl(rules, "[data-hl-seed]", "--hl-z-seed"), "var(--hud-z-top, var(--hud-scale))");
   assert.equal(decl(rules, "[data-hl-seed][data-hl-bottom]", "--hl-z-seed"), "var(--hud-z-bot, var(--hud-scale))");
+});
+
+test("Arrange HUD event colors persist independently and reset one state at a time", () => {
+  const sheet = {};
+  const { H, written } = load({}, { editor: true, doc: { createElement: () => sheet, head: { appendChild() {} } } });
+  const flags = H.colors.options("flag");
+  for (const [index, kind] of ["yellow", "vsc", "sc", "red", "blue"].entries()) {
+    const selector = kind === "blue" ? '#hud-flag[data-flag="blue"]' : "#hud-flag.flag-" + kind;
+    for (const [part, property, color] of [
+      ["fill", "background-color", "#12345" + index],
+      ["text", "color", "#abcde" + index],
+    ]) {
+      const option = flags.find(flag => flag.id === "flag-" + kind + "-" + part);
+      H.colors.save(option.id, color);
+      assert.equal(decl(cssRules(sheet.textContent), selector, property), color + " !important");
+    }
+  }
+  H.colors.save("flag-yellow-fill", "#abcdef");
+  H.colors.save("map-armed", "#123456");
+  const restored = load(written, { editor: true }).H.colors;
+  assert.equal(restored.value("flag-yellow-fill"), "#abcdef");
+  restored.save("flag-yellow-fill", null);
+  assert.equal(restored.value("flag-yellow-fill"), undefined);
+  assert.equal(restored.value("map-armed"), "#123456");
 });

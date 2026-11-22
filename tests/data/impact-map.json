@@ -19629,6 +19629,28 @@
         "tests/unit/cvd-palette.test.mjs"
       ]
     },
+    "js/ui/hud-layout-editor.js": {
+      "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "options": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "read": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "save": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-arrange.test.mjs"
+      ]
+    },
     "js/ui/hud-layout.js": {
       "apply": [
         "tests/specs/hud-layout.spec.js",
@@ -19659,6 +19681,9 @@
       ],
       "endArrangeDraft": [
         "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "ensureEditor": [
         "tests/unit/hud-layout.test.mjs"
       ],
       "hiddenReason": [
@@ -19710,6 +19735,9 @@
       ],
       "restoreSnapshot": [
         "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "save": [
         "tests/unit/hud-layout.test.mjs"
       ],
       "scaleOf": [
@@ -21037,6 +21065,9 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs"
       ],
+      "options": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
@@ -21050,6 +21081,7 @@
       ],
       "value": [
         "tests/specs/career-season.spec.js",
+        "tests/unit/hud-layout.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "wire": [

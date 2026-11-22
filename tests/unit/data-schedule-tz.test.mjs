@@ -82,12 +82,14 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
   const sub = nodes.find((n) => n.cls === "dh-race-sub");
   assert.ok(sub, "a venue line exists");
   assert.equal(sub.attrs.title, undefined, "no title until the line actually ellipsizes");
-  sub.listeners.mouseenter[0]();
+  sub.listeners.pointerenter[0]({ pointerType: "mouse" });
   assert.equal(sub.attrs.title, undefined, "a fully-visible line still has no title");
   sub.scrollWidth = 400; sub.clientWidth = 120;
-  sub.listeners.mouseenter[0]();
+  sub.listeners.pointerenter[0]({ pointerType: "touch" });
+  assert.equal(sub.attrs.title, undefined, "a tap on a truncated venue does not open a tooltip");
+  sub.listeners.pointerenter[0]({ pointerType: "mouse" });
   assert.equal(sub.attrs.title, "Albert Park Circuit · Melbourne, Australia");
-  sub.listeners.mouseleave[0]();
+  sub.listeners.pointerleave[0]();
   assert.equal(sub.attrs.title, undefined, "leave clears the tip so scroll cannot hang it");
 });
 
