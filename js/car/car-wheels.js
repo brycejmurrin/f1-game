@@ -70,7 +70,7 @@ const CarWheels = (function () {
       const v = tiers._visual || {}, t = v.tyres, b = v.brakes, w = v.wheels, tint = tints(liv);
       const band = t && t.band || Car3D.TYRE_BAND[tiers.tyres] || Car3D.TYRE_BAND[1];
       const cal = tint.cal || (b && b.cal) || Car3D.BRAKE_CALIPER[tiers.brakes];
-      const rim = tint.rim || (b && b.rim);
+      const rim = tint.rim || w?.rim || b?.rim;
       // The garage turntable's wheels at the player's desktop level (EXTREME tyres there; 0 on every phone).
       const gd = Car3D.garageDetail ? Car3D.garageDetail().detail : 0;
       const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd);

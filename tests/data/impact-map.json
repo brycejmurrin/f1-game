@@ -3911,6 +3911,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/factory-ai-setup.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs",
