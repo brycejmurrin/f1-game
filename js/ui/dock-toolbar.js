@@ -1,7 +1,7 @@
 /* Live touch layout toolbar, loaded on the first edit. */
 const DockToolbar = (() => {
   "use strict";
-  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, getShape, setShape, record, close }) {
+  function create(G, { schemeOf, getScheme, commitLayout, applyDrag, repaint, saveLayout, boundedXY, docks, measurePad, inboard, boundedControlXY, getShape, setShape, record, close }) {
     const { $ } = G;
     const { sizeStep, SHAPES } = DockLayout;
     const labels = {
@@ -17,6 +17,7 @@ const DockToolbar = (() => {
     const byId = new Map(controls.filter(Boolean).map(node => [node.id, node]));
     let target = "all", shown = null;
     let editBar = null, doneBtn = null, toolsButton = null, expanded = false, visible = false;
+    let drag = null;
     function targetButtons() { return targets[target] || (labels[target] ? [target] : []); }
     function stepSize(dir) {
       if (target !== "all") {
@@ -71,7 +72,7 @@ const DockToolbar = (() => {
       const size = same("size", 100), buttonShape = same("shape", "auto");
       const out = $("pm-btnscale-v");
       field("size").textContent = target === "all" ? "SIZE " + (out?.textContent || "") : size == null ? "Mixed sizes" : size + "%";
-      field("shape").textContent = "Shape: " + (target === "all" ? getShape() : buttonShape === "auto" ? "Default" : buttonShape || "Mixed");
+      field("shape").value = target === "all" ? getShape() : buttonShape || "";
       for (const id of Object.keys(labels)) {
         const el = byId.get(id);
         if (el && visible && ids.includes(id)) el.setAttribute("data-dock-selected", "");
@@ -104,9 +105,9 @@ const DockToolbar = (() => {
         const sel = document.createElement("select");
         sel.dataset.k = key;
         sel.setAttribute("aria-label", aria);
-        for (const [value, text] of choices) {
+        for (const [value, text, disabled = false] of choices) {
           const option = document.createElement("option");
-          option.value = value; option.textContent = text; sel.appendChild(option);
+          option.value = value; option.textContent = text; option.disabled = disabled; sel.appendChild(option);
         }
         sel.onchange = () => change(sel.value);
         editBar.appendChild(sel);
@@ -118,7 +119,7 @@ const DockToolbar = (() => {
         if (value === "") delete getScheme().gap; else getScheme().gap = Number(value);
         commitLayout();
       });
-      select("layout", "Driving button layout", [["", "Layout: Auto"], ["pedal-row", "Pedals side by side"], ["tap-row", "Actions side by side"], ["stack", "Two rows"]], value => {
+      select("layout", "Driving button layout", DockLayout.DRIVE_LAYOUTS, value => {
         if (value) getScheme().layout = value; else delete getScheme().layout;
         commitLayout();
       });
@@ -130,12 +131,10 @@ const DockToolbar = (() => {
       size.setAttribute("aria-live", "polite");
       editBar.appendChild(size);
       mk("bigger", "+", "Bigger buttons", () => stepSize(1));
-      mk("shape", "SHAPE", "Next button shape", () => {
-        const ids = targetButtons();
-        const current = target === "all" ? getShape() : getScheme().controls?.[ids[0]]?.shape || "auto";
-        const next = SHAPES[(SHAPES.findIndex(([s]) => s === current) + 1) % SHAPES.length][0];
-        if (target === "all") return setShape(next);
-        for (const id of ids) record(id).shape = next;
+      const shapes = [["", "Mixed shapes", true], ...SHAPES.map(([value, label]) => [value, "Shape · " + label.toLowerCase()])];
+      select("shape", "Button shape", shapes, value => {
+        if (target === "all") return setShape(value);
+        for (const id of targetButtons()) record(id).shape = value;
         commitLayout();
       });
       mk("reset", "Reset selection", "", () => {
@@ -178,8 +177,30 @@ const DockToolbar = (() => {
       if (was.settings && settings) settings.hidden = false;
       if (was.pause && pause) pause.hidden = false;
     }
+    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
+    let fitRaf = 0;
+    function fitNow() {
+      fitRaf = 0;
+      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
+    }
+    function paintDrag(pad) {
+      applyDrag(pad);
+      if (fitRaf) return;
+      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
+      else fitNow();
+    }
     function show(on, restore) {
       visible = on;
+      if (!on) {
+        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
+        if (fitRaf) {
+          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
+          fitRaf = 0;
+        }
+        if (drag) saveLayout(); // a drag cut short by DONE/Escape keeps its move
+        drag = null;
+      }
+
       if (on) { target = "all"; expanded = false; ensureDone(); hideDialogs(); }
       else if (restore === false) shown = null;
       else restoreDialogs();
@@ -222,7 +243,64 @@ const DockToolbar = (() => {
         },
       };
     }
+    function onPointerDown(e) {
+      if (!visible) return;
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const left = $("dock-left"), right = $("dock-right");
+      const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
+      if (!side) return;
+      // The press is the drag's, not the button's: preventDefault alone let
+      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
+      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
+      // before the target, so stopping here means the button never sees it.
+      e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (drag || e.isPrimary === false) return;
+      const s = schemeOf();
+      const hit = t.closest(".touchbtn")?.id;
+      const pad = measurePad(docks()), before = getScheme(s)[side];
+      drag = {
+        side, hit, buttons: buttonDrag(hit, side, pad), before, moved: false,
+        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
+        scheme: s, pid: e.pointerId, pad,
+      };
+      try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+    }
+    function onPointerMove(e) {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const pad = drag.pad;
+      const sx = inboard(drag.side);
+      const dx = ((e.clientX - drag.startX) / pad.w) * sx;
+      const dy = -((e.clientY - drag.startY) / pad.h);
+      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
+      drag.moved = true;
+      if (drag.buttons) drag.buttons.move(dx, dy);
+      else getScheme(drag.scheme)[drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
+      paintDrag(pad);
+    }
+    function onPointerUp(e) {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const finished = drag;
+      drag = null;
+      if (finished.moved) saveLayout();
+      else pick(finished.hit, true);
+      fitNow();
+    }
+    function cancelDrag(e) {
+      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
+      if (drag.buttons) drag.buttons.cancel();
+      else getScheme(drag.scheme)[drag.side] = drag.before;
+      drag = null;
+      repaint();
+    }
+    if (typeof window !== "undefined") window.addEventListener?.("blur", cancelDrag);
     if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("pointerdown", onPointerDown, true);
+      document.addEventListener("pointermove", onPointerMove, true);
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", cancelDrag, true);
+      document.addEventListener("lostpointercapture", cancelDrag, true);
       document.addEventListener("click", e => {
         if (!visible) return;
         const id = e.target.closest?.(".touchbtn")?.id;
@@ -254,7 +332,7 @@ const DockToolbar = (() => {
         commitLayout();
       }, true);
     }
-    return { show, paint: paintBar, pick, buttonDrag };
+    return { show, paint: paintBar, cancelDrag, dragging: () => !!drag };
   }
   return Object.freeze({ create });
 })();
