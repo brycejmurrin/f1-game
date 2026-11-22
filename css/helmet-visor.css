@@ -22,6 +22,9 @@ body[data-helmet-cam] { --visor-lens: var(--visor-neutral); }
 body[data-helmet-visor-color="amber"] { --visor-lens: var(--visor-amber); }
 body[data-helmet-visor-color="ice"] { --visor-lens: var(--visor-ice); }
 body[data-helmet-visor-color="rose"] { --visor-lens: var(--visor-rose); }
+body[data-helmet-visor-color="green"] { --visor-lens: var(--visor-green); }
+body[data-helmet-visor-color="violet"] { --visor-lens: var(--visor-violet); }
+body[data-helmet-visor-color="copper"] { --visor-lens: var(--visor-copper); }
 
 #fx-visor { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; mix-blend-mode: screen; }
 @supports (mix-blend-mode: plus-lighter) { #fx-visor { mix-blend-mode: plus-lighter; } }

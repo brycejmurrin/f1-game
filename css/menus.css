@@ -586,7 +586,7 @@ body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])):has
     gap: 0.45em;
     padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.8);
     /* #1537: clamp+wrap so RACE A FRIEND / PHOTO STUDIO stay inside the cell. */
-    font-size: clamp(0.75rem, calc(3.2 * var(--vwz)), var(--fs-3));
+    font-size: clamp(calc(0.75rem * var(--arrange-text-size, 1)), calc(3.2 * var(--vwz) * var(--arrange-text-size, 1)), var(--fs-3));
     min-height: max(calc(var(--tap) * 0.9), var(--tap-paint));
     white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
   }
@@ -602,7 +602,7 @@ body[data-shape="tall"]:has(> :where(#overlay) > #home-motion:not([hidden])):has
     padding-block: calc(var(--gap) * 0.3);
     min-height: max(calc(var(--tap) * 0.85), var(--tap-paint));
     white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
-    font-size: clamp(0.7rem, calc(2.8 * var(--vwz)), var(--fs-micro));
+    font-size: clamp(calc(0.7rem * var(--arrange-text-size, 1)), calc(2.8 * var(--vwz) * var(--arrange-text-size, 1)), var(--fs-micro));
   }
 
   /* THE CARS, IN THE CLEAR. The side-on drawing, not the tall one: a portrait
@@ -777,12 +777,12 @@ html[data-home-scene] :where(body[data-shape="wide"][data-density="compact"]) #o
   display: flex; align-items: center; justify-content: center;
   gap: 0.4em;
   /* #1537: clamp+wrap — nowrap clipped RACE A FRIEN / PHOTO STUDI. */
-  font-size: clamp(0.7rem, calc(2.6 * var(--vwz)), calc(var(--fs-4) * var(--ui-compact-text, 1)));
+  font-size: clamp(calc(0.7rem * var(--arrange-text-size, 1)), calc(2.6 * var(--vwz) * var(--arrange-text-size, 1)), calc(var(--fs-4) * var(--ui-compact-text, 1)));
   white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .bigbtn {
   white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.1;
-  font-size: clamp(0.6rem, calc(2.0 * var(--vwz)), var(--fs-micro));
+  font-size: clamp(calc(0.6rem * var(--arrange-text-size, 1)), calc(2.0 * var(--vwz) * var(--arrange-text-size, 1)), var(--fs-micro));
 }
 :where(body[data-shape="wide"][data-density="compact"]) :is(#menu-explore, #menu-secondary) {
   --balance-basis: calc(50% - 0.5em);

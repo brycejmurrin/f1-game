@@ -84,6 +84,38 @@ const RIPPLE = (s) => 0.037 * Math.sin(s * 2 * Math.PI / 30)
                     + 0.075 * Math.sin(s * 2 * Math.PI / 68 + 1.1)
                     + 0.112 * Math.sin(s * 2 * Math.PI / 110 + 2.3);
 
+test("helmet eye position survives reduced motion and leaves the cockpit seat alone", () => {
+  let pose = "standard", mount = "center";
+  const { cams } = loadRig({ CockpitOpts: { helmetEye: () => pose, helmetMount: () => mount, layout: () => ({ eyeF: -0.2, eyeU: 0.82 }), turnChaseLead: () => 0 } });
+  const track = makeElevationTrack(() => 0);
+  const eye = mode => [...cams.vantage(track, mode, 200, 0, 60, 0, { carPos: [0, 200], att: {}, reduceMotion: true }).eye];
+  const stock = eye("helmet"), cockpit = eye("cockpit");
+  pose = "tucked";
+  const low = eye("helmet");
+  pose = "upright";
+  const high = eye("helmet");
+  assert.ok(low[1] < stock[1] && low[2] > stock[2]);
+  assert.ok(high[1] > stock[1] && high[2] < stock[2]);
+  pose = "forward";
+  assert.equal(eye("helmet")[1], stock[1]);
+  assert.ok(eye("helmet")[2] > low[2]);
+  pose = "high";
+  assert.ok(eye("helmet")[1] > high[1]);
+  pose = "low";
+  assert.ok(eye("helmet")[1] < low[1]);
+  pose = "back";
+  const back = eye("helmet");
+  assert.equal(back[1], stock[1]);
+  assert.ok(back[2] < high[2]);
+  mount = "left";
+  const left = eye("helmet");
+  mount = "right";
+  const right = eye("helmet");
+  assert.ok(Math.abs(left[0] - right[0] - 0.064) < 1e-6);
+  assert.deepEqual(right.slice(1), back.slice(1));
+  assert.deepEqual(eye("cockpit"), cockpit);
+});
+
 test("flat road: the chase rig frames exactly as its constants say", () => {
   const track = makeElevationTrack(() => 7.5);
   const cams = loadElevationRig();

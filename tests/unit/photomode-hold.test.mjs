@@ -136,6 +136,10 @@ function boot() {
     photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},
     applyResMode() {}, snapGameCam() {}, camEye: [0, 0, 0], camTgt: [0, 0, -1], camFov: 60,
   };
+  for (const id of ["pc-move", "pc-look"]) {
+    const nub = dom.document.createElement("div"); nub.className = "pc-nub";
+    dom.byId(id).appendChild(nub);
+  }
   const api = vm.runInContext("Photomode", ctx).create(G);
   return { dom, G, api, key: (e) => { const list = listeners.get(e.type); if (list && list.length) list.at(-1)(e); } };
 }
@@ -164,12 +168,17 @@ test("Photo Studio buttons keep activation and arrows while WASD still flies and
 });
 
 test("#pc-restore and Studio buttons keep Space activation on keydown AND keyup (#3562)", () => {
-  for (const host of ["pc-restore", "ps-panel"]) {
+  for (const host of ["pc-restore", "ps-panel", "screen-arranger"]) {
     const { dom, G, api, key } = boot();
     api.enterPhotoMode();
     let button = dom.byId(host);
-    if (host === "ps-panel") { button = dom.document.createElement("button"); dom.byId(host).appendChild(button); }
+    if (host !== "pc-restore") { button = dom.document.createElement("button"); dom.byId(host).appendChild(button); }
     button.focus();
+    if (host === "screen-arranger") {
+      G.photoKeys.up = true; G.photoKeys.w = true;
+      key({type:"focusin", target:button});
+      assert.equal(G.photoKeys.w, false, "entering the layout editor releases a held camera key");
+    }
     for (const type of ["keydown", "keyup"]) {
       const e = { code: "Space", type, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} };
       key(e);
@@ -258,5 +267,44 @@ test("opposite altitude holds cancel together and releasing either preserves the
     dom.dispatch(dom.byId("pc-" + first), { type: "pointerup", pointerId: 1 });
     assert.equal(G.photoAlt, second === "up" ? 1 : -1, "the other pointer remains held");
     dom.dispatch(dom.byId("pc-" + second), { type: "pointercancel", pointerId: 2 }); assert.equal(G.photoAlt, 0);
+  }
+});
+
+test("sized movement and look sticks use visual ring geometry and keep the nub inside the local ring", () => {
+  const { dom, G, api, key } = boot();
+  api.enterPhotoMode();
+  for (const [id, vec, size, factor] of [["pc-move", G.photoMove, 180, 1.5], ["pc-look", G.photoLook, 74, 0.75]]) {
+    const el = dom.byId(id), nub = el.querySelector(".pc-nub");
+    const localHeight = size - 20;
+    el._rect = { width:size, height:localHeight };
+    nub._rect = { width:26, height:18 };
+    let reads = 0;
+    el.getBoundingClientRect = () => { reads++; return {left:40, top:25, width:size * factor, height:localHeight * factor}; };
+    const x = 40 + size * factor / 2, y = 25 + localHeight * factor / 2;
+    const event = (type, pointerId, clientX, clientY) => dom.dispatch(el, {type,pointerId,clientX,clientY});
+    event("pointerdown", 1, x, y);
+    assert.deepEqual([vec.x, vec.y], [0, 0]);
+    event("pointermove", 1, x + size * factor / 2, y);
+    assert.deepEqual([vec.x, vec.y], [1, 0]);
+    assert.equal(nub.style.transform, "translate(" + (size - 26) / 2 + "px,0px)");
+    event("pointerdown", 2, x, y);
+    event("pointercancel", 2, x, y);
+    assert.equal(vec.x, 1, "a second contact cannot steal this stick");
+    event("pointermove", 1, x, y + localHeight * factor / 2);
+    assert.deepEqual([vec.x, vec.y], [0, 1]);
+    assert.equal(nub.style.transform, "translate(0px," + (localHeight - 18) / 2 + "px)");
+    assert.equal(reads, 1);
+    key({type:"resize"});
+    event("pointermove", 1, x + 30, y);
+    assert.deepEqual([vec.x, vec.y], [0, 0]);
+    assert.equal(nub.style.transform, "translate(0,0)");
+    event("pointerdown", 3, x + 30, y);
+    key({type:"focusin", target:dom.byId("screen-arranger")});
+    event("pointermove", 3, x + 30, y);
+    assert.deepEqual([vec.x, vec.y], [0, 0], "the editor interrupts the actual captured gesture");
+    event("pointerdown", 4, x + 30, y);
+    api.exitPhotoMode(); api.enterPhotoMode();
+    event("pointermove", 4, x + 30, y);
+    assert.deepEqual([vec.x, vec.y], [0, 0], "a stale pointer cannot drive a reopened camera");
   }
 });

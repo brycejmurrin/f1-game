@@ -550,7 +550,7 @@ const PhonePadPage = (function () {
     // a thumb on the diagonal does not flicker between two arrows.
     function menuStick(base, nub, arrows) {
       if (!base) return;
-      let id = null, dir = null, cx = 0, cy = 0, rad = 1;
+      let id = null, dir = null, cx = 0, cy = 0, rad = 1, localPerViewport = 1;
       const reps = {};
       const lit = (k, on) => { const a = arrows && arrows[k]; if (a && a.classList) a.classList.toggle("on", on); };
       const aim = (k) => {
@@ -565,7 +565,7 @@ const PhonePadPage = (function () {
       };
       const place = (e) => {
         const dx = e.clientX - cx, dy = e.clientY - cy, d = Math.hypot(dx, dy);
-        const m = d ? Math.min(d, rad * 0.55) / d : 0;
+        const m = d ? Math.min(d, rad * 0.55) / d * localPerViewport : 0;
         if (nub && nub.style) nub.style.transform = "translate(" + (dx * m).toFixed(1) + "px," + (dy * m).toFixed(1) + "px)";
         if (d < rad * 0.28) { aim(null); return; }
         const ax = Math.abs(dx), ay = Math.abs(dy);
@@ -577,6 +577,9 @@ const PhonePadPage = (function () {
         id = e.pointerId;
         try { base.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         const b = base.getBoundingClientRect();
+        // The nub's translate is local to the painted D-pad. An arranged
+        // scale changes viewport travel without changing its local diameter.
+        localPerViewport = b.width && base.offsetWidth ? base.offsetWidth / b.width : 1;
         cx = b.left + b.width / 2; cy = b.top + b.height / 2; rad = Math.max(1, b.width / 2);
         base.classList.add("on");
         place(e);
@@ -592,7 +595,12 @@ const PhonePadPage = (function () {
       };
       // In the release nets too: a lost lift otherwise repeats forever and
       // `id` stays set, so the stick refuses every later press.
-      releases.push(() => { if (id !== null) up({ pointerId: id }); });
+      const release = () => { if (id !== null) up({ pointerId: id }); };
+      releases.push(release);
+      if (typeof window !== "undefined") window.addEventListener?.("resize", release);
+      if (typeof document !== "undefined") document.addEventListener("focusin", e => {
+        if (e.target?.closest?.("#screen-arranger")) release();
+      });
       pointerReleases.push(up);   // an outside lift must work even when capture was refused
       base.addEventListener("pointerup", up);
       base.addEventListener("pointercancel", up);
@@ -968,19 +976,25 @@ const PhonePadPage = (function () {
   // off its slot and sized. place[id] = { x, y } offset in % of the screen's
   // width / height, and s, the size in %. The grid stays the base, so a preset
   // or RESET puts every control back.
-  const BUTTON_SHAPES = ["square", "capsule", "arch", "shield", "paddle-left", "paddle-right", "leaf"];
+  const BUTTON_SHAPES = ["square", "rounded", "capsule", "arch", "shield", "paddle-left", "paddle-right", "leaf"];
   const ARRANGE_MIN_PX = 44;   // the touch floor: no control sizes below it
   const clampN = (v, lo, hi, d) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
+  const PLACE_IDS = new Set([...LAYOUT_KEYS, "screen", "utility", "shiftFlick", "shiftUp", "shiftDown", "otBig", "boostBig", "brake", "gas", "steering"]);
   function normalisePlace(raw) {
     const out = {};
     if (!raw || typeof raw !== "object") return out;
     for (const id of Object.keys(raw).slice(0, 40)) {
       const p = raw[id];
-      if (!/^[\w-]{1,24}$/.test(id) || !p || typeof p !== "object") continue;
+      if (!PLACE_IDS.has(id) || !p || typeof p !== "object") continue;
       const r1 = (v) => Math.round(v * 10) / 10;
       const q = { x: r1(clampN(p.x, -90, 90, 0)), y: r1(clampN(p.y, -90, 90, 0)), s: Math.round(clampN(p.s, 40, 250, 100)) };
-      if (BUTTON_SHAPES.includes(p.shape) && id !== "screen" && id !== "steering") q.shape = p.shape;
-      if (q.x || q.y || q.s !== 100 || q.shape) out[id] = q;
+      for (const axis of ["w", "h"]) {
+        if (Number.isFinite(p[axis])) q[axis] = r1(clampN(p[axis], 1, 90, 1));
+      }
+      // Earlier wheel files used "pill" for the same capsule silhouette.
+      const shape = p.shape === "pill" ? "capsule" : p.shape;
+      if (BUTTON_SHAPES.includes(shape) && id !== "screen" && id !== "steering") q.shape = shape;
+      if (q.x || q.y || q.s !== 100 || q.w || q.h || q.shape) out[id] = q;
     }
     return out;
   }
@@ -997,6 +1011,13 @@ const PhonePadPage = (function () {
     const r = raw && typeof raw === "object" ? raw : {}, z = r.zone && typeof r.zone === "object" ? r.zone : {};
     return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true,
       pedals: r.pedals === "side" ? "side" : "stack", strip: r.strip === "column" ? "column" : "row", shifts: r.shifts === "flick" ? "flick" : "paddles", place: normalisePlace(r.place), ...(r.utility === "wheel" ? { utility: "wheel" } : {}) };
+  }
+  function readWheelBackup(file) {
+    const layout = file?.layout;
+    if (file?.format !== "apex26-wheel" || file.v !== 1 || !layout || typeof layout !== "object" ||
+        !layout.zone || typeof layout.zone !== "object" || Array.isArray(layout.zone) ||
+        !layout.place || typeof layout.place !== "object" || Array.isArray(layout.place)) throw new Error("Invalid wheel layout");
+    return normaliseLayout(layout);
   }
   /** The preset a layout equals, or "custom". */
   function layoutPreset(lay) {
@@ -1024,6 +1045,13 @@ const PhonePadPage = (function () {
     if (!el || !el.style) return;
     el.style.translate = p && (p.x || p.y) ? p.x + "vw " + p.y + "vh" : "";
     el.style.scale = p && p.s !== 100 ? String(p.s / 100) : "";
+    // Equal bounds also resize controls that normally stretch in a flex or grid slot.
+    const floor = ARRANGE_MIN_PX / ((p?.s || 100) / 100);
+    for (const [key, axis, unit] of [["w", "Width", "vw"], ["h", "Height", "vh"]]) {
+      const size = p?.[key] ? "max(" + floor + "px," + p[key] + unit + ")" : "";
+      el.style["min" + axis] = size;
+      el.style["max" + axis] = size;
+    }
     if (p?.shape) el.setAttribute("data-wheel-shape", p.shape);
     else el.removeAttribute?.("data-wheel-shape");
     if (el.classList) el.classList.toggle("placed", !!p && !!(p.x || p.y || p.s !== 100));
@@ -1066,9 +1094,33 @@ const PhonePadPage = (function () {
     }
     function set(lay) {
       cur = applyLayout(dom, lay);
-      try { if (store) store.setItem(LAYOUT_KEY, JSON.stringify(cur)); } catch (e) { /* storage blocked: this session keeps it */ }
+      let durable = false;
+      try { if (store) { store.setItem(LAYOUT_KEY, JSON.stringify(cur)); durable = true; } } catch (e) { /* session fallback */ }
       paint();
+      return durable;
     }
+    dom.exportLayout?.addEventListener("click", () => {
+      const data = JSON.stringify({ format: "apex26-wheel", v: 1, layout: cur }, null, 2);
+      const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+      const link = dom.doc.createElement("a");
+      link.href = url; link.download = "apex26-phone-wheel.json";
+      dom.doc.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    let importSerial = 0;
+    dom.importLayout?.addEventListener("change", async () => {
+      const serial = ++importSerial;
+      const file = dom.importLayout.files[0];
+      dom.importLayout.value = "";
+      if (!file) return;
+      try {
+        if (file.size > 32768) throw new Error();
+        const next = readWheelBackup(JSON.parse(await file.text()));
+        if (serial !== importSerial) return;
+        const durable = set(next);
+        dom.fileStatus.textContent = durable ? "Wheel layout imported." : "Wheel layout imported for this session.";
+      } catch { if (serial === importSerial) dom.fileStatus.textContent = "Choose an Apex 26 wheel layout file."; }
+    });
     for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
     dom.flickBtn?.addEventListener("click", () => set({ ...cur, shifts: cur.shifts === "flick" ? "paddles" : "flick" }));
     dom.utilityBtn?.addEventListener("click", () => set({ ...cur, utility: cur.utility ? null : "wheel" }));
@@ -1109,11 +1161,12 @@ const PhonePadPage = (function () {
       if (dom.picker && id) dom.picker.value = id;
       if (dom.undo) dom.undo.disabled = !history.length;
       const p = placeOf(id);
+      if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "% · Width " +
+        (p.w ? p.w + "vw" : "auto") + " · Height " + (p.h ? p.h + "vh" : "auto") : "Select a control";
       if (dom.shape) {
         dom.shape.disabled = !id || id === "screen" || id === "steering";
         dom.shape.value = p.shape || "default";
       }
-      if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "%" : "Select a control";
       markClashes();
     }
     function put(id, p, save) {
@@ -1245,6 +1298,15 @@ const PhonePadPage = (function () {
     for (const [button, factor] of [[dom.minus, 0.9], [dom.plus, 1.1]]) button?.addEventListener("click", () => {
       if (picked) edit(() => sizeBy(picked, factor, false));
     });
+    for (const button of dom.dimensions || []) button.addEventListener("click", () => {
+      if (!picked) return;
+      const axis = button.dataset.dimension, width = axis === "w";
+      edit(() => {
+        const p = placeOf(picked), rect = A[picked].getBoundingClientRect();
+        const size = p[axis] ?? (width ? rect.width / W() : rect.height / H()) * 10000 / p.s;
+        put(picked, { ...p, [axis]: size + Number(button.dataset.step) * (coarse ? 5 : 1) }, false);
+      });
+    });
     dom.undo?.addEventListener("click", () => { stopDrag(true); if (history.length) restore(history.pop()); });
     dom.resetOne?.addEventListener("click", () => { if (picked) edit(() => put(picked, {x:0,y:0,s:100}, false)); });
     dom.resetAll?.addEventListener("click", () => edit(() => restore(LAYOUT_PRESETS.classic)));
@@ -1268,6 +1330,6 @@ const PhonePadPage = (function () {
     return { get: () => normaliseLayout(cur), set, show, arrange, sizeBy: (id, f) => sizeBy(id, f, true) };
   }
 
-  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, layoutPreset, applyLayout, layout };
+  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, readWheelBackup, layoutPreset, applyLayout, layout };
 })();
 Object.freeze(PhonePadPage);

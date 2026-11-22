@@ -568,3 +568,22 @@ test("car setup's dim text (.cs-tab-cur, .cs-opt-cost.free) clears 4.5:1 on ever
   }
   assert.deepEqual(bad, []);
 });
+
+test("Studio's Endurance and Drafting labels clear AA on menu surfaces and interaction states", () => {
+  const chrome = cssRules(read("css/screen-arranger.css"));
+  for (const theme of ["endurance", "drafting"]) {
+    const base = ':root[data-ui-theme="' + theme + '"]';
+    for (const high of [false, true]) {
+      const get = name => (high && decl(tokens, ROOT_SEL.high, name)) ||
+        (!high && decl(chrome, new RegExp('^:root\\[data-ui-theme="' + theme + '"\\]:where'), name)) ||
+        decl(tokens, base, name) || token(name);
+      const paint = name => resolve(get(name), new Set([name]), get);
+      for (const bg of ["--bg", "--carbon", "--plate-hover", "--plate-press"]) {
+        const surface = over(paint(bg), paint("--bg"));
+        assert.ok(ratio(paint("--text"), surface) >= 4.5, theme + " primary text on " + bg + ", high contrast " + high);
+      }
+      assert.ok(ratio(paint("--dim"), paint("--carbon")) >= 4.5, theme + " secondary text");
+      assert.ok(ratio(over(paint("--plate-line"), paint("--carbon")), paint("--carbon")) >= 3, theme + " control edge");
+    }
+  }
+});

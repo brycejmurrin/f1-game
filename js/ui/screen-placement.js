@@ -6,7 +6,12 @@ window.ScreenPlacement = (function () {
 
   const KEY = "screenPlacement";
   const SHAPES = ["portrait", "landscape"];
-  const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [0.5, 2] };
+  const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], diameter: [5, 100], scale: [0.5, 2],
+    textSize: [0.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104],
+    formWidth: [10, 100], cornerRadius: [0, 40], rowGap: [0, 48], columnGap: [0, 48] };
+  const fontSteps = ["micro", "1", "2", "3", "4", "5", "6"];
+  const buttons = ':is(button:not([data-arrange-screen]), [role="button"], input[type="button"], input[type="submit"], input[type="reset"])';
+  const formControls = 'select, textarea, input:not([type]), input[type="text"], input[type="search"], input[type="range"]';
   const sheets = new Map();
   let garageRevision = 0, garagePanelMoved = false;
   let editorZoom = new WeakMap();
@@ -32,10 +37,13 @@ window.ScreenPlacement = (function () {
       const fields = {};
       for (const key of Object.keys(limits)) {
         const value = raw[region][key];
-        if (!Number.isFinite(value) || config[key] === false) continue;
-        if ((key === "x" || key === "y") && !value || key === "scale" && value === 1) continue;
+        if (!Number.isFinite(value) || config[key] === false || key === "diameter" && !config.diameter) continue;
+        if ((key === "x" || key === "y") && !value || (key === "scale" || key === "textSize") && value === 1) continue;
         fields[key] = fieldValue(key, value, config);
       }
+      if (fields.diameter) { delete fields.width; delete fields.height; }
+      const align = raw[region].textAlign;
+      if (config.textAlign !== false && ["start", "center", "end"].includes(align)) fields.textAlign = align;
       if (Object.keys(fields).length) out[region] = fields;
     }
     return out;
@@ -88,6 +96,11 @@ window.ScreenPlacement = (function () {
       if (!zoom) { zoom = new Map(); editorZoom.set(editor, zoom); }
     }
     const rules = [];
+    if (Object.values(map).some(fields => fields.textSize)) {
+      // Resolve the global accessibility ladder on the root, before overriding
+      // the same tokens in a region. Theme and text-size changes stay live.
+      rules.push(':root{' + fontSteps.map(step => '--arrange-base-' + step + ':var(--fs-' + step + ',1rem)').join(';') + '}');
+    }
     for (const [region, fields] of Object.entries(map)) {
       const part = config.regions[region].selector;
       const target = ':is(' + config.root + ') :is(' + part + '), :is(' + config.root + '):is(' + part + ')';
@@ -99,9 +112,28 @@ window.ScreenPlacement = (function () {
       }
       const declarations = [];
       if (fields.x || fields.y) declarations.push('translate:' + ((fields.x || 0) / z) + 'vw ' + ((fields.y || 0) / z) + 'vh');
+      if (fields.diameter) {
+        const stick = config.regions[region].diameter;
+        const disc = stick === ":scope" ? target : ':is(' + target + ') ' + stick;
+        // Studio and free flight can change the wrapper's zoom without rotating.
+        const photo = id === "photo-controls";
+        const requested = photo ? 'calc(' + fields.diameter + 'vmin / var(--pc-control-z,1))' : fields.diameter / z + 'vmin';
+        const floor = photo ? 'calc(44px / var(--pc-control-z,1) / ' + (fields.scale || 1) + ')' : 44 / (z * (fields.scale || 1)) + 'px';
+        const fit = photo ? 'min(' + requested + ',var(--pc-max-diameter,' + requested + '))' : requested;
+        const size = 'max(' + floor + ',' + fit + ')';
+        rules.push(disc + '{width:' + size + ' !important;height:' + size + ' !important;box-sizing:border-box !important}');
+        if (photo) {
+          rules.push(config.root + '{--pc-' + region + '-diameter:' + fields.diameter + 'vmin}');
+          if (fields.x || fields.y) declarations.push('--pc-max-diameter:' + requested);
+          rules.push(disc + ' .pc-nub{width:39%;height:39%;margin:0;translate:-50% -50%}');
+        }
+      }
       if (fields.width) {
         const width = fields.width / z + 'vw';
         declarations.push('width:' + width);
+        if (region === "window" && config.tuner) {
+          rules.push('body:has(> ' + config.root + ':not([hidden])){--dock-w:' + width + ' !important}');
+        }
         // The adjacent camera controls consume the sheet's own width token.
         if (id === "carsetup" && region === "panel") rules.push('#carsetup{--cs-sheet-w:' + width + ' !important}');
         if (id === "career" && (region === "navigation" || region === "calendar")) {
@@ -120,7 +152,45 @@ window.ScreenPlacement = (function () {
       }
       if (fields.height) declarations.push('height:' + fields.height / z + 'vh', 'overflow:auto');
       if (fields.scale) declarations.push('scale:' + fields.scale);
-      rules.push(target + '{' + declarations.map(d => d + ' !important').join(';') + '}');
+      const scope = ':is(' + target + ')';
+      if (fields.textSize) {
+        declarations.push('--arrange-text-size:' + fields.textSize);
+        for (const step of fontSteps) declarations.push('--fs-' + step + ':max(var(--fs-floor,0px),calc(var(--arrange-base-' + step + ') * ' + fields.textSize + '))');
+        // Give inherited body copy a size too. A heading or button that owns a
+        // font rule keeps that rule, including its relative size in the ladder.
+        rules.push('@layer reset{:where(' + target + '){font-size:calc(1em * ' + fields.textSize + ')}}');
+      }
+      if (fields.rowGap !== undefined) declarations.push('row-gap:' + fields.rowGap + 'px');
+      if (fields.columnGap !== undefined) declarations.push('column-gap:' + fields.columnGap + 'px');
+      if (fields.textAlign) {
+        declarations.push('text-align:' + fields.textAlign);
+        rules.push(scope + ' :is(h1,h2,h3,h4,h5,h6,p,label,button,select,textarea,input[type="text"],input[type="search"]){text-align:' + fields.textAlign + ' !important}');
+      }
+      if (fields.cornerRadius !== undefined) {
+        declarations.push('border-radius:' + fields.cornerRadius + 'px');
+        rules.push(scope + ' :is(' + buttons + ',' + formControls + '){border-radius:' + fields.cornerRadius + 'px !important}');
+      }
+      if (fields.formWidth) {
+        const form = ':is(' + formControls + ')';
+        rules.push(scope + form + ',' + scope + ' ' + form + '{width:' + fields.formWidth + '% !important;max-width:100% !important;' +
+          'min-width:min(100%,max(' + Math.max(44, 44 / z) + 'px,var(--tap-paint,44px))) !important;box-sizing:border-box !important;flex:0 1 auto !important}');
+      }
+      if (declarations.length) rules.push(target + '{' + declarations.map(d => d + ' !important').join(';') + '}');
+      if (fields.buttonWidth || fields.buttonHeight) {
+        const style = [];
+        const tap = Math.max(44, 44 / z) + 'px';
+        if (fields.buttonWidth) {
+          style.push('width:' + fields.buttonWidth + '%', 'max-width:100%', 'box-sizing:border-box',
+            'min-width:min(100%,max(' + tap + ',var(--tap-paint,44px)))', 'flex-basis:auto', 'flex-grow:0');
+          // A chevron/select group normally shrink-wraps its contents. Give the
+          // percentage a definite base and wrap the group at larger widths.
+          const group = '.set-row > div:has(> button[data-step])';
+          rules.push(scope + ' ' + group + ',' + scope + group + ',' + group + ':has(> ' + scope +
+            '){width:100% !important;flex-wrap:wrap !important}');
+        }
+        if (fields.buttonHeight) style.push('min-height:max(' + fields.buttonHeight + 'px,' + tap + ',var(--tap-paint,44px))');
+        rules.push(scope + buttons + ',' + scope + ' ' + buttons + '{' + style.map(d => d + ' !important').join(';') + '}');
+      }
     }
     if (!sheet) {
       sheet = document.createElement("style");
@@ -191,6 +261,6 @@ window.ScreenPlacement = (function () {
       else if (change.key === "uiScale") resized();
     });
   }
-  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue,
+  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue, formControls,
     get garageRevision() { return garageRevision; }, get garagePanelMoved() { return garagePanelMoved; } });
 })();

@@ -876,6 +876,8 @@ const TrackDesigner = (function () {
     files.append(ui.share, ui.card, ui.export, ui.import);
     foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
+    // The compact header is zero-height; the designer reserves a grid cell by its footer for this action.
+    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, root)?.classList.add("screen-arrange-entry");
     // Short landscape phone: the foot rides under the rail (inside the body) so the dialog never scrolls.
     // Sizes are the effective ones (UI SIZE zooms the dialog); a very narrow effective width keeps the stacked layout.
     const seatFoot = (force) => {
@@ -1648,6 +1650,7 @@ const TrackDesigner = (function () {
     return true;
   }
   function onBack(ev) {
+    if (ev.target?.closest?.("#screen-arranger")) return;
     if (workspace && workspace.closeMenu(ev)) return;
     if (ev.type === "keydown" && (ev.key === "z" || ev.key === "Z") && (ev.ctrlKey || ev.metaKey)) {
       if (!openFlag) return;

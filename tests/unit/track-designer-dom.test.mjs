@@ -1808,6 +1808,17 @@ test("elevation: presets + node height undo/redo; strip selects a point; Escape 
     // Force a strip selection by dispatching after mode elev + selecting via canvas pick is heavy; call profileBack path by selecting through setNodeHeight which selects.
     // Profile select via evaluating: the strip's select is internal; Escape with no selection should not claim.
     for (const l of back) l.fn(esc);
+    const arranger = b.dom.document.body.appendChild(b.dom.makeElement("dialog", "screen-arranger"));
+    const filesMenu = walk(b.root).find((el) => el.dataset.role === "file-menu");
+    filesMenu.open = true;
+    const layoutEscape = {type:"keydown", key:"Escape", target:arranger, preventDefault(){this.defaultPrevented=true;}, stopPropagation(){}};
+    for (const listener of back) listener.fn(layoutEscape);
+    assert.equal(filesMenu.open, true, "Escape in the layout editor leaves the browsed disclosure open");
+    assert.equal(layoutEscape.defaultPrevented, undefined);
+    const layoutUndo = {type:"keydown", key:"z", ctrlKey:true, target:arranger, preventDefault(){this.defaultPrevented=true;}};
+    for (const listener of back) listener.fn(layoutUndo);
+    assert.equal(layoutUndo.defaultPrevented, undefined, "the layout editor owns its undo shortcut");
+    assert.equal(b.D.state().design.heights[pick], 5, "layout undo leaves the design intact");
     // Undo / redo the height edit.
     assert.equal(b.D.undo(), true);
     assert.notEqual(b.D.state().design.heights[pick], 5);
@@ -3551,6 +3562,12 @@ test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", (
 // The entry shares the body's cell (no fourth row) at its end. An absolute bottom anchored it to the visible box, so
 // a dialog that scrolls at UI SIZE 150 % put it over SHARE & FILES (CI run 44853962507, 852x344@150).
 test("the tucked designer seats the arrange entry in the body's cell instead of adding a grid row", async () => {
+  const b = bootScreen();
+  b.root.ownerDocument = b.dom.document;
+  vm.runInContext(read("js/ui/editor-workspace.js"), b.ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const button = b.root.querySelector(":scope > .screen-arrange-entry");
+  assert.equal(button?.getAttribute("data-arrange-screen"), "trackdesigner", "the live action occupies the designer's reserved cell");
   const { cssRules, decl } = await import("../helpers/css-rules.mjs");
   const rules = cssRules(read("css/screen-arranger.css"));
   const entry = '#trackdesigner[data-foot="in"] > .screen-arrange-entry';

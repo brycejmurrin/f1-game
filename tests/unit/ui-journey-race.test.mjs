@@ -75,7 +75,9 @@ test("free-cam pads match the steering-arrow diameter", () => {
   const overlays = readCssSource("css/overlays.css");
   assert.match(overlays, /--steer:\s*84px/);
   assert.match(hud, /\.pc-btn\s*\{[^}]*width:\s*var\(--steer\)/);
-  assert.match(hud, /\.pc-stick\s*\{[^}]*width:\s*118px/);
+  const stick = rulesMentioning(hud, ".pc-stick").find(rule => rule.body.includes("--pc-default-diameter:"));
+  assert.ok(stick.body.includes("min(118px, var(--pc-max-diameter))"));
+  assert.ok(stick.body.includes("width: var(--pc-default-diameter)") && stick.body.includes("height: var(--pc-default-diameter)"));
   assert.doesNotMatch(hud, /body\.lt-open:not\(\.pc-nopanel\) \.pc-stick \{ width: 84px/);
   assert.doesNotMatch(hud, /body\.lt-open:not\(\.pc-nopanel\) \.pc-btn \{ width: 46px/);
 });

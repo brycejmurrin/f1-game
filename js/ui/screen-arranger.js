@@ -6,14 +6,24 @@ window.ScreenArranger = (function () {
   const clone = value => JSON.parse(JSON.stringify(value));
   let active = null;
 
-  function open(id, invoker = document.activeElement) {
+  function open(id, invoker = document.activeElement, onClose) {
     if (active) active();
     const screen = window.ScreenRegions[id];
     const root = screen && document.querySelector(screen.root);
-    if (!root || root.hidden) return false;
+    if (!root || root.hidden || root.closest("[hidden], dialog:not([open])")) return false;
     const placement = window.ScreenPlacement;
     const element = key => root.matches(screen.regions[key].selector) ? root : root.querySelector(screen.regions[key].selector);
-    const visibleKeys = () => Object.keys(screen.regions).filter(key => element(key)?.getClientRects().length);
+    function shown(el) {
+      if (!el?.getClientRects?.().length) return false;
+      // A closed <details> can retain descendant layout boxes. Only its
+      // summary and the disclosure itself are selectable until it opens.
+      for (let p = el.parentElement; p && root.contains(p); p = p.parentElement) {
+        if (p.tagName === "DETAILS" && !p.open && !p.querySelector("summary")?.contains(el)) return false;
+        if (p === root) break;
+      }
+      return true;
+    }
+    const visibleKeys = () => Object.keys(screen.regions).filter(key => shown(element(key)));
     let keys = visibleKeys();
     const viewport = () => ({w: document.documentElement.clientWidth || innerWidth, h: document.documentElement.clientHeight || innerHeight});
     const rectOf = el => window.CssZoom ? window.CssZoom.viewportRect(el) : el.getBoundingClientRect();
@@ -64,9 +74,55 @@ window.ScreenArranger = (function () {
     function setExpanded(open) {
       controls.hidden = !open;
       toggle.setAttribute("aria-expanded", String(open));
+      if (open) { refreshBrowse(); refreshScroll(); }
       if (!open && controls.contains(document.activeElement)) toggle.focus({preventScroll:true});
     }
     for (const k of keys) node("option", picker, screen.regions[k].label).value = k;
+    const browseLabel = node("label", controls, "Browse section ");
+    const browse = node("select", browseLabel);
+    let browseActions = [];
+    const originalTabs = new Map(), originalFolds = new Map();
+    // Only native disclosures and the owner's semantic tab buttons are
+    // forwarded. Capture, Quit, drive controls and arbitrary links stay inert.
+    const tabSelector = 'button[role="tab"][aria-controls]';
+    const canBrowse = el => shown(el) && !el.disabled && !el.matches(":disabled") && !el.closest('[aria-disabled="true"]');
+    function refreshBrowse() {
+      const candidates = Array.from(root.querySelectorAll('summary,' + tabSelector))
+        .filter(el => (el.tagName !== "SUMMARY" || el.parentElement?.tagName === "DETAILS") &&
+          canBrowse(el) &&
+          (root !== document.body || keys.some(k => element(k)?.contains(el))))
+        .map(el => {
+          const title = el.getAttribute("aria-label") || el.textContent.trim();
+          const verb = el.tagName !== "SUMMARY" ? "Tab · " : el.parentElement.open ? "Close " : "Open ";
+          return {el, label: verb + title};
+        });
+      browseLabel.hidden = !candidates.length;
+      if (candidates.length === browseActions.length &&
+        candidates.every(({el, label}, i) => browseActions[i].el === el && browseActions[i].label === label)) return;
+      browseActions = candidates;
+      browse.replaceChildren();
+      node("option", browse, "Choose a section").value = "";
+      browseActions.forEach(({label}, i) => { node("option", browse, label).value = String(i); });
+      browse.value = "";
+    }
+    browse.addEventListener("change", () => {
+      if (browse.value === "") return;
+      const el = browseActions[Number(browse.value)]?.el;
+      browse.value = "";
+      if (!el || !root.contains(el) || !canBrowse(el)) return;
+      if (el.tagName === "SUMMARY") {
+        // Opening a named disclosure can also close a sibling.
+        for (const fold of root.querySelectorAll("details")) if (!originalFolds.has(fold)) originalFolds.set(fold, fold.open);
+        el.parentElement.open = !el.parentElement.open;
+      } else {
+        const list = el.closest('[role="tablist"]');
+        const previous = list?.querySelector('[aria-selected="true"]');
+        if (previous && !originalTabs.has(list)) originalTabs.set(list, previous);
+        el.click();
+      }
+      refreshRegions();
+      refreshBrowse();
+    });
     const stepLabel = node("label", controls, "Adjustment ");
     const step = node("select", stepLabel);
     node("option", step, "Fine").value = "1";
@@ -76,6 +132,26 @@ window.ScreenArranger = (function () {
       el.className = "arrange-row";
       return el;
     };
+    const scrollButtons = row();
+    let scrollHost;
+    function scrollable(el) {
+      return el?.scrollHeight > el.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(el).overflowY);
+    }
+    function refreshScroll() {
+      const part = element(key);
+      scrollHost = null;
+      for (let n = part; n && root.contains(n); n = n.parentElement) {
+        if (scrollable(n)) { scrollHost = n; break; }
+      }
+      if (!scrollHost) scrollHost = Array.from(root.querySelectorAll(".pane, .sheet-body, [role=tabpanel]")).find(scrollable);
+      scrollButtons.hidden = !scrollHost;
+    }
+    for (const [name, sign] of [["Scroll up", -1], ["Scroll down", 1]]) {
+      button(scrollButtons, name, () => {
+        refreshScroll();
+        if (scrollHost) scrollHost.scrollTop += sign * Math.max(1, Math.floor(scrollHost.clientHeight * .75));
+      });
+    }
     function button(parent, title, fn) {
       const el = node("button", parent, title);
       el.type = "button";
@@ -96,6 +172,7 @@ window.ScreenArranger = (function () {
       }
     }
     function change(fn) {
+      if (!shown(element(key))) return;
       remember();
       fn();
       render();
@@ -109,6 +186,7 @@ window.ScreenArranger = (function () {
     }
     function move(name, amount) {
       const [dx, dy] = directions[name];
+      if (screen.regions[key][dx ? "x" : "y"] === false) return;
       change(() => {
         const r = region();
         offset(r, r.x || 0, r.y || 0, dx * amount, dy * amount);
@@ -117,13 +195,21 @@ window.ScreenArranger = (function () {
     const arrows = row();
     for (const name of Object.keys(directions)) button(arrows, name, () => move(name, Number(step.value)));
     const sizes = row(), sizing = [];
-    for (const prop of ["width", "height", "scale"]) {
+    for (const prop of ["width", "height", "diameter", "scale"]) {
       for (const sign of [-1, 1]) {
         const title = prop[0].toUpperCase() + prop.slice(1) + (sign < 0 ? " −" : " +");
         const btn = button(sizes, title, () => change(() => {
           const r = region(), n = Number(step.value) * sign;
           if (prop === "scale") r.scale = fieldValue(prop, (r.scale || 1) + n * 0.05);
-          else {
+          else if (prop === "diameter") {
+            const selector = screen.regions[key].diameter;
+            const part = element(key), disc = selector === ":scope" ? part : part.querySelector(selector);
+            if (!disc) return;
+            const { w, h } = viewport();
+            const diameter = r.diameter ?? rectOf(disc).width * 100 / (Math.min(w, h) * (r.scale || 1));
+            delete r.width; delete r.height;
+            r.diameter = fieldValue(prop, diameter + n);
+          } else {
             const rect = rectOf(element(key));
             const {w, h} = viewport();
             const measured = rect[prop] / ((prop === "width" ? w : h) * (r.scale || 1)) * 100;
@@ -137,6 +223,78 @@ window.ScreenArranger = (function () {
         sizing.push({btn, prop});
       }
     }
+    // Only measure a button when changing a dimension. A drag never needs its size.
+    const styleRow = row();
+    const buttonSelector = "button:not(.screen-arrange-entry,[data-arrange-screen]), [role=button], input[type=button], input[type=submit], input[type=reset]";
+    function firstButton() {
+      const part = element(key);
+      if (!part) return null;
+      return part.matches(buttonSelector) ? part : part.querySelector(buttonSelector);
+    }
+    const appearanceButtons = [];
+    for (const [prop, label] of [["textSize", "Text size"], ["buttonWidth", "Button width"], ["buttonHeight", "Button height"]]) {
+      for (const sign of [-1, 1]) {
+        const btn = button(styleRow, label + (sign < 0 ? " −" : " +"), () => change(() => {
+          const r = region(), increment = Number(step.value) * sign;
+          if (prop === "textSize") r[prop] = fieldValue(prop, (r[prop] || 1) + increment * .05);
+          else {
+            const control = firstButton();
+            if (!control) return;
+            let parent = control.parentElement;
+            while (parent && !parent.clientWidth) parent = parent.parentElement;
+            const current = prop === "buttonWidth"
+              ? control.offsetWidth * 100 / Math.max(1, parent?.clientWidth || control.offsetWidth)
+              : control.offsetHeight;
+            const baseline = r[prop] ?? fieldValue(prop, current);
+            r[prop] = fieldValue(prop, baseline + increment * 2);
+          }
+        }));
+        if (prop !== "textSize") appearanceButtons.push(btn);
+      }
+    }
+    const advanced = node("details", controls);
+    node("summary", advanced, "Advanced style");
+    const advancedInputs = new Map();
+    for (const [prop, name, min, max] of [
+      ["diameter", "Diameter (% of shorter screen side)", 5, 100],
+      ["formWidth", "Form control width (%)", 10, 100],
+      ["textAlign", "Text alignment"], ["cornerRadius", "Corner radius (px)", 0, 40],
+      ["rowGap", "Row gap (px)", 0, 48], ["columnGap", "Column gap (px)", 0, 48],
+    ]) {
+      const label = node("label", advanced, name);
+      const input = node(prop === "textAlign" ? "select" : "input", label);
+      if (prop === "textAlign") {
+        for (const [value, text] of [["", "Automatic"], ["start", "Start"], ["center", "Center"], ["end", "End"]]) {
+          node("option", input, text).value = value;
+        }
+      } else {
+        input.type = "number";
+        input.min = String(min);
+        input.max = String(max);
+        input.step = "1";
+        input.placeholder = "Auto";
+      }
+      input.addEventListener("change", () => change(() => {
+        if (input.value === "") delete region()[prop];
+        else {
+          const r = region();
+          if (prop === "diameter") { delete r.width; delete r.height; }
+          r[prop] = prop === "textAlign" ? input.value : fieldValue(prop, Number(input.value));
+        }
+      }));
+      advancedInputs.set(prop, { label, input });
+    }
+    function refreshStyleFields() {
+      const part = element(key);
+      advancedInputs.get("diameter").label.hidden = !screen.regions[key].diameter;
+      const form = placement.formControls;
+      advancedInputs.get("formWidth").label.hidden = !part || !form || !(part.matches(form) || part.querySelector(form));
+      const display = part && window.getComputedStyle?.(part).display;
+      const hasGap = ["grid", "inline-grid", "flex", "inline-flex"].includes(display);
+      advancedInputs.get("rowGap").label.hidden = !hasGap;
+      advancedInputs.get("columnGap").label.hidden = !hasGap;
+    }
+    advanced.addEventListener("toggle", () => { if (advanced.open) refreshStyleFields(); });
     const status = node("output", controls);
     status.setAttribute("aria-live", "polite");
     const edits = row();
@@ -155,26 +313,56 @@ window.ScreenArranger = (function () {
     }));
     button(actions, "Cancel", () => finish(false)).id = "screen-arranger-cancel";
     button(actions, "Apply", () => finish(true));
+    let checkedKey;
     function render() {
       placement.apply(id, drafts[side]);
-      if (marked) marked.classList.remove("arrange-selection");
-      marked = element(key);
-      if (marked) marked.classList.add("arrange-selection");
+      const selected = element(key);
+      if (selected !== marked) {
+        marked?.classList.remove("arrange-selection");
+        marked = selected;
+        marked?.classList.add("arrange-selection");
+      }
       picker.value = key;
       heading.textContent = screen.label + " · " + side;
       copy.textContent = "Copy from " + (side === "portrait" ? "landscape" : "portrait");
       undo.disabled = !history.length;
-      for (const {btn, prop} of sizing) btn.disabled = screen.regions[key][prop] === false;
+      for (const {btn, prop} of sizing) {
+        const config = screen.regions[key];
+        btn.hidden = prop === "diameter" ? !config.diameter : !!config.diameter && (prop === "width" || prop === "height");
+        btn.disabled = btn.hidden || config[prop] === false;
+      }
+      arrows.hidden = screen.regions[key].x === false && screen.regions[key].y === false;
+      sizes.hidden = sizing.every(({btn}) => btn.disabled);
+      if (checkedKey !== key) {
+        const available = !!firstButton();
+        for (const btn of appearanceButtons) btn.hidden = !available;
+        if (advanced.open) refreshStyleFields();
+        checkedKey = key;
+      }
       const r = drafts[side][key] || {};
-      status.textContent = "X " + (r.x || 0) + "% · Y " + (r.y || 0) + "% · Width " +
-        (r.width ? r.width + "%" : "auto") + " · Height " + (r.height ? r.height + "%" : "auto") +
+      for (const [prop, { input }] of advancedInputs) {
+        const value = String(r[prop] ?? "");
+        if (input.value !== value) input.value = value;
+      }
+      updateStatus(r);
+    }
+    function updateStatus(r) {
+      const dimensions = screen.regions[key].diameter
+        ? "Diameter " + (r.diameter ? r.diameter + "% of shorter screen side" : "auto")
+        : "Width " + (r.width ? r.width + "%" : "auto") + " · Height " + (r.height ? r.height + "%" : "auto");
+      status.textContent = "X " + (r.x || 0) + "% · Y " + (r.y || 0) + "% · " + dimensions +
         " · Scale " + Math.round((r.scale || 1) * 100) + "%" +
+        " · Text " + Math.round((r.textSize || 1) * 100) + "%" +
+        (!appearanceButtons[0].hidden ? " · Button width " + (r.buttonWidth ? r.buttonWidth + "%" : "auto") +
+          " · Minimum button height " + (r.buttonHeight ? r.buttonHeight + " px" : "auto") : "") +
+        (id === "photo-controls" && screen.regions[key].diameter && r.diameter && !r.x && !r.y ? " · Auto position fits available space" : "") +
         (screen.regions[key].constraint ? " · " + screen.regions[key].constraint : "") +
         (resetLegacy ? " · Reset covers both orientations" : "");
     }
     // Prefer the edge covering less of the selected region. Keep the bar
     // still during a drag so moving a region never moves the controls.
     function clearSelection() {
+      if (!marked) return;
       const box = rectOf(marked), bar = panel.getBoundingClientRect();
       const {w, h} = viewport();
       const overlap = (x, y) => Math.max(0, Math.min(x + bar.width, box.right) - Math.max(x, box.left))
@@ -185,7 +373,11 @@ window.ScreenArranger = (function () {
         dialog.dataset.edge = dialog.dataset.edge === "start" ? "end" : "start";
       }
     }
-    picker.addEventListener("change", () => { key = picker.value; render(); clearSelection(); });
+    picker.addEventListener("change", () => {
+      key = picker.value;
+      element(key)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+      render(); clearSelection();
+    });
     function abortDrag() {
       if (!drag) return;
       cancelAnimationFrame(frame);
@@ -197,21 +389,30 @@ window.ScreenArranger = (function () {
     function flush() {
       frame = 0;
       if (!drag || (!drag.changed && Math.hypot(drag.dx, drag.dy) < 3)) return;
-      if (!drag.changed) { remember(); drag.changed = true; }
-      offset(region(), drag.x, drag.y, drag.dx / drag.w * 100, drag.dy / drag.h * 100);
-      render();
+      if (drag.dx === drag.lastX && drag.dy === drag.lastY) return;
+      if (!drag.changed) { remember(); drag.changed = true; undo.disabled = false; }
+      drag.lastX = drag.dx;
+      drag.lastY = drag.dy;
+      const r = region();
+      offset(r, drag.x, drag.y, drag.dx / drag.w * 100, drag.dy / drag.h * 100);
+      placement.apply(id, drafts[side]);
+      updateStatus(r);
     }
     dialog.addEventListener("pointerdown", e => {
       if (drag) { abortDrag(); return; }
       if (!e.isPrimary || e.button !== 0 || panel.contains(e.target)) return;
       setExpanded(false);
       e.preventDefault();
-      const hit = keys.map(k => ({k, rect:element(k) && rectOf(element(k))})).filter(({rect}) => rect &&
+      const hit = keys.map(k => {
+        const el = element(k);
+        return {k, rect:el && rectOf(el)};
+      }).filter(({rect}) => rect &&
         e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom);
       hit.sort((a,b) => a.rect.width*a.rect.height - b.rect.width*b.rect.height);
       if (!hit.length) return;
       key = hit[0].k;
       render();
+      if (screen.regions[key].x === false && screen.regions[key].y === false) { clearSelection(); return; }
       const r = drafts[side][key] || {};
       drag = {id:e.pointerId, startX:e.clientX, startY:e.clientY, dx:0, dy:0,
         ...viewport(), x:r.x || 0, y:r.y || 0, changed:false};
@@ -232,30 +433,55 @@ window.ScreenArranger = (function () {
       drag = null;
     });
     for (const event of ["pointercancel", "lostpointercapture"]) dialog.addEventListener(event, abortDrag);
+    function refreshRegions() {
+      if (closed) return;
+      const current = visibleKeys();
+      if (drag && (!current.includes(key) || element(key) !== marked)) abortDrag();
+      if (!current.length) { picker.disabled = true; return; }  // an asynchronous tab can briefly be empty
+      picker.disabled = false;
+      const changed = current.length !== keys.length || current.some((k, i) => k !== keys[i]);
+      keys = current;
+      if (!keys.includes(key)) key = keys[0];
+      if (changed) {
+        picker.replaceChildren();
+        for (const k of keys) node("option", picker, screen.regions[k].label).value = k;
+      }
+      checkedKey = null;
+      render();
+      if (!controls.hidden) refreshScroll();
+    }
     function resize() {
       abortDrag();
       side = orientation();
-      placement.apply(id, drafts[side]);
-      keys = visibleKeys();
-      if (!keys.length) { finish(false); return; }
-      if (!keys.includes(key)) key = keys[0];
-      picker.replaceChildren();
-      for (const k of keys) node("option", picker, screen.regions[k].label).value = k;
-      render();
+      refreshRegions();
     }
     function keydown(e) {
       if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); finish(false); return; }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z" && !e.target?.matches?.("input, textarea")) {
+        e.preventDefault(); e.stopImmediatePropagation(); undoLast(); render(); return;
+      }
       const name = e.key.replace(/^Arrow/, "");
       if (!e.altKey || !directions[name]) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       move(name, e.shiftKey ? 5 : Number(step.value));
     }
+    function ownerVisible() {
+      return root.isConnected && !root.hidden && !root.closest("[hidden], dialog:not([open])") && root.matches(screen.root);
+    }
     function finish(save) {
       if (closed) return;
       closed = true;
       abortDrag();
       observer.disconnect();
+      cancelAnimationFrame(refreshFrame);
+      if (ownerVisible()) {
+        for (const previous of [...originalTabs.values()].reverse()) {
+          const tab = previous.isConnected ? previous : Array.from(root.querySelectorAll(tabSelector)).find(el => el.id && el.id === previous.id);
+          if (tab && !tab.matches(":disabled") && !tab.disabled && tab.getAttribute("aria-selected") !== "true") tab.click();
+        }
+        for (const [fold, open] of originalFolds) if (fold.isConnected && fold.open !== open) fold.open = open;
+      }
       window.removeEventListener("resize", resize);
       window.removeEventListener("blur", abortDrag);
       window.removeEventListener("keydown", keydown, true);
@@ -277,13 +503,24 @@ window.ScreenArranger = (function () {
         notice.setAttribute("role", "status");
         window.setTimeout(() => notice.remove(), 8000);
       }
-      if (invoker?.isConnected && !invoker.closest("[hidden]")) invoker.focus({preventScroll:true});
+      if (onClose) onClose();
+      else if (invoker?.isConnected && !invoker.closest("[hidden], dialog:not([open])")) invoker.focus({preventScroll:true});
     }
-    const observer = new MutationObserver(() => {
-      if (!root.isConnected || root.hidden || !root.matches(screen.root) || (root.tagName === "DIALOG" && !root.open)) finish(false);
+    let refreshFrame = 0;
+    const observer = new MutationObserver(records => {
+      if (!ownerVisible()) { finish(false); return; }
+      if (refreshFrame || !records.some(r => root.contains(r.target) && !dialog.contains(r.target) &&
+          (r.type === "childList" ? [...r.addedNodes, ...r.removedNodes].some(n => n.nodeType === 1) : r.attributeName !== "class"))) return;
+      refreshFrame = requestAnimationFrame(() => {
+        refreshFrame = 0;
+        refreshRegions();
+        if (!controls.hidden) refreshBrowse();
+      });
     });
-    observer.observe(root, {attributes:true, attributeFilter:["hidden","open","class"]});
-    if (root.parentNode) observer.observe(root.parentNode, {childList:true});
+    observer.observe(root, {attributes:true, attributeFilter:["hidden","open","class","disabled","aria-disabled","aria-selected"], childList:true, subtree:true});
+    for (let ancestor = root.parentElement; ancestor; ancestor = ancestor.parentElement) {
+      observer.observe(ancestor, {attributes:true, attributeFilter:["hidden","open"], childList:true});
+    }
     dialog.addEventListener("cancel", e => { e.preventDefault(); finish(false); });
     dialog.addEventListener("close", () => finish(false));
     document.body.appendChild(dialog);

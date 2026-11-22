@@ -140,6 +140,15 @@
 #appearance-studio [data-preset="sunlight"] [data-as="preset-art"] {
   background-image: linear-gradient(135deg, var(--look-sunlight-hi), var(--look-sunlight-lo));
 }
+#appearance-studio [data-preset="endurance"] [data-as="preset-art"] {
+  background: linear-gradient(155deg, var(--endurance-bg) 25%, var(--endurance-carbon) 60%, var(--endurance-line));
+  border-radius: var(--r-lg);
+}
+#appearance-studio [data-preset="drafting"] [data-as="preset-art"] {
+  background: repeating-linear-gradient(90deg, var(--drafting-line) 0 1px, transparent 1px 25%),
+    linear-gradient(var(--drafting-carbon), var(--drafting-bg));
+  border-radius: 2px;
+}
 #appearance-studio [data-as="preset-list"] button[aria-pressed="true"] [data-as="preset-art"] {
   border-color: color-mix(in oklab, var(--red) 55%, var(--plate-line));
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--red) 40%, transparent);
@@ -192,7 +201,7 @@
 #appearance-studio [data-as="preview-door"] { padding: calc(var(--gap) * .35) calc(var(--gap) * .5); margin-block: calc(var(--gap) * .25); }
 #appearance-studio [data-as="preview-wrap"][data-shape="phone"] [data-as="preview"] { max-height: calc(var(--tap) * 10); min-height: 0; }
 /* WIDE IN ITS OWN PX (≥ 52rem = 832 own; the laptop Settings sheet): preview
-   beside the controls, pinned while the controls scroll; one row of five
+   beside the controls, pinned while the controls scroll; rows of
    preset tiles at the painted tap floor. Zoom-corrected by construction —
    UI SIZE 150% on a 1020 sheet is 680 own and stays one column. */
 @container sheet (min-width: 52rem) {
