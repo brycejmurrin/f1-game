@@ -487,7 +487,7 @@ const DockLayout = (function () {
   }
 
   /** ARRANGE HUD's pause-card door (create() opens it). js/ui/hud-arrange.js is LAZY_UI_PRESETS: the first
-   *  tap loads it alone, calls make() (HudArrange.create(G)) once and opens the editor; a failed load logs and
+   *  tap loads it with the HUD customization policy, calls make() (HudArrange.create(G)) once and opens the editor; a failed load logs and
    *  the next tap retries. */
   function arrangeDoor(G, make) {
     const { $ } = G;
@@ -513,7 +513,9 @@ const DockLayout = (function () {
       if (editor) { editor.setEditing(!editor.isEditing()); return; }
       if (load) return;
       btn.setAttribute("aria-busy", "true");
-      load = ready().catch(() => false).then((ok) => {
+      const policy = typeof HudLayout !== "undefined" && HudLayout.ensureEditor ? HudLayout.ensureEditor() : true;
+      load = Promise.all([ready(), policy]).catch(() => [false]).then(results => {
+        const ok = results.every(Boolean);
         load = null;
         btn.removeAttribute("aria-busy");
         editor = ok && typeof HudArrange !== "undefined" ? make() : null;

@@ -262,6 +262,7 @@ const HudArrange = (() => {
         bar.appendChild(colorPart);
         bar.appendChild(colorInput);
         bar.appendChild(colorReset);
+        sizeControls.push(colorPart, colorInput, colorReset);
       }
       undo = mk("Undo", "Undo last HUD edit", undoEdit, "hud-arrange-undo");
       bar.appendChild(undo);

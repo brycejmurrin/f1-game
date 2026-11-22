@@ -19564,6 +19564,24 @@
         "tests/unit/cvd-palette.test.mjs"
       ]
     },
+    "js/ui/hud-layout-editor.js": {
+      "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "options": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "save": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-arrange.test.mjs"
+      ]
+    },
     "js/ui/hud-layout.js": {
       "apply": [
         "tests/specs/hud-layout.spec.js",
@@ -19596,8 +19614,8 @@
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
-      "finish": [
-        "tests/specs/hud-layout.spec.js"
+      "ensureEditor": [
+        "tests/unit/hud-layout.test.mjs"
       ],
       "hiddenReason": [
         "tests/unit/hud-layout-hidden.test.mjs",
@@ -19621,18 +19639,11 @@
       "narrow": [
         "tests/unit/hud-layout-hidden.test.mjs"
       ],
-      "options": [
-        "tests/unit/hud-layout.test.mjs"
-      ],
       "originOf": [
         "tests/unit/hud-layout.test.mjs"
       ],
       "packPhoneRects": [
         "tests/unit/hud-dock-pack.test.mjs"
-      ],
-      "paint": [
-        "tests/unit/hud-feel.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "presetLayout": [
         "tests/unit/hud-layout.test.mjs"
@@ -19643,13 +19654,6 @@
       "profile": [
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-layout.test.mjs"
-      ],
-      "read": [
-        "tests/specs/hud-layout.spec.js",
-        "tests/unit/hud-feel.test.mjs",
-        "tests/unit/hud-race-keep-5678.test.mjs",
-        "tests/unit/hud-survey.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "resetEl": [
         "tests/specs/hud-layout.spec.js",
@@ -19682,8 +19686,11 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "*": [
+        "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-helmet-placement.test.mjs",
-        "tests/unit/hud-inputs.test.mjs"
+        "tests/unit/hud-inputs.test.mjs",
+        "tests/unit/hud-survey.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/hud-minimap.js": {

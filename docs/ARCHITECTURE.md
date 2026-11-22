@@ -295,6 +295,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
+| `hud-layout-editor.js` | `HudLayoutEditor` | LAZY_UI_PRESETS | HUD customization controls and color stylesheet, loaded on demand. |
 | `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
