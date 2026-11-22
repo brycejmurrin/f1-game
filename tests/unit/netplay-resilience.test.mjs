@@ -135,3 +135,15 @@ test("a spectator consumes no grid seat, receives field state, and cannot publis
   assert.equal(watch.ownsRaceControl(), false);
   assert.equal(watch.ownsClassification(), false);
 });
+
+test("host teardown closes every driver and spectator transport", () => {
+  const net = NetPlay.create(stubG(4));
+  const peers = ["driver", "spectator", "driver"].map((kind, i) => {
+    const [wire] = NetTransport.loopback({ latencyMs: 0 });
+    return { id: "peer-" + i, kind, wire, session: NetSession.create({ transport: wire }) };
+  });
+  assert.equal(net.start({ role: "host", session: peers[0].session, sessions: peers, peers }).ok, true);
+  net.tick(1000);
+  assert.equal(net.stop("local"), true);
+  assert.deepEqual(peers.map(({ wire }) => wire.status), ["closed", "closed", "closed"]);
+});

@@ -4349,7 +4349,7 @@ function quitToMenu() {
   els.pausemenu.hidden = true;
   Input.unlockLandscape();
   _menuGate.warm = 0; _menuGate.garageWarm = 0; _menuGate.track = null; _menuGate.ready = ""; _menuFly = null;
-  resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear();
+  resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
@@ -4377,7 +4377,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
+  if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
   setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
@@ -4408,7 +4408,7 @@ function quitToMenu() {
   els.overlay.hidden = false;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
-  practiceMode = false;
+  practiceMode = false; coach.releasePracticeWorlds();
   Particles.rainShow(false); Particles.clear(); Droplets.clear();
   if (soundOn) GameAudio.startMusic(-1);
   consumeGhostHash();
@@ -4441,6 +4441,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch(quit) {
+  if (quit && typeof HudReadouts !== "undefined") HudReadouts.gaps.reset();
   ranked.length = 0; parked.length = 0; stillCars.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
@@ -4836,7 +4837,7 @@ function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
   // read once at its existing sites; only the TT recorder receives this copy.
-  if (isTimeTrial() && c.isPlayer && !c.retired && !c.finished) {   // one reused record: InputGhost.record copies the primitives, keeps only initialState (fresh below)
+  if (c.isPlayer && isTimeTrial() && !c.retired && !c.finished) {   // one reused record: InputGhost.record copies the primitives, keeps only initialState (fresh below)
     const r = _ttRec; r.native = !inputOf(c); r.initialState = r.boost = r.overtake = r.aeroToggle = r.shiftUp = r.shiftDown = r.steer = r.throttle = r.brake = r.throttleLevel = r.brakeLevel = r.aero = undefined;
     S.recordInput = r;
   } else S.recordInput = null;
@@ -4913,9 +4914,10 @@ function updateCar(c, dt, ranked) {
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
   const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
-  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, surfaceWet);
+  const speedStd = vStd(Math.abs(c.speed));
+  const aq = TyreModel.aquaInto(c, speedStd, raceWeather, surfaceWet);
   const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
-  const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.carGrip(null, raceWeather, meanWet, meanWet);
+  const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.weatherGrip(0, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -4924,7 +4926,7 @@ function updateCar(c, dt, ranked) {
   // --- speed targets ---
   let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : Math.min(BAND_CEIL, c.tierV * c.skill * dd.ai * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)));   // #5330 scripted trim
   // WIND (js/race/wind.js) off the car's OWN heading (an AI's: tangent less its aiHead): head/tail wind moves top speed.
-  vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), vStd(Math.abs(c.speed))).vmaxMul;
+  vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), speedStd).vmaxMul;
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
@@ -5769,7 +5771,8 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    const _passH = blocker ? AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, paceVmax(blocker), S.pvB, scriptPace(blocker), scriptPace(c)) : 1;   // pooled bag (audit4 I4 F2)
+    const blockerVmax = blocker ? paceVmax(blocker) : 0;
+    const _passH = blocker ? AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, blockerVmax, S.pvB, scriptPace(blocker), scriptPace(c)) : 1;   // pooled bag (audit4 I4 F2)
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
@@ -5854,7 +5857,7 @@ function updateCarLateral(c, dt, ranked, S) {
       // judged by its paceF against the field (paceVmax, AiDrive.paceSample).
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
-      _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0; _aiOtPull.trailT = c._trOf === blocker ? c.trailT : 0;
+      _aiOtPull.blockerVmax = blockerVmax; _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0; _aiOtPull.trailT = c._trOf === blocker ? c.trailT : 0;
       _aiOtPull.ourVmax = S.pvB; _aiOtPull.ourPace = scriptPace(c); _aiOtPull.blockerPace = scriptPace(blocker);
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
@@ -6818,7 +6821,7 @@ const _wmWaterWet = { roughness: 0.16, specular: 0.85, metalness: 0.05 };
 const _wmWaterDry = { roughness: 0.10, specular: 0.92, metalness: 0.05 };
 const _wmGateWet = { roughness: 0.32, metalness: 0.35, specular: 0.65 };
 const _wmGateDry = { roughness: 0.45, metalness: 0.30, specular: 0.50 };
-function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
+function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe, viewPlanes) {
   // Base floor first (under everything) — fills the void on street circuits (no
   // terrain ribbon) and the far infield/horizon on open circuits. No detail noise
   // so the huge plane stays flat and recedes into fog.
@@ -6915,7 +6918,7 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow, envProbe) {
     const _pb = track.meshes.propBatches;
     // mirrorLite skips batches; mirrorFreezeInstanced reuses last mirror mats+colours (main pass would overwrite at ~30 Hz) — not under gfx.instPerPass (TLX: the mirror has its own instance buffers).
     if (_pb && _pb.length && gfx.drawInstanced && !frame.mirrorLite && !envProbe) {
-      const planes = gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
+      const planes = viewPlanes || (gfx.makeFrustumPlanes ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null);
       const pp = !!gfx.instPerPass, freeze = !pp && !!frame.mirrorFreezeInstanced, rec = !pp && frame.mirrorLite === false;
       for (let i = 0; i < _pb.length; i++) {
         const b = _pb[i];
@@ -7560,21 +7563,9 @@ function render(dt) {
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
-  // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
-  // module-scope scratch vectors (no per-frame V3 array allocation); same math.
-  {
-    let bx = camEye[0] - camTgt[0], by = camEye[1] - camTgt[1], bz = camEye[2] - camTgt[2];
-    let bl = Math.hypot(bx, by, bz) || 1; bx /= bl; by /= bl; bz /= bl;
-    // right = normalize(worldUp × back), worldUp = (0,1,0)
-    let rx = 1 * bz - 0 * by, ry = 0 * bx - 0 * bz, rz = 0 * by - 1 * bx;
-    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
-    // up = normalize(worldUp + right*sin(roll))
-    const s = Math.sin(feel.camRoll);
-    let ux = rx * s, uy = 1 + ry * s, uz = rz * s;
-    let ul = Math.hypot(ux, uy, uz) || 1;
-    _camUp[0] = ux / ul; _camUp[1] = uy / ul; _camUp[2] = uz / ul;
-  }
+  V3.rolledUpTo(_camUp, camEye, camTgt, feel.camRoll);
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
+  if (typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling) PhotoStudioBody.sampling.project(_mProj, _mView, gfx.width, gfx.height);
   M4.mulTo(_mVP, _mProj, _mView);
   // inv VP: sky rays always; god-rays when live. inv Proj: post AND TLX's
   // main-view reconstruction, even after tier 4 sheds all view-space post.
@@ -7784,7 +7775,10 @@ function render(dt) {
   //  Corona strength note: the lens-glare halos are drawn from frame.lights
   //  COLOURS (already time-of-day scaled); the LENS GLARE tuner slider is
   //  LT.glareStr, default 0.12.)
-  drawWorldMeshes(frame, night, wet, _floodEmit, false);
+  // Main-view props and rival cars share these planes. The mirror has already drawn with its own view.
+  const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
+    ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
+  drawWorldMeshes(frame, night, wet, _floodEmit, false, false, _carCullPlanes);
   gfx.drawSky(frameSky);
   // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
   // …and the entrance lamps go GREEN over their steady red once you are called
@@ -7823,8 +7817,6 @@ function render(dt) {
   const _cornerSlope = Math.hypot((1 + Math.abs(_mProj[8])) / _mProj[0], (1 + Math.abs(_mProj[9])) / _mProj[5]);
   const _useHorizontalCull = _headingLength > Math.abs(camTgt[1] - camEye[1]) * _cornerSlope;
   if (_useHorizontalCull) { _camFwdX /= _headingLength; _camFwdZ /= _headingLength; }
-  const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
-    ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
   // Glossy automotive paint is identical for every car this frame (depends only
   // on wet/night), and carPaintMat returns a shared scratch — so compute it ONCE
   // instead of 22× per frame. Wet adds a water film (sharper highlights).
@@ -7832,7 +7824,7 @@ function render(dt) {
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
   const haze = gfx.mobileTier ? null : carFx.haze;
-  if (haze) haze.pick(cars, player, onboard, track ? track.total : 0, dt);
+  const hazeAnchor = haze && haze.pick(cars, player, onboard, track ? track.total : 0, dt);
   shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals(); carDraw.primeRace(paint, night);   // accumulate car decals, flush in one batch after the loop; primeRace: warm-built car meshes (#5387)
   // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
@@ -7961,7 +7953,7 @@ function render(dt) {
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
     carFx.marks(c, _groundMat, dt, state);   // AI lock-up marks persist: laid BEFORE the frustum cull (#4669)
-    if (haze) haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
+    if (c === hazeAnchor) haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8530,6 +8522,10 @@ function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
+  if (typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling && !netPlay.active()) {
+    if (PhotoStudioBody.sampling.pump) render(0);
+    return;
+  }
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
   if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) {
     const drew = RenderRate.drew();

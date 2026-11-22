@@ -323,9 +323,16 @@ const HudReadouts = (function () {
     function sample(car, prog, T, L) {
       if (!(L > 0) || !Number.isFinite(prog) || !Number.isFinite(T)) return;
       if (L / LINES !== step) { step = L / LINES; cars.clear(); }
-      let c = cars.get(car);
-      // A re-grid or a reset moves a car BACK: its history no longer describes this run.
-      if (!c || prog < c.p - 1 || T < c.t) { c = { p: prog, t: T, k: new Float64Array(N).fill(NaN), at: new Float64Array(N).fill(NaN) }; cars.set(car, c); return; }
+      const c = cars.get(car);
+      if (!c) {
+        cars.set(car, { p: prog, t: T, k: new Float64Array(N).fill(NaN), at: new Float64Array(N) });
+        return;
+      }
+      // A rewind or re-grid invalidates all crossings. The line keys guard every timestamp read.
+      if (prog < c.p - 1 || T < c.t) {
+        c.k.fill(NaN); c.p = prog; c.t = T;
+        return;
+      }
       for (let i = Math.floor(c.p / step) + 1, e = Math.floor(prog / step); i <= e; i++) {
         const j = ((i % N) + N) % N;
         c.k[j] = i; c.at[j] = c.t + (T - c.t) * (i * step - c.p) / (prog - c.p);

@@ -27,9 +27,19 @@ const BenchRun = (function () {
   const race = (track, weather, tod, label) => ({ kind: "race", path: null, track, weather, tod, label });
   // ONE LAP / QUICK PATHS: Monza dry on the helmet camera, GPU TEST's own scene, so a lap reads against its phases.
   const lap = (path) => ({ kind: "lap", path, track: "monza", weather: "dry", tod: "default", label: path ? "Lap " + path.toUpperCase() : "Lap" });
+  // Repeat each reference after both changes to detect thermal and timing drift.
+  function graphicsLegs(weather, tod, label, order) {
+    const variants = { base: "Current settings", resolution: "Lower resolution", mirror: "Mirror off" };
+    return ["base", ...order, "base"].map((variant) => Object.assign(
+      race("monza", weather, tod, label + " · " + variants[variant]), { variant }));
+  }
   const TESTS = [
     { id: "paths", label: "WEBGPU vs WEBGL2", legs: [gpu("webgpu"), gpu("webgl2"), gpu("webgl2"), gpu("webgpu")],
       help: "three.js on both paths, alternating: WebGPU, WebGL2, WebGL2, WebGPU. The game reloads between legs. About 14 min." },
+    { id: "graphics", label: "GRAPHICS CHECK", legs: [
+      ...graphicsLegs("dry", "day", "Dry day", ["resolution", "mirror"]),
+      ...graphicsLegs("rain", "night", "Wet night", ["mirror", "resolution"]),
+    ], help: "Compare your current settings with lower resolution and with the rear-view mirror off. Eight short races reload between samples. Pause to cancel. About 8 min." },
     { id: "current", label: "THIS PATH", legs: [gpu(null)],
       help: "GPU TEST once on the renderer you have now, plus race entry. About 4 min." },
     { id: "races", label: "WEATHER & TRACKS", legs: [race("monza", "dry", "default", "Monza dry"), race("monza", "rain", "default", "Monza rain"),
@@ -47,7 +57,7 @@ const BenchRun = (function () {
   ];
   const READY_MS = 60000, COLD_MS = 300000, WARM_MS = 60000, RACE_MS = 20000, SETTLE_MS = 5000, LAP_MS = 240000;
 
-  let _G = null, _ui = null, _pick = "paths", _busy = false;
+  let _G = null, _ui = null, _pick = "graphics", _busy = false, _stopping = false, _reloading = false;
   const r2 = (n) => (n != null && Number.isFinite(+n) ? Math.round(+n * 100) / 100 : null);
   const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -149,7 +159,7 @@ const BenchRun = (function () {
   function pathPrefs(path, base) { return path ? { backend: "three", threePath: path === "webgl2" ? "1" : "0" } : base; }
   function liveApi() { try { return (RP() && RP().liveThreeApi()) || (RP() && RP().liveBackend()) || null; } catch (_) { return null; } }
 
-  function stillRunning() { const p = load(); return !!(p && p.state === "running"); }
+  function stillRunning() { const p = load(); return !_stopping && !!(p && p.state === "running"); }
   // Screen Wake Lock: a hands-free run must not let the phone sleep. The browser drops the lock whenever the page hides,
   // so it is asked for again on visible and on every post-reload resume. Unsupported = silent; refused = one hint.
   let _wl = null, _wlHint = false;
@@ -165,13 +175,13 @@ const BenchRun = (function () {
     try { if (l && !l.released) { const r = l.release(); if (r && r.catch) r.catch(() => {}); } } catch (_) { /* already released */ }
   }
   function onVisible() { try { if (document.visibilityState === "visible" && stillRunning()) wakeAcquire(); } catch (_) { /* no document */ } }
-  function reload() { log("reload"); try { location.reload(); } catch (_) { /* no location */ } }
+  function reload() { log("reload"); try { _reloading = true; location.reload(); } catch (_) { _reloading = false; } }
   // The plan goes to disk BEFORE the leg's renderer pins: a refused write reloads nothing and pins nothing (#5006).
   function startLeg(plan) {
     const leg = plan.legs[plan.i];
     leg.state = "booting";
     if (!save(plan)) { refuse(plan); return false; }
-    writePrefs(pathPrefs(leg.path, plan.prefs));
+    if (plan.test !== "graphics") writePrefs(pathPrefs(leg.path, plan.prefs));
     reload();
     return true;
   }
@@ -180,7 +190,7 @@ const BenchRun = (function () {
     log("refused: the plan could not be saved");
     _busy = false; wakeRelease();
     clear();
-    writePrefs(plan.prefs);   // an earlier leg's pins come off
+    if (plan.test !== "graphics") writePrefs(plan.prefs);   // an earlier leg's pins come off
     if (plan.restore) restore(plan.restore).catch(() => {});
     say("BENCHMARK needs free storage: nothing was run");
   }
@@ -206,6 +216,7 @@ const BenchRun = (function () {
   async function runLeg(plan) {
     const leg = plan.legs[plan.i];
     if (!(await waitReady())) { leg.state = "failed"; leg.reason = "game not ready after reload"; return false; }
+    if (!stillRunning()) return "aborted";
     leg.api = liveApi();
     try { leg.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { leg.engine = null; }
     try { leg.fallbackWhy = sessionStorage.getItem("apex26.gfxFallbackWhy"); } catch (_) { leg.fallbackWhy = null; }
@@ -243,10 +254,19 @@ const BenchRun = (function () {
   }
   // rAF intervals over `ms` after `settleMs`, with program links / pipelines counted inside the window (GPU TEST's stats).
   // record() starts counting; the function it returns stops and gives the stats, frames over 33 / 50 ms included.
-  function record() {
+  function record(drawCount) {
     const counts = { links: 0, pipes: 0 }, unhook = GpuTestRun.hookCounts(counts), d = [];
-    let prev = 0, on = true;
-    const tick = (ts) => { if (!on) return; if (prev) d.push(ts - prev); prev = ts; requestAnimationFrame(tick); };
+    let prev = null, on = true, lastDraw = drawCount && drawCount();
+    const tick = (ts) => {
+      if (!on) return;
+      const draw = drawCount && drawCount();
+      if (!drawCount || draw !== lastDraw) {
+        if (prev !== null) d.push(ts - prev);
+        prev = ts;
+        lastDraw = draw;
+      }
+      requestAnimationFrame(tick);
+    };
     requestAnimationFrame(tick);
     return () => {
       on = false; unhook();
@@ -255,23 +275,79 @@ const BenchRun = (function () {
       return st;
     };
   }
-  async function measure(ms, settleMs) {
+  async function measure(ms, settleMs, drawCount) {
     await sleep(settleMs);
-    const end = record();
+    const end = record(drawCount);
     await sleep(ms);
     return end();
   }
   async function until(f, ms) { const t0 = now(); while (now() - t0 < ms) { try { if (f()) return true; } catch (_) { /* not yet */ } await sleep(100); } return false; }
+  // Pin the currently drawn scale and tier for every leg so only the named option changes.
+  async function graphicsSample(leg) {
+    const gfx = typeof GLX !== "undefined" && GLX;
+    if (!gfx || !gfx.getRenderScale || !gfx.setRenderScale || typeof PerfGov === "undefined") return null;
+    const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance();
+    const scale = gfx.getRenderScale(), auto = PerfGov.autoRes(), hold = PerfGov.tierHold();
+    const mode = mp && mp.mode();
+    try {
+      PerfGov.setTierHold(true);
+      PerfGov.setAutoRes(false);
+      if (leg.variant === "resolution") gfx.setRenderScale(scale > 0.76 ? 0.75 : 0.5);
+      if (leg.variant === "mirror" && mp) mp.setMode("off", { persist: false });
+      const step = await measure(RACE_MS, SETTLE_MS, RenderRate.drawCount);
+      return Object.assign(step, { scale: gfx.getRenderScale(), tier: PerfGov.tier(),
+        mirror: !!(mp && mp.drawing()) });
+    } finally {
+      if (leg.variant === "mirror" && mp) mp.setMode(mode, { persist: false });
+      gfx.setRenderScale(scale);
+      PerfGov.setAutoRes(auto);
+      PerfGov.setTierHold(hold);
+    }
+  }
+
+  function graphicsAdvice(legs) {
+    const gains = { mirror: [], resolution: [] };
+    let comparable = 0;
+    for (const weather of ["dry", "rain"]) {
+      const scene = legs.filter((l) => l.weather === weather);
+      const usable = (l) => l.state === "done" && l.steps && l.steps[0] && l.steps[0].frames >= 30 && l.steps[0].p95 > 0;
+      const bases = scene.filter((l) => l.variant === "base" && usable(l));
+      if (bases.length !== 2) continue;
+      const [a, b] = bases.map((l) => l.steps[0]);
+      if (a.scale !== b.scale || a.mirror !== b.mirror || a.tier !== b.tier || bases[0].api !== bases[1].api) continue;
+      for (const l of scene.filter((l) => l.variant !== "base" && usable(l))) {
+        const v = l.steps[0];
+        if (v.tier !== a.tier || l.api !== bases[0].api) continue;
+        if (l.variant === "mirror" ? !a.mirror || v.mirror || v.scale !== a.scale
+          : v.scale >= a.scale || v.mirror !== a.mirror) continue;
+        comparable++;
+        const gain = Math.min(a.p95, b.p95) - v.p95;
+        // The gain must exceed both baseline drift and a 5% noise margin.
+        if (gain > Math.max(1, Math.abs(a.p95 - b.p95), a.p95 * 0.05))
+          gains[l.variant].push(gain);
+      }
+    }
+    const candidates = Object.entries(gains).filter(([, rows]) => rows.length === 2);
+    if (comparable === 0) return "Insufficient comparable samples. Try again with the game in the foreground.";
+    if (!candidates.length) return "Keep your current settings. Neither change showed a repeatable frame-time improvement across both scenes.";
+    const worstGain = (rows) => Math.min(...rows);
+    candidates.sort((a, b) => worstGain(b[1]) - worstGain(a[1]));
+    const [variant, rows] = candidates[0];
+    const setting = variant === "mirror" ? "Turn the rear-view mirror off" : "Lower Resolution by one step";
+    return setting + ". The 95th-percentile interval between rendered frames improved by " + r2(rows[0]) + " ms in dry daylight and " + r2(rows[1]) + " ms on a wet night.";
+  }
+
   async function raceLeg(plan, leg) {
     _G.seed = plan.seed;
     const cold = await timedEntry(() => SoakRun.start({ track: leg.track, weather: leg.weather, tod: leg.tod, minutes: 2, cam: "helmet" }), COLD_MS);
     leg.entry = { cold };
     if (!cold.ok) { leg.state = "failed"; leg.reason = "race could not start"; return false; }
-    const st = await measure(RACE_MS, SETTLE_MS);
+    const st = leg.variant ? await graphicsSample(leg) : await measure(RACE_MS, SETTLE_MS);
     const alive = SoakRun.active(), why = alive ? null : (SoakRun.status() || {}).reason;
     try { if (alive) SoakRun.stop("bench"); } catch (_) { /* soak gone */ }
     if (!stillRunning()) return "aborted";
     if (!alive) { leg.state = "failed"; leg.reason = "race ended early: " + why; return false; }
+    if (!st) { leg.state = "failed"; leg.reason = "resolution control unavailable"; return false; }
     leg.steps = [Object.assign({ id: "race" }, st)];
     leg.state = "done";
     return true;
@@ -443,9 +519,11 @@ const BenchRun = (function () {
     wakeRelease();
     plan.state = state; plan.finishedAt = new Date().toISOString(); plan.show = true;
     plan.summary = summarize(plan.legs); plan.scenes = scenes(plan.legs);
+    if (plan.test === "graphics" && state === "complete") plan.advice = graphicsAdvice(plan.legs);
     if (BC()) plan.capture = BC().budget(plan);
     if (plan.restore) { await restore(plan.restore); plan.restoreAfter = plan.restore; delete plan.restore; }
-    writePrefs(plan.prefs); save(plan);
+    if (plan.test !== "graphics") writePrefs(plan.prefs);
+    save(plan);
     log("done " + state);
     // Always reload: the results open over a fresh title screen, never over the paused race the last leg left.
     reload();
@@ -467,7 +545,9 @@ const BenchRun = (function () {
     const leg = plan.legs[plan.i];
     if (leg && leg.state === "running") { leg.state = "reloaded"; leg.reason = "the page reloaded during this leg"; if (BC()) leg.crumb = BC().recover(); plan.i++; save(plan); }
     else if (leg && leg.state === "booting") {
-      const ok = await runLeg(plan);
+      let ok;
+      try { ok = await runLeg(plan); }
+      catch (err) { leg.state = "failed"; leg.reason = String(err && err.message || "benchmark interrupted"); }
       if (ok === "aborted" || !stillRunning()) { _busy = false; return; }
       // A failed leg is a result, not the end: it keeps its state and reason and the run goes on to the next leg,
       // so a phone left alone always comes back to a results page. Only STOP BENCHMARK ends a run early.
@@ -477,7 +557,8 @@ const BenchRun = (function () {
     startLeg(plan);
   }
   function run(testId) {
-    if (load() && load().state === "running") return false;
+    if (stillRunning() || _stopping) return false;
+    if (testId === "graphics" && _G && _G.state !== "menu") { say("Return to the title screen to start this test."); return false; }
     const plan = newPlan(testId, readPrefs());
     // Every apex26.* key as it was, put back by finishPlan: a race starts the PHONE TEST recorder (apex26.phoneRec)
     // and counts toward onboarding, a garage leg saves livery picks. A benchmark leaves no trace.
@@ -488,6 +569,9 @@ const BenchRun = (function () {
   }
   function stop() {
     const plan = load(); if (!plan || plan.state !== "running") return false;
+    if (_stopping) return false;
+    _stopping = true;
+    try { if (typeof SoakRun !== "undefined" && SoakRun.active()) SoakRun.stop("stopped"); } catch (_) { /* nothing running */ }
     try { if (typeof GpuTestRun !== "undefined" && GpuTestRun.active()) GpuTestRun.stop(); } catch (_) { /* nothing running */ }
     const leg = plan.legs[plan.i]; if (leg && leg.state !== "done") { leg.state = "stopped"; leg.reason = "stopped by the player"; }
     finishPlan(plan, "stopped");
@@ -539,13 +623,15 @@ const BenchRun = (function () {
     if (plan && plan.state === "running") {
       if (_wlHint) say("Screen may sleep: set Auto-Lock to Never");
       const leg = plan.legs[plan.i] || {};
-      body.appendChild(el("p", "adv-help", "Running " + plan.test + ": leg " + (plan.i + 1) + " of " + plan.legs.length + (leg.label ? " (" + leg.label + ")" : "") + ". Leave the phone alone; this page comes back with the results."));
+      body.appendChild(el("p", "adv-help", "Running " + plan.test + ": leg " + (plan.i + 1) + " of " + plan.legs.length + (leg.label ? " (" + leg.label + ")" : "") + ". Keep the game in the foreground until the results appear."));
       body.appendChild(btn("STOP BENCHMARK", "bigbtn alt", () => { stop(); paint(); }));
       return;
     }
     const hasSum = !!(plan && plan.summary && Object.keys(plan.summary).length), hasScenes = !!(plan && plan.scenes && plan.scenes.length);
     if (hasSum || hasScenes) {
       body.appendChild(el("p", "adv-help", "Last run: " + plan.test + " · " + plan.state + " · " + String(plan.finishedAt || "").slice(0, 16).replace("T", " ") + " UTC"));
+      if (plan.test === "graphics") body.appendChild(el("p", "adv-help", "FPS and frame intervals count frames drawn by the game. They include the selected frame-rate cap."));
+      if (plan.advice) body.appendChild(el("p", "adv-help", plan.advice));
       if (hasSum) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.id = "bench-summary"; wrap.appendChild(summaryTable(plan.summary)); body.appendChild(wrap); }
       if (hasScenes) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.id = "bench-scenes"; wrap.appendChild(scenesTable(plan.scenes)); body.appendChild(wrap); }
       plan.legs.forEach((l, i) => { if (l.state !== "done" && l.kind === "gpu") body.appendChild(el("p", "adv-help", "Leg " + (i + 1) + " " + l.label + ": " + l.state + (l.reason ? " (" + l.reason + ")" : ""))); });
@@ -562,7 +648,7 @@ const BenchRun = (function () {
     body.appendChild(pick);
     body.appendChild(el("p", "adv-help", (TESTS.find((t) => t.id === _pick) || TESTS[0]).help));
     body.appendChild(btn("RUN " + (TESTS.find((t) => t.id === _pick) || TESTS[0]).label, "bigbtn", () => { if (run(_pick)) say("starting…"); }));
-    body.appendChild(el("p", "adv-help", "Before RUN: Low Power Mode off, phone cool, Auto-Lock set to Never (Settings › Display & Brightness). Keep the game in front until the results show."));
+    body.appendChild(el("p", "adv-help", "Keep the game in the foreground and turn off power saving for comparable results."));
   }
   // BENCHMARK covers the screen it opened from (SETTINGS, or the title after a run) and gives it back on BACK —
   // race-settings.js's openSettingSearch does the same with #pmsettings.
@@ -580,12 +666,18 @@ const BenchRun = (function () {
   function mount() {
     if (typeof document === "undefined") return false;
     const back = (doc() && doc().getElementById("bench-back")); if (back && !back.__bench) { back.__bench = true; back.addEventListener("click", close); }
+    const resumeBtn = doc().getElementById("pm-resume");
+    if (resumeBtn && stillRunning() && !doc().getElementById("pm-bench-stop")) {
+      const cancel = btn("Cancel benchmark", null, stop);
+      cancel.id = "pm-bench-stop";
+      resumeBtn.after(cancel);
+    }
     if ((doc() && doc().getElementById("pm-bench-open"))) return true;
     const host = doc().getElementById("pm-panel-graphics");   // GRAPHICS: "Renderer, resolution & effects"
     if (!host) return false;
     const nav = el("nav", "pm-doors"); nav.setAttribute("aria-label", "Benchmark");   // the SETTINGS hub's door tile look
-    const b = btn("BENCHMARK…", null, open); b.id = "pm-bench-open";
-    b.appendChild(el("small", null, "Time this phone: one lap, renderer paths, weather, tracks, garage, livery edits"));
+    const b = btn("Test my graphics…", null, open); b.id = "pm-bench-open";
+    b.appendChild(el("small", null, "Compare settings in dry daylight and wet night races."));
     nav.appendChild(b); host.insertBefore(nav, host.firstChild);
     return true;
   }
@@ -593,9 +685,15 @@ const BenchRun = (function () {
   // open / close / stillRunning / resultText stay module-local (mount, resume, paint);
   // KEY stays — tools/perf/devicefarm-*.mjs reads BenchRun.KEY across reloads.
   return {
-    KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, overs, growth, summarize, scenes, newPlan, pathPrefs,
+    KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, overs, growth, summarize, scenes, graphicsAdvice, newPlan, pathPrefs,
     create(G) {
       _G = G;
+      const activeGraphics = () => { const p = load(); return p && p.test === "graphics" && p.state === "running"; };
+      try {
+        const pause = document.getElementById("pausebtn");
+        if (pause) pause.addEventListener("click", (e) => { if (e.isTrusted && _G.state === "race" && !_G.paused && activeGraphics()) stop(); }, true);
+        document.addEventListener("visibilitychange", () => { if (document.hidden && !_reloading && activeGraphics()) stop(); });
+      } catch (_) { /* no document */ }
       try { document.addEventListener("visibilitychange", onVisible); } catch (_) { /* no document */ }
       if (typeof setTimeout === "function") [400, 1200, 2500, 5000].forEach((ms) => setTimeout(mount, ms));
       if (typeof setTimeout === "function") setTimeout(() => { resume().catch((e) => log("resume failed " + (e && e.message))); }, 0);

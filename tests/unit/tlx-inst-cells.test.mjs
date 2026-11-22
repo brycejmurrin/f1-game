@@ -100,6 +100,24 @@ test("a changed cell set repacks and uploads", () => {
   assert.equal(batch.packMatrices[12], 45);
 });
 
+test("successive changed prop culls exchange two key buffers and preserve the resident set on hits", () => {
+  const { cullInstances, batch, writes } = load();
+  cullInstances(batch, slab(0, 26));
+  const first = batch._cellKey;
+  cullInstances(batch, slab(40, 66));
+  const second = batch._cellKey;
+  assert.notEqual(first, second);
+  assert.equal(batch._cellKeyScratch, first);
+  cullInstances(batch, slab(41, 67));   // same three cells as the previous sweep
+  assert.equal(batch._cellKey, second);
+  assert.deepEqual(Array.from(second.slice(0, batch._cellKeyN)), [4, 5, 6]);
+  cullInstances(batch, slab(20, 36));
+  assert.equal(batch._cellKey, first);
+  assert.equal(batch._cellKeyScratch, second);
+  assert.deepEqual(Array.from(first.slice(0, batch._cellKeyN)), [2, 3]);
+  assert.deepEqual(writes, [3, 3, 2]);
+});
+
 test("the shadow cull (upload:false) neither consults nor disturbs the key", () => {
   const { cullInstances, batch, writes } = load();
   cullInstances(batch, slab(0, 36));                          // camera: 4 cells

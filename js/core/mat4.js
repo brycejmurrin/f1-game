@@ -118,6 +118,16 @@ const V3 = (function () {
     const l = len(a) || 1;
     return [a[0] / l, a[1] / l, a[2] / l];
   }
-  return { norm };
+  // Tilt world up toward the camera's right vector to roll into corners.
+  function rolledUpTo(out, eye, target, roll) {
+    const dx = eye[0] - target[0], dz = eye[2] - target[2];
+    const scale = Math.sin(roll) / (Math.hypot(dx, dz) || 1);
+    const x = dz * scale, z = -dx * scale, length = Math.hypot(x, 1, z);
+    out[0] = x / length;
+    out[1] = 1 / length;
+    out[2] = z / length;
+    return out;
+  }
+  return { norm, rolledUpTo };
 })();
 Object.freeze(M4);

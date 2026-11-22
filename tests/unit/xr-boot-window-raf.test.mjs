@@ -40,6 +40,10 @@ test("without the VR bundle, chainWindowRaf() re-arms the tick bind() was given"
   assert.equal(rafs.length, 1, "exactly one window rAF is scheduled");
   rafs[0](16);
   assert.deepEqual(ticks, [16], "the bound window tick runs");
+  assert.equal(ctx.XrBoot.afterTick((t) => ticks.push(-t)), true);
+  assert.equal(rafs[1], rafs[0], "ordinary frames share one dispatcher even when the queued tick changes");
+  rafs[1](32);
+  assert.deepEqual(ticks, [16, -32]);
 });
 
 test("before anything is bound, chainWindowRaf() still reports no loop", () => {

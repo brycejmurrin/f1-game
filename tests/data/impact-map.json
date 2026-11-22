@@ -2536,6 +2536,9 @@
       "refreshButton": [
         "tests/unit/replay-buf.test.mjs"
       ],
+      "release": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
       "reset": [
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/replay-buf.test.mjs",
@@ -5817,6 +5820,9 @@
       "roadFrameAxes": [
         "tests/unit/shared-math.test.mjs"
       ],
+      "rolledUpTo": [
+        "tests/unit/shared-math.test.mjs"
+      ],
       "wrapDelta": [
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/shared-math.test.mjs"
@@ -8651,6 +8657,9 @@
       "paintCareer": [
         "tests/unit/garage-followups.test.mjs"
       ],
+      "project": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
       "statsOf": [
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
@@ -8660,7 +8669,6 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
-        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -11174,7 +11182,8 @@
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-seed-sync-vm.test.mjs",
         "tests/unit/net-session.test.mjs",
-        "tests/unit/net-start-arming.test.mjs"
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
       ],
       "tick": [
         "tests/unit/net-authority.test.mjs",
@@ -11601,6 +11610,9 @@
       ]
     },
     "js/perf/bench-run.js": {
+      "graphicsAdvice": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "growth": [
         "tests/unit/bench-run.test.mjs"
       ],
@@ -12163,6 +12175,9 @@
       "observe": [
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/render-rate.test.mjs"
+      ],
+      "setDesktopTarget": [
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
@@ -16783,6 +16798,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-r187-contracts.test.mjs"
       ],
+      "roadRanges": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "splitRanges": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
@@ -17057,7 +17075,8 @@
       ],
       "pass": [
         "tests/unit/tlx-csm-lampx.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-round2.test.mjs"
       ],
       "prime": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -17195,9 +17214,6 @@
       "_mirWarmUnswap": [
         "tests/unit/tlx-inst-root-3104.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
-      ],
-      "_mul4Col": [
-        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "_poolShow": [
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -18024,7 +18040,11 @@
       "update": [
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "updateClock": [
+        "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "viewDepth": [
         "tests/unit/extreme-lights-sky.test.mjs"
@@ -19950,6 +19970,7 @@
         "tests/unit/hud-radio-slot.test.mjs"
       ],
       "announceLaneTick": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs"
       ],
       "create": [
@@ -19975,6 +19996,7 @@
         "tests/unit/hud-radio-slot.test.mjs"
       ],
       "radioTopSlot": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
@@ -20213,6 +20235,7 @@
         "tests/unit/race-radio.test.mjs"
       ],
       "hStyle": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
@@ -20221,9 +20244,13 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "hToggle": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/hud-status-stack.test.mjs"
+      ],
+      "hUnstyle": [
+        "tests/unit/hud-announce-lane-cache.test.mjs"
       ],
       "hlKey": [
         "tests/unit/hud-dock-btn-cache.test.mjs"
@@ -21963,6 +21990,7 @@
     },
     "js/xr/xr-boot.js": {
       "afterTick": [
+        "tests/unit/xr-boot-window-raf.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "applyEyes": [
@@ -21992,6 +22020,9 @@
       ],
       "diag": [
         "tests/unit/xr-phase0.test.mjs"
+      ],
+      "dispatch": [
+        "tests/unit/real-replay-transport.test.mjs"
       ],
       "ensureXr": [
         "tests/unit/xr-phase0.test.mjs"

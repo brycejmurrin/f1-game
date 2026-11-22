@@ -59,10 +59,8 @@ const MirrorPass = (function () {
   // every other frame on top of the forward cull.
   const RERANK_M = 5, RERANK_EVERY = 8, RERANK_AIM_COS = 0.9994;
   const LITE_CULL = 120;
-  // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21: "shorter mirror draw distance"). Monza sweep, 7
-  // positions: the lite mirror drew 75k tris mean / 117k worst at 180 m, 65k / 71k at 120 m, and no less at 100 or 80 m
-  // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
-  // reaches. The low and min rungs never draw further than lite.
+  // A historical seven-position Monza sweep set the lite budget at 120 m. That sweep included
+  // an entire ~51k-triangle road. TLX now submits visible index ranges of the same marked ribbon.
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, ss: 2, cull: 280, reach: 260, every: 1, instEvery: _instEvery },
     { name: "lite", lite: true,  res: 0.6, ss: 2, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
@@ -115,6 +113,7 @@ const MirrorPass = (function () {
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
     let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
+    let _projFov = NaN, _projAspect = NaN;
     let _coneTan = 1;        // tan(horizontal half-FOV) of the pass in flight (pass())
     // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
     // distance squared per rival that survives the arc / behind-eye / cone tests.
@@ -699,12 +698,16 @@ const MirrorPass = (function () {
     function pass(frame, frameSky, night, wet, floodEmit, w, h, fovY, centre, skip) {
       const g = G.gfx;
       const aspect = w / h;
-      M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
+      // The rear view and broadcast PiP share this lens; only the pose changes on most passes.
+      if (fovY !== _projFov || aspect !== _projAspect) {
+        M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
+        M4.invertTo(_invProj, _proj);
+        _coneTan = Math.tan(fovY / 2) * aspect;
+        _projFov = fovY; _projAspect = aspect;
+      }
       M4.lookAtTo(_view, _eye, _tgt, _up);
       M4.mulTo(_vp, _proj, _view);
-      _coneTan = Math.tan(fovY / 2) * aspect;
       M4.invertTo(_invVP, _vp);
-      M4.invertTo(_invProj, _proj);
 
       // The mirror camera goes ON `frame` (drawWorldMeshes culls the prop
       // batches through frame.viewProj, and every backend's begin reads it)
@@ -755,7 +758,7 @@ const MirrorPass = (function () {
       frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
       let began = false;
       try {
-        began = g.mirrorBegin(frame, w, h);
+        began = g.mirrorBegin(frame, w, h, skip != null);   // the rear view skips the player; broadcast PiP includes its subject
         if (began) {
           drawWorldMeshes(frame, night, wet, floodEmit, false);
           drawCars(wet, night, _q.reach, centre, skip);
@@ -786,10 +789,10 @@ const MirrorPass = (function () {
       return began;
     }
 
-    function setMode(v) {
+    function setMode(v, opts) {
       if (MODES.indexOf(v) < 0) v = "auto";
       mode = v;
-      G.store.set("hudMirror", mode);
+      if (!opts || opts.persist !== false) G.store.set("hudMirror", mode);
       _measureAt = -Infinity;
       if (onModeChange) onModeChange(mode);
     }
