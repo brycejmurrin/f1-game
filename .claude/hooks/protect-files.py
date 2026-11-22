@@ -64,7 +64,8 @@ def fail(msg):
 
 
 def js_strings(src, name):
-    """The string literals of `export const NAME = [ … ]` / `Object.freeze([ … ])` / `new Set([ … ])` in src, or None."""
+    """The string literals of `export const NAME = [ … ]` / `Object.freeze([ … ])` / `new Set([ … ])` in src, or None
+    when the array is absent. An element this reader cannot resolve raises ValueError naming it (#5799)."""
     m = re.search(r"\b" + re.escape(name) + r"\s*=\s*(?:Object\.freeze\(|new Set\()?\[(.*?)\]", src, re.S)
     if not m:
         return None
@@ -75,7 +76,20 @@ def js_strings(src, name):
         if lit or ref:
             out.append((lit or ref).group(1))
         elif item:
-            return None                           # an element this reader cannot resolve
+            shown = re.sub(r"\s+", " ", item).strip()
+            if len(shown) > 120:
+                shown = shown[:117] + "..."
+            raise ValueError("%s: cannot parse element %r (string literal or const name only; // and /* */ comments "
+                             "inside the array are not supported)" % (name, shown))
+    return out
+
+
+def _js_strings_at(path, src, name):
+    """js_strings with the file path prefixed on parse errors (and on a missing array)."""
+    try:
+        out = js_strings(src, name)
+    except ValueError as e:
+        raise ValueError("%s: %s" % (path, e)) from None
     return out
 
 
@@ -83,13 +97,14 @@ def generator_targets(root):
     """Every path a doc / shell generator writes (tools/gen/targets.mjs GENERATORS + gen-shell TARGETS)."""
     gen = os.path.join(root, "tools/gen")
     src = open(os.path.join(gen, "targets.mjs"), encoding="utf8").read()
-    mods = js_strings(src, "GENERATORS")
+    mods = _js_strings_at("tools/gen/targets.mjs", src, "GENERATORS")
     if not mods:
         raise ValueError("tools/gen/targets.mjs: GENERATORS not found")
     out = []
     for rel in mods:
-        g = open(os.path.normpath(os.path.join(gen, rel)), encoding="utf8").read()
-        listed = js_strings(g, "TARGETS")
+        gpath = os.path.normpath(os.path.join(gen, rel))
+        g = open(gpath, encoding="utf8").read()
+        listed = _js_strings_at("tools/gen/" + rel.lstrip("./"), g, "TARGETS")
         one = re.search(r"export const TARGET\s*=\s*\"([^\"]+)\"", g)
         if listed:
             out += listed
@@ -104,7 +119,8 @@ def generator_targets(root):
 
 
 def shell_targets(gen):
-    t = js_strings(open(os.path.join(gen, "gen-shell.mjs"), encoding="utf8").read(), "TARGETS")
+    t = _js_strings_at("tools/gen/gen-shell.mjs",
+                       open(os.path.join(gen, "gen-shell.mjs"), encoding="utf8").read(), "TARGETS")
     if not t:
         raise ValueError("tools/gen/gen-shell.mjs: TARGETS not found")
     return t
@@ -113,11 +129,13 @@ def shell_targets(gen):
 def generated(root):
     """(whole-file map rel → why, block-mode set). Raises when a source list cannot be read."""
     src = open(os.path.join(root, "tools/lib/generated-paths.mjs"), encoding="utf8").read()
-    gp, bp = js_strings(src, "GENERATED_PATHS"), js_strings(src, "BUILT_PATHS")
+    where = "tools/lib/generated-paths.mjs"
+    gp = _js_strings_at(where, src, "GENERATED_PATHS")
+    bp = _js_strings_at(where, src, "BUILT_PATHS")
     # ON_DEMAND_PATHS is newer than the hook's other lists (2026-11-11): a tree from before it (an older branch's
     # worktree edited from a newer checkout) has none, which means no on-demand file, not an unreadable list.
     # Present but unresolvable still fails closed, like the other two.
-    od = js_strings(src, "ON_DEMAND_PATHS") if re.search(r"\bON_DEMAND_PATHS\s*=", src) else []
+    od = (_js_strings_at(where, src, "ON_DEMAND_PATHS") if re.search(r"\bON_DEMAND_PATHS\s*=", src) else [])
     if gp is None or bp is None or od is None:
         raise ValueError("tools/lib/generated-paths.mjs: GENERATED_PATHS / BUILT_PATHS / ON_DEMAND_PATHS not found")
     whole = {p: WHY_GEN for p in gp}
@@ -146,7 +164,7 @@ def mdc_generated(root, rel):
     if not re.match(r"^\.cursor/rules/[^/]+\.mdc$", rel):
         return False
     src = open(os.path.join(root, "tools/gen/gen-cursor-rules.mjs"), encoding="utf8").read()
-    hand = js_strings(src, "HAND_WRITTEN")
+    hand = _js_strings_at("tools/gen/gen-cursor-rules.mjs", src, "HAND_WRITTEN")
     if hand is None:
         raise ValueError("tools/gen/gen-cursor-rules.mjs: HAND_WRITTEN not found")
     return os.path.basename(rel) not in hand

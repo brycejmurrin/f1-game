@@ -38,7 +38,20 @@ function openDb() {
     req.onblocked = () => { abandoned = true; reject(new Error("Close another game tab to open photo storage")); };
   });
 }
-async function library(action, value) {
+// Both views show the same newest-first order used when a full album evicts its last row.
+function newestPhotoFirst(a, b) { return b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0); }
+// A failed write may precede the first successful read of the device album.
+// Place visit-only photos after that durable history, in their save order, once.
+function orderVisitPhotos(stored, session) {
+  let latest = stored.reduce((at, p) => Math.max(at, p.at), 0);
+  for (let i = session.length - 1; i >= 0; i--) {
+    const p = session[i];
+    if (p.needsOrder) { p.at = Math.max(p.at, latest + 1); delete p.needsOrder; }
+    latest = Math.max(latest, p.at);
+  }
+  return latest;
+}
+async function library(action, value, session) {
   const db = await openDb();
   try {
     return await new Promise((resolve, reject) => {
@@ -46,15 +59,16 @@ async function library(action, value) {
       let result = null, failure = null;
       const req = action === "delete" ? store.delete(value) : store.getAll();
       req.onsuccess = () => {
-        if (action !== "save") { result = req.result; return; }
+        if (action === "delete") return;
+        const latest = orderVisitPhotos(req.result, session);
+        if (action === "list") { result = req.result; return; }
         // Queue every mutation in this active request callback. Readwrite
         // transactions on the same store serialize across tabs; an await here
         // would let this transaction become inactive and lose that isolation.
         try {
-          const photos = req.result.filter((p) => p.id !== value.id)
-            .sort((a, b) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+          const photos = req.result.filter((p) => p.id !== value.id).sort(newestPhotoFirst);
           // Commit order decides which photos to keep, even if the device clock moved backward.
-          const at = photos.length ? Math.max(value.at, photos[0].at + 1) : value.at;
+          const at = Math.max(value.at, latest + 1);
           for (const old of photos.slice(LIMIT - 1)) store.delete(old.id);
           const put = store.put({ ...value, at }); put.onsuccess = () => { result = put.result; };
         } catch (e) { failure = e; tx.abort(); }
@@ -716,10 +730,14 @@ function create(G, deps) {
       if (blob.size > 3 * 1024 * 1024) throw new Error("This photo is too large. Download the PNG instead");
       const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, thumb: thumbnail(canvas) };
       try {
-        await library("save", entry);
+        await library("save", entry, session);
         if (gen === st.generation) say("Saved to My Photos on this device.");
-      } catch (_) { session.unshift(entry); session.splice(LIMIT); if (gen === st.generation) say("Device storage is unavailable. Saved for this visit; download to keep it."); }
-      if (gen === st.generation) await paintLibrary();
+      } catch (_) {
+        session.unshift({ ...entry, at: Math.max(entry.at, session.length ? session[0].at + 1 : 0), needsOrder: true });
+        session.splice(LIMIT);
+        if (gen === st.generation) say("Device storage is unavailable. Saved for this visit; download to keep it.");
+      }
+      if (st.open) await paintLibrary();   // the album is shared across Studio visits
     } catch (e) { if (gen === st.generation) say("Save failed: " + text(e.message)); }
     finally { if (gen === st.generation) busy(false); }
   }
@@ -734,7 +752,7 @@ function create(G, deps) {
   }
   async function paintLibrary() {
     const gen = st.generation, paint = ++libraryPaint;
-    let photos; try { photos = await library("list"); } catch (_) { photos = []; }
+    let photos; try { photos = await library("list", null, session); } catch (_) { photos = []; }
     if (!st.open || gen !== st.generation || paint !== libraryPaint) return;
     const box = E["ps-library"];
     // DELETE repaints the list under the focused button; keepFocus lands on the
@@ -743,7 +761,7 @@ function create(G, deps) {
     if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(box, render); else render();
   }
   function paintPhotos(box, photos) {
-    photos = photos.concat(session).sort((a, b) => b.at - a.at).slice(0, LIMIT);
+    photos = photos.concat(session).sort(newestPhotoFirst).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     const bgOk = sceneIsPhoto();
     for (const p of photos) {
@@ -764,8 +782,18 @@ function create(G, deps) {
           finally { downloading = false; }
         }),
         bg,
-        button("DELETE", async () => { const i = session.findIndex((x) => x.id === p.id); if (i >= 0) session.splice(i, 1); else try { await library("delete", p.id); } catch (_) { say("Photo could not be deleted."); return; } paintLibrary(); }),
+        button("DELETE", async () => {
+          const gen = st.generation, i = session.findIndex((x) => x.id === p.id);
+          if (i >= 0) session.splice(i, 1);
+          else try { await library("delete", p.id); } catch (_) {
+            if (gen === st.generation) say("Photo could not be deleted.");
+            return;
+          }
+          if (st.open) paintLibrary();
+        }),
       ]);
+      // A newly saved photo shifts the rows. Keep focus on the same photo and action.
+      row.querySelectorAll("button").forEach((el, i) => { el.id = "ps-action-" + p.id + "-" + i; });
       box.appendChild(row);
     }
   }
@@ -789,9 +817,9 @@ function create(G, deps) {
   function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
   async function album() {
     let photos;
-    try { photos = await library("list"); } catch (e) { if (!session.length) throw e; photos = []; }
+    try { photos = await library("list", null, session); } catch (e) { if (!session.length) throw e; photos = []; }
     const seen = new Set();
-    return photos.concat(session).sort((a, b) => b.at - a.at || String(a.id).localeCompare(String(b.id)))
+    return photos.concat(session).sort(newestPhotoFirst)
       .filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return /^data:image\/(jpeg|png);base64,/.test(p.thumb || "") && p.thumb.length < 240000; })
       .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, at: +p.at || 0 }));
   }

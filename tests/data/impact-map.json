@@ -3525,6 +3525,7 @@
         "tests/unit/ghost-share.test.mjs"
       ],
       "fileExport": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/ghost-share.test.mjs"
       ],
       "guest": [
@@ -5489,6 +5490,7 @@
         "tests/unit/custom-tracks-stale.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/desktop-native.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel.test.mjs",
         "tests/unit/forecast.test.mjs",
@@ -14636,6 +14638,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/ui-experience.test.mjs"
       ],
       "debrief": [
@@ -14677,6 +14680,7 @@
         "tests/unit/radio-voice.test.mjs"
       ],
       "*": [
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ]
     },
@@ -20360,6 +20364,7 @@
       "*": [
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs"

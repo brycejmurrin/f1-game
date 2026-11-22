@@ -28,6 +28,7 @@ export function bootEditor(stored = {}) {
     get: (k, d) => (k in data ? JSON.parse(JSON.stringify(data[k])) : d),
     set: (k, v) => { data[k] = v; },
     write: (k, v) => { data[k] = v; return { ok: true, durable: true }; },
+    failedKeys: () => [],
     rawDel: (k) => { delete data[k]; },
   };
   ctx.GameStore = { store };
