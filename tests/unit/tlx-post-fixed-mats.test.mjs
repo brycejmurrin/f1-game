@@ -115,7 +115,7 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
     const dest = soft ? { width: presentW, height: presentH } : null;
     const aaRT = { texture: {} }, ldrRT = { texture: {} };
     const context = vm.createContext({ P, presentW, presentH, phonePost: true,
-      fixed: true, fixedActive: () => true, spatialUpscale: false,
+      phys: true, fixed: true, fixedActive: () => true, spatialUpscale: false,
       dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0, _warmFlipUp: false,
       AA: null, taaLive: () => false,   // traa off: the FXAA / SGSR branches below are today's
       presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false,

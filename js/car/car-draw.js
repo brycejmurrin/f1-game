@@ -2005,8 +2005,12 @@ const CarDraw = (function () {
       // the disc fades in over that band. Per frame on purpose: a low frame
       // rate aliases sooner, and the blur has to cover what the display shows.
       // Within 120 m of a rival; the player always. Lite (tier ≥ 1) drops it.
-      const spinRate = (c.speed / PhysicsConsts.WHEEL_R) * dt;
-      const blur = !lite && camD2 < 120 * 120 ? Math.min(1, Math.max(0, (Math.abs(spinRate) - 0.6) / 1.2)) : 0;
+      let frontBlur = 0, rearBlur = 0;
+      if (!lite && camD2 < 120 * 120 && dt) {
+        const spin = CarWheels.phaseStep(c.speed, dt, PhysicsConsts.WHEEL_R, c.wheelLock || 0);
+        frontBlur = M4.clamp((Math.abs(spin.front) - 0.6) / 1.2, 0, 1);
+        rearBlur = M4.clamp((Math.abs(spin.rear) - 0.6) / 1.2, 0, 1);
+      }
       // PAST THE RINGS (a rival beyond 40 m): one cheap additive flare per FRONT
       // disc (Particles.flare — this frame only, outside the pool) on the same
       // brakeHeat. Mostly a night cue: `opt.emissive` is the wheels' night term
@@ -2073,6 +2077,7 @@ const CarDraw = (function () {
           _cqMesh[_cqN] = getCompoundRing(tyreCol);
           _cqN++;
         }
+        const blur = wd.front ? frontBlur : rearBlur;
         if (blur > 0.01) {
           // The disc sits just inside the brake ring's plane so the hot ring
           // still reads over it; same queue, no emissive.
@@ -2139,6 +2144,7 @@ const CarDraw = (function () {
     // BARE (drawPlayerWheels): the mirror is ~120 px tall. A GLB is one piece.
     // The main pass's _wheelOpts (game.js) values: TLX keys materials by value.
     const _mirWheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
+    const _mirrorLiftedBody = new Float32Array(16);
     let _mirrorBodyLow = null, _mirrorViewRead = false, _mirrorViewContext = null, _mirrorContext = null;
     function mirrorBodyContext() {
       const mp = typeof MirrorPass !== "undefined" && MirrorPass.instance ? MirrorPass.instance() : null;
@@ -2183,15 +2189,24 @@ const CarDraw = (function () {
       return low;
     }
     function drawMirrorCar(c, mat, paint, night) {
+      let bodyMat = mat;
+      if (c.pitState === "box" && G.pits && G.pits.stopAnim) {
+        const anim = G.pits.stopAnim(c);
+        if (anim && anim.lift) {
+          _mirrorLiftedBody.set(mat);
+          _mirrorLiftedBody[13] += anim.lift;
+          bodyMat = _mirrorLiftedBody;
+        }
+      }
       const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
-      if (!body) { G.gfx.draw(teamMesh(c.team, c), mat, paint); return; }
+      if (!body) { G.gfx.draw(teamMesh(c.team, c), bodyMat, paint); return; }
       const context = _mirrorBodies && !c.isPlayer && FieldLod.on ? mirrorBodyContext() : null;
       const low = context ? _mirrorBodies.get(body) : null;
-      G.gfx.draw(low && mirrorBodyLow(c, mat, context, low.radius) ? low.mesh : body, mat, paint);
+      G.gfx.draw(low && mirrorBodyLow(c, bodyMat, context, low.radius) ? low.mesh : body, bodyMat, paint);
       // The moveable wing elements are not in the body: the static set (ONE
       // draw, the nearer rest pose), or every wing here was its main plane only.
       const aSt = teamDecalState(paintTeam(c), c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);
-      deps.drawAeroFlaps(paintTeam(c), aSt.val, c.aeroX || 0, mat, paint, aSt.aero, null, true);
+      deps.drawAeroFlaps(paintTeam(c), aSt.val, c.aeroX || 0, bodyMat, paint, aSt.aero, null, true);
       _mirWheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, mat, 0, _mirWheelOpts, false, 0, 1, true);
     }

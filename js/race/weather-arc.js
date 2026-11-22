@@ -269,6 +269,17 @@ const WeatherArc = (function () {
       const frac = Number.isFinite(s) && len > 0 ? s / len : a.cell.c0 + a.cell.v * a.t / a.cell.total;
       return baseRain + (peak - baseRain) * RainCells.strength(a.cell, frac, a.t);
     }
+    const coverProjection = {}, coverRoad = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+    function sheltered(eye) {
+      const track = G.track, bore = track && track.def && track.def.rainShelter;
+      if (!bore) return false;
+      Tracks.project(track, eye[0], eye[2], null, eye[1], coverProjection);
+      const frac = coverProjection.s / track.total;
+      if (frac < bore.start || frac > bore.end) return false;
+      Tracks.sample(track, coverProjection.s, coverRoad);
+      const height = eye[1] - coverRoad.p[1] - coverProjection.lat * coverRoad.r[1];
+      return coverProjection.dist <= coverRoad.hw + bore.shoulderWidth && height >= 0 && height < bore.clearance;
+    }
     function viewRainfall() { return rainfallAt(G.player && G.player.s); }
     /** The largest |segment − target| of a local arc (the scalar's own gap otherwise). */
     function maxDev(a, target) {
@@ -561,7 +572,7 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, sheltered, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; grooveEnd = null; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
