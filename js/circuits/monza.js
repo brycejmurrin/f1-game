@@ -51,6 +51,10 @@
       { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // racing arc 0.295-0.315 Roggia
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // racing arc 0.608-0.652 Ascari
     ],
+    // Frac zones kept (not { turn }): converting to turn-anchors moved the
+    // banking under the car and drifted physics-characterization + props-index
+    // pins on CI (#6121). Corner-frames still lists the three far fracs; fix
+    // with a physics-aware pass, not a silent rebaseline.
     bankZones: [
       { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande
       { frac: 0.3831, angleDeg: 6.0, widthM: 140 },   // Lesmo 1

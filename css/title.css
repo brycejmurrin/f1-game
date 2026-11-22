@@ -82,6 +82,7 @@
    the radial from --menu-wash-pct, so a soft/off answer wins on every
    viewport without fighting cascade-layer order. Grain uses --grain-opacity
    (css/components.css). */
+:root[data-menu-wash="medium"] { --menu-wash-pct: 18%; --grain-opacity: 0.0375; }
 :root[data-menu-wash="soft"] { --menu-wash-pct: 12%; --grain-opacity: 0.025; }
 :root[data-menu-wash="off"]  { --menu-wash-pct: 0%;  --grain-opacity: 0; }
 /* THE TITLE CAR. Decorative and NOT a grid item: an in-flow child of the
@@ -104,6 +105,7 @@
   aspect-ratio: 1400 / 900;
   zoom: normal;
   pointer-events: none;
+  opacity: calc(0.14 + (var(--title-art-full, 1) - 0.14) * var(--title-art-strength, 1));
   z-index: -1;
   color: var(--red);                 /* the ONE declaration that themes every
                                         currentColor stroke and gradient stop */
@@ -160,22 +162,21 @@
    be. Anything painting a <g> that `#title-car g` also matches has to come
    from a rule, not an attribute. */
 #title-car g[data-trail] { fill: url(#tc-trail); }
-/* TITLE ART player setting (js/ui/title-fx.js → html[data-title-art]).
-   Specificity beats the media-query opacity fades and the tall-shape
-   re-shows below so SOFT/OFF win on every viewport. ON leaves those alone. */
-:root[data-title-art="soft"] #title-car { opacity: 0.14; }
+/* Blend soft art toward this viewport's opacity. */
+:root[data-title-art="medium"] #title-car { --title-art-strength: 0.5; }
+:root[data-title-art="soft"] #title-car { --title-art-strength: 0; }
 :root[data-title-art="off"] #title-car { display: none; }
 /* COPY SPACE IS A FUNCTION OF WIDTH — a composition rule, not a contrast one.
    Measured as WCAG SC 1.4.3 asks, the disclaimer runs 14.55:1 art off and
    12.62:1 art on (need 4.5:1), so no scrim is owed. On a narrow screen the
    button column takes the whole width and the art crosses it as clutter, so
    it fades as the column closes in. */
-@media (max-width: 1000px) { #title-car { opacity: 0.4; } }
+@media (max-width: 1000px) { #title-car { --title-art-full: 0.4; } }
 /* PHONES KEEP IT TOO. This used to be display:none when the element was sized
    to the viewport and the art ran through the button stack; with the box at
    its own aspect a narrow screen gets a band at the foot instead, so it goes
    quiet rather than absent — and the tall phone below then makes it a crop. */
-@media (max-width: 699px)  { #title-car { opacity: 0.22; } }   /* the phone rules end at 699, the iPad ones start at 700 */
+@media (max-width: 699px)  { #title-car { --title-art-full: 0.22; } }
 /* #tc-frame frames the ONE placement tools/gen/title-art.mjs writes. A CSS
    transform on an SVG element defaults to transform-origin 50% 50% of the
    view-box, which would scale the art about (700,450) and move it as a side
@@ -188,7 +189,7 @@
    monitor got a front wing across its lower third at full opacity (wider than
    1000px, so the fade above never fires). Narrow aspects keep the art at a
    step of opacity, not display:none: the button stack runs down the middle. */
-@media (max-aspect-ratio: 13/10) and (min-width: 700px) { #title-car { opacity: 0.26; } }
+@media (max-aspect-ratio: 13/10) and (min-width: 700px) { #title-car { --title-art-full: 0.26; } }
 /* Transparency is a preference, and this layer is the most transparent thing on
    the screen. prefers-reduced-transparency is not Baseline yet, so it is a
    progressive enhancement on a design that is already legible without it. */

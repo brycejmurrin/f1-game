@@ -4,7 +4,6 @@ const PlatformSession = (function () {
 "use strict";
 function create(G, deps) {
 const { $, els, store } = G;
-const { MAX_RPM, IDLE_RPM } = PhysicsConsts;
 const { canvas, raceWakeLock, disarmProbeOnLeave, cancelMirrorPrep, setPaused, ensureNet, settingsBack, closeSettings, showTouchControls, refreshGearsBtn, openSettingsPage } = deps;
 function paintBuild() {
 // BUILD NUMBER in the pause menu. index.html is the one file with no ?v= of its
@@ -229,110 +228,31 @@ if ($("pm-fullscreen")) {
 }
 
 function wirePhone() {
-// PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the net stack,
-// then the module pairs and feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
-// padUrl() follows the page origin: a native host's links are rebased here, fragment kept.
-function phoneLink(url) {
-  if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
-  return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
-}
-let /** @type {ReturnType<typeof PhonePad.host> | null} */ phonePad = null;
-let phonePadLoading = false, phonePadGeneration = 0;
-let recoveryOwner = null;
-const recoveryNote = document.createElement("p"), newPhoneCode = document.createElement("button");
-newPhoneCode.type = "button"; newPhoneCode.className = "sel-chip"; newPhoneCode.textContent = "MAKE NEW CODE";
-recoveryNote.setAttribute("role", "status"); newPhoneCode.hidden = true;
-$("pm-phonepad-box").append(recoveryNote, newPhoneCode);
-newPhoneCode.onclick = () => {
-  if (phonePad || phonePadLoading) $("pm-phonepad").onclick();
-  else if (recoveryOwner) recoveryOwner.cancel();
-  recoveryOwner = null;
-  newPhoneCode.hidden = true; recoveryNote.textContent = "";
-  $("pm-phonepad").onclick();
-};
-// The camera before a phone linked: the phone is the wheel, so the screen shows VISOR (no wheel,
-// js/camera/vantage.js) while it drives, and goes back after unless the player cycled away.
-let phonePadCam = -1;
-const VISOR_CAM = CamModes.CAM_MODES.findIndex((c) => c.id === "visor");
-// The dash the paired phone paints: the fields js/ui/hud.js reads, ~15 Hz.
-function phonePadDash() {
-  const p = G.player;
-  const D = PhonePad.DASH;
-  // NO PLAYER IS A DASH TOO (menus before a first race): the phone shows its MENU PAD only on a
-  // dash packet (!inRace || paused), and a null sends nothing, so it stayed on the wheel.
-  if (!p) return { gear: 0, kmh: 0, rpm: 0, lap: 0, laps: 0, pos: 0, cars: 0, ers: 0,
-    flags: G.paused ? D.paused : 0, caution: 0, lastLapMs: 0, state: G.state, team: "" };
-  const xOpen = (p.aeroX || 0) > 0.05;
-  const controls = G.recordControls();
-  const flags = (p.boostOn ? D.boost : 0) | (p.otT > 0 ? D.otActive : p.otArmed ? D.otArmed : 0)
-    | (xOpen ? D.xOpen : p.xArmed ? D.xArmed : 0) | (p.retired ? D.retired : 0) | (G.timeTrial ? D.timeTrial : 0)
-    | (G.session === "quali" ? D.quali : G.practice && !G.timeTrial ? D.practice : 0)
-    | (G.paused ? D.paused : 0) | (p.rpm > MAX_RPM * 0.92 ? D.redline : 0)
-    // The control modes, so the wheel offers only what the driver operates.
-    | (controls.gearsManual ? 0 : D.gearsAuto) | (controls.autoThrottle ? D.throttleAuto : 0)
-    | (G.raceAeroMode === "auto" ? D.aeroAuto : 0) | (G.aeroZones.length ? 0 : D.aeroNone);
-  return { gear: p.gear, kmh: G.dashKph(p.speed), rpm: (p.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), lap: p.lap, laps: G.lapsTarget,
-    pos: p.rank, cars: G.cars.length, ers: p.energy, flags, caution: G.cautionLevel(), lastLapMs: (p.lastLap || 0) * 1000,
-    state: G.state, team: PhonePad.teamHex(p.team && p.team.color) };
-}
-$("pm-phonepad").onclick = () => {
-  const box = $("pm-phonepad-box"), status = $("pm-phonepad-status"), btn = $("pm-phonepad");
-  if (phonePad || phonePadLoading) {
-    phonePadGeneration++; phonePadLoading = false;
-    if (phonePad) phonePad.cancel();
-    phonePad = null; box.hidden = true; btn.textContent = "STEER THIS GAME WITH A PHONE";
-    if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);   // what lost() does: cancel() closes the link without calling it
-    phonePadCam = -1;
-    return;
-  }
-  box.hidden = false; btn.textContent = "STOP PAIRING"; status.textContent = "Loading…";
-  const generation = ++phonePadGeneration;
-  phonePadLoading = true;
-  ensureNet().then((ok) => {
-    if (generation !== phonePadGeneration) return;
-    phonePadLoading = false;
-    if (!ok) { btn.textContent = "STEER THIS GAME WITH A PHONE"; status.textContent = "Could not load the pairing stack — check the connection."; return; }
-    $("pm-phonepad-url").textContent = phoneLink(PhonePad.padUrl("")).replace(/#.*$/, "");
-    phonePad = PhonePad.host({
-      hud: phonePadDash,
-      say: (t) => { status.textContent = t; },
-      qr: (url, code) => {
-        url = phoneLink(url);
-        LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
-        $("pm-phonepad-code").textContent = code || "";
-        $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
-        $("pm-phonepad-pair").hidden = !code;
-        // Scroll the code (below the button) into view: a short screen said "scan the code" over nothing.
-        if (code && box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
-      },
-      linked: () => {
-        btn.textContent = "UNPAIR PHONE"; G.announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
-        if (VISOR_CAM >= 0 && G.camMode !== VISOR_CAM) { phonePadCam = G.camMode; G.setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
-      },
-      // ALLOW / REJECT covers the pedals: pause a running solo race under it (a net race never pauses).
-      asking: () => { if ((G.state === "race" || G.state === "count") && !G.paused && !G.netPlay.active()) setPaused(true, "phone-confirm"); },
-      // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
-      relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
-      recovery: (r) => {
-        newPhoneCode.hidden = !["waiting", "connecting", "failed", "lost"].includes(r.phase);
-        recoveryNote.textContent = r.reconnecting && r.publicRelay
-          ? r.deadlineAt === null ? "Reconnecting — opening the same-code window…" :
-            "Reconnecting — same code available for up to " + Math.max(0, Math.ceil((r.deadlineAt - Date.now()) / 1000)) + " seconds. Or choose MAKE NEW CODE."
-          : "";
-      },
-      // A first pairing that failed (expired, no relay): the status stays, the button starts over.
-      failed: () => { btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; },
-      lost: () => {
-        btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; G.announce("PHONE DISCONNECTED", 3, "warn");
-        if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);
-        phonePadCam = -1;
-      },
+  const button = $("pm-phonepad"), box = $("pm-phonepad-box"), status = $("pm-phonepad-status");
+  let panel = null, loading = false, generation = 0;
+  const active = () => loading || !!panel?.active();
+  button.onclick = () => {
+    const request = ++generation;
+    if (active()) {
+      loading = false;
+      panel?.cancel();
+      box.hidden = true; button.textContent = "STEER THIS GAME WITH A PHONE";
+      return;
+    }
+    box.hidden = false; button.textContent = "STOP PAIRING"; status.textContent = "Loading…";
+    loading = true;
+    ensureNet().then((ok) => {
+      if (request !== generation) return;
+      loading = false;
+      if (!ok) {
+        button.textContent = "STEER THIS GAME WITH A PHONE";
+        status.textContent = "Could not load the pairing stack — check the connection.";
+        return;
+      }
+      (panel ||= PhonePairingUI.create(G, setPaused, () => loading)).start();
     });
-    recoveryOwner = phonePad;
-  });
-};
-// Title door (desktop): CONTROLS, pairing started (a running one is only shown).
-$("mb-steerphone").onclick = () => { openSettingsPage("controls"); if (!phonePad && !phonePadLoading) $("pm-phonepad").onclick(); };
+  };
+  $("mb-steerphone").onclick = () => { openSettingsPage("controls"); if (!active()) button.onclick(); };
 }
 
 function wireLifecycle() {

@@ -760,3 +760,21 @@ test("hud.js: LAP 1/N and TIME agree from lights out — the grid-to-line run is
   G.session = "quali"; player.lap = 0; player.lapTime = 3.33; tick();
   assert.equal(els.time.textContent, "3.33", "qualifying's out-lap clock is untouched");
 });
+
+test("pedal feedback follows the active pedal's grip and distinguishes classic rear slip from wheelspin", () => {
+  const { R } = load({ TyreModel: { CURVE_PEAK_X: 1.5, CURVE_HOLD_R: 2.5 } });
+  const car = { throttleDemand: 0.6, brakeDemand: 0, wheelSpin: 0.8, wheelLock: 0.6, rearUtil: 2, frontUtil: 0.5 };
+  assert.equal(R.pedalGrip(car, true), "spin");
+  assert.equal(R.pedalGrip(car, false), "slip");
+  car.frontUtil = 1.5;
+  assert.equal(R.pedalGrip(car, false), "");
+  car.wheelSpin = 0.1;
+  assert.equal(R.pedalGrip(car, true), "");
+  car.brakeDemand = 0.4;
+  assert.equal(R.pedalGrip(car, true), "lock");
+  car.wheelLock = 0;
+  assert.equal(R.pedalGrip(car, false), "");
+  car.throttleDemand = car.brakeDemand = 0;
+  car.wheelSpin = 1;
+  assert.equal(R.pedalGrip(car, true), "");
+});

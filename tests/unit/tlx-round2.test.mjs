@@ -453,7 +453,7 @@ test("soft blit: three dark reads in a row present and notify; a bright read pre
   const b = TLX.indexOf('\n      }\n', a);
   assert.ok(a > 0 && b > a, '_startSoftBlitRead moved — update this test');
   const h = new Function(`"use strict";
-    let _softReadPending = false, _softReadSince = 0, _softReadEpoch = 0, _softShownGen = 0, _softDarkRun = 0;
+    let _softReadPending = false, _softReadSince = 0, _softReadEpoch = 0, _softShownGen = 0, _softDarkRun = 0, _softDrop = 0;
     let _softReadLastMs = 0, _softReadFails = 0, _softReadLastErr = null, _softImg = null, maxPx = 0, notes = 0, puts = 0;
     const _displayCanvas = { width: 4, height: 2 };
     const _displayCtx = { createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData() { puts++; } };

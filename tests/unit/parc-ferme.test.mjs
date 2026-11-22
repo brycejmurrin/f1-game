@@ -110,6 +110,26 @@ test("create: timer reaches PARC_S; frozen path keeps a static pose", () => {
   assert.ok(G.dbgCam && G.dbgCam._parcFerme);
 });
 
+// Mutation hunt 2026-11-20: PARC_S 8→3 survived a 10 s drive-past. Pin the wall clock.
+test("parc fermé wall timer is 8 seconds", () => {
+  const PF = boot(0);
+  const player = car();
+  const G = { player, cars: [player], dbgCam: null, gfx: { isMobile: false }, track: null };
+  const api = PF.create(G);
+  assert.equal(api.start(), true);
+  assert.equal(api.status().remaining, 8, "fresh beat has 8 s on the wall");
+  api.tick(1);
+  assert.ok(Math.abs(api.status().remaining - 7) < 1e-9);
+  // Still live just before 8 s; done once the wall elapses.
+  for (let i = 0; i < Math.round(6.9 * 30); i++) api.tick(1 / 30);
+  assert.equal(api.live(), true, "still inspecting at ~7.9 s");
+  assert.ok(api.status().remaining > 0 && api.status().remaining < 0.2);
+  for (let i = 0; i < 12; i++) api.tick(1 / 30);
+  assert.equal(api.live(), false);
+  assert.equal(api.status().phase, "done");
+  assert.equal(api.status().remaining, 0);
+});
+
 test("parkAnchor falls back to car world pose without a track", () => {
   const PF = boot();
   const c = car({ px: 7, py: 2, pz: 9 });

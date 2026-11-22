@@ -239,3 +239,98 @@ test('a truncated snapshot preserves steering calibration and produces neutral s
   wheel.axes[3] = .2; I.poll();
   assert.equal(I.debugState().pad.steer, 0, 'rest is still centred when the axis returns');
 });
+
+/* Pad-menu deadzone + hold-repeat timing (InputPadMenu via real Input.poll).
+ * Pins PAD_NAV_DEADZONE / PAD_NAV_DELAY_MS / PAD_NAV_REPEAT_MS through behaviour —
+ * a stick past ~0.22 navigates; held directions wait ~450 ms then repeat ~130 ms. */
+function bootPadMenu() {
+  const keys = [];
+  const state = { now: 1000, anyOpen: false, top: null, pad: null };
+  const listeners = {};
+  const el = () => ({ addEventListener() {}, removeEventListener() {}, style: {}, dataset: {}, classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, setAttribute() {}, getAttribute: () => null, removeAttribute() {}, children: [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }), setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false });
+  const sb = {
+    Math, Object, Array, Number, isFinite, JSON, Map, Set, Date, String,
+    performance: { now: () => state.now },
+    navigator: { getGamepads: () => (state.pad ? [state.pad] : []) },
+    screen: {},
+    GameStore: { store: { get: (_k, d) => d, set() { return true; } } },
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
+    removeEventListener() {}, dispatchEvent() {}, setTimeout: () => 0, clearTimeout() {},
+    matchMedia: () => ({ matches: false, addEventListener() {} }),
+    KeyboardEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
+    Event: class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } },
+    UiLayers: {
+      anyOpen: () => state.anyOpen,
+      navOpen: () => state.anyOpen,
+      top: () => state.top,
+    },
+    MenuNav: { activeLayer: () => state.top, FOCUSABLE: "button,input,select" },
+    document: {
+      addEventListener(t, f) { (listeners[t] ||= []).push(f); },
+      removeEventListener() {},
+      getElementById: el, querySelector: el, querySelectorAll: () => [],
+      hidden: false, body: el(), activeElement: null,
+      dispatchEvent(e) { if (e && e.key) keys.push(e.key); return true; },
+    },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  for (const f of ['js/core/mat4.js', 'js/input/tilt-roll.js', 'js/input/bindings.js', 'js/input/pad-menu.js', 'js/input/haptics.js', 'js/input/pedal-travel.js', 'js/input/hold-buttons.js', 'js/input/controller-profiles.js', 'js/input/input.js']) {
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  }
+  const Input = vm.runInContext('Input', ctx);
+  Input.init(el());
+  const mkPad = (ax = 0, ax2 = 0) => ({
+    id: 'menu pad', index: 0, connected: true, mapping: 'standard',
+    axes: [ax, 0, ax2, 0],
+    buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })),
+  });
+  state.pad = mkPad(0);
+  (listeners.gamepadconnected || []).forEach((fn) => fn({ gamepad: state.pad }));
+  Input.poll();
+  const take = () => keys.splice(0);
+  return { Input, state, mkPad, take };
+}
+
+test('menu stick deadzone: ~0.15 rests, ~0.3 navigates', () => {
+  const { Input, state, mkPad, take } = bootPadMenu();
+  state.anyOpen = true;
+  state.top = { id: 'pause', contains: () => true };
+  state.pad = mkPad(0);
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowDown'], 'opening a menu seeds focus once');
+  state.pad = mkPad(0.15);
+  Input.poll();
+  assert.deepEqual(take(), [], '0.15 stays inside the menu stick deadzone');
+  state.pad = mkPad(0.30);
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], '0.30 clears the deadzone and navigates');
+});
+
+test('held menu direction waits ~450 ms then repeats every ~130 ms', () => {
+  const { Input, state, mkPad, take } = bootPadMenu();
+  state.anyOpen = true;
+  state.top = { id: 'pause', contains: () => true };
+  state.pad = mkPad(0);
+  Input.poll();
+  take();
+  state.pad = mkPad(0.30);
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], 'first deflection moves once');
+  state.now += 400;
+  Input.poll();
+  assert.deepEqual(take(), [], 'no repeat before the initial ~450 ms delay');
+  state.now += 60;
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], 'first repeat after ~450 ms');
+  state.now += 100;
+  Input.poll();
+  assert.deepEqual(take(), [], 'repeat cadence is not every frame');
+  state.now += 40;
+  Input.poll();
+  assert.deepEqual(take(), ['ArrowRight'], 'subsequent repeats land about every ~130 ms');
+  state.pad = mkPad(0);
+  Input.poll();
+  assert.deepEqual(take(), [], 'releasing the stick stops repeats immediately');
+});

@@ -241,6 +241,13 @@ test("Escape over the telemetry popup leaves the Data Hub open (the popup's canc
   assert.equal(e.stopped, false);
 });
 
+test("Escape reaches the focused exact-value field to cancel its edit", () => {
+  const h = escHarness(["datahub"]);
+  const e = h.ev({ target: { dataset: { editEscape: "cancel" } } });
+  assert.equal(h.clicks(), 0);
+  assert.equal(e.stopped, false);
+});
+
 test("Escape on the Data Hub itself still presses its door", () => {
   const h = escHarness(["datahub"]);
   const e = h.ev();

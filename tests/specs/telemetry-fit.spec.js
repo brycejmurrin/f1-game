@@ -4,7 +4,7 @@
 // the trace takes the free width, and the whole body scrolls as ONE column so
 // the last row (map key, legend toggles) is reachable above the bottom edge.
 // Notch insets are injected (headless reports env(safe-area-inset-*) as 0).
-import { readProfile } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
@@ -12,12 +12,14 @@ import { BOOT_MS } from "../helpers/fixtures.js";
 // It is the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
 const LEGACY_PROFILE = readProfile("legacy");
 
+const { width, height, insets } = BRYCE_WINDOWS.standalone;
+const ownerLandscape = { w: width, h: height, sal: insets.left, sar: insets.right, sat: insets.top, sab: insets.bottom };
 const VIEWS = [
-  { name: "landscape-852x393", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "landscape-852x393", ...ownerLandscape },
   { name: "portrait-390x844", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
 ];
 
-async function openCompare(page, v) {
+async function openTrace(page, v, drivers) {
   await page.addInitScript((css) => {
     const add = () => { const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
     document.head ? add() : document.addEventListener("DOMContentLoaded", add, { once: true });
@@ -57,14 +59,15 @@ async function openCompare(page, v) {
   });
   const chips = page.locator(".dh-dchip");
   await expect(chips.first()).toBeVisible();
-  for (const code of ["VER", "STR", "HUL"]) await chips.filter({ hasText: code }).first().click();
-  await page.locator(".dh-livebtn", { hasText: "COMPARE 3 LAPS" }).evaluate((b) => b.click());
+  for (const code of drivers) await chips.filter({ hasText: code }).first().click();
+  const label = drivers.length === 1 ? "LOAD FASTEST LAP" : `COMPARE ${drivers.length} LAPS`;
+  await page.locator(".dh-livebtn", { hasText: label }).evaluate((b) => b.click());
   await expect(page.locator(".dh-tpopup[open] .dh-dash")).toBeVisible();
   await expect(page.locator(".dh-tpopup[open] canvas.dh-map")).toBeVisible();
 }
 
 async function checkFit(page, v) {
-      await openCompare(page, v);
+      await openTrace(page, v, ["VER", "STR", "HUL"]);
       const r = await page.evaluate((ins) => {
         const q = (s) => /** @type {HTMLElement[]} */ ([...document.querySelectorAll(s)]);
         const box = (e) => e.getBoundingClientRect();
@@ -117,18 +120,29 @@ test.describe("landscape 852x393 notch", () => {
 test.describe("portrait 390x844", () => {
   test.use({ viewport: { width: VIEWS[1].w, height: VIEWS[1].h }, hasTouch: true });
   test("telemetry compare view is not clipped, overlapped or narrower than its column", async ({ page }) => { await checkFit(page, VIEWS[1]); });
+  test("browser Back closes the trace before the Data Hub and restores the selected driver", async ({ page }) => {
+    await openTrace(page, VIEWS[1], ["VER"]);
+    const hub = page.locator("#datahub");
+    await page.evaluate(() => history.back());
+    await expect(page.locator(".dh-tpopup")).toHaveCount(0);
+    await expect(hub).toBeVisible();
+    await expect(hub.locator(".dh-dchip", { hasText: "VER" })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => history.state?.apexBack)).toBe(1);
+    await page.evaluate(() => history.back());
+    await expect(hub).toHaveAttribute("hidden", "");
+  });
 });
 
 /* ── THE DATA HUB HEAD on a phone held sideways (UI contract gap 15, PR #5156) ──
- * The contract's windows: A an iPhone 15 Pro (notch left, home indicator), C the
- * same in Safari with its toolbar up (283 px tall), D a notch-less 844x390. At
+ * The contract's windows: A an iPhone 15 (notch left, home indicator), C the
+ * legacy 283 px toolbar stress case, D a notch-less 844x390. At
  * every cell the head is ONE row — title, the tab strip, ⋯, ✕ — the ✕ is the
  * LAST thing on it, and the strip is the row's scroller (nowrap, overflow-x
  * auto, pan-x) instead of wrapping under the title or pushing ✕ off the card.
  * Measured 2026-11-07 (probe at the export): ✕ right 775 of 793 safe (A), card
  * bottom 275 of 283 (C), one row in all 15 cells. */
 const HEAD_WINDOWS = [
-  { name: "A 852x393 notch", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
+  { name: "A 852x393 notch", ...ownerLandscape },
   { name: "C 852x283 Safari toolbar", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0 },
   { name: "D 844x390", w: 844, h: 390, sal: 47, sar: 47, sat: 0, sab: 21 },
 ];

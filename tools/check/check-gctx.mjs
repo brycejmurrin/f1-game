@@ -414,15 +414,17 @@ function entryParams(ast, sm, entries) {
 const analysisCache = new Map();
 function analyzeFile(rel) {
   if (analysisCache.has(rel)) return analysisCache.get(rel);
-  const ast = parseFile(rel);
+  const out = analyzeAst(parseFile(rel));
+  analysisCache.set(rel, out);
+  return out;
+}
+function analyzeAst(ast) {
   const parents = new Map();
   walk(ast, (n, p) => { if (p) parents.set(n, p); });
   const sm = escope.analyze(ast, { ecmaVersion: 2022, sourceType: "script" });
   const resolved = new Map();
   for (const s of sm.scopes) for (const r of s.references) if (r.resolved) resolved.set(r.identifier, r.resolved);
-  const out = { ast, parents, sm, resolved };
-  analysisCache.set(rel, out);
-  return out;
+  return { ast, parents, sm, resolved };
 }
 
 /**
@@ -499,6 +501,10 @@ export function scanCtxEntries() {
         // A module that re-exports `fn` by `const { fn } = Y` hands the entry on to Y.
         const re = reexportOf(target, fn);
         if (re && fileOf.has(re)) { g = re; target = fileOf.get(re); }
+        const body = fileOf.get(g + "Body");
+        if (body && lazyBodyEntry(analyzeFile(target), parseFile(body), g, fn)) {
+          g += "Body"; target = body;
+        }
         if (fn === "create" && k === 0 && createFiles.has(target)) continue;   // the factory roster already seeds it
         const list = byFile.get(target) || [];
         if (list.some((e) => e.fn === fn && e.argIndex === k)) continue;
@@ -542,6 +548,116 @@ function reexportOf(rel, fn) {
   return out;
 }
 
+/** Resolve only an exported rest forwarder that passes its entire argument list
+ * to the same member. A Body sibling or a same-named method alone proves nothing.
+ * The injected bodyApi() shape also requires the body's Global._bind(GlobalBody). */
+export function lazyBodyEntry(shell, body, global, member) {
+  const { ast, parents, resolved } = typeof shell === "string" ? analyzeAst(parse(shell)) : shell;
+  const bodyAst = typeof body === "string" ? parse(body) : body;
+  const bodyName = global + "Body";
+  const bound = bodyAst.body.some(stmt => {
+    const call = stmt.expression, callee = call?.callee;
+    return call?.type === "CallExpression" && callee?.type === "MemberExpression" && !callee.computed
+      && callee.object.name === global && callee.property.name === "_bind" && call.arguments[0]?.name === bodyName;
+  });
+  const initOf = id => {
+    const def = resolved.get(id)?.defs[0];
+    return def?.type === "FunctionName" ? def.node : def?.node.init;
+  };
+  // A registered lazy body can be reached through a zero-argument getter.
+  // Only accept a getter of the very binding that _bind assigns its argument to.
+  const boundSlots = new Set();
+  if (bound) walk(ast, n => {
+    if (n.type !== "FunctionDeclaration" || n.id?.name !== "_bind" || n.params.length !== 1) return;
+    walk(n.body, write => {
+      if (write.type === "AssignmentExpression" && write.operator === "=" && write.left.type === "Identifier"
+          && resolved.get(write.right)?.defs[0]?.name === n.params[0]) boundSlots.add(resolved.get(write.left));
+    });
+  });
+  boundSlots.delete(undefined);
+  // Only follow a result that the wrapper returns, either immediately or
+  // through its readiness promise. A call inside a stored callback may never run.
+  function returnedBy(call, fn) {
+    let value = call;
+    while (value) {
+      let owner = parents.get(value);
+      if (owner?.type === "ReturnStatement") {
+        while (owner && !/Function/.test(owner.type)) owner = parents.get(owner);
+      } else if (owner?.type !== "ArrowFunctionExpression" || owner.body !== value) return false;
+      if (owner === fn) return true;
+      const chain = parents.get(owner);
+      if (chain?.type !== "CallExpression" || chain.callee.type !== "MemberExpression"
+          || chain.callee.property.name !== "then" || chain.arguments[0] !== owner) return false;
+      value = chain;
+    }
+    return false;
+  }
+  function forwards(fn, key) {
+    if (fn?.params?.length !== 1 || fn.params[0].type !== "RestElement") return false;
+    let matched = false;
+    walk(fn.body, call => {
+      const target = call.callee, spread = call.arguments?.[0];
+      if (call.type !== "CallExpression" || target.type !== "MemberExpression" || call.arguments.length !== 1
+          || spread.type !== "SpreadElement" || resolved.get(spread.argument)?.defs[0]?.name !== fn.params[0].argument) return;
+      const same = target.computed ? (target.property.value === member || (key && resolved.get(target.property)?.defs[0]?.name === key))
+        : target.property.name === member;
+      if (!same || !returnedBy(call, fn)) return;
+      const obj = target.object;
+      if (obj.type === "Identifier" && obj.name === bodyName && !resolved.has(obj)) matched = true;
+      if (obj.type === "CallExpression" && !obj.arguments.length) {
+        const getter = initOf(obj.callee);
+        if (getter?.params?.length === 0 && boundSlots.has(resolved.get(getter.body))) matched = true;
+      }
+    });
+    return matched;
+  }
+  function memberValue(value, loopKey) {
+    if (value?.type === "Identifier") value = initOf(value);
+    if (value?.type !== "CallExpression") return forwards(value);
+    const arg = value.arguments[0], factory = initOf(value.callee);
+    if (value.arguments.length !== 1 || !factory?.params || factory.params.length !== 1) return false;
+    if (arg.value !== member && !(loopKey && resolved.get(arg)?.defs[0]?.name === loopKey)) return false;
+    return forwards(factory.body, factory.params[0]);
+  }
+  // Find the module's actual exported object and any map spread into it.
+  const decl = ast.body.flatMap(s => s.declarations || []).find(d => d.id.name === global);
+  const init = decl?.init;
+  const returns = init?.callee?.body?.body?.filter(n => n.type === "ReturnStatement").map(n => n.argument) || [init];
+  const inspecting = new Set();
+  function fromMap(id) {
+    const map = resolved.get(id);
+    if (!map || inspecting.has(map)) return undefined;
+    inspecting.add(map);
+    let value;
+    const initial = initOf(id);
+    if (initial?.type === "ObjectExpression") value = fromObject(initial);
+    walk(ast, n => {
+      const lhs = n.left;
+      if (n.type !== "AssignmentExpression" || n.operator !== "=" || lhs.type !== "MemberExpression" || resolved.get(lhs.object) !== map) return;
+      if ((!lhs.computed && lhs.property.name === member) || (lhs.computed && lhs.property.value === member)) {
+        value = memberValue(n.right);
+      } else if (lhs.computed) {
+        const key = resolved.get(lhs.property)?.defs[0]?.name;
+        const loop = key && parents.get(parents.get(parents.get(key)));
+        if (loop?.type === "ForOfStatement" && loop.right.elements?.some(e => e?.value === member)) value = memberValue(n.right, key);
+      }
+    });
+    inspecting.delete(map);
+    return value;
+  }
+  function fromObject(obj) {
+    // Object properties overwrite from left to right. A later explicit
+    // method must keep its own ctx seed even when an earlier spread forwards.
+    for (const prop of [...(obj?.properties || [])].reverse()) {
+      if (prop.type === "SpreadElement") {
+        const value = fromMap(prop.argument);
+        if (value !== undefined) return value;
+      } else if (!prop.computed && (prop.key.name ?? prop.key.value) === member) return memberValue(prop.value);
+    }
+  }
+  return returns.some(out => (out?.type === "Identifier" ? fromMap(out) : fromObject(out)) === true);
+}
+
 /** How collectUsage() seeds a real file: its create() when it is a ctx factory, plus its entries. */
 function usageOptions(rel) {
   return { create: ctxModuleFiles().includes(rel), entries: scanCtxEntries().byFile.get(rel) || [] };
@@ -560,8 +676,6 @@ export function usageFiles() {
  */
 export const UNCOVERED_ENTRIES = Object.freeze([
   "js/core/lazy-bundles.js: CrowdAudio.bind(ctxOrNull()) — the ctx arrives as a call result, not a binding",
-  // An entry the coverage leg skips is named HERE, by `<file>: <Global>.<fn>(` — one list, its reason in the row.
-  "js/ui/settings-export.js: SettingsExport.collect(mode, G) (js/agent/apex.js:2305) — a lazy-split forwarder (`fwd`, `...args`, settings-export.js:591); the real collect(mode, G) is js/ui/settings-export-body.js:54, unchecked until #6044",
 ]);
 
 /** The UNCOVERED_ENTRIES row that names this entry, if any (an explicit, reasoned exception). */

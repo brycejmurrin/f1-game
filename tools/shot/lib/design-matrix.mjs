@@ -2,9 +2,11 @@
 // batch split and manifest resume. No browser, no fs beyond the manifest helpers.
 // @doc Design-review matrix core: PART_BOXES, ANGLES, COLOURS, LIGHTS, expandMatrix, frameForPart, labelDiff, manifest.
 // @skill garage-parts-livery
+import { BRYCE_WINDOWS } from "../../lib/bryce-phone.mjs";
 import { STATIONS } from "./garage-camera-catalog.mjs";
 import { assertSafePathToken } from "../../lib/output-paths.mjs";
 
+const phoneView = [BRYCE_WINDOWS.standalone.width, BRYCE_WINDOWS.standalone.height];
 const D = Math.PI / 180;
 
 /** Car-space bounding boxes (m; +x right, +y up, +z nose) of the parts a design lane reviews.
@@ -171,7 +173,7 @@ export function parseArgs(argv) {
     colours: csv(o.colours, ["dark", "light"]), lights: csv(o.lights, ["lamp"]),
     variants: csv(o.variants, ["factory"]), baseline: o.baseline || "factory",
     fill: Number(o.fill || 0.7), fov: Number(o.fov || 45),
-    viewport: String(o.viewport || (o.phone ? "844x390" : "1280x720")).split("x").map(Number),
+    viewport: String(o.viewport || (o.phone ? phoneView.join("x") : "1280x720")).split("x").map(Number),
     batch: parseBatch(o.batch), run: o.run || null, out: o.out || null, bounds: o.bounds || null,
     resume: !!o.resume, plan: !!o.plan, dpr: Number(o.dpr || 1), phone: !!o.phone, help: !!(o.help || o.h),
     indexOnly: !!o["index-only"], backend: o.backend || "three",
@@ -190,7 +192,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 /** Gallery HTML: one section per light; rows = part·angle, columns = colour × variant. */
 export function sheetHtml(groups, manifest, { title = "design matrix", phone = false } = {}) {
   const lights = [...new Set(groups.map((g) => g.light))];
-  const fr = phone ? "aspect-ratio:844/390" : "aspect-ratio:16/9";
+  const viewport = manifest.request?.viewport || (phone ? phoneView : [16, 9]);
+  const fr = `aspect-ratio:${viewport.map(Number).join("/")}`;
   let h = `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>${esc(title)}</title>`
     + `<style>:root{color-scheme:dark light}body{font:13px system-ui;margin:16px;background:#111;color:#ddd}`
     + `table{border-collapse:collapse}td,th{padding:4px;vertical-align:top}.c{width:300px}img{width:100%;${fr};object-fit:cover;background:#222;display:block}`

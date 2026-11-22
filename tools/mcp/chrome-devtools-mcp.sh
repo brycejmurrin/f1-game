@@ -97,12 +97,15 @@ build_mcp_args() {
     MCP_ARGS=(--browserUrl "$APEX_CDT_BROWSER_URL" --memoryDebugging)
     return 0
   fi
+  # This launch flag controls CSS dimensions only. Attach to debug-chrome for native-DPR phone captures.
+  local viewport
+  viewport="$(node -p 'const {width,height}=require(process.argv[1]).windows.standalone; width+"x"+height' "$ROOT/tests/data/phone-windows.json")"
   MCP_ARGS=(
     --headless
     --isolated
     ${chrome:+--executablePath "$chrome"}
     --memoryDebugging
-    --viewport "844x390"
+    --viewport "$viewport"
     # Container floor even if webgpu-chrome-args.cjs is missing: without these,
     # headless Chrome in a Cloud VM can refuse to start or OOM /dev/shm.
     --chromeArg=--no-sandbox

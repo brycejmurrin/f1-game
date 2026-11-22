@@ -1,4 +1,6 @@
 // @ts-check
+import { LANDSCAPE } from "../helpers/iphone15.mjs";
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { exportStore } from "../helpers/title-fit.mjs";
 
@@ -127,8 +129,8 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
 // the sheet (#5200, fixed by its own PR, which owns ui-resize.spec.js); display-mode standalone cannot be emulated.
 // The renderer stays the fixture's pinned GLX: this is a layout cell.
 test.describe("owner phone: 852x393 Home Screen app, insets 59/21/59, exported profile", () => {
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
-  const INSETS = { top: 0, left: 59, bottom: 21, right: 59 };
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
+  const INSETS = BRYCE_WINDOWS.standalone.insets;
 
   test("race chrome keeps a fixed size and the pause doors can be tapped", async ({ page }) => {
     const store = exportStore();
@@ -152,7 +154,7 @@ test.describe("owner phone: 852x393 Home Screen app, insets 59/21/59, exported p
       hud: localStorage.getItem("apex26.hudScale"), btn: localStorage.getItem("apex26.hudBtnScale"),
     }));
     expect(env, "the cell is the owner's: env() insets, a coarse pointer and his stored sizes reached the page")
-      .toEqual({ sal: "59px", coarse: true, hud: "155.25", btn: "245" });
+      .toEqual({ sal: INSETS.left + "px", coarse: true, hud: "155.25", btn: "245" });
 
     await page.evaluate(() => window.__apex.headless(true));
     await page.evaluate(() => window.__apex.race("bahrain"));
@@ -174,8 +176,8 @@ test.describe("owner phone: 852x393 Home Screen app, insets 59/21/59, exported p
       const p = await probe(id);
       expect(p, id + " exists").not.toBeNull();
       expect(p.hit, `${id} owns its own centre point (elementFromPoint gave ${p.hitBy})`).toBe(true);
-      expect(p.top >= 0 && p.bottom <= 393 && p.left >= 0 && p.right <= 852, `${id} is inside the window: ${JSON.stringify(p)}`).toBe(true);
-      if (safe) expect(p.left >= INSETS.left - 0.5 && p.right <= 852 - INSETS.right + 0.5, `${id} clears the notch and the corner (${p.left}..${p.right})`).toBe(true);
+      expect(p.top >= 0 && p.bottom <= LANDSCAPE.height && p.left >= 0 && p.right <= LANDSCAPE.width, `${id} is inside the window: ${JSON.stringify(p)}`).toBe(true);
+      if (safe) expect(p.left >= INSETS.left - 0.5 && p.right <= LANDSCAPE.width - INSETS.right + 0.5, `${id} clears the notch and the corner (${p.left}..${p.right})`).toBe(true);
       return p;
     };
 
