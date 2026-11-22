@@ -628,6 +628,7 @@ const TLX = (function () {
       // DESKTOP TIERS (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): GfxQuality.feature(name), false on any throw
       // or without the module, so every extra below falls back to today's path.
       const _gfxx = (n) => { try { return typeof GfxQuality !== "undefined" && !!GfxQuality.feature(n); } catch (_) { return false; } };
+      const _detailOpt = (n, preset = _ultra) => typeof GfxQuality !== "undefined" && GfxQuality.option ? GfxQuality.option(n, preset) : preset;
       const _deskTier = !isMobile && !isWebKit && !_softAdapter;
       let _hdrPeak = 1;   // hdrOut: 1 = SDR; set after init from what the canvas reports (TLXAA.hdrPeak)
       // mirrorHi (ULTRA+): the mirror target's clamp, 2048x1024 (js/render/shared/mirror-pass.js targetSize).
@@ -1510,9 +1511,9 @@ const TLX = (function () {
           // Shrink maps on software WebGPU too (detectSoftwareGL is WebGL-only
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
-            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : (_ultra && !softContent("shadow") ? 4096 : 0), carSize: _ultra ? 2048 : 0,
+            renderer, mobileTier, isMobile, softwareGL: softContent("shadow"), sunSize: _lite ? _lite.sunSize : (_detailOpt("sunMap") && !softContent("shadow") ? 4096 : 0), carSize: _detailOpt("carMap") ? 2048 : 0,
             isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
-            extras: _ultra && !_lite,   // EXTREME csm / lampShadows may build (tlx-shadow.js asks GfxQuality.feature)
+            extras: !isMobile && !_lite,   // EXTREME csm / lampShadows may build (tlx-shadow.js asks GfxQuality.feature)
           });
         }
       } catch (e) {
@@ -1606,7 +1607,7 @@ const TLX = (function () {
         _postHealth = { state: _postRebuild ? "recovering" : "degraded", attempts: _postStrikes, maxAttempts: 3,
           reason: String(reason || "Post-processing failed").replace(/\s+/g, " ").slice(0, 160) };
       }
-      const ENV_SIZE = _ultra ? 128 : 64;
+      const ENV_SIZE = _detailOpt("envMap") ? 128 : 64;
       const ENV_CULL_M = 150;
       let envRT = null, envDummy = null;
       // REAR-VIEW MIRROR (js/render/shared/mirror-pass.js). The env probe's
@@ -1789,7 +1790,7 @@ const TLX = (function () {
       // binding out of every lit program. Pixel-identical: with the probe off
       // uEnvStr is 0, so every tap was mix(a, cube, 0) = a.
       let _envOptOut = true;
-      try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = ep === "0" || (ep !== "1" && !(_ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
+      try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = !_detailOpt("envProbe", ep === "1" || (ep !== "0" && _ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
       if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -1930,6 +1931,11 @@ const TLX = (function () {
           try {
             if (!isMobile && typeof GfxQuality !== "undefined" && renderer.backend && renderer.backend.isWebGPUBackend) {
               litDetail = { matDetail: GfxQuality.feature("matDetail"), envAll: GfxQuality.feature("envAll"), envLods: Math.log2(ENV_SIZE) };
+              if (GfxQuality.option) {
+                const base = litDetail.matDetail;
+                for (const key of ["hexTiling", "wallBlend", "detailNormal", "gravelRelief"]) litDetail[key] = GfxQuality.option(key, base);
+                litDetail.matDetail = litDetail.hexTiling || litDetail.wallBlend || litDetail.detailNormal || litDetail.gravelRelief;
+              }
               if (!litDetail.matDetail && !litDetail.envAll) litDetail = null;
             }
           } catch (_) { litDetail = null; }
@@ -5343,8 +5349,8 @@ const TLX = (function () {
       // the backend object (the ~40-member seam contract)
       function materialArrayAnisotropy() {
         if (materialArrayDetail !== null) return materialArrayDetail;
-        let requested = _ultra ? 16 : 4;
-        try { if (!_ultra && localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
+        let requested = _detailOpt("anisotropy") ? 16 : 4;
+        try { if (requested === 4 && localStorage.getItem("apex26.tlxMaterialDetail") === "8") requested = 8; } catch (_) { /* baseline */ }
         let cap = 1;
         try {
           const b = renderer.backend;
@@ -7560,6 +7566,7 @@ const TLX = (function () {
       let p = localStorage.getItem("apex26.gfxPreset");
       try { p = JSON.parse(p); } catch (_) { /* not JSON: compare the raw string */ }
       ultra = p === "ultra" || p === "extreme" || (p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+      if (typeof GfxQuality !== "undefined" && GfxQuality.option) ultra = GfxQuality.option("msaa", ultra);
     } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
     if (!ultra && s > 2) s = 2;
     return s < 2 ? 0 : s;

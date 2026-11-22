@@ -41,6 +41,7 @@ function resolve(expr, ctx) {
     .replace(/\bvars\.(\w+)/g, (_, n) => JSON.stringify(ctx.vars[n] ?? ""))
     .replace(/\bgithub\.event\.pull_request\.head\.repo\.full_name\b/g, JSON.stringify(ctx.headRepo ?? ""))
     .replace(/\binputs\.concurrency_key\b/g, JSON.stringify(ctx.inputs?.concurrency_key ?? ""))
+    .replace(/\bgithub\.event\.pull_request\.draft\b/g, JSON.stringify(ctx.draft ?? false))
     .replace(/\bgithub\.event_name\b/g, JSON.stringify(ctx.event))
     .replace(/\bgithub\.repository\b/g, JSON.stringify("brycejmurrin/f1-game"))
     .replace(/[!=]=/g, (op) => (op === "!=" ? "!==" : "==="));

@@ -22,7 +22,7 @@ window.UiLayers = (function () {
        among these layers), self-gated by CSS media queries rather than the
        hidden attribute. gate: false is load-bearing three ways — Escape must
        still pause the race (anyOpen() stays false), arrows must not be
-       swallowed as menu nav gating, and gateEls() must not pay a per-frame
+       swallowed as menu nav gating, and input gating must not pay a per-frame
        measure for an element that never carries `hidden`. Being in DEFS at
        all is what lets TopModal's focus containment see it as top(): before
        this entry, Tab walked out of the blocker into #pausebtn and the
@@ -246,29 +246,23 @@ window.UiLayers = (function () {
     return best;
   }
 
-  /* Resolved by ID rather than by document query, because THIS one is called
-     from the frame loop. Input.poll() -> pollGamepad() runs every frame (before
-     the paused gate, so on menus too) and asks anyOpen() on every one — and
-     a 24-selector comma list passed to querySelectorAll misses
-     Blink's single-selector fast paths and walks the element tree
-     instead. `#id:not([hidden])` is exactly `getElementById(id)` plus an
-     `el.hidden` test, so 24 map lookups give the identical answer without the
-     walk. Cached lazily and re-resolved whenever an entry is missing, so a
-     layer that has not been created yet is picked up as soon as it exists. top() walks the same ids (layerEls). */
-  let _gateEls = null;
-  function gateEls() {
-    if (_gateEls) {
-      for (let i = 0; i < _gateEls.length; i++) if (!_gateEls[i].isConnected) { _gateEls = null; break; }
+  // Some input gates only exist while their editor is open. Cache each mounted
+  // node independently so a missing editor doesn't rebuild the shell every poll.
+  const gateIds = DEFS.filter((d) => d.gate !== false).map((d) => d.id);
+  const gateNodes = new Array(gateIds.length).fill(null);
+
+  function refreshGateNodes() {
+    let changed = false;
+    for (let i = 0; i < gateIds.length; i++) {
+      const previous = gateNodes[i];
+      if (previous && previous.isConnected) continue;
+      const node = document.getElementById(gateIds[i]) || null;
+      if (node === previous) continue;
+      gateNodes[i] = node;
+      navWatch(node, true);
+      changed = true;
     }
-    if (!_gateEls) {
-      const ids = DEFS.filter((d) => d.gate !== false).map((d) => d.id);
-      const els = byIds(ids);
-      // Only cache once every gated layer exists; before that, re-resolve each
-      // call so a late-built layer is never permanently missed.
-      if (els.length === ids.length) _gateEls = els;
-      return els;
-    }
-    return _gateEls;
+    return changed;
   }
 
   /* anyOpen() walks every gated layer and may call shownLayer() (layout).
@@ -289,19 +283,19 @@ window.UiLayers = (function () {
   const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
 
   function anyOpenLive() {
-    const els = gateEls();
-    for (let i = 0; i < els.length; i++) {
-      const el = els[i];
-      if (el.hidden) continue;          // the cheap test, first
+    for (let i = 0; i < gateNodes.length; i++) {
+      const el = gateNodes[i];
+      if (!el || el.hidden) continue;          // the cheap test, first
       if (shownLayer(el)) return true;
     }
     return false;
   }
 
   function anyOpen() {
+    navDirty();
     if (!navObs) return anyOpenLive();
     const now = clock();
-    if (gateMemo !== null && now - gateMemoAt < NAV_MEMO_MS && !navDirty()) return gateMemo;
+    if (gateMemo !== null && now - gateMemoAt < NAV_MEMO_MS) return gateMemo;
     gateMemo = anyOpenLive();
     gateMemoAt = now;
     return gateMemo;
@@ -357,11 +351,11 @@ window.UiLayers = (function () {
   }
 
   function navDirty() {
+    // Mounts and removals can precede every observed attribute mutation.
+    if (refreshGateNodes()) navStale = true;
     if (!navObs) return true;
     if (navObs.takeRecords().length) navStale = true;
     if (openObs && openObs.takeRecords().length) navStale = true;
-    // Layers created since the last look join the watch before the memo is trusted.
-    for (const el of gateEls()) navWatch(el, true);
     navWatch(document.getElementById("overlay"), true);
     navWatch(document.getElementById("rotate-device"), true);
     const stale = navStale;

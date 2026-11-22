@@ -62,7 +62,7 @@ serve `js/` and `css/` from the working tree.
 `tooling-fast --changed --jobs=3 --quiet`; `node tools/track/verify-track.cjs <id>`
 for a circuit; the docs-only fast path for prose. No agent runs a browser spec
 locally (AGENTS.md rule 5): the specs `pick-tests` / `select-specs` name are proven
-by the PR's `selected` shard, and a whole group runs on the pushed branch with
+by the ready PR's `selected` legs, and a whole group runs on the pushed branch with
 `node tools/ci/remote-group.mjs <group>` when Bryce opts in (the group names are the ones
 `pick-tests` prints):
 
@@ -71,18 +71,18 @@ node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs
 ```
 
 Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
-The full tiers run on the PR: every draft push gets the fast tier plus the
-`selected` legs under a 5-min budget with no overflow — one leg for a typical
-diff; a wide diff still fans out, because `select-specs` never drops a routed
-spec (its `Structural guards` A–D run `tooling-fast`, the check `ready-gate`
-reads: the whole floor, except on a PR whose diff touches none of `tools/`,
-`tests/`, `.github/` or `package.json`, where they run `--changed`. Ratchet delta JSON files, the generated impact map,
-and listed unit tests that share a basename with and directly reference a changed game source also qualify
-for changed-file selection. See guardsScope
-in `tools/ci/tooling-fast.mjs`, ci.yml "Guards scope"), the full tier runs once the PR is ready (a ready flip
-skips the `selected` legs when the newest run on the same head passed them on
-its first attempt with the same plan, on a base that is still the deploy tip:
-`tools/ci/reuse-draft-selected.mjs`), and
+Draft pushes run the fast tier and defer the selected browser legs. The structural
+guards A–D run `tooling-fast` and feed the check `ready-gate` reads. They run
+the whole floor when the diff touches `tools/`, `tests/`, `.github/` or
+`package.json`, and use `--changed` otherwise. Ratchet delta JSON files, the generated
+impact map, and listed unit tests that share a basename with and directly
+reference a changed game source also qualify for changed-file selection. See
+`guardsScope` in `tools/ci/tooling-fast.mjs`. Marking a PR ready starts the full tier on that
+head. The browser exemption applies only when every changed path qualifies as
+documentation or an audited Node-only path. A mixed diff containing a runtime
+change or an unknown path takes the normal browser route. Draft deferral
+provides no execution evidence for the ready verdict.
+
 `land.yml`'s `gate` check judges the merge result. A ready plan that DROPS a
 routed spec (the over-budget pool is full) is red unless every dropped spec ran
 green in a `remote-group.mjs <group>` run on the same head and base, first
@@ -191,7 +191,7 @@ successful rerun.
 
 PR CI validates the PR head; the deploy branch requires one check, `gate`, whose
 ci row requires `CI` green on the head (D-031). Every PR push starts CI (a
-draft's run is the fast tier plus the 5-min-budget `selected` legs, §3); `= ci none` after a
+draft runs the fast tier, §3); `= ci none` after a
 push means no open PR carries the sha. A deploy-branch push starts the Pages release
 train; there is no separate ship-push CI run. A green PR is not proof that Pages
 is live; verify live `version.json` and the apex SHA with `deploy-research`

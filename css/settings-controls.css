@@ -381,6 +381,7 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner:not([data-density="compact"]) .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-graphics > details,
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance > details { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
@@ -522,12 +523,14 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
 /* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
    + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
    after RESOLUTION / RENDERER / GRAPHICS — do not add a named "adv" area. */
+#pm-graphics-details-body .set-row > details { flex: 1 1 12rem; min-width: 0; }
 #pm-display-adv,
 #pm-visual-tuners {
   margin: 0;
   min-width: 0;
 }
 #pm-display-adv-body,
+#pm-graphics-details-body,
 #pm-visual-tuners-body {
   display: flex;
   flex-direction: column;

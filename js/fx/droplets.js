@@ -24,6 +24,7 @@ const Droplets = (function () {
   const DPR_MAX_DESK = 1.5, DPR_MAX_PHONE = 1;
 
   let _cv = null, _ctx = null, _sprite = null, _looked = false;
+  let _cssSize = null;
   let _w = 0, _h = 0, _dpr = 1, _shown = false, _mobile = null;
   // True while the canvas may hold paint: with rain on and no drop alive, a
   // full-DPR clearRect every frame cleared an already-clear canvas (#4532 note).
@@ -123,7 +124,11 @@ const Droplets = (function () {
     if (typeof window === "undefined") return;
     const dpr = Math.min(window.devicePixelRatio || 1, _mob() ? DPR_MAX_PHONE : DPR_MAX_DESK);
     // The layout viewport (ICB) the fixed 100% layer fills, not inner* (stale portrait pair on a Home Screen landscape launch, #5201).
-    const de = document.documentElement, bw = de ? de.clientWidth | 0 : 0, bh = de ? de.clientHeight | 0 : 0, box = bw > 0 && bh > 0;
+    const de = document.documentElement;
+    if (!_cssSize && de && typeof CanvasCssSize !== "undefined") _cssSize = CanvasCssSize.create(de, { settleFrames: 30 });
+    const size = _cssSize && _cssSize.read();
+    const bw = size ? size.width : de ? de.clientWidth | 0 : 0;
+    const bh = size ? size.height : de ? de.clientHeight | 0 : 0, box = bw > 0 && bh > 0;
     const w = Math.max(1, Math.round((box ? bw : window.innerWidth || 1) * dpr)), h = Math.max(1, Math.round((box ? bh : window.innerHeight || 1) * dpr));
     if (w === _w && h === _h && dpr === _dpr) return;
     _w = w; _h = h; _dpr = dpr;

@@ -5,6 +5,7 @@
 // the page reloads at the phone shape, and the test reads back the stored key, the row's painted value (read()
 // reflects live game state) and, where one exists, a direct live signal. Node VMs cannot reach these writes (they
 // live in game.js / race-settings.js rows), so this is their apply+persist proof (B·H11 settings audit).
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -149,4 +150,68 @@ test("every live Settings row left off its value comes back after a reload (pers
   // The allowlist stays honest: a transient row that starts persisting should leave the list.
   const nowPersist = Object.keys(TRANSIENT).filter((id) => id in set && set[id] !== before[id] && after[id] === set[id]);
   expect(nowPersist, "TRANSIENT rows that now persist (drop them from the list)").toEqual([]);
+});
+
+test.describe("individual desktop graphics", () => {
+  test.use({ viewport: { width: 1366, height: 768 }, hasTouch: false, isMobile: false });
+  test("saves independent effects across a reload and restores preset choices", async ({ page }) => {
+    async function openDetail() {
+      await page.locator("#mb-settings").click();
+      await page.locator("#pm-open-graphics").click();
+      await page.getByText("Graphics details", { exact: true }).click();
+    }
+    await page.goto("/");
+    await boot(page);
+    await openDetail();
+    await expect(page.locator('script[src*="js/ui/desktop-graphics.js"]')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => Object.keys(GfxQuality.FEATURES).filter(key =>
+      !document.querySelector(`[data-desktop-graphics] select[data-effect="${key}"]`)))).toEqual([]);
+    const trees = page.getByRole("combobox", { name: "High-detail trees", exact: true });
+    const mirrors = page.getByRole("combobox", { name: "High-resolution rear-view mirror", exact: true });
+    await trees.selectOption("on");
+    await mirrors.selectOption("off");
+    await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Reload to apply" }).click()]);
+    await boot(page);
+    expect(await page.evaluate(() => [GfxQuality.feature("treesHi"), GfxQuality.feature("mirrorHi")])).toEqual([true, false]);
+    await openDetail();
+    await expect(trees).toHaveValue("on");
+    await expect(mirrors).toHaveValue("off");
+    await page.getByRole("button", { name: "Use preset for all" }).click();
+    await expect(trees).toHaveValue("");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.gfxFeatureOverrides")))).toEqual({});
+  });
+});
+
+test.describe("phone detail", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 } }) });
+  test("mobile detail changes survive reload without enabling desktop effects", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxFeatureOverrides", JSON.stringify({ hdrOut: true })));
+    async function openDetail() {
+      await page.locator("#mb-settings").tap();
+      await page.locator("#pm-open-graphics").tap();
+      await page.getByText("Graphics details", { exact: true }).tap();
+    }
+    await page.goto("/");
+    await boot(page);
+    await openDetail();
+    const kerbs = page.getByRole("combobox", { name: "Modelled kerbs", exact: true });
+    await expect(page.getByRole("combobox", { name: "HDR output", exact: true })).toHaveCount(0);
+    const kerbHelp = page.locator("#desktop-detail-kerbProfile details");
+    await expect(kerbHelp.locator("p")).toBeHidden();
+    await kerbHelp.locator("summary").tap();
+    await expect(kerbHelp.locator("p")).toContainText("raised");
+    await expect(kerbHelp.locator("p")).toBeVisible();
+    await expect(kerbs).toHaveValue("");
+    await kerbHelp.locator("summary").tap();
+    await expect(kerbHelp.locator("p")).toBeHidden();
+    await kerbs.selectOption("on");
+    await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Reload to apply" }).tap()]);
+    await boot(page);
+    expect(await page.evaluate(() => [GfxQuality.feature("kerbProfile"), GfxQuality.feature("hdrOut")])).toEqual([true, false]);
+    await openDetail();
+    await expect(kerbs).toHaveValue("on");
+    await page.getByRole("button", { name: "Use preset for all" }).tap();
+    await expect(kerbs).toHaveValue("");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.gfxFeatureOverrides")))).toEqual({ hdrOut: true });
+  });
 });

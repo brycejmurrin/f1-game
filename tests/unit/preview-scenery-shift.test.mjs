@@ -36,13 +36,15 @@ wctx.importScripts = (...files) => { for (const f of files) { const rel = f.repl
 vm.runInContext(read("js/track/build-worker.js"), wctx, { filename: absSrc("js/track/build-worker.js") });
 
 /** A page that has built nothing: engine + garage exterior builder + the build client wired to the worker. */
-function page({ dropShift = false } = {}) {
+function page({ dropShift = false, legacyPreviewRequest = false } = {}) {
   const h = buildContext({ assets: false });
   const ctx = vm.createContext(h.sandbox);
   class BridgeWorker {
     postMessage(m) {
       const from = posted.length;
-      Promise.resolve(wctx.onmessage({ data: structuredClone(m) })).then(() => {
+      const request = structuredClone(m);
+      if (legacyPreviewRequest && request.type === "preview") delete request.banking;
+      Promise.resolve(wctx.onmessage({ data: request })).then(() => {
         for (const reply of posted.splice(from)) {
           if (dropShift) delete reply.sceneryShift;   // a reply as the worker sent it before #5081
           this.onmessage({ data: reply });
@@ -109,3 +111,23 @@ for (const id of ["monaco", "vegas"]) {
     assert.equal(old.def(id)._sceneryShift, fullShift(id));
   });
 }
+
+test("a worker map preview defers banking until a 3-D caller asks for it", async () => {
+  const p = page(), def = p.def("zandvoort");
+  assert.equal(await p.client.previewMap(def), true);
+  const map = p.Tracks.buildCenterline(def, { line: false, banking: false });
+  assert.equal(map.bankP, undefined);
+  const garage = p.Tracks.buildCenterline(def, { line: false });
+  const expected = full.Tracks.buildCenterline(full.def(def.id), { line: false });
+  assert.equal(garage.px, map.px);
+  assert.ok(expected.bankP.lift.some(h => h > 1));
+  for (const key of ["lift", "bsign"]) assert.deepEqual([...garage.bankP[key]], [...expected.bankP[key]]);
+  assert.equal(p.Tracks.buildCenterline(def, { line: false }).bankP, garage.bankP);
+});
+
+test("legacy preview requests still receive baked banking from the worker", async () => {
+  const p = page({ legacyPreviewRequest: true }), def = p.def("zandvoort");
+  assert.equal(await p.client.previewMap(def), true);
+  const hit = p.Tracks.buildCenterline(def, { line: false, banking: false });
+  assert.ok(hit.bankP.lift.some(h => h > 1), "the worker sent the bank data before a 3-D caller ran");
+});
