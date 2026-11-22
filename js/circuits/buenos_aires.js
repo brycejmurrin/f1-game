@@ -60,7 +60,8 @@
     // researched real turn count. No researched sectors — consumers fall back to thirds.
     sectors: [0.378, 0.686],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0890, 0.1030, 0.1945, 0.2050, 0.2610, 0.3530, 0.5545, 0.5640, 0.5985, 0.6195, 0.6580, 0.7450, 0.7585, 0.7790, 0.8600, 0.8675, 0.8810, 0.8885],
-    furniture: { tree: "plane", fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
+    // Single roadside trees complement the two hand-planted avenues without overlapping crowns.
+    furniture: { tree: "plane", sparse: true, fol: [0.30, 0.50, 0.24], lamp: "globe", lc: [1.0, 0.90, 0.68] },  // plátano avenues, city-park globes
     kit: { marshal: "cabin",     rail: "cable",       fence: "palisade",  tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "scaffold", "pastel"],  // 1950s mass concrete + temporary tube
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

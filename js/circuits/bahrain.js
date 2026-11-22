@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "bahrain",
+    revision: 2,
     // The pit complex (TrackPit) sits on the start straight, on its RIGHT (east):
     // OSM pit-lane way 187123422 measures 9.5-11.8 m right of the built
     // centreline, the main grandstand (way 187123419) 39 m left.
@@ -44,7 +45,9 @@
       { frac: 0.1166, angleDeg: 3.0, widthM: 100 },   // T4
       { frac: 0.3373, angleDeg: 4.0, widthM: 220 },   // T5-T7 sweep
       { frac: 0.4064, angleDeg: 3.5, widthM: 190 },
-      { frac: 0.6077, angleDeg: 3.0, widthM: 130 },   // T10
+      // F1 describes this left-hander as off-camber. Keep the authored
+      // nominal magnitude, anchored to the numbered turn with adverse roll.
+      { turn: 10, angleDeg: -3.0, widthM: 130 },
       { frac: 0.9799, angleDeg: 3.0, widthM: 100 },   // final right
     ],
 

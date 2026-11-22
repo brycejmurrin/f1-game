@@ -122,7 +122,8 @@
       for (let i = 0; i < 8; i++) {
         const kC = K(i / 8 * 0.22);
         backdrop(kC, 1,  140 + hash(i * 5)  * 60,  [28 + hash(i * 7)  * 18, 32 + hash(i * 11) * 44, 22], DARK2);
-        backdrop(kC, -1, 140 + hash(i * 9)  * 60,  [24 + hash(i * 3)  * 16, 28 + hash(i * 13) * 40, 20], DARK2);
+        // Keep the inner skyline row clear of the façades across the first two turns.
+        backdrop(kC, -1, 100 + hash(i * 9)  * 60,  [24 + hash(i * 3)  * 16, 28 + hash(i * 13) * 40, 20], DARK2);
         backdrop(kC, 1,  280 + hash(i * 15) * 120, [32 + hash(i * 17) * 24, 46 + hash(i * 19) * 80, 22], DARK);
         backdrop(kC, -1, 260 + hash(i * 21) * 110, [30 + hash(i * 23) * 22, 42 + hash(i * 25) * 72, 22], DARK);
       }
@@ -182,9 +183,6 @@
         addBox(out, vadd(aGate.c, aGate.u, 2.9), [40, 6.2, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
         addBox(out, vadd(aGate.c, aGate.u, 7), [42, 2, 3], WIN_WARM, [aGate.r, aGate.u, aGate.t]);
 
-        // Uplit wash at Government House base (warm stone courtyard glow)
-        const aGov = anchor(k, 1, 64);
-        addBox(out, vadd(aGov.c, aGov.u, 0.35), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
       // (The five pit halls and the 1 m pit wall at .94-.02 are the engine's
@@ -396,10 +394,7 @@
         minH: 6, maxH: 14, depth: 12, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
-      cityFront(0.553, 0.56, 1, 26, {
-        minH: 6, maxH: 16, depth: 12, step: 16,
-        palette: SAND_PAL, lit: false, windowCol: WIN_WARM, floor: 3,
-      });
+      // The rampart and terrace occupy the descending slope beyond the palace.
 
       for (let i = 0; i < 4; i++) {
         const dist = 38 + hash(i * 13) * 12;  // well behind the 10m wall gap
@@ -559,7 +554,7 @@
         const a = anchor(k, 1, 32);
         // Highest terrain under the footprint — single-point seat buried the plinth 7.6 m.
         let baseY = a.c[1];
-        for (const [to, ro] of [[0, 0], [22, 0], [-22, 0], [0, 10], [0, -8], [18, 8], [-18, 8], [18, -6], [-18, -6], [30, 4], [-30, 4]]) {
+        for (const [to, ro] of [[0, 0], [22, 0], [-22, 0], [0, 10], [0, -8], [0, -11], [18, 8], [-18, 8], [18, -6], [-18, -6], [30, 4], [-30, 4]]) {
           const q = vadd(vadd(a.c, a.t, to), a.r, ro);
           const g = terrainYAt(q[0], q[2]);
           if (g != null && g > baseY) baseY = g;
@@ -598,7 +593,7 @@
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
           [0.51, 1, 36, 10, 10, 14],
-          [0.54, 1, 38, 12, 12, 12],
+          [0.54, 1, 48, 12, 12, 12], // The castle terrace at gap 28 extends to ~40 m behind the road edge.
           [0.56, 1, 30, 14,  8, 16],
         ];
         for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {
@@ -666,7 +661,8 @@
       // lit:false — with theme city dress excluded on +1 (#3340), cityFront's
       // night neon band vs drawFace detail was unmasked as coplanar growth.
       // Towers / billboards still light the boulevard; façades stay readable.
-      cityFront(0.63, 0.738, 1, 14, {
+      // The flat seafront starts at T16.
+      cityFront(0.663, 0.738, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
       });
@@ -681,7 +677,7 @@
 
       {
         const k  = K(0.70);
-        const aH = anchor(k, 1, 62);
+        const aH = anchor(k, 1, 78);   // Set the podium back from the boulevard façades.
         const b  = [aH.r, aH.u, aH.t];
         // Podium base
         addBox(out, vadd(aH.c, aH.u, 1.8), [48, 3.6, 36], [0.28, 0.28, 0.32], b);
@@ -799,7 +795,8 @@
         addBox(out, vadd(a.c, a.u, 0.5 * sc), [W * 1.02, 0.9 * sc, L * 0.88], [0.06, 0.08, 0.14], b);
         const sup = vadd(a.c, a.t, L * 0.02);
         addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
-        addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
+        // The upper cabin spans the lower roof at 5.4 sc to the mast at 7.6 sc.
+        addBox(out, vadd(sup, a.u, 6.5 * sc), [W * 0.66, 2.2 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
         out._mat = 0;
         addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.52], WIN_WARM, b);
         addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.34], WIN_COOL, b);

@@ -6,6 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "magny_cours",
+    revision: 2,
     classic: true,
     // Upstream fr-1960 already runs clockwise, matching the racing direction.
     reverse: false,

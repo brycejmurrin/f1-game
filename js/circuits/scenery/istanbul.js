@@ -331,17 +331,20 @@
         }, { required: true });
       }
 
-      for (const [id, s, side, gap] of [
-        ["t1", 0.070, 1, 58], ["t4", 0.170, -1, 60],
-        ["t9", 0.640, 1, 60], ["t12", 0.790, -1, 58],
+      // End the earthworks before their offset paths fold back through the
+      // preceding hillside panels on the tight bends.
+      for (const [id, side, gap, stations] of [
+        ["t1", 1, 58, [0.064, 0.076, 0.088]],
+        ["t4", -1, 60, [0.152, 0.164, 0.176]],
+        ["t9", 1, 60, [0.634, 0.646, 0.658]],
+        ["t12", -1, 58, [0.772, 0.784, 0.796, 0.808]],
       ]) {
         for (let t = 0; t < 2; t++) {
           groundedSegments({
             id: `istanbul-hillside-${id}-${t + 1}`,
-            points: [0, 1, 2, 3].map((j) => ({
-              k: K(s + (j - 1.5) * 0.012), side, dist: gap + t * 24,
+            points: stations.map((s) => ({
+              k: K(s), side, dist: gap + t * 24,
             })),
-            // Two tiers, shorter chords — cuts tris and clears self-flatCoplanar.
             width: 8.0, height: 1.4 + t * 1.1,
             color: t & 1 ? [0.27, 0.33, 0.18] : [0.33, 0.38, 0.21],   // grass-toned: pale tan read as planks
           });

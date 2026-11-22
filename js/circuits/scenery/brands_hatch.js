@@ -198,7 +198,7 @@
       // a grass bank: catering units, a toilet block, a burger van and the
       // programme hut. Small, low and repeated, never a wall of buildings.
       for (const [s, d] of [
-        [0.066, 34], [0.074, 34], [0.082, 35], [0.090, 36],
+        [0.066, 40], [0.074, 34], [0.082, 35], [0.090, 36],
         [0.180, 33], [0.190, 33], [0.200, 34],
         [0.850, 35], [0.858, 35], [0.866, 44], [0.876, 35],
         [0.900, 34], [0.910, 34], [0.922, 35], [0.934, 36],

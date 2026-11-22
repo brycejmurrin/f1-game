@@ -68,7 +68,8 @@
         let seen = false, judged = 0;
         for (let i = 0; i <= 9 && !seen; i++) {
           const ang = i / 9 * 6.2832, rr = i === 9 ? 0 : w * 0.42;
-          const g = terrainYAt(x + Math.cos(ang) * rr, z + Math.sin(ang) * rr);
+          // Use the rendered terrain footprint: the outer ribbon ends within some rings.
+          const g = Tracks.terrainY(track, x + Math.cos(ang) * rr, z + Math.sin(ang) * rr);
           if (g == null) continue;          // off the ribbon: no ground to judge by
           judged++;
           seen = g - top <= 0.02;
@@ -443,6 +444,7 @@
           stage._mat = MAT.FLAT;
           addBox(stage, vadd(a.c, a.u, 0.20), [46, 0.35, 2.2], [0.86, 0.91, 0.91], b);
           // Bottom 5.5 cm above the first line's: flush undersides z-fought.
+          if (s === 0.56) return;   // the smaller foam line falls behind the dune here
           addBox(stage, vadd(vadd(a.c, a.u, 0.19), a.r, 4.5),
                  [38, 0.22, 1.2], [0.72, 0.84, 0.87], b);
         });
@@ -648,7 +650,7 @@
         [0.58, 160, 112, 1.5],
         [0.66, 150, 118, 1.6],
         [0.72, 145, 102, 1.4],
-        [0.79, 165, 110, 1.5],
+        // The last glint at 0.79 is hidden by the dune at the chicane exit.
       ]) {
         const a = anchor(K(s), 1, dist);
         if (onTrack(a.c[0], a.c[2], 18)) continue;

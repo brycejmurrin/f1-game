@@ -56,8 +56,8 @@ test("the judge baseline is shrink-only data: known circuits, known codes, nothi
     assert.ok(ids.has(id), `${id} is not a circuit`);
     for (const c of codes) assert.ok(["start", "grade"].includes(c), `${id}: ${c} — only the real-world start/grade reds are baselined`);
   }
-  // Without its entry spa's grade is a failure; an entry a circuit no longer earns is one too.
-  assert.throws(() => VT.defChecks(Tracks, def("spa"), { judgeReds: {} }), /read RED: grade/);
+  // Without its entry Silverstone's start is a failure; an entry a circuit no longer earns is one too.
+  assert.throws(() => VT.defChecks(Tracks, def("silverstone"), { judgeReds: {} }), /read RED: start/);
   assert.throws(() => VT.defChecks(Tracks, def("monza"), { judgeReds: { monza: ["start"] } }), /no longer reads RED — drop it \(shrink-only\)/);
   assert.ok(!base.monza, "monza carries no exception");
 });

@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "monaco",
+    revision: 2,
     name: "MONACO",
     gp: "Monaco GP",
     country: "Monaco",
@@ -36,6 +37,9 @@
       { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
       // (racing 0.108-0.178: the Beau Rivage climb, kept as it ships.)
       { kind: "city", s0: 0.0116, s1: 0.0816 },
+      // The lower terrace at Beau Rivage has a retaining slope within the
+      // generic palm's crown. Its replacement stands on the upper shelf.
+      { kind: "foliage", s0: 0.036, s1: 0.044, side: 1 },
       // Casino Square as BUILT (racing 0.205-0.285, both sides): the Massenet
       // bust, the Hôtel de Paris, the Café, the fountain and the Casino were
       // re-seated here 2026-10-05 (scenery/monaco.js KRACE); the landmarks
@@ -63,19 +67,17 @@
     startFrac: 0.2516,
     sceneryStartFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
-    // Elevation, re-authored 2026-10-04 against THIS centreline (the old +30 m
-    // crest sat at arc 0.12, before Massenet, with Casino back at datum). The
-    // shape: the line at harbour level, the Beau Rivage climb from Ste Devote,
-    // the crest at Massenet/Casino (~+40 m — SRTM 30 m via Open Topo Data puts
-    // Casino Square ~45 m above the harbour), down Mirabeau and the Loews
-    // hairpin to Portier, the tunnel, and the harbour low through the chicane,
-    // Tabac and the pool. `s` is authored in the REVERSED source frame about
-    // sceneryStartFrac: racing arc = 0.2180 - s (mod 1; the comments give it).
+    // Heights fitted to Leclerc's 2024 qualifying lap (OpenF1 session 9519,
+    // lap 25), registering horizontal positions against this centreline.
+    // Piastri's lap 23 independently reproduces the climb, tunnel shelf and
+    // harbour low. Stations below use racing arc = 0.2180 - s (mod 1).
     elevations: [
-      { s: 0.0880, halfM: 250, rise: 7 },   // arc 0.130 Beau Rivage climb
-      { s: 0.9530, halfM: 600, rise: 41 },  // arc 0.265 Massenet / Casino crest
-      { s: 0.8180, halfM: 200, rise: 11 },  // arc 0.400 Mirabeau - Loews shoulder
-      { s: 0.5750, halfM: 360, rise: -4 },  // arc 0.643 tunnel exit / harbour chicane / Tabac
+      { s: 0.0732, halfM: 375, rise: 14.1 },   // Beau Rivage
+      { s: 0.9537, halfM: 597, rise: 38.4 },   // Casino
+      { s: 0.8122, halfM: 313, rise: 5.6 },    // hairpin to Portier
+      { s: 0.6813, halfM: 400, rise: 4.7 },    // tunnel road deck
+      { s: 0.5587, halfM: 223, rise: -1.6 },   // harbour chicane
+      { s: 0.4190, halfM: 463, rise: -2.9 },   // pool
     ],
     // hwZones are SOURCE index fractions (TrackSpace.range "source": racing
     // index = 0.2516 - s), then interpolated by arc; the arc windows below are

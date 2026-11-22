@@ -1,11 +1,13 @@
 /* Apex 26 — WATKINS GLEN INTERNATIONAL circuit definition (data only).
    Retired circuit (`classic: true`): last United States GP 1980.
+   The Boot and uninterrupted Esses match the 1971–74 GP configuration.
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "watkins_glen",
+    revision: 2,
     classic: true,
     // Upstream us-1956 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -35,9 +37,8 @@
       grass:         [0.20, 0.42, 0.19],
       sunDir:        [0.46, 0.58, 0.36],
     },
-    // WAT-M3 identity lock: the uphill Esses and the +13 m Boot climb are
-    // authored circuit geometry. Scenery grading must follow them, never
-    // flatten or counter-grade these two elevation moves.
+    // Fallback when the SRTM profile is unavailable. The normal runtime uses
+    // the 64-sample survey of this same unchicaned Boot trace.
     elevations: [
       // ONE climb from Turn 1's exit up through the Esses (T2-T4, 0.118-0.256),
       // peaking where they open onto the back straight, then easing down the
@@ -46,7 +47,7 @@
       // the exit", "the uphill Esses"); nascar.com turn guide ("ascent through
       // the esses"). Until 2026-11-18 a +9 m bump at 0.11 and a -12 m dip at
       // 0.19 made the Esses a ~20 m DROP (#5316 CIRC4-07). The 12 m is the
-      // def's old figure, not a survey; no SRTM bake exists for this circuit.
+      // def's old figure, not a survey.
       { s: 0.27, halfM: 900, rise: 12.0 },
       { s: 0.52, halfM: 340, rise: -8.0 },   // into the Boot
       { s: 0.70, halfM: 360, rise: 13.0 },   // the climb back out

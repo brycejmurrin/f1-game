@@ -4,10 +4,6 @@
  * skipped 7.6 m of path arc into one step and authored a 9.8% jolt on a
  * profile clamped at 5.5%. Monotonic arc mapping fixes that; this gate pins it.
  *
- * Builds with undulate:false so the gate measures surveyHeights alone. In-game
- * undulate still runs (fleet prop seating was measured with it) and can stack a
- * couple of grade points on top — that is not the knife-edge this pins.
- *
  * Cap is the baker's MAX_GRADE (0.055) plus a 0.005 allowance for Catmull-Rom
  * overshoot between the 64 samples — tighter than the 9.8% bug, never looser
  * than any prior assertion (there was none). Bridge ramps are excluded.
@@ -89,10 +85,7 @@ describe("elevation smoothness (densified centreline)", () => {
     it(`${id}: densified grade ≤ bake cap (+CR slop)`, () => {
       const def = ctx.Tracks.LIST.find((d) => d.id === id);
       assert.ok(def, `missing def ${id}`);
-      // Gate surveyHeights alone: undulate still runs in-game (fleet prop
-      // seating was measured with it) and can stack a couple of grade points
-      // on top of the bake. Knife-edge regression is the densified remap.
-      const track = ctx.Tracks.build(Object.assign({}, def, { undulate: false }));
+      const track = ctx.Tracks.build(def);
       const { n, py, total } = track;
       const ds = total / n;
       let maxG = 0, atG = 0;
@@ -103,6 +96,22 @@ describe("elevation smoothness (densified centreline)", () => {
       }
       assert.ok(maxG <= capOf(id) + CR_SLOP,
         `${id}: max grade ${(maxG * 100).toFixed(2)}% at s=${atG.toFixed(4)} exceeds ${(capOf(id) + CR_SLOP) * 100}%`);
+      if (id === "brands_hatch") {
+        // EA lidar finds a 17.5 m Paddock Hill drop and 20.6 m climb to
+        // Druids. The grade-limited fit recovers over 10 m on each side.
+        const heights = (lo, hi) => py.subarray(Math.ceil(lo / ds), Math.floor(hi / ds) + 1);
+        const trough = Math.min(...heights(300, 410));
+        assert.ok(Math.max(...heights(60, 180)) - trough >= 10, "Paddock Hill drop");
+        assert.ok(Math.max(...heights(550, 660)) - trough >= 10, "Druids climb");
+      }
+      if (id === "buddh") {
+        const height = (frac) => py[Math.round(frac * n) % n];
+        const rise = height(def.turns[2]) - height(def.turns[0]);
+        assert.ok(Math.abs(rise - 14) < 0.5, `Buddh T1–T3 climbs ${rise.toFixed(2)} m`);
+        const hollow = height((def.turns[2] + def.turns[3]) / 2);
+        assert.ok(hollow < height(def.turns[2]) && hollow < height(def.turns[3]),
+          "the back straight descends from T3 and rises again to T4");
+      }
       if (id === "cota") {
         // The T1 hill: crest within the first tenth of the lap stands >= 25 m over
         // the lap's low point (was 10.5 m + 11.7 m low = 22 m relief, crest ~10 m).

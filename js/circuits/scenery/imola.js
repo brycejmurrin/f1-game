@@ -85,28 +85,28 @@
           const kk = R(sf);
           const a0 = anchor(kk, side, gap);
           if (onTrack(a0.c[0], a0.c[2], 30)) continue;
-          const b = [a0.r, a0.u, a0.t];
           for (let r = 0; r < rows; r++) {
             const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
             if (onTrack(a.c[0], a.c[2], 24)) continue;
-            const rowLen0 = len * 1.08;
-            // Rows on a hillside sink their soil strip and posts into the slope: skip them.
-            const rowYs = [];
-            for (const [ex, ez] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-              rowYs.push(terrainYAt(a.c[0] + a.t[0] * ex * rowLen0 / 2 + a.r[0] * ez * 2.3,
-                                    a.c[2] + a.t[2] * ex * rowLen0 / 2 + a.r[2] * ez * 2.3));
-            }
-            if (rowYs.some((y) => !Number.isFinite(y)) || Math.max(...rowYs) - Math.min(...rowYs) > 0.5) continue;
+            const b = [a.r, a.u, a.t];
             const hv = hash(kk * 17 + r * 29);
             const rowLen = len * (0.86 + hv * 0.22);
-            addBox(out, vadd(a.c, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
+            // Rows on a hillside sink their soil strip and posts into the slope: skip them.
+            const rowYs = [];
+            for (const [ex, ez] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [0, 0]]) {
+              rowYs.push(terrainYAt(a.c[0] + a.t[0] * ex * rowLen / 2 + a.r[0] * ez * 2.3,
+                                    a.c[2] + a.t[2] * ex * rowLen / 2 + a.r[2] * ez * 2.3));
+            }
+            if (rowYs.some((y) => !Number.isFinite(y)) || Math.max(...rowYs) - Math.min(...rowYs) > 0.5) continue;
+            const soil = [a.c[0], rowYs[4], a.c[2]];
+            addBox(out, vadd(soil, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
             out._mat = MAT.FOLIAGE;
-            addBox(out, vadd(a.c, a.u, 1.05), [1.5, 1.5, rowLen],
+            addBox(out, vadd(soil, a.u, 1.05), [1.5, 1.5, rowLen],
                    hv < 0.5 ? VINE : VINE_DRY, b);
             out._mat = 0;
             out._mat = MAT.WOOD;
             for (const e of [-rowLen / 2, rowLen / 2]) {
-              addCyl(out, vadd(a.c, a.t, e), 0.10, 2.0, POST, 4, b);
+              addCyl(out, vadd(soil, a.t, e), 0.10, 2.0, POST, 4, b);
             }
             out._mat = 0;
           }
@@ -537,7 +537,7 @@
           const h2 = hash(i * 31 + 9);
           put(-40 + i * 36, 46 + h2 * 30, 12 + h2 * 8, 18 + h2 * 6, 11 + h2 * 5, 16, h2 < 0.5 ? STONE2 : CONC);
         }
-        const churchAt = footAt(55, 42, 18);
+        const churchAt = footAt(101, 42, 18);
         const churchFoot = churchAt.p;
         plinth(churchAt, 18, 28);
         addBox(out, vadd(churchFoot, u, 8), [18, 16, 28], STONE2, [r, u, t]);
@@ -572,7 +572,8 @@
 
       fence(0.96, 0.10, -1, 4, 4, [0.62, 0.64, 0.66]);
       fence(0.49, 0.56,  1, 4, 4, [0.62, 0.64, 0.66]);
-      fence(0.79, 0.86, -1, 4, 4, [0.62, 0.64, 0.66]);
+      // Upright mesh follows the inside of Tosa without overlapping wide leaning caps.
+      fence(0.79, 0.86, -1, 4, 4, [0.62, 0.64, 0.66], { style: "chainlink" });
       guardrail(0.00, 0.18, 1, 3, [0.78, 0.78, 0.80]);
       guardrail(0.20, 0.30, -1, 3, [0.78, 0.78, 0.80]);
       guardrail(0.60, 0.70,  1, 3, [0.78, 0.78, 0.80]);
@@ -803,8 +804,8 @@
           }
           // Compact timing turret, intentionally below the nearby tree crowns.
           const turret = vadd(vadd(base, a.r, 7), a.t, -9);
-          addBox(stage, vadd(turret, a.u, 6.5), [7, 13, 8], STONE2, b);
-          // Turret box is CENTRED at 6.5 with height 13 → top face at 13.
+          addBox(stage, vadd(turret, a.u, 10), [7, 6, 8], STONE2, b);
+          // Turret starts at the eaves and rises to 13 m.
           seat.prism(stage, vadd(turret, a.u, 13), [8, 2.4, 9], TERRA, b);
           stage._mat = MAT.METAL;
           addBox(stage, vadd(vadd(turret, a.r, -3.6), a.u, 9.5),
@@ -880,6 +881,6 @@
       guardrail(0.015, 0.145, -1, 2.8, [0.76, 0.77, 0.79]);
       fence(0.015, 0.145, -1, 6.8, 4.2, [0.58, 0.61, 0.62]);
       guardrail(0.43, 0.56, 1, 2.8, [0.74, 0.75, 0.77]);
-      fence(0.43, 0.49, 1, 6.5, 4.0, [0.56, 0.59, 0.60]);
+      fence(0.43, 0.49, 1, 6.5, 4.0, [0.56, 0.59, 0.60], { style: "chainlink" });
       guardrail(0.775, 0.88, -1, 2.8, [0.76, 0.77, 0.79]);
     };

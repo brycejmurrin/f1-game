@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "miami",
+    revision: 2,
     pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.7 m off centreline; = trace vertex 0.
@@ -33,12 +34,22 @@
       { kinds: ["city", "foliage"], s0: 0.94, s1: 0.08 },
       { kinds: ["city", "foliage"], s0: 0.26, s1: 0.38, side: 1 },
       { kinds: ["city", "foliage"], s0: 0.60, s1: 0.72 },
+      // The left verge at T10 holds three stands and their parking lots.
+      { kinds: ["city"], s0: 0.416, s1: 0.512, side: -1 },
+      // The Beach Club and its two ranks of hospitality buildings occupy this frontage.
+      { kinds: ["city"], s0: 0.492, s1: 0.600, side: 1 },
+      // Reserve the two banks of back-straight and final-sector stands with
+      // their own cityFront facades; generic retail otherwise fills the gaps twice.
+      { kinds: ["city"], s0: 0.752, s1: 0.860, side: -1 },
+      { kinds: ["city"], s0: 0.870, s1: 0.935, side: -1 },
       { kinds: ["city"], s0: 0.115, s1: 0.128 },   // unnumbered right kink (0.1188) between T3 and T4, inside: retail boxes converge and interpenetrate
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.34, 0.33, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     elevations: [
-      { s: 0.8605, halfM: 220, rise: 3.5 },   // T17 approach rise (peak y ~3.4 m); not sourced from a real survey — the real circuit is near-flat
-      { s: 0.662, halfM: 95, rise: 3.4 },   // Turnpike chicane crest (~11 ft under 2nd deck)
+      // 2024 qualifying, car 1 lap 14: OpenF1 z aligned at the T13–T17
+      // MultiViewer corner markers. Both knots form the asymmetric chicane hill.
+      { s: 0.6152, halfM: 93, rise: 3.13 },  // access-ramp crest between T14 and T15
+      { s: 0.6322, halfM: 65, rise: 1.67 },  // still above datum at T16, then back down
     ],
     bankZones: [
       { frac: 0.0816, angleDeg: 3.0, widthM: 240 },   // T3

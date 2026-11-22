@@ -565,7 +565,8 @@
       }
       billboard(K(UNI - 0.03), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
       // University / Turn-4 DRS straight (bahrain.gp University stand map).
-      lightBank(K(UNI + 0.005), 1, 28);
+      // Behind the University slabs, clear of their 18 m-wide footprint.
+      lightBank(K(UNI + 0.005), 1, 44);
 
       // Per-wedge setbacks: the 0.11-0.14 and 0.37 legs run 80-140 m to the left
       // of this stretch, so a uniform 64 + 14 i put wedges 0, 1 and 4 on those
@@ -743,10 +744,10 @@
 
       // Pit-exit stand + floods (+1 paddock side), inside the in-game pit window
       // (<= ~110 m + 90 m road after the line, js/track/core/pit.js): SF+0.034 is
-      // ~185 m on. Gap 42 clears the motorhome row (26-34 m) and sits in front of
+      // ~185 m on. Gap 54 clears the hospitality frontage at 30 m and sits in front of
       // the Sakhir Tower (62) and the paddock mast (88). The old 0.912/0.940
       // absolutes and the SF+0.142..0.182 re-key both land on the T3-T4 leg.
-      grandstandEx(SF + 0.034, 1, 42, 36, null, null,
+      grandstandEx(SF + 0.034, 1, 54, 36, null, null,
         { livery: "steel", roof: "flat", endWalls: true });
       floodMast(K(SF + 0.026), 1, 44, 40);
       floodMast(K(SF + 0.044), 1, 44, 40);

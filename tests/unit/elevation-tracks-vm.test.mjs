@@ -160,7 +160,7 @@ test("banking pivots around the centreline with smooth edge transitions", () => 
   const audits = ["zandvoort", "madrid"].map((id) => {
     const def = Tracks.LIST.find((entry) => entry.id === id);
     const track = Tracks.buildCenterline(def);
-    const stepM = 1;
+    const stepM = 1, crossSection = { p: [], t: [], r: [] };
     let maxCentreLift = 0, maxPivotError = 0, maxEdgeGrade = 0;
     for (let s = 0; s < track.total; s += stepM) {
       const centre = Tracks.banking(track, s, 0);
@@ -168,14 +168,14 @@ test("banking pivots around the centreline with smooth edge transitions", () => 
       const leftEdge = Tracks.banking(track, s, -Infinity)?.dy || 0;
       const edge = Tracks.banking(track, s, Infinity)?.dy || 0;
       const nextEdge = Tracks.banking(track, s + stepM, Infinity)?.dy || 0;
-      maxPivotError = Math.max(maxPivotError, Math.abs(leftEdge + edge));
+      maxPivotError = Math.max(maxPivotError, Math.abs(edge - leftEdge - 2 * Tracks.sample(track, s, crossSection).hw * Math.tan(centre?.roll || 0)));
       maxEdgeGrade = Math.max(maxEdgeGrade, Math.abs(nextEdge - edge) / stepM);
     }
     return { id, maxCentreLift, maxPivotError, maxEdgeGrade };
   });
   for (const audit of audits) {
     lt(audit.maxCentreLift, 0.01, `${audit.id} centreline lift`);
-    lt(audit.maxPivotError, 0.01, `${audit.id} edge symmetry`);
+    lt(audit.maxPivotError, 0.01, `${audit.id} cross-section rise`);
     lt(audit.maxEdgeGrade, 0.08, `${audit.id} bank transition grade`);
   }
 });
@@ -184,14 +184,17 @@ test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", () => {
   const Tracks = g.sandbox.Tracks;
   const def = Tracks.LIST.find((entry) => entry.id === "zandvoort");
   const track = Tracks.buildCenterline(def);
-  const rollDeg = (frac) => {
-    const bank = Tracks.banking(track, frac * track.total, 0);
+  const rollDeg = (frac, x = 0) => {
+    const bank = Tracks.banking(track, frac * track.total, x);
     return Math.abs((bank?.roll || 0) * 180 / Math.PI);
   };
-  const hugenholtz = rollDeg(def.turns[2]);    // T3, the banked LEFT hairpin
+  const k = Math.round(def.turns[2] * track.n);  // T3, banked left
+  const peak = k / track.n, edge = track.hw[k];
+  const inside = rollDeg(peak, -edge), outside = rollDeg(peak, edge);
   const luyendyk = rollDeg(def.turns[13]);     // T14, the banked final RIGHT
-  const others = def.turns.filter((_, i) => i !== 2 && i !== 13).map(rollDeg);
-  gt(hugenholtz, 15, "Hugenholtz banking");
+  const others = def.turns.filter((_, i) => i !== 2 && i !== 13).map(f => rollDeg(f));
+  closeTo(inside, 4.5, 1, "Hugenholtz inside banking");
+  closeTo(outside, 19, 1, "Hugenholtz outside banking");
   gt(luyendyk, 15, "Arie Luyendyk banking");
   lt(Math.max(...others), 6, "no other corner is banked like a bowl");
 });
@@ -238,6 +241,11 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
   A.camera("chase");
   A.snapCam();
   const bankedRoll = A.camState().roll;
+  for (const mode of ["rear", "reverse"]) {
+    A.camera(mode);
+    A.snapCam();
+    closeTo(A.camState().roll, trackRoll, 4, mode + " mirrors forward bank roll");
+  }
   A.orbit(MONUMENTAL_FRAC, 45, 18, 45);
   const debugRoll = A.camState().roll;
   A.camera("chase");

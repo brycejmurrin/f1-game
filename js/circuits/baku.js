@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "baku",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // startFrac defaults to 0 — Already correct per docs/tracks/START-LINES.md
     name: "BAKU",
@@ -25,6 +26,9 @@
     barrierGap: 1.0,
     sceneryCoordinates: "racing",
     dressingExclusions: [
+      // A back-row tower at the T6 exit otherwise occupies a Neftchilar façade
+      // on the nearby return leg. The authored street frontage fills this block.
+      { kinds: ["city"], s0: 0.354, s1: 0.36, side: -1 },
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56 },
       // Preserve the Caspian void on the left of Neftchilar Avenue.
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
@@ -49,7 +53,9 @@
       { s0: 0.2577, s1: 0.3233, hw: 5.4, ease: 0.012 },  // T4 to T5 into the Old City
       { s0: 0.8232, s1: 0.8825, hw: 5.4, ease: 0.012 },  // T20 seafront kink
     ],
-    elevations: [{ s: 0.46, halfM: 500, rise: 14 }],
+    // Formula 1's "Highs and lows" gives 26.8 m from the seafront to T13.
+    // Approximate the old-town climb and descent to the T16 boulevard.
+    elevations: [{ s: 0.529, halfM: 790, rise: 26.8 }],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // turns: FIA 2026 event-map numbering (T1-T20), one apex per FIA corner, from

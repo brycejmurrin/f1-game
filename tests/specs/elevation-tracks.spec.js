@@ -82,18 +82,24 @@ test.describe("Apex 26 — elevation & banking tracks", () => {
       window.__apex.camera("chase");
       window.__apex.snapCam();
       const bankedRoll = window.__apex.camState().roll;
+      const rearRolls = ["rear", "reverse"].map((mode) => {
+        window.__apex.camera(mode);
+        window.__apex.snapCam();
+        return window.__apex.camState().roll;
+      });
       window.__apex.orbit(bankFrac, 45, 18, 45);
       const debugRoll = window.__apex.camState().roll;
       window.__apex.camera("chase");
       window.__apex.jump(0.60, 30, 0);
       window.__apex.snapCam();
       const flatRoll = window.__apex.camState().roll;
-      return { trackRoll, bankedRoll, debugRoll, flatRoll };
+      return { trackRoll, bankedRoll, rearRolls, debugRoll, flatRoll };
     });
 
     expect(Math.abs(result.bankedRoll) * 180 / Math.PI).toBeGreaterThan(13);
     expect(Math.abs(result.bankedRoll) * 180 / Math.PI).toBeLessThan(14);
     expect(result.bankedRoll).toBeCloseTo(-result.trackRoll, 4);
+    for (const roll of result.rearRolls) expect(roll).toBeCloseTo(result.trackRoll, 4);
     expect(result.debugRoll).toBe(0);
     expect(Math.abs(result.flatRoll) * 180 / Math.PI).toBeLessThan(1);
   });

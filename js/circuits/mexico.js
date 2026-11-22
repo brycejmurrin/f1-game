@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mexico",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.6 m off centreline; = trace vertex 0.
     // 0.6350 also measures straight (mean |k| 0.00211 over 120 m) but
@@ -59,25 +60,13 @@
       { frac: 0.6928, angleDeg: 6.0, widthM: 120 },   // T11
       { frac: 0.7311, angleDeg: 5.0, widthM: 140 },   // T11-T12 link
     ],
-    // Source-coordinate undulations. Hermanos Rodríguez sits on a drained lakebed
-    // and is gentle, but not flat: it climbs through the esses, crests before the
-    // stadium and drops through Foro Sol.
-    // Authored in SOURCE space, so no pair can remap across start/finish and
-    // invent a hill.
-    //
-    // MEASURED off the built spline, 240 samples: 6.64 m end to end, peaking at
-    // 2.83 % grade on the flank of the s = 0.245 rise, with 6 samples over 2 %.
-    // This said "under 2 % anywhere" — a figure nobody computed, which
-    // tests/specs/terrain-over-road.spec.js then pinned verbatim in `f9bbf479` and
-    // sat red on. The geometry is unchanged and correct; only the claim was
-    // wrong. Re-measure if these three rows change, rather than adjusting the
-    // sentence to taste.
-    // Racing-lap ARC fractions (no sceneryStartFrac, so no fmap): old source
-    // s 0.855/0.245/0.520 -> (s - 0.635) + 0.72364.
+    // Formula 1 reports 2.8 m of lap elevation change on the modern layout:
+    // https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc
+    // Scale the existing undulations together. Their locations are approximations.
     elevations: [
-      { s: 0.94364, halfM: 420, rise: 5.0 },
-      { s: 0.33364, halfM: 380, rise: 3.0 },
-      { s: 0.60864, halfM: 280, rise: -1.6 },
+      { s: 0.94364, halfM: 420, rise: 2.12 },
+      { s: 0.33364, halfM: 380, rise: 1.27 },
+      { s: 0.60864, halfM: 280, rise: -0.68 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

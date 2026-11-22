@@ -281,7 +281,6 @@ function measure(Tracks, id) {
     const dress = def._sceneryShift || 0;
     const mirror = def.reverse && def.sceneryLapMirror ? -1 : 1;
     const nearestTurn = (f) => { let b = -1, bd = 1; turns.forEach((t, i) => { const d = lapGap(t, f); if (d < bd) { bd = d; b = i; } }); return { t: b + 1, m: bd * L }; };
-    const lift = track.bankP && track.bankP.lift;
     zones.forEach((z, i) => {
       const text = zoneLines[i] || "";
       const comment = (text.split("//")[1] || "").trim();
@@ -293,15 +292,25 @@ function measure(Tracks, id) {
         centre = wrap01((z.frac || 0) * mirror + dress);
         claim = cornersIn(comment, def, names);
       }
-      // where the BUILT lift actually peaks within the zone's half-width
+      // A turn-anchored zone has no dependency on the other zones. Build its
+      // contribution in isolation: a stronger bank nearby can otherwise win
+      // the search through the combined profile (both Pouhon apexes reported
+      // at Fagnes). Frac anchors share the engine's nearest-unclaimed-apex
+      // re-seating pass, so those must be measured on the complete profile.
+      const turnAnchor = Number.isFinite(z.turn);
+      const bankTrack = turnAnchor
+        ? Tracks.buildCenterline({ ...def, bankZones: [z] }, { line: false })
+        : track;
+      const lift = bankTrack.bankP && bankTrack.bankP.lift;
       let at = centre;
       if (lift) {
         const half = Math.round(((z.widthM || 120) / 2) / (L / n));
         const k0 = Math.round(centre * n);
         // Nearest first, so a tie between this zone and an equal neighbour's
         // peak (Mexico T8/T9: both 3.0 deg, 87 m apart) resolves to this zone.
+        const radius = turnAnchor ? Math.ceil(n / 2) : half * 3;
         let best = -1;
-        for (let a = 0; a <= half * 3; a++) for (const j of a ? [a, -a] : [0]) { const k = ((k0 + j) % n + n) % n; if (lift[k] > best) { best = lift[k]; at = k / n; } }
+        for (let a = 0; a <= radius; a++) for (const j of a ? [a, -a] : [0]) { const k = ((k0 + j) % n + n) % n; if (lift[k] > best) { best = lift[k]; at = k / n; } }
       }
       const near = nearestTurn(at);
       let m, bad, detail;

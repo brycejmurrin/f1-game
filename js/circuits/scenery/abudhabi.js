@@ -275,15 +275,11 @@
       // Floodlights ringing the pit straight on the grandstand side (the pits
       // are +1). Shared floodMast: it REGISTERS its lens, so these light the
       // straight at night instead of standing over painted pool discs.
-      for (let i = 0; i < 6; i++) floodMast(R(0.006 + i * 0.012), -1, 20, { h: 36 });
-      // Hairpin floodlights — both sides with pools
+      for (let i = 0; i < 6; i++) floodMast(R(0.006 + i * 0.012), -1, 20, { h: 36, pool: false });
+      // Emit light from the mast heads on both sides of the hairpin.
       for (const side of [-1, 1])
-        for (let i = 0; i < 3; i++) {
-          const tk = R(HP - 0.014 + i * 0.014);
-          tower(tk, side, 18, 4, 34, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-          const pa = anchor(tk, side, 18);
-          addCyl(out, vadd(pa.c, pa.u, 0.1), 9, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
-        }
+        for (let i = 0; i < 3; i++)
+          floodMast(R(HP - 0.014 + i * 0.014), side, 18, { h: 34, pool: false });
 
       grandstandEx(0.42, -1, 9, 80, null, null,
         { livery: "darkSteel", tiers: 1, roof: "truss", endWalls: true });
@@ -310,28 +306,34 @@
       {
         // All content relative to ONE far anchor — re-anchoring closer to the
         // road made child prims fail "emitted footprint rejected".
-        const a0 = anchor(K(0.62), 1, 58);
+        const a0 = anchor(K(0.62), 1, 132);
         if (!onTrack(a0.c[0], a0.c[2], 24)) {
-          const b0 = [a0.r, a0.u, a0.t];
+          // Moor the boats level on the flat waterBand, clear of the shoreline.
+          const span = Math.hypot(a0.t[0], a0.t[2]);
+          const alongDock = [a0.t[0] / span, 0, a0.t[2] / span];
+          const acrossDock = [a0.r[0], 0, a0.r[2]];
+          const up = [0, 1, 0];
+          const waterline = [a0.c[0], pyMin - 0.82, a0.c[2]];
+          const b0 = [acrossDock, up, alongDock];
           modelGroup("abudhabi-marina", {
-            center: vadd(a0.c, a0.u, 4), size: [32, 14, 100], basis: b0,
+            center: vadd(waterline, up, 4), size: [32, 14, 100], basis: b0,
           }, (stage) => {
             for (let i = 0; i < 8; i++) {
               const tOff = (i - 3.5) * 11;
               const rOff = (i % 3) * 6;
-              const hc = vadd(vadd(a0.c, a0.t, tOff), a0.r, rOff);
+              const hc = vadd(vadd(waterline, alongDock, tOff), acrossDock, rOff);
               const big = (i % 5 === 0) ? 1.3 : (i % 2 === 0 ? 1.05 : 0.85);
-              addBox(stage, vadd(hc, a0.u, 1.1 * big), [4.0 * big, 2.0 * big, 10 * big],
+              addBox(stage, vadd(hc, up, 0.8 * big), [4.0 * big, 2.0 * big, 10 * big],
                 [0.94, 0.95, 0.96], b0);
-              seat.cyl(stage, vadd(hc, a0.u, 2.1 * big), 0.16, 10 * big,
+              seat.cyl(stage, vadd(hc, up, 1.8 * big), 0.16, 10 * big,
                 [0.86, 0.88, 0.92], 4, b0);
-              addBox(stage, vadd(hc, a0.u, 0.35), [4.4 * big, 0.3, 10.5 * big],
+              addBox(stage, vadd(hc, up, 0.35), [4.4 * big, 0.3, 10.5 * big],
                 [1.0, 0.85, 0.50], b0);
             }
             for (let i = 0; i < 5; i++) {
-              const p = vadd(a0.c, a0.t, (i - 2) * 16);
+              const p = vadd(waterline, alongDock, (i - 2) * 16);
               addCyl(stage, p, 0.35, 3.0, [0.72, 0.54, 0.28], 6, b0);
-              addBox(stage, vadd(p, a0.u, 3.3), [1.4, 0.7, 1.4], [0.85, 0.22, 0.12], b0);
+              addBox(stage, vadd(p, up, 3.3), [1.4, 0.7, 1.4], [0.85, 0.22, 0.12], b0);
             }
           }, { required: true });
         }

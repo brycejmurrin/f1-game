@@ -111,10 +111,8 @@ test("the five once-dropped fields carry their authored values", () => {
   assert.equal(at("monza").ownPitStraight, true);
   assert.equal(at("spa").ownPitStraight, false, "unset must copy as false, not undefined");
 
-  // Only korea opts out of undulation (`undulate: false`, asserted below), but the hatch must be
-  // reachable: buildCenterline reads `def.undulate !== false` off the BUILT def.
   assert.ok(Object.prototype.hasOwnProperty.call(at("monza"), "undulate"),
-    "undulate must exist on the built def for the opt-out to be takeable");
+    "the explicit procedural ripple setting reaches the built def");
 });
 
 // Catalog hygiene: sceneryTheme is only for NON-DEFAULT themes. build-props
@@ -451,6 +449,17 @@ test("hairpin circuits keep a node radius of at least 4 m and no folded road sur
   assert.deepEqual(bad, [], "add short-spaced path.pts either side of the hairpin (js/circuits/<id>.js)");
 });
 
+test("Silverstone follows the Stowe to Vale descent and measured lap relief", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(entry => entry.id === "silverstone");
+  const track = tracks.buildCenterline(def);
+  const atTurn = number => track.py[Math.round(def.turns[number - 1] * track.n)];
+  const relief = Math.max(...track.py) - Math.min(...track.py);
+  assert.ok(Math.abs(relief - 11.3) < 0.5, `Silverstone relief ${relief} m`);
+  const drop = atTurn(15) - atTurn(16);
+  assert.ok(drop > 4 && drop < 6.5, `Stowe to Vale drop ${drop} m`);
+});
+
 // Spa and Monaco carry hand-authored cosine bumps. They were authored against
 // an older centreline and sat on the wrong corners: Spa crested +84 m BEFORE
 // Eau Rouge and ran Kemmel downhill; Monaco crested before Massenet with
@@ -493,11 +502,12 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
 
   const mc = profile("monaco");
   const crest = mc.ext(0, 1, +1), low = mc.ext(0, 1, -1);
-  // Official F1 numbering since 2026-11-11: Casino T4 (was def T6), the
-  // Nouvelle chicane T10-T11 (old def T12 0.6407 = T11). Same physical
-  // stations; no profile/tolerance change.
   near(crest, mc.T(4), "Monaco high point = Casino");
-  near(low, mc.T(11), "Monaco low point = the harbour chicane");
+  // OpenF1 2024 qualifying, laps 25 (Leclerc) and 23 (Piastri):
+  // the low section continues past the chicane alongside the pool.
+  assert.ok(low.f > mc.T(14) && low.f < mc.T(17), `Monaco harbour low at ${low.f}`);
+  const tunnel = mc.ext(0.51, 0.56, -1);
+  assert.ok(tunnel.y - low.y > 5, "Monaco tunnel deck sits above the harbour low");
   assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);
   assert.ok(mc.grade < 0.18, `Monaco grade ${(mc.grade * 100).toFixed(1)} %`);
 });
