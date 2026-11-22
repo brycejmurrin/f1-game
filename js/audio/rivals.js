@@ -370,15 +370,17 @@ var RivalAudio = (() => {
       if (!player || typeof GameAudio === "undefined" || !GameAudio.fieldContact) return;
       const track = G.track, cars = G.cars;
       if (!track || !cars) return;
+      let top;
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
         if (!c || c === player || c.isPlayer || c.retired) continue;
         const lock = +c.wheelLock || 0;
         const skid = +c.skidIntensity || 0;
         const inten = Math.max(lock, skid > 0.45 ? skid : 0);
+        if (!(inten > 0.35)) continue;
         // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
-        const top = (G.vTop && G.vTop()) || 1;
-        if (!(inten > 0.35) || Math.abs(+c.speed || 0) / top < 0.08) continue;
+        top ??= (G.vTop && G.vTop()) || 1;
+        if (Math.abs(+c.speed || 0) / top < 0.08) continue;
         let wx = c.px, wz = c.pz;
         if (wx == null || wz == null) {
           const w = worldXZ(track, c.s, c.x);

@@ -20,8 +20,8 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const LAP = 1000;
 
-function load() {
-  const sb = { Math, Array, Object, Number, console };
+function load(GameAudio) {
+  const sb = { Math, Array, Object, Number, console, GameAudio };
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
@@ -225,6 +225,28 @@ test("emitFieldSfx is exported and is a no-op without GameAudio.fieldContact", (
   const R = load().create({ track: { total: LAP }, cars: [me, car({ s: 510, wheelLock: 1, speed: 40 })] });
   assert.equal(typeof R.emitFieldSfx, "function");
   assert.doesNotThrow(() => R.emitFieldSfx(me));
+});
+
+test("field squeals sample pace once per skidding field and pick up the next frame's pace", () => {
+  const emitted = [], me = car({});
+  const sliding = car({ px: 1, pz: 2, speed: 10 }), locking = car({ px: 3, pz: 4, speed: 20 });
+  let top = 100, reads = 0;
+  const audio = load({ fieldContact: (...args) => emitted.push(args) }).create({
+    track: { total: LAP }, cars: [me, sliding, locking], vTop() { reads++; return top; },
+  });
+  audio.emitFieldSfx(me);
+  assert.equal(reads, 0);
+  assert.deepEqual(emitted, []);
+  sliding.skidIntensity = 0.6;
+  locking.wheelLock = 0.8;
+  audio.emitFieldSfx(me);
+  assert.equal(reads, 1);
+  assert.deepEqual(emitted, [["squeal", 0.6, 1, 2, 1], ["squeal", 0.8, 3, 4, 2]]);
+  emitted.length = 0;
+  top = 200;
+  audio.emitFieldSfx(me);
+  assert.equal(reads, 2);
+  assert.deepEqual(emitted, [["squeal", 0.8, 3, 4, 2]]);
 });
 
 test("the returned rows are reused, so a caller must read them before the next call", () => {
