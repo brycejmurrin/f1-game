@@ -350,7 +350,10 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   gap: 0; padding: 0 0 calc(var(--gap) * 0.5); border-bottom: 0;
 }
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label { font-size: 0; gap: 0; }
-#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label > input { font-size: var(--fs-3); }
+/* Keep the search text at least 16 painted pixels when the settings sheet scales down. */
+#pm-settings-index [data-settings-search] input {
+  font-size: max(var(--fs-3), calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
+}
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search]:has(input:placeholder-shown) > p { display: none; }
 /* TWO-COLUMN SETTINGS PAGES — BY WIDTH, NOT BY ASPECT (UI contract 2026-11-06
    §4.2, gap 3). This grid used to key on data-shape="wide", which is the
