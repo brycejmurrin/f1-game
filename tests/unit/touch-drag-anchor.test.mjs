@@ -194,6 +194,35 @@ test("follows the touch that is actually steering (last drag wins, a resting pre
   assert.equal(dragEl.style.top, "120px");
 });
 
+test("two thumbs can exchange steering repeatedly while both stay on the canvas (#6062)", () => {
+  const { Input, onCanvas, dragEl } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  const touch = (event, identifier, clientX, clientY) =>
+    onCanvas(event, { changedTouches: [{ identifier, clientX, clientY }] });
+  const steering = (direction, anchor) => {
+    assert.equal(Math.sign(Input.steer()), direction);
+    assert.equal(dragEl.style.left, anchor + "px");
+  };
+
+  touch("touchstart", 1, 250, 200);
+  touch("touchmove", 1, 320, 200);
+  steering(1, 250);
+  touch("touchstart", 2, 550, 200);
+  touch("touchmove", 2, 552, 200);
+  steering(1, 250);
+  touch("touchmove", 2, 480, 200);
+  steering(-1, 550);
+  touch("touchmove", 1, 320, 230); // vertical movement of the first thumb
+  steering(-1, 550);
+  touch("touchmove", 1, 350, 230);
+  steering(1, 250);
+  touch("touchmove", 2, 460, 200);
+  steering(-1, 550);
+  touch("touchend", 2, 460, 200);
+  steering(1, 250);
+});
+
 test("hides while a menu overlay is open", () => {
   const { Input, onCanvas, classOn, sb } = boot();
   Input.setSteerMode("touch");

@@ -1284,25 +1284,13 @@ const Input = (function () {
     return xHat;
   }
 
-  // "Most recent steering touch wins" is the rule, and it needs an explicit
-  // sequence number to be true. The obvious reading — take the last entry of the
-  // Map — is wrong: Map iterates in INSERTION order and `set()` on an existing
-  // key keeps that key where it was. So a finger placed FIRST and then dragged
-  // across the screen could never take the steering from a later finger that had
-  // not moved since. Stamping every start and every move gives the rule its
-  // literal meaning: whichever touch last SAID something is the one steering.
-  //
-  // A touch still resting inside its dead zone counts as steering-zero rather
-  // than as absent, so a second thumb parked on the glass does not silently hand
-  // control back to a finger the player stopped using.
+  // Steering and its indicator follow the same finger: the latest horizontal
+  // drag outside its dead zone, or the first resting touch before any drag.
   function recomputeTouchSteer() {
-    let best = -1;
-    touchActive = touches.size > 0;
-    touchSteer = 0;
-    for (const rec of touches.values()) {
-      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); }
-    }
-    updateDragAnchor();
+    const rec = steeringTouchRec();
+    touchActive = !!rec;
+    touchSteer = rec ? touchCmd(rec) : 0;
+    updateDragAnchor(rec);
   }
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
@@ -1338,9 +1326,8 @@ const Input = (function () {
     const mark = dragMarkEl();
     if (mark) mark.classList.remove("on");
   }
-  function updateDragAnchor() {
+  function updateDragAnchor(rec) {
     if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
-    const rec = steeringTouchRec();
     if (!rec) { hideDragAnchor(); return; }
     const mark = dragMarkEl();
     if (!mark) return;
@@ -1374,8 +1361,8 @@ const Input = (function () {
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
       if (!rec) continue;
+      if (rec.x !== t.clientX && Math.abs(t.clientX - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
       rec.x = t.clientX;
-      if (!rec.seq && Math.abs(rec.x - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
     }
     recomputeTouchSteer();
   }
