@@ -275,6 +275,7 @@
     // a SAMPLEABLE depth texture (NO compareFunction — raw reads for SSAO/
     // SSR/godray reconstruction; the shadow maps keep their own compare ones).
     let W = 1, H = 1;
+    let compositeSizeDirty = true;
     // Track depth independently until the RenderTarget adopts it, so a target
     // constructor throw still releases a partially-created depth texture.
     const sceneDepthTex = ownTexture(new THREE.DepthTexture(1, 1));
@@ -904,6 +905,7 @@
         return;
       }
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
+      compositeSizeDirty = true;
       PW = nPW; PH = nPH;
       pW = nPostW; pH = nPostH;
       // Fixed: LDR physical tracks present. Orient cover: same square as scene.
@@ -1288,8 +1290,12 @@
       // (COMPOSITE_FS in js/render/glx/shaders/glsl-post.js). When bloom is off we
       // bind blackTex, so the 8 dependent fetches accumulated vec3(0).
       // GLX zeroes the uniform rather than paying the taps; same here.
-      const _shaftMul = _gk(GT, "sunShaftMul");
-      C.sunShaft.value = haveBloom ? sunShaft * _shaftMul : 0;
+      const shaftMul = haveBloom ? _gk(GT, "sunShaftMul") : 0;
+      C.sunShaft.value = haveBloom ? sunShaft * shaftMul : 0;
+      if (C.sunShaft.value > 0 && C.bloomAmt.value > 0.001) {
+        C.shaftDecay.value = _gk(GT, "sunShaftDecay");
+        C.shaftSpread.value = Math.sqrt(Math.max(0.05, shaftMul));
+      }
       const grade = o.grade;
       const gs = (grade && grade.shadow) || null, gh = (grade && grade.hi) || null;
       C.gradeShadow.value.set(gs ? gs[0] : 1, gs ? gs[1] : 1, gs ? gs[2] : 1);
@@ -1332,10 +1338,6 @@
       C.acesD.value = _gk(GT, "acesD");
       C.acesE.value = _gk(GT, "acesE");
       C.speedBlur.value = o.speedBlur != null ? o.speedBlur : 0.0;
-      C.shaftDecay.value = _gk(GT, "sunShaftDecay");
-      // Reach scales with SCREEN SUN-SHAFT, sub-linearly so the shipped
-      // value (1) keeps the shipped radius (js/render/glx/post.js).
-      C.shaftSpread.value = Math.sqrt(Math.max(0.05, _shaftMul));
       C.flareStreak.value = _gk(GT, "flareStreak");
       C.flareStreak2.value = _gk(GT, "flareStreak2");
       // EXHAUST HEAT HAZE plume anchor (opts.haze = {u, v, str} | null).
@@ -1351,14 +1353,15 @@
       C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
       C.ssrQuality.value = o.ssrQuality >= 2 ? 2 : o.ssrQuality >= 1 ? 1 : 0;
       C.lensDirt.value = dirtTex ? _gk(GT, "lensDirt") : 0;
-      // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
-      // SSR samples the full-res scene, so the UV quantum stays 1/W even when
-      // the LDR composite runs at a reduced phone post size pW.
-      C.reflTexel.value.set(1 / W, 1 / H);
-      if (C.vigAspect) {   // tsl-post.js: the vignette's aspect and corner norm, per frame not per pixel
-        const va = W > 0 && H > 0 ? W / H : 1;
-        C.vigAspect.value = va;
-        C.vigNorm.value = 0.70710678 / Math.hypot(va * 0.5, 0.5);
+      // Reflection and vignette sample the full scene size, including under fixed physical targets.
+      if (compositeSizeDirty) {
+        C.reflTexel.value.set(1 / W, 1 / H);
+        if (C.vigAspect) {
+          const va = W / H;
+          C.vigAspect.value = va;
+          C.vigNorm.value = 0.70710678 / Math.hypot(va * 0.5, 0.5);
+        }
+        compositeSizeDirty = false;
       }
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
