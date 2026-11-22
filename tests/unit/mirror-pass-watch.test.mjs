@@ -49,6 +49,19 @@ test("the PiP: AUTO skips a software renderer and ON draws it; no subject, no Pi
   assert.ok(rect[1] && rect[2] === undefined, "the mirror's composite: the default (flipped) path");
 });
 
+test("rear-view road refinement is requested only by the rear camera, including after leaving a broadcast", () => {
+  const h = boot({ mode: "on", bc: true, pipMode: "on" }), rear = [];
+  const begin = h.gfx.mirrorBegin;
+  h.gfx.mirrorBegin = (...args) => { rear.push(args[3]); return begin(...args); };
+  const sub = { s: 400, team: "s", code: "HAM" };
+  h.G.cars.push(sub);
+  h.mp.setSubject(sub, "chase");
+  h.render();
+  h.classes.delete("bc-on");
+  h.render();
+  assert.deepEqual(rear, [false, true]);
+});
+
 test("a phone's governor cannot make the mirror flash: the target ignores render scale, a rung holds ~1.5 s", () => {
   const h = boot({ mode: "on", tier: 2 });
   h.render();

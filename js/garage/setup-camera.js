@@ -1128,7 +1128,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const arrivalHeld = () => typeof exteriorSettled === "function" && !!(arrival.state && arrival.state.active) && !exteriorSettled();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt, arrivalHeld());
   if (handoff && !driveOut && !preview && !home.active && !(arriving && arriving.active)) fireHandoff();   // the show ended or was skipped
-  const context = garageCtx(), sceneTime = context.sceneNow;
+  const context = garageCtx();
+  const photoSample = typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling;
+  if (photoSample) context.sceneNow = photoSample.garageTime ??= context.sceneNow;
+  const sceneTime = context.sceneNow;
   context.showLaneBays = !!(arriving && arriving.active);
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
@@ -1285,6 +1288,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   M4.lookAtTo(_spView, eye, _spAim, _spUp);
   M4.mulTo(_spVP, _spProj, _spView);
   GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(lens && lens.centre) && !(arriving && arriving.active), _spHull);
+  if (photoSample) {
+    photoSample.project(_spProj, _spView, gfx.width, gfx.height);
+    M4.mulTo(_spVP, _spProj, _spView);
+  }
   M4.invertTo(_spInvProj, _spProj);
   const outside = context.realExterior ? exteriorLighting() : null;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell

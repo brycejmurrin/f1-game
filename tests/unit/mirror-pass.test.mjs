@@ -503,3 +503,12 @@ test("GLX mirror target caps TEXTURE_MAX_LEVEL at the last level generateMipmap 
   h.GLX.mirrorEnd();
   assert.deepEqual(span(90, 40), want(90, 40, 6), "90x40: levels 0..6");
 });
+
+test("a temporary benchmark mirror override leaves the player's preference intact", () => {
+  const h = boot({ mode: "on", cam: "helmet" });
+  h.mp.setMode("on");
+  h.mp.setMode("off", { persist: false });
+  h.render();
+  assert.equal(h.mp.drawing(), false);
+  assert.equal(h.stored.hudMirror, "on");
+});

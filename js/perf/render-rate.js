@@ -8,7 +8,7 @@
    handling is identical at any refresh rate); only render() and the HUD pass are skipped,
    and the skipped frame's dt and ms are carried into the next drawn one so the camera
    damping and HUD smoothing see the real elapsed time.
-   Device class only: desktop 144 Hz monitors keep every frame, and an immersive XR
+   Desktop follows display refresh by default. An optional desktop race target caps draws at 60 or 120 FPS. An immersive XR
    session (its own rAF, its own rate) is never gated. apex26.renderRate = "off" never
    skips, "half" forces it on any device (the test and A/B handle), unset/"auto" = phones.
    "45" / "30" are the opt-in render-rate TIER (#2652): while racing, draw 3-of-4 or every 2nd
@@ -33,6 +33,7 @@ const RenderRate = (function () {
   const MAX_GAP_S = 1 / 20;  // render()'s own dt clamp: one drawn frame never carries more
   const SETTINGS_HZ = 20;    // paused SETTINGS sheet cadence (#5049)
   let mode = "auto";         // one of MODES
+  let desktopTarget = "display", targetBudgetMs = 0;
   let credit = 0, live = 0;  // tier: banked draw credit, consecutive racing frames seen
   let mobile = false;
   let ema = 16.7;
@@ -55,16 +56,27 @@ const RenderRate = (function () {
     let v = "";
     try { v = localStorage.getItem(KEY) || ""; } catch (_) { /* no storage: auto */ }
     mode = MODES.indexOf(v) >= 0 ? v : "auto";
+    desktopTarget = "display"; targetBudgetMs = 0;
+    if (!mobile) {
+      try { setDesktopTarget(localStorage.getItem("apex26.desktopFpsTarget")); } catch (_) { /* use display refresh */ }
+    }
     credit = 0; live = 0; sCredit = 1;
     ema = 16.7; fast = 0; half = false; phase = 0; accDt = 0; accMs = 0; skipped = 0; drawn = 0; last = true;
   }
 
-  const tierRate = () => mode === "45" ? 45 : mode === "30" ? 30 : 0;
+  function setDesktopTarget(value) {
+    if (mobile || !["display", "60", "120"].includes(value)) return false;
+    desktopTarget = value; credit = 0; live = 0; targetBudgetMs = 0;
+    return true;
+  }
+
+  const desktopRate = () => !mobile && mode === "auto" && desktopTarget !== "display" ? Number(desktopTarget) : 0;
+  const tierRate = () => mode === "45" ? 45 : mode === "30" ? 30 : desktopRate();
 
   /** Set the mode at run time (the __apex.renderRate hook). Persisting is the caller's. */
   function setMode(v) {
     if (MODES.indexOf(v) < 0) return false;
-    mode = v; credit = 0; live = 0; phase = 0; accDt = 0; accMs = 0;
+    mode = v; targetBudgetMs = 0; credit = 0; live = 0; phase = 0; accDt = 0; accMs = 0;
     return true;
   }
 
@@ -89,12 +101,13 @@ const RenderRate = (function () {
     return true;
   }
   /** A live preview must draw now: flush skipped time and mark this rAF as drawn. */
-  function force(dt, ms) { sCredit = 1; return (last = draw(dt, ms)); }
+  function force(dt, ms) { targetBudgetMs = 0; sCredit = 1; return (last = draw(dt, ms)); }
 
   /** Paused SETTINGS over the frozen race (#5049): only the sky moves, so draw at SETTINGS_HZ on the
    *  wall clock (js/ui/home-world.js's credit idiom), carrying the skipped dt into the drawn frame.
    *  The first frame after any other draw path draws at once; "off" and an XR session never skip. */
   function settle(dt, ms, presenting) {
+    targetBudgetMs = 0;
     if (presenting || mode === "off" || !(ms > 0) || ms > MAX_SANE_MS) { sCredit = 1; return (last = draw(Number.isFinite(dt) && dt > 0 ? dt : 0, ms > 0 && ms <= MAX_SANE_MS ? ms : 16.7)); }
     sCredit = Math.min(1, sCredit + ms / 1000 * SETTINGS_HZ);
     if (sCredit < 1 - 1e-6) { accDt += dt; accMs += ms; skipped++; return (last = false); }
@@ -110,6 +123,8 @@ const RenderRate = (function () {
     // frame. Banking it paid the whole gap into the HUD. dt is the caller's
     // already-clamped step (game.js caps it at 1/4 s, then render clamps again:
     // 100 ms in the garage, 50 ms on the world). Sane frames fall through.
+    const desktop = !presenting && racing ? desktopRate() : 0;
+    targetBudgetMs = desktop ? 1000 / desktop : 0;
     if (!(ms > 0) || ms > MAX_SANE_MS) {
       accDt = 0; accMs = 0; credit = 0;
       const step = Number.isFinite(dt) && dt > 0 ? dt : 0;
@@ -119,7 +134,7 @@ const RenderRate = (function () {
     if (rate && !presenting) {
       if (!racing) { live = 0; credit = 0; } else {
         accDt += dt; accMs += ms;
-        let draw = live++ < WARM_FRAMES;
+        let draw = live++ < (desktop ? 1 : WARM_FRAMES);
         if (!draw) { credit = Math.min(2, credit + dt * rate); draw = credit >= 1 - 1e-6; if (draw) credit -= 1; }
         if (draw) { outDt = Math.min(accDt, MAX_GAP_S); outMs = accMs; accDt = 0; accMs = 0; drawn++; return true; }
         skipped++; return false;
@@ -135,9 +150,11 @@ const RenderRate = (function () {
   }
 
   return {
-    init, observe, gate, force, settle, setMode,
+    init, observe, gate, force, settle, setMode, setDesktopTarget,
+    desktopTarget: () => desktopTarget, targetBudgetMs: () => targetBudgetMs,
     dt: () => outDt,
     drew: () => last,
+    drawCount: () => drawn,
     ms: () => outMs,
     active,
     state: () => ({ mode, tier: tierRate() || 60, mobile, half, active: active(), emaMs: +ema.toFixed(2), skipped, drawn }),
