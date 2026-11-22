@@ -1,6 +1,7 @@
 /* Solo post-finish shortcut. Use the pause menu’s handler for settlement. */
-var RetiredCard = RetiredCard || (function () {
+var RetiredCard = (function () {
   "use strict";
+  if (RetiredCard) return RetiredCard; // HUD preview and race entry share the same card.
   const STALE_MS = 400;   // no tick for this long: not in a running race any more
   let shown = false, previewing = false, lastTick = 0, watch = 0, title = null;
 

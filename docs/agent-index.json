@@ -4328,7 +4328,7 @@
     },
     {
       "path": "js/race/retired-card.js",
-      "global": null,
+      "global": "RetiredCard",
       "roster": "LAZY_RACE_SESSION"
     },
     {

@@ -411,7 +411,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 | `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
-| `retired-card.js` | `—` | LAZY_RACE_SESSION | Solo post-finish shortcut. |
+| `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | Solo post-finish shortcut. |
 | `driving-coach.js` | `DrivingCoachBody` | LAZY_RACE_SESSION | Read-only driving feedback and explicitly unscored solo practice: the BODY (DrivingCoachBody, LAZY_RACE_SESSION, #4748). |
 | `tv-graphics.js` | `TvGraphics` | LAZY_REAL_RACE | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
