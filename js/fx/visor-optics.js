@@ -297,20 +297,7 @@ const VisorOptics = (function () {
     return out;
   }
 
-  // ---------- scene reader (window.__apex, read-only) ----------
-
-  let _knobs = { bloom: 1, glare: 0.12 }, _knobsAt = -1e9;
-  function readKnobs(now) {
-    if (now - _knobsAt < 2000) return _knobs;
-    _knobsAt = now;
-    try {
-      const A = typeof window !== "undefined" ? window.__apex : null;
-      const t = A && typeof A.lightTune === "function" ? A.lightTune() : null;
-      const b = t ? +t.bloomMul : NaN, gl = t ? +t.glareStr : NaN;
-      _knobs = { bloom: Number.isFinite(b) ? b : 1, glare: Number.isFinite(gl) ? gl : 0.12 };
-    } catch (_) { /* no tuner: shipped defaults */ }
-    return _knobs;
-  }
+  // ---------- scene reader ----------
 
   // The scene comes from game.js's G façade, handed in by bind(G) at boot — NOT only through window.__apex: the
   // agent surface is LAZY_AGENT, absent on a player's Pages build, and gating on it left the visor glint unpainted
@@ -751,10 +738,11 @@ const VisorOptics = (function () {
     if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
     const fringe = FRINGE[refraction] || 0;
     const beams = budget.beams ? _beams() : 0;
-    const kn = readKnobs(t0 || 0);
+    const tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams, glintLimit: budget.glints });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null,
+        bloom: Number.isFinite(tune?.bloomMul) ? tune.bloomMul : 1, glare: Number.isFinite(tune?.glareStr) ? tune.glareStr : 0.12, beams, glintLimit: budget.glints });
       // With the sun behind the driver and no visible lamps, only the sky gradient remains.
       // Its pixels depend on sky brightness and viewport size, even as the helmet moves.
       const hazeOnly = !m.sun && !m.rim && !m.glints.length && m.fringe <= 0.004;

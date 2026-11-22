@@ -359,9 +359,27 @@ test("visor tick: a Pages build WITHOUT the dev API (__apex null) still paints t
   assert.equal(calls.inserted.hidden, false, "the light layer shows once a scene painted");
 });
 
+test("visor paints the live bloom value without the developer API", () => {
+  const { V, ctx, calls } = load({ beams: 0 });
+  const tune = ctx.LightTune = { LT: { bloomMul: 0, glareStr: 0.12 } };
+  V.bind({ camEye: NIGHT.eye, camTgt: NIGHT.tgt, camFov: NIGHT.fov, _lastFloodEmit: 1,
+    frame: { ...NIGHT, lights: lamp(0, -30), tailStart: 1 } });
+  const gradients = () => {
+    const before = calls.gradients;
+    V.tick(1 / 15, true, 55, false);
+    assert.equal(V.stats().glints, 1);
+    return calls.gradients - before;
+  };
+  const zero = gradients();
+  tune.LT.bloomMul = 1;
+  assert.equal(gradients(), zero + 1, "one bloom halo for the visible lamp");
+  tune.LT.bloomMul = 0;
+  assert.equal(gradients(), zero, "turning bloom off takes effect on the next paint");
+});
+
 test("visor tick: a bad knob or a throwing canvas never reaches the render loop", () => {
-  const apex = { visorScene: () => DAY, lightTune: () => ({ bloomMul: "nope", glareStr: null }) };
-  const { V } = load({ apex });
+  const { V, ctx } = load({ apex: { visorScene: () => DAY } });
+  ctx.LightTune = { LT: { bloomMul: "nope", glareStr: null } };
   V.tick(1 / 60, true, 0, false);
   assert.ok(V.stats().paints === 1 && V.stats().errors === 0, "a non-numeric knob falls back to the shipped default");
   const boom = load({ apex: { visorScene: () => ({ ...DAY, sunColor: [NaN, NaN, NaN] }) } });
