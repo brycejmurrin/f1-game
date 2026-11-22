@@ -134,7 +134,7 @@ function create(G, deps) {
       }
     }
   }
-  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
+  const st = { open: false, source: "race", aspect: "wide", highRes: false, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0, releaseCar = null, downloading = false;
   const mk = (tag, props, kids) => {
@@ -411,6 +411,12 @@ function create(G, deps) {
         select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
       group("photo", "YOUR PHOTO", [
+        select("Capture resolution", [["normal", "Standard"], ["4k", "Up to 4K"]], () => st.highRes ? "4k" : "normal",
+          v => {
+            if (st.busy) return;
+            st.highRes = v === "4k";
+            if (last) say("Press Capture again to use the new resolution.");
+          }, "ps-resolution"),
         mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
         mk("div", { className: "balanced-row" }, [button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
         mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("") ? "Menu background cleared." : "Background could not be cleared."))]),
@@ -589,7 +595,7 @@ function create(G, deps) {
     // display:none, so setPaused → syncRotateBlocker would miss the portrait
     // gate and leave the pause card up (photo-studio.spec.js race close).
     const target = focus, generation = st.generation;
-    // Release the composed canvas (up to 2048 px, ~17 MB RGBA) and its preview data URL; open() rebuilds both.
+    // Release the composed canvas and its preview data URL; open() rebuilds both.
     last = null; raw = null; capturedOptions = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
     // ...and the library rows: each held a thumbnail data URL and a DOWNLOAD closure over its photo blob. open() repaints them.
     if (E["ps-library"]) E["ps-library"].replaceChildren();
@@ -659,14 +665,16 @@ function create(G, deps) {
     }
     return canvas;
   }
-  function options() { return { aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
+  function options() { return { maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
   function recompose() {
     if (!raw || !capturedOptions) return;
     last = compose(raw, { ...capturedOptions, aspect: st.aspect, postcard: st.postcard });
     E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
   }
   function keepSource(source, opts) {
-    const scale = Math.min(1, 2048 / source.width, 2048 / source.height), copy = mk("canvas");
+    const scale = Math.min(1, opts.maxEdge / source.width, opts.maxEdge / source.height);
+    if (scale === 1 && source.tagName === "CANVAS") { raw = source; capturedOptions = opts; return; }
+    const copy = mk("canvas");
     copy.width = Math.max(1, Math.round(source.width * scale)); copy.height = Math.max(1, Math.round(source.height * scale));
     copy.getContext("2d").drawImage(source, 0, 0, copy.width, copy.height); raw = copy; capturedOptions = opts;
   }
@@ -679,7 +687,7 @@ function create(G, deps) {
     box.appendChild(button("DISMISS TIPS", () => { box.hidden = true; })); return box;
   }
   function compose(source, opts = options()) {
-    const box = crop(source.width, source.height, opts.aspect), scale = Math.min(1, 2048 / box.width, 2048 / box.height), out = mk("canvas");
+    const box = crop(source.width, source.height, opts.aspect), scale = Math.min(1, opts.maxEdge / box.width, opts.maxEdge / box.height), out = mk("canvas");
     out.width = Math.round(box.width * scale); out.height = Math.round(box.height * scale);
     const ctx = out.getContext("2d"); if (!ctx) throw new Error("Image composition is unavailable");
     ctx.drawImage(source, box.x, box.y, box.width, box.height, 0, 0, out.width, out.height);
@@ -702,25 +710,34 @@ function create(G, deps) {
   // #3656: the live view may run below native resolution (the governor, a
   // phone's title scene), and the photo copied that backing store: 217 x 122 px
   // on an iPhone 14. The shot renders at renderScale 1 (the native backing
-  // size, still under the backend's DPR cap and texture limit; keepSource and
-  // compose bound it at 2048 px), then the live scale comes back unchanged.
-  async function fullRes(run) {
+  // size). The optional 4K draw requests a larger backing size for this shot.
+  async function fullRes(run, highRes) {
     const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
-    const raised = prev < 1 && !!gfx.setRenderScale(1);
-    if (!raised) return run();
+    let size = null;
+    if (highRes) {
+      if (!gfx?.setPhotoCaptureSize || !(gfx.width > 0 && gfx.height > 0)) throw new Error("High-resolution capture is unavailable");
+      const factor = Math.min(3840 / Math.max(gfx.width, gfx.height), Math.sqrt(8294400 / (gfx.width * gfx.height)));
+      size = { width: Math.max(1, Math.round(gfx.width * factor)), height: Math.max(1, Math.round(gfx.height * factor)) };
+    }
+    if (!size && prev >= 1) return run();
     const release = () => {
       if (releaseCaptureScale !== release) return;
       releaseCaptureScale = null;
-      if (gfx.getRenderScale() === 1) gfx.setRenderScale(prev);
+      try { if (size) gfx.setPhotoCaptureSize(null); }
+      finally { if (prev !== 1 && gfx.getRenderScale() === 1) gfx.setRenderScale(prev); }
     };
     releaseCaptureScale = release;
-    try { return await run(); } finally { release(); }
+    try {
+      if (prev !== 1) gfx.setRenderScale(1);
+      if (size) gfx.setPhotoCaptureSize(size);
+      return await run();
+    } finally { release(); }
   }
   async function capture() {
     if (!st.open || st.busy) return false;
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
-      const source = await fullRes(frame); if (gen !== st.generation) return false;
+      const source = await fullRes(frame, st.highRes); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }
@@ -754,15 +771,12 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("Save failed: " + text(e.message)); }
     finally { if (gen === st.generation) busy(false); }
   }
-  function sceneIsPhoto() {
-    return typeof GameStore !== "undefined" && GameStore.store
-      ? GameStore.store.get("homeScene", "static") === "photo" : false;
+  function chooseBackground(image) {
+    if (!setBackground(image)) { say("Background could not be saved. Device storage may be full."); return; }
+    const result = AppearanceStudio.setScene("photo");
+    say(result?.durable === false ? "Menu background selected for this visit." : "Personal photo set as menu background.");
   }
-  function useBackground() {
-    if (!last) return;
-    if (!sceneIsPhoto()) { say("Set Appearance Scene to My photo first."); return; }
-    say(setBackground(thumbnail(last)) ? "Personal photo set as menu background." : "Device storage is full. Download the photo to keep it.");
-  }
+  function useBackground() { if (last) chooseBackground(thumbnail(last)); }
   async function paintLibrary() {
     const gen = st.generation, paint = ++libraryPaint;
     let photos; try { photos = await library("list", null, session); } catch (_) { photos = []; }
@@ -776,15 +790,8 @@ function create(G, deps) {
   function paintPhotos(box, photos) {
     photos = photos.concat(session).sort(newestPhotoFirst).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
-    const bgOk = sceneIsPhoto();
     for (const p of photos) {
-      const bg = button("MENU BACKGROUND", () => {
-        if (!sceneIsPhoto()) { say("Set Appearance Scene to My photo first."); return; }
-        say(setBackground(p.thumb) ? "Personal menu background selected." : "Device storage is unavailable.");
-      });
-      bg.classList.add("ps-use-bg");
-      bg.disabled = !bgOk;
-      if (!bgOk) bg.setAttribute("aria-disabled", "true");
+      const bg = button("MENU BACKGROUND", () => chooseBackground(p.thumb));
       const row = mk("div", { className: "pane" }, [mk("img", { src: p.thumb, alt: p.title || "Saved photo" }), mk("span", { textContent: p.title || "Photo" }),
         button("DOWNLOAD", async () => {
           if (downloading) return;

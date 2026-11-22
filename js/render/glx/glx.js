@@ -1056,6 +1056,7 @@ const GLXBackend = (function () {
     const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
     presentH = Math.max(1, Math.round(css.height * dpr));
+    if (cssSizeCache?.photoSize) { presentW = cssSizeCache.photoSize.width; presentH = cssSizeCache.photoSize.height; }
     // CLAMP UNIFORMLY to the driver's ceiling (maxDim, queried in init): one
     // factor for both axes keeps `aspect`, and every projection built on it,
     // correct — just smaller. It sits BEFORE rw/rh on purpose: post.js
@@ -2875,6 +2876,7 @@ const GLXBackend = (function () {
     lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx, armed: SHD.lampArmed }),
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
+    setPhotoCaptureSize(size) { cssSizeCache.photoSize = size; resize(); },
     setRenderScale, getRenderScale, setDprBoost, getDprBoost,
     setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's

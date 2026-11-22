@@ -35,7 +35,6 @@ const WHEN = {
   "touch-dock": (h, on) => { h.mode.touch = on; },
   "panel-contrast": (h, on) => { h.d.documentElement.setAttribute("data-ui-contrast", on ? "normal" : "high"); },
   "turnchase-cam": (h, on) => { h.mode.cam = on ? "cockpit" : "chase"; },
-  "photo-scene": (h, on) => { h.mode.scene = on ? "photo" : "garage"; },
 };
 
 function boot(extra = {}) {

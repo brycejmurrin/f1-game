@@ -60,6 +60,7 @@ function boot(options = {}) {
     Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    AppearanceStudio: { setScene(mode) { scene.value = mode; return { durable: true }; } },
     NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
@@ -505,27 +506,47 @@ test("the menu background goes through GameStore's raw lane and reads back the s
   assert.equal(b.storage.has("apex26.photoBackground"), false);
 });
 
-// #2848: USE AS MENU BACKGROUND / library tiles stay inert unless Appearance Scene is My photo.
-test("menu background stays inert unless Appearance Scene is My photo", async () => {
-  const b = boot({ homeScene: "garage", storageFull: true });
-  b.api.open({ source: "garage" });
-  await b.api.capture();
-  await b.api.savePhoto();
-  b.dom.byId("ps-background").click();
-  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
-  const bg = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
-  assert.ok(bg, "library MENU BACKGROUND carries .ps-use-bg for SettingDeps");
-  assert.equal(bg.disabled, true);
-  bg.click();
-  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
-  b.scene.value = "photo";
-  b.api.close(false);
-  b.api.open({ source: "garage" });
-  await turn();
-  const live = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
-  assert.ok(live, "saved visit photo still listed after reopen");
-  assert.equal(live.disabled, false);
+test("a captured or saved photo selects its own Home scene after the image is stored", async () => {
+  for (const full of [false, true]) {
+    const b = boot({homeScene: "garage", storageFull: full});
+    b.api.open({source: "garage"}); await b.api.capture();
+    b.dom.byId("ps-background").click();
+    assert.equal(b.scene.value, full ? "garage" : "photo");
+    assert.equal(!!b.PS.background(), !full);
+    b.scene.value = "garage";
+    await b.api.savePhoto();
+    const bg = b.dom.byId("ps-library").children[0].children.find(el => el.textContent === "MENU BACKGROUND");
+    bg.click();
+    assert.equal(b.scene.value, full ? "garage" : "photo");
+  }
 });
+
+test("4K capture requests real render pixels and releases the override before PNG export", async () => {
+  const b = boot(), sizes = [];
+  Object.assign(b.G.gfx, {width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
+    capturePixels() { const size = sizes.at(-1); return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) }; }});
+  b.api.open({source: "garage"});
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, {type:"change"});
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [3840,2160,null]);
+  assert.deepEqual([b.api.state().width,b.api.state().height], [3840,2160]);
+  await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
+});
+
+test("closing an unfinished 4K capture releases its backing size once", async () => {
+  const b = boot(), sizes = [];
+  let finish;
+  Object.assign(b.G.gfx, { width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
+    capturePixels() { return new Promise(resolve => { finish = resolve; }); } });
+  b.api.open();
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, { type: "change" });
+  const pending = b.api.capture();
+  b.api.close(false);
+  assert.equal(sizes.at(-1), null);
+  finish({ width: 1, height: 1, data: new Uint8ClampedArray(4) });
+  assert.equal(await pending, false); assert.equal(sizes.length, 2);
+});
+
 test("failed PNG encoding reports a recoverable error instead of creating a bogus download", async () => {
   const b = boot({ nullBlob: true }); b.api.open(); await b.api.capture(); await b.api.exportPhoto();
   assert.equal(b.downloads.length, 0); assert.match(b.dom.byId("ps-message").textContent, /could not be encoded/);

@@ -4969,6 +4969,7 @@ const TLX = (function () {
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         presentW = Math.max(1, Math.round(cw * dpr));
         presentH = Math.max(1, Math.round(ch * dpr));
+        if (cssSizeCache?.photoSize) { presentW = cssSizeCache.photoSize.width; presentH = cssSizeCache.photoSize.height; }
         // Clamp to the WebGPU device's texture ceiling, exactly as WGX resize()
         // does: requestDevice() asks for no requiredLimits, so
         // maxTextureDimension2D is the WebGPU DEFAULT 8192, and with dpr capped
@@ -5436,6 +5437,7 @@ const TLX = (function () {
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
           renderScale = v; resizeNow(); return true;
         },
+        setPhotoCaptureSize(size) { cssSizeCache.photoSize = size; resizeNow(); },
         getRenderScale() { return renderScale; },
         maxRenderScale() { return _ssCeil(); },
         mirrorMax: _mirHi ? [_mirCapW, _mirCapH] : null,   // mirrorHi: mirror-pass.js targetSize's cap (GLX/WGX: none, 1024x512)   // superSample / ss2x ceiling (1 everywhere else): the governor's climb
