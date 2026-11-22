@@ -16,8 +16,10 @@ body[data-helmet-cam][data-visor-port] #hud::before {
   box-shadow: none;
 }
 
-/* The TINTED lens colour: one of css/tokens.css's --visor-* tokens, picked by the stored choice; VisorOptics reads
-   the resolved --visor-lens when it builds the port image. */
+/* The TINTED lens colour: neutral/amber/ice/rose live in css/tokens.css; the
+   newer hues here in this deferred sheet. VisorOptics reads --visor-lens when
+   it builds the port image. */
+:root { --visor-green: #244c38; --visor-violet: #493658; --visor-copper: #643b29; }
 body[data-helmet-cam] { --visor-lens: var(--visor-neutral); }
 body[data-helmet-visor-color="amber"] { --visor-lens: var(--visor-amber); }
 body[data-helmet-visor-color="ice"] { --visor-lens: var(--visor-ice); }
