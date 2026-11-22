@@ -28,6 +28,7 @@ let raceSessionLoad = null;
 // (PitLane) called a group whose later file failed complete: the retry saw the
 // real PitLane, loaded nothing, and the race ran on stub engineer / radio.
 const RACE_SESSION_READY = {
+  "js/input/touch-button-actions.js": () => typeof TouchButtonActions !== "undefined",
   "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
   "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,

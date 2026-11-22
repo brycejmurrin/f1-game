@@ -10068,9 +10068,6 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/touch-button-settings.test.mjs"
       ],
-      "bindControl": [
-        "tests/unit/touch-button-settings.test.mjs"
-      ],
       "buildOnHold": [
         "tests/unit/touch-button-settings.test.mjs"
       ],
@@ -10079,6 +10076,9 @@
       ],
       "buttonProfile": [
         "tests/unit/settings-export.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "contactProfile": [
         "tests/unit/touch-button-settings.test.mjs"
       ],
       "ease": [
@@ -10317,6 +10317,14 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
+      ]
+    },
+    "js/input/touch-button-actions.js": {
+      "bindControl": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/phone-pad.test.mjs"
       ]
     },
     "js/lighting/atmosphere.js": {

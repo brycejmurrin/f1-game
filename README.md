@@ -121,6 +121,8 @@ Open **Settings › Controls › Touch Button Response** and choose the control 
 | Setting | What you feel or see |
 | --- | --- |
 | First Touch | **Instant** requests full input on contact. Slide up a pedal or inward on an arrow to ease off. **Progressive** starts at 12%. Slide away from the landing point in any direction to build input, or back toward it to ease off. Lift to release in Hold mode. |
+| Start From Touch Position | Choose which edge gives 100% at touchdown. A double border marks that edge when feedback is on. The opposite edge gives 0%, and the middle gives 50%. Sliding then follows the selected direction and distance. Off restores the saved fixed starting input. |
+| Pressure Indicator | Show color alone, color plus a live percentage, or a colored fill that rises from the bottom. Grip warnings take priority over the percentage. |
 | Starting Input | Choose the input at touchdown in 5% steps. Mode Default uses 100% for Instant and 12% for Progressive. |
 | Slide Direction | Choose which way to ease off an Instant button or build a Progressive button. Mode Default keeps the original gesture. For example, choose Instant Gas with Up and Progressive Brake with Down to ease both pedals by sliding up. |
 | Hold Build Curve | Linear builds evenly. Gentle Start builds slowly at first, and Fast Start builds quickly at first. Each reaches full at the selected hold time. |

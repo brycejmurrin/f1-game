@@ -2307,7 +2307,6 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    for (const [key, id] of Object.entries(PedalTravel.raceButtons)) PedalTravel.bindControl(document.getElementById(id), key);
     wireHold("btn-throttle", function (v) {
       // Toggle on the DOWN edge only: the matching up-edge must not undo it, and
       // holdReleaseAll()'s apply(false) must not either — that path CLEARS the

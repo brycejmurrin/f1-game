@@ -1138,6 +1138,7 @@ const LAZY_RACE = [
 // Optional selected-circuit pit slice for every garage view. Never gates a race.
 const LAZY_GARAGE_EXTERIOR = ["js/garage/exterior-geometry.js", "js/garage/exterior.js"];
 const LAZY_RACE_SESSION = [
+  "js/input/touch-button-actions.js",
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
   "js/race/reliability.js",
@@ -1544,6 +1545,7 @@ const CONTROLLER = [
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/input/touch-button-actions.js",
   "js/ui/touch-button-settings.js",
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",

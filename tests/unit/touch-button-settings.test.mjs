@@ -7,11 +7,11 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 function boot(globals = {}) {
   const dom = makeDom(), context = vm.createContext({ document: dom.document, ...globals });
-  for (const path of ["js/input/pedal-travel.js", "js/ui/touch-button-settings.js"]) {
+  for (const path of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/ui/touch-button-settings.js"]) {
     vm.runInContext(fs.readFileSync(absSrc(path), "utf8"), context, { filename: absSrc(path) });
   }
   const host = dom.document.createElement("div"); host.id = "touch-test"; dom.body.appendChild(host);
-  return { dom, host, editor: vm.runInContext("TouchButtonSettings", context), model: vm.runInContext("PedalTravel", context) };
+  return { dom, host, actions: vm.runInContext("TouchButtonActions", context), editor: vm.runInContext("TouchButtonSettings", context), model: vm.runInContext("PedalTravel", context) };
 }
 
 test("changing, reopening and resetting a touch response edits only the selected button", () => {
@@ -117,7 +117,7 @@ test("a stationary timed hold advances by elapsed time and stops on release", ()
 });
 
 test("Boost keeps its own colors and accepts only the chosen touch gesture", () => {
-  const { host, dom, model, editor } = boot();
+  const { host, dom, model, editor, actions: controls } = boot();
   editor.mount(host);
   const choose = (id, value) => {
     const control = dom.byId("touch-test-" + id);
@@ -131,7 +131,7 @@ test("Boost keeps its own colors and accepts only the chosen touch gesture", () 
     setAttribute: (key, value) => { attrs[key] = value; }, removeAttribute: key => delete attrs[key],
     getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 15, right: 15 }),
     addEventListener: (key, handle) => { events[key] = handle; }, click: () => actions++ };
-  model.bindControl(el, "boost");
+  controls.bindControl(el, "boost");
   assert.equal(style["--touch-custom-idle"], "var(--gold)");
   assert.equal(model.buttonOverrides("pause").activation, undefined);
   const send = (type, time, x = 5, detail = 1) => {
@@ -185,4 +185,27 @@ test("build curves share the same start and finish and save separately per butto
     assert.equal(model.level(profile, 0, 1), 1);
     assert.equal(model.buttonProfile("gas").buildPower, undefined);
   }
+});
+
+test("touch position maps each edge and clamps to the actual resized button", () => {
+  const { model, dom, host, editor } = boot();
+  editor.mount(host);
+  const field = id => dom.byId("touch-test-" + id);
+  const choose = (id, value) => { field(id).value = value; field(id).onchange(); };
+  choose("button", "gas"); choose("start", "30");
+  const el = { getBoundingClientRect: () => ({ left: 10, top: 20, width: 80, height: 40 }) };
+  const at = (x, y) => model.contactProfile("gas", undefined, { clientX: x, clientY: y }, el).start;
+  for (const [edge, near, far] of [
+    ["left", [10, 40], [90, 40]], ["right", [100, 40], [0, 40]],
+    ["top", [50, 20], [50, 60]], ["bottom", [50, 60], [50, 20]],
+  ]) {
+    choose("fullEdge", edge);
+    assert.equal(at(...near), 100); assert.equal(at(50, 40), 50); assert.equal(at(...far), 0);
+  }
+  choose("indicator", "percent");
+  assert.equal(model.buttonProfile("gas").indicator, "percent");
+  assert.equal(model.buttonProfile("brake").indicator, undefined);
+  assert.equal(field("start").disabled, true);
+  choose("fullEdge", "fixed");
+  assert.equal(at(50, 40), 30);
 });

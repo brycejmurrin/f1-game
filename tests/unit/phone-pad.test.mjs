@@ -31,6 +31,7 @@ const NetIce = load("js/net/ice.js", "NetIce");             // transport calls N
 const NetTransport = globalThis.NetTransport = load("js/net/transport.js", "NetTransport");
 const TiltRoll = globalThis.TiltRoll = load("js/input/tilt-roll.js", "TiltRoll");
 globalThis.PedalTravel = load("js/input/pedal-travel.js", "PedalTravel");
+globalThis.TouchButtonActions = load("js/input/touch-button-actions.js", "TouchButtonActions");
 globalThis.PhonePadCodec = load("js/input/phone-pad-codec.js", "PhonePadCodec");
 globalThis.PhonePadPage = load("js/input/phone-pad-page.js", "PhonePadPage");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");
@@ -1759,7 +1760,7 @@ function wakePad(over = {}, extra = {}) {
   if (extra.location) sb.location = extra.location;
   if (extra.sensor) { sb.DeviceOrientationEvent = {}; sb.TiltRoll = TiltRoll; }
   const ctx = vm.createContext(sb);
-  for (const f of ["js/input/pedal-travel.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
+  for (const f of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const P = vm.runInContext("PhonePad", ctx);
   const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl(), ...(extra.codeIn ? { codeIn: fakeEl() } : {}) };

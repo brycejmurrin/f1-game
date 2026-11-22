@@ -95,6 +95,8 @@ const PedalTravel = (function () {
       out.adaptive = Math.max(1, Math.min(10, Math.round(value.adaptive)));
     if (["up", "down", "left", "right"].includes(value.direction)) out.direction = value.direction;
     if (Number.isFinite(value.start)) out.start = Math.max(0, Math.min(100, Math.round(value.start)));
+    if (["top", "bottom", "left", "right"].includes(value.fullEdge)) out.fullEdge = value.fullEdge;
+    if (["percent", "bar"].includes(value.indicator)) out.indicator = value.indicator;
     if ([0.5, 2].includes(value.buildPower)) out.buildPower = value.buildPower;
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
     if ([25, 70, 100].includes(value.brightness)) out.brightness = value.brightness;
@@ -132,6 +134,21 @@ const PedalTravel = (function () {
     const slide = pedal && (globalSlide ?? store()?.get("pedalSlide", "instant"));
     return { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
   }
+  // Snapshot the physical button at touchdown. Subsequent slides keep the same origin.
+  function contactProfile(id, slide, event, el) {
+    const profile = buttonProfile(id, slide);
+    if (!profile.fullEdge || !event) return profile;
+    const rect = el.getBoundingClientRect();
+    const edge = profile.fullEdge;
+    const horizontal = edge === "left" || edge === "right";
+    const distance = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
+    const fraction = distance / (horizontal ? rect.width : rect.height);
+    if (Number.isFinite(fraction)) {
+      const amount = edge === "left" || edge === "top" ? 1 - fraction : fraction;
+      profile.start = 100 * Math.max(0, Math.min(1, amount));
+    }
+    return profile;
+  }
   function watchButtonProfile(id, callback) {
     const refresh = () => callback(buttonProfile(id));
     refresh();
@@ -154,55 +171,7 @@ const PedalTravel = (function () {
     return buttonProfile(id);
   }
 
-  function bindControl(el, id) {
-    if (!el || !allButtons.has(id)) return;
-    let mode, pointer = null, began = 0, previous = -Infinity, touchClick = false;
-    watchButtonProfile(id, profile => {
-      for (const [field, attribute] of [["idleColor", "idle"], ["pressedColor", "pressed"]]) {
-        const color = profile[field], name = "--touch-custom-" + attribute;
-        if (color) {
-          el.style?.setProperty?.(name, "var(" + colors[color] + ")");
-          el.setAttribute("data-custom-" + attribute, "");
-        } else {
-          el.style?.removeProperty?.(name);
-          el.removeAttribute?.("data-custom-" + attribute);
-        }
-      }
-      if (mode !== profile.activation) { mode = profile.activation; pointer = null; previous = -Infinity; }
-    });
-    if (BUTTONS.includes(id) || id === "look") return;
-    const consume = e => { e.preventDefault(); e.stopImmediatePropagation(); };
-    el.addEventListener("pointerdown", e => {
-      touchClick = e.pointerType === "touch" && !!mode;
-      if (!touchClick) return;
-      consume(e);
-      if (pointer !== null || el.disabled || el.getAttribute?.("aria-disabled") === "true") return;
-      pointer = e.pointerId; began = e.timeStamp;
-      try { el.setPointerCapture(pointer); } catch (_) { /* implicit touch capture still delivers a lift */ }
-    }, true);
-    el.addEventListener("pointerup", e => {
-      if (!mode || e.pointerType !== "touch") return;
-      consume(e);
-      if (pointer !== e.pointerId) return;
-      pointer = null;
-      const r = el.getBoundingClientRect();
-      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom ||
-          el.disabled || el.hidden || el.getAttribute?.("aria-disabled") === "true") { previous = -Infinity; return; }
-      const elapsed = e.timeStamp - began;
-      const fire = mode === "tap" || (mode === "quick" && elapsed <= 180) ||
-        (mode === "hold" && elapsed >= 450) || (mode === "long" && elapsed >= 900) ||
-        (mode === "double" && elapsed < 350 && e.timeStamp - previous <= 350);
-      previous = !fire && elapsed < 350 ? e.timeStamp : -Infinity;
-      if (fire) el.click();
-    }, true);
-    const cancel = e => { if (e.pointerId === pointer) { pointer = null; previous = -Infinity; } };
-    el.addEventListener("pointercancel", cancel, true);
-    el.addEventListener("lostpointercapture", cancel, true);
-    el.addEventListener("click", e => { if (touchClick && e.detail > 0) consume(e); }, true);
-    el.addEventListener("contextmenu", e => { if (touchClick && mode) consume(e); }, true);
-  }
-
-  return { raceButtons, phoneButtons, colors, bindControl, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile,
+  return { raceButtons, phoneButtons, colors, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile,
     watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);

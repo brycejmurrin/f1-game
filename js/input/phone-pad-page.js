@@ -193,7 +193,7 @@ const PhonePadPage = (function () {
         ids.add(e.pointerId);
         el.classList.add("on");
         if (!travel) { on(1); return; }
-        const profile = PedalTravel.buttonProfile(travel);
+        const profile = PedalTravel.contactProfile(travel, undefined, transfer ? null : e, el);
         const cross = transfer && profile.slide === "ease";
         const peerId = travel === "gas" ? "brake" : "gas";
         // Standalone phones historically capture a pedal until lift, including a
@@ -333,7 +333,7 @@ const PhonePadPage = (function () {
     }
     for (const id of PedalTravel.phoneButtons) {
       const target = id === "look" ? dom.lookBack : id === "calib" ? dom.center : dom.buttons?.[id] || dom[id];
-      for (const el of (Array.isArray(target) ? target : [target])) PedalTravel.bindControl(el, id);
+      for (const el of (Array.isArray(target) ? target : [target])) TouchButtonActions.bindControl(el, id);
     }
     hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, "gas");
     hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, "brake");

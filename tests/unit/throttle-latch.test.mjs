@@ -785,3 +785,17 @@ test("an instant Gas and a down-progressive Brake both ease upward from their ow
     assert.equal(read(), 0);
   }
 });
+
+test("Gas reads its selected full edge only on touchdown, then follows its slide setting", () => {
+  const { sb, gas, mid, btn } = bootDock();
+  sb.PedalTravel.setButtonProfile("gas", { fullEdge: "right", direction: "down", travel: 80 });
+  const point = mid("btn-throttle");
+  gas.fire("pointerdown", point);
+  assert.equal(btn().throttleVal, 0.5);
+  gas.fire("pointermove", { clientX: point.clientX + 10, clientY: point.clientY });
+  assert.equal(btn().throttleVal, 0.5);
+  gas.fire("pointermove", { clientX: point.clientX, clientY: point.clientY + 32 });
+  assert.equal(btn().throttleVal, 0.25);
+  gas.fire("pointerup", point);
+  assert.equal(btn().throttleVal, 0);
+});

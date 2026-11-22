@@ -45,6 +45,7 @@ const TouchButtonSettings = (() => {
     travelHelp.className = "adv-help"; travelHelp.id = host.id + "-travel-help";
     travel.setAttribute("aria-describedby", travelHelp.id); section.appendChild(travelHelp);
     const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...["up", "down", "left", "right"].map(d => [d, d.toUpperCase()])]);
+    const edge = choice("fullEdge", "START FROM TOUCH POSITION", [["fixed", "OFF · FIXED START"], ...["top", "bottom", "left", "right"].map(k => [k, "FULL AT " + k.toUpperCase()])]);
     const start = choice("start", "STARTING INPUT", [["default", "MODE DEFAULT"], ...Array.from({ length: 21 }, (_, i) => [String(i * 5), i * 5 + "%"])]);
     const build = choice("buildMs", "HOLD BUILD TIME", [["0", "OFF"], ["250", "0.25 S"], ["500", "0.5 S"], ["1000", "1 S"], ["2000", "2 S"]]);
     const curve = choice("buildPower", "HOLD BUILD CURVE", [["1", "LINEAR"], ["2", "GENTLE START"], ["0.5", "FAST START"]]);
@@ -64,6 +65,7 @@ const TouchButtonSettings = (() => {
     const feedback = choice("feedback", "ON-BUTTON FEEDBACK", [["on", "ON"], ["off", "OFF"]]);
     const feedbackHelp = node("p"); feedbackHelp.className = "adv-help"; feedbackHelp.id = host.id + "-feedback-help";
     feedback.setAttribute("aria-describedby", feedbackHelp.id); section.appendChild(feedbackHelp);
+    const indicator = choice("indicator", "PRESSURE INDICATOR", [["color", "COLOR"], ["percent", "COLOR + PERCENTAGE"], ["bar", "RISING FILL"]]);
     const brightness = choice("brightness", "FULL-INPUT COLOR INTENSITY", [["25", "SUBTLE · 25%"], ["46", "STANDARD · 46%"], ["70", "STRONG · 70%"], ["100", "VIVID · 100%"]]);
     const reset = node("button"), note = node("p");
     reset.type = "button"; reset.dataset.field = "reset";
@@ -97,14 +99,17 @@ const TouchButtonSettings = (() => {
       curve.value = String(profile.buildPower || 1); curve.disabled = !profile.buildMs;
       build.value = String(profile.buildMs || 0);
       brightness.value = String(profile.brightness || 46);
-      brightness.disabled = !profile.feedback;
+      brightness.disabled = indicator.disabled = !profile.feedback;
+      edge.value = profile.fullEdge || "fixed"; start.disabled = !!profile.fullEdge;
+      indicator.value = profile.indicator || "color";
       help.textContent = profile.press === "progressive"
         ? "Touch for 12% input. Slide away from that spot in any direction to reach 100% over your Slide Distance. Slide back to ease off."
         : pedal ? "Touch for full input. Slide upward to ease off, or move back down toward your starting point to press harder." : "Touch for a full turn. Slide toward the other arrow to ease off. At the default distance, the global Adaptive Buttons level controls how much this slide eases steering.";
-      if (profile.direction || profile.start != null) {
+      if (profile.direction || profile.start != null || profile.fullEdge) {
         const gesture = profile.direction || (profile.press === "progressive" ? "in any direction" : pedal ? "up" : "toward the other arrow");
-        help.textContent = "Touch for " + PedalTravel.startPercent(profile) + "% input. Slide " + gesture +
-          (profile.press === "progressive" ? " to build input." : " to ease off.");
+        const touchdown = profile.fullEdge ? "Touch the " + profile.fullEdge + " edge for 100%, the opposite edge for 0%, or the middle for 50%." +
+          (profile.feedback ? " A double line marks the full edge." : "") : "Touch for " + PedalTravel.startPercent(profile) + "% input.";
+        help.textContent = touchdown + " Slide " + gesture + (profile.press === "progressive" ? " to build input." : " to ease off.");
       }
       if (id === "gas" && !standalone) help.textContent += " Hold throttle gives manual control until you lift. Latch toggles full throttle with each tap. Auto handles throttle while you steer and brake.";
       reset.textContent = "RESET " + id.toUpperCase();
@@ -119,6 +124,8 @@ const TouchButtonSettings = (() => {
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
     direction.onchange = () => change({ direction: direction.value });
+    edge.onchange = () => change({ fullEdge: edge.value });
+    indicator.onchange = () => change({ indicator: indicator.value });
     start.onchange = () => change({ start: start.value === "default" ? null : Number(start.value) });
     curve.onchange = () => change({ buildPower: Number(curve.value) });
     build.onchange = () => change({ buildMs: Number(build.value) });

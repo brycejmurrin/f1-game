@@ -299,6 +299,15 @@
     background: color-mix(in srgb, var(--touch-fill) var(--touch-brightness, 46%), var(--hud-ink-dark));
     opacity: var(--travel, 1);
   }
+  .pedal.on[data-touch-indicator="percent"]:not(.feedback-off, .grip-cue)::before {
+    counter-reset: pressure calc(100 * var(--travel, 0));
+    content: counter(pressure) "%"; inset: auto 0 5%; width: auto; height: auto;
+    transform: none; clip-path: none; border: 0; background: none; text-align: center;
+    font-size: var(--fs-micro); line-height: 1; pointer-events: none;
+  }
+  .pedal.on[data-touch-indicator="bar"]:not(.feedback-off)::after {
+    opacity: 1; transform-origin: bottom; transform: scaleY(var(--travel));
+  }
   .pedal.grip-cue.on:not(.feedback-off)::before { inset: .4rem 12% auto; height: .4rem; border: 0; }
   #gas.grip-cue.on:not(.feedback-off)::before { background: repeating-linear-gradient(125deg, currentColor 0 .2rem, transparent .2rem .4rem); }
   #brake.grip-cue.on:not(.feedback-off)::before { border-block: .15rem solid currentColor; border-radius: 0; }
@@ -626,6 +635,7 @@
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/touch-button-actions.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/touch-button-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-codec.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-page.js?v=dev"></script>

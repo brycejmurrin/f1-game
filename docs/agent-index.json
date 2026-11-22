@@ -3746,6 +3746,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/input/touch-button-actions.js",
+      "global": "TouchButtonActions",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/lighting/atmosphere.js",
       "global": "Atmosphere",
       "roster": "tag"

@@ -183,7 +183,7 @@ const InputHoldButtons = (function () {
         live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
         if (firstContact) apply(true);
         if (level) {
-          const profile = PedalTravel.buttonProfile(opts?.button || id, slideEase?.() ? "ease" : "instant");
+          const profile = PedalTravel.contactProfile(opts?.button || id, slideEase?.() ? "ease" : "instant", arrived ? null : e, el);
           const trackTravel = !arrived || (axis === "x" && profile.press === "progressive");
           anchors.set(e.pointerId, { x: e.clientX, y: e.clientY, profile, trackTravel });
           const ramp = arrived && profile.slide === "ease";

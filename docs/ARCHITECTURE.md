@@ -491,6 +491,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `controller-profiles.js` | `ControllerProfiles` | tag | ControllerProfiles — bounded physical-device maps; legacy maps seed only the first device. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for the ADVANCED pause-menu page. |
+| `touch-button-actions.js` | `TouchButtonActions` | LAZY_RACE_SESSION | Touch appearance and action gestures mount with the race HUD or the paired phone. |
 | `phone-pad-codec.js` | `PhonePadCodec` | LAZY_NET | PhonePadCodec — the PHONE AS CONTROLLER wire format, one home. |
 | `phone-pad-page.js` | `PhonePadPage` | LAZY_NET | PhonePadPage — the phone wheel. |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |

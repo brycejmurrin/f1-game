@@ -165,6 +165,17 @@
   background: linear-gradient(to bottom, var(--hud-ink-light) 32%, var(--hud-ink-dark) 32% 68%, var(--hud-ink-light) 68%);
 }
 
+/* Leave the grip cue visible when wheelspin or lock-up needs the same space. */
+.touchbtn[data-touch-indicator="percent"][data-touch-feedback]:not([data-grip-cue], [aria-pressed])::before {
+  counter-reset: pressure calc(100 * var(--touch-level, 0));
+  content: counter(pressure) "%"; position: absolute; inset: auto 0 5%; width: auto; height: auto;
+  transform: none; clip-path: none; background: none; text-align: center;
+  font-size: var(--fs-micro); line-height: 1; pointer-events: none;
+}
+.touchbtn[data-touch-indicator="bar"][data-touch-feedback]::after {
+  opacity: 1; transform-origin: bottom; transform: scaleY(var(--touch-level));
+}
+
 /* Latch uses the persistent illuminated GAS button for its binary command. */
 #btn-throttle[aria-pressed][data-touch-feedback]::after { display: none; }
 
