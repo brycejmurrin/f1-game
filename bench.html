@@ -50,7 +50,13 @@
   main { padding:16px 20px 40px; max-width:1100px; }
   button { font:inherit; background:#16161f; color:var(--fg); border:1px solid var(--line);
            border-radius:6px; padding:9px 16px; cursor:pointer; }
-  button:hover:not(:disabled) { border-color:var(--accent); }
+  @media (hover: hover) and (pointer: fine) {
+    button:hover:not(:disabled) { border-color:var(--accent); }
+  }
+  @media (pointer: coarse), (hover: none) {
+    html { touch-action: manipulation; }
+    label select, label input[type=number] { font-size: 16px; }
+  }
   button:disabled { opacity:.45; cursor:default; }
   label { color:var(--dim); font-size:12px; margin-right:14px; }
   select, input[type=number] { font:inherit; background:#16161f; color:var(--fg);

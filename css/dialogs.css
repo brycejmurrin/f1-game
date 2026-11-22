@@ -552,7 +552,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
     letter-spacing: var(--ls-1);
     box-shadow: none;
   }
-  @media (hover: hover) {
+  @media (hover: hover) and (pointer: fine) {
     #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):hover,
     #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):hover,
     #vsfriend :is(#vs-scan-answer, #vs-scan-invite):hover {

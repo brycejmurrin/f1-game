@@ -1,1 +1,1 @@
-Fixed: Settings opens on Controls and keeps search text large enough to avoid focus zoom on iPhone.
+Fixed: Phone menus keep their scale when editing fields, Settings opens on Controls, and tapping an action no longer leaves a mouse hover highlight.
