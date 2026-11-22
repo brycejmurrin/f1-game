@@ -1,1 +1,1 @@
-New: Settings → Graphics → Desktop detail lets desktop players mix individual lighting, rendering, car, scenery and cinema settings. Each choice can follow the preset or override it after a reload.
+New: Settings → Graphics now offers individual Desktop detail and Mobile detail controls. Phones can tune car and circuit geometry, garage and crew detail, texture filtering and atmospheric sky. Each choice can follow the preset or override it after a reload.

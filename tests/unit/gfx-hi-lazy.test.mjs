@@ -20,13 +20,13 @@ const read = (rel) => readFileSync(new URL("../../" + rel, import.meta.url), "ut
 const HI = MANIFEST.LAZY_GFX_HI;
 
 // A boot with the real quality-preset.js and renderer-boot.js; the loader evaluates the real files it is handed.
-function boot({ preset, mobile = false, gfxDetail = null, choices = {} }) {
+function boot({ preset, mobile = false, gfxDetail = null, choices = {}, phoneChoices = {} }) {
   const loads = [], warns = [], ls = new Map([["apex26.gfxBackend", "three"]]);
   const raw = new Map(gfxDetail == null ? [] : [["apex26.gfxDetail", String(gfxDetail)]]);
   const ctx = vm.createContext({
     console, Promise, setTimeout, clearTimeout,
     ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] }, LAZY_GFX_HI: HI, LAZY_GFX_HI_EDGES: MANIFEST.LAZY_GFX_HI_EDGES },
-    GameStore: { store: { get: (k, d) => (k === "gfxPreset" ? preset : k === "gfxFeatureOverrides" ? choices : d), set() {}, raw: (k) => (raw.has(k) ? raw.get(k) : null), rawSet: (k, v) => raw.set(k, v) } },
+    GameStore: { store: { get: (k, d) => (k === "gfxPreset" ? preset : k === "gfxFeatureOverrides" ? choices : k === "gfxPhoneFeatureOverrides" ? phoneChoices : d), set() {}, raw: (k) => (raw.has(k) ? raw.get(k) : null), rawSet: (k, v) => raw.set(k, v) } },
     localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null), setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k) },
     sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     ApexXR: { bootPick: () => null, detect: async () => {} },
@@ -117,5 +117,18 @@ test("desktop effect choices load their dependencies independently and stay off 
     assert.equal(h.Q.feature("motionBlur", true), !mobile);
     h.Q.setCinema(true);
     assert.equal(h.Q.feature("motionBlur"), !mobile);
+  }
+});
+
+test("phone detail switches apply independently and only hero geometry fetches the extra bundle", async () => {
+  for (const hero of [false, true]) {
+    const h = boot({ preset: "extreme", mobile: true, phoneChoices: { heroCar: hero, treesHi: true, hdrOut: true } });
+    await h.rb.start();
+    assert.equal(h.Q.detail(), 0);
+    assert.equal(h.Q.feature("treesHi"), true);
+    assert.equal(h.Q.feature("garageHi"), false);
+    assert.equal(h.Q.feature("hdrOut"), false);
+    assert.equal(h.Q.feature("heroCar"), hero);
+    assert.equal(h.loads.includes(HI[0]), hero);
   }
 });

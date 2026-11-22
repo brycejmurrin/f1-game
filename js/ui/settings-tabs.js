@@ -113,7 +113,7 @@ const SettingsNav = (function () {
   }
   enterFns.push((id) => {
     if (id === "appearance") presets();
-    if (id === "graphics" && typeof GLX !== "undefined" && !GLX.isMobile && typeof ScriptLoader !== "undefined")
+    if (id === "graphics" && typeof GLX !== "undefined" && typeof ScriptLoader !== "undefined")
       ScriptLoader.create().load(["js/ui/desktop-graphics.js"], [], { strict: true, loaded: presetsLoaded });
   });
   if (typeof document !== "undefined" && document.addEventListener) {

@@ -147,6 +147,7 @@ const SPEC = [
   { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/post-fx-opts.js (PostFxOpts.debris) + js/physics/debris-world.js create() (only \"1\" is on)" },
   { k: "gfxSsao", lane: "raw", group: "display", def: () => typeof PostFxOpts !== "undefined" && !PostFxOpts.defaultSsao() ? "0" : "1", perDevice: true, src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
+  { k: "gfxPhoneFeatureOverrides", lane: "json", group: "display", def: {}, whole: true, perDevice: true, src: "js/ui/desktop-graphics.js phone detail choices" },
   { k: "gfxFeatureOverrides", lane: "json", group: "display", def: {}, whole: true, perDevice: true, src: "js/ui/desktop-graphics.js per-effect choices" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },

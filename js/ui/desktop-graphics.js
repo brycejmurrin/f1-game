@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const panel = document.getElementById("pm-panel-graphics");
-  if (!panel || typeof GLX === "undefined" || GLX.isMobile || panel.querySelector("[data-desktop-graphics]")) return;
+  if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
   const groups = {
     "Image quality": {
       msaa: "Multisample anti-aliasing", traa: "Temporal anti-aliasing", superSample: "1.5× supersampling",
@@ -36,23 +36,28 @@
   const fold = add(panel, "details");
   fold.dataset.desktopGraphics = "";
   fold.className = "pm-renderer-sub";
-  add(fold, "summary", "Desktop detail").className = "adv-more-btn";
+  add(fold, "summary", GLX.isMobile ? "Mobile detail" : "Desktop detail").className = "adv-more-btn";
   fold.addEventListener("toggle", () => {
     if (!fold.open || fold.children.length > 1) return;
     const store = GameStore.store;
-    const choices = { ...store.get("gfxFeatureOverrides", {}) };
-    add(fold, "p", "Use preset follows Graphics. Some effects require three.js WebGPU or a compatible display. Changes take effect after reloading.").className = "adv-help";
+    const key = GfxQuality.choicesKey();
+    const choices = { ...store.get(key, {}) };
+    const help = GLX.isMobile ? "Use preset follows Graphics. Higher detail can reduce frame rate. Texture filtering and atmospheric sky use the three.js renderer."
+      : "Use preset follows Graphics. Some effects require three.js WebGPU or a compatible display.";
+    add(fold, "p", help + " Changes take effect after reloading.").className = "adv-help";
     const selects = [];
     const status = document.createElement("p");
     status.setAttribute("role", "status");
     function save() {
-      const ok = store.set("gfxFeatureOverrides", { ...choices });
+      const ok = store.set(key, { ...choices });
       status.textContent = ok === false ? "Could not save graphics settings." : "Saved for the next reload.";
     }
     for (const [title, options] of Object.entries(groups)) {
+      const available = Object.entries(options).filter(([name]) => GfxQuality.supportsOption(name));
+      if (!available.length) continue;
       const section = add(fold, "fieldset");
       add(section, "legend", title);
-      for (const [key, name] of Object.entries(options)) {
+      for (const [key, name] of available) {
         const row = add(section, "div");
         row.className = "set-row";
         const label = add(row, "label", name);

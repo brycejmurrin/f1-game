@@ -56,16 +56,23 @@ function detail() {
   return (_detail = d);
 }
 // Player overrides are a boot snapshot: changing several controls never rebuilds half a scene.
+const phoneEffects = new Set(["anisotropy", "skyAtmo", "meshHi", "heroCar", "rivalLod", "garageHi", "crewHi",
+  "crowd3d", "treesHi", "kerbProfile", "farTerrain", "density", "propsHi"]);
+function phoneDetail() { return typeof GLX !== "undefined" && GLX.isMobile; }
+function supportsOption(name) { return !phoneDetail() || phoneEffects.has(name); }
+function choicesKey() { return phoneDetail() ? "gfxPhoneFeatureOverrides" : "gfxFeatureOverrides"; }
 let choices;
 function overrides() {
-  if (!choices) choices = typeof GLX !== "undefined" && GLX.isMobile ? {} : (gstore()?.get("gfxFeatureOverrides", {}) || {});
+  if (!choices) choices = gstore()?.get(choicesKey(), {}) || {};
   return choices;
 }
 function option(name, fallback) {
+  if (!supportsOption(name)) return fallback;
   const value = overrides()[name];
   return typeof value === "boolean" ? value : fallback;
 }
 function needsBundle() {
+  if (phoneDetail()) return option("heroCar", false);
   return detail() >= 2 || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
 }
 function feature(name, building = false) {
@@ -337,7 +344,7 @@ if (typeof document !== "undefined") {
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
-  detail, feature, option, needsBundle, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
+  detail, feature, option, supportsOption, choicesKey, needsBundle, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();
 Object.freeze(GfxQuality);

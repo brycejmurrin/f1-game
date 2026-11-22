@@ -5,6 +5,7 @@
 // the page reloads at the phone shape, and the test reads back the stored key, the row's painted value (read()
 // reflects live game state) and, where one exists, a direct live signal. Node VMs cannot reach these writes (they
 // live in game.js / race-settings.js rows), so this is their apply+persist proof (B·H11 settings audit).
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true });
@@ -178,5 +179,31 @@ test.describe("individual desktop graphics", () => {
     await page.getByRole("button", { name: "Use preset for all" }).click();
     await expect(trees).toHaveValue("");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.gfxFeatureOverrides")))).toEqual({});
+  });
+});
+
+test.describe("phone detail", () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 } }) });
+  test("mobile detail changes survive reload without enabling desktop effects", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.gfxFeatureOverrides", JSON.stringify({ hdrOut: true })));
+    async function openDetail() {
+      await page.locator("#mb-settings").tap();
+      await page.locator("#pm-open-graphics").tap();
+      await page.getByText("Mobile detail", { exact: true }).tap();
+    }
+    await page.goto("/");
+    await boot(page);
+    await openDetail();
+    const kerbs = page.getByLabel("Modelled kerbs", { exact: true });
+    await expect(page.getByLabel("HDR output", { exact: true })).toHaveCount(0);
+    await kerbs.selectOption("on");
+    await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Reload to apply" }).tap()]);
+    await boot(page);
+    expect(await page.evaluate(() => [GfxQuality.feature("kerbProfile"), GfxQuality.feature("hdrOut")])).toEqual([true, false]);
+    await openDetail();
+    await expect(kerbs).toHaveValue("on");
+    await page.getByRole("button", { name: "Use preset for all" }).tap();
+    await expect(kerbs).toHaveValue("");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.gfxFeatureOverrides")))).toEqual({ hdrOut: true });
   });
 });
