@@ -75,6 +75,15 @@ const InstCells = (function () {
     if (batch) batch._cellKeyN = -1;
   }
 
-  return { enabled, collectVisible, sameRadial, recordRadial, scratchKeys, sameKey, recordKey, invalidate };
+  // Only private mirror views call this. The previous pass must have drawn
+  // this batch, and a cull snapshot must still describe its resident bytes.
+  // A zero-count pack is just as reusable as a nonempty one.
+  function holdMirror(batch, pass, freeze) {
+    const previous = batch._mirrorCullPass;
+    batch._mirrorCullPass = pass;
+    return freeze && previous === pass - 1 && !!batch._cullPlanes;
+  }
+
+  return { enabled, collectVisible, sameRadial, recordRadial, scratchKeys, sameKey, recordKey, invalidate, holdMirror };
 })();
 Object.freeze(InstCells);

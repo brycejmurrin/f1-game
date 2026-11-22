@@ -1709,6 +1709,31 @@ function prepared(team, liv, getParts, driverIdx, ctx) {
   return !!shellMesh && roomKeys(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx).key === cacheKey;
 }
 
+// Capture the fixed room only. The moving car, crew and planar floor mirror
+// must not reflect back into themselves. All geometry is already GPU-resident.
+const roomProbe = {
+  centre: [0, CEIL_Y / 2, (Z_DOOR + Z_BACK) / 2],
+  half: [HALF_W, CEIL_Y / 2, (Z_DOOR - Z_BACK) / 2],
+  room: null, mood: "",
+  draw() {
+    _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+    _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
+    if (trussMesh) _gfx.draw(trussMesh, MAT_I, SHELL_OPTS);
+    for (const side of SIDES) {
+      if (side === "shutter" || side === "barrier") continue; // open pit-lane end
+      if (propMesh[side]) _gfx.draw(propMesh[side], MAT_I, SHELL_OPTS);
+      if (ledMesh[side]) _gfx.draw(ledMesh[side], MAT_I, LED_OPTS);
+    }
+  },
+};
+function reflectionProbe(team, liv, getParts, driverIdx, ctx) {
+  if (ctx.studio || !_gfx) return null;
+  rebuild(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx);
+  roomProbe.room = shellMesh;
+  roomProbe.mood = moodId;
+  return shellMesh ? roomProbe : null;
+}
+
 // THE RACE DOES NOT CARRY THE GARAGE: the bay, both atlases, the moving props and
 // the cached preview cars (~12.5 MB GPU, 54 k verts, plus ~5 MB of canvases) stayed
 // resident through every race after the first garage visit. Freed at race start
@@ -1719,6 +1744,7 @@ function release() {
   let n = typeof GarageCrew !== "undefined" && GarageCrew.free ? GarageCrew.free() : 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
+  roomProbe.room = null;
   fallbackBaysMesh = fm(fallbackBaysMesh);
   fallbackFixtures = fm(fallbackFixtures);
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
@@ -1741,6 +1767,6 @@ function debug() {
 
   // FIXTURES / LED_DROP / hangerSpan stay public — garage-personality pins the LED hangers.
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, CUES, cueLabel, cueLen, cueSample, CUE_SHA256, mood, setMood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
-           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
+           previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, reflectionProbe, release };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

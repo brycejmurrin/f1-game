@@ -154,12 +154,11 @@ function lampStrideNodes(ds) {
 // track rebuild. dens<1 drops posts below the target spacing; dens>1 inserts
 // synthetic roadside lights (no lens halo) between fixtures — poles catch up
 // on the next Tracks.build (which reads the same LT.lampDensity).
-function applyLampDensity(posts, track, height, onlyAlways) {
+function applyLampDensity(posts, track, height, onlyAlways, targetGap) {
   if (!posts || !posts.length || onlyAlways) return posts;
   const dens = lampDensityFactor();
   if (Math.abs(dens - 1) < 0.01) return posts;
-  const n = track.n, ds = track.total / n;
-  const targetGap = lampStrideNodes(ds);
+  const n = track.n;
   const sorted = posts.slice().sort((a, b) => a.k - b.k);
   if (dens < 1) {
     const out = [];
@@ -215,7 +214,7 @@ function buildTrackLights(track, onlyAlways, poolEnergy = LT.poolEnergy) {
   // alone was flooding the ring buffer.
   if (Log.enabled("game", Log.DEBUG))
     Log.debug("game", "LightTune.buildTrackLights track=" + ((track.def && track.def.id) || "?"));
-  const ds = total / n;
+  const ds = track.sceneryStepM || total / n;
   const stride = lampStrideNodes(ds);   // matches buildProps mast stride (+ LAMP DENSITY)
   const { tint, intensity, radius, street } = floodColor(track.def.theme, track.def.id);
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
@@ -240,7 +239,7 @@ function buildTrackLights(track, onlyAlways, poolEnergy = LT.poolEnergy) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
-  posts = applyLampDensity(posts, track, height, onlyAlways);
+  posts = applyLampDensity(posts, track, height, onlyAlways, stride);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // Circuits suppress the generic mast pass over a stretch (dressingExclusions
   // kind "lamps" / "floodlights" / "lighting") so bespoke fixtures own that ground.

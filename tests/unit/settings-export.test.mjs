@@ -2187,9 +2187,9 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
 test("relative placements and named profiles round-trip across devices without saving automatic dimensions", () => {
   const regions = { carsetup: { regions: { panel: {} } } };
   const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28 } } } } };
-  const controls = { "btn-throttle": { size: 125, shape: "round", x: -0.02 } };
+  const controls = { "btn-throttle": { size: 125, shape: "arch", x: -0.02 } };
   const dock = { buttons: { gap: 20, layout: "pedal-row", controls } };
-  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement, dockLayout: dock, hudBtnShape: "square" } }];
+  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement, dockLayout: dock, hudBtnShape: "leaf" } }];
   const source = boot({ mobile: true, appearance: true, realStore: true, denyWrites: true });
   assert.equal(source.collect("all").settings.appearance.screenPlacement, null);
   assert.equal(source.collect("changes").settings.appearance?.screenPlacement, undefined);
@@ -2203,7 +2203,7 @@ test("relative placements and named profiles round-trip across devices without s
     assert.deepEqual(target.GameStore.store.get("screenPlacement"), placement);
     const restored = target.GameStore.store.get("appearanceProfiles")[0].values;
     assert.deepEqual(restored.screenPlacement, placement);
-    assert.equal(restored.hudBtnShape, "square");
+    assert.equal(restored.hudBtnShape, "leaf");
     const restoredDock = target.GameStore.store.get("dockLayout");
     assert.deepEqual(restoredDock.buttons.controls, controls);
     assert.equal(restoredDock.buttons.gap, 20);

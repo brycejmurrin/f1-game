@@ -439,3 +439,22 @@ test("carryPlayback keeps a refreshed preview's family, MIX deal and timing; ang
   assert.equal(Arrival.crewFor(d, "out"), "pushout", "an explicit crew edit re-chooses");
   assert.equal(Arrival.carryPlayback(a, null), null);
 });
+
+test("pit-crew warm releases partial body and prop uploads before a successful retry", () => {
+  for (const failAt of [4, 10]) {
+    const { Pit, gfx } = load();
+    const create = gfx.createMesh, live = new Set(), car = { isPlayer: true, team: { color: [1, 0, 0] } };
+    let calls = 0;
+    gfx.createMesh = (data) => {
+      if (++calls === failAt) throw Error("partial crew");
+      const handle = create(data); live.add(handle); return handle;
+    };
+    gfx.freeMesh = handle => { assert.ok(live.delete(handle), "free exactly once"); };
+    assert.throws(() => Pit.warm({ gfx }, car), /partial crew/);
+    assert.equal(live.size, 0);
+    assert.equal(Pit.warm({ gfx }, car), true);
+    assert.equal(live.size, 12);
+    assert.equal(Pit.warm({ gfx }, car), true);
+    assert.equal(live.size, 12, "successful retry is cached");
+  }
+});

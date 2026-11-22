@@ -20,44 +20,38 @@ export default function register() {
     test.use({ viewport: LANDSCAPE });
     test.setTimeout(360_000);
 
-    test("uses explicit racing coordinates and a shallow Sphere-sector dip", async ({ page }) => {
+    test("uses racing coordinates and climbs from the Sphere to the end of the Strip", async ({ page }) => {
       await loadVegas(page);
       const result = await page.evaluate(() => {
         const def = Tracks.LIST.find((track) => track.id === "vegas");
-        // 7a173519 moved the start line (startFrac 0.8575 -> 0.9899), rotating
-        // racing fractions by the arc shift (+0.8433); the Sphere-sector dip did
-        // not move physically. Measured in the new frame (headless VM, extremum
-        // scan): the dip bottoms at frac 0.1927, y -1.274, with the shoulders
-        // near 0 (y(0.15) -0.016, y(0.24) -0.007). Note vegas.js's own elevation
-        // comment says "racing s≈0.218" — that figure is INDEX-fraction
-        // arithmetic (0.2075 + (1 - 0.9899)); buildCenterline places the bump by
-        // the ARC-length shift (def s 0.35 + 0.8433 -> 0.1933), which is where
-        // the dip actually measures. Trust the measurement, not the comment.
-        const samples = [0.15, 0.193, 0.24, 0.65].map((frac) => {
-          const node = window.__apex.nodeAt(frac);
-          return { frac, y: node.y };
-        });
+        const profile = window.__apex.trackProfile(500);
+        const low = profile.reduce((a, b) => a.y < b.y ? a : b);
+        const high = profile.reduce((a, b) => a.y > b.y ? a : b);
         return {
           coordinates: def.sceneryCoordinates,
           terrainOuter: def.terrainOuter,
           barrierGap: def.barrierGap,
-          elevationFrac: def.elevations[0].s,
           exclusions: def.dressingExclusions,
-          samples,
+          relief: high.y - low.y,
+          lowFrac: low.frac,
+          highFrac: high.frac,
         };
       });
 
       expect(result.coordinates).toBe("racing");
       expect(result.terrainOuter).toBe(26);
       expect(result.barrierGap).toBe(1);
-      expect(result.elevationFrac).toBeCloseTo(0.35, 3);
       expect(result.exclusions).toEqual(expect.arrayContaining([
         expect.objectContaining({ kinds: ["city", "foliage"], s0: 0.36, s1: 0.47 }),
       ]));
-      const byFrac = Object.fromEntries(result.samples.map((sample) => [sample.frac, sample.y]));
-      expect(byFrac[0.193]).toBeLessThan(byFrac[0.15] - 0.4);
-      expect(byFrac[0.193]).toBeLessThan(byFrac[0.24] - 0.4);
-      expect(Math.abs(byFrac[0.65])).toBeLessThan(0.15);
+      // The 48 USGS samples span 16.28 m. Russell's 2024 pole lap spans 16.30 m.
+      expect(result.relief).toBeGreaterThan(15.8);
+      expect(result.relief).toBeLessThan(16.8);
+      // The low point is at the Sphere sector; the high point is near T14 on the Strip.
+      expect(result.lowFrac).toBeGreaterThan(0.32);
+      expect(result.lowFrac).toBeLessThan(0.38);
+      expect(result.highFrac).toBeGreaterThan(0.80);
+      expect(result.highFrac).toBeLessThan(0.86);
     });
 
     test("emits required landmarks, typed water, and safe overhead spans", async ({ page }) => {

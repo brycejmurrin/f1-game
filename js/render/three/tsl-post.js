@@ -1351,10 +1351,8 @@
           const minY = min(min(left.y, left.z), min(right.x, right.w));
           finalY.assign(clamp(EdgeSharpness.mul(finalY), minY, maxY));
           const deltaY = clamp(finalY.sub(colorW), float(-23.0 / 255.0), float(23.0 / 255.0));
-          outC.assign(vec3(
-            clamp(color.x.add(deltaY), float(0.0), float(1.0)),
-            clamp(color.y.add(deltaY), float(0.0), float(1.0)),
-            clamp(color.z.add(deltaY), float(0.0), float(1.0))));
+          const peak = HDR_OUT ? C.hdrPeak : float(1.0);
+          outC.assign(clamp(rgb.add(deltaY), vec3(0.0), vec3(peak)));
         });
         return vec4(outC, 1.0);
       })(), "tlx-post-sgsr"),

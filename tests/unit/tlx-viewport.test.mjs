@@ -243,7 +243,7 @@ function postFixture() {
   const ctx = { Log: { info() {}, warn() {} }, localStorage: { getItem() { return null; } } };
   ctx.window = ctx; vm.createContext(ctx);
   for (const f of ["js/lighting/knobs.js", "js/render/shared/post-common.js", "js/render/three/tsl-viewport.js",
-    "js/render/three/tsl-chunks.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
+    "js/render/three/tsl-chunks.js", "js/render/three/tsl-gi.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const VP = ctx.TLXShaders.viewport(RealThree, RealThree.TSL, { enabled: true });
   const groups = [], scope = VP.scope, rootReaders = [], rootTex = VP.tex;
@@ -256,17 +256,17 @@ function postFixture() {
   let target = null;
   const renderer = { backend: { isWebGPUBackend: true, device: { features: new Set() } },
     setRenderTarget(t) { target = t; }, getRenderTarget() { return target; } };
-  const create = () => {
+  const create = (opts = {}) => {
     const n = groups.length, first = rootReaders.length;
     const p = ctx.TLXShaders.postChain(RealThree, RealThree.TSL, { renderer, isMobile: true,
       chunks: ctx.TLXShaders.chunks(RealThree, RealThree.TSL), fixedTargets: true, vp: VP,
-      shadow: null, wantSpatialUpscale: () => false });
+      shadow: null, wantSpatialUpscale: () => false, ...opts });
     if (groups.length === n) groups.push(rootReaders.slice(first)); // baseline factory has no scope
     return p;
   };
   const I = new RealThree.Matrix4().toArray();
-  const frame = { proj: I, invProj: I, viewProj: I, sunDir: [0, 1, 0], sunColor: [1, 1, 1], upVS: [0, 1, 0] };
-  return { ctx, VP, groups, create, frame };
+  const frame = { proj: I, invProj: I, invVP: I, viewProj: I, sunDir: [0, 1, 0], sunColor: [1, 1, 1], upVS: [0, 1, 0] };
+  return { ctx, VP, groups, create, frame, renderer };
 }
 
 test("real post readers stay current through cold allocation, toggles, shedding and resize", () => {
@@ -312,4 +312,97 @@ test("four real post rebuilds retire only their readers and preserve shared scen
   f.ctx.TLXShaders.post = (...args) => { makePost(...args); throw new Error("controlled graph failure"); };
   assert.throws(f.create, /controlled graph failure/);
   assert.equal(f.VP.wrapperCount(), baseline);
+});
+
+const quiet = { bloom: 0, carReflect: 0, reflect: 0, flareMul: 0 };
+
+test("mobile scene visualization maps the entire destination after a resolution change", () => {
+  const f = postFixture();
+  f.renderer.backend.isWebGPUBackend = false;
+  f.renderer.domElement = { width: 422, height: 195 };
+  let graph;
+  const factory = f.ctx.TLXShaders.post;
+  f.ctx.TLXShaders.post = (...args) => (graph = factory(...args));
+  f.renderer.render = () => {};
+  const p = f.create({ fixedTargets: false, vp: null, viz: "scene" });
+  try {
+    for (const [width, height] of [[422, 195], [195, 422]]) {
+      Object.assign(f.renderer.domElement, { width, height });
+      p.resize(width, height, 844, 390);
+      p.present(quiet, f.frame);
+      assert.deepEqual(graph.blit.V.size.value.toArray(), [width, height]);
+    }
+  } finally { p.dispose(); }
+});
+
+test("steady post frames leave viewport mapping uniforms alone until a layout changes", () => {
+  const f = postFixture(), p = f.create();
+  f.renderer.render = () => {};
+  try {
+    p.resize(422, 195, 844, 390);
+    p.present(quiet, f.frame);
+    let writes = 0;
+    for (const w of f.groups[0]) for (const key of ["ratio", "maxUV"]) {
+      const value = w[key].value, set = value.set;
+      value.set = function (x, y) { writes++; return set.call(this, x, y); };
+    }
+    p.resize(422, 195, 844, 390);
+    for (let i = 0; i < 10; i++) p.present(quiet, f.frame);
+    assert.equal(writes, 0);
+    p.resize(500, 250, 844, 390);
+    p.present(quiet, f.frame);
+    assert.ok(writes > 0);
+  } finally { p.dispose(); }
+});
+
+test("spatial upscale preserves the composite precision on HDR and SDR outputs", () => {
+  for (const peak of [1, 2.5]) {
+    const f = postFixture(), draws = [];
+    f.renderer.render = q => draws.push([q.material.customProgramCacheKey(), f.renderer.getRenderTarget()]);
+    const p = f.create({ isMobile: false, fixedTargets: false, vp: null, hdrPeak: peak, wantSpatialUpscale: () => true });
+    try {
+      p.resize(422, 195);
+      p.present(quiet, f.frame);
+      assert.deepEqual(draws.map(d => d[0]), ["tlx-post-comp", "tlx-post-fxaa", "tlx-post-sgsr"]);
+      assert.equal(draws[1][1].texture.type, peak > 1 ? RealThree.HalfFloatType : RealThree.UnsignedByteType);
+    } finally { p.dispose(); }
+  }
+});
+
+test("the first cinema frame preserves depth and tag, and shed GTAO targets have no live readers", () => {
+  const f = postFixture();
+  let cinema = false, graph;
+  f.ctx.GfxQuality = { detail: () => 2, FEATURES: { dof: 3, motionBlur: 3, gtao: 2 },
+    feature: name => name === "gtao" || cinema && (name === "dof" || name === "motionBlur") };
+  const factory = f.ctx.TLXShaders.post;
+  f.ctx.TLXShaders.post = (...args) => (graph = factory(...args));
+  f.renderer.render = () => {};
+  const p = f.create({ isMobile: false, fixedTargets: false, vp: null });
+  try {
+    p.resize(320, 180);
+    let cinemaFrames = 0;
+    for (let i = 0; i < 20; i++) {
+      const depth = p.depthBegin(quiet, f.frame), tag = !(p.sceneTarget().apexDiscardColor & 2);
+      p.depthEnd();
+      p.present(quiet, f.frame);
+      if (p.state().hi.ran.dof) {
+        assert.ok(depth && tag);
+        cinemaFrames++;
+      }
+      cinema = true;
+    }
+    assert.ok(cinemaFrames > 0);
+    p.present({ ...quiet, ssao: 1 }, f.frame);
+    const readers = [graph.gi.gtaoH.tex, graph.gi.gtaoV.tex];
+    let retired = 0;
+    for (const reader of readers) {
+      const tex = reader.value;
+      tex.renderTarget.addEventListener("dispose", () => {
+        assert.notEqual(reader.value, tex);
+        retired++;
+      });
+    }
+    for (let i = 0; i < 8; i++) p.present(quiet, f.frame);
+    assert.equal(retired, 2);
+  } finally { p.dispose(); }
 });

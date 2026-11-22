@@ -599,6 +599,7 @@ test("CamTune comfort knobs are independent of reduce-motion and default to ship
   assert.equal(CamTune.rollTarget(0.1, 0, 0, true), 0, "reduce-motion zeroes roll");
   CamTune.comfortSet("rollLean", 0.5);
   assert.equal(CamTune.rollTarget(0.2, 0, 0, false), 0.1);
+  assert.equal(CamTune.rollTarget(0, 0, 0.2, false), -0.1, "onboard camera follows the signed physical chassis lean");
 });
 
 test("CamTune global baseline layers under per-mode; copyFrom and presets work", () => {

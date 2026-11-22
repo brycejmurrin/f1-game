@@ -107,3 +107,47 @@ test("editor: WHEELS & BRAKES section carries rimTint and caliperTint rows", () 
   assert.match(read("js/garage/livery-design-editor.js"), /section\("WHEELS & BRAKES"[^\n]*"rimTint", "caliperTint"/);
   assert.match(read("js/garage/setup-sheet.js"), /colorRow\("RIM", "rimTint", true\)[^\n]*colorRow\("CALIPER", "caliperTint", true\)/);
 });
+
+test("tyre wear buffs the rotating tread and phase-locks the front flat spot", () => {
+  const build = wear => Car3D.buildWheelLayers(.32, [.8,.3,.1], undefined, undefined, true, undefined, undefined, undefined, undefined, undefined, 0, wear);
+  const fresh = build(0), worn = build(1), scarred = build(3);
+  assert.deepEqual(worn.fixed, fresh.fixed);
+  assert.deepEqual(scarred.fixed, fresh.fixed);
+  assert.notDeepEqual(worn.rotating.col, fresh.rotating.col);
+  assert.notDeepEqual(worn.rotating.pos, fresh.rotating.pos, "wear shallows the tread grooves");
+  const p = worn.rotating.pos, q = scarred.rotating.pos;
+  assert.equal(q.length, p.length);
+  let lifted = 0;
+  for (let i = 0; i < p.length; i += 3) {
+    assert.equal(q[i], p[i]);
+    assert.equal(q[i + 2], p[i + 2]);
+    if (q[i + 1] !== p[i + 1]) {
+      assert.ok(p[i + 1] < -.32 && q[i + 1] > p[i + 1]);
+      lifted++;
+    }
+  }
+  assert.ok(lifted > 0, "the patch at phase zero flattens the contact surface");
+});
+
+test("player wheels reuse wear stages across frames, pit changes and feature toggles", async () => {
+  const { carDrawVm } = await import("../helpers/car-draw-vm.mjs");
+  const v = carDrawVm();
+  v.field(() => 0);
+  let enabled = false;
+  v.ctx.GfxQuality = { feature: id => id === "tyreWearVisual" && enabled };
+  const calls = [], build = v.ctx.Car3D.buildWheelLayers;
+  v.ctx.Car3D.buildWheelLayers = (...args) => { calls.push(args[11]); return build(...args); };
+  const car = v.G.player;
+  const draw = () => v.carDraw.drawPlayerWheels(car, new Float32Array(16), 0, {}, false, 0, 1, true);
+  Object.assign(car, { tyreWearF: .7, tyreWearR: .02, flatSpot: .4 });
+  draw();
+  enabled = true;
+  draw();
+  car.tyreWearF = .73;
+  draw();
+  car.tyreWearR = .8;
+  draw();
+  Object.assign(car, { tyreWearF: 0, tyreWearR: 0, flatSpot: 0 });
+  draw();
+  assert.deepEqual(calls, [0, 0, 3, 0, 3, 1]);
+});

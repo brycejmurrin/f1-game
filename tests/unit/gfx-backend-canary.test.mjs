@@ -383,7 +383,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
   assert.match(src, /infoBlob\s*=\s*\[[^\]]*\bdev\b[^\]]*\]/, "the adapter sniff joins the info fields into one blob");
-  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
+  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*probeDirection\(Rg\)\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
 test("GLX upscale toggles preserve scene targets at unchanged render resolution", () => {
@@ -2918,7 +2918,7 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
   assert.ok(testAt >= 0 && armAt > testAt, "the re-test must precede the arm");
   const endFn = fnBody(glx, "envFaceEnd");
   const clearAt = endFn.indexOf("_envActive = false");
-  const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
+  const bailAt = endFn.indexOf("if (!gl || !envTex) return false;");
   assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
     "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
 });
@@ -3670,9 +3670,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   }
   assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
     "env / post restore must rebind the blit RT, not the native swapchain");
-  const envEnd = src.indexOf("envFaceEnd(face)");
-  assert.notEqual(envEnd, -1, "envFaceEnd moved");
-  const envBody = src.slice(envEnd, envEnd + 4200);
+  const envBody = fnBody(src, "envFaceEnd");
   assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
     "envFaceEnd must not restore the swapchain on the software-WebGPU path");
   // A probe face that throws must NOT be counted: six swallowed throws used to
@@ -3706,8 +3704,11 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "and compare that flag at the latch — a silent rejection has no other tell");
   assert.match(envBody, /_envGaveUp\s*=\s*true\s*;\s*envReady\s*=\s*false\b/,
     "a probe that keeps erroring must stand down instead of binding the cube");
-  assert.match(fnBody(src, "envProbeReady"), /return\s+envReady\s*\|\|\s*_envGaveUp\b/,
-    "standing down must read as ready so the caller stops re-probing forever");
+  const ready = new Function("garageProbeRoom", "envReady", "_envGaveUp", fnBody(src, "envProbeReady"));
+  assert.equal(ready(null, false, true), true, "a failed race probe stops retrying");
+  assert.equal(ready(null, true, false), true, "a complete race cube stays ready");
+  assert.equal(ready(null, false, false), false, "an incomplete race cube keeps capturing");
+  assert.equal(ready({}, true, false), false, "a complete garage cube cannot satisfy the race producer");
   // three's node builder reads attribute.array.constructor to type an attribute
   // whenever it compiles a program for a pass it has not seen before, so a
   // chunk freed before the env probe's first face makes EVERY face throw.
@@ -5591,9 +5592,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
   // Software faces still latch envReady for M9, but a black cube must not
   // raise uEnvStr (clearcoat absorb toward black).
   const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  const beginAt = src.indexOf("envFaceBegin(face, eye, frame)");
-  assert.notEqual(beginAt, -1, "envFaceBegin moved");
-  const beginBody = src.slice(beginAt, beginAt + 1800);
+  const beginBody = fnBody(src, "envFaceBegin");
   assert.match(beginBody, /frame\.viewProj\s*=\s*_envVPArr/,
     "probe must publish the face VP so propBatches cull against the cube face");
   assert.match(beginBody, /frame\.eye\s*=\s*eye/,
@@ -5602,9 +5601,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
     "probe must cap draw distance like GLX (150 m when envCull is on)");
   assert.match(beginBody, /lit\.updateFrame\(frame\)/,
     "probe runs before gfx.begin — updateFrame must push this frame's lighting");
-  const endAt = src.indexOf("envFaceEnd(face)");
-  assert.notEqual(endAt, -1, "envFaceEnd moved");
-  const endBody = src.slice(endAt, endAt + 3600);
+  const endBody = fnBody(src, "envFaceEnd");
   assert.match(endBody, /_restoreEnvFrame\(\)/,
     "envFaceEnd must restore the main-camera VP/eye/cullDist");
   assert.match(endBody, /_envBlank\s*=\s*true/,
@@ -5646,8 +5643,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "main HDR render must arm the ssrTag MRT");
   assert.match(window, /renderer\.setMRT\(/,
     "renderer.getMRT() is what NodeMaterial.setup merges into");
-  const envEnd = tlx.indexOf("envFaceEnd(face)");
-  const envBody = tlx.slice(envEnd, envEnd + 3600);
+  const envBody = fnBody(tlx, "envFaceEnd");
   assert.doesNotMatch(envBody, /setSsrMrt\(true\)/,
     "env cube must not arm the 2-attachment program");
   assert.doesNotMatch(envBody, /setMRT\(/,

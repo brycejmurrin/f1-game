@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "jeddah",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish on the pit straight AFTER the T27 hairpin, ~250 m before the
     // T1 apex (#5507; evidence docs/tracks/START-LINES.md §jeddah). The line needs
@@ -47,7 +48,8 @@
       { frac: 0.1825, angleDeg: 3.0, widthM: 90 },
       { frac: 0.2662, angleDeg: 3.0, widthM: 160 },
       { frac: 0.3188, angleDeg: 3.0, widthM: 160 },
-      { frac: 0.4792, angleDeg: 7.0, widthM: 240 },   // banked left onto the north loop
+      // T13 left hairpin. Tilke reports 12% crossfall (~7 degrees).
+      { turn: 13, angleDeg: 7.0, widthM: 240 },
       // The sweeper after the banked left, by turn index: the old { frac: 0.5552 }
       // built 80 m past the T14 apex, inside this row's own 200 m width.
       { turn: 14, angleDeg: 6.0, widthM: 200 },       // banked sweeper

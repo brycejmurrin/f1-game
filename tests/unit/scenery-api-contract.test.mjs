@@ -138,8 +138,22 @@ test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
   assert.match(monaco, /monaco-tabac-shop[\s\S]{0,2200}TABAC/);
   assert.match(monaco, /monaco-rascasse-bar[\s\S]{0,2200}RASCASSE/);
   assert.match(monaco, /const harbourStations = \[0\.365, 0\.545, 0\.59\]/);
-  assert.equal((landmarkSource("singapore").match(/\bcityFront\s*\(/g) || []).length, 5,
-    "Must landmarks must not densify cityFront");
+});
+
+test("Singapore landmarks preserve the city frontage density budget", () => {
+  const Tracks = buildContext();
+  const singapore = Tracks.LIST.find((def) => def.id === "singapore");
+  const draw = Tracks._vmContext.TrackScenery.singapore;
+  let stations = 0;
+  singapore.scenery = (api) => draw({ ...api,
+    cityFront(start, end, side, gap, options) {
+      // cityFront builds one facade per along() station. A frontage can be
+      // split around a bend without adding buildings; both spans count here.
+      api.along(start, end, options?.step || 22, () => { stations++; });
+    },
+  });
+  Tracks.build(singapore);
+  assert.ok(stations > 0 && stations <= 76, `expected 1–76 Singapore frontage stations, got ${stations}`);
 });
 
 // ── K: the frac -> node index must be a valid index for EVERY frac ─────────────

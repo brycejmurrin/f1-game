@@ -18,7 +18,7 @@ Dusk/early-evening: deep indigo-to-violet sky fading orange at the horizon over 
 - Flame Towers glow: animated `[0.95, 0.35, 0.10]`
 
 ## 3. Elevation
-Mostly flat (sea-level boulevards). One distinct climb: the Old City "Castle Section" ramps uphill from s≈0.38 to a crest near s≈0.46, then descends back toward the Maiden Tower and the seafront. Everything from s≈0.55 to 1.0 (the long straight) is dead flat.
+The road climbs through the Old City’s T8 castle section to T13 (s≈0.529), then descends to the seafront. The game approximates the published 26.8 m relief with a smooth rise and returns to the flat boulevard at T16. [Formula 1 elevation guide](https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc)
 
 ## 4. Landmarks & Surroundings by Lap Position
 
@@ -31,7 +31,7 @@ Mostly flat (sea-level boulevards). One distinct climb: the Old City "Castle Sec
 | 0.30 | L | mid | Mixed modern mid-rise: stacked glass boxes, lit window grids |
 | 0.38 | R | near | Old City wall begins: long crenellated sandstone box, uplit |
 | 0.42 | L+R | very near | Castle Section squeeze (~7.6 m): tall walls both sides, near-vertical climb |
-| 0.46 | R | near | Crest past castle gate: chunky stone bastion box at apex |
+| 0.46 | R | near | Climb past castle gate: chunky stone bastion box at apex |
 | 0.52 | L | near | Maiden Tower: stout cylindrical-look stepped sandstone tower (tall box) |
 | 0.58 | L | far | Seafront opens: low boulevard rail + palm-row low green boxes |
 | 0.65–0.95 | L | far | Caspian-front straight (~2.2 km): sea void left, sparse lit modern boxes right |

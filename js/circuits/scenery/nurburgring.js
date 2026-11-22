@@ -148,7 +148,8 @@
       bowlSeatWall(0.145, 0.205, 1, 15, {
         h: 6.4, thick: 4.2, shell: [0.50, 0.51, 0.54], step: 8,
       });
-      bowlSeatWall(0.100, 0.185, -1, 13, {
+      // Start past the tight inside bend where adjacent seating blocks overlap.
+      bowlSeatWall(0.1033, 0.185, -1, 13, {
         h: 5.2, thick: 3.6, shell: [0.56, 0.56, 0.55], step: 8,
       });
       spectatorHill(0.205, 0.245, -1, 14, { rows: 4, rise: 1.2, depth: 1.9, density: 0.52, step: 8 });

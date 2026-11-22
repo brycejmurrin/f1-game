@@ -467,7 +467,7 @@ function buzzAmp(spV, deploying, reduceMotion, wet) {
 }
 function rollTarget(roadCamRoll, slipSm, baRoll, reduceMotion) {
   if (reduceMotion) return 0;
-  return (roadCamRoll + slipSm * 0.16 + baRoll) * rollLean();
+  return (roadCamRoll + slipSm * 0.16 - baRoll) * rollLean();
 }
 
 function copyFrom(srcMode, dstMode) {

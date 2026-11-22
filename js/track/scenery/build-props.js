@@ -123,6 +123,14 @@ const TrackBuildProps = (function () {
     const waterOccupied = new Set();
     const waterRects = new Map();   // cell width -> emitted world rectangles
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
+    // Quantize horizontal layout intervals against the plan-view lap when authored.
+    // A height-only update can otherwise move a half-node tie and re-seed whole streets.
+    const sceneryStepM = def.planarScenerySpacing === true
+      ? px.reduce((sum, x, i) => {
+        const j = (i + 1) % n;
+        return sum + Math.hypot(px[j] - x, pz[j] - pz[i]);
+      }, 0) / n : ds;
+    track.sceneryStepM = sceneryStepM;
     const NIGHT = track._night != null ? track._night : !!def.night;
 
     // Rendered-terrain raycast for exact prop anchoring: anchor-based props
@@ -1202,7 +1210,7 @@ const TrackBuildProps = (function () {
     const HK = (k) => (((Math.round(k) - HKSHIFT) % n) + n) % n;
     // Phase every() by the same shift so the walk revisits the same places.
     const every = (m, fn) => {
-      const stp = Math.max(1, Math.round(m / ds));
+      const stp = Math.max(1, Math.round(m / sceneryStepM));
       for (let i = 0; i < n; i += stp) fn((i + HKSHIFT) % n);
     };
     // dressingExclusions are authored in the def's scenery frame, exactly like
@@ -1256,7 +1264,7 @@ const TrackBuildProps = (function () {
     // Box is track-aligned ([t,u,r] basis) so its large face always runs parallel
     // to the road — a forward camera only ever sees the thin sz[2] edge, never
     // the full sz[0]×sz[1] face regardless of the track's world-space heading.
-    const backdrop = (k, side, dist, sz, col) => {
+    const backdrop = (k, side, dist, sz, col, opts) => {
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1318,22 +1326,26 @@ const TrackBuildProps = (function () {
         const floors = Math.max(2, Math.min(4, Math.round(sz[1] / 18)));
         const fh = sz[1] / floors;
         const base = cy0 - sz[1] / 2;
+        // On a grade, place the facade along the wall’s local up axis.
+        const facadeCenter = y => opts?.followGrade
+          ? vadd([cx, cy0, cz], u, y - sz[1] / 2)
+          : [cx, base + y, cz];
         out._mat = MAT.GLASS;
         for (let i = 1; i < floors; i++) {
           const wc = (lit && hash(k * 7.7 + i * 3.3 + dist * 0.1) < 0.34) ? darkWin : win;
           // band on the camera-facing (u × sz2) face; thin in up, proud in sz2
-          addBox(out, [cx, base + (i + 0.5) * fh, cz], [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
+          addBox(out, facadeCenter((i + 0.5) * fh), [sz[0] * 0.98, fh * 0.5, sz[2] * 1.03], wc, [t, u, r]);
         }
         // parapet cap so the roofline isn't a bare slab edge
         out._mat = MAT.METAL;
-        addBox(out, [cx, base + sz[1] + 0.6, cz], [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
+        addBox(out, facadeCenter(sz[1] + 0.6), [sz[0] * 1.02, 1.2, sz[2] * 1.04], col, [t, u, r]);
         out._mat = 0;
       }
     };
 
     const ctx = {
       // output buffers + per-build state
-      out, glassBuf, waterBuf, track, def, theme, pal, n, ds, px, py, pz, hw,
+      out, glassBuf, waterBuf, track, def, theme, pal, n, ds, sceneryStepM, px, py, pz, hw,
       pyMin, NIGHT, MAT, lod,
       // desktop detail level (0 today) and its feature flags (TrackDetail.NAMES; all false at 0)
       detail: track._detail || 0, detailFeatures: DF,
@@ -1728,8 +1740,13 @@ const TrackBuildProps = (function () {
           const a = anchor(k, side, 9);
           if (massBlocked(a.c, 9, 7, [a.r, a.u, a.t], 0.82)) { blockAt(k, side, 9 - 4.5, 3.5); placeSeq += 2; return; }
           const rc = toneFor(HK(k) * 2.7, side).d || [0.5, 0.5, 0.54];
-          place(k, side, 9, [9, 4 + hash(HK(k)) * 3, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
-          place(k, side, 9, [9.3, 1.0, 7.3], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
+          const height = 4 + hash(HK(k)) * 3;
+          place(k, side, 9, [9, height, 7], NIGHT ? [0.13, 0.13, 0.16] : rc);
+          // place() seats the centres vertically but tilts both boxes with
+          // the road. Leave clearance around the body's downhill face as
+          // well as across the independent placement jitter (up to 0.13 m).
+          const skirtLength = 7.3 + Math.abs(track.ty[k]) * height;
+          place(k, side, 9, [9.4, 1.0, skirtLength], NIGHT ? lc : [lc[0] * 0.4 + 0.3, lc[1] * 0.4 + 0.3, lc[2] * 0.4 + 0.3], -0.45);
         }
       });
       // Occasional illuminated billboard accent (more on high-neon circuits).
@@ -2151,7 +2168,7 @@ const TrackBuildProps = (function () {
       const dens = (typeof LightTune !== "undefined" && LightTune.LT &&
         typeof LightTune.LT.lampDensity === "number" && LightTune.LT.lampDensity > 0)
         ? LightTune.LT.lampDensity : 1;
-      const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
+      const mstride = Math.max(1, Math.round((22 / dens) / sceneryStepM));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
       const globeStreet = fz.lamp === "globe";
       const pickKind = (k, roll) => {

@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "montreal",
+    revision: 2,
     pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.1 m off centreline, 2 nodes past vertex 0.
@@ -36,11 +37,20 @@
       { frac: 0.4734, angleDeg: 3.0, widthM: 90 },    // T9
       { frac: 0.6197, angleDeg: 3.0, widthM: 80 },    // T10, the hairpin
     ],
+    // Formula 1's Montréal elevation trace (Highs and lows, 2016) has 5.2 m of
+    // relief, cresting between T2 and T3 and bottoming between T12 and T13.
+    // Approximate heights relative to start/finish at equal lap intervals.
+    // Overlapping cosine lobes interpolate adjacent heights smoothly.
     elevations: [
-      { s: 0.4846, halfM: 220, rise: 1.25 },   // s re-keyed (0.52, 0.115, 0.755) so each bump stays put without the 0.915 frame
-      { s: 0.0796, halfM: 300, rise: 2.2 },
-      { s: 0.7196, halfM: 260, rise: -1.0 },
-    ],
+      0.0, 0.0, 0.3, 0.6, 1.3, 4.1, 5.0, 4.7, 4.5, 1.8, 0.1, 0.3,
+      0.3, 0.5, 1.9, 3.3, 3.6, 3.6, 3.6, 3.6, 3.7, 3.7, 3.8, 3.2,
+      3.1, 3.1, 3.0, 3.0, 2.9, 2.8, 2.7, 2.7, 1.7, 1.7, 1.0, 0.3,
+      0.1, -0.1, -0.2, -0.1, 0.1, 0.2, 0.3, 0.3, -0.1, -0.1, -0.1, -0.1,
+    ].map((rise, i, heights) => ({
+      s: (0.0198 + i / heights.length) % 1, // fromRaw subtracts startFrac
+      halfM: 4347 / heights.length,
+      rise,
+    })),
     flatTerrain: true,
     terrainOuter: 70,
 

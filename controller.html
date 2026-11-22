@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-NsPmuNpdF4Lo0c45H4G3sVhlm0pYF7/xgx1tQLyfb/k=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-4VWCz+SrUDGY+KVSQJRMeXi7bpu5ZZfPY45Ez4ZGdfY=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -18,6 +18,7 @@
      light theme and menu accents) and the component layer (.bigbtn). -->
 <link rel="stylesheet" href="css/tokens.css?v=dev">
 <link rel="stylesheet" href="css/components.css?v=dev">
+<link rel="stylesheet" href="css/touch-button-colors.css?v=dev">
 <script>
 // THE PLAYER'S LOOK, before first paint: the same apex26.* settings
 // js/ui/appearance-opts.js applies on the game (THEME, MENU ACCENT, TEXT SIZE,
@@ -216,6 +217,17 @@
   body[data-pedals="side"][data-swap] #right > * { direction: ltr; }
   #b-layout { flex: none; width: 44px; padding: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
   #b-layout svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  #b-utility[hidden], #utility-options[hidden] { display: none; }
+  #utility-options {
+    position: fixed; z-index: 4; display: flex; align-items: flex-end; gap: 4px;
+    width: max-content; max-width: 100vw; height: 64px; pointer-events: none;
+  }
+  #utility-options button {
+    min-width: 52px; min-height: 44px; border-radius: 50%; padding: 0 6px;
+    font: 800 13px/1 var(--font-ui); background: var(--plate-opaque); pointer-events: auto;
+  }
+  #utility-options button:nth-child(2) { align-self: flex-start; }
+  #utility-options [data-aimed] { outline: 3px solid var(--team-c); }
   #layout-sheet { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
                   display: flex; flex-direction: column; gap: 10px; background: var(--bg);
                   padding: calc(10px + var(--sat)) calc(14px + var(--sar)) calc(12px + var(--sab)) calc(14px + var(--sal)); }
@@ -255,7 +267,14 @@
   #arr-tools { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
   #arr-name { flex: 0 0 100%; text-align: center; font-size: 13px; }
   #arr-select { max-width: 10em; }
-  @media (pointer: coarse), (hover: none) { #arrange-bar #arr-select { font-size: 16px; } }
+  #ctl [data-wheel-shape="square"] { border-radius: 0; }
+  #ctl [data-wheel-shape="capsule"] { border-radius: 999px; }
+  #ctl [data-wheel-shape="arch"] { border-radius: 50% 50% 12% 12%; }
+  #ctl [data-wheel-shape="shield"] { border-radius: 12% 12% 50% 50%; }
+  #ctl [data-wheel-shape="paddle-left"] { border-radius: 50% 12% 12% 50%; }
+  #ctl [data-wheel-shape="paddle-right"] { border-radius: 12% 50% 50% 12%; }
+  #ctl [data-wheel-shape="leaf"] { border-radius: 50% 12% 50% 12%; }
+  @media (pointer: coarse), (hover: none) { #arrange-bar :is(#arr-select, #arr-shape) { font-size: 16px; } }
   body.arranging #ctl > .screen-arrange-entry { visibility: hidden; }
   body.arranging #ctl :is(#gas,#b-aero) { pointer-events: auto; }
   #lay-arrange { border-color: var(--red); }
@@ -277,6 +296,14 @@
   .shift, .tap { flex: 1 1 0; min-height: 48px; border-radius: 22px; background: var(--plate-opaque);
             border: 2px solid var(--plate-line); font-weight: 800; font-size: 26px; line-height: 1; color: var(--text);
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  #shift-flick { display: none; flex: 1 1 0; min-width: 44px; min-height: 96px; grid-row: 1 / -1;
+    flex-direction: column; align-items: stretch; justify-content: space-between; text-align: center;
+    touch-action: none; user-select: none; border: 2px solid var(--plate-line); border-radius: 22px; background: var(--plate-opaque); }
+  #shift-flick small { font-weight: 700; font-size: 12px; letter-spacing: .08em; color: var(--dim); }
+  #shift-flick button { min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); font-weight: 800; }
+  #shift-flick.on { border-color: var(--team-c); }
+  body[data-shifts="flick"] .shift { display: none; }
+  body[data-shifts="flick"]:not(.gears-auto) #shift-flick { display: flex; }
   .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
   .tap { font-size: 16px; letter-spacing: .1em; display: none; }
   .shift.on, .tap.on { border-color: var(--team-c); box-shadow: inset 0 0 0 2px var(--team-c); }
@@ -296,8 +323,17 @@
   .pedal.on:not(.feedback-off) { isolation: isolate; background: var(--hud-ink-dark); color: var(--hud-ink-light); }
   .pedal.on:not(.feedback-off)::after {
     content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
-    background: color-mix(in srgb, var(--touch-fill) 46%, var(--hud-ink-dark));
+    background: color-mix(in srgb, var(--touch-fill) var(--touch-brightness, 46%), var(--hud-ink-dark));
     opacity: var(--travel, 1);
+  }
+  .pedal.on[data-touch-indicator="percent"]:not(.feedback-off, .grip-cue)::before {
+    counter-reset: pressure calc(100 * var(--travel, 0));
+    content: counter(pressure) "%"; inset: auto 0 4px; width: auto; height: auto;
+    transform: none; clip-path: none; border: 0; background: none; text-align: center;
+    font-size: var(--fs-micro); line-height: 1; pointer-events: none;
+  }
+  .pedal.on[data-touch-indicator="bar"]:not(.feedback-off)::after {
+    opacity: 1; transform-origin: bottom; transform: scaleY(var(--travel));
   }
   .pedal.grip-cue.on:not(.feedback-off)::before { inset: .4rem 12% auto; height: .4rem; border: 0; }
   #gas.grip-cue.on:not(.feedback-off)::before { background: repeating-linear-gradient(125deg, currentColor 0 .2rem, transparent .2rem .4rem); }
@@ -321,6 +357,7 @@
   body.gears-auto #keys #b-overtake, body.gears-auto #keys #b-boost { display: none; }   /* on the grip instead */
   body.throttle-auto #gas { pointer-events: none; flex-direction: column; align-items: center; justify-content: flex-end; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
   body.throttle-auto #gas::before { border-color: var(--card-line); }
+  body.throttle-auto #gas > [data-pedal-ticks] { display: none; }
   body.throttle-auto #gas small { display: block; color: color-mix(in oklab, var(--dim) 55%, transparent); }
   body.aero-auto #b-aero, body.aero-none #b-aero { pointer-events: none; background: var(--surf-1); color: color-mix(in oklab, var(--dim) 55%, transparent); border-color: var(--card-line); }
   /* THE MENU PAD (PhonePad.paintHud → body.menu: out of a race, or paused) is
@@ -543,6 +580,11 @@
     <div id="left-keys" class="grip-keys"></div>
     <button id="b-shiftUp" class="shift" type="button" aria-label="Shift up">&#9650;<small>UP</small></button>
     <button id="b-shiftDown" class="shift" type="button" aria-label="Shift down">&#9660;<small>DN</small></button>
+    <div id="shift-flick" role="group" aria-label="Flick to shift up or down">
+      <button id="flick-up" type="button" aria-label="Shift up">&#9650; UP</button>
+      <small aria-hidden="true">FLICK TO SHIFT</small>
+      <button id="flick-down" type="button" aria-label="Shift down">DN &#9660;</button>
+    </div>
     <button id="b-ot-big" class="tap" type="button" aria-label="Overtake">OT</button>
     <button id="b-boost-big" class="tap" type="button" aria-label="Boost">BOOST</button>
   </div>
@@ -558,6 +600,7 @@
       <button id="b-overtake" type="button">OT</button>
       <button id="b-boost" type="button">BOOST</button>
       <button id="b-aero" type="button">AERO</button>
+      <button id="b-utility" type="button" aria-label="Camera, look back and radio" aria-controls="utility-options" aria-expanded="false" hidden>UTILITIES</button>
       <button id="b-camera" type="button">CAM</button>
       <button id="b-radio" type="button">RADIO</button>
       <button id="b-look" type="button">LOOK</button>
@@ -576,6 +619,12 @@
     <div id="brake" class="pedal" role="button" tabindex="0" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" tabindex="0" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
+  <div id="utility-stowed" hidden></div>
+  <div id="utility-options" role="group" aria-label="Utility wheel" hidden>
+    <button id="u-camera" type="button">CAMERA</button>
+    <button id="u-look" type="button" aria-label="Look back for one second">LOOK 1s</button>
+    <button id="u-radio" type="button">RADIO</button>
+  </div>
   <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
 </section>
 <div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
@@ -585,14 +634,19 @@
     <button type="button" data-preset="classic">CLASSIC</button>
     <button type="button" data-preset="right">RIGHT THUMB<small>OT · BOOST · AERO by the pedals</small></button>
     <button type="button" data-preset="left">LEFT THUMB<small>OT · BOOST · AERO by the paddles</small></button>
+    <button type="button" data-preset="split">SPLIT ACTIONS<small>OT · AERO left, BOOST right, pedals side by side</small></button>
+    <button type="button" data-preset="views">RACE VIEWS<small>CAM · LOOK left, RADIO right</small></button>
     <button type="button" data-preset="mirror">MIRRORED<small>pedals left, paddles right</small></button>
     <button type="button" data-preset="phone">PHONE STYLE<small>tall BRAKE · GAS side by side, OT · BOOST · AERO column</small></button>
   </div>
+  <p id="lay-utility-help">Combine Camera, Look and Radio into one button. Hold Utilities, slide onto an action and lift, or tap to open its buttons. Look glances back for one second.</p>
   <div id="lay-rows" role="group" aria-label="Where each button sits"></div>
   <div id="lay-toggles">
     <button id="lay-pedals" type="button">PEDALS SIDE BY SIDE</button>
     <button id="lay-strip" type="button">MOVED BUTTONS IN A COLUMN</button>
+    <button id="lay-utility" type="button" aria-describedby="lay-utility-help">UTILITY WHEEL</button>
     <button id="lay-swap" type="button">SWAP PEDALS AND PADDLES</button>
+    <button id="lay-flick-shifts" type="button">FLICK TO SHIFT</button>
     <button id="lay-arrange" type="button">MOVE &amp; SIZE BUTTONS</button>
   </div>
 </div>
@@ -608,6 +662,12 @@
     <button type="button" data-nudge="up">Up</button><button type="button" data-nudge="down">Down</button>
     <button id="arr-step" type="button" aria-label="Coarse adjustment" aria-pressed="false">Fine</button>
     <button id="arr-minus" type="button">Scale −</button><button id="arr-plus" type="button">Scale +</button>
+    <label for="arr-shape">Shape</label>
+    <select id="arr-shape">
+      <option value="default">Default</option><option value="square">Square</option><option value="capsule">Capsule</option>
+      <option value="arch">Arch</option><option value="shield">Shield</option><option value="paddle-left">Left paddle</option>
+      <option value="paddle-right">Right paddle</option><option value="leaf">Leaf</option>
+    </select>
     <button id="arr-undo" type="button">Undo</button>
     <button id="arr-reset" type="button">Reset region</button><button id="arr-reset-all" type="button">Reset wheel</button>
   </div>
@@ -626,6 +686,7 @@
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/touch-button-actions.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/touch-button-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-codec.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-page.js?v=dev"></script>
@@ -649,7 +710,9 @@ window.addEventListener("DOMContentLoaded", function () {
   var ctl = PhonePad.pad({
     steeringMode: $("steering-mode"), steer: $("steering-strip"), health: $("input-health"), healthAge: $("input-age"),
     body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
+    utility: { trigger: $("b-utility"), panel: $("utility-options"), choices: { camera: $("u-camera"), look: $("u-look"), radio: $("u-radio") } },
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
+    shiftFlick: $("shift-flick"), flickKeys: { shiftUp: $("flick-up"), shiftDown: $("flick-down") },
     buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: [$("b-overtake"), $("b-ot-big")],
                boost: [$("b-boost"), $("b-boost-big")], aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
                recover: $("b-recover"), pause: [$("b-pause"), $("b-pause-menu")],
@@ -674,16 +737,17 @@ window.addEventListener("DOMContentLoaded", function () {
   // WHEEL LAYOUT: which thumb each face key sits under, saved on this phone.
   try {
     window.__apexPadLayout = PhonePadPage.layout({
+      utilityTrigger: $("b-utility"), utilityStore: $("utility-stowed"), utilityBtn: $("lay-utility"), closeUtilities: ctl.closeUtilities,
       body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
       keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
               look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
-      sheet: $("layout-sheet"), responses: $("pedal-response-fields"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
+      sheet: $("layout-sheet"), responses: $("pedal-response-fields"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"), flickBtn: $("lay-flick-shifts"),
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
       stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
-      picker: $("arr-select"), adjust: $("arr-adjust"), tools: $("arr-tools"), edge: $("arr-edge"), step: $("arr-step"),
+      picker: $("arr-select"), shape: $("arr-shape"), adjust: $("arr-adjust"), tools: $("arr-tools"), edge: $("arr-edge"), step: $("arr-step"),
       nudges: document.querySelectorAll("#arr-tools [data-nudge]"), undo: $("arr-undo"), cancel: $("arr-cancel"),
       resetOne: $("arr-reset"), resetAll: $("arr-reset-all"), arrangeDone: $("arr-done"),
-      arrange: { screen: $("screen"), shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), otBig: $("b-ot-big"), boostBig: $("b-boost-big"),
+      arrange: { utility: $("b-utility"), screen: $("screen"), shiftFlick: $("shift-flick"), shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), otBig: $("b-ot-big"), boostBig: $("b-boost-big"),
                  overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"), look: $("b-look"),
                  recover: $("b-recover"), pause: $("b-pause"), brake: $("brake"), gas: $("gas"), steering: $("steering-strip") },
     }, { store: (function () { try { return window.localStorage; } catch (e) { return null; } })() });

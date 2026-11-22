@@ -112,7 +112,10 @@ const TrackMesh = (function () {
       }
     }
 
-    function paint(kc, lo, hi, tanA, peak) {
+    // Fractional increase in crossfall from the centre of the road to the high edge.
+    const varying = zones && zones.some(z => Number.isFinite(z.insideAngleDeg)) ? new Float32Array(n) : null;
+
+    function paint(kc, lo, hi, tanA, peak, variation = 0) {
       lo = Math.max(1, lo); hi = Math.max(1, hi);
       const span = lo + hi + 1;
       let dom = 0;
@@ -143,7 +146,11 @@ const TrackMesh = (function () {
       }
       for (let i = -lo; i <= hi; i++) {
         const k = (kc + i + n) % n, v = signed[i + lo], a = Math.abs(v);
-        if (a > lift[k]) { lift[k] = a; bsign[k] = v >= 0 ? 1 : -1; }
+        if (a > lift[k]) {
+          lift[k] = a;
+          bsign[k] = v >= 0 ? 1 : -1;
+          if (varying) varying[k] = variation;
+        }
       }
     }
 
@@ -263,11 +270,13 @@ const TrackMesh = (function () {
 
       zones.forEach((z, i) => {
         const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
-        paint(Math.round(centre[i] * n) % n, half, half,
-              Math.tan((z.angleDeg || 18) * Math.PI / 180), null);
+        const outer = Math.tan((z.angleDeg ?? 18) * Math.PI / 180);
+        const inner = Number.isFinite(z.insideAngleDeg) ? Math.tan(z.insideAngleDeg * Math.PI / 180) : outer;
+        const mean = (inner + outer) / 2;
+        paint(Math.round(centre[i] * n) % n, half, half, mean, null, mean ? (outer - inner) / (2 * mean) : 0);
       });
       relaxSignSteps();
-      return { lift, bsign };
+      return { lift, bsign, varying };
     }
 
     // Legacy auto-pick: the two highest-curvature corners, banked at 18°.
@@ -287,9 +296,7 @@ const TrackMesh = (function () {
 
   // Cross-track banking offset (metres along the node's up axis) at lateral
   // offset `o` from the centreline. THE single source of truth for the pivot:
-  // the section rotates about its own centreline, so the inner edge drops
-  // lift/2 and the outer edge rises lift/2, and anything past the tarmac clamps
-  // to the corresponding edge height.
+  // The centreline stays fixed. Beyond the tarmac the height holds at its edge.
   //
   // Everything laid alongside the road must use this. buildRoad applied the
   // pivot inline while buildKerbSteps did not, so on Zandvoort's banked corners the
@@ -302,14 +309,15 @@ const TrackMesh = (function () {
     const lift = bp.lift[k];
     if (!(lift > 0)) return 0;
     const w = track.hw[k];
-    let frac = (bp.bsign[k] * o + w) / (2 * w);
-    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-    return lift * (frac - 0.5);
+    const x = Math.max(-w, Math.min(w, o));
+    // Integrate a linear change in crossfall across the width. The centreline
+    // remains at its surveyed height; a bowl's two edges can have unequal offsets.
+    return lift * x / (2 * w) * (bp.bsign[k] + (bp.varying ? bp.varying[k] * x / (2 * w) : 0));
   }
 
   // The banked running surface's NORMAL at node k, lateral offset `o`.
-  // Across the lap the surface leans: bankOffsetAt is linear in o over the
-  // tarmac (slope g = bsign·lift / 2w), so it runs along r + u·g — the roll
+  // Across the lap the surface leans; its local derivative g yields the
+  // tangent r + u·g, including a progressive bowl. This is the roll
   // banking() reports. Along the lap it twists wherever the bank ramps in and
   // out, so the along-lap tangent is THIS column's own chord through the two
   // neighbouring banked points (not t: on the inside of a hairpin the rail at
@@ -326,7 +334,7 @@ const TrackMesh = (function () {
     const n = track.n, kp = (k - 1 + n) % n, kn = (k + 1) % n, lift = bp.lift;
     if (!(lift[k] > 0) && !(lift[kp] > 0) && !(lift[kn] > 0)) return u;
     const w = track.hw[k];
-    const g = (lift[k] > 0 && w > 0 && __M.abs(o) <= w) ? bp.bsign[k] * lift[k] / (2 * w) : 0;
+    const g = (lift[k] > 0 && w > 0 && __M.abs(o) <= w) ? lift[k] / (2 * w) * (bp.bsign[k] + (bp.varying ? bp.varying[k] * o / w : 0)) : 0;
     const { px, py, pz, rx, ry, rz } = track;
     const at = (j) => {
       const uj = upOf(track, j), b = bankOffsetAt(track, j, o);
@@ -539,7 +547,7 @@ const TrackMesh = (function () {
   // monza / zandvoort (fixed seed, 200k node-aligned samples): ~7.6× less
   // time in bankAngle; ~10–13 % less wall time per physics step. Early-out
   // on !signedLift keeps flat nodes (almost all of monza) off atan2.
-  function bankAngle(track, s) {
+  function bankAngle(track, s, x = 0) {
     const bp = track.bankP;
     if (!bp) return 0;
     const n = track.n, L = track.total;
@@ -549,7 +557,13 @@ const TrackMesh = (function () {
     const signedLift = sl0 + (sl1 - sl0) * f;
     if (!signedLift) return 0;
     const w0 = track.hw[k], w1 = track.hw[j];
-    return Math.atan2(signedLift, 2 * (w0 + (w1 - w0) * f));
+    const w = w0 + (w1 - w0) * f;
+    if (x < -w || x > w) return 0;
+    if (x && bp.varying) {
+      const change = lerp(bp.varying[k] * bp.lift[k], bp.varying[j] * bp.lift[j], f);
+      return Math.atan2(signedLift + change * (x / w), 2 * w);
+    }
+    return Math.atan2(signedLift, 2 * w);
   }
 
   // `out` (optional): a reusable { dy, roll } scratch. When supplied it's written
@@ -566,6 +580,7 @@ const TrackMesh = (function () {
   // the elevation was smoothed. Camera call sites opt in; nothing else changes.
   // Signed cross-track lift at node i. Hoisted out of banking() — see the call.
   function _signedLift(bp, i) { return bp.lift[i] * bp.bsign[i]; }
+  function _variationLift(bp, i) { return bp.varying[i] * bp.lift[i]; }
   function banking(track, s, x, out, smooth) {
     const bp = track.bankP;
     if (!bp) return null;
@@ -589,8 +604,16 @@ const TrackMesh = (function () {
       : lerp(track.hw[k], track.hw[j], f);
     const cx = x < -w ? -w : x > w ? w : x;
     const o = out || {};
-    o.dy = signedLift * cx / (2 * w);
-    o.roll = Math.atan2(signedLift, 2 * w);
+    let laneLift = 0;
+    if (bp.varying) {
+      const change = smooth
+        ? catmull(_variationLift(bp, (k - 1 + n) % n), _variationLift(bp, k), _variationLift(bp, j), _variationLift(bp, (k + 2) % n), f)
+        : lerp(_variationLift(bp, k), _variationLift(bp, j), f);
+      laneLift = change * cx / w;
+    }
+    o.dy = (signedLift + laneLift / 2) * cx / (2 * w);
+    // Beyond the asphalt the kerb and verge carry the edge lift across their width.
+    o.roll = x === cx ? Math.atan2(signedLift + laneLift, 2 * w) : 0;
     return o;
   }
 
@@ -735,7 +758,8 @@ const TrackMesh = (function () {
     // mesh.js surface row). A strip decal along the line is the finer follow-up.
     const lineX = track.line && track.line.length === n ? track.line : null;
     const wearF = (v, k, o) => {
-      const f = (v === 4 || v === 9) ? 1.07 : 1.0;
+      const dustColumn = (v === 4 || v === 9) && hw[k] - Math.abs(o) <= 0.3;
+      const f = dustColumn ? 1.07 : 1.0;
       if (!lineX) return (v >= 5 && v <= 8) ? f * 0.86 : f;
       const d = __M.abs(o - lineX[k]);
       const band = d < 1.2 ? 1 : d > 4.0 ? 0 : (4.0 - d) / 2.8;
@@ -763,6 +787,11 @@ const TrackMesh = (function () {
                     0.30, 0.35,                      // centre line (right half)
                     w - 0.25, w - 0.2, w,            // right step + edge line
                     w + 0.4, w + 2.2];
+      // Reuse the ten asphalt columns for the curved cross-section. Markings
+      // use the lateral coordinate in the shader, independent of column index.
+      if (track.bankP && track.bankP.varying && track.bankP.varying[k]) {
+        for (let v = 2; v <= 11; v++) offs[v] = w * ((v - 2) * 2 / 9 - 1);
+      }
       // VERGE FOLD CLAMP. A rail at offset o runs BACKWARDS over a node span when
       // o·dot(r[k+1]-r[k], t) < -|dP| (turn radius < |o|); its quads then fold
       // back over the neighbouring strip. On the fold side only, pull the verge
@@ -979,18 +1008,11 @@ const TrackMesh = (function () {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const u = upOf(track, k);
         const w = hw[k];
-        const bankLift = bp ? bp.lift[k] : 0;
-        const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const t = NTV <= 1 ? 1 : v / (NTV - 1);
           const yBase = surface.heightAt(k, __M.abs(lats[v]), lats[v] < 0 ? -1 : 1);
-          let by = 0;
-          if (bankLift > 0) {
-            let frac = (bankSide * o + w) / (2 * w);
-            frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-            by = bankLift * (frac - 0.5) * (1 - t);
-          }
+          const by = bp ? bankOffsetAt(track, k, o) * (1 - t) : 0;
           const wx = px[k] + r[0] * o + u[0] * by;
           const wz = pz[k] + r[2] * o + u[2] * by;
           let wy = yBase + u[1] * by;
@@ -1093,7 +1115,7 @@ const TrackMesh = (function () {
           const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
-          mat.push(gt < 0.22 ? runoffMat : groundMat);
+          mat.push(v < surface.gravelRails ? runoffMat : groundMat);
         }
         if ((k + 1) % 32 === 0 || k + 1 === n) yield;
       }

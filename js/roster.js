@@ -256,6 +256,7 @@
     "js/garage/hi-prims.js"
   ],
     LAZY_RACE_SESSION: [
+    "js/input/touch-button-actions.js",
     "js/data/garage-departure-motion.js",
     "js/garage/departure-wheels.js",
     "js/race/reliability.js",

@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "catalunya",
+    revision: 2,
     classic: true,
     reverse: false,
     // The trace opens on the ~990 m main straight (measured, curvature < 0.0008 from frac 0.935), and its first vertex IS the
@@ -46,12 +47,16 @@
       runoff:        [0.62, 0.48, 0.32],
       sunDir:        [0.40, 0.70, 0.28],
     },
+    // OpenF1 2024 Spanish qualifying, session 9535, Norris lap 11. Relative height
+    // every 1/64 of a closed XY racing lap. Two overlapping knot intervals smooth
+    // the position feed. Half-amplitude weights sum to one around the lap.
+    // F1 reports 29.6 m between the T1 low point and the crest after T12.
     elevations: [
-      { s: 0.2876, halfM: 380, rise: 7.0 },    // climb through Renault/Repsol
-      { s: 0.5476, halfM: 420, rise: 11.0 },   // high ground before Campsa
-      { s: 0.7276, halfM: 400, rise: -9.0 },   // Campsa drop into La Caixa
-      { s: 0.9676, halfM: 360, rise: -6.0 },   // dip along the pit straight
-    ],
+      0, 0.1, -0, -0, -0.3, -1.1, -2.5, -4.2, -5.7, -6.6, -7.4, -8.3, -7.3, -4.4, -1.1, 1.9,
+      4.4, 5.9, 6.9, 8, 9, 10, 11, 11.7, 12.8, 13.1, 12.2, 10.8, 8.8, 5.3, 0.8, -2.8,
+      -5.2, -5.7, -4.6, -2.1, 2.2, 6.5, 10.8, 14.4, 16.4, 16.3, 15.5, 14.7, 13.8, 12.9, 12.1, 11.3,
+      11.5, 13.1, 15.8, 18.7, 20.7, 21.5, 20.6, 17.9, 14.1, 10.5, 7, 4.5, 2.9, 1.9, 0.8, 0.1,
+    ].map((height, i) => ({ s: i / 64, halfM: 4653 / 32, rise: height / 2 })),
     hwZones: [
       { s0: 0.290, s1: 0.335, hw: 6.4, ease: 0.012 },  // Seat / Wurth chicane
       { s0: 0.660, s1: 0.705, hw: 6.3, ease: 0.012 },  // La Caixa hairpin

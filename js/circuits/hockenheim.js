@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "hockenheim",
+    revision: 2,
     classic: true,
     reverse: false,
     startFrac: 0.0,
@@ -33,10 +34,17 @@
       grass:         [0.19, 0.42, 0.19],
       sunDir:        [0.42, 0.62, 0.36],
     },
+    // Smooth approximation of Formula 1's 2016 Hockenheim longitudinal profile
+    // (4.3 m relief, T2 high point, second crest into the Spitzkehre).
+    // https://www.formula1.com/en/latest/article/7I9JEcBw3R2AqXbnJ6hyvc
     elevations: [
-      { s: 0.26, halfM: 380, rise: -3.5 },  // drift down through the forest loop
-      { s: 0.46, halfM: 300, rise: -5.0 },  // Spitzkehre sits in the low corner
-      { s: 0.70, halfM: 420, rise: 4.0 },   // climb back toward the Motodrom
+      { s: 0.136, halfM: 454, rise: 2.24 },
+      { s: 0.181, halfM: 132, rise: 2.25 },
+      { s: 0.325, halfM: 1264, rise: 1.54 },
+      { s: 0.451, halfM: 217, rise: 2.48 },
+      { s: 0.533, halfM: 520, rise: 2.50 },
+      { s: 0.702, halfM: 627, rise: 3.16 },
+      { s: 0.882, halfM: 311, rise: 1.66 },
     ],
     hwZones: [
       { s0: 0.3624, s1: 0.4169, hw: 6.2, ease: 0.012 },  // Spitzkehre hairpin approach (index; racing ≈0.349-0.402)

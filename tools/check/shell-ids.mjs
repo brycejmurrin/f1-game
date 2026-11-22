@@ -88,7 +88,6 @@ export const RUNTIME_IDS = {
   "ga-pit-out": "GarageArrival buildRows() AFTER_ON (EACH MOMENT, #4745 A2), the same null-guarded reads",
   "ga-crew-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-result": "GarageArrival buildRows(), same table and the same null-guarded reads",
-  "ga-preview-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-race": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "pm-btnshape":      "DockLayout.create builds the BUTTON SHAPE row with SettingRow.build under BUTTON OPACITY (shell node count is a shrink-only ratchet); its lookups are null-guarded",
   "as-slang":         "audio/panel.js builds the SPOKEN LANGUAGE row with SettingRow.build after RADIO SOUND (the shell's node count is a shrink-only ratchet); its paint/wire reads are null-guarded",

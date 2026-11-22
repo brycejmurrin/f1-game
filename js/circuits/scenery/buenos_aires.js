@@ -144,11 +144,11 @@
         building(K(0.920 + i * 0.016), 1, 40, 22, 9, 22,
           { kind: "drum", wall: [0.86, 0.85, 0.80], window: [0.30, 0.34, 0.42], floor: 4.2 });
       }
-      every(56, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.60) return;
-        motorhome(k, 1, 56 + h * 10, 10, 4, 6, { wall: [0.70 + h * 0.2, 0.70, 0.72] });
-      });
+      // Park on the level outer paddock apron above the road’s first dip.
+      for (const s of [0.932, 0.950, 0.972, 0.992]) {
+        const k = K(s), h = hash(k * 71 + 31);
+        motorhome(k, 1, 82, 10, 4, 6, { wall: [0.70 + h * 0.2, 0.70, 0.72] });
+      }
       broadcastCompound(K(0.908), 1, 72, { vans: 2, dishes: 2, mastH: 9 });
       // Low panel boards (kit default is arched — its crown prism floated
       // ~7.7 m above the posts, ground-audit unsupported).
@@ -188,7 +188,7 @@
       grandstandEx(0.355, 1, 68, 40, null, null,
         { livery: "concrete", tiers: 2, roof: "flat", endWalls: true, h: 10 });
       // Behind Recta del Lago terrace@14 (depth ~18 m → clear by gap 36).
-      grandstandEx(0.655, -1, 36, 44, null, null,
+      grandstandEx(0.650, -1, 36, 44, null, null,
         { livery: "pastel", tiers: 2, roof: "flat", endWalls: true, pylons: true, h: 10 });
 
       // Grass banks — wider step (9→14) kills coplanar tread pairs (old :160).

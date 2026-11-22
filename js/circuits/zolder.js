@@ -16,6 +16,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zolder",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -74,6 +75,8 @@
     // fall back to thirds.
     sectors: [0.36, 0.613],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0240, 0.0376, 0.1911, 0.2771, 0.4105, 0.5591, 0.7066, 0.7230, 0.7675, 0.8790],
+    // Flemish DHMV II lidar transects across 8 m of the modern asphalt.
+    bankZones: [{ turn: 4, angleDeg: 2.5, widthM: 160 }, { turn: 9, angleDeg: 3.8, widthM: 145 }],
     furniture: { tree: "fir", fol: [0.15, 0.31, 0.19], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["concrete", "steel", "darkSteel"],

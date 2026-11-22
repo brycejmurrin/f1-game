@@ -16,6 +16,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "buddh",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against

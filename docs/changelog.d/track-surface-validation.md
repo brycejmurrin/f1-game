@@ -1,0 +1,1 @@
+Fixed: Updated circuit crests, descents and corner heights against survey and qualifying data, including Paddock Hill at Brands Hatch, Turn 4 at Bahrain and Remus at the Red Bull Ring. Adjusted affected trackside scenery to fit the rebuilt road.

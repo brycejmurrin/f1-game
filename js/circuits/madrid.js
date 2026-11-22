@@ -4,6 +4,7 @@
 
   (window.TrackDefs = window.TrackDefs || []).push({
     id: "madrid",
+    revision: 2,
     name: "MADRID",
     gp: "Spanish GP",
     country: "Spain",
@@ -39,9 +40,11 @@
       // mid-arc. It sat at 0.75, on an ordinary 67° left, until 2026-11-18
       // (#5316 CIRC2-02).
       { frac: 0.456, angleDeg: 13.5, widthM: 548 }, // La Monumental, T10/T11 in this list; 24% grade = atan(0.24)
-      { frac: 0.0524, angleDeg: 3.0, widthM: 180 },
-      { frac: 0.3990, angleDeg: 3.5, widthM: 110 },
-      { frac: 0.5711, angleDeg: 3.0, widthM: 90 },
+      // madring.com/en/circuit gives Curve 2 at 1%, Curve 11 at 2% adverse,
+      // and Curve 13 at 4%. Convert crossfall percentages with atan.
+      { frac: 0.0524, angleDeg: 0.57, widthM: 180 },
+      { frac: 0.3990, angleDeg: -1.15, widthM: 110 },
+      { frac: 0.5711, angleDeg: 2.29, widthM: 90 },
       { frac: 0.6557, angleDeg: 3.0, widthM: 180 },
       { frac: 0.9296, angleDeg: 3.0, widthM: 90 },
     ],

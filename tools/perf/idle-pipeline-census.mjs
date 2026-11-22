@@ -65,7 +65,7 @@ export const WINDOW_FRAMES = 60;
 export const REPLAY_MARGIN = 1.5;   // the warm pass drives the counted frames x this, so a slower counted pass stays on warmed road
 
 /** Boot TLX (forceGL selects three's WebGL2 backend), race monza with GAS held through `gas(true|false)`
- *  (the spec passes page.keyboard), warm WARM_FRAMES, drive the counted stretch once (the warm pass), jump back,
+ *  (the spec passes page.keyboard), warm WARM_FRAMES, drive the counted stretch once (the warm pass), reset the field,
  *  then count pipelines in WINDOWS equal windows over that same stretch. */
 export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   await page.addInitScript((gl) => {
@@ -101,13 +101,22 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
   // in up to 4 windows. So: note where the car is, drive the windows' frames again with margin (the warm pass), jump
   // back to that spot at that speed and count over road whose draws have all been seen. What a window builds then is
   // churn — "nothing changed" holds by construction — and the run says how far each pass got.
-  const at = () => page.evaluate(() => { const p = window.__apex.physState(); return { s: p.s, speed: p.speed, prog: p.prog }; });
-  const start = await at();
-  const total = await page.evaluate(() => window.__apex.info().total);
+  // Rewind the field as well as the player. A player-only jump leaves rivals farther along
+  // the course, so a car first entering the camera or shadow pass can allocate during replay.
+  const start = await page.evaluate(() => {
+    const p = window.__apex.physState();
+    return { fraction: p.s / window.__apex.info().total, speed: p.speed, x: p.x };
+  });
+  const restart = () => page.evaluate(({ fraction, speed, x }) => {
+    if (!window.__apex.reset(fraction, speed, x, 3713)) throw new Error("Could not reset the census race field");
+    window.__apex.snapCam();
+    return window.__apex.physState().prog;
+  }, start);
+  const progress = () => page.evaluate(() => window.__apex.physState().prog);
+  const warmStart = await restart();
   await frames(page, Math.ceil(WINDOWS * WINDOW_FRAMES * REPLAY_MARGIN));
-  const warmM = (await at()).prog - start.prog;
-  const jumped = await page.evaluate(([f, v]) => { const r = window.__apex.jump(f, v); window.__apex.snapCam(); return r; }, [start.s / total, start.speed]);
-  const prog0 = (await at()).prog;
+  const warmM = (await progress()) - warmStart;
+  const prog0 = await restart();
   const warm = await page.evaluate(() => { window.__bpp.gpuLogOn = true; return window.__bpp.count; });
   const windows = [];
   for (let i = 1; i <= WINDOWS; i++) {
@@ -118,7 +127,7 @@ export async function measureIdleWindows(page, { forceGL, bootMs, gas }) {
     windows.push({ window: i, pipelines: c1.p - c0.p, built: await page.evaluate(([a, b]) => window.__bpp.log.slice(a, b), [c0.p, c1.p]),
       bindGroups: c1.bg - c0.bg, buffers: c1.b - c0.b, gpuBuilt: await page.evaluate(([a, b]) => window.__bpp.gpuLog.slice(a, b), [c0.g, c1.g]) });
   }
-  const replay = { jumped: !!jumped, warmM: Math.round(warmM), countedM: Math.round((await at()).prog - prog0) };
+  const replay = { warmStart, countedStart: prog0, warmM: Math.round(warmM), countedM: Math.round((await progress()) - prog0) };
   const gov = { scale0: gov0.scale, tier0: gov0.tier, ...(await govAt()) };
   await page.evaluate(() => { window.__apex.govHold(false); window.__apex.renderScale(true); });
   await gas(false);
