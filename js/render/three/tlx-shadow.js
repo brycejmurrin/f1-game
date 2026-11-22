@@ -897,8 +897,7 @@
       im.updateRanges.length = 0; im.updateRanges.push(rg);
       im.needsUpdate = true;
       m.count = n;
-      m.matrix.identity();
-      m.matrixWorld.identity();
+      // These keyed meshes stay at identity. Only their instance rows move.
       m.visible = true;
       iCast.push(m);
     }
@@ -1122,12 +1121,14 @@
         if (keepDepth) renderer.autoClear = false;
         const all = castScene.children;
         if (_passRoot) {
-          _passKids.length = 0;
           for (let i = 0; i < used; i++) _passKids.push(pool[i]);
           for (let i = 0; i < iCast.length; i++) _passKids.push(iCast[i]);
           castScene.children = _passKids;
         }
-        try { renderer.render(castScene, shadowCam); } finally { castScene.children = all; }
+        try { renderer.render(castScene, shadowCam); } finally {
+          castScene.children = all;
+          _passKids.length = 0;   // release loaned casters even if this is the track's last pass
+        }
         // A-P2: only the PCSS blocker ever reads a map's colour (the sun map's, colorPcss); every
         // other R8 attachment is written for the pass and fetched by nothing. WebGL2: drop its store
         // while the FBO three just rendered into is still bound. WebGPU never writes it (colorWrite).

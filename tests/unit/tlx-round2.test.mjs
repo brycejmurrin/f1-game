@@ -27,15 +27,15 @@ const mk = () => new Proxy(function () {}, {
 const THREE = new Proxy(CORE, { get: (t, k) => (k in t ? t[k] : mk()) });
 
 function bootShadow(warming = { on: false }) {
-  const rendered = [];
+  const rendered = [], childLists = [];
   const renderer = { backend: {}, getRenderTarget: () => null, setRenderTarget() {}, autoClear: true,
-    render(scene) { rendered.push(scene); } };
+    render(scene) { rendered.push(scene); childLists.push(scene.children); } };
   const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(THREE, mk(), { renderer, isMobile: false, softwareGL: false,
     isWarming: () => warming.on });
-  return { sys, rendered, warming };
+  return { sys, rendered, warming, childLists };
 }
 
 function batchOf(n = 4) {
@@ -63,7 +63,15 @@ test("TLX-06: the instanced caster draws its own shallow geometry, one caster me
   assert.notEqual(m.geometry, b.geo, "not the lit batch's geometry");
   assert.equal(m.geometry.getAttribute("position"), b.geo.getAttribute("position"), "vertex data is shared, not copied");
   assert.equal(m.geometry.getAttribute("instanceTint"), undefined, "depth never reads the lit pass's tint");
+  const identity = new CORE.Matrix4();
+  let resets = 0;
+  for (const matrix of [m.matrix, m.matrixWorld]) {
+    matrix.identity = function () { resets++; return CORE.Matrix4.prototype.identity.call(this); };
+  }
   assert.equal(castOnce(h, b)[0], m, "the same caster is reused while the geometry is unchanged");
+  assert.equal(resets, 0, "moving instance rows needs no object transform reset");
+  assert.ok(m.matrix.equals(identity) && m.matrixWorld.equals(identity));
+  assert.equal(h.childLists.at(-1).length, 0, "the temporary render list releases its caster references after the draw");
   let disposed = 0;
   m.geometry.addEventListener("dispose", () => disposed++);
   h.sys.freeInstanced(b);
