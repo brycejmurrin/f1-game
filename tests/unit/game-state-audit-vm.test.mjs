@@ -110,7 +110,10 @@ test("#6 aquaplaning reads the surface under the car at its x, as grip does", ()
   const calls = [...src.matchAll(/wxArc\.wetnessAt\(([^()]*)\)/g)].map((m) => m[1].replace(/\s+/g, ""));
   assert.ok(calls.length >= 2, `found ${calls.length} wetnessAt reads — the pattern looks broken`);
   assert.deepEqual([...new Set(calls)], ["c.s,c.x"], "a per-car wetnessAt read without the car's x: " + calls.join(" | "));
-  // aquaInto's read is one of these calls, so the set check above already pins it.
+  // Both tyre calculations use the same car-local sample. Tread selection still uses the lap mean.
+  assert.match(src, /surfaceWet = wxArc \? wxArc\.wetnessAt\(c\.s, c\.x\) : meanWet/);
+  assert.match(src, /TyreModel\.aquaInto\(c, [^;]+, surfaceWet\)/);
+  assert.match(src, /TyreModel\.carGrip\(c, raceWeather, meanWet, surfaceWet\)/);
 });
 
 test("#10 a tyre-wear level changed after boot survives a quit to the menu", async () => {

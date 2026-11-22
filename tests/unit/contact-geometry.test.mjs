@@ -222,6 +222,27 @@ test("SAT reuses body trigonometry without changing axis construction",()=>{
   assert.ok(calls<=12,`four swept axes repeated body trigonometry: ${calls}`);
 });
 
+test("a proven near miss is checked once in small and bucketed fields", () => {
+  for (const count of [2, 22]) {
+    let trig = 0;
+    const math = Object.create(Math);
+    for (const key of ["sin", "cos"]) math[key] = angle => { trig++; return Math[key](angle); };
+    const { collision } = setup({ math });
+    const field = Array.from({ length: count }, (_, i) => car(i * 30, 25));
+    const [a, b] = field;
+    a.human = true; a.yawVis = 0.8;
+    b.prog = b.s = 1; b.x = 6;  // same longitudinal bucket, clear laterally
+    collision.resolveCollisions([], 1 / 60);
+    trig = 0;
+    assert.equal(collision.pairContact(a, b), null);
+    const oneCheck = trig;
+    assert.ok(oneCheck > 0);
+    trig = 0;
+    collision.resolveCollisions(field, 1 / 60);
+    assert.equal(trig, oneCheck, `unmoved near miss rechecked in a ${count}-car field`);
+  }
+});
+
 test("pair extents share trig while preserving nonfinite yaw semantics",()=>{
   let calls=0;
   const math=Object.create(Math);

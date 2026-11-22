@@ -246,6 +246,24 @@ test("the OVERTAKE chip spells every state differently and reads the 2026 allowa
   assert.equal(els.btnOT.getAttribute("data-state"), "caution");
 });
 
+test("the pit limiter holds an Overtake grant until the driver leaves the exit road", () => {
+  const { els, player, G, tick } = boot();
+  player.otE = 0.125;
+  player.pitState = "out";
+  let limiterHeld = true;
+  G.pits = { held: car => car === player && limiterHeld };
+  tick();
+  assert.equal(els.ot.className, "ot-off");
+  assert.equal(els.ot.textContent, "OT · PIT LANE");
+  assert.equal(els.ot.getAttribute("aria-label"), "Overtake unavailable in the pit lane");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
+  assert.equal(els.btnOT.getAttribute("data-state"), "pit-lane");
+  limiterHeld = false;
+  tick();
+  assert.equal(els.ot.textContent, "OT READY 0.50 MJ");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");
+});
+
 test("automatic active aero identifies its mode while the manual control stays unavailable", () => {
   const { els, player, G, tick } = boot();
   G.raceAeroMode = "auto";

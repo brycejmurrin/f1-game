@@ -142,10 +142,6 @@ test("GhostShare.decode never throws past the boundary (N=2000)", async () => {
 });
 
 // ── #5783 / #5999 I3 (track-in-hash): shipped this batch.
-// I2 (≤120 m/s) and I3 (±4% length) reproduced red on tip, then deferred:
-// enabling them fails two existing cases in ghost-share.test.mjs (thinned
-// 246 m/s link; 3× lengthKm ceiling) that DAD 2026-11-21 forbids editing
-// while #5978 is open (append-only). See PR Not run.
 test("I3: new envelopes hash the track id so a kept-h relabel fails (#5783/#5999)", async () => {
   const lengths = { monza: 5.8, spa: 5.8 };            // same length: only the hash catches it
   const GhostShare = bootGhostShare({ lengths, tracks: ["monza", "spa"] });

@@ -62,7 +62,6 @@ const ApexLobby = (function () {
     return [1 / 60, steps];
   }
   // One step()/act() tick: render anchors first (the rAF loop snapshots them before each step), then update().
-  // The results-state finished-car loop (W25 row 8) waits on its game.js seam (#5100).
   function tick(G, d) {
     AgentView.syncRenderAnchors(G.cars);
     // Detached call: as a method the frame reads "Object.update", and stack walks over game.js's update()
@@ -192,6 +191,7 @@ fieldState() {
       dnf:      c.dnf || null,
     }));
   },
+// Lists each car’s driver role, pose availability, handling modifiers and remote input.
 carRoles() {
     return G.cars.map((c, i) => ({
       id: i, code: c.code, team: c.team && c.team.id,
@@ -203,6 +203,7 @@ carRoles() {
       netInput: c.netInput ? Object.assign({}, c.netInput) : null,
     }));
   },
+// Changes a car’s driver role or handling modifiers. Returns false for an unknown index.
 carRole(idx, o) {
     const c = G.cars[idx];
     if (!c) return false;

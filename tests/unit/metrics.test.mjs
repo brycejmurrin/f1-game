@@ -337,6 +337,18 @@ test("log page filters the tail by namespace and level", () => {
   assert.match(tr.logs[0], /build done monza/);
 });
 
+test("LOG keeps the newest 12 namespace matches in chronological order after the ring wraps", () => {
+  const { M, Log } = load({});
+  for (let i = 0; i < 600; i++) Log.info(i % 3 === 0 ? "track" : "car", String(i));
+  M.setPage("log");
+  M.setLogNs("track");
+  M.setLogLvl("info");
+  const s = M.snapshot();
+  assert.equal(s.logN, 500);
+  assert.equal(s.logShown, 12);
+  assert.deepEqual(Array.from(s.logs), Array.from({ length: 12 }, (_, i) => "i track " + (564 + 3 * i)));
+});
+
 test("page and log filters persist while metrics are off", () => {
   const { M, disk } = load({});
   assert.equal(M.on(), false);

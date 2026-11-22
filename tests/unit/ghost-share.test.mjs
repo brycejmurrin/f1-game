@@ -118,10 +118,10 @@ test("a ghost for an unknown circuit is refused", async () => {
 
 // The last sample lands ON the lap time, as a recorded ghost's does (within
 // one sample, js/car/ghost.js): GhostShare binds the claimed time to it.
-const trace = (n, time) => ({
+const trace = (n, time, distance = (n - 1) * 3.7) => ({
   time,
   t: Array.from({ length: n }, (_, i) => i * time / (n - 1)),
-  s: Array.from({ length: n }, (_, i) => i * 3.7),
+  s: Array.from({ length: n }, (_, i) => i * distance / (n - 1)),
   x: Array.from({ length: n }, (_, i) => (i % 101) / 100),
 });
 
@@ -775,7 +775,7 @@ test("a link whose lap time does not match its own trace is refused", async () =
 
 test("a thinned link keeps its time bound to the trace", async () => {
   const { GhostShare } = harness();
-  const long = trace(9000, 135);
+  const long = trace(9000, 135, 7004);
   const r = await GhostShare.encode(long, { track: "spa" });
   assert.equal(r.ok, true);
   assert.ok(r.thinned > 0, "precondition: the link copy was thinned");
@@ -812,15 +812,46 @@ test("a crafted ghost with absurd x, s, t or sample count is refused (CORRUPT)",
   assert.equal(GhostShare.fileExport({ ...ok, x: ok.x.map((v, i) => i === 5 ? 1e308 : v) }, { track: "monza" }).ok, false);
 });
 
-test("s is bounded by the circuit's own length when the circuit declares one", async () => {
+test("a shared ghost must cover one circuit within the declared length tolerance", async () => {
+  const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8, spa: 7 } });
+  const lap = trace(40, 90, 5800);
+  const body = GhostShare.fileExport(lap, { track: "monza" }).envelope;
+  delete body.h; // A legacy link has no track-bound hash.
+  for (const distance of [5568, 5800, 6032])
+    assert.equal((await GhostShare.decode(JSON.stringify({ ...body, ...trace(40, 90, distance) }))).ok, true);
+  for (const distance of [5567, 6033])
+    assert.equal((await GhostShare.decode(JSON.stringify({ ...body, ...trace(40, 90, distance) }))).ok, false);
+  assert.equal((await GhostShare.decode(JSON.stringify({ ...body, track: "spa" }))).ok, false);
+  assert.equal((await GhostShare.decode(JSON.stringify({ ...body, ...trace(40, 100, 7000) }))).ok, false);
+  assert.equal((await GhostShare.decode(JSON.stringify({ ...body, s: lap.s.map(v => 5500 + v / 20) }))).ok, false,
+    "a trace starting near the finish still has to cover the circuit");
+});
+
+test("full laps near the observed built circuit lengths survive the portable link path", async () => {
+  const lengths = { monaco: 3.337, monza: 5.793, spa: 7.004 };
+  const { GhostShare } = harness({ tracks: Object.keys(lengths), lengths });
+  for (const [track, builtRatio] of [["monaco", 0.9717], ["monza", 1], ["spa", 1.0051]]) {
+    const g = trace(200, 100, lengths[track] * 1000 * builtRatio);
+    const result = await GhostShare.encode(g, { track });
+    assert.equal(result.ok, true, track);
+    assert.equal((await GhostShare.decode(result.url)).ok, true, track);
+  }
+});
+
+test("the average lap speed is bounded even for hashless and correctly hashed files", async () => {
   const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8 } });
-  const near = trace(40, 90);                         // s ends at 144 m
-  const raw = JSON.parse(GhostShare.fileExport(near, { track: "monza" }).text);
-  delete raw.h;
-  raw.s = raw.s.map((v, i) => i * 17400 / 39);        // 3 x 5.8 km
-  assert.equal((await GhostShare.decode(JSON.stringify(raw))).ok, true, "3 laps' worth of arc is the ceiling");
-  raw.s = raw.s.map((v) => v * 1.01);
-  assert.equal((await GhostShare.decode(JSON.stringify(raw))).ok, false, "past 3 x lengthKm is not this circuit's ghost");
+  const g = trace(40, 100, 5800);
+  const body = GhostShare.fileExport(g, { track: "monza" }).envelope;
+  body.time /= 10;
+  body.t = body.t.map(t => t / 10);
+  delete body.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false);
+  const ctx = vm.createContext({});
+  seedHash32(ctx);
+  body.h = vm.runInContext("Hash32", ctx).fnv1a(JSON.stringify([body.track, body.time, body.t, body.s, body.x])).toString(36);
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false);
+  assert.equal(GhostShare.fileExport(body, { track: body.track }).ok, false);
+  assert.equal(GhostShare.installGuest({ track: body.track, ghost: body }), false);
 });
 
 test("shared ghost meta keeps only the whitelisted keys, strings <= 32 chars", async () => {
@@ -887,11 +918,9 @@ test("TT records find historical wear classes without crossing other settings", 
 });
 
 // ── #5783 / #5999 I3 track-in-hash (appended only; DAD 2026-11-21) ──────────
-// Existing cases above are untouched. Speed (I2) and ±4% length (I3) wait on
-// remakes of the thinned-link and 3×-arc cases — append-only while #5978 is open.
 test("I3: export hash covers the track id; a kept-h relabel is refused (#5783/#5999)", async () => {
   const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8, spa: 5.8 } });
-  const g = trace(40, 90);
+  const g = trace(40, 90, 5800);
   const file = GhostShare.fileExport(g, { track: "monza" });
   assert.equal(file.ok, true);
   assert.equal((await GhostShare.decode(file.text)).ok, true, "honest monza export imports");

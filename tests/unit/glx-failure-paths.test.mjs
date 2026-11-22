@@ -113,3 +113,25 @@ test("GLX boot retains its retry marker until an explicit clean boundary", () =>
     assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostReloads"), "1");
   }
 });
+
+test("GLX retries incomplete scene and multisample targets on the next render size", () => {
+  for (const failedTarget of ["scene", "multisample"]) {
+    const h = bootGlx({ extensions: ["EXT_color_buffer_float"] });
+    const samples = h.GLX.msaa();
+    assert.ok(samples > 1);
+    const healthy = h.answers.checkFramebufferStatus;
+    let checks = 0;
+    h.answers.checkFramebufferStatus = () => ++checks === (failedTarget === "scene" ? 1 : 2) ? 0 : healthy();
+    h.GLX.setRenderSizeOverride({ width: 320, height: 240 });
+    h.GLX.resize();
+    assert.equal(h.GLX.msaa(), 0);
+    assert.equal(h.GLX.hdrMode(), failedTarget === "multisample");
+    h.reset();
+    h.GLX.resize();
+    assert.equal(h.count("createTexture"), 0, "a stable size keeps the fallback");
+    h.GLX.setRenderSizeOverride({ width: 256, height: 192 });
+    h.GLX.resize();
+    assert.equal(h.GLX.hdrMode(), true);
+    assert.equal(h.GLX.msaa(), samples);
+  }
+});
