@@ -19499,6 +19499,7 @@
         "tests/unit/editor-workspace.test.mjs"
       ],
       "init": [
+        "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/editor-workspace.test.mjs"
       ],
       "setPreview": [
@@ -19508,7 +19509,8 @@
         "tests/unit/bench-run.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/cockpit-preview.test.mjs",
-        "tests/unit/photo-studio.test.mjs"
+        "tests/unit/photo-studio.test.mjs",
+        "tests/unit/telemetry-view-resize.test.mjs"
       ]
     },
     "js/ui/experience.js": {
@@ -21006,6 +21008,7 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/screen-looks.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ]
     },

@@ -29,7 +29,14 @@ window.ScreenRegions = (function () {
     a11y: parts("pm-", { motion: "Reduced motion", focus: "Keyboard focus", cbcues: "Colourblind cues", "hold-throttle": "Gas input", "hold-lookback": "Look back input" }),
     advanced: { pace: part("label[for=pm-pace]", "Overall speed"), more: part("#adv-details", "Advanced handling"), ...parts("pm-", { "tiltdeg-jump": "Tilt setup", "line-jump": "Steer assist" }) },
     audio: parts("as-", { "music-details": "Music", "sound-details": "Sound effects", "radio-details": "Team radio", "ann-details": "Announcers", "engine-details": "Engine" }),
-    files: { ...parts("pm-files-", { nav: "Backup actions", save: "Save files", restore: "Restore files", share: "Import share code" }), daily: part("#daily-history", "Daily history") },
+    files: {
+      ...parts("pm-files-", { nav: "Backup tabs", save: "Save files", restore: "Restore files", share: "Import share code", included: "Backup contents" }),
+      ...parts("pm-", { "settings-changed": "Save changed settings", "settings-all": "Save all settings", "garage-save": "Save garage file", "career-save": "Save career file",
+        "settings-load": "Load settings file", "garage-load": "Load garage file", "career-load": "Load career file",
+        "share-code-in": "Share code field", "share-code-import": "Import button", "share-code-status": "Import feedback" }),
+      daily: part("#daily-history", "Daily history"), health: part(".save-health", "Storage health and restore points"),
+      history: part(".save-health-history", "Restore point selection"),
+    },
     visual: parts("pm-", { lighting: "Lighting tuner", camtune: "Camera tuner", flyby: "Flyby editor", garrival: "Garage animations" }),
     progress: parts("pm-badges-", { summary: "Licence progress", list: "Badge list" }),
     credits: parts("credits-", { data: "Data sources", software: "Software", fonts: "Fonts", assets: "Assets" }),
@@ -118,12 +125,24 @@ window.ScreenRegions = (function () {
     close: part("#dh-close-btn", "Close"), filters: part(".dh-picker", "Session filters"),
     nextRace: part('[data-nextgp="tile"]', "Next Grand Prix"), scheduleList: part(".dh-race-grid", "Schedule grid"),
     telemetryDrivers: part(".dh-driverpick", "Telemetry driver picker"), timingControls: part(".dh-livecontrols", "Live timing controls"),
+    drivers: part('[data-hub-part="drivers"]', "Driver standings"), constructors: part('[data-hub-part="constructors"]', "Constructor standings"),
+    headToHead: part(".dh-h2h-wrap", "Championship comparison"),
+    resultsTable: part(".dh-res-body .dh-table", "Session classification"), resultRounds: part(".dh-res-body .dh-rounds", "Qualifying rounds"),
+    timingSort: part(".dh-sorts", "Timing order"), liveClass: part(".dh-class-rows", "Live classification"), weather: part(".dh-weather", "Session weather"),
+    selectedDrivers: part('[data-hub-part="lanes"]', "Selected telemetry drivers"), loadTraces: part('[data-hub-part="traces"]', "Open telemetry"),
+    replayControls: part('[data-hub-part="replay"]', "Race replay controls"), lapList: part('[data-hub-part="lap-list"]', "Lap by lap"),
+    lapBoard: part(".dh-lap-board .dh-table", "Selected lap classification"),
   });
   screen("telemetry-detail", "Telemetry detail", {
     heading: part(".dh-tpopup-hdr", "Drivers and session"), traces: part(".dh-tpopup-body", "Telemetry detail panel"),
     charts: part(".dh-telem-main", "Trace area"), sidebar: part(".dh-telem-side", "Map and gauges"),
     transport: part(".dh-transport", "Playback controls"), legend: part(".dh-legend", "Trace channels"),
     gauges: part(".dh-dash", "Gauges"), close: part("#dh-tpopup-close", "Close"),
+    window: part(".dh-tpopup-card", "Detail window"), summary: part('[data-hub-part="summary"]', "Text summary"),
+    play: part(".dh-tplay", "Play or pause"), restart: part(".dh-trestart", "Restart"), rates: part(".dh-trates", "Playback speed"),
+    onboard: part(".dh-onboard", "Onboard camera"), braking: part("details.dh-thint", "Braking zone duel"),
+    mapKey: part(".dh-maplegend", "Track map legend"), stints: part('[data-hub-part="stints"]', "Tyre stints"),
+    pits: part('[data-hub-part="pits"]', "Pit stops"),
   }, "dialog.dh-tpopup");
   screen("share-card-preview", "Share card", {
     heading, preview: part("#scp-img", "Card preview"), size: part('[aria-label="Card size"]', "Card size"), actions,
@@ -234,7 +253,7 @@ window.ScreenRegions = (function () {
   // Appearance keeps its illustrative preview. This button uses the same
   // launchers a player would press, so their Career slot or race stays theirs.
   const previewTargets = { garage: "carsetup", race: "race-settings", pause: "pausemenu" };
-  const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data",
+  const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data", "telemetry-detail": "mb-data",
     "race-settings": "mb-race", "track-detail": "mb-race", "duel-picker": "mb-race", quali: "mb-race", teampicker: "mb-garage", "season-setup": "mb-season",
     trackdesigner: "mb-designer", "photo-studio": "mb-photo", watch: "mb-watch", vsfriend: "mb-vs", howtoplay: "mb-help" };
   const flybyDoor = () => document.getElementById("pm-flyby");
@@ -292,6 +311,11 @@ window.ScreenRegions = (function () {
       host.dispatchEvent(new CustomEvent("apex:arrangement-target", {detail: {id, label}}));
       go.textContent = id === "popups" ? "Edit shared popup style" : "Arrange " + label;
       go.disabled = (id === "home" || id === "home-style") && !atHome();
+      if ((id === "datahub" || id === "telemetry-detail") && !atHome()) {
+        go.disabled = true;
+        note.textContent = "Open Data Hub from Home. Its header and the telemetry detail window each have an Arrange button.";
+        return;
+      }
       if (id === "campicker" && atHome()) {
         go.disabled = true;
         note.textContent = "During a race, hold or right-click the camera button and choose Arrange this screen.";
@@ -308,7 +332,7 @@ window.ScreenRegions = (function () {
         note.textContent = "Pause during a session to arrange " + label + ".";
         return;
       }
-      note.textContent = go.disabled ? "Open Appearance from Home to arrange Home." :
+      note.textContent = id === "telemetry-detail" ? "In Data Hub’s Telemetry tab, choose a session and a driver, then open their fastest-lap trace." : go.disabled ? "Open Appearance from Home to arrange Home." :
         atHome() && id === "duel-picker" ? "Continue from the circuit list to Race Settings, open Field, and choose your duel rival." :
         atHome() && id === "teampicker" ? "Select the team card in the Garage to arrange the team picker." :
         atHome() && id === "quali" ? "In Race Settings, choose a qualifying grid, then start to arrange the qualifying sheet." :
@@ -454,7 +478,11 @@ window.ScreenRegions = (function () {
       // that owner changes while loading. Invoke it after the close settles.
       requestAnimationFrame(() => {
         if (pending !== id) return;
-        if (fromHome && launchers[id]) document.getElementById(launchers[id])?.click();
+        if (fromHome && launchers[id]) {
+          const door = document.getElementById(launchers[id]);
+          if (door && id === "telemetry-detail") door.dataset.openTab = "telemetry";
+          door?.click();
+        }
         tryPending(id);
       });
     });

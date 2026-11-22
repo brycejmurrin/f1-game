@@ -1025,7 +1025,7 @@ test("settings offers concise throttle help and separate backup actions", async 
   for (const section of ["save", "restore", "share"]) {
     const button = page.locator("#pm-files-show-" + section);
     await button.click();
-    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(button).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#pm-files-" + section)).toBeVisible();
     const layout = await page.evaluate((section) => {
       const nav = document.getElementById("pm-files-nav").getBoundingClientRect();
@@ -1040,6 +1040,19 @@ test("settings offers concise throttle help and separate backup actions", async 
     }
   }
   }
+  const arrange = page.locator("#pmsettings .pm-arrange-current");
+  await arrange.click();
+  const editor = page.locator("#screen-arranger");
+  await editor.getByRole("button", { name: "Controls", exact: true }).click();
+  const region = editor.getByLabel("Region", { exact: true });
+  await region.selectOption("share-code-in");
+  await editor.getByLabel("Browse section").selectOption({ label: "Tab · Restore" });
+  await expect(region.locator('option[value="share-code-in"]')).toHaveCount(0);
+  await region.selectOption("settings-load");
+  await expect(page.locator("#pm-settings-load")).toHaveText("LOAD SETTINGS FILE");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(arrange).toBeFocused();
+  await expect(page.locator("#pm-files-show-share")).toHaveAttribute("aria-selected", "true");
   await page.locator("#pm-share-code-in").fill("harmless invalid fixture");
   await page.locator("#pm-share-code-import").click();
   await expect(page.locator("#pm-share-code-status")).not.toBeEmpty();

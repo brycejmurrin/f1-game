@@ -272,7 +272,7 @@ test("backup action navigation exposes one section without exporting or importin
     assert.equal(b.dom.document.activeElement, choice, "navigation retains keyboard focus");
     for (const id of ["save", "restore", "share"]) {
       assert.equal(b.dom.byId("pm-files-" + id).hidden, id !== active);
-      assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-pressed"), String(id === active));
+      assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-selected"), String(id === active));
       assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-controls"), "pm-files-" + id);
     }
   }
@@ -280,6 +280,36 @@ test("backup action navigation exposes one section without exporting or importin
   assert.equal(b.reloads(), 0);
   assert.deepEqual([...b.disk], before);
   assert.ok(host.children.some((el) => el.getAttribute("data-help") === "keep" && /accounts are excluded/.test(el.textContent)), "backup exclusions stay visible outside optional help");
+});
+
+test("Saves & Data offers keyboard tab navigation and arrangeable actions only in their owning panes", () => {
+  const b = bootImportUI();
+  const { dom } = b;
+  const registry = vm.runInNewContext(read("js/ui/screen-regions.js"), { window: {} }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { regions } = registry["pm-panel-files"];
+  assert.equal(dom.byId("pm-files-nav").getAttribute("role"), "tablist");
+  assert.equal(dom.byId("pm-files-nav").getAttribute("aria-orientation"), "horizontal");
+  for (const [from, key, to, visible] of [
+    ["save", "ArrowRight", "restore", ["settings-load", "garage-load", "career-load"]],
+    ["restore", "End", "share", ["share-code-in", "share-code-import", "share-code-status"]],
+    ["share", "ArrowRight", "save", ["settings-all", "settings-changed", "garage-save", "career-save"]],
+    ["save", "ArrowLeft", "share", ["share-code-in"]],
+    ["share", "Home", "save", ["settings-all"]],
+  ]) {
+    const source = dom.byId("pm-files-show-" + from), tab = dom.byId("pm-files-show-" + to);
+    assert.equal(source.tabIndex, 0);
+    dom.dispatch(source, { type: "keydown", key, preventDefault() {} });
+    assert.equal(dom.document.activeElement, tab);
+    assert.equal(tab.tabIndex, 0);
+    assert.equal(source.tabIndex, -1);
+    assert.equal(tab.getAttribute("role"), "tab");
+    const pane = dom.byId(tab.getAttribute("aria-controls"));
+    assert.equal(pane.getAttribute("role"), "tabpanel");
+    assert.equal(pane.hidden, false);
+    for (const region of visible) assert.ok(pane.querySelector(regions[region].selector), region + " in " + to);
+  }
+  assert.equal(dom.document.querySelector("input"), null);
+  assert.equal(b.reloads(), 0);
 });
 
 test("leaving Restore disarms its overwrite confirmation", () => {
@@ -1919,6 +1949,21 @@ for (const fileReader of [false, true]) test(`leaving Saves and Data invalidates
   finish(volumeFile(0.2)); await Promise.resolve();
   assert.equal(b.disk.has("apex26.volMusic"), false);
   b.flushReloads(); assert.equal(b.reloads(), 0);
+});
+
+for (const fileReader of [false, true]) test(`switching backup tabs invalidates a pending ${fileReader ? "FileReader" : "File.text"} restore after returning`, async () => {
+  const b = bootImportUI({ fileReader });
+  const restore = b.dom.byId("pm-files-show-restore");
+  restore.click();
+  let finish;
+  b.choose(new Promise(resolve => { finish = resolve; }));
+  b.dom.byId("pm-files-show-share").click();
+  restore.click();
+  finish(volumeFile(0.2));
+  await Promise.resolve();
+  assert.equal(b.disk.has("apex26.volMusic"), false);
+  b.flushReloads();
+  assert.equal(b.reloads(), 0);
 });
 
 test("garage reset stays on screen when deleting an extra key is not durable", () => {

@@ -211,6 +211,7 @@ const DataHub = (function () {
     });
     inHead(tabs);
     inHead(developerTools);
+    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, header, "datahub", "Arrange");
 
     // content
     contentEl = el("div", "dh-content");
