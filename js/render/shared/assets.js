@@ -1015,8 +1015,10 @@ const Assets = (function () {
     const text = String(src);
     // Start the remembered models now. manifest() is still in flight on a
     // return visit; model() reconciles each id when the fresh manifest lands.
-    const hinted = _idsNamedIn(packIndex(), text);
-    for (let i = 0; i < hinted.length; i++) model(hinted[i]);
+    if (_manifest === null) {
+      const hinted = _idsNamedIn(packIndex(), text);
+      for (let i = 0; i < hinted.length; i++) model(hinted[i]);
+    }
     const m = await manifest();
     if (generation !== _loadGeneration) return 0;
     const ids = _idsNamedIn(m, text);

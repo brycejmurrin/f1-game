@@ -4613,16 +4613,15 @@ function update(dt) {
     }
   }
 
-  // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
+  // Catch-up needs the leading active human. Scripted pace only needs the poses.
+  const catchup = AiBand.mode() === "catchup";
   _leadHuman = null;
-  // !finished: a flagged human coasts on advancing prog — don't band toward it.
-  for (let i = 0; i < cars.length; i++) { const c = cars[i]; if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c; }
-
   // Traffic scans read last step's poses. Writing prog/x/speed inside
   // updateCar and then scanning the next car made a side-by-side look like a
   // pass in array order.
   for (let i = 0; i < cars.length; i++) {
     const s = cars[i];
+    if (catchup && s.human && !s.retired && !s.finished && (!_leadHuman || s.prog > _leadHuman.prog)) _leadHuman = s;
     s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
   }
   // One wrap-aware fill for the whole field; each updateCar walks adjacent
@@ -4904,8 +4903,10 @@ function updateCar(c, dt, ranked) {
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and driveTune.PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
-  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness());   // standing water UNDER the car (a local shower)
-  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE, gmC = gripMult(c) * aq.mul, gm0 = gripMult();
+  const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
+  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, surfaceWet);
+  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
+  const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.carGrip(null, raceWeather, meanWet, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -4918,7 +4919,7 @@ function updateCar(c, dt, ranked) {
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both
+  if (!c.human && _leadHuman) {
     const bc = _bandCtx; bc.leadProg = _leadHuman.prog; bc.carProg = c.prog; bc.trackTotal = track.total; bc.raceT = raceT; bc.launchT0 = launchT0; bc.bandAuth = dd.band;
     const applied = AiBand.applyVmax(vmax, AiBand.factor(bc), c.tierV * c.skill * dd.ai, BAND_CEIL, _bandOut);   // reused: no objects per AI car
     vmax = applied.vmax; c._bandNow = applied.bandNow;
@@ -5093,8 +5094,8 @@ function updateCar(c, dt, ranked) {
   //
   // The O(n) ahead walk is only needed when a detection-line crossing can earn
   // OT (otDetectOpen + crossed since last tick), or the car already holds
-  // allowance (AI fire / spend). Seed the crossing trackers the same way
-  // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
+  // allowance (AI fire / spend). Both consumers use the same crossing.
+  // Profiled Monza 22-car: the walk was ~17 % of
   // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
   // Keep the ahead-search radius meaningful while reversing. A held allowance
   // can outlive a forward pass, so c.speed may be negative even though this
@@ -5103,10 +5104,8 @@ function updateCar(c, dt, ranked) {
   // speed for OT timing, but it still needs a finite, non-negative search.
   const otSpeed = Math.max(0, c.speed);
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * otSpeed + 1;
-  if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
-  const otOpen = raceCtl.otDetectOpen();
-  const otNeedAhead = (c.otE > 0 || c.otOn) ||
-    (!!track && otOpen && OvertakeMode.crossed(c._otS, c.s, OvertakeMode.detectS(track), otL));
+  const otOpen = raceCtl.otDetectOpen(), detected = OvertakeMode.detectionCrossed(c, track);
+  const otNeedAhead = c.otE > 0 || c.otOn || (otOpen && detected);
   if (otNeedAhead) {
     const ot = Collide.scanOtAhead(c, otL, otW, _otSkipLane);
     ahead = ot.ahead; gapAhead = ot.gapAhead;
@@ -5116,7 +5115,7 @@ function updateCar(c, dt, ranked) {
   // at every OVERALL SPEED setting (vstd-invariant A13). Never while the pit
   // limiter holds the car (pits.held: entry line to exit) — a queue in the lane
   // is inside OT_GAP (docs/research/PIT-NEXT-STEPS-2026-09.md §4e).
-  OvertakeMode.lines(c, track, gapAhead, otOpen && !pitHeld);   // no detection-line EARN in the lane either
+  OvertakeMode.lines(c, track, gapAhead, otOpen && !pitHeld, detected);   // no detection-line EARN in the lane either
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
