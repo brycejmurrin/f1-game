@@ -40,6 +40,7 @@ var RaceFacts = (function () {
     const hist = new Map();        // player checkpoint -> { a, ga, b, gb, t }
     let pitEndT = -1e9;            // when the player last left the pit lane
     let order = [];
+    const orderedStates = [];
     let fastest = { time: Infinity, car: null };
     let pos = 0, pendPos = 0, pendT = 0;
     let grid = null, started = false, caution = 0, playerHits = 0, playerSev = 0;
@@ -49,7 +50,7 @@ var RaceFacts = (function () {
     function reset() {
       t = 0; lapLen = 0; cars = null; nextId = 1; pairVisit = 0;
       st.clear(); pairs.clear(); battles.clear(); hist.clear();
-      order = []; fastest = { time: Infinity, car: null };
+      order = []; orderedStates.length = 0; fastest = { time: Infinity, car: null };
       pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
       pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
       leadLap = 0; rankAcc = 0; primed = false;
@@ -62,30 +63,21 @@ var RaceFacts = (function () {
           lap: c.lap || 0, lastLap: c.lastLap || 0, retired: !!c.retired, finished: !!c.finished,
           stops: c.pitStops || 0, pit: inPits(c), pitT: -99, errs: c.errCount | 0 };
         // Born Double, values kept: an integer here is a Smi field, and the first lap time / pit stamp split every
-        // bag's map mid-race and deopted gap()/timeAt() (PERF-HUNT-5).
+        // bag's map mid-race and deopted the gap calculation (PERF-HUNT-5).
         const l0 = s.lastLap; s.lastLap = s.pitT = 0.5; s.lastLap = l0; s.pitT = -99;
         st.set(c, s);
       }
       return s;
     }
 
-    function timeAt(c, i) {
-      const s = st.get(c);
-      if (!s || i < 0) return null;
-      const k = i % RING;
-      return s.idx[k] === i ? s.times[k] : null;
+    /** Seconds from the ahead car back to the one behind, at the last checkpoint
+     *  the latter crossed. Both stamps must still belong to this checkpoint. */
+    function gapFromStates(a, b) {
+      if (!a || !b || b.cp < 0) return null;
+      const cp = b.cp, k = cp % RING;
+      return a.idx[k] === cp && b.idx[k] === cp ? Math.max(0, b.times[k] - a.times[k]) : null;
     }
-
-    /** Seconds from `a` (ahead) back to `b`, by the timing loop — or null until
-     *  both have crossed one line since they were first seen. A radio that
-     *  says a guessed number is worse than one that waits a checkpoint. */
-    function gap(a, b) {
-      if (!a || !b) return null;
-      const sb = st.get(b);
-      if (!sb || sb.cp < 0) return null;
-      const ta = timeAt(a, sb.cp), tb = timeAt(b, sb.cp);
-      return ta != null && tb != null ? Math.max(0, tb - ta) : null;
-    }
+    function gap(a, b) { return gapFromStates(st.get(a), st.get(b)); }
 
     // By distance, with a finished car held at the prog it took the flag with
     // (it stops there, and the field would otherwise "pass" it). NOT c.finPos:
@@ -94,8 +86,8 @@ var RaceFacts = (function () {
     // A lapped car flagged at its next crossing froze a lap short, so it stays
     // below the lead-lap cars still running to the line.
     const distOf = (c) => {
-      const s = st.get(c);
-      return c.finished && s && s.finProg != null ? s.finProg : (c.prog || 0);
+      const s = c.finished && st.get(c);
+      return s && s.finProg != null ? s.finProg : (c.prog || 0);
     };
     // EVERY RANK_S (race-radio ticks observe every step): the ranking fills
     // the one `order` array in place with a hoisted comparator, pair / battle
@@ -130,6 +122,9 @@ var RaceFacts = (function () {
       order.length = 0;
       for (let i = 0; i < list.length; i++) if (!list[i].retired) order.push(list[i]);   // indexed: no iterator per step
       order.sort(byRace);
+      // Pairs and gaps all read the same timing records until the next ranking.
+      orderedStates.length = order.length;
+      for (let i = 0; i < order.length; i++) orderedStates[i] = st.get(order[i]);
       return order;
     }
 
@@ -264,7 +259,7 @@ var RaceFacts = (function () {
       for (let i = 0; i < order.length; i++) {
         for (let j = i + 1; j <= i + PAIR_SPAN && j < order.length; j++) {
           const a = order[i], b = order[j];
-          const ia = bag(a).id, ib = bag(b).id;
+          const ia = orderedStates[i].id, ib = orderedStates[j].id;
           const key = ia < ib ? pairKey(ia, ib) : pairKey(ib, ia);
           let r = pairs.get(key);
           if (!r) { pairs.set(key, r = { ahead: a, pend: 0.5, key, visit: pairVisit }); r.pend = 0; continue; }
@@ -273,7 +268,7 @@ var RaceFacts = (function () {
           r.pend += dt;
           if (r.pend < HOLD_S) continue;
           r.ahead = a; r.pend = 0;
-          const sa = st.get(a), sb = st.get(b);
+          const sa = orderedStates[i], sb = orderedStates[j];
           const pitty = inPits(a) || inPits(b) || t - sa.pitT < 4 || t - sb.pitT < 4;
           if (started && t > 2 && !pitty && !a.finished && !b.finished) {
             ev.push({ type: "pass", a, b, pos: i + 1 });
@@ -284,7 +279,7 @@ var RaceFacts = (function () {
       for (const r of pairs.values()) if (r.visit !== pairVisit) pairs.delete(r.key);   // deletion during Map iteration is defined
 
       // ── the player's position, with the same hold ───────────────────────
-      const raw = order.indexOf(p) + 1;
+      const at = order.indexOf(p), raw = at + 1;
       if (!pos) pos = raw;
       else if (raw && raw !== pos) {
         if (raw !== pendPos) { pendPos = raw; pendT = 0; }
@@ -305,12 +300,11 @@ var RaceFacts = (function () {
       playerHits = hits; playerSev = sev;
 
       // ── the player's neighbours, and how the gaps are moving ────────────
-      const at = order.indexOf(p);
       const ahead = at > 0 ? order[at - 1] : null;
       const behind = at >= 0 && at + 1 < order.length ? order[at + 1] : null;
-      const gA = ahead ? gap(ahead, p) : null;
-      const gB = behind ? gap(p, behind) : null;
       const sp = st.get(p);
+      const gA = ahead ? gapFromStates(orderedStates[at - 1], sp) : null;
+      const gB = behind ? gapFromStates(sp, orderedStates[at + 1]) : null;
       let rateA = null, rateB = null;
       if (sp && sp.cp >= 0) {
         if (!hist.has(sp.cp)) {
@@ -331,9 +325,10 @@ var RaceFacts = (function () {
       for (let i = 0; i + 1 < order.length; i++) {
         const a = order[i], b = order[i + 1];
         if (a.finished || b.finished || inPits(a) || inPits(b)) continue;
-        const g = gap(a, b);
+        const sa = orderedStates[i], sb = orderedStates[i + 1];
+        const g = gapFromStates(sa, sb);
         if (g == null || g > BATTLE_GAP) continue;
-        const key = pairKey(bag(a).id, bag(b).id);   // ordered: a is ahead
+        const key = pairKey(sa.id, sb.id);   // ordered: a is ahead
         live.add(key);
         let bt = battles.get(key);
         if (!bt) battles.set(key, bt = { since: t, a, b, pos: i + 1 });
@@ -381,7 +376,7 @@ var RaceFacts = (function () {
       f.pos = pos || raw; f.rawPos = raw; f.n = order.length;
       f.gridPos = grid && grid.has(p) ? grid.get(p) : null;
       f.ahead = ahead; f.behind = behind; f.gapA = gA; f.gapB = gB; f.rateA = rateA; f.rateB = rateB;
-      f.leader = leader; f.second = second; f.leadGap = leader && second ? gap(leader, second) : null;
+      f.leader = leader; f.second = second; f.leadGap = leader && second ? gapFromStates(orderedStates[0], orderedStates[1]) : null;
       f.lastLap = p.lastLap || 0; f.best = Number.isFinite(p.best) ? p.best : 0;
       if (fastest.car) { _fastestOut.car = fastest.car; _fastestOut.time = fastest.time; f.fastest = _fastestOut; } else f.fastest = null;
       f.energy = p.energy == null ? null : p.energy;
