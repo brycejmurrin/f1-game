@@ -8,7 +8,7 @@
 // is loaded, just the car. For interactive poking, open tools/carview.html itself.
 //
 // Prereq: a static server for the repo root on http://127.0.0.1:3456
-//   python3 -m http.server 3456      (or: npx serve -l 3456 .)
+//   node tools/serve.mjs              (port 3456)
 //
 // Usage:
 //   node tools/car/render-car.mjs [--views=a,b,c] [options]

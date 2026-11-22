@@ -7,5 +7,17 @@
     "Missing or invalid policy fields fail closed. The spec still gets an isolated retrying shard while its exact-test policy is active.",
     "signature (optional; required on rows since 2026-10-26): a case-sensitive regex source starting with ^, matched against the retried attempt's first error line with ANSI codes and a leading 'Error: ' removed (flaky-policy.mjs errorLine). The row then exempts only that failure; the same test failing with any other message still blocks. Several rows may name one spec, one per exact title."
   ],
-  "quarantine": []
+  "quarantine": [
+    {
+      "spec": "tests/specs/track-designer.spec.js",
+      "title": "Track designer › pending START FROM preserves a real map drag before pointer release",
+      "signature": "^expect\\(received\\)\\.toBe\\(expected\\)",
+      "owner": "brycejmurrin",
+      "since": "2026-11-20",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/44806709337/job/136536638507",
+      "expires": "2026-12-04",
+      "review": "Issue #6031. First red on #5296 be1695c1 (toBe(false) got true after a 19.9 s poll; SW controllerchange at 7.5 s mid-test). Node twin track-designer-dom pending START FROM 6/6 x5 on be1695c1; shard green on 66ad4962 (run 44779257145) and tip eef0e45f (pages 44802440676). By 2026-12-04 the designer owner (#5937/#6000 area) fixes it and removes this row after three cold CI passes without retry; any extension needs fresh failed-run evidence and a new deadline.",
+      "why": "One red on #5296 be1695c1 (job 136536638507): __tdPendingResult stayed true for a 19.9 s poll, SW controllerchange at 7.5 s mid-test; node twin 6/6 x5 and the shard green on 66ad4962 and tip eef0e45f. Issue #6031."
+    }
+  ]
 }

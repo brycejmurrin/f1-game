@@ -182,3 +182,17 @@ test('VM eval supports the advertised __apex expression and existing a/g binding
   const r=spawnSync(process.execPath,['tools/shot/apex-eval.mjs','bahrain','({same:a===__apex,track:__apex.info().track,handle:typeof g.close})','--vm','--raw'],{cwd:root,encoding:'utf8',timeout:20000});
   assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{same:true,track:'bahrain',handle:'function'});
 });
+
+// The expr compiles in the GAME context (vm.runInContext on g.ctx), not apex-eval's own realm.
+// Pinned both ways: what that removes, and what it does not (game-vm.cjs builds its globals from host
+// objects and `g` is the host handle on purpose), so nobody reads --vm as a security boundary.
+test('VM eval compiles the expr in the game realm and returns JSON; it is not a security boundary',()=>{
+  const expr=`(async()=>{let dyn;try{await import('node:fs');dyn='loaded'}catch(e){dyn='refused'}
+    return {process:typeof process,require:typeof require,module:typeof module,slot:typeof globalThis.__apexEvalHandle,
+      sameFn:a.info.constructor===Function,dyn,track:__apex.info().track,
+      hostViaGameGlobal:performance.now.constructor('return typeof process')(),hostViaHandle:typeof g.close.constructor('return process')()}})()`;
+  const r=spawnSync(process.execPath,['tools/shot/apex-eval.mjs','bahrain',expr.replace(/\n\s*/g,''),'--vm','--raw'],{cwd:root,encoding:'utf8',timeout:20000});
+  assert.equal(r.status,0,r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout),{process:'undefined',require:'undefined',module:'undefined',slot:'undefined',sameFn:true,dyn:'refused',track:'bahrain',
+    hostViaGameGlobal:'object',hostViaHandle:'object'});
+});

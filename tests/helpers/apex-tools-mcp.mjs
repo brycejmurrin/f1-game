@@ -99,3 +99,6 @@ export function extrasCtx(over = {}) {
     acquireLock: () => null, releaseLock: () => { released.n++; }, occupancyRefuse: () => null, assertSafeOut: (p) => p,
     knownCircuits: () => ["monza"], runSpawn: null, splitOut: (s) => ({ out: null, rest: s }), log: () => {}, mockMode: () => false, ...over } };
 }
+
+/** A job id in the exact shape jobStart mints (<kind>-<base36>-<pid>-<12 hex>); anything else is refused (#5296 W25). */
+export const jid = (kind, n) => `${kind}-t${n}-1-${String(n).padStart(12, "0")}`;
