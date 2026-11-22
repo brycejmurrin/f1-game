@@ -507,7 +507,7 @@ test("a WebGPU garage photo draws once into a readable target after a race", asy
     };
     const api = vm.runInNewContext(paint + fnSource(src, "function _captureRT() {")
       + "\n({ draw: () => paintCanvas({}), current: _captureRT, " + fnSource(src, "renderCaptureFrame(draw) {")
-      + ", " + fnSource(src, "capturePixels() {") + "})", sandbox);
+      + ", " + fnSource(src, "capturePixels() {") + "})", sandbox, { filename: absSrc("js/render/three/tlx.js") });
     assert.equal(api.current(), race);
     assert.equal(api.renderCaptureFrame(api.draw), true);
     assert.deepEqual(Array.from((await api.capturePixels()).data), [41, 52, 63, 255]);
