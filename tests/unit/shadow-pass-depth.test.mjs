@@ -192,11 +192,13 @@ function dynamicShadowFixture(matrixProbe = false) {
       cullInstances: () => { calls.cull++; return 0; }, castShadowInstanced: noop,
     },
   };
+  const shafts = { on: true, shed: false };
+  ctx.PostFxOpts = { godraysOn: () => shafts.on, lookPostOff: () => shafts.shed };
   const sp = ctx.ShadowPass.create(G, { vStd: v => v, teamMesh: () => { calls.mesh++; return {}; },
     cockpitCaster: () => { calls.cockpit++; return {}; } });
   const lights = [0, 10, 0, 10, 10, 10, 50, 0, -1, 0, 0.9, 0.7, 0, 0, 0];
   const frame = (night = false) => ({ sunDir: [0, 0.8, 0.6], sunColor: night ? [0.1, 0.1, 0.1] : [1, 1, 1], lights, lampLum: [10], tailCount: 0 });
-  return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT, gov: ctx.PerfGov, M4: ctx.M4, realM4, vps };
+  return { sp, calls, enabled, shafts, frame, G, LT: ctx.LightTune.LT, gov: ctx.PerfGov, M4: ctx.M4, realM4, vps };
 }
 
 test("tier 2 redraws the car map on even frames only and keeps it on the odd frame", () => {
@@ -340,4 +342,31 @@ test("zero shadow darkness stops only the car map, preserving sun-map readers an
   LT.shadowStr = 0;
   sp.sunPass(frame(), 61, true);
   assert.equal(calls.keep, 0, "zero strength must not keep a stale car map armed");
+});
+
+test("static sun depth follows its readers and refreshes on restoration in the same snap cell", () => {
+  const { sp, calls, shafts, frame, G, LT } = dynamicShadowFixture();
+  const day = frame();
+  sp.sunPass(day, 0, false);
+  assert.equal(calls.sun, 1);
+  LT.shadowStr = 0;
+  shafts.on = false;
+  for (let i = 1; i <= 10; i++) {
+    G.camEye[0] = G.camTgt[0] = i * 40;
+    sp.sunPass(day, i, false);
+  }
+  assert.equal(calls.sun, 1, "crossing snap cells with neither reader submits no shadow work");
+  shafts.on = true;
+  sp.sunPass(day, 11, false);
+  assert.equal(calls.sun, 2, "shafts alone refresh the map");
+  shafts.shed = true;
+  sp.sunPass(day, 12, false);
+  shafts.shed = false;
+  sp.sunPass(day, 13, false);
+  assert.equal(calls.sun, 3, "restoring shafts refreshes without camera motion");
+  shafts.on = false;
+  sp.sunPass(day, 14, false);
+  LT.shadowStr = 1;
+  sp.sunPass(day, 15, false);
+  assert.equal(calls.sun, 4, "lighting alone refreshes without camera motion");
 });

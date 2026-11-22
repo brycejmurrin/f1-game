@@ -264,7 +264,7 @@ interface GameEls {
   best: HTMLElement; speed: HTMLElement; energy: HTMLElement;
   ot: HTMLElement; aero: HTMLElement;
   tyre: HTMLElement; tyreCode: HTMLElement; tyreFill: HTMLElement; plan: HTMLElement;
-  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement;
+  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement; endSessionBtn: HTMLElement;
   gapA: HTMLElement; gapB: HTMLElement;
   hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;

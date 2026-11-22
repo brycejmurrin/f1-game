@@ -1717,6 +1717,22 @@ const TrackDesigner = (function () {
     invalidateShares();
     ++replacementGeneration;   // pending single-circuit reads/decodes no longer own this visit
     saveDraft();
+    clearTimeout(previewT); previewT = 0;   // open() schedules a fresh preview
+    if (cancelDesignJob) cancelDesignJob();
+    if (typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(fromFrame);
+      cancelAnimationFrame(candThumbFrame);
+    }
+    ++fromJob; ++candThumbJob;
+    if (ui.from) ui.fromBtn.setAttribute("aria-expanded", "false");
+    for (const panel of [ui.from, ui.cands]) if (panel) {
+      while (panel.firstChild) panel.removeChild(panel.firstChild);
+      panel.hidden = true;
+    }
+    cands = []; candStyle = null;
+    if (ui.styles) for (const chip of Object.values(ui.styles)) {
+      chip.setAttribute("aria-pressed", "false"); chip.classList.remove("active");
+    }
     cancelLibraryImport(false);
     if (repair) repair.cancel();
     if (cv) cv.reset();
@@ -1751,7 +1767,7 @@ const TrackDesigner = (function () {
 
   // ── insight: TURNS, SPEED, TRACK OF THE DAY, START FROM (TrackInsight) ──
   // ins: the TURNS rows of the last preview; heatV: its per-node speeds (m/s).
-  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0;
+  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0, fromFrame = 0;
   // START FROM: def id → the OUTLINE DesignerCanvas.thumb strokes ({ px, pz, n }, at most
   // THUMB_PTS points), built once. It held each whole line-less centreline: 52 circuits,
   // ~4 MB pinned for the page after the panel opened once, for a 160×110 card.
@@ -1922,9 +1938,9 @@ const TrackDesigner = (function () {
         if (!tr) { tr = thumbOutline(Tracks.buildCenterline(def, { line: false })); thumbTr.set(def.id, tr); }
         DesignerCanvas.thumb(c, tr, { color: "#f6f6f9", width: 2 });
       } catch (e) { Log.warn("track", "start-from thumbnail " + def.id + " failed: " + (e && e.message)); }
-      requestAnimationFrame(next);
+      fromFrame = requestAnimationFrame(next);
     };
-    requestAnimationFrame(next);
+    fromFrame = requestAnimationFrame(next);
   }
 
   // ── authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ─────────
@@ -2214,7 +2230,8 @@ const TrackDesigner = (function () {
   // cands: the cards on show ({ seed, pts, score, feats, tr, stats }, best
   // first); candJob: the run in flight (a newer press drops an older one).
   const DESIGN_N = 16, DESIGN_SLICES = 4, DESIGN_STYLES = ["FAST", "TECHNICAL", "MIXED"];
-  let cands = [], candStyle = null, candJob = 0, candThumbJob = 0, candBusy = false;
+  let cands = [], candStyle = null, candThumbJob = 0, candThumbFrame = 0, candBusy = false;
+  let /** @type {(() => void) | null} */ cancelDesignJob = null;
   /** Under the RANDOMISE row's group: [FAST][TECHNICAL][MIXED] and the candidate cards. */
   function buildDesigned(circuit) {
     ui.styleRow = el("div", "td-chips");
@@ -2240,21 +2257,30 @@ const TrackDesigner = (function () {
    *  the busy state paints), then done() → the Promise's value. A newer run
    *  supersedes this one (false). */
   function runSliced(text, slices, work, done) {
-    const job = ++candJob;
+    if (!openFlag) return Promise.resolve(false);
+    if (cancelDesignJob) cancelDesignJob();
     setDesignBusy(true); message(text);
     return new Promise((resolve) => {
-      let k = 0;
+      let k = 0, timer;
+      const cancel = () => {
+        clearTimeout(timer);
+        cancelDesignJob = null;
+        setDesignBusy(false);
+        message("");
+        resolve(false);
+      };
+      cancelDesignJob = cancel;
       const step = () => {
-        if (job !== candJob) { resolve(false); return; }
+        if (cancelDesignJob !== cancel) return;
         try { work(k); } catch (e) {
           Log.warn("track", "designed randomise failed: " + (e && e.message || e));
-          setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
+          cancelDesignJob = null; setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
         }
-        if (++k < slices) { setTimeout(step, 0); return; }
-        setDesignBusy(false);
+        if (++k < slices) { timer = setTimeout(step, 0); return; }
+        cancelDesignJob = null; setDesignBusy(false);
         resolve(done());
       };
-      setTimeout(step, 30);
+      timer = setTimeout(step, 30);
     });
   }
   /** FAST / TECHNICAL / MIXED: DESIGN_N seeds (from `seed`, default the design's
@@ -2334,9 +2360,9 @@ const TrackDesigner = (function () {
       if (job !== candThumbJob || !queue.length) return;
       const [cvs, tr] = queue.shift();
       try { DesignerCanvas.thumb(cvs, tr, { color: "#f6f6f9", width: 2 }); } catch (e) { Log.warn("track", "designed thumbnail failed: " + (e && e.message)); }
-      requestAnimationFrame(next);
+      candThumbFrame = requestAnimationFrame(next);
     };
-    requestAnimationFrame(next);
+    candThumbFrame = requestAnimationFrame(next);
   }
 
   // ── files, the share card, the test drive ─────────────────────────────────

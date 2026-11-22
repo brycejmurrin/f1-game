@@ -107,7 +107,7 @@ test("compact race HUD uses body density, not orientation + max-height queries",
 
 test("pause owns paused navigation: #campicker stands down with the dim sheet", () => {
   const hud = read("css/hud.css");
-  assert.match(hud, /body:has\(> \.screen\.dim:not\(\[hidden\]\)\) #campicker \{\s*display:\s*none/);
+  assert.equal(decl(cssRules(hud), "body:has(> .screen.dim:not([hidden])) :is(#photo-controls, #campicker)", "display"), "none");
   // UI hunt 2026-10-29 row 2: an open grid painted through the results card.
   assert.equal(decl(cssRules(hud), "body:not(.in-race) #campicker", "display"), "none");
 });

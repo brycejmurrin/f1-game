@@ -714,6 +714,12 @@ test("customized left and right travel reaches the wheel with adaptive steering 
   assert.equal(wheel(), -1);
   left.fire("pointermove", other);
   assert.equal(wheel(), 1, "instant arrow takes full travel at crossover");
+  lift("btn-steer-right");
+  sb.PedalTravel.resetButtonProfile("right");
+  sb.PedalTravel.setButtonProfile("right", { slideCurve: "fine" });
+  right.fire("pointerdown", other);
+  right.fire("pointermove", { ...other, clientX: other.clientX - 57 });
+  assert.equal(wheel(), 0.75, "an instant arrow with only a custom slide curve reaches the wheel");
   Input.reset();
   assert.equal(wheel(), 0);
 });
@@ -766,4 +772,66 @@ test("each touch arrow uses its own speed sensitivity for building lock, with in
   Input.setSpeedStd(0);
   left.fire("pointerdown", px);
   check(Input.steer(0.05), -0.30); // no reduction at rest, even at strength 10
+});
+
+test("an instant Gas and a down-progressive Brake both ease upward from their own starts", () => {
+  const { sb, gas, brake, mid, btn } = bootDock();
+  sb.PedalTravel.setButtonProfile("gas", { direction: "up", start: 80, travel: 80 });
+  sb.PedalTravel.setButtonProfile("brake", { press: "progressive", direction: "down", start: 40, travel: 80 });
+  for (const [el, id, read, initial] of [
+    [gas, "btn-throttle", () => btn().throttleVal, 0.8],
+    [brake, "btn-brake", () => btn().brakeVal, 0.4],
+  ]) {
+    const point = mid(id);
+    el.fire("pointerdown", point);
+    assert.equal(read(), initial);
+    el.fire("pointermove", { clientX: point.clientX, clientY: point.clientY - 20 });
+    assert.ok(read() < initial);
+    el.fire("pointerup", point);
+    assert.equal(read(), 0);
+  }
+});
+
+test("Gas reads its selected full edge only on touchdown, then follows its slide setting", () => {
+  const { sb, gas, mid, btn } = bootDock();
+  sb.PedalTravel.setButtonProfile("gas", { fullEdge: "right", direction: "down", travel: 80 });
+  const point = mid("btn-throttle");
+  gas.fire("pointerdown", point);
+  assert.equal(btn().throttleVal, 0.5);
+  gas.fire("pointermove", { clientX: point.clientX + 10, clientY: point.clientY });
+  assert.equal(btn().throttleVal, 0.5);
+  gas.fire("pointermove", { clientX: point.clientX, clientY: point.clientY + 32 });
+  assert.equal(btn().throttleVal, 0.25);
+  gas.fire("pointerup", point);
+  assert.equal(btn().throttleVal, 0);
+});
+
+test("absolute gas follows the current tick with independent fingers, brake handoff and cancel", () => {
+  const { sb, gas, brake, mid, btn } = bootDock();
+  const select = (id, edge) => sb.PedalTravel.setButtonProfile(id, {
+    sliderEdge: edge, fullEdge: "left", press: "progressive", start: 10, buildMs: 250, slideCurve: "fine", slide: "ease",
+  });
+  select("gas", "right"); select("brake", "top");
+  const { left, width } = BOX["btn-throttle"];
+  const sample = (type, fraction, pointerId) => gas.fire(type, {
+    clientX: left + width * fraction, clientY: mid("btn-throttle").clientY, pointerId,
+  });
+  sample("pointerdown", 0.25, 1);
+  assert.equal(btn().throttleVal, 0.25);
+  sample("pointermove", 0.75, 1);
+  sample("pointerdown", 0.5, 2);
+  assert.equal(btn().throttleVal, 0.75);
+  sample("pointermove", -0.5, 1);
+  assert.equal(btn().throttleVal, 0.5);
+  sample("pointerup", 0.5, 2);
+  assert.equal(btn().throttleVal, 0);
+  sample("pointermove", 1.5, 1);
+  assert.equal(btn().throttleVal, 1);
+  gas.fire("pointermove", { ...mid("btn-brake"), pointerId: 1 });
+  assert.equal(btn().throttleVal, 0);
+  assert.equal(btn().brakeVal, 0.5);
+  brake.fire("pointermove", { clientX: mid("btn-brake").clientX, clientY: BOX["btn-brake"].top, pointerId: 1 });
+  assert.equal(btn().brakeVal, 1);
+  brake.fire("pointercancel", { pointerId: 1 });
+  assert.equal(btn().brakeVal, 0);
 });

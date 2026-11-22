@@ -1864,7 +1864,7 @@ test("CSS-only changes run the layout specs that measure the sheet they touch", 
   // with `deepEqual(hud, [smoke])`), so the specs that measure the HUD and the pause sheet at phone shapes ran
   // for JS diffs only. Each sheet now names the spec that measures it.
   const hud = cssSpecs(["css/hud.css"]);
-  for (const name of ["hud", "touch-controls"]) {
+  for (const name of ["hud", "touch-controls", "touch-button-colors"]) {
     const got = cssSpecs([`css/${name}.css`]);
     assert.ok(got.includes(S("hud-layout")) && got.includes(S("ui-scale")), `${name}.css runs the HUD layout matrix`);
   }

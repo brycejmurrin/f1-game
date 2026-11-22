@@ -365,14 +365,20 @@ const Particles = (function () {
   }
 
   function armPrime() { _prime = true; }
-  function draw() {
-    _draw();
+  // A billboard's farthest corner is sqrt(2) times its half-size from its centre.
+  // The normalized near plane comes from the actual view-projection matrix.
+  function behindNear(plane, x, y, z, size) {
+    return plane && plane[0] * x + plane[1] * y + plane[2] * z + plane[3] < -Math.SQRT2 * size;
+  }
+  const unclipped = [0, 0, 0, 0], lastPlane = new Float64Array(4);
+  function draw(nearPlane) {
+    _draw(nearPlane);
     if (!_prime || !_gfx || !_gfx.drawParticles || !MAX) return;
     _prime = false;
     if (!_lastPa) { _vertA.fill(0, 0, 60); _gfx.drawParticles(_vertA, 60, false, true); }
     if (!_lastPb) { _vertB.fill(0, 0, 60); _gfx.drawParticles(_vertB, 60, true, true); }
   }
-  function _draw() {
+  function _draw(nearPlane) {
     // The shower draws only on a frame its owner advanced it (rainUpdate, which
     // game.js calls only while the road is wet): a field nobody updates is a
     // frozen box of streaks at a stale eye — what a drying weather arc left
@@ -385,6 +391,15 @@ const Particles = (function () {
     if (!_n && !_flN && !(rainLive && _rainN && _rainOn)) {
       _lastPa = _lastPb = 0;
       return;
+    }
+    // Live particles survive a camera cut or look-back. An unchanged pool may
+    // reuse its upload only under the same plane (including the unclipped XR path).
+    if (_n) {
+      const plane = nearPlane || unclipped;
+      for (let i = 0; i < 4; i++) {
+        if (lastPlane[i] !== plane[i]) _dirty = true;
+        lastPlane[i] = plane[i];
+      }
     }
     // Clean: re-issue the last upload without expanding (rain-cell / idle pool).
     if (!_dirty && !_flareDirty && (_lastPa || _lastPb)) {
@@ -408,6 +423,7 @@ const Particles = (function () {
       const alpha = _a0[i] * fade;
       if (alpha <= 0.004) continue;
       const size = _sz[i] + _grw[i] * _age[i];
+      if (behindNear(nearPlane, _px[i], _py[i], _pz[i], size)) continue;
       const out = _add[i] ? _vertB : _vertA;
       let p = _add[i] ? pb : pa;
       const x = _px[i], y = _py[i], z = _pz[i], r = _cr[i], g = _cg[i], b = _cb[i];
@@ -422,6 +438,7 @@ const Particles = (function () {
     for (let f = 0; f < _flN; f++) {
       const o = f * 8;
       const x = _fl[o], y = _fl[o + 1], z = _fl[o + 2], size = _fl[o + 3];
+      if (behindNear(nearPlane, x, y, z, size)) continue;
       const r = _fl[o + 4], g = _fl[o + 5], b = _fl[o + 6], alpha = _fl[o + 7];
       for (let v = 0; v < 12; v += 2) {
         _vertB[pb++] = _CORNERS[v]; _vertB[pb++] = _CORNERS[v + 1];
@@ -474,6 +491,7 @@ const Particles = (function () {
   let _rox = null, _roy = null, _roz = null;          // offset from the eye (m)
   let _rspd = null, _rlen = null, _ralpha = null;     // fall speed (m/s), streak-length scale, opacity
   const _rainEye = [0, 0, 0];
+  let _rainCamera;
   let _rainEyeOk = false;                              // false until the first update after a seed/show (no finite difference)
   const _camVel = [0, 0, 0];
   let _windX = 0, _windZ = 0;
@@ -599,7 +617,7 @@ const Particles = (function () {
   // velocity is its finite difference, and a cut (> 40 m in one frame) resets
   // it rather than painting one frame of 4 km/h streaks. Render-only: reads the
   // handed-in eye, never writes physics state.
-  function rainUpdate(dt, eye, raining) {
+  function rainUpdate(dt, eye, raining, camera, cut = false) {
     if (!_rainN || !_rainOn || !eye) return;
     if (!(dt > 0)) dt = 0;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport the field
@@ -616,6 +634,8 @@ const Particles = (function () {
     const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6, dzLen = LT.drizzleLen != null ? LT.drizzleLen : 0.5;
     _rainSpeedScale = dzSpeed + (1 - dzSpeed) * shape; _rainLenScale = dzLen + (1 - dzLen) * shape;
     _rainFed = true;
+    if (cut || camera !== _rainCamera) { _rainEyeOk = false; _dirty = true; }
+    _rainCamera = camera;
     if (_rainEyeOk && dt > 0) {
       const dx = eye[0] - _rainEye[0], dy = eye[1] - _rainEye[1], dz = eye[2] - _rainEye[2];
       if (dx * dx + dy * dy + dz * dz < 40 * 40) { _camVel[0] = dx / dt; _camVel[1] = dy / dt; _camVel[2] = dz / dt; }

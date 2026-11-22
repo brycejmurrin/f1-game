@@ -179,7 +179,7 @@ function garage() {
     const p = doc.createElement("p"); p.className = "adv-help"; p.textContent = text; return p;
   });
   rows.append(paragraphs[0], otherRow, angleRow, paragraphs[1], paragraphs[2]);
-  const calls = [], sequences = [["ga-preview-in", "Pit stop"], ["ga-preview-out", "Race start"], ["ga-preview-home", "Return"]];
+  const calls = [], sequences = [["ga-preview-out", "Race start"], ["ga-preview-in", "Pit entry"], ["ga-preview-pit-exit", "Pit exit"], ["ga-preview-home", "Race end"]];
   const buttons = sequences.map(([id]) => { const b = doc.createElement("button"); b.id = id; b.onclick = () => calls.push(id); foot.append(b); return b; });
   const reset = doc.createElement("button"), done = doc.createElement("button");
   reset.id = "ga-reset"; reset.onclick = () => calls.push("reset"); done.id = "ga-close"; foot.append(reset, done);
@@ -206,9 +206,9 @@ test("compact garage sequence strip preserves each real preview handler and shor
   const h = garage(), strip = h.sheet.querySelector(".balanced-row");
   assert.equal(strip.getAttribute("aria-label"), "Preview sequence");
   assert.deepEqual(strip.querySelectorAll("button"), h.buttons);
-  assert.deepEqual(h.buttons.map(b => b.textContent), ["Pit stop", "Race start", "Return"]);
+  assert.deepEqual(h.buttons.map(b => b.textContent), ["Race start", "Pit entry", "Pit exit", "Race end"]);
   for (const b of h.buttons) b.click();
-  assert.deepEqual(h.calls, ["ga-preview-in", "ga-preview-out", "ga-preview-home"]);
+  assert.deepEqual(h.calls, ["ga-preview-out", "ga-preview-in", "ga-preview-pit-exit", "ga-preview-home"]);
 });
 
 test("garage furniture survives preview changes and remount without duplicated controls", () => {
@@ -233,7 +233,7 @@ test("garage toolbar Preview starts the real Race start action only after the us
 
 test("garage toolbar Preview preserves the active sequence and paused editing transport", () => {
   const h = garage();
-  h.buttons[2].click(); h.transport.hidden = false;
+  h.buttons[3].click(); h.transport.hidden = false;
   h.api.setPreview(false);
   const toggle = h.sheet.querySelector(".ew-preview");
   toggle.click(); toggle.click(); toggle.click();
@@ -255,7 +255,7 @@ test("stopping a toolbar-launched garage preview returns to visible edit control
   const h = garage(), toggle = h.sheet.querySelector(".ew-preview");
   // Domain playback owns sheet visibility. Its Stop restores the sheet without
   // calling furniture APIs, as setup-camera's start/stop preview contract does.
-  h.buttons[1].onclick = () => { h.sheet.hidden = true; h.transport.hidden = false; };
+  h.doc.getElementById("ga-preview-out").onclick = () => { h.sheet.hidden = true; h.transport.hidden = false; };
   toggle.click();
   assert.equal(h.sheet.hidden, true);
   assert.equal(h.transport.hidden, false);

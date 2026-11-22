@@ -156,6 +156,37 @@ for (const backend of ["tlx", "glx", "wgx"]) for (const enabled of [true, false]
   });
 }
 
+for (const backend of ["tlx", "wgx"]) test(`${backend}: held mirror uses its previous resident pack, including empty packs`, () => {
+  const { ctx, batch: main, writes } = radialRig(backend, true);
+  const { batch: mirror } = radialRig(backend, true);
+  ctx._mirActive = true;
+  ctx._mirCull = 0;
+  ctx._mirEncoder = {};
+  ctx._passBatch = ctx._mirrorView = () => mirror;
+  if (backend === "tlx") {
+    vm.runInContext(fnSource(read("js/render/three/tlx.js"), "function cullPassInstances(batch, planes, opts)") + "\nthis.cull = cullPassInstances;", ctx, { filename: absSrc("js/render/three/tlx.js") });
+  }
+  const empty = widePlanes(), all = widePlanes();
+  empty[0][3] = -10000;
+  const pass = (seq, freeze, planes) => {
+    ctx._mirRenders = ctx._mirPassSeq = seq;
+    ctx._mirFreeze = freeze;
+    return ctx.cull(main, planes);
+  };
+  assert.equal(pass(1, false, empty), 0);
+  let before = writes();
+  assert.equal(pass(2, true, all), 0, "even a newly visible cell waits for the refresh");
+  assert.equal(writes(), before);
+  assert.equal(pass(3, false, all), 4);
+  before = writes();
+  assert.equal(pass(4, true, empty), 4);
+  assert.equal(writes(), before);
+  assert.equal(pass(6, true, empty), 0, "a batch skipped last pass must recull");
+  mirror._cullPlanes = null; // updateInstances cleared the cull's ownership of these bytes
+  assert.equal(pass(7, true, all), 4, "an overwritten pack must recull");
+  assert.equal(main._cullPlanes, undefined, "the forward camera has its own pack");
+});
+
 test("TLX mirror instance cull uses the mirror eye and radius instead of the main camera", () => {
   const { ctx, batch: b } = radialRig("tlx", true);
   ctx.frameCullDist = 100;

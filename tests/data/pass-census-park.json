@@ -1,8 +1,8 @@
 {
  "_doc": "pass-census --park exact baselines (#4783 row 1): per pass the [min, max] draw calls and triangles per render on a parked, frozen frame, and three's memory counters. Built by `node tools/gfx/pass-census-lib.mjs --collect`; never hand-edited. No tolerance: a diff is a change in what the frame draws.",
  "source": {
-  "run": "44991005492",
-  "sha": "136b458100b5e9af59758b1da1c6c30f5a7c1fe1",
+  "run": "45000459060",
+  "sha": "6f13ee4feba8504603d7b842c5e3486bdfba366a",
   "adapter": "perf-census-webgpu.yml on ubuntu-latest; adapterInfo vendor google, architecture swiftshader (software WebGPU)"
  },
  "cells": {
@@ -194,8 +194,8 @@
     },
     "output 640x360": {
      "calls": [
-      31,
-      31
+      30,
+      30
      ],
      "tris": [
       153041,
@@ -301,8 +301,8 @@
     },
     "output 640x360": {
      "calls": [
-      31,
-      31
+      30,
+      30
      ],
      "tris": [
       142303,
@@ -542,8 +542,8 @@
     },
     "output 640x360": {
      "calls": [
-      32,
-      32
+      31,
+      31
      ],
      "tris": [
       113332,
@@ -649,8 +649,8 @@
     },
     "output 640x360": {
      "calls": [
-      32,
-      32
+      31,
+      31
      ],
      "tris": [
       112636,

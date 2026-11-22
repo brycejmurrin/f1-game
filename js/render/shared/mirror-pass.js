@@ -108,6 +108,8 @@ const MirrorPass = (function () {
     // Canvas fractions [x, y, w, h], top-left origin, of the #hud-mirror frame.
     let _rect = null, _measureAt = -Infinity, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
     let _run = 0;   // consecutive FULL passes drawn since the last interruption: the freeze cadence (b._mirMats is only current inside a run)
+    const _packEye = [0, 0, 0];
+    let _packBx = 0, _packBz = 0, _packW = 0, _packH = 0;
     let _el = null, _canvas = null, _dead = false, _lastW = 0, _lastH = 0;
     // COLLAPSED: tapped away this session. Not persisted — the next page load
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
@@ -650,14 +652,14 @@ const MirrorPass = (function () {
       }
       const nowT = nowMs();
       if (nowT >= _measureAt) { measure(); _measureAt = nowT + MEASURE_MS; }
-      if (!_rect) { g.mirrorRect(null); return; }
+      if (!_rect) { _run = 0; g.mirrorRect(null); return; }
       g.mirrorRect(_rect);
       // Every frame — a mirror that updates at half rate reads as lag — except
       // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
       quality(g);
       const sz = targetSize(_cssW, _cssH, _q.res), w = sz[0], h = sz[1];
-      if (w < 16 || h < 8) return;
+      if (w < 16 || h < 8) { _run = 0; return; }
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
       if (_frame % _q.every !== 0 && !G.frozen && same && _drawn > 0) return;
@@ -738,7 +740,12 @@ const MirrorPass = (function () {
       // leaves b._mirMats from before it, and a global parity could freeze the first full pass onto that old pack.
       // _run is zeroed here and only advanced after a pass that drew, so a throw or a refused begin also resets it.
       const ie = _q.instEvery || 1;
-      const run = _run; _run = 0;
+      // A replay seek, recovery teleport or sudden heading change can put a
+      // different stretch of track in the mirror between consecutive draws.
+      const dx = _eye[0] - _packEye[0], dy = _eye[1] - _packEye[1], dz = _eye[2] - _packEye[2];
+      const sameView = w === _packW && h === _packH && dx * dx + dy * dy + dz * dz <= 8 * 8
+        && _bx * _packBx + _bz * _packBz >= 0.985; // ~10°
+      const run = sameView ? _run : 0; _run = 0;
       const freezeInst = !_q.lite && ie > 1 && run > 0 && (run % ie) !== 0;
       frame.mirrorFreezeInstanced = freezeInst;
       if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
@@ -769,6 +776,11 @@ const MirrorPass = (function () {
           drawCars(wet, night, _q.reach, centre, skip);
           g.drawSky(frameSky);   // opaque first, then sky (gfx.js)
           _drawn++;
+          if (!_q.lite && !freezeInst) {
+            _packEye[0] = _eye[0]; _packEye[1] = _eye[1]; _packEye[2] = _eye[2];
+            _packBx = _bx; _packBz = _bz;
+            _packW = w; _packH = h;
+          }
           _run = _q.lite ? 0 : run + 1;
         }
       } finally {
@@ -829,6 +841,7 @@ const MirrorPass = (function () {
       // Race teardown: the lamp re-rank cache keys on the track, and a page-lifetime pass kept it alive.
       // quit (quit-to-menu only, #4219): the backend frees its mirror target too; the next mirrorBegin re-allocates.
       releaseTrack(quit) {
+        _run = 0;
         _vlTrack = null; _vlSrc = null; _vlAge = Infinity;
         const g = G.gfx;
         if (quit && g && typeof g.releaseMirror === "function") g.releaseMirror();

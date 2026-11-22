@@ -2809,6 +2809,7 @@
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "drawPlayerWheels": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "farRivalBodyReady": [
@@ -5793,6 +5794,7 @@
         "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
@@ -6805,7 +6807,8 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "thumb": [
-        "tests/unit/designer-canvas.test.mjs"
+        "tests/unit/designer-canvas.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "view": [
         "tests/unit/designer-canvas.test.mjs",
@@ -7111,6 +7114,9 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "toggleHeat": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
+      "toggleStartFrom": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "trackOfTheDay": [
@@ -7936,6 +7942,10 @@
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "outsideFieldRange": [
+        "tests/unit/director.test.mjs",
+        "tests/unit/field-lod.test.mjs"
+      ],
       "paceVmax": [
         "tests/unit/ai-racecraft-vm.test.mjs"
       ],
@@ -8569,6 +8579,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "samplePose": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs"
       ],
       "spinRadians": [
@@ -8976,9 +8987,6 @@
       ]
     },
     "js/garage/scene.js": {
-      "buildPitLane": [
-        "tests/unit/garage-mesh.test.mjs"
-      ],
       "buildStatic": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
@@ -10063,6 +10071,14 @@
       ]
     },
     "js/input/pedal-travel.js": {
+      "advance": [
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "buildOnHold": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "buttonOverrides": [
         "tests/unit/touch-button-settings.test.mjs"
       ],
@@ -10070,31 +10086,39 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/touch-button-settings.test.mjs"
       ],
+      "contactProfile": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "ease": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "level": [
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
       ],
       "setButtonProfile": [
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/settings-export.test.mjs",
-        "tests/unit/throttle-latch.test.mjs"
+        "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
       ],
-      "*": [
-        "tests/unit/a11y-pwa-pass.test.mjs",
-        "tests/unit/camera-defaults.test.mjs",
+      "tick": [
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds-hunt.test.mjs",
+        "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/photomode-hold.test.mjs"
+      ],
+      "*": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
-        "tests/unit/pad-haptics.test.mjs",
         "tests/unit/pedal-slide.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
-        "tests/unit/photomode-hold.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -10308,6 +10332,16 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
+      ]
+    },
+    "js/input/touch-button-actions.js": {
+      "bindControl": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs"
       ]
     },
     "js/lighting/atmosphere.js": {
@@ -11247,7 +11281,8 @@
       ],
       "start": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/net-qr.test.mjs"
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs"
       ],
       "stop": [
         "tests/unit/async-lifecycle.test.mjs",
@@ -16279,6 +16314,9 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
+      "makeFrustumPlanes": [
+        "tests/unit/particles-dirty.test.mjs"
+      ],
       "radialCulled": [
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
@@ -16720,10 +16758,12 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "depthBegin": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "depthEnd": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "discardAttachments": [
         "tests/unit/tlx-hunt4b.test.mjs"
@@ -17232,6 +17272,9 @@
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs"
       ],
+      "cullPassInstances": [
+        "tests/unit/tlx-cull-shadow-pack.test.mjs"
+      ],
       "detectSoftwareGL": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
@@ -17606,6 +17649,7 @@
       ],
       "resolve": [
         "tests/unit/tlx-aa.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tsl-gi.test.mjs"
       ],
       "ssCeil": [
@@ -17786,6 +17830,10 @@
       ],
       "ssaoKernel": [
         "tests/unit/tsl-gi.test.mjs"
+      ],
+      "*": [
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ]
     },
     "js/render/three/tsl-lit.js": {
@@ -17946,6 +17994,7 @@
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "sync": [
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "view": [
@@ -19691,6 +19740,10 @@
         "tests/unit/layout-presets.test.mjs"
       ],
       "finish": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "hiddenReason": [
+        "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "options": [
