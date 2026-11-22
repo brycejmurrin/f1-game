@@ -4027,3 +4027,8 @@ Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
 `(tree) eagerCodeBytes` 3958534 → **3960549** (+2015). The garage resolves each moment’s settings and blends its camera across shot boundaries.
 `(tree) shellNodes` 2327 → **2335** (+8). A labelled selector exposes the four editable animations.
 Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
+
+## 2026-11-22 — PR #6157 garage camera sampling
+
+`(tree) eagerCodeBytes` 3960549 → **3960800** (+251). Sampling the previous camera shot exits before writing car and crew poses, which removes allocations during camera transitions.
+Fragment: `ratchets.d/codex--tt-pit-end-session.json`.

@@ -602,7 +602,7 @@ const GarageArrival = (function () {
   // produce the same camera as uninterrupted playback. Only the camera blends.
   const PREVIOUS_SHOT = {};
   function blendShot(o, dir, config, t, boundary, window) {
-    if (boundary <= 0 || t < boundary || t >= boundary + window || o === PREVIOUS_SHOT) return;
+    if (boundary <= 0 || t < boundary || t >= boundary + window) return;
     const before = boundary - 1e-6;
     if (dir === "out") poseOut(before, config, false, PREVIOUS_SHOT);
     else poseIn(before, config, false, dir, PREVIOUS_SHOT);
@@ -615,7 +615,7 @@ const GarageArrival = (function () {
   }
   function poseIn(seconds, config, calm, dir, o) {
     const pair = o ? posePair(o) : null;
-    if (o) clearKeys(o, CONSUMER_KEYS); else o = {};
+    if (!o) o = {}; else if (o !== PREVIOUS_SHOT) clearKeys(o, CONSUMER_KEYS);
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = scratchT(T_POSE, config, dir), end = T.base + crewExtra(config, dir), r = T.result;
     const rig = rigFor(config);
     const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
@@ -640,6 +640,10 @@ const GarageArrival = (function () {
     const aim = cam === "left" || cam === "right"
       ? set3(AIM, Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)) : aimAt(cam, p, t < T.door, AIM);
     const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
+    if (o === PREVIOUS_SHOT) {
+      o.fov = config.fov;
+      return shot(o, rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look, pair);
+    }
     o.active = t < end; o.serviceTime = t - T.park; o.seconds = t; o.direction = "in"; o.sequence = dir; o.result = r ? config.result : null;
     o.engine = !(r && r.pushed); o.side = side; o.calm = calm; o.camera = rig || cam; o.shot = n + 1; lookOf(o, config, dir);
     o.crewClear = 1 - ease((t - (T.park - .3)) / .3); carOf(o, config, dir, rs, t, T, p); o.label = label;
@@ -756,7 +760,7 @@ const GarageArrival = (function () {
   const P_OUT = {};
   function poseOut(seconds, config = DEFAULT, calm = false, o = null) {
     const pair = o ? posePair(o) : null;
-    if (o) clearKeys(o, CONSUMER_KEYS); else o = {};
+    if (!o) o = {}; else if (o !== PREVIOUS_SHOT) clearKeys(o, CONSUMER_KEYS);
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = scratchT(T_POSE, config, "out"), end = T.base + crewExtra(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
     const rig = rigFor(config);
@@ -779,6 +783,10 @@ const GarageArrival = (function () {
       const k = 1 - Math.exp(-(t - settle) / HOLD_TAU);
       e = set3(EYE, eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, Math.min(5.9, eye[2] + HOLD_PUSH * k));
       aim[0] -= cs * 2.2 * k;
+    }
+    if (o === PREVIOUS_SHOT) {
+      o.fov = config.fov;
+      return shot(o, e, aim, t, calm, config.height || 0, look, pair);
     }
     o.active = t < end; o.serviceTime = t; o.seconds = t; o.direction = "out"; o.sequence = "out"; o.engine = true; o.side = side; o.calm = calm; o.camera = rig || cam;
     o.shot = n + 1; lookOf(o, config, "out");
