@@ -1279,6 +1279,168 @@ const HudLayout = (function () {
   };
   const NAMES = { x: "LEFT / RIGHT", y: "UP / DOWN", s: "SIZE" };
 
+  function createColors() {
+    const parts = [];
+    const add = (id, label, selector, property) => parts.push({ id, label, selector, property });
+    function panel(id, label, selector) {
+      add(id + "-fill", label + " · Background", selector, "background-color");
+      add(id + "-text", label + " · Text", selector, "color");
+    }
+    for (const [id, label, selector] of ELEMENTS) {
+      if (id === "map") {
+        add("map-fill", "TRACK MAP · Background", selector, "background-color");
+        add("map-frame", "TRACK MAP · Frame", selector, "--map-frame-color");
+      } else if (id === "mirror") {
+        add("mirror-frame", "MIRROR · Frame", selector, "outline-color");
+      } else if (id === "tower") {
+        panel(id, label, ".hud-top .hud-box, #bc-tower");
+      } else {
+        panel(id, label, selector);
+      }
+    }
+    for (const [id, label] of [["pos", "POSITION"], ["lap", "LAP"], ["time", "LAP TIME"], ["best", "BEST"], ["delta", "DELTA"]]) {
+      const box = id === "delta" ? "#hud-delta" : "#hud-box-" + id;
+      add(id + "-fill", label + " · Background", box + (id === "pos" ? ", #bc-tower .bc-pos" : ""), "background-color");
+      add(id + "-text", label + " · Text", id === "pos" ? "#hud-pos:not([data-delta]), #bc-tower .bc-row:not([data-delta]) .bc-pos" : box + " .hud-value", "color");
+    }
+    for (const [state, label] of [["up", "POSITION GAINED"], ["down", "POSITION LOST"]]) {
+      const broadcast = ', #bc-tower .bc-row[data-delta="' + state + '"] .bc-pos';
+      add("pos-" + state + "-fill", label + " · Background", '#hud-box-pos:has(#hud-pos[data-delta="' + state + '"])' + broadcast, "background-color");
+      add("pos-" + state + "-text", label + " · Text", '#hud-pos[data-delta="' + state + '"]' + broadcast, "color");
+    }
+    // Use the race producers' state attributes. A missing override leaves the
+    // shipped paint (including team and accessibility palettes) in control.
+    function event(id, label, plate, ink = plate) {
+      add(id + "-fill", label + " · Background", plate, "background-color");
+      add(id + "-text", label + " · Text", ink, "color");
+    }
+    function states(group, root, attr, labels, plateSuffix = "", inkSuffix = plateSuffix) {
+      for (const [state, label] of Object.entries(labels)) {
+        const selector = root + "[" + attr + '="' + state + '"]';
+        event(group + "-" + state, label, selector + plateSuffix, selector + inkSuffix);
+      }
+    }
+    for (const [state, label] of [["pb", "PERSONAL BEST LAP"], ["lap", "COMPLETED LAP"]]) {
+      const ink = '#hud-time[data-hold="' + state + '"]';
+      event("tower-time-" + state, label, "#hud-box-time:has(" + ink + ")", "#hud-box-time " + ink);
+    }
+    states("tower-delta", "#hud-delta", "data-sign", { fast: "FASTER DELTA", slow: "SLOWER DELTA" }, "", " .hud-value");
+    add("tower-ghost", "GHOST REFERENCE · Indicator", '#hud-delta[data-ref="ghost"] .hud-label::after', "color");
+    for (const [state, label] of Object.entries({ on: "CAMERA CAR", fl: "FASTEST LAP", pit: "PITTING", out: "RETIRED" })) {
+      const row = "#bc-tower .bc-row." + state;
+      event("tower-broadcast-" + state, "BROADCAST " + label, row + " button", row + (state === "pit" ? " .bc-gap" : " .bc-code"));
+    }
+    for (const [state, label] of Object.entries({ yellow: "YELLOW FLAG", vsc: "VIRTUAL SAFETY CAR", sc: "SAFETY CAR", red: "RED FLAG", blue: "BLUE FLAG" })) {
+      event("flag-" + state, label, state === "blue" ? '#hud-flag[data-flag="blue"]' : "#hud-flag.flag-" + state);
+    }
+    event("limits-warn", "TRACK LIMIT WARNING", "#hud-limits.limits-warn");
+    event("limits-hot", "TRACK LIMIT PENALTY RISK", "#hud-limits.limits-hot");
+    for (const [state, label] of Object.entries({ session: "SESSION BEST", personal: "PERSONAL BEST", slow: "SLOWER SECTOR" })) {
+      const row = '#hud-sectors [data-split="' + state + '"]';
+      event("sectors-" + state, label, row, row + " .sec-val");
+      add("sectors-" + state + "-stripe", label + " · Stripe", row, "border-left-color");
+    }
+    for (const [kind, label] of Object.entries({ race: "RACE RADIO", comm: "COMMENTARY", coach: "COACH", practice: "PRACTICE", info: "INFORMATION", warning: "WARNING", "penalty-warn": "PENALTY WARNING", "penalty-hit": "PENALTY ISSUED", box: "BOX CALL" })) {
+      const card = kind === "race" ? "#announce:not([data-kind])" : '#announce[data-kind="' + kind + '"]';
+      event("announce-" + kind, label, card, card + " #announce-text");
+      add("announce-" + kind + "-channel", label + " · Channel text", card + " #announce-who", "color");
+    }
+    for (const [state, label] of Object.entries({ off: "UNAVAILABLE", armed: "ARMED", active: "ACTIVE", cool: "NEXT LAP" })) {
+      event("ot-" + state, label, "#hud-ot.ot-" + state);
+    }
+    for (const [state, label] of Object.entries({ off: "CORNER MODE", armed: "ARMED", open: "STRAIGHT MODE", none: "NO ZONES" })) {
+      event("aero-" + state, label, "#hud-aero.ax-" + state);
+    }
+    states("ot-gate", "#hud-ot", "data-gate", { caution: "CAUTION", "low-grip": "LOW GRIP", "opening-lap": "OPENING LAP", "waiting-for-leader": "ON GRID", "race-control": "RACE CONTROL" });
+    states("aero-zone", "#hud-aero", "data-zone", { near: "APPROACHING ZONE", in: "IN ZONE", auto: "AUTOMATIC", straight: "AUTOMATIC STRAIGHT" });
+    event("mirror-collapsed", "COLLAPSED MIRROR", "#hud-mirror-chip");
+    add("gearbox-redline", "REDLINE · Rev bar", "#hud-tach.redline #hud-rpm-fill", "background");
+    for (const [state, label] of [["deploy", "DEPLOYING"], ["harvest", "HARVESTING"]]) {
+      const bar = '#hud-energy[data-ers="' + state + '"]';
+      add("energy-" + state + "-bar", label + " · Bar", bar + " #hud-energy-fill", "background");
+      add("energy-" + state + "-text", label + " · Text", bar + " .hud-energy-label", "color");
+    }
+    states("tyre-temp", "#hud-tyre", "data-temp", { hot: "HOT TYRE", cold: "COLD TYRE" }, " #hud-tyre-code");
+    states("tyre-plan", "#hud-tyre", "data-plan", { soon: "BOX NEXT LAP", now: "BOX THIS LAP", cheap: "LOW COST STOP" }, " #hud-plan");
+    for (const [state, label] of [["ok", "HEALTHY"], ["warn", "WORN"], ["gone", "WORN OUT"]]) {
+      add("tyre-wear-" + state, label + " · Wear bar", '#hud-tyre[data-wear="' + state + '"] #hud-tyre-fill', "background");
+    }
+    add("tyre-commit", "PIT COMMITMENT · Progress", '#hud-tyre[data-pit="commit"] #hud-tyre-code', "--you");
+    states("tyre-stop", "#hud-tyre", "data-pit", { lane: "IN PIT LANE", box: "IN PIT BOX" }, " #hud-tyre-code");
+    states("tyre-cue", "#hud-pit", "data-phase", { near: "APPROACHING ENTRY", enter: "HOLD THE LANE", armed: "STOP CALLED", lane: "STAY IN LANE", keep: "RETURN TO LANE", "near-box": "APPROACHING BOX", stop: "STOP HERE", square: "ALIGN CAR", missed: "BOX MISSED", box: "SERVICE", served: "RELEASE", merge: "MERGE", out: "EXIT ROAD" });
+    event("tyre-work", "WORK ON CAR", "#hud-work");
+    states("gaps-ghost", ".hud-gaps > div", "data-ghost", { fast: "AHEAD OF GHOST", slow: "BEHIND GHOST" });
+    event("gaps-tow", "SLIPSTREAM", ".hud-gaps > div[data-tow]");
+    event("gaps-window", "RIVAL PIT WINDOW", '.hud-gaps > div[data-pit]:not([data-pit="IN"])::after');
+    event("gaps-in", "RIVAL IN PITS", '.hud-gaps > div[data-pit="IN"]::after');
+    states("rel-lap", "#hud-rel > div", "data-lap", { up: "LAP AHEAD", down: "LAP BEHIND" });
+    event("rel-self", "PLAYER ROW", "#hud-rel > div[data-self]");
+    states("strat", "#hud-strat > div", "data-k", { uc: "UNDERCUT", cov: "COVER" });
+    for (const [level, label] of [["1", "LIGHT"], ["2", "MODERATE"], ["3", "SEVERE"]]) {
+      add("damage-" + level, label + " DAMAGE · Diagram", '#hud-damage [data-lvl="' + level + '"]', "fill");
+    }
+    // The start gantry and side warnings have no movable piece of their own.
+    add("tower-lights", "START LIGHTS · Lit lamp", "#lights .light.on", "background");
+    add("tower-countdown", "START COUNTDOWN · Text", "#lights.count::after", "color");
+    add("tower-go", "START SIGNAL · Go text", '#lights.count[data-count="GO"]::after', "color");
+    for (const [side, label] of [["l", "LEFT"], ["r", "RIGHT"]]) {
+      add("gaps-along-" + side, "CAR ALONGSIDE · " + label, '#hud[data-along~="' + side + '"]::after', "--along-" + side);
+    }
+    for (const [name, label] of Object.entries({ ghost: "GHOST CAR", approaching: "PIT RECOMMENDED", armed: "PIT ARMED", lane: "PLAYER IN PITS" })) {
+      add("map-" + name, label + " · Marker", null, null);
+    }
+    for (const channel of ["throttle", "brake", "steering"]) {
+      add("inputs-" + channel, channel.toUpperCase() + " · Trace", null, null);
+    }
+    let activeColors = {}, edits = null;
+    let sheet = null;
+    function options(element) {
+      return parts.filter(part => part.id.startsWith(element + "-") ||
+        (element === "tower" && /^(pos|lap|time|best|delta)-/.test(part.id)));
+    }
+    function read() {
+      const raw = store && store.get("hudColors", null);
+      return Object.fromEntries(parts.filter(p => raw && /^#[0-9a-f]{6}$/i.test(raw[p.id])).map(p => [p.id, raw[p.id]]));
+    }
+    function paint() {
+      const colors = read();
+      for (const [id, value] of Object.entries(edits || {})) {
+        if (value) colors[id] = value;
+        else delete colors[id];
+      }
+      activeColors = colors;
+      if (!sheet && Object.keys(colors).length && doc?.head) {
+        sheet = doc.createElement("style");
+        doc.head.appendChild(sheet);
+      }
+      if (sheet) sheet.textContent = parts.filter(p => p.selector && colors[p.id]).map(p =>
+        p.selector + " { " + p.property + ": " + colors[p.id] + " !important; }").join("\n");
+    }
+    function save(id, value) {
+      if (!parts.some(part => part.id === id) || (value !== null && !/^#[0-9a-f]{6}$/i.test(value))) return;
+      if (edits) { edits[id] = value; paint(); return; }
+      const colors = read();
+      if (value) colors[id] = value;
+      else delete colors[id];
+      if (store) store.set("hudColors", Object.keys(colors).length ? colors : null);
+      paint();
+    }
+    if (store && store.subscribe) store.subscribe(change => {
+      if (change.key === "hudColors" || change.keys?.includes("hudColors")) paint();
+    });
+    paint();
+    function finish(accept) {
+      const changed = Object.keys(edits || {}).length;
+      paint();
+      edits = null;
+      if (accept && changed && store) store.set("hudColors", Object.keys(activeColors).length ? activeColors : null);
+      paint();
+    }
+    return { options, read: () => ({ ...activeColors }), save, value: id => activeColors[id],
+      snapshot: () => ({ ...edits }), preview: patch => { edits = { ...patch }; paint(); }, finish };
+  }
+  const colors = createColors();
+
   function build() {
     if (!doc) return;
     const host = doc.getElementById("pm-hud-details");
@@ -1458,7 +1620,7 @@ const HudLayout = (function () {
   // PACK_SCALE_MIN / PACK_FIXED / PACK_MOVE stay module-local (no js/ or test
   // callers). Survey lockstep still parses the LIM const from source.
   return {
-    ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
+    colors, ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, relativeSize, setCam, apply, fit, clearReadouts, build,

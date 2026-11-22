@@ -1804,3 +1804,19 @@ test("the factory phone seed keeps the screen-fit caps; a player's own placement
   assert.equal(decl(rules, "[data-hl-seed]", "--hl-z-seed"), "var(--hud-z-top, var(--hud-scale))");
   assert.equal(decl(rules, "[data-hl-seed][data-hl-bottom]", "--hl-z-seed"), "var(--hud-z-bot, var(--hud-scale))");
 });
+
+test("Arrange HUD event colors persist independently and reset one state at a time", () => {
+  const { H, written } = load();
+  const flags = H.colors.options("flag").map(part => part.id);
+  for (const kind of ["yellow", "vsc", "sc", "red", "blue"]) {
+    assert.ok(flags.includes("flag-" + kind + "-fill"));
+    assert.ok(flags.includes("flag-" + kind + "-text"));
+  }
+  H.colors.save("flag-yellow-fill", "#abcdef");
+  H.colors.save("map-armed", "#123456");
+  const restored = load(written).H.colors;
+  assert.equal(restored.value("flag-yellow-fill"), "#abcdef");
+  restored.save("flag-yellow-fill", null);
+  assert.equal(restored.value("flag-yellow-fill"), undefined);
+  assert.equal(restored.value("map-armed"), "#123456");
+});
