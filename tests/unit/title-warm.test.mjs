@@ -21,7 +21,8 @@ function rig({ phone = false, saveData = false, stored = null, build = "1700", h
     select: { hidden: true }, "race-settings": { hidden: true },
   };
   const disk = new Map(stored === null ? [] : [["titleWarm", stored]]);
-  const store = { raw: (k) => (disk.has(k) ? disk.get(k) : null), rawSet: (k, v) => { disk.set(k, String(v)); return true; } };
+  const calls = { schedule: 0, storage: 0, dom: 0 };
+  const store = { raw: (k) => { calls.storage++; return disk.get(k) ?? null; }, rawSet: (k, v) => { disk.set(k, String(v)); return true; } };
   const clock = { t: 0 };
   const ctx = vm.createContext({
     performance: { now: () => clock.t },
@@ -33,10 +34,9 @@ function rig({ phone = false, saveData = false, stored = null, build = "1700", h
   });
   for (const f of ["js/garage/prebuild.js", "js/perf/title-warm.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const G = { state: "menu", setupPreviewOn: false, headlessMode: false, gfx: { isMobile: phone, warm() {} } };
-  const calls = { schedule: 0 };
   let ready = false;
   const W = vm.runInContext("TitleWarm", ctx).create(G, {
-    $: (id) => els[id], ui: () => ({ state: () => ({ home }) }), store, idleMs: 1200,
+    $: (id) => { calls.dom++; return els[id]; }, ui: () => ({ state: () => ({ home }) }), store, idleMs: 1200,
     warmable: () => warmable, schedule: () => { calls.schedule++; }, prepReady: () => ready,
   });
   const tick = (ms) => { clock.t += ms; W.poll(); };
@@ -133,6 +133,22 @@ test("leaving the menus mid-prep re-arms it; tapping RACE keeps it running throu
   assert.equal(g.W.state().wanted, false, "left for another screen: dropped");
   g.els.overlay.hidden = false; g.idle();
   assert.equal(g.calls.schedule, 2, "back on an idle title: it starts again");
+});
+
+test("racing abandons pending title work without polling the menu until it returns", () => {
+  const h = rig();
+  h.idle();
+  assert.equal(h.W.wants(), true);
+  h.G.state = "race";
+  const before = { ...h.calls };
+  for (let i = 0; i < 60; i++) h.tick(1000);
+  assert.equal(h.W.wants(), false);
+  assert.deepEqual(h.calls, before);
+  h.G.state = "menu";
+  h.tick(1000);
+  assert.equal(h.calls.schedule, 1);
+  h.tick(1300);
+  assert.equal(h.calls.schedule, 2);
 });
 
 test("game.js wiring: the prep's current() accepts a title warm, and the poll is created and started", () => {

@@ -4020,7 +4020,7 @@ const WGX = (function () {
         _envFrame.cullDist = _envSvCull;
         _envFrame = null;
       }
-      if (!envCubeTex || !litPass || !_envEncoder) return;
+      if (!envCubeTex || !litPass || !_envEncoder) return false;
       _flushLitRings();
       litPass.end();
       _envFacesMask |= 1 << face;
@@ -4066,6 +4066,7 @@ const WGX = (function () {
     let mirSampleView = null, _mirSamp = null, _mirGlassLod = -Infinity, _mirGlassInf = 0;
     const _mirBox = [0, 0, 0, 0];
     let _mirPassSeq = 0;   // bumped per mirrorBegin: a batch's mirror instance view is valid only for the pass that culled it
+    let _mirFreeze = false;
     let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true, _mirAllocs = 0;   // flip false: the broadcast PiP
     let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
     let _mirUBO = null, _mirBG = null;
@@ -4123,6 +4124,7 @@ const WGX = (function () {
       const fc = (frame && frame.fogColor) || [0.5, 0.6, 0.7];
       if (SHD) SHD.flushPending();   // this frame's shadow maps land before the mirror samples them
       _mirPassSeq++;
+      _mirFreeze = !!frame.mirrorFreezeInstanced;
       _mirEncoder = device.createCommandEncoder();
       litPass = _mirEncoder.beginRenderPass({
         colorAttachments: [{ view: mirView, clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
@@ -5135,6 +5137,7 @@ const WGX = (function () {
       // cell-set key made the main and mirror culls evict each other every frame (a full repack + writeBuffer
       // per batch per pass, measured 43/frame on Monza). The mirror gets its own pack, buffer and key.
       const tb = (!shadow && _mirEncoder && _mirrorView(batch)) || batch;
+      if (tb !== batch && InstCells.holdMirror(tb, _mirPassSeq, _mirFreeze)) return tb.visible;
       let samePack = !shadow && !!tb._cullPlanes && InstCells.sameRadial(tb, eye, cd, fog);
       if (samePack) {
         let po = 0;
@@ -5975,6 +5978,7 @@ const WGX = (function () {
       // Quit-to-menu (#4219): destroy both textures and drop the composite / glass bind groups naming them
       // (_mirrorFree; WebKit holds a destroyed texture while a bind group references it). mirrorBegin re-allocates.
       releaseMirror() { if (_mirEncoder) return false; _mirrorFree(); return true; },
+      get envProbeOptOut() { return WGX_MINIMAL || WGX_LITE || _envInitFailed || _lost; },
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 
@@ -6020,6 +6024,7 @@ const WGX = (function () {
       gpuMs,
       createInstancedBatch,
       cullInstances,
+      instPerPass: true,   // rear and main views retain separate packs
       // Expands caller matrices into the stride-20 matrix/colour instance layout.
       updateInstances,
       drawInstanced,

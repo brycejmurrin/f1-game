@@ -425,8 +425,20 @@ const CarDraw = (function () {
     // callback after the full shared body exists; until it lands a far rival draws the full shared body.
     const FAR_BODY_TRIS = 1500;
     let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
+    const _farWheels = { F: null, R: null };
+    function getFarWheels() {
+      if (_farWheels.F && _farWheels.R) return _farWheels;
+      // Retain each successful upload if the other axle needs a retry.
+      try {
+        if (!_farWheels.F) _farWheels.F = G.gfx.createMesh(Car3D.buildFarWheel(0.32));
+        if (!_farWheels.R) _farWheels.R = G.gfx.createMesh(Car3D.buildFarWheel(0.38));
+      } catch (e) { Log.warn("gfx", "far wheel upload failed", e); return null; }
+      return _farWheels.F && _farWheels.R ? _farWheels : null;
+    }
     let _sharedRivalEpoch = 0;
     function freeSharedRivalBodies() {
+      freeWheelPair(_farWheels);
+      _farWheels.F = _farWheels.R = null;
       _sharedRivalEpoch++; // queued idle work belongs to the old cache generation
       const near = _sharedRivalBody, far = _farRivalBody;
       _sharedRivalBody = _farRivalBody = _sharedRivalGeom = null;
@@ -1158,6 +1170,7 @@ const CarDraw = (function () {
         // crosses flapsM / farBody after green. Team-less ":sh" in the warm census.
         try {
           sharedRivalBodyMesh(false);
+          if (FieldLod.on && !carModelBuf) getFarWheels();
           if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
             buildFarRivalBody(_sharedRivalEpoch);
           }
@@ -1951,7 +1964,8 @@ const CarDraw = (function () {
     // camera would emit twice). All views read the same frame's private phases;
     // dt controls spin blur only, never the phase.
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {
-      const wm = c.isPlayer ? getPlayerWheelMeshes(c.team) : getFieldWheelMeshes(c.team, c);
+      const far = !c.isPlayer && !bare && FieldLod.farWheels(c) ? getFarWheels() : null;
+      const wm = far || (c.isPlayer ? getPlayerWheelMeshes(c.team) : getFieldWheelMeshes(c.team, c));
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.
       const phase = _wheelPhases.get(c);

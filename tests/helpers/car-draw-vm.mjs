@@ -89,6 +89,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
         if (o.seats) for (const n of o.seats.keys()) o.seats.set(n, { kind, team: o.teamId, num: n, seated: o.num });
         return { kind, team: o.teamId, num: o.num };
       },
+      buildFarWheel: () => ({ kind: "wheel", far: true }),
       buildWheelLayers: () => { rec.wheels++; return { rotating: { kind: "wheel" }, fixed: { kind: "wheelFixed" } }; },
       TYRE_BAND: [null, [1, 1, 0]], BRAKE_CALIPER: [null, [1, 0, 0]],
       aeroLevelOf: () => 2, aeroStyleOf: () => null, appearanceParts: (p) => p,

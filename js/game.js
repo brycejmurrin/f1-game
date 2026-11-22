@@ -6746,14 +6746,12 @@ function clearRaceEntrySoften() {
   // Scale stays where PerfGov.chooseSoftwareRaceScale put it. A restore here
   // is a second canvas setSize (tens of seconds on SwiftShader).
   if (typeof PerfGov !== "undefined" && PerfGov.softwareGaragePreviewEnd) PerfGov.softwareGaragePreviewEnd(gfx);
-  try { if (gfx && gfx.envProbeOptOut) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
 }
 function installRaceEntrySoften() {
   if (typeof GfxEscalation === "undefined" || !GfxEscalation.registerRaceEntrySoften) return;
-  GfxEscalation.registerRaceEntrySoften((g) => {
+  GfxEscalation.registerRaceEntrySoften(() => {
     if (typeof RaceEntryProfile === "undefined" || !RaceEntryProfile.softwareRaster || !RaceEntryProfile.softwareRaster()) return;
     _raceEntryEnvProbeSession = true;
-    try { if (g) g.envProbeOptOut = true; } catch (_) { /* harness */ }
   });
 }
 // Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
@@ -7704,7 +7702,7 @@ function render(dt) {
     (gfx.getRenderScale && gfx.getRenderScale() < 0.98) ||
     (PerfGov.autoShed && PerfGov.autoShed() > 0)
   )) ? 7 : 3;
-  if (player && (state === "race" || state === "count") && !_envProbeOff && !_raceEntryEnvProbeSession && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && (state === "race" || state === "count") && !_envProbeOff && !_raceEntryEnvProbeSession && !PerfGov.softwareGaragePreviewActive && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
     const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)
@@ -7716,15 +7714,19 @@ function render(dt) {
         { _envHold = false; _envFace = -1; }
     }
     if (!_envHold) {
-      _envFace = (_envFace + 1) % 6;
+      const nextFace = (_envFace + 1) % 6;
       _envEye[0] = _pex; _envEye[1] = _pey; _envEye[2] = _pez;
-      const _envInv = gfx.envFaceBegin(_envFace, _envEye, frame);
+      const _envInv = gfx.envFaceBegin(nextFace, _envEye, frame);
       if (_envInv) {
         frameSky.invViewProj = _envInv;
         // THE `finally` IS LOAD-BEARING: envFaceBegin raises `_envActive`; envFaceEnd
         // is its ONLY lowering — a throw here froze the tab into a 64px cube (2026-09-22).
+        let accepted;
         try { drawWorldMeshes(frame, night, wet, _floodEmit, false, true); gfx.drawSky(frameSky); }
-        finally { gfx.envFaceEnd(_envFace); }
+        finally { accepted = gfx.envFaceEnd(nextFace); }
+        // A refused begin leaves this face pending. A rejected capture starts
+        // a fresh cycle, even when a previous cube is still available.
+        _envFace = accepted === false ? -1 : nextFace;
       }
       if (_envFace === 5) {
         _envHold = true; _envLatchTod = raceTimeOfDay;
@@ -7809,7 +7811,9 @@ function render(dt) {
   const paint = carPaintMat(wet
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
-  carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt); shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
+  const haze = gfx.mobileTier ? null : carFx.haze;
+  if (haze) haze.pick(cars, player, onboard, track ? track.total : 0, dt);
+  shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
   carDraw.beginDecals(); carDraw.primeRace(paint, night);   // accumulate car decals, flush in one batch after the loop; primeRace: warm-built car meshes (#5387)
   // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
   // a struggling device stops spawning sub-pixel puffs that only starve the pool.
@@ -7958,7 +7962,7 @@ function render(dt) {
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
     carFx.marks(c, _groundMat, dt, state);   // AI lock-up marks persist: laid BEFORE the frustum cull (#4669)
-    carFx.haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
+    if (haze) haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8264,7 +8268,7 @@ function render(dt) {
   startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
-  Particles.draw();
+  Particles.draw(!_xrEyes && _carCullPlanes ? _carCullPlanes[4] : null);   // XR replays one packet for both eyes
   Droplets.tick(paused ? 0 : dt, onboard && !photoMode, frame.rain || 0, Storm.is(raceWeather), player ? vStd(player.speed) : 0, motionReduced());   // lens/visor rain (js/fx/droplets.js)
 
   // Per-time cinematic grade + bloom. DRAMATIC = high contrast, deep shadows,
@@ -8450,7 +8454,7 @@ function render(dt) {
     po.grLite = _ut >= 2 || _as >= 1;
   }
   // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
-  po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
+  po.haze = haze ? haze.at(_mVP) : null;
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
