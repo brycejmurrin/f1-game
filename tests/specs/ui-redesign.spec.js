@@ -1031,7 +1031,7 @@ test("settings offers concise throttle help and separate backup actions", async 
     }
   }
   }
-  const arrange = page.locator("#pmsettings .pm-arrange-current");
+  const arrange = page.locator("#pmsettings").getByRole("button", { name: "Arrange this screen", exact: true });
   await arrange.click();
   const editor = page.locator("#screen-arranger");
   await editor.getByRole("button", { name: "Controls", exact: true }).click();
