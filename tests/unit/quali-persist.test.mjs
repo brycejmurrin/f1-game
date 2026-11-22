@@ -816,25 +816,27 @@ test("carLap: an AI car reads its wing level, a human's car its seat's wing (neu
   for (const idx of [0, 1]) for (const w of [0, 1]) assert.deepEqual(sheet(idx, w), allAi, `car ${idx} as the player on wing ${w}: the all-AI sheet`);
 });
 
-// The career.spec isolation test in the REAL game (#5786): a career on the device points the shared car UI at
-// its seat, and __apex.race() keeps that seat, so the player is NOR, then BEA, then SAI. The simulated grid
-// must not move with it. Failed on ff67146a: the player's row read the neutral wing, so NOR P12 → P4 and BEA P20 → P17.
+// Reproduce the career.spec grid isolation check with different saved free-play seats as well.
+// The same seed must produce the same grid whichever seat is human (#5786).
 test("a one-off GP's simulated grid is the same whichever career is on the device (game VM)", async () => {
   const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
   const g = await createGame({ track: "monza", carMeshes: false });
   try {
     const a = g.apex;
-    const gridFor = async (opts) => {
+    const gridFor = async (opts, freeTeam, freeSeat) => {
+      const teamIdx = g.sandbox.Teams.LIST.findIndex(t => t.id === freeTeam);
+      g.G.store.set("team", teamIdx);
+      g.G.store.set("driver", freeSeat);
       if (opts) a.career(opts); else a.careerReset();
       a.seed(1234);
       await a.race("monza");
       const rows = a.qualiSim();
-      return { codes: rows.map((r) => r.code).join(","), me: (rows.find((r) => r.isPlayer) || {}).code };
+      return { codes: rows.map((r) => r.code).join(","), me: rows.find((r) => r.isPlayer).code };
     };
-    const none = await gridFor(null);
-    const haas = await gridFor({ teamId: "haas", seat: 1, seed: 4242 });
-    const williams = await gridFor({ teamId: "williams", seat: 0, seed: 99 });
-    assert.equal(new Set([none.me, haas.me, williams.me]).size, 3, `the precondition: three different player seats (${none.me}, ${haas.me}, ${williams.me})`);
+    const none = await gridFor(null, "mclaren", 0);
+    const haas = await gridFor({ teamId: "haas", seat: 1, seed: 4242 }, "williams", 0);
+    const williams = await gridFor({ teamId: "williams", seat: 0, seed: 99 }, "haas", 1);
+    assert.deepEqual([none.me, haas.me, williams.me], ["NOR", "SAI", "BEA"], "each GP uses its saved free-play seat");
     assert.equal(none.codes.split(",").length, 22);
     assert.equal(haas.codes, none.codes, "a Haas career on the device");
     assert.equal(williams.codes, none.codes, "a Williams career on the device");

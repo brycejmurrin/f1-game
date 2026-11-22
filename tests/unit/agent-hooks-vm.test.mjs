@@ -608,3 +608,26 @@ test("world full carries feel; pit() carries the lane loss", async () => {
   // Monza's lane at racing speed (the real figure is ~22-24 s).
   assert.equal(pit.lossS, 22.54);
 });
+
+test("race() leaves a career in the saved free-play seat on the requested circuit", async () => {
+  const game = await createGame({ storage: { trackId: "monza" }, carMeshes: false });
+  try {
+    const { apex, G } = game;
+    const teams = game.sandbox.Teams.LIST;
+    G.store.set("team", teams.findIndex(t => t.id === "mclaren"));
+    G.store.set("driver", 0);
+    apex.career({ teamId: "haas", seat: 1, seed: 7 });
+    assert.equal(teams[G.teamIdx].id, "haas");
+    assert.equal(G.driverIdx, 1);
+    assert.equal(apex.race("unknown-circuit"), false);
+    assert.equal(G.flow, "career");
+
+    await game.race("bahrain");
+    assert.equal(G.flow, "gp");
+    assert.equal(G.track.def.id, "bahrain");
+    assert.equal(G.player.team.id, "mclaren");
+    assert.equal(G.driverIdx, 0);
+    assert.equal(apex.career().team, "haas");
+    assert.equal(apex.career().seat, 1);
+  } finally { game.close(); }
+});

@@ -3589,6 +3589,9 @@
         "tests/unit/race-insights.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs"
       ],
+      "round": [
+        "tests/specs/time-trial.spec.js"
+      ],
       "scheduleSave": [
         "tests/specs/time-trial.spec.js"
       ],
