@@ -35,6 +35,7 @@ function device(disk = {}, globals = {}) {
   const ctx = vm.createContext(sb);
   seedSaveMigrate(ctx);
   vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
+  vm.runInContext(read("js/race/race-insights.js"), ctx, { filename: absSrc("js/race/race-insights.js") });
   vm.runInContext(read("js/ui/progress-backup.js").replace(/^const\b/m, "var"), ctx, { filename: absSrc("js/ui/progress-backup.js") });
   const GameStore = vm.runInContext("GameStore", ctx);
   const disk1 = (k) => { const v = map.get("apex26." + k); return v === undefined ? undefined : JSON.parse(v); };
@@ -124,4 +125,13 @@ test("custom circuits travel in their apex26.tracks collection and merge through
   assert.deepEqual(Array.from(dst.C.list(), (it) => it.name), ["BACKUP LOOP"]);
   assert.deepEqual(b.P.apply(file), { applied: 0, skipped: 1, rejected: 0, failed: 0 }, "an existing design wins");
   assert.deepEqual(b.P.apply({ circuits: { format: "apex26.tracks", v: 9, items: [] } }), { applied: 0, skipped: 0, rejected: 1, failed: 0 });
+});
+
+test("circuit-only restore counts the registry's duplicate-write retry by durability", () => {
+  const collection = { format: "apex26.tracks", v: 1, items: [] };
+  let durable = false;
+  const b = device({}, { CustomTracks: { importCollection: () => ({ ok: true, added: 0, retried: true, durable }) } });
+  assert.deepEqual(b.P.apply({ circuits: collection }), { applied: 0, skipped: 0, rejected: 0, failed: 1 });
+  durable = true;
+  assert.deepEqual(b.P.apply({ circuits: collection }), { applied: 1, skipped: 0, rejected: 0, failed: 0 });
 });

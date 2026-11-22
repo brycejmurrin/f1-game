@@ -33,9 +33,13 @@ export function readCaptureFallbacks(trackId) {
       const id = trackId || (window.__apex && window.__apex.info && window.__apex.info().track) || null;
       const list = typeof Tracks !== "undefined" && Tracks && Tracks.LIST ? Tracks.LIST : [];
       const def = id ? list.find((d) => d && d.id === id) : null;
-      const fn = (def && def.scenery) || (id && window.TrackScenery && window.TrackScenery[id]) || null;
+      const registry = (typeof TrackScenery !== "undefined" && TrackScenery) || (window.TrackScenery) || null;
+      // Prefer TrackDef.scenerySource so ENGINE_MODELS flags (e.g. bakedPines → pine_lod0) count as player models (#6037).
+      const src = def && typeof TrackDef !== "undefined" && TrackDef && typeof TrackDef.scenerySource === "function"
+        ? TrackDef.scenerySource(def, registry)
+        : ((def && def.scenery) || (id && registry && registry[id]) ? String((def && def.scenery) || registry[id]) : null);
       out.track = id;
-      out.playerModels = fn && typeof Assets.modelIds === "function" ? Assets.modelIds(String(fn)) : null;
+      out.playerModels = src && typeof Assets.modelIds === "function" ? Assets.modelIds(src) : null;
     }
   } catch (e) { out.modelsErr = String((e && e.message) || e); }
   return out;
@@ -110,4 +114,45 @@ export async function loadAllModels(page, { log = console.log, quiet = false } =
       + "(the capture-state line names the extras)");
   }
   return r;
+}
+
+// #6037 §2: default capture path — load only the models a player's page would for this track
+// (TrackDef.scenerySource + Assets.loadModelsFor). Whole-pack stays an explicit opt-in via loadAllModels /
+// prefetchCaptureModels({ allModels: true }).
+export function loadPlayerModelsInPage(trackId) {
+  try {
+    if (typeof Assets === "undefined" || !Assets || typeof Assets.loadModelsFor !== "function") {
+      return Promise.resolve({ n: 0, pack: false, scope: "player", track: trackId || null });
+    }
+    const id = trackId || (window.__apex && window.__apex.info && window.__apex.info().track) || null;
+    const list = typeof Tracks !== "undefined" && Tracks && Tracks.LIST ? Tracks.LIST : [];
+    const def = id ? list.find((d) => d && d.id === id) : null;
+    const registry = (typeof TrackScenery !== "undefined" && TrackScenery) || null;
+    const src = def && typeof TrackDef !== "undefined" && TrackDef && typeof TrackDef.scenerySource === "function"
+      ? TrackDef.scenerySource(def, registry)
+      : ((def && def.scenery) || (id && registry && registry[id]) ? String((def && def.scenery) || registry[id]) : "");
+    const ids = typeof Assets.modelIds === "function" ? Assets.modelIds(src) : [];
+    return Assets.loadModelsFor(src).then((n) => ({
+      n, pack: true, scope: "player", track: id, ids, srcLen: src.length,
+    }), (e) => ({ n: 0, pack: true, scope: "player", track: id, err: String((e && e.message) || e) }));
+  } catch (e) {
+    return Promise.resolve({ n: 0, pack: false, scope: "player", track: trackId || null, err: String((e && e.message) || e) });
+  }
+}
+export async function loadPlayerModels(page, trackId, { log = console.log, quiet = false } = {}) {
+  let r;
+  try { r = await page.evaluate(loadPlayerModelsInPage, trackId || null); }
+  catch (e) { r = { n: 0, pack: false, scope: "player", track: trackId || null, err: String((e && e.message) || e) }; }
+  if (!quiet && r.pack) {
+    log(`models: this tool loaded the PLAYER set for ${r.track || "?"} (${r.n} resident`
+      + `${Array.isArray(r.ids) ? `, ids: ${r.ids.join(",") || "(none)"}` : ""}`
+      + `${r.err ? `, error: ${r.err}` : ""}); pass --all-models to prefetch the whole pack`);
+  }
+  return r;
+}
+
+/** Default = player set (#6037); `allModels: true` keeps the whole-pack path for tools that need it. */
+export async function prefetchCaptureModels(page, { trackId = null, allModels = false, log = console.log, quiet = false } = {}) {
+  if (allModels) return loadAllModels(page, { log, quiet });
+  return loadPlayerModels(page, trackId, { log, quiet });
 }

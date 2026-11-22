@@ -372,10 +372,23 @@ const RealReplay = (function () {
 
     function runningOrder() { return [...run.cars.keys()].filter((c) => run.cars.get(c).tr && !c.retired).sort((a, b) => b.prog - a.prog); }
 
+    // A seek can skip every frame before a retirement. Rank the traces at the
+    // last instant the subject was running, using the same stable progress order.
+    function retirementRank(subject) {
+      const tr = run.cars.get(subject)?.tr;
+      if (!tr) return -1;
+      const t = tr.end + ENDED_S, order = [];
+      for (const [car, f] of run.cars) {
+        if (!f.tr) continue;
+        const point = sampleAt(f.tr, t, at);
+        if (!point.ended) order.push({ car, prog: point.prog });
+      }
+      return order.sort((a, b) => b.prog - a.prog).findIndex((entry) => entry.car === subject);
+    }
+
     function setFollow(c, snap = true) {
       if (!run || !c) return;
       run.follow = c;
-      run.followRank = runningOrder().indexOf(c);   // where it runs, for follow(±1) after it retires (#4756)
       if (G.followCar) G.followCar(c);
       if (snap && bc) bc.refresh(bcState);   // paused follow changes must update the tower and remove a self-following inset before the camera
       if (snap && G.snapGameCam) G.snapGameCam();
@@ -391,7 +404,8 @@ const RealReplay = (function () {
       else {
         const i = running.indexOf(run.follow), d = want | 0;
         // A retired follow car left `running`: the car behind it moved up into its slot, so +1 is that slot and -1 the one ahead.
-        const at = i >= 0 ? i + d : (run.followRank >= 0 ? run.followRank + (d > 0 ? d - 1 : d) : 0);
+        const rank = i >= 0 ? i : retirementRank(run.follow);
+        const at = rank < 0 ? 0 : rank + d - (i < 0 && d > 0 ? 1 : 0);
         c = running[(at % running.length + running.length) % running.length];
       }
       if (c) setFollow(c);
@@ -650,7 +664,6 @@ const RealReplay = (function () {
       if (run.paused) { for (const [c, f] of run.cars) if (f.tr && !c.retired) c.speed = 0; return; }
       if (G.state === "race") run.T += dt * run.speed;
       pose();
-      { const i = runningOrder().indexOf(run.follow); if (i >= 0) run.followRank = i; }   // the slot it holds now, not where it was picked (#4948)
       if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
       fire();
