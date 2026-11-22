@@ -4354,7 +4354,7 @@ function quitToMenu() {
   els.pausemenu.hidden = true;
   Input.unlockLandscape();
   _menuGate.warm = 0; _menuGate.garageWarm = 0; _menuGate.track = null; _menuGate.ready = ""; _menuFly = null;
-  resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear();
+  resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release();
   if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
@@ -4382,7 +4382,7 @@ function quitToMenu() {
   // left the flyby active() for the session — capture listeners attached, and
   // menuBlank and the per-car draw break both gate on !active(). Idempotent.
   loadingScreen.stop();
-  if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.clear(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
+  if (skipToResults()) { resultsCam.reset(); RaceCeremony.resetLive(); replayBuf.release(); announcer.stop && announcer.stop(); }   // a finished player's result is settled before the session is dropped
   setState("menu", "quit"); paused = false; releaseFieldScratch(true); raceCtl.reset(); wxArc.endSession(); daily.stop(); realRace.stop(); flyingStart.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
@@ -4446,6 +4446,7 @@ function rankFinishers() {
 // A finished race's cars hold their track (car._lk.track): step scratch that outlives the race kept it in the heap (LIVE-MEMORY-H12-2026-10-20).
 // Cutting _lk.track (a cache: lk.track !== track rebuilds it) leaves any other stale scratch holding a car, not a circuit.
 function releaseFieldScratch(quit) {
+  if (quit && typeof HudReadouts !== "undefined") HudReadouts.gaps.reset();
   ranked.length = 0; parked.length = 0; stillCars.length = 0; _colField.length = 0; _finRanked.length = 0; Collide.releaseArcBuckets(); collide.releaseTrack(); mirrorPass.releaseTrack(quit); pits.releaseTrack();
   _wallCtx.track = null; _tfSamp.track = null; _tfSamp.s = NaN;
   for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i]._lk) cars[i]._lk.track = null;
@@ -5761,7 +5762,8 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    const _passH = blocker ? AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, paceVmax(blocker), S.pvB, scriptPace(blocker), scriptPace(c)) : 1;   // pooled bag (audit4 I4 F2)
+    const blockerVmax = blocker ? paceVmax(blocker) : 0;
+    const _passH = blocker ? AiDrive.hungerOf(!!track.street, aiT, vT, c.queueT || 0, blockerVmax, S.pvB, scriptPace(blocker), scriptPace(c)) : 1;   // pooled bag (audit4 I4 F2)
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
@@ -5846,7 +5848,7 @@ function updateCarLateral(c, dt, ranked, S) {
       // judged by its paceF against the field (paceVmax, AiDrive.paceSample).
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
-      _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0; _aiOtPull.trailT = c._trOf === blocker ? c.trailT : 0;
+      _aiOtPull.blockerVmax = blockerVmax; _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0; _aiOtPull.trailT = c._trOf === blocker ? c.trailT : 0;
       _aiOtPull.ourVmax = S.pvB; _aiOtPull.ourPace = scriptPace(c); _aiOtPull.blockerPace = scriptPace(blocker);
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.

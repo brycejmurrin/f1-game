@@ -518,6 +518,9 @@ test("endRace while scrubbing scores nothing; after the scrub the same call sett
     a.finishRace();
     assert.equal(G.state, "results", "the flag settles once the scrub is over");
     assert.ok(G.season.round > round0, "…and the round scores");
+    G.quitToMenu();
+    assert.equal(G.state, "menu");
+    assert.equal(rb.window().allocatedBytes, 0);
   } finally { g.close(); }
 });
 
@@ -831,6 +834,19 @@ test("ring byte accounting includes Float64 timestamps and separates fixed typed
   assert.ok(info.allocatedBytes <= R.MAX_BYTES);
   r.sample(0, G.cars); r.sample(1 / R.HZ, G.cars);
   assert.equal(r.window().bytes, R.frameBytes(24) * r.window().frames);
+  assert.equal(r.window().allocatedBytes, info.allocatedBytes);
+  const initialAllocations = allocations.length;
+  r.onRaceStart(G.cars);
+  assert.equal(allocations.length, initialAllocations, "same-size restart reuses the lanes");
+  assert.equal(r.window().frames, 0);
+  G.netPlay = { active: () => true };
+  r.onRaceStart(G.cars);
+  assert.equal(r.window().allocatedBytes, 0);
+  assert.equal(r.window().fixedBytes, 108);
+  assert.equal(r.sample(1, G.cars), false);
+  assert.equal(allocations.length, initialAllocations);
+  G.netPlay = null;
+  assert.equal(r.sample(2, G.cars), true);
   assert.equal(r.window().allocatedBytes, info.allocatedBytes);
 });
 
