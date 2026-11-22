@@ -5616,14 +5616,7 @@ const TLX = (function () {
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
         flushTexPool,
-        // texCensus: GLX-only. Declared ABSENT rather than left off, because
-        // game.js installs a backend by descriptor-copy onto GLX and an absent
-        // NAME would keep GLX's own function — which would then run against a
-        // null gl. This makes `if (gfx.texCensus)` answer honestly, and
-        // __apex.texCensus() report supported:false instead of a measured zero.
-        // three tracks its own retained counts through __tlx.memState();
-        // reconciling the two is follow-up work, not a silencer to remove.
-        texCensus: undefined,
+        texCensus: function () { return TLXShaders.memCensus(this.__tlx); },
 
         // Baked material arrays — the GLX.createTextureArray counterpart
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
