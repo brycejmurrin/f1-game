@@ -50,6 +50,10 @@ for (const p of RENDER.keys()) {
 
 /** ON_DEMAND_PATHS entry → (root) => "fresh" | "missing" | "stale"; each owns its own staleness receipt. */
 const ON_DEMAND = new Map([
+  ["docs/agent-output/catalog.json", (root) => {
+    const generator = createRequire(import.meta.url)(path.join(root, "tools/gen/gen-output-surface.mjs"));
+    return ensureFile(path.join(root, generator.TARGET), generator.render());
+  }],
   ["tools/shot/scenery-locations.json", (root) => createRequire(import.meta.url)(path.join(root, "tools/shot/gen-scenery-locations.cjs")).ensureCatalog()],
 ]);
 for (const p of ON_DEMAND_PATHS) {
