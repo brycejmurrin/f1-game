@@ -10,6 +10,10 @@
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 
+  // Terrain, road and props share a projection within a pass. Camera and shadow
+  // matrices can be rewritten in place, so the pooled planes are keyed by value.
+  const _fcVP = new Float64Array(16).fill(NaN);
+
   // Vertex-attribute packing.
   // three keeps the CPU copy of every attribute array forever (measured: 49.8
   // MB of deduped attribute bytes on montreal, against GLX's 17.8 MB, which is
@@ -780,7 +784,12 @@
     function cull(mesh, vp, eye, cullDist, fog) {
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
-      Frustum.extractPlanes(vp, _fcPlanes);
+      for (let i = 0; i < 16; i++) {
+        if (vp[i] === _fcVP[i]) continue;
+        Frustum.extractPlanes(vp, _fcPlanes);
+        for (let j = i; j < 16; j++) _fcVP[j] = vp[j];
+        break;
+      }
       const cd = cullDist > 0 ? cullDist : 0, cf = fog || null,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       let n = 0;
