@@ -1296,17 +1296,18 @@
       C.gradeHi.value.set(gh ? gh[0] : 1, gh ? gh[1] : 1, gh ? gh[2] : 1);
       C.gradeStr.value = grade && grade.str !== undefined ? grade.str : 0;
       // IMAGE & COLOUR knobs — every default reproduces the shipped grade.
-      C.tone0.value.set(_gk(GT, "blacks"), _gk(GT, "shadows"), _gk(GT, "midtones"), _gk(GT, "highlights"));
-      C.tone1.value.set(_gk(GT, "whites"), _gk(GT, "toe"), _gk(GT, "shoulder"), 0);
-      C.lift.value.set(_gk(GT, "liftR"), _gk(GT, "liftG"), _gk(GT, "liftB"));
-      C.gamma.value.set(_gk(GT, "gammaR"), _gk(GT, "gammaG"), _gk(GT, "gammaB"));
-      C.gain.value.set(_gk(GT, "gainR"), _gk(GT, "gainG"), _gk(GT, "gainB"));
+      const _hg = PostCommon.hdrGradeOn(GT);
+      C.hdrGradeOn.value = _hg ? 1 : 0;
+      if (_sceneHdr && _hg) {
+        C.tone0.value.set(_gk(GT, "blacks"), _gk(GT, "shadows"), _gk(GT, "midtones"), _gk(GT, "highlights"));
+        C.tone1.value.set(_gk(GT, "whites"), _gk(GT, "toe"), _gk(GT, "shoulder"), 0);
+        C.lift.value.set(_gk(GT, "liftR"), _gk(GT, "liftG"), _gk(GT, "liftB"));
+        C.gamma.value.set(_gk(GT, "gammaR"), _gk(GT, "gammaG"), _gk(GT, "gammaB"));
+        C.gain.value.set(_gk(GT, "gainR"), _gk(GT, "gainG"), _gk(GT, "gainB"));
+      }
       C.contrast.value = _gk(GT, "contrast");
       C.vibrance.value = _gk(GT, "vibrance");
       C.saturation.value = _gk(GT, "saturation");
-      // Skip the whole HDR block when every knob is neutral (js/render/glx/post.js).
-      const _hg = PostCommon.hdrGradeOn(GT);
-      C.hdrGradeOn.value = _hg ? 1 : 0;
       C.tint.value = _gk(GT, "tint");
       C.vignette.value = _gk(GT, "vignette");
       C.vigSoft.value = _gk(GT, "vignetteSoft");
@@ -1459,7 +1460,8 @@
       _last.rays = haveGR && GRP !== P.godray ? 1 : 0;
       _last.gi = !!haveGI;
       _last.ssrHi = !!(compHi && HV.ssrHi);
-      if (F.viewProj && F.viewProj.length >= 16) { _prevVP.set(F.viewProj); _prevOk = !!_last.mblur; }
+      _prevOk = !!(_last.mblur && F.viewProj && F.viewProj.length >= 16);
+      if (_prevOk) _prevVP.set(F.viewProj);
       holdFlush(false);   // before a shed below destroys a target a held command buffer still names
       // After the composite has rebound the 1x1 fallbacks. Releasing on the
       // same frame the block drew would dispose a target runPass just wrote.
