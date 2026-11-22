@@ -861,3 +861,17 @@ body.desktop #pm-calib-help { display: none !important; }
 [data-dep-reason="label"] { display: inline-block; max-width: 100%; white-space: normal; }
 [data-dep-reason="line"] { display: block; margin: 0.25em 0 0.5em; }
 }
+
+@layer layout {
+/* A native field can open Safari's keyboard or picker at any game UI size.
+   Use the compact sheet cap, ordinary sheet scale, or the designer's own zoom. */
+@media (pointer: coarse), (hover: none) {
+  :where(input:not([type]), textarea, select, [contenteditable]:not([contenteditable="false"])) {
+    font-size: max(16px, var(--touch-field-size, var(--fs-3)), calc(16px / var(--_sheet-z, var(--sheet-scale, var(--td-zoom, var(--ui-scale, 1))))));
+  }
+  :where(input:is([type=text], [type=search], [type=url], [type=email], [type=tel], [type=number],
+                  [type=password], [type=date], [type=time], [type=datetime-local], [type=month], [type=week])) {
+    font-size: max(16px, var(--touch-field-size, var(--fs-3)), calc(16px / var(--_sheet-z, var(--sheet-scale, var(--td-zoom, var(--ui-scale, 1))))));
+  }
+}
+}
