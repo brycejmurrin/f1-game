@@ -164,7 +164,7 @@ test.describe("individual desktop graphics", () => {
     await boot(page);
     await openDetail();
     await expect(page.locator('script[src*="js/ui/desktop-graphics.js"]')).toHaveCount(1);
-    expect(await page.evaluate(() => Object.keys(GfxQuality.FEATURES).filter(key =>
+    await expect.poll(() => page.evaluate(() => Object.keys(GfxQuality.FEATURES).filter(key =>
       !document.querySelector(`[data-desktop-graphics] select[data-effect="${key}"]`)))).toEqual([]);
     const trees = page.getByLabel("High-detail trees", { exact: true });
     const mirrors = page.getByLabel("High-resolution rear-view mirror", { exact: true });
