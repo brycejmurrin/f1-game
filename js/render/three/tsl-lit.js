@@ -327,6 +327,12 @@
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
+    if (ctx.circuitSurfaces) U.silverstoneSurface = uniform(0.0);
+    if (envCubeNode && ctx.garageProbeRequested) {
+      U.garageBoxOn = uniform(0.0);
+      U.garageBox = uniform(new THREE.Vector3(1, 1, 1));
+      U.garageCentre = uniform(new THREE.Vector3());
+    }
     if (ENV_ALL) U.envWorld = uniform(0.0);   // envAll: 1 while the live probe is sampleable (setEnvStr's 2nd arg)
     // SHARED FRAME BLOCK. Every member of U is written once per frame/pass
     // (updateFrame, setLampGrid, setEnvStr, setMaterialMaps) and never per
@@ -399,6 +405,7 @@
         U.pitBox.value.set(pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
       }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
+      if (U.silverstoneSurface) U.silverstoneSurface.value = frame.trackId === "silverstone" ? 1 : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
@@ -2042,6 +2049,39 @@
           rough.assign(packedTex.w);
         }
 
+        // Silverstone pilot. Work in metres along/across the road so the repair seams
+        // follow the bends. Footprints precede the material branch for WebGPU derivatives.
+        const filmRough = U.silverstoneSurface && trkA && !instanced ? float(0.30).toVar() : null;
+        if (filmRough) {
+          const pixel = fwidth(trkA.xy).toVar();
+          If(U.silverstoneSurface.greaterThan(0.5), () => {
+            const s = trkA.x, x = trkA.y;
+            If(surfaceId.equal(16).and(trkA.z.greaterThan(0.5)).and(abs(x).lessThan(trkA.z)), () => {
+              // Three stretches of newer binder in the older, pale aggregate. A skewed
+              // end joint and a lateral joint describe each pass of the paving machine.
+              const edge = max(float(0.14), max(pixel.x, pixel.y)).toVar();
+              const slab = (centre, halfLength, lane, halfWidth) => {
+                const end = abs(s.sub(centre).add(x.mul(0.34))).sub(halfLength);
+                const side = abs(x.sub(lane)).sub(halfWidth);
+                return smoothstep(edge.negate(), edge, max(end, side)).oneMinus();
+              };
+              const repair = max(slab(170, 38, 2.4, 3.8), max(slab(2480, 68, -2.7, 3.4), slab(4520, 54, 0, 10))).toVar();
+              const wear = vnoise(vec2(s.mul(0.09), x.mul(0.7))).toVar();
+              albedo.mulAssign(mix(wear.mul(0.16).add(1.06), float(0.74), repair));
+              rough.assign(mix(rough.mul(0.9).add(wear.mul(0.10)), float(0.65), repair));
+              filmRough.assign(mix(float(0.36), float(0.22), repair));
+            }).ElseIf(surfaceId.equal(0).and(trkA.z.equal(0)).and(abs(x).greaterThan(2.0)), () => {
+              // The flat, track-addressed paint includes the striped kerbs and pit hatching.
+              // Leave the stripe boundaries intact; fade the paint scuffs as they minify.
+              const fade = smoothstep(0.15, 0.65, max(pixel.x, pixel.y)).oneMinus();
+              const scuff = smoothstep(0.55, 0.86, vnoise(vec2(s.mul(2), x.mul(4)))).mul(fade);
+              albedo.assign(mix(albedo, vec3(0.32, 0.31, 0.29), scuff.mul(0.44)));
+              rough.assign(mix(float(0.46), float(0.72), scuff));
+              filmRough.assign(mix(float(0.16), float(0.28), scuff));
+            });
+          });
+        }
+
         // painted road markings (js/render/glx/shaders/glsl-lit.js)
         // AFTER the material grain and the baked texture, exactly as GLX
         // orders it, so the paint sits ON the tarmac rather than under it.
@@ -2139,7 +2179,7 @@
           albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.40), puddle));   // standing water: darker than the sheet
           wetSheen.assign(wet.mul(porous.oneMinus()));
-          rough.assign(mix(rough, 0.30, wetSheen));
+          rough.assign(mix(rough, filmRough || 0.30, wetSheen));
           rough.assign(mix(rough, 0.02, puddle));   // near-mirror inside the pool
           a.assign(rough.mul(rough));
           f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
@@ -2472,6 +2512,25 @@
           });
         });
 
+        // A bay cube is photographed at its centre. Intersect the world
+        // reflection ray with its walls, then look up the hit from that centre.
+        // Only the local room uses this direction; sky/sun and race probes keep R.
+        const roomPos = U.garageBox ? wp.sub(U.garageCentre).toVar() : null;
+        const localProbeStrength = U.garageBox ? U.envStr.mul(mix(float(1.0),
+          smoothstep(0.0, 1.5, U.garageBox.z.sub(abs(roomPos.z))).mul(
+            smoothstep(0.0, 0.5, U.garageBox.x.sub(abs(roomPos.x)))), U.garageBoxOn)) : U.envStr;
+        function probeDirection(ray) {
+          if (!U.garageBox) return ray;
+          const direction = ray.toVar();
+          If(U.garageBoxOn.greaterThan(0.5), () => {
+            const signedPos = mix(roomPos.negate(), roomPos, step(vec3(0), ray));
+            const axis = abs(ray);
+            const distance = mix(vec3(1e6), U.garageBox.sub(signedPos).div(max(axis, vec3(0.00001))), step(vec3(0.00001), axis));
+            const travel = max(0.0, min(distance.x, min(distance.y, distance.z)));
+            direction.assign(roomPos.add(ray.mul(travel)));
+          });
+          return direction;
+        }
         // clearcoat ENV mirror (the analytic-clearcoat-ENV block in glsl-lit.js).
         //    uEnvStr = 0 -> analytic
         //    sky-gradient path only; > 0 blends in the M9 live cube fetch
@@ -2484,7 +2543,7 @@
           const NoVc = max(dot(Ngeo, V), 1e-4);
           const ccFb = NoVc.oneMinus();
           const ccF = ccFb.mul(ccFb);                          // fresnel² (mul not pow: pow(0,2) NaNs on mobile)
-          const probeLive = clamp(U.envStr, 0.0, 1.0);
+          const probeLive = clamp(localProbeStrength, 0.0, 1.0);
           // A TINTED VISOR IS A DIELECTRIC, NOT CHROME — mirrors the GLX split.
           // baseRefl is the ANGLE-INDEPENDENT mirror term; cutting it for the
           // visor keeps the 0.28*ccF grazing rim, so the visor holds an edge
@@ -2506,7 +2565,7 @@
             // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
             // clones with referenceNode = this base (mrdoob/three.js
             // CubeTextureNode.js). Do not call .uv() on a cube node.
-            const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
+            const cubeRefl = cubeTexture(envCubeNode, probeDirection(Rg), rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance. A finite
@@ -2573,14 +2632,15 @@
           if (envCubeNode) {
             // envAll: a world pixel takes the probe at full strength (envWorld, not the CAR knob), out to 240 m,
             // and a roughness-aware mip; a car pixel keeps today's weight and LOD.
-            const envOn = ENV_ALL ? max(U.envStr, U.envWorld) : U.envStr;
+            const envOn = ENV_ALL ? max(localProbeStrength, U.envWorld) : localProbeStrength;
             If(envOn.greaterThan(0.001), () => {
-              const probeW = clamp(U.envStr, 0.0, 1.0)
+              const probeW = clamp(localProbeStrength, 0.0, 1.0)
                 .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
               if (ENV_ALL) probeW.assign(select(classifiedCar, probeW, U.envWorld.mul(clamp(vd.sub(90.0).div(150.0).oneMinus(), 0.0, 1.0))));
               If(probeW.greaterThan(0.001), () => {
-                const tapAll = ENV_ALL ? cubeTexture(envCubeNode, R, select(classifiedCar, rough.mul(2.5), sqrt(rough).mul(ENV_LODS))) : null;
-                envCubeTap.assign(vec4(tapAll ? tapAll.rgb : cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+                const direction = probeDirection(R);
+                const tapAll = ENV_ALL ? cubeTexture(envCubeNode, direction, select(classifiedCar, rough.mul(2.5), sqrt(rough).mul(ENV_LODS))) : null;
+                envCubeTap.assign(vec4(tapAll ? tapAll.rgb : cubeTexture(envCubeNode, direction, rough.mul(2.5)).rgb, probeW));
                 envColor.assign(mix(envColor, envCubeTap.rgb, envCubeTap.w));
               });
             });
@@ -2611,9 +2671,9 @@
           const skyM = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rm.y, 0.0)));
           const envMet = mix(vec3(U.ambGround).mul(0.6), skyM, smoothstep(-0.12, 0.30, Rm.y)).toVar();
           if (envCubeNode) {
-            If(U.envStr.greaterThan(0.001), () => {
-              const cubeM = select(envCubeTap.w.greaterThan(0.0), envCubeTap.rgb, cubeTexture(envCubeNode, Rm, rough.mul(2.5)).rgb);
-              envMet.assign(mix(envMet, cubeM, clamp(U.envStr, 0.0, 1.0)));
+            If(localProbeStrength.greaterThan(0.001), () => {
+              const cubeM = select(envCubeTap.w.greaterThan(0.0), envCubeTap.rgb, cubeTexture(envCubeNode, probeDirection(Rm), rough.mul(2.5)).rgb);
+              envMet.assign(mix(envMet, cubeM, clamp(localProbeStrength, 0.0, 1.0)));
             });
           }
           const metAdd = envMet.mul(F_Schlick(NoV, albedo, rough.mul(0.5).oneMinus()))

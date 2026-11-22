@@ -1791,6 +1791,9 @@ const TLX = (function () {
       // uEnvStr is 0, so every tap was mix(a, cube, 0) = a.
       let _envOptOut = true;
       try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = !_detailOpt("envProbe", ep === "1" || (ep !== "0" && _ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
+      const raceProbeOff = _envOptOut;
+      const garageProbeRequested = !isMobile && isWebGPU() && !softContent("env") && _gfxx("garageProbeParallax");
+      if (garageProbeRequested) _envOptOut = false; // either producer can own the one cube
       if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
         const envOpts = {
@@ -1921,8 +1924,8 @@ const TLX = (function () {
           // draws nothing. Same _liteGpu gate as antialias/outputType above.
           // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
           const litCtx = { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
-            envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
-            sharedUniforms: _sharedUniforms,
+            envCube: envRT ? envRT.texture : null, matMaps, lampGrid, garageProbeRequested,
+            sharedUniforms: _sharedUniforms, circuitSurfaces: !isMobile && _gfxx("circuitSurfaces"),
             // EXTREME lightsHi: 128 slots on three's WebGPU backend only (LightBudget.tlxSlots).
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.tlxSlots(isWebGPU()) };
           // EXTREME material detail / env-everywhere (tsl-lit.js MAT_DETAIL, ENV_ALL): desktop WebGPU only; a
@@ -4194,6 +4197,36 @@ const TLX = (function () {
       const _envInvArr = new Float32Array(16);
       const _envVPArr = new Float32Array(16);
       const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
+      let garageProbeRoom = null, garageProbeMood = "", garageProbeFace = 0;
+      function leaveGarageProbe() {
+        if (!garageProbeRoom) return;
+        garageProbeRoom = null;
+        backend.envProbeReset();
+      }
+      function captureGarageFace(probe, frame) {
+        if (garageProbeRoom !== probe.room || garageProbeMood !== probe.mood) {
+          backend.envProbeReset();
+          garageProbeRoom = probe.room;
+          garageProbeMood = probe.mood;
+        }
+        // Delay captures until an in-flight pipeline warm releases the renderer.
+        if (envReady || _envGaveUp || _warmPending) return;
+        const face = garageProbeFace;
+        scene.backgroundNode = null;
+        hideSkyMesh();
+        resetRecs();
+        lit.setEnvStr(0, false); // room draws sample neither last race nor themselves
+        try {
+          if (!backend.envFaceBegin(face, probe.centre, frame)) { _envGaveUp = true; return; }
+          try { probe.draw(); } finally { backend.envFaceEnd(face); }
+          garageProbeFace = (face + 1) % 6;
+        } catch (error) {
+          _envGaveUp = true;
+          _envActive = false;
+          _restoreEnvFrame();
+          Log.warn("gfx", "Garage cube capture failed; using analytic reflections", error);
+        }
+      }
       function _restoreEnvFrame() {
         if (!_envFrame) return;
         _envFrame.viewProj = _envSvVP;
@@ -5834,6 +5867,10 @@ const TLX = (function () {
         // via lit.updateFrame, and envFaceEnd owns the face render.
         envFaceBegin(face, eye, frame) {
           if (_envOptOut) return null;   // see _envOptOut: measured cost, and a black world on WebGPU
+          if (!frame?.garageProbe) {
+            if (raceProbeOff) return null;
+            leaveGarageProbe();
+          }
           if (!envRT || !lit || !eye || !frame || !frame.viewProj) return null;
           // "A probe that cannot succeed must stop being retried" — the
           // producer half. After the give-up latch flipped, game.js kept
@@ -6203,9 +6240,11 @@ const TLX = (function () {
         // The cube stays unbound — envState() is where the difference shows.
         // The opt-out as a capability: game.js skips its whole probe branch (a track
         // sample, the latch bookkeeping) instead of calling a begin that returns null.
-        envProbeOptOut: _envOptOut,
-        envProbeReady() { return envReady || _envGaveUp; },
+        garageProbeEnabled: !!(garageProbeRequested && envRT && lit && lit.uniforms && lit.uniforms.garageBox),
+        envProbeOptOut: raceProbeOff,
+        envProbeReady() { return !garageProbeRoom && (envReady || _envGaveUp); },
         envProbeReset() {
+          garageProbeFace = 0;
           envFacesMask = 0; envReady = false; _envBlank = false;
           _envFailN = 0; _envFailMsg = ""; _envFailStack = ""; _envErrBase = -1;
           _envBadProbes = 0; _envGaveUp = false;
@@ -6468,6 +6507,9 @@ const TLX = (function () {
           const f = (z && z.length >= 3) ? z
             : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
           scene.background.setRGB(f[0], f[1], f[2]);
+          const garageProbe = backend.garageProbeEnabled && frame && frame.garageProbe;
+          if (garageProbe) captureGarageFace(garageProbe, frame);
+          else leaveGarageProbe();
           camera.matrixWorldAutoUpdate = false;
           const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
@@ -6515,6 +6557,15 @@ const TLX = (function () {
               const _T = frame.tune;
               const _envOn = envRT && envReady && !_envBlank && !frame.noEnv && !_envActive;
               lit.setEnvStr(_envOn ? (_T && _T.carEnvCube != null ? _T.carEnvCube : 0) : 0, _envOn);
+            }
+          }
+          if (lit && lit.uniforms && lit.uniforms.garageBox) {
+            const live = !!(garageProbe && envReady && !_envBlank && !_envGaveUp);
+            lit.uniforms.garageBoxOn.value = live ? 1 : 0;
+            if (live) {
+              lit.uniforms.garageBox.value.fromArray(garageProbe.half);
+              lit.uniforms.garageCentre.value.fromArray(garageProbe.centre);
+              lit.setEnvStr(1, false); // garage cube fades to the existing analytic exterior
             }
           }
           if (fx && frame) fx.updateFrame(frame);

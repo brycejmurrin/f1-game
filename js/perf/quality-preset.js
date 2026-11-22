@@ -75,7 +75,7 @@ function option(name, fallback) {
 }
 function needsBundle() {
   if (phoneDetail()) return option("heroCar", false);
-  return detail() >= 2 || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
+  return detail() >= 2 || option("rivalLiveryLod", false) || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
 }
 function feature(name, building = false) {
   if (optInEffects.has(name)) return option(name, false);

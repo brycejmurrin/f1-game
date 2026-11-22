@@ -236,7 +236,7 @@ test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and t
   assert.equal(boot("extreme", false, { "apex26.gfxx.csm": "0" }).feature("csm"), false);
 });
 
-test("desktop scene effects are independent opt-ins, including on the cinema preset", () => {
+test("desktop scene effects are independent opt-ins, including in cinema mode", () => {
   const names = ["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"];
   const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
   for (const mobile of [true, false]) {
@@ -249,5 +249,14 @@ test("desktop scene effects are independent opt-ins, including on the cinema pre
         assert.equal(q.feature(name), !mobile && name === selected);
       }
     }
+  }
+});
+
+test("enabling distant team colours on High loads the palette builder on desktop", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  const store = { get: (k, fallback) => k === "gfxFeatureOverrides" ? { rivalLiveryLod: true } : fallback, raw: () => null };
+  for (const mobile of [true, false]) {
+    const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
+    assert.equal(q.needsBundle(), !mobile);
   }
 });

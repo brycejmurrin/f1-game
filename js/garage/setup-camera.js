@@ -779,6 +779,7 @@ function resetSetupCam() {
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
 let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
+let previewWorn = false, appliedWorn = false;
 let _spWheelDistance = 0, _spWheelSteer = 0;
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
@@ -839,7 +840,8 @@ function getSetupPreviewMesh() {
     || (typeof CarWheels !== "undefined" && CarWheels.createGarage);
   const split = typeof createWheels === "function";
   const key = previewKey() + (split ? "|wheels" : "");
-  if (key !== _spMeshKey) {
+  const worn = previewWorn && GfxQuality.feature("tyreWearVisual");
+  if (key !== _spMeshKey || worn !== appliedWorn) {
     const liv = resolveLivery(team);
     const parts = Parts.getVisualTiers(getTeamParts(team.id), team);
     const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|wheels" : "");
@@ -861,8 +863,9 @@ function getSetupPreviewMesh() {
       }) }).data));
     if (split) {
       if (!departureWheels) departureWheels = createWheels(gfx);
-      departureWheels.prepare(key, liv, Car3D.appearanceParts(parts, liv));
+      departureWheels.prepare(key, liv, Car3D.appearanceParts(parts, liv), worn);
     }
+    appliedWorn = worn;
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
@@ -1315,7 +1318,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     ambientSky: outside ? outside.ambientSky : GarageScene.AMB_SKY, ambientGround: outside ? outside.ambientGround : GarageScene.AMB_GROUND,
     fogColor: outside ? outside.fogColor : GarageScene.BACKDROP, fogDensity: outside ? outside.fogDensity : 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
-    noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
+    noEnv: true,   // keep the garage post path and exclude the race cube
+    garageProbe: gfx.garageProbeEnabled ? GarageScene.reflectionProbe(Teams.LIST[G.teamIdx], liv, getTeamParts, G.driverIdx, context) : null,
   }) === false) return false;
   if (context.realExterior) exteriorDrawn = exterior.draw(context.showLaneBays);
   const spMat = carPaintMat(PAINT_DRY_DAY);
@@ -1386,6 +1390,25 @@ function renderSetupPreview(dt, holdDriveOut = false) {
 function setSetupCamPanel(open) {
   const b = $("cs-cam"), p = $("cs-cam-panel");
   if (!b || !p) return;
+  if (open) {
+    const enabled = typeof GfxQuality !== "undefined" && GfxQuality.feature("tyreWearVisual");
+    let wear = $("cs-preview-worn");
+    if (enabled && !wear) {
+      wear = document.createElement("button");
+      wear.type = "button";
+      wear.id = "cs-preview-worn";
+      wear.className = "cs-view-btn";
+      wear.textContent = "Preview worn tyres";
+      wear.setAttribute("aria-pressed", String(previewWorn));
+      wear.onclick = () => {
+        previewWorn = !previewWorn;
+        wear.classList.toggle("active", previewWorn);
+        wear.setAttribute("aria-pressed", String(previewWorn));
+      };
+      p.appendChild(wear);
+    }
+    if (wear) wear.hidden = !enabled;
+  }
   p.hidden = !open;
   b.setAttribute("aria-expanded", open ? "true" : "false");
 }

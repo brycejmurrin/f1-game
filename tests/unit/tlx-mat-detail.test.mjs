@@ -248,6 +248,33 @@ for (const language of ["wgsl", "glsl"]) {
   });
 }
 
+test("Silverstone surface pilot builds in both shader languages and resets when the circuit changes", async () => {
+  for (const lang of ["wgsl", "glsl"]) {
+    const off = await build({}, lang);
+    assert.equal(off.lit.uniforms.silverstoneSurface, undefined);
+    const enabled = await build({ circuitSurfaces: true }, lang);
+    assert.notEqual(enabled.fs, off.fs);
+    const { uniforms, updateFrame } = enabled.lit;
+    for (const wetness of [0, 1]) {
+      for (const trackId of ["silverstone", "spa", undefined]) {
+        updateFrame({ trackId, wetness });
+        assert.equal(uniforms.silverstoneSurface.value, Number(trackId === "silverstone"));
+      }
+    }
+  }
+});
+
+test("garage box projection builds on WebGPU using the existing cube taps", async () => {
+  const ordinary = await build({}, "wgsl");
+  const garage = await build({ garageProbeRequested: true }, "wgsl");
+  const taps = (program) => (program.match(/textureSampleLevel\(/g) || []).length;
+  assert.ok(taps(ordinary.fs) > 0);
+  assert.equal(taps(garage.fs), taps(ordinary.fs));
+  assert.equal(ordinary.lit.uniforms.garageBox, undefined);
+  assert.equal(garage.lit.uniforms.garageBoxOn.value, 0, "the race starts with ordinary reflections");
+  assert.notEqual(garage.fs, ordinary.fs);
+});
+
 test("envAll needs a live cube: without one it compiles out, and setEnvStr's live bit drives envWorld", async () => {
   const lit = globalThis.TLXShaders.lit(THREE, THREE.TSL, { chunks: globalThis.TLXShaders.chunks(THREE, THREE.TSL), maxLights: 16,
     detail: { envAll: true, envLods: 7 } });
@@ -271,6 +298,35 @@ function tlxBlock(head, tail) {
 }
 const LIT_DETAIL = new Function("isMobile", "GfxQuality", "renderer", "TLXShaders", "THREE", "TSL", "litCtx", "ENV_SIZE", "Log",
   "let lit;\n" + tlxBlock("let litDetail = null;", "lit = TLXShaders.lit(THREE, TSL, litCtx);") + "\nreturn lit;");
+test("garage capture reuses the cube until a room or mood change, and discards it at exit", () => {
+  const start = TLX.indexOf("let garageProbeRoom =");
+  const end = TLX.indexOf("function _restoreEnvFrame()", start);
+  const run = new Function("record", `
+    let envReady = true, _envGaveUp = false, _warmPending = false, _envActive = false;
+    const scene = {}, hideSkyMesh = () => {}, resetRecs = () => {}, lit = { setEnvStr() {} };
+    const backend = {
+      envProbeReset() { envReady = false; _envGaveUp = false; garageProbeFace = 0; record.push("reset"); },
+      envFaceBegin(face) { record.push(face); return true; },
+      envFaceEnd(face) { if (face === 5) envReady = true; },
+    };
+    ${TLX.slice(start, end)}
+    return { frame: probe => captureGarageFace(probe, {}), leave: leaveGarageProbe, ready: () => envReady };
+  `);
+  const record = [], capture = run(record);
+  const probe = { room: {}, mood: "day", centre: [0, 2, 0], draw() {} };
+  for (let i = 0; i < 10; i++) capture.frame(probe);
+  assert.deepEqual(record, ["reset", 0, 1, 2, 3, 4, 5]);
+  assert.equal(capture.ready(), true);
+  probe.mood = "night";
+  capture.frame(probe);
+  capture.frame(probe);
+  probe.room = {};
+  capture.frame(probe);
+  capture.leave();
+  capture.leave();
+  assert.deepEqual(record.slice(7), ["reset", 0, 1, "reset", 0, "reset"]);
+  assert.equal(capture.ready(), false);
+});
 const ENV_STR = new Function("lit", "frame", "envRT", "envReady", "_envBlank", "_envActive", tlxBlock("if (lit.setEnvStr) {", "lit.setEnvStr("));
 
 test("tlx.js asks for the features on desktop WebGPU only, and retries today's program if the detail factory throws", () => {

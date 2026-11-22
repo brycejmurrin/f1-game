@@ -2068,7 +2068,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
   }
   const pal = def.palette;
   frame = {
-    viewProj: M4.ident(), eye: camEye,
+    trackId: def.id, viewProj: M4.ident(), eye: camEye,
     sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
     // COPIES: the lightning block writes these in place, and in the menu's
     // flyby warm frames (before applyRaceSettings swaps them) that wrote the
@@ -7710,7 +7710,7 @@ function render(dt) {
     const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)
     if (_envHold) {
       const dx = _pex - _envLatch[0], dy = _pey - _envLatch[1], dz = _pez - _envLatch[2];
-      if (dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
+      if ((gfx.garageProbeEnabled && !gfx.envProbeReady()) || dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
         || Math.abs(_es[0] - _envLatch[3]) > 1e-4 || Math.abs(_es[1] - _envLatch[4]) > 1e-4 || Math.abs(_es[2] - _envLatch[5]) > 1e-4
         || Math.abs(_ew - _envLatch[6]) > 1e-3 || raceTimeOfDay !== _envLatchTod || _elg !== _envLatch[7])
         { _envHold = false; _envFace = -1; }
@@ -8097,9 +8097,9 @@ function render(dt) {
     const pt = carDraw.paintTeam(c);   // the team as this car is painted: a friend's sent paint, an AI's factory one (#5037)
     const sharedBody = FieldLod.on && !c.isPlayer && _lod >= 2;
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
-      : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
+      : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c), c) : teamBodyMesh(c.team, c)));
     if (body) {
-      // Only the neutral shared distant bodies share paint and geometry; keep chassis attitude.
+      // Distant rivals with the same silhouette and paint can share a batch; keep chassis attitude.
       gfx.draw(body, tmpMat, sharedBody ? carDraw.coOpt(paint) : paint);
       if (_lod < 2) queueCarDecals(pt, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
@@ -8260,6 +8260,7 @@ function render(dt) {
   // merely WET (rainSeed picked which). Open-cockpit cars have no windscreen,
   // so onboard views get the same field as the chase cam — no water-on-glass
   // beading and no wiper (there is nothing to wipe).
+  if (wxArc.arc && wxArc.arc.cell && GfxQuality.feature("rainCurtains")) Particles.rainCurtain(track, wxArc, camEye, frame.fogColor);
   if (Particles.rainActive()) Particles.rainUpdate(dt, camEye, wxArc.viewRainfall());
   startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control

@@ -22,6 +22,7 @@ function make(uploads, wind, opts = {}) {
     LightTune: { LT: lt },
     PerfGov: { autoShed: () => 0 },
     Wind: { state: () => wind },
+    Tracks: opts.tracks,
   });
   seedLog(ctx);
   const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
@@ -363,4 +364,31 @@ test("clear disarms a pending armPrime so the next draw is not a stale idle prim
   P.clear();
   P.draw();
   assert.equal(uploads.length, 0, "clear dropped the pending prime");
+});
+
+test("distant rain follows the moving cell in world space and clears after the shower", () => {
+  const uploads = [], samples = [];
+  const track = { total: 2000 };
+  const weather = { arc: { t: 0, cell: { c0: 0.95, h: 0.15, total: 2000, life: 30, v: 10 } }, rainfallAt: () => 1 };
+  const P = make(uploads, null, { tracks: { sample(track, s, out) {
+    samples.push(s);
+    out.p[0] = (s % track.total + track.total) % track.total;
+    out.p[1] = 5; out.p[2] = 0;
+  } } });
+  const eye = [0, 0, 1000], fog = [1, 1, 1];
+  P.rainCurtain(track, weather, eye, fog); P.draw();
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].floats, 9 * 60);
+  assert.equal(samples[4], 1900);
+  const anchor = (data, k) => (data[60 * k + 2] + data[60 * k + 12]) / 2;
+  assert.ok(Math.abs(anchor(uploads[0].data, 4) - 1900) < 0.01);
+  weather.arc.t = 20;
+  P.rainCurtain(track, weather, eye, fog); P.draw();
+  assert.ok(Math.abs(anchor(uploads[1].data, 4) - 100) < 0.01, "crosses the start line");
+  weather.arc.t = weather.arc.cell.life;
+  P.rainCurtain(track, weather, eye, fog); P.draw();
+  assert.equal(uploads.length, 2);
+  P.rainSeed(false); P.rainShow(true);
+  P.rainUpdate(0.016, eye, 1); P.draw();
+  assert.equal(uploads.at(-1).floats, 8 * 60, "local rain alone after the curtain expires");
 });

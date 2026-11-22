@@ -106,7 +106,7 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
   const cd = read("js/car/car-draw.js");
-  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\.team\) : getFieldWheelMeshes\(c\.team, c\);/);
+  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
