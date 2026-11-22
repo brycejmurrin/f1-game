@@ -652,19 +652,24 @@ const SceneryPits = (function () {
         // curving row two back walls stand end to end on one plane too.
         const lift = (i & 1) ? TrackGeom.MIN_SEP : 0, bump = sd * lift;
         const kap = ctx.curvature ? ctx.curvature(box.s) : 0;   // +k = left turn; lateral +x right
-        // The jambs' back face stands MIN_SEP proud of the baked bay's door
-        // wall (at h + garage): at 5 mm the two fought from 159 m on every pit
-        // row (coplanar-audit --fight 300, half of all the new spots).
-        const front = sd * (h + garage - 0.125 - TrackGeom.MIN_SEP) - bump;
-        const jamb = (B.w - doorW) / 2;
-        for (const side of [-1, 1]) {
-          const cj = atF(f, front, B.h / 2, k);
-          rawBox(out, [cj[0] + bs[2][0] * side * (B.w / 2 - jamb / 2), cj[1] + bs[2][1] * side * (B.w / 2 - jamb / 2), cj[2] + bs[2][2] * side * (B.w / 2 - jamb / 2)],
-                 [0.25, B.h, jamb], SHELL, bs);
+        // A detached garage owns its neighbors' complete ground storeys. Put
+        // their upper storeys on that same mesh, outside the parked cutaway.
+        const neighbor = ctx.neighborBay && ctx.neighborBay(i, box, c, rotY);
+        if (!neighbor) {
+          // The jambs' back face stands MIN_SEP proud of the baked bay's door
+          // wall (at h + garage): at 5 mm the two fought from 159 m on every pit
+          // row (coplanar-audit --fight 300, half of all the new spots).
+          const front = sd * (h + garage - 0.125 - TrackGeom.MIN_SEP) - bump;
+          const jamb = (B.w - doorW) / 2;
+          for (const side of [-1, 1]) {
+            const cj = atF(f, front, B.h / 2, k);
+            rawBox(out, [cj[0] + bs[2][0] * side * (B.w / 2 - jamb / 2), cj[1] + bs[2][1] * side * (B.w / 2 - jamb / 2), cj[2] + bs[2][2] * side * (B.w / 2 - jamb / 2)],
+                   [0.25, B.h, jamb], SHELL, bs);
+          }
+          const lintH = B.h - doorH + 0.6;
+          const cl = atF(f, sd * (h + garage - 0.125 - 2 * TrackGeom.MIN_SEP) - bump, doorH + lintH / 2, k);   // one MIN_SEP proud of the jambs
+          rawBox(out, cl, [0.25, lintH, doorW], box.col, bs);
         }
-        const lintH = B.h - doorH + 0.6;
-        const cl = atF(f, sd * (h + garage - 0.125 - 2 * TrackGeom.MIN_SEP) - bump, doorH + lintH / 2, k);   // one MIN_SEP proud of the jambs
-        rawBox(out, cl, [0.25, lintH, doorW], box.col, bs);
         if (S && i < S.cells) {
           const right = [-sd * f.t[0], -sd * f.t[1], -sd * f.t[2]];   // the viewer's right, facing the bay from the lane
           const lat = sd * (h + garage - S.proud) - bump, hw2 = S.quadW / 2;
@@ -683,18 +688,20 @@ const SceneryPits = (function () {
           signs.cells.push({ i, team: box.team });
           if (i === (count >> 1)) signs.centre = atF(f, sd * (h + garage), 3, k);
         }
-        const cr = atF(f, sd * (h + garage + B.depth / 2), B.h + 0.05 + 0.175 + lift, k);
-        rawBox(out, cr, [B.depth + 0.5, 0.35, segAt(kap, sd * (h + garage + B.depth / 2))], ROOF, bs);
-        // 2 cm under the roof line, like the end caps below: at B.h + 0.4 the
-        // shell's top shared the canopy roof's top plane and fought from any
-        // camera above the pit row (40 circuits, up-facing, 0 mm).
-        const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.38) / 2 + lift, k);
-        rawBox(out, cb, [0.3, B.h + 0.38, segAt(kap, sd * (h + garage + B.depth + 0.2))], SHELL, bs);
+        if (!neighbor) {
+          const cr = atF(f, sd * (h + garage + B.depth / 2), B.h + 0.05 + 0.175 + lift, k);
+          rawBox(out, cr, [B.depth + 0.5, 0.35, segAt(kap, sd * (h + garage + B.depth / 2))], ROOF, bs);
+          // 2 cm under the roof line, like the end caps below: at B.h + 0.4 the
+          // shell's top shared the canopy roof's top plane and fought from any
+          // camera above the pit row (40 circuits, up-facing, 0 mm).
+          const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.38) / 2 + lift, k);
+          rawBox(out, cb, [0.3, B.h + 0.38, segAt(kap, sd * (h + garage + B.depth + 0.2))], SHELL, bs);
+        }
         const ch = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 1.7 + lift, k);
-        rawBox(out, ch, [B.depth - 1.0, 3.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], GLASS, bs);
+        rawBox(neighbor || out, ch, [B.depth - 1.0, 3.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], GLASS, bs);
         const ct = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 3.4 + 0.2 + lift, k);
-        rawBox(out, ct, [B.depth - 0.4, 0.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], ROOF, bs);
-        if (i === 0 || i === count - 1) {
+        rawBox(neighbor || out, ct, [B.depth - 0.4, 0.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], ROOF, bs);
+        if (!neighbor && (i === 0 || i === count - 1)) {
           const ce = atF(f, sd * (h + garage + B.depth / 2), (B.h + 0.38) / 2, k);   // 2 cm under the roof line
           const along = (i === 0 ? -1 : 1) * (seg / 2 + 0.15);
           rawBox(out, [ce[0] + bs[2][0] * along, ce[1] + bs[2][1] * along, ce[2] + bs[2][2] * along],
