@@ -3534,7 +3534,9 @@ const TLX = (function () {
       function lineIndex(slot) {
         const capTris = Math.max(0, slot.cap - 2);
         if (slot.geo.index && slot.geo.index.count >= capTris * 3) return;
-        const idx = new Uint32Array(capTris * 3);
+        // Keep 0xffff reserved for WebGL2 fixed-index primitive restart.
+        const IndexArray = slot.cap <= 65535 ? Uint16Array : Uint32Array;
+        const idx = new IndexArray(capTris * 3);
         for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
         slot.geo.setIndex(new THREE.BufferAttribute(idx, 1));
       }
