@@ -1,11 +1,15 @@
 {
   "files": {
     "js/game.js": {
-      "codeLines": 2,
-      "lines": 2
+      "codeLines": 4,
+      "lines": 4
+    },
+    "js/ui/hud.js": {
+      "codeLines": -1,
+      "lines": -1
     }
   },
   "tree": {
-    "eagerCodeBytes": 438
+    "eagerCodeBytes": 1077
   }
 }
