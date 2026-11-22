@@ -926,6 +926,36 @@ function sharedRivalLifecycleRig() {
   return { ...v, idle, made, freed, decimated, nextRevision() { revision++; } };
 }
 
+test("distant rival liveries share a silhouette, preserve both inks across LODs, and release palette uploads", () => {
+  const r = sharedRivalLifecycleRig();
+  vm.runInContext(read("js/car/car-hero.js"), r.ctx);
+  r.ctx.GfxQuality = { feature: key => key === "rivalLiveryLod" };
+  const pos = [0, 0, 0, 1, 1, 1, 0, 1, 0];
+  let builds = 0;
+  r.ctx.Car3D.build = (primary, secondary) => {
+    builds++;
+    return { pos, col: [...primary, ...secondary, 0.25, 0.25, 0.25] };
+  };
+  const car = { team: r.ctx.Teams.LIST[0] };
+  const other = { team: car.team, netPaint: { tag: "peer", livery: { c1: [0, 1, 0], c2: [1, 0, 0] } } };
+  const mesh = r.carDraw.sharedRivalBodyMesh(true, car);
+  const inputs = [1, 0, 0, 0, 0, 1, 0.25, 0.25, 0.25];
+  assert.deepEqual(Array.from(mesh.geo.col), inputs);
+  assert.equal(r.carDraw.sharedRivalBodyMesh(true, { ...car }), mesh, "same palette reuses the upload");
+  const peer = r.carDraw.sharedRivalBodyMesh(false, other);
+  assert.equal(peer.geo.pos, mesh.geo.pos);
+  assert.deepEqual(Array.from(peer.geo.col), [0, 1, 0, 1, 0, 0, 0.25, 0.25, 0.25]);
+  r.idle.shift()();
+  const far = r.carDraw.sharedRivalBodyMesh(true, car);
+  assert.equal(far.geo.far, true);
+  assert.deepEqual(Array.from(far.geo.col), inputs);
+  assert.equal(builds, 1);
+  assert.equal(r.decimated.length, 1);
+  r.carDraw.invalidateFactoryMeshCaches();
+  assert.equal(r.freed.length, r.made.length);
+  for (const handle of [mesh, peer, far]) assert.ok(r.freed.includes(handle));
+});
+
 test("shared rival cache: invalidation releases both LODs and rebuilds the far body", () => {
   const r = sharedRivalLifecycleRig(), cd = r.carDraw;
   const near = cd.sharedRivalBodyMesh(true); r.idle.shift()();

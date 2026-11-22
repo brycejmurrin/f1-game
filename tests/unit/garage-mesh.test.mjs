@@ -1258,7 +1258,7 @@ test("the ordinary garage selects articulated wheels before any departure or rac
     GarageScene: { previewMesh: (_key, _hull, make) => ({ mesh: make(), hull: [] }) },
   };
   const make = new Function("env", `const {${Object.keys(env).join(",")}} = env;
-    let _spMesh, _spMeshKey = "", _spHull, _spBase, departureWheels, driveOut = null;
+    let _spMesh, _spMeshKey = "", _spHull, _spBase, departureWheels, driveOut = null, previewWorn = false, appliedWorn = false;
     ${fnSource(read("js/garage/setup-camera.js"), "function getSetupPreviewMesh()")}
     return getSetupPreviewMesh;`);
   const get = make(env), first = get();
@@ -1355,4 +1355,11 @@ test('circuit exterior retains distant rendered road while tyre lookup remains a
     const [x, z] = key.split(',').map(Number);
     assert.ok(x >= -28 && x <= 27 && z >= 3 && z <= 55, 'all cell references remain in contact bounds');
   }
+});
+
+test("garage tyre wear preview replaces wheel layers and restores fitted fresh tyres", () => {
+  const h = garageWheelHarness(), wheels = h.Wheels.createGarage(h.gfx), tiers = { tyres: 1, brakes: 1 };
+  for (const worn of [false, true, true, false]) wheels.prepare("car", {}, tiers, worn);
+  assert.deepEqual(h.recipes.map(args => args[11]), [0, 0, 1, 1, 0, 0]);
+  assert.equal(h.freed.length, 8);
 });

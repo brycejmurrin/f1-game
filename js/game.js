@@ -2075,7 +2075,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
   }
   const pal = def.palette;
   frame = {
-    viewProj: M4.ident(), eye: camEye,
+    trackId: def.id, viewProj: M4.ident(), eye: camEye,
     sunDir: V3.norm(pal.sunDir), sunColor: pal.sunColor,
     // COPIES: the lightning block writes these in place, and in the menu's
     // flyby warm frames (before applyRaceSettings swaps them) that wrote the
@@ -6707,7 +6707,7 @@ function setFrameLights(eye, scale, fwd, srcSet) {
   LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
 }
 function appendCarTailLights() {
-  LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
+  LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier, currentCarGroundMat, carDraw.WHEELS);
 }
 
 // ---------- cameras ----------
@@ -7059,7 +7059,10 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   // Cleared every frame, set only by the flood branch: `frame` outlives a
   // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
   // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
+  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0; frame.brakeSpillCount = 0;
+  frame.brakeSpillEnabled = _floodActive && !_studioRig && player && !gfx.isMobile && !gfx.mobileTier &&
+    GfxQuality.feature("brakeLightSpill") && PerfGov.autoTier() === 0
+    ? clamp((0.8 - Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2])) / 0.65, 0, 1) : 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -7715,7 +7718,7 @@ function render(dt) {
     const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)
     if (_envHold) {
       const dx = _pex - _envLatch[0], dy = _pey - _envLatch[1], dz = _pez - _envLatch[2];
-      if (dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
+      if ((gfx.garageProbeEnabled === true && !gfx.envProbeReady()) || dx * dx + dy * dy + dz * dz > ENV_HOLD_MOVE_M * ENV_HOLD_MOVE_M
         || Math.abs(_es[0] - _envLatch[3]) > 1e-4 || Math.abs(_es[1] - _envLatch[4]) > 1e-4 || Math.abs(_es[2] - _envLatch[5]) > 1e-4
         || Math.abs(_ew - _envLatch[6]) > 1e-3 || raceTimeOfDay !== _envLatchTod || _elg !== _envLatch[7])
         { _envHold = false; _envFace = -1; }
@@ -8064,6 +8067,18 @@ function render(dt) {
         // Gravel/grass kickup: any off-track car at speed throws surface bits.
         if (c.offroad && c.speed > 10) {
           const wd = carDraw.WHEELS[2 + ((Math.random() * 2) | 0)];
+          if (GfxQuality.feature("gravelDebris") && !motionReduced()) {
+            const k = Math.floor(wrapS(cS) / track.total * track.n);
+            const wheelLat = cX + (_groundMat[0] * wd.x + _groundMat[8] * wd.z) * smp2.r[0]
+              + (_groundMat[2] * wd.x + _groundMat[10] * wd.z) * smp2.r[2];
+            if (track.surface.gravelAt(k, wheelLat)) {
+              Particles.gravel(
+                _groundMat[12] + _groundMat[0] * wd.x + _groundMat[8] * wd.z,
+                _groundMat[13] + _groundMat[1] * wd.x + _groundMat[9] * wd.z,
+                _groundMat[14] + _groundMat[2] * wd.x + _groundMat[10] * wd.z,
+                -tmpF[0] * c.speed, -tmpF[2] * c.speed, track.def.palette.runoff, dt * Math.min(28, vStd(c.speed) * 0.5));
+            }
+          }
           const dirt = Math.random() < 0.5;   // mix dusty-earth and grass tints
           Particles.kickup(
             tmpMat[12] + tmpMat[0] * wd.x + tmpMat[8] * wd.z,
@@ -8114,9 +8129,9 @@ function render(dt) {
     const pt = carDraw.paintTeam(c);   // the team as this car is painted: a friend's sent paint, an AI's factory one (#5037)
     const sharedBody = FieldLod.on && !c.isPlayer && _lod >= 2;
     const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
-      : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c)) : teamBodyMesh(c.team, c)));
+      : (sharedBody ? carDraw.sharedRivalBodyMesh(FieldLod.farBody(_lodD2, fovY, c), c) : teamBodyMesh(c.team, c)));
     if (body) {
-      // Only the neutral shared distant bodies share paint and geometry; keep chassis attitude.
+      // Distant rivals with the same silhouette and paint can share a batch; keep chassis attitude.
       gfx.draw(body, tmpMat, sharedBody ? carDraw.coOpt(paint) : paint);
       if (_lod < 2) queueCarDecals(pt, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
@@ -8276,6 +8291,7 @@ function render(dt) {
   const rainField = Particles.rainActive();
   const rainfall = rainField ? wxArc.viewRainfall() : 0;
   const underCover = (rainfall > 0 || frame.rain > 0) && wxArc.sheltered(camEye);
+  if (wxArc.arc && wxArc.arc.cell && GfxQuality.feature("rainCurtains")) Particles.rainCurtain(track, wxArc, camEye, frame.fogColor);
   if (rainField) Particles.rainUpdate(dt, camEye, underCover ? 0 : rainfall, camId, rainCameraCut);
   startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
@@ -8532,7 +8548,11 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
-  if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
+  if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) {
+    const drew = RenderRate.drew();
+    PerfGov.tick(_dtMs, drew);
+    if (drew) FieldLod.updateModelBudget(_dtMs, gfx.height, PerfGov);
+  }
   if (typeof GfxQuality !== "undefined") GfxQuality.setCinema(setupPreviewOn || photoMode || replayBuf.isScrubbing());   // CINEMA: garage / photo / replay (EXTREME only)
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)

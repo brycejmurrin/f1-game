@@ -900,6 +900,7 @@ for dusk glow while the scene sun is dimmed at night), tone-map `exposure`, how
 many point lights are **active this frame** after the nearest-N cull
 (`numLights`), how many are **baked** on the track before cull (`bakedLights`),
 and how many mast fixtures the scenery pass registered (`lampPosts`).
+`brakeSpillLights` counts the player’s front brake lights in that frame’s light set (0 or 2).
 **LAMP DENSITY** moves `bakedLights` (and poles on the next track load);
 **LAMP COUNT** / AI traffic moves `numLights`. Reading only `numLights` to
 check density is a false no-op — with a full grid it sticks near `lampCull`
