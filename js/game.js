@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam });
+    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true) });
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -2744,13 +2744,13 @@ function startRace() {
   return request;
 }
 
-function showTouchControls(show) {
+function showTouchControls(show, cooldown = false) {
   const t = show && Input.touchControlsNeeded();
-  const manual = gearsManual();
+  const manual = !cooldown && gearsManual();
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
-  els.btnThrottle.hidden = !(t && !autoThrottle());
+  els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle()));
   els.btnBrake.hidden = !t;
-  els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
+  els.btnBoost.hidden = els.btnOT.hidden = !t || cooldown;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
   // the control has no job at all — and a dock of GROUPS can afford to drop it,
   // because the survivors just close ranks. That was not true of the old
@@ -2762,7 +2762,7 @@ function showTouchControls(show) {
   // exists, it is this CIRCUIT that cannot use it, and the struck-through
   // NO AERO ZONE chip beside a faded button says so. Removing it would silently
   // suggest the game has no such feature.
-  if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
+  if (els.btnAero) els.btnAero.hidden = !t || cooldown || raceAeroMode === "auto";
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -8597,7 +8597,7 @@ function tickBody(now) {
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   PerfSpans.begin("camera"); director.tick(dt); PerfSpans.end("camera");   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
-  if (state === "results") { resultsCam.tick(dt); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.min(dt, 1 / 20)); }
+  if (state === "results") { resultsCam.tick(dt); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.max(0, _dtMs / 1000)); }
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
   RenderRate.observe(_dtMs);
   if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame

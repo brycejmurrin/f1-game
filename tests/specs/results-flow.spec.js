@@ -18,9 +18,8 @@ async function boot(page, headless = true) {
   if (headless) await page.evaluate(() => window.__apex.headless(true));
 }
 
-async function startGp(page, headless = true, scale = 1) {
+async function startGp(page, headless = true) {
   await boot(page, headless);
-  if (scale !== 1) await page.evaluate(s => window.__apex.renderScale(s), scale);
   await page.evaluate(() => window.__apex.race("bahrain", "day", "dry", { laps: 1, grid: "tier" }));
   await page.waitForFunction(() => !!window.__apex.info().track
     && ["count", "race"].includes(window.__apex.info().state), null,
@@ -227,7 +226,11 @@ test.describe("results-flow — phone landscape acceptance", () => {
   });
 
   test("natural flag: actual SKIP/CONTINUE advance every phase at 844×390", async ({ page }) => {
-    await startGp(page); await crossFlag(page); await skipChain(page);
+    await startGp(page); await crossFlag(page);
+    await expect(page.locator("#btn-throttle")).toBeVisible();
+    await expect(page.locator("#btn-brake")).toBeVisible();
+    await skipChain(page);
+    await expect(page.locator("#btn-brake")).toBeHidden();
     const buttons = page.locator("#results .sheet-foot button:visible");
     expect(await buttons.count()).toBeGreaterThan(0);
     for (const button of await buttons.all()) {
@@ -333,35 +336,26 @@ test.describe("results-flow — desktop cooldown ownership", () => {
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false, isMobile: false, reducedMotion: "no-preference" });
   test.setTimeout(240_000);
   test("a naturally finished car takes native throttle without changing classification", async ({ page }) => {
-    // Every page round trip waits out a frame. The fixture's GLX draws this 1280x720
-    // race at 0.24 fps on SwiftShader (~4 s a frame); at render scale 0.5 it is 0.6 fps
-    // (fewer pixels than the 844x390 cells), and the cell fits its budget. The
-    // viewport, layout and input stay desktop; nothing here reads a pixel.
-    await startGp(page, false, 0.5); await crossFlag(page);
+    // Keep the live input/physics loop and real DOM controls. Drawing the race on
+    // a software GPU can consume the cooldown's 45 wall seconds before the click.
+    await startGp(page); await crossFlag(page);
     const diag = () => page.evaluate(() => JSON.stringify({ ceremony: window.__apex.ceremony(),
       car: window.__apex.carAt(), active: document.activeElement && (document.activeElement.id || document.activeElement.tagName),
       layers: !!(window.UiLayers && window.UiLayers.anyOpen()), state: window.__apex.info().state }));
     const step = (name, wait) => wait.catch(async e => { throw new Error(`${name}: ${e.message}\n${await diag()}`); });
-    const fOwn = await page.evaluate(() => window.__apex.cameraState().renderFrame);   // frames, not wall time (below)
     await step("cooldown hands input to the player", page.waitForFunction(
-      (f) => window.__apex.ceremony().inputOwner === "player" || window.__apex.cameraState().renderFrame >= f + 8,
-      fOwn, { polling: 100, timeout: 0 }));
-    expect(await page.evaluate(() => window.__apex.ceremony().inputOwner), "cooldown hands input to the player").toBe("player");
-    // ONE round trip for the baseline and the frame count, so no extra coasting frame lands between them.
-    const [before, f0] = await page.evaluate(() => [window.__apex.carAt(), window.__apex.cameraState().renderFrame]);
-    // THROTTLE, not coasting (#5445). Moving forward proves nothing: the car is still rolling (11.3 m/s in Pages
-    // #5084) and dt is clamped to 1/4 s, so one coasting frame moves it ~2.8 m. Under cooldown ownership the car is
-    // driven by cooldownDrive (js/game.js): +18 m/s² on throttle, -6 coasting, so only throttle can RAISE speed
-    // over the baseline. Each round trip coasts about a frame (-6·dt) before the key lands, and 8 throttled frames
-    // (+18·dt each, the same dt regime) outweigh them. Gate on frames drawn, not wall time: a loaded software-GPU
-    // runner can draw no frame at all in 5 s (Pages #5084: 7-8 s a round trip).
-    // `after` is read while the key is still held: a release first would let coasting frames eat the gain.
+      () => window.__apex.ceremony().inputOwner === "player", null, WAIT));
+    expect(await page.evaluate(() => window.__apex.ceremony().cameraOwner)).toBe("chase");
+    const before = await page.evaluate(() => window.__apex.carAt());
+    // Coasting can increase progress. Only throttle can also raise speed.
     let after;
     await page.keyboard.down("ArrowUp");
     try {
       await step("held ArrowUp accelerates the finished car", page.waitForFunction(
-        ([v, prog, f]) => { const c = window.__apex.carAt(); return (c.speed > v && c.prog > prog + 1) || window.__apex.cameraState().renderFrame >= f + 8; },
-        [before.speed, before.prog, f0], { polling: 100, timeout: 0 }));
+        ({ speed, prog }) => {
+          const car = window.__apex.carAt();
+          return car.speed > speed && car.prog > prog + 1;
+        }, { speed: before.speed, prog: before.prog }, WAIT));
       after = await page.evaluate(() => window.__apex.carAt());
     } finally { await page.keyboard.up("ArrowUp"); }
     expect(after.speed, `held ArrowUp accelerates the finished car (a coasting car only slows): ${before.speed} -> ${after.speed} m/s`).toBeGreaterThan(before.speed);
