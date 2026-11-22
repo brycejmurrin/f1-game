@@ -277,7 +277,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
       const { all, seed } = await walk(page, "pmsettings");
       if (door === "#pm-open-visual") {
         expect(all.slice().sort()).toEqual([
-          "#pm-visual-tuners-sum", "#pm-garrival", "#pm-settings-close",
+          "#pm-visual-tuners-sum", "#pm-garrival", "#pm-arrange-current", "#pm-settings-close",
         ].sort());
         for (const id of ["pm-lighting", "pm-camtune", "pm-flyby"])
           await expect(page.locator("#" + id)).toBeDisabled();

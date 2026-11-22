@@ -438,7 +438,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
+    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-files",
     "pm-open-credits",
     "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
@@ -950,10 +950,8 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await waitReady(page);
   const report = async (selector) => page.evaluate((sel) => {
     const host = document.querySelector(sel);
-    // FIND A SETTING (SettingsSearch) heads the settings index as its own
-    // full-bleed row; it is not a door, so it never counts toward the balance.
-    const children = [...host.children].filter((el) => !el.hidden && getComputedStyle(el).display !== "none"
-      && !el.matches("[data-settings-search]"));
+    // Measure the doors themselves; Settings also has search and category headings.
+    const children = [...host.children].filter((el) => el.matches("button") && !el.hidden && getComputedStyle(el).display !== "none");
     const rows = [];
     for (const el of children) {
       const r = el.getBoundingClientRect();

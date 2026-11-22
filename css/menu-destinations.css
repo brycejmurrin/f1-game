@@ -330,8 +330,7 @@ body #overlay #menu-buttons #menu-secondary > .bigbtn {
   }
   :root:not([data-title-btns]) #overlay #menu-buttons #menu-secondary { gap: var(--hg); }
 }
-/* Wide desktops share the landscape phone's centered pairs and Racing skin.
-   Let the normal dense grid place Practice and Garage on the same row. */
+/* Desktop shares the landscape Racing layout. */
 @media (pointer: fine) and (orientation: landscape) and (min-width: 1000px) and (min-height: 520px) {
   :root:not([data-title-button-style="flat"]) #menu-buttons { --home-flat: initial; }
   :root:not([data-title-layout]) [data-shape="wide"] > #overlay {
@@ -355,6 +354,7 @@ body #overlay #menu-buttons #menu-secondary > .bigbtn {
   :root:not([data-title-layout]) #overlay #menu-buttons :is(#menu-secondary, #menu-create) > .bigbtn {
     font-size: max(var(--fs-micro), calc(var(--home-label) * .84)); min-height: var(--hrow);
   }
+  :root:not([data-title-layout]) #overlay #menu-buttons #menu-secondary > #mb-steerphone { min-width: min-content; }
   :root:not([data-title-layout]) #overlay #menu-buttons #mb-career { min-height: var(--hrow); }
   :root:not([data-title-layout]) [data-shape="wide"] > #overlay #title {
     font-size: calc(6.5 * var(--vwz));
