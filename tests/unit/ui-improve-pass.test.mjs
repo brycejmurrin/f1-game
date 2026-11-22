@@ -1924,8 +1924,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
     "the RENDERER fold is the shell host; RESET / shots still inject into its body");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details', "grid-column"), "1 / -1",
-    "every present and future Display disclosure spans the wide grid");
+  for (const panel of ["display", "graphics"]) {
+    const selector = `#pmsettings-inner:not([data-density="compact"]) #pm-panel-${panel} > details`;
+    const fullWidth = css("css/components.css").some(rule =>
+      rule.selector.split(/\s*,\s*/).includes(selector) && rule.decls.get("grid-column") === "1 / -1");
+    assert.ok(fullWidth, `every ${panel} disclosure spans the wide grid`);
+  }
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner:not([data-density="compact"]) #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   // ONE RULE NOW, not three (2026-09-18). DISPLAY's summary chrome and
@@ -1944,8 +1948,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "a summary breaks between readout words, never inside TILT 6");
   // The body is addressed by id (#pm-display-adv-body): RESOLUTION is a chip
   // row inside it, its own role=group, and a descendant match would grid it.
-  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body, #pm-visual-tuners-body", "display"), "flex",
-    "Display disclosure bodies default to columns; wide/compact override to grids");
+  for (const body of ["#pm-display-adv-body", "#pm-graphics-details-body", "#pm-visual-tuners-body"]) {
+    const column = css("css/components.css").some(rule =>
+      rule.selector.split(/\s*,\s*/).includes(body) &&
+      rule.decls.get("display") === "flex" && rule.decls.get("flex-direction") === "column");
+    assert.ok(column, `${body} defaults to a flex column`);
+  }
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] :is\(#pm-display-adv-body, #pm-visual-tuners-body\)/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
