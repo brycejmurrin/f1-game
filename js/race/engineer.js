@@ -363,8 +363,8 @@ var RaceEngineer = (function () {
           const back = (c.prog || 0) - (o.prog || 0);
           if (rejoin != null && back > 0 && back < lossM && (o.prog || 0) < rejoinProg) { rejoin = o.code || "TRAFFIC"; rejoinProg = o.prog || 0; }
         }
-        const now = o.pitStops || 0, prev = b.stops.has(o) ? b.stops.get(o) : now;
-        if (now > prev && pit && pit.lossS != null && !noStop) {
+        const now = o.pitStops || 0, prev = b.stops.get(o);
+        if (prev !== undefined && now > prev && pit && pit.lossS != null && !noStop) {
           // DIVIDED BY OUR OWN PACE, not theirs. This fires on the tick a rival's
           // pitStops increments — the tick that car is STOPPED in its box — so
           // `o.speed` is ~0, the clamp made the divisor 1, and the "gap in
@@ -375,7 +375,7 @@ var RaceEngineer = (function () {
           // tick to the quiet gap or a full card queue was never said at all.
           if (gap > 0 && gap < pit.lossS + 2) b.undercut = { code: o.code || "RIVAL", left: lapS || 90 };
         }
-        b.stops.set(o, now);
+        if (prev !== now) b.stops.set(o, now);
       }
       if (b.undercut && !noStop) rivalBoxed = b.undercut.code;
       // Every field written, in the literal's old order (callFor reads them all).
