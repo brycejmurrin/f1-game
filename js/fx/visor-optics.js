@@ -427,7 +427,7 @@ const VisorOptics = (function () {
   }
 
   let _viewport = null;
-  function _size() {
+  function _size(newCanvas = false) {
     if (typeof window === "undefined") return false;
     // The layout viewport (ICB) the fixed 100% layer is laid out in, not inner*: a Home Screen landscape launch can hold
     // the portrait inner* pair with no resize to follow, and a 393x852 store stretched over the 852x393 box bent the
@@ -440,7 +440,7 @@ const VisorOptics = (function () {
     const box = bw > 0 && bh > 0;
     const w = Math.max(1, box ? bw : window.innerWidth | 0), h = Math.max(1, box ? bh : window.innerHeight | 0);
     const lightW = Math.ceil(w / 2), lightH = Math.ceil(h / 2);
-    if (w === _w && h === _h && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
+    if (!newCanvas && w === _w && h === _h && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
     _w = w; _h = h;
     if (_cv) {
       // The broad reflected light is low-frequency. Keep projection, stroke widths
@@ -715,7 +715,7 @@ const VisorOptics = (function () {
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const hadCanvas = !!_cv;
     if (!_lookup()) return;
-    if (!hadCanvas && _size()) resized = true;   // size a newly enabled canvas before painting
+    if (!hadCanvas && _size(true)) resized = true;   // size a newly enabled canvas before painting
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
     const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);

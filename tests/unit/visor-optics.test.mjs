@@ -43,7 +43,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   const document = {
     body,
     getElementById: (id) => (id === "game" ? game : null),
-    createElement: () => ({ width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls), toDataURL: () => { calls.bendMaps++; return "data:,"; } }),
+    createElement: () => ({ width: 300, height: 150, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls), toDataURL: () => { calls.bendMaps++; return "data:,"; } }),
     createElementNS: () => ({ setAttribute() {}, appendChild() {}, style: {}, querySelectorAll: () => [] }),
   };
   class Path2D { constructor(d) { this.d = d; } }
@@ -383,13 +383,13 @@ test("visor exit via Droplets (#4751 row 15): leaving the onboard cam in the dry
 });
 
 test("visor size (audit4 R2): turning the visor ON mid-helmet sizes the new canvas before its first paint", () => {
-  const { V, calls, listeners, live } = load({ apex: { visorScene: () => DAY }, visor: "off" });
+  const { V, calls, listeners, live } = load({ apex: { visorScene: () => DAY }, visor: "off", win: { innerWidth: 600, innerHeight: 300 } });
   V.tick(1 / 60, true, 0, false);                     // visor OFF: _size records the viewport, no canvas yet
   live.visor = "clear";
   for (const fn of listeners) fn("visor", "clear");
   V.tick(1 / 60, true, 0, false);
   assert.ok(calls.inserted, "the canvas is built");
-  assert.deepEqual([calls.inserted.width, calls.inserted.height], [422, 195], "the first paint uses the half-size light surface");
+  assert.deepEqual([calls.inserted.width, calls.inserted.height], [300, 150], "the first paint uses the half-size light surface");
   assert.deepEqual(calls.transform, [.5, 0, 0, .5, 0, 0], "geometry stays in CSS pixels");
   assert.ok(V.stats().paints >= 1, "and it paints at once");
 });
