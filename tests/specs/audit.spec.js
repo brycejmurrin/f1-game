@@ -147,7 +147,7 @@ test.describe("Apex 26 — audit regressions", () => {
       // that exists for exactly this. Start far enough back that a REAL lap
       // time is on the clock by the time the line arrives.
       window.__apex.setLap(2);
-      window.__apex.jump(1 - 130 / total, 22, 0);
+      window.__apex.jump(1 - 130 / total, 22, 0, { keepLap: true });   // the fixture fabricates the lap
       window.__apex.setInput({ steer: 0, throttle: true });
       const start = lap();
       const crossed = until(() => lap() > start, 900);

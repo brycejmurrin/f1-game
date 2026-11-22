@@ -47,7 +47,7 @@ Bryce's profile is tests/data/settings-defaults-export.json (iPhone, build 14012
 | **D′** spec phone, Playwright (no insets) | 844×390 | 828×374 | 759.6×343.1 | 774.3×357.8 | compact / wide |
 | **Aₛ** A at launch with the stale portrait `inner*` (393×852) | CSS lays out 852×393 | 718×356 | — | 360.6×781.7 | **normal / tall** (wrong) |
 
-The measured iPhone 15 Safari tab is 852×368 CSS px (#5218). [Current device sizes](../COMPONENTS.md#the-viewports-and-what-each-one-is-for).
+Row C assumed B0. Safari measured 852×368 and 852×283. Short Safari and the 852×393 app measured L59/T0/R59/B20. [Viewports](../COMPONENTS.md#the-viewports-and-what-each-one-is-for). [Readings](../../tests/data/phone-windows.json)
 
 What flips to "normal" at 852×393: body at UI SIZE ≤ 65 %; a 480 sheet at ≤ 74 %; a 380 sheet at ≤ 93 %. The
 `(max-height: 400px)` and `(max-height: 500px)` media bands (menu-destinations.css:45,50,152; dialogs.css:252-311;

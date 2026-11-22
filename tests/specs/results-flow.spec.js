@@ -379,7 +379,7 @@ test.describe("results-flow — desktop cooldown ownership", () => {
 
 // UI contract cells (#5153 gap 12, PR D; docs/notes/UI-CONTRACT-2026-11-06.md §3 rule 8 and §4.9; the numbers in
 // docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pinned podium's pin count comes from the pane, so the shortest window
-// still scrolls >= 2 rows of the classification. Windows A (the iOS Home Screen app), C (the legacy toolbar stress case) and D (the spec
+// still scrolls >= 2 rows of the classification. Windows A (the iOS Home Screen app), C (the measured short Safari tab) and D (the spec
 // phone), seeded from Bryce's own export (TEXT large; it stores no UI SIZE, so a phone reads the shipped 70 %, #5358),
 // insets injected on :root as the shell does. #5580: at 0.7 the sheet has 515 own px in A and 534 in D, over the
 // generic --compact-at 380, so it went NORMAL there: two-line rows 73.7 / 74.4 painted px, YOU the only pin, 3.8 rows

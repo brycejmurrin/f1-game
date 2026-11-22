@@ -20,6 +20,8 @@ test("changing, reopening and resetting a touch response edits only the selected
   const field = key => dom.byId("touch-test-" + key);
   const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
   const slider = host.querySelector("input"), reset = host.querySelector("button");
+  const describedBy = el => dom.byId(el.getAttribute("aria-describedby")).textContent;
+  assert.equal(describedBy(slider).includes("40–160"), true);
   assert.equal(field("button").value, "left");
   assert.ok(field("slide").parentElement.parentElement.hidden);
   const adaptive = field("adaptive");
@@ -56,6 +58,11 @@ test("changing, reopening and resetting a touch response edits only the selected
   assert.equal(field("feedback").value, "on");
   choose("button", "left");
   assert.equal(field("press").value, "progressive");
+  assert.equal(describedBy(field("feedback")).includes("Three rising bars"), true);
+  choose("button", "gas");
+  choose("press", "progressive");
+  assert.equal(describedBy(field("feedback")).includes("Three rising bars"), false);
+  assert.equal(describedBy(field("press")).includes("Latch toggles"), true);
 });
 
 test("controller editor offers only the controls its caller supports", () => {

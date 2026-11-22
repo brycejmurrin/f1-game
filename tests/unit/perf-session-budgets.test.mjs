@@ -12,11 +12,27 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installSessionPins } from "../helpers/perf-session-pins.mjs";
 import {
   BUDGETS, MIN_STEADY_FRAMES, frameWindow, heapGrowth, judge, sessionReport,
 } from "../../tools/perf/session-budgets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+test("the first frame crossing the race deadline closes the sample window", () => {
+  let tick;
+  const window = { requestAnimationFrame(callback) { tick = callback; } };
+  installSessionPins(window);
+  const bag = window.__perfSessionFrames;
+  Object.assign(bag, { last: 100, until: 30_100, on: true });
+  tick(85); // Callback queued before arming.
+  tick(14_853);
+  assert.equal(bag.on, true);
+  tick(30_200);
+  assert.equal(bag.on, false);
+  tick(30_216); // A delayed collector must not record another frame.
+  assert.deepEqual(Array.from(bag.samples), [14_753, 15_347]);
+});
 
 test("frame hang ceilings sit above the blessed SwiftShader sample", () => {
   const blessed = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/perf-frametime-baseline.json"), "utf8"));

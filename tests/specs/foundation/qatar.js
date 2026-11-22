@@ -134,6 +134,8 @@ export default function register() {
     expect(night.walls.anyNaN).toBe(false);
     expect(night.walls.minB).toBeGreaterThan(1);
     expect(night.walls.maxB).toBeLessThan(60);
+    // A null gap passes the loop below; all 14 probes read terrain (headless VM, 2026-11-10).
+    expect(night.ground.filter((probe) => probe.gap !== null)).toHaveLength(14);
     for (const probe of night.ground) {
       // Every probe holds the SHARED 0.18 contract again. This loop used to
       // carry a local 0.32 allowance at 0.74/-18 (and briefly a 0.25 at

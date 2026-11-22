@@ -98,6 +98,10 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.elevation.varianteAlta).toBeGreaterThan(15);
     expect(result.elevation.rivazza).toBeGreaterThan(3);
     expect(result.elevation.range).toBeGreaterThan(25);
+    // Null gaps (inside the road carve) are dropped above, so an all-null ladder
+    // would leave an empty list that passes. All 480 shoulder probes read
+    // terrain (headless VM, 2026-11-10); 400 is the floor.
+    expect(result.shoulderGaps.length).toBeGreaterThanOrEqual(400);
     expect(result.shoulderGaps.filter((sample) => sample.gap > 0.18)).toEqual([]);
 
     await loadImola(racePage, "night");

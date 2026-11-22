@@ -28,8 +28,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
 test("rotation never resurfaces the pause card over an active photo camera", () => {
-  const source = src("js/game.js");
-  const fn = source.slice(source.indexOf("function syncRotateBlocker("), source.indexOf("if (rotateBlockMql.addEventListener)"));
+  const fn = symbolSource("function syncRotateBlocker(");
   for (const photoMode of [false, true]) for (const active of [false, true]) {
     const box = { setAttribute() {} }, pausemenu = { hidden: false };
     const ctx = vm.createContext({ $: () => box, getComputedStyle: () => ({ display: active ? "flex" : "none" }),
@@ -64,6 +63,23 @@ test("rotation keeps foreground Settings above Pause until Settings closes", () 
   ctx.photoMode = false; ctx.garageReturn = "pit"; garage.hidden = false;
   ctx.syncRotateBlocker(false);
   assert.equal(pausemenu.hidden, true, "pit work retains its existing pause ownership");
+});
+
+test("rotating a paused time trial leaves its HUD arrangement toolbar in the foreground", () => {
+  const { document } = makeDom();
+  const pausemenu = document.createElement("dialog"), pmsettings = document.createElement("dialog");
+  pausemenu.hidden = pmsettings.hidden = true; // the editor temporarily hides both
+  const gate = document.createElement("div");
+  const ctx = vm.createContext({ document, $: () => gate, els: { pausemenu, pmsettings },
+    rotateBlockMql: { matches: true }, paused: true, photoMode: false, garageReturn: "select",
+    getComputedStyle: () => ({ display: "none" }) }); // RACE IN PORTRAIT is enabled
+  vm.runInContext(symbolSource("function syncRotateBlocker("), ctx, { filename: absSrc("js/game.js") });
+  document.body.setAttribute("data-hud-arrange", "1");
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "opening pause would cancel ARRANGE through its dialog observer");
+  document.body.removeAttribute("data-hud-arrange");
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, false, "an ordinary paused race still gets its card back");
 });
 
 test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {

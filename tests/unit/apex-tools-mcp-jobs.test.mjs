@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { ROOT, MCP, rpc, callCli } from "../helpers/apex-tools-mcp.mjs";
+import { ROOT, MCP, rpc, callCli, jid } from "../helpers/apex-tools-mcp.mjs";
 
 test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad input", () => {
   const body = (r) => JSON.parse(r.stdout);
@@ -37,8 +37,10 @@ test("2026-10-03 tools: track session, jobs and UI pin their argv and refuse bad
   bad("apex_job_start", { kind: "rm_rf" });
   bad("apex_job_start", { kind: "ui_gallery", screens: "--write" });
   bad("apex_job_start", { kind: "survey_track", track: "nope" });
-  bad("apex_job_status", { jobId: "missing" }, "unknown_job");
-  bad("apex_job_cancel", { jobId: "missing" }, "unknown_job");
+  bad("apex_job_status", { jobId: "missing" });   // not the shape jobStart mints
+  bad("apex_job_cancel", { jobId: "../missing" });
+  bad("apex_job_status", { jobId: jid("float_all", 404) }, "unknown_job");
+  bad("apex_job_cancel", { jobId: jid("float_all", 404) }, "unknown_job");
   ok("apex_ui_fit", { screen: "settings", scale: 130 }, /--screens=settings","--viewports=ios-iphone-landscape","--jobs=1","--json","--scale=130/);
   bad("apex_ui_fit", { screen: "--all" });
   bad("apex_ui_fit", { screen: "settings", scale: 500 });

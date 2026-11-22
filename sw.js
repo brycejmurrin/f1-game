@@ -689,6 +689,7 @@ async function precacheAssetLists() {
     "js/ui/screen-placement.js",
     "js/ui/screen-arranger.js",
     "js/ui/hud-layout-editor.js",
+    "js/ui/dock-toolbar.js",
     "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
@@ -1042,7 +1043,7 @@ self.addEventListener("install", (event) => {
     // manifest or relying on the first online boot loses the pack after an update.
     const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-studio-ui|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|settings-export-body|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-studio-ui|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|settings-export-body|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.

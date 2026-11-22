@@ -802,8 +802,6 @@ const TitleLayout = (function () {
   }
 
   if (typeof document !== "undefined") {
-    const arrange = document.getElementById("title-arrange-entry");
-    if (arrange) arrange.addEventListener("click", () => enter(arrange));
     // #4798 gate
     if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(build) : build()), { once: true });
     else build();

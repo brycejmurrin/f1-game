@@ -47,107 +47,91 @@ window.ScreenRegions = (function () {
   screen("broadcast", "Broadcast overlay", { tower: part(".ov-tower", "Timing tower"), sectors: part(".ov-sectors", "Sector times"),
     battle: part(".ov-battle", "Battle"), caption: part(".ov-caption", "Caption") }, "main#overlay");
 
-  let editorLoad, request = 0;
-  async function openEditor(id, button, prepare) {
-    if (!button || !Object.hasOwn(screens, id)) return;
-    if (button.getAttribute("aria-busy") === "true") return;
-    const mine = ++request;
-    if (!window.ScreenArranger) {
-      button.setAttribute("aria-busy", "true");
-      button.textContent = "Loading layout editor…";
-      try {
-        if (!editorLoad) {
-          const file = "js/ui/screen-arranger.js";
-          editorLoad = ScriptLoader.create().load([file], [], { strict: true }).finally(() => { editorLoad = null; });
-        }
-        if (!(await editorLoad) || !window.ScreenArranger) throw new Error("Layout editor unavailable");
-      } catch (error) {
-        button.textContent = "Retry layout editor";
-        button.title = "The layout editor could not load. Select to try again.";
-        if (typeof Log !== "undefined") Log.warn("ui", "Could not load the layout editor: " + error.message);
-        return;
-      } finally {
-        button.removeAttribute("aria-busy");
-      }
-      button.textContent = prepare ? "Arrange Pause" : "Arrange this screen";
-      button.removeAttribute("title");
-    }
-    if (mine !== request || !button.isConnected || button.closest("[hidden]")) return;
-    const invoker = prepare ? prepare() : button;
-    // Closing Settings reveals the native Pause dialog through a layer observer.
-    // Its regions have layout boxes after that observer promotes it to the top layer.
-    if (prepare && invoker) await new Promise(resolve => requestAnimationFrame(resolve));
-    if (mine === request && invoker && !invoker.closest("[hidden]")) window.ScreenArranger.open(id, invoker);
-  }
-
-  function entry(root, label, run) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "screen-arrange-entry";
-    if (root.id) button.id = root.id + "-arrange-entry";
-    button.textContent = label;
-    button.addEventListener("click", (event) => { event.stopPropagation(); run(button); });
-    // Pause's door rides its header; the fly-cam's rides its bar, because a
-    // corner door sat over the docked tuner's FREE CAMERA toggle (844x390).
-    const host = root.id === "pausemenu" ? root.querySelector(".sheet-head") :
-      root.id === "photo-controls" ? root.querySelector("#pc-bar") || root : root;
-    host.appendChild(button);
-  }
-
   // Appearance keeps its illustrative preview. This button uses the same
   // launchers a player would press, so their Career slot or race stays theirs.
-  const routes = {
-    home: ["Home", null, "From Home, choose Arrange this screen."],
-    career: ["Career", "mb-career", "From Home, open Career Modes and choose Arrange this screen."],
-    garage: ["Garage", "mb-garage", "From Home, open Garage and choose Arrange this screen."],
-    select: ["Track selector", "mb-race", "From Home, open Race and choose Arrange this screen on the circuit list."],
-    datahub: ["Data Hub", "mb-data", "From Home, open Data Hub and choose Arrange this screen."],
-    race: ["Race setup", "mb-race", "From Home, open Race, select a circuit and continue to Race Settings. Choose Arrange this screen there."],
-    pause: ["Pause", null, "During a race, pause and open Settings → Appearance. Choose Pause, then Arrange Pause."],
-    hud: ["Race HUD", "pm-hud-arrange", "Arrange the HUD for the selected HUD style and camera group."],
-    popups: ["Race results", null, "Finish a race, then choose Arrange this screen on Results. Each dialog saves separately."],
-  };
+  const previewTargets = { garage: "carsetup", race: "race-settings", pause: "pausemenu", popups: "results" };
+  const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data",
+    "race-settings": "mb-race", "track-detail": "mb-race", "season-setup": "mb-season",
+    trackdesigner: "mb-designer", "photo-studio": "mb-photo", watch: "mb-watch", vsfriend: "mb-vs", howtoplay: "mb-help" };
+  const separatePages = { pair: "controller.html", menupad: "controller.html", wheel: "controller.html", broadcast: "overlay.html" };
+  let pending;
+  function tryPending(id) {
+    if (pending !== id) return;
+    const root = document.querySelector(screens[id].root);
+    if (!root || !root.getClientRects().length) return;
+    const focus = Array.from(root.querySelectorAll("button:enabled")).find(el => el.getClientRects().length);
+    if (window.ScreenArranger?.open(id, focus || root)) pending = null;
+  }
   function attachPicker(host) {
     const preview = host.querySelector('[data-as="preview"]');
     if (!preview || host.querySelector(".arrange-route")) return;
     const note = host.querySelector('[data-as="note"]');
+    const target = document.createElement("select");
+    target.setAttribute("aria-label", "Screen to arrange");
+    target.add(new Option("Home", "home"));
+    target.add(new Option("Race HUD", "hud"));
+    for (const [id, def] of Object.entries(screens)) {
+      target.add(new Option(def.label, id));
+    }
+    target.add(new Option("Phone wheel", "wheel"));
     const go = document.createElement("button");
     go.type = "button";
     go.className = "arrange-route";
-    host.appendChild(go);
+    host.append(target, go);
     const atHome = () => document.getElementById("overlay")?.hidden === false && !window.UiLayers?.inRace();
-    const inRace = () => !!window.UiLayers?.inRace();
+    function describe() {
+      const id = target.value;
+      const label = target.selectedOptions[0].text;
+      go.textContent = "Arrange " + label;
+      go.disabled = id === "home" && !atHome();
+      note.textContent = go.disabled ? "Open Appearance from Home to arrange Home." :
+        id === "home" || id === "hud" || id === "pmsettings" ? "" :
+        "The editor opens when " + label + " is on screen.";
+    }
+    let lastPreview;
     function refresh() {
       const key = preview.dataset.screen || "home";
-      if (!Object.hasOwn(routes, key)) {
-        note.textContent = "Open this screen and choose Arrange this screen to edit its layout.";
-        go.hidden = true;
-        return;
-      }
-      const [label, door, path] = routes[key];
-      note.textContent = "Illustrative preview. " + path;
-      go.textContent = key === "race" ? "Choose circuit for Race Setup" : key === "hud" || key === "home" || key === "pause" ? "Arrange " + label : "Open " + label;
-      go.hidden = key === "hud" ? !document.getElementById(door) :
-        key === "pause" ? !inRace() : !atHome() || key === "popups";
+      if (key === lastPreview) return;
+      lastPreview = key;
+      target.value = previewTargets[key] || key;
+      if (!target.value) target.value = "home";
+      describe();
     }
-    go.addEventListener("click", () => {
-      const key = preview.dataset.screen || "home";
-      if (go.hidden || !Object.hasOwn(routes, key)) return;
-      if (key === "hud") { document.getElementById("pm-hud-arrange")?.click(); return; }
-      const back = document.getElementById("pm-settings-close");
+    target.addEventListener("change", describe);
+    go.addEventListener("click", async () => {
+      pending = null;
+      const id = target.value;
+      if (id === "hud") { document.getElementById("pm-hud-arrange")?.click(); return; }
       const settings = document.getElementById("pmsettings");
-      function closeSettings() {
-        // Unwind nested Settings pages through the ordinary Back handler.
-        for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
-        return settings.hidden;
-      }
-      if (key === "pause") {
-        openEditor("pausemenu", go, () => preview.dataset.screen === key && closeSettings() ? document.getElementById("pm-settings") : null);
+      if (separatePages[id]) {
+        const url = new URL(separatePages[id], location.href);
+        url.searchParams.set("arrange", id);
+        if (id === "menupad" || id === "wheel") url.searchParams.set("demo", id === "menupad" ? "menu" : "wheel");
+        window.open(url, "_blank", "noopener");
         return;
       }
-      if (!closeSettings()) return;
-      if (key === "home") TitleLayout.enter(document.querySelector("#overlay .screen-arrange-entry"));
-      else document.getElementById(routes[key][1])?.click();
+      const fromHome = atHome();
+      if (id !== "home" && !window.ScreenArranger) {
+        go.disabled = true;
+        try {
+          await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
+        } catch { /* Keep the picker available for retry. */ }
+        describe();
+        if (!window.ScreenArranger) { note.textContent = "Layout editor could not load. Try again."; return; }
+        if (target.value !== id || !go.getClientRects().length) return;
+      }
+      const back = document.getElementById("pm-settings-close");
+      if (id === "pmsettings") {
+        back.click();
+        requestAnimationFrame(() => window.ScreenArranger.open(id, document.getElementById("pm-open-appearance")));
+        return;
+      }
+      for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
+      if (!settings.hidden) return;
+      if (id === "home") { TitleLayout.enter(document.getElementById("mb-settings")); return; }
+      pending = id;
+      if (fromHome && launchers[id]) document.getElementById(launchers[id])?.click();
+      requestAnimationFrame(() => tryPending(id));
     });
     refresh();
     new MutationObserver(refresh).observe(preview, { attributes: true, attributeFilter: ["data-screen"] });
@@ -157,10 +141,13 @@ window.ScreenRegions = (function () {
     document.addEventListener("apex:appearance-picker", event => attachPicker(event.target));
     const existingPicker = document.querySelector('[data-as="preview-side"]');
     if (existingPicker) attachPicker(existingPicker);
+    const query = new URLSearchParams(location.search);
+    if (query.has("arrange") && !document.getElementById("menu-buttons")) pending = query.get("arrange") || "broadcast";
     const ids = new WeakMap();
     const reveal = (root) => {
       const id = ids.get(root);
       if (!id || root.hidden || document.querySelector("#screen-arranger[open]")) return;
+      if (id === pending) requestAnimationFrame(() => tryPending(id));
       if (window.ScreenPlacement) window.ScreenPlacement.restore(id);
     };
     // Observe layer visibility only. Timing, telemetry and HUD DOM updates
@@ -171,16 +158,25 @@ window.ScreenRegions = (function () {
     function bind(id, root) {
       if (!root || ids.has(root)) return;
       ids.set(root, id);
-      if (id !== "broadcast" || new URLSearchParams(location.search).has("arrange")) {
-        entry(root, "Arrange this screen", (button) => openEditor(id, button));
-      }
       visibility.observe(root, { attributes: true, attributeFilter: ["hidden", "open"] });
       reveal(root);
     }
     for (const [id, def] of Object.entries(screens)) bind(id, document.querySelector(id === "watch" ? ".watch-transport" : def.root));
     const title = document.querySelector("#overlay #menu-buttons");
     const wheel = document.getElementById("ctl");
-    if (wheel) entry(wheel, "Arrange this screen", () => document.getElementById("lay-arrange").click());
+    if (wheel && (pending === "wheel" || pending === "menupad")) {
+      const start = () => {
+        if (pending === "menupad") tryPending("menupad");
+        else if (pending === "wheel" && wheel.getClientRects().length) {
+          document.getElementById("lay-arrange").click();
+          pending = null;
+        }
+        if (!pending) observer.disconnect();
+      };
+      const observer = new MutationObserver(start);
+      observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      requestAnimationFrame(start);
+    }
     if (!title) return;
     const inserted = new MutationObserver((records) => {
       for (const record of records) for (const el of record.addedNodes) {

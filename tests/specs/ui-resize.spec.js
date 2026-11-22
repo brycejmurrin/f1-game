@@ -573,8 +573,8 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
 
 // THE UI CONTRACT'S SETTINGS AND DIALOG CELLS (UI contract 2026-11-06 §4.2, §4.4, gaps 3/4/5/14 and
 // §6; PR B of #5153). The exception to this file's "same as a fresh load" oracle, and deliberately so: the contract
-// names the ONE phone-landscape layout, so these cells assert values — three contract windows, A the Home
-// Screen app (852x393, insets 59/21/59), C the legacy toolbar stress case (852x283, 59/0/59), D the spec phone
+// names the ONE phone-landscape layout, so these cells assert values — the owner's three windows, A the Home
+// Screen app (852x393, insets 59/20/59), C the same phone as a Safari tab (852x283, 59/20/59), D the spec phone
 // (844x390, no insets) — × TEXT SIZE normal/large × UI SIZE 100/130, seeded from Bryce's LOAD SETTINGS export (UI
 // 109, HUD 155, HIGH CONTRAST, textSize large). `SheetShape.layoutProbe` is the assertion (the `__apex.sheetFit()`
 // alias waits on #5155, which owns js/agent/apex.js); a screenshot is sign-off only. One boot per window; the four
@@ -587,9 +587,9 @@ const LEGACY_PROFILE = readProfile("legacy");
 const { left: sal, right: sar, top: sat, bottom: sab } = BRYCE_WINDOWS.standalone.insets;
 const CONTRACT_WINDOWS = [
   { name: "A-home-screen-852x393", w: PHONE_LANDSCAPE.width, h: PHONE_LANDSCAPE.height, sal, sar, sat, sab },
-  // C carries the fit-band cell: at UI 130 its 267 px safe box caps the 220-own settings sheet (1.214), the only
+  // C carries the fit-band cell: at UI 130 its 255 px content box caps the 220 px settings sheet (1.159), the only
   // A/C/D cell that is capped at all.
-  { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: 0, band: true },
+  { name: "C-safari-852x283", w: 852, h: 283, sal: 59, sar: 59, sat: 0, sab: BRYCE_WINDOWS["safari-short"].insets.bottom, band: true },
   { name: "D-spec-844x390", w: 844, h: 390, sal: 0, sar: 0, sat: 0, sab: 0 },
 ];
 const twoFrames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -700,8 +700,8 @@ for (const v of CONTRACT_WINDOWS) {
       expect(bad, JSON.stringify(cells)).toEqual([]);
       if (!v.band) return;
       // THE FIT BAND (gap 14), from the last cell (large / 130, the capped one). A Safari toolbar show/hide moves the
-      // host a few px: within ±0.03 the painted cap holds (283 -> 289 is +0.027), a release is never held back
-      // (310 fits 130% outright) and the way back re-caps at the same value — no ratchet.
+      // host a few px: within ±0.03 the painted cap holds (283 -> 289 is +0.027).
+      // With 8 px top and 20 px bottom padding, the 220 px settings sheet fits at 130% in a 314 px host.
       const at = async (h) => {
         await page.setViewportSize({ width: v.w, height: h });
         await page.waitForFunction((hh) => document.getElementById("pmsettings").clientHeight === hh, h, { polling: 50, timeout: 10_000 });
@@ -715,8 +715,11 @@ for (const v of CONTRACT_WINDOWS) {
       expect(base.zoom).toBeLessThan(1.3);
       const taller = await at(v.h + 6);
       expect(taller.sheetScale, "6 px of toolbar keeps the painted cap " + JSON.stringify(taller)).toBe(base.sheetScale);
-      const released = await at(310);
+      const justBelow = await at(313);
+      expect(justBelow.fit, "the sheet is still capped one pixel below release " + JSON.stringify(justBelow)).toBe("on");
+      const released = await at(314);
       expect(released.fit, "a release is never held back " + JSON.stringify(released)).not.toBe("on");
+      expect(released.zoom).toBeCloseTo(1.3, 3);
       const back = await at(v.h);
       expect(back.sheetScale, "the way back re-caps at the same value " + JSON.stringify(back)).toBe(base.sheetScale);
     });
@@ -758,8 +761,8 @@ test.describe("UI contract boot cell — a stale portrait inner* at a landscape 
 
 // UI contract cells (#5153 gap 10; PR D of #5153 — `LEGACY_PROFILE` is PR B's constant above, the UI contract note of PR #5154, UI-CONTRACT-2026-11-06 §3 rule 8 and §4.3;
 // measured in docs/notes/UI-PR-D-MEASURE-2026-11-06.md): the pause card in the owner's three
-// windows — A the iOS Home Screen app (852x393, insets 59/21/59), C the legacy toolbar stress case (852x283,
-// insets 59/0/59), D the spec phone (844x390) — seeded from the legacy export (TEXT large,
+// windows — A the iOS Home Screen app (852x393, insets 59/20/59), C the Safari tab (852x283,
+// insets 59/20/59), D the spec phone (844x390) — seeded from the legacy export (TEXT large,
 // UI 109 %, PAUSE look btn 115 / w 130). ONE phone card for every stored layout: nothing in the
 // card scrolls, every door is on screen, every tray label fits its tile. Before the fix each of
 // LIST / COMPACT / WIDE / SIDEBAR swapped in the 420 card and put QUIT 221-420 own px past the sheet.

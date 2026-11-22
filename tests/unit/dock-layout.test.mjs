@@ -14,14 +14,19 @@ import { cssRules } from "../helpers/css-rules.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/dock-layout.js"), "utf8");
 
+const toolbarSource = fs.readFileSync(path.join(ROOT, "js/ui/dock-toolbar.js"), "utf8");
+function installToolbar(ctx) {
+  vm.runInNewContext(toolbarSource.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/dock-toolbar.js") });
+}
+
 let lastWin;
-function loadDock() {
+function loadDock(insets = {}) {
   lastWin = { innerWidth: 400, innerHeight: 800, visualViewport: { width: 0, height: 0 } };
   const ctx = {
     Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
     window: lastWin,
     document: { documentElement: {} },
-    getComputedStyle() { return { getPropertyValue() { return "0"; } }; },
+    getComputedStyle() { return { getPropertyValue(key) { return insets[key] || "0"; } }; },
   };
   vm.createContext(ctx);
   // The real CssZoom (window.CssZoom IIFE) — dock-layout reads the dock's own zoom through it.
@@ -69,13 +74,13 @@ test("usablePad reads the layout viewport (documentElement.client*), never the v
   lastWin.visualViewport.height = 0;
 });
 
-test("clampXY keeps a dock between its safe-area home and MAX (a negative share would park it off screen)", () => {
+test("clampXY accepts signed offsets while bounding malformed imports", () => {
   const c = DL.clampXY({ x: 2, y: -2 });
   assert.equal(c.x, DL.MAX);
-  assert.equal(c.y, 0, "down past the home bar clips to the home");
+  assert.equal(c.y, -DL.MAX);
   const neg = DL.clampXY({ x: -0.1, y: -0.2 });
-  assert.equal(neg.x, 0, "outboard past the screen edge clips to the home edge");
-  assert.equal(neg.y, 0, "below the home bar clips to the home");
+  assert.equal(neg.x, -0.1);
+  assert.equal(neg.y, -0.2);
   // Property-wise: vm-realm objects fail deepStrictEqual on prototype identity.
   const junk = DL.clampXY({ x: "no", y: null });
   assert.equal(junk.x, 0);
@@ -161,13 +166,66 @@ test("switching scheme applies that scheme's offsets only", () => {
   assert.equal(left.style.transform, "", "tilt default clears the buttons offset");
 });
 
-test("a primary control centre inside the unsafe inset is rejected by clamp", () => {
-  // Offsets are fractions of the usable pad (already inset). Clamping at ±MAX
-  // is what keeps a drag from parking a dock under the notch / home indicator.
-  const edge = DL.clampXY({ x: MAX_PROBE(), y: MAX_PROBE() });
-  function MAX_PROBE() { return DL.MAX + 0.5; }
-  assert.ok(Math.abs(edge.x) <= DL.MAX + 1e-9);
-  assert.ok(Math.abs(edge.y) <= DL.MAX + 1e-9);
+// Layout geometry, including a change to the effective zoom between paints.
+// Homes and sizes are screen coordinates; CSS translations scale with zoom.
+function dockWithButton(id, left, top, width, height) {
+  const style = () => ({ removeProperty(k) { delete this[k]; } });
+  const dock = { style: style(), currentCSSZoom: 1 };
+  const el = { id, style: style(), get currentCSSZoom() { return dock.currentCSSZoom; } };
+  let reads = 0;
+  const numbers = s => (s?.match(/-?[\d.]+px/g) || []).map(parseFloat);
+  el.getBoundingClientRect = () => {
+    reads++;
+    const [dx = 0, dy = 0] = numbers(dock.style.transform);
+    const [bx = 0, by = 0] = numbers(el.style.translate);
+    const x = left + (dx + bx) * dock.currentCSSZoom, y = top + (dy + by) * dock.currentCSSZoom;
+    return { left: x, right: x + width, top: y, bottom: y + height, width, height };
+  };
+  dock.querySelectorAll = () => [el];
+  return { dock, el, reads: () => reads };
+}
+
+test("intentional moves use the side gutters and stop at the reachable part of the safe area", () => {
+  const D = loadDock({ "--sal": "59px", "--sar": "59px", "--sab": "21px" });
+  D.__doc.documentElement.clientWidth = 852; D.__doc.documentElement.clientHeight = 393;
+  const { dock, el } = dockWithButton("btn-steer-left", 71, 245, 92, 92);
+  const bag = D.normalize({ buttons: { L: { x: -1, y: -1 } } });
+  D.apply("buttons", bag, { L: dock });
+  let r = el.getBoundingClientRect();
+  assert.equal(r.left, 11, "an intentional outward move reclaims 60px past the automatic anchor");
+  assert.equal(r.right, 103, "44px of steering target remain inside the 59px inset");
+  assert.equal(r.bottom, 393, "the whole target remains physically on the display");
+  dock.currentCSSZoom = 2;
+  D.apply("buttons", bag, { L: dock });
+  r = el.getBoundingClientRect();
+  assert.equal(r.left, 11, "the old translation is unwound at the new zoom");
+  bag.buttons.L.x = 1;
+  D.apply("buttons", bag, { L: dock });
+  assert.equal(el.getBoundingClientRect().right, 841, "the opposite safe-area edge is reachable");
+  const small = dockWithButton("btn-boost", 71, 285, 32, 32);
+  bag.buttons.L.x = -1;
+  D.apply("buttons", bag, { L: small.dock });
+  assert.equal(small.el.getBoundingClientRect().left, 59, "an undersized target stays wholly within the safe inset");
+});
+
+test("individual placement uses the group's current offset, clamps on resize and restores shipped placement on reset", () => {
+  const D = loadDock(), doc = D.__doc.documentElement;
+  doc.clientWidth = 400; doc.clientHeight = 600;
+  const { dock, el } = dockWithButton("btn-brake", 300, 300, 60, 60);
+  const bag = D.normalize({ buttons: { R: { x: .25 }, controls: { "btn-brake": { x: .25, y: -.25 } } } });
+  D.apply("buttons", bag, { R: dock });
+  let r = el.getBoundingClientRect();
+  assert.equal(r.left, 100);
+  assert.equal(r.top, 450);
+  doc.clientWidth = 200;
+  D.apply("buttons", bag, { R: dock });
+  r = el.getBoundingClientRect();
+  assert.equal(r.right <= 200, true);
+  doc.clientWidth = 400;
+  D.apply("buttons", D.normalize({}), { R: dock });
+  assert.equal(el.getBoundingClientRect().left, 300);
+  assert.equal(el.getBoundingClientRect().top, 300);
+  assert.equal(el.style.translate, undefined);
 });
 
 test("store.subscribe on steerMode reloads that scheme's offsets", () => {
@@ -213,6 +271,7 @@ function bootCreate(opts = {}) {
     MutationObserver: function (cb) { observers.push(cb); this.observe = () => {}; },
     getComputedStyle() { ctx.gcsCalls = (ctx.gcsCalls || 0) + 1; return { getPropertyValue() { return "0"; } }; },
   };
+  if (!opts.lazyToolbar) installToolbar(ctx);
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
   const bag = ctx.DockLayout.normalize({});
   bag.buttons.L = { x: 0, y: 0.35 };
@@ -263,8 +322,109 @@ test("dock tools open compact and keep Done available in both states", () => {
   assert.equal(control("shape").hidden, true);
 });
 
+test("independent Gas and Brake edits retain the other settings when a button is reset", () => {
+  const { api, made, els, docL } = bootCreate();
+  const attributes = {};
+  const gas = els["btn-throttle"] = {
+    id: "btn-throttle", closest() { return this; },
+    setAttribute(k, v) { attributes[k] = v; }, removeAttribute(k) { delete attributes[k]; },
+  };
+  els["btn-brake"] = { id: "btn-brake", setAttribute() {}, removeAttribute() {} };
+  els["dock-right"].contains = target => target === gas;
+  els["dock-left"].contains = () => false;
+  api.setEditing(true);
+  const control = key => made[0].querySelector("[data-k=" + key + "]");
+  const choose = (key, value) => {
+    control(key).value = value; control(key).onchange();
+  };
+  const event = x => ({ target: gas, pointerId: 1, clientX: x, clientY: 600, preventDefault() {} });
+  docL.pointerdown(event(300)); docL.pointerup(event(300));
+  assert.equal(control("target").value, "btn-throttle", "a tap selects just the pedal");
+  let blocked = false;
+  docL.click({ target: gas, detail: 0, preventDefault() {}, stopImmediatePropagation() { blocked = true; } });
+  assert.equal(blocked, true, "keyboard activation selects without driving");
+  assert.equal(control("bigger").hidden, false);
+  control("bigger").onclick(); control("shape").onclick();
+  docL.pointerdown(event(300)); docL.pointermove(event(260)); docL.pointerup(event(260));
+  let config = api.bag().buttons;
+  assert.equal(config.controls["btn-throttle"].size, 110);
+  assert.equal(config.controls["btn-throttle"].shape, "round");
+  assert.equal(config.controls["btn-throttle"].x, 0.1);
+  assert.equal(config.R.x, 0, "the group stays at home");
+  assert.equal(config.controls["btn-brake"], undefined);
+  docL.pointerdown(event(260)); docL.pointermove(event(220)); docL.pointercancel(event(220));
+  assert.equal(api.bag().buttons.controls["btn-throttle"].x, 0.1, "cancel restores the individual button");
+  const key = (name, shiftKey) => docL.keydown({ target: gas, key: name, shiftKey, preventDefault() {}, stopImmediatePropagation() {} });
+  key("ArrowUp", false);
+  assert.equal(api.bag().buttons.controls["btn-throttle"].y, 2 / 800);
+  key("ArrowUp", true);
+  assert.equal(api.bag().buttons.controls["btn-throttle"].y, 18 / 800);
+  choose("target", "btn-brake"); control("smaller").onclick();
+  choose("target", "steer"); choose("gap", "24");
+  choose("target", "drive"); choose("layout", "pedal-row");
+  choose("target", "btn-throttle"); control("reset").onclick();
+  config = api.bag().buttons;
+  assert.equal(config.controls["btn-throttle"], undefined);
+  assert.equal(config.controls["btn-brake"].size, 90);
+  assert.equal(config.gap, 24);
+  assert.equal(config.layout, "pedal-row");
+  assert.equal(api.bag().tilt.controls, undefined);
+});
+
+test("Gas + Brake and Race actions move, resize and reset as independent subsets", () => {
+  const { api, made, els, docL } = bootCreate();
+  const controls = ["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero"];
+  for (const id of controls) els[id] = { id, closest() { return this; }, setAttribute() {}, removeAttribute() {} };
+  els["dock-left"].contains = () => false;
+  els["dock-right"].contains = node => controls.includes(node.id);
+  api.setEditing(true);
+  const field = k => made[0].querySelector("[data-k=" + k + "]");
+  const target = field("target");
+  const choose = id => { target.value = id; target.onchange(); };
+  const pointer = (id, x) => ({ target: els[id], pointerId: 5, clientX: x, clientY: 300, preventDefault() {} });
+  const drag = (id, from, to, end) => {
+    docL.pointerdown(pointer(id, from)); docL.pointermove(pointer(id, to)); docL[end](pointer(id, to));
+  };
+  choose("pedals"); field("bigger").onclick(); field("shape").onclick();
+  drag("btn-brake", 260, 220, "pointerup");
+  choose("actions"); field("smaller").onclick();
+  drag("btn-ot", 240, 160, "pointercancel");
+  let prefs = api.bag().buttons.controls;
+  for (const id of controls.slice(0, 2)) {
+    assert.equal(prefs[id].size, 110);
+    assert.equal(prefs[id].shape, "round");
+    assert.equal(prefs[id].x, 0.1);
+  }
+  for (const id of controls.slice(2)) assert.deepEqual({ ...prefs[id] }, { size: 90 });
+  choose("pedals"); field("reset").onclick();
+  prefs = api.bag().buttons.controls;
+  assert.deepEqual(Object.keys(prefs).sort(), controls.slice(2).sort());
+});
+
+test("resetting driving buttons in manual tilt preserves the shifter sharing their dock", () => {
+  const { api, els, docL, made, setMode } = bootCreate();
+  for (const id of ["btn-boost", "shift-up"]) els[id] = {
+    id, closest() { return this; }, setAttribute() {}, removeAttribute() {},
+  };
+  els["dock-left"].contains = node => node === els["btn-boost"] || node === els["shift-up"];
+  els["dock-right"].contains = () => false;
+  setMode("tilt");
+  api.setEditing(true);
+  const pointer = x => ({ target: els["btn-boost"], clientX: x, clientY: 300, pointerId: 4, preventDefault() {} });
+  docL.pointerdown(pointer(40)); docL.pointermove(pointer(80)); docL.pointerup(pointer(80));
+  const original = api.bag().tilt.L.x;
+  assert.equal(original, 0.1);
+  const field = k => made[0].querySelector("[data-k=" + k + "]");
+  field("target").value = "drive"; field("target").onchange();
+  field("reset").onclick();
+  const scheme = api.bag().tilt;
+  assert.equal(scheme.L.x, 0);
+  assert.equal(scheme.controls["shift-up"].x, original);
+  assert.equal(scheme.controls["btn-boost"], undefined);
+});
+
 test("an interrupted dock drag rolls back without saving or switching to a second finger", () => {
-  for (const interrupt of ["pointercancel", "lostpointercapture", "blur"]) {
+  for (const interrupt of ["pointercancel", "lostpointercapture", "blur", "resize", "orientationchange"]) {
     const { api, docL, winL, els, sets } = bootCreate();
     const target = { closest() { return target; } };
     els["dock-right"].contains = t => t === target;
@@ -276,7 +436,7 @@ test("an interrupted dock drag rolls back without saving or switching to a secon
     docL.pointerdown(press(2, 130));
     docL.pointermove(press(2, 90));
     assert.equal(api.bag().buttons.R.x, 0.1);
-    if (interrupt === "blur") winL.blur({});
+    if (winL[interrupt]) winL[interrupt]({});
     else docL[interrupt](press(1, 140));
     docL.pointerup(press(1, 140));
     assert.equal(api.bag().buttons.R.x, 0);
@@ -469,4 +629,42 @@ test("setEditing(false) cancels a pending drag fit frame (hunt memory-leaks back
   api.setEditing(false);
   assert.deepEqual(cancelled, [7], "DONE/Escape cancels the pending fit");
   assert.equal(rafCb, null, "the cancelled frame is dropped, not flushed");
+});
+
+test("dock toolbar loads on first open, deduplicates a pending request and retries on failure", async () => {
+  const { ctx, api, settings } = bootCreate({ lazyToolbar: true });
+  const requests = [];
+  ctx.ScriptLoader = { create: () => ({ load(paths) {
+    assert.deepEqual(Array.from(paths), ["js/ui/dock-toolbar.js"]);
+    return new Promise(resolve => requests.push(resolve));
+  } }) };
+  api.setEditing(true);
+  api.setEditing(true);
+  assert.equal(requests.length, 1);
+  assert.equal(settings.hidden, false);
+  requests[0](false);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.editing(), false);
+  api.setEditing(true);
+  installToolbar(ctx);
+  requests[1](true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.editing(), true);
+  api.setEditing(false);
+  api.setEditing(true);
+  assert.equal(requests.length, 2);
+});
+
+test("leaving Settings while its toolbar loads does not open an editor over the next screen", async () => {
+  const { ctx, api, settings, pause } = bootCreate({ lazyToolbar: true });
+  let finish;
+  ctx.ScriptLoader = { create: () => ({ load: () => new Promise(resolve => { finish = resolve; }) }) };
+  api.setEditing(true);
+  settings.hidden = true;
+  pause.hidden = false;
+  installToolbar(ctx);
+  finish(true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.editing(), false);
+  assert.equal(pause.hidden, false);
 });

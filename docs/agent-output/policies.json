@@ -1326,6 +1326,11 @@
       "presentation": "native",
       "preserve": "GitHub ::error annotations, unknown/missing evidence and existing nonzero gate exit."
     },
+    "tools/gfx/chunk-merge-timing.mjs": {
+      "action": "artifact-first",
+      "presentation": "shared-levels",
+      "preserve": "Keep per-boot samples, adapter identity, repeat spread, missing measurements and the exit status."
+    },
     "tools/gfx/chunk-reach.cjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2245,6 +2250,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Per-reading counts (meshes, textures, batches, listeners by scope, intervals, timers), every LEAK row, the `= vm-leak-census clean|LEAK` line, exit status and the --json artifact."
+    },
+    "tools/serve.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Server URL line"
     },
     "tools/shot/ab-gallery.mjs": {
       "action": "artifact-first",

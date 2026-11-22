@@ -669,19 +669,21 @@ test("race and paired-phone button feedback illuminates the entire face without 
   assert.equal(decl(hud, ':root[data-motion="reduce"] #hud .touchbtn[data-touch-feedback="on"]::after', "--hud-feedback-transition"), "0s");
 });
 
-test("resting marks identify only progressive buttons that have enabled feedback", () => {
+test("Gas shows its live level without a resting mark, while progressive steering keeps its mark", () => {
   const { sb, left, gas, mid, win } = bootDock();
+  gas.style = { setProperty(k, v) { this[k] = v; }, removeProperty(k) { delete this[k]; } };
   sb.PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
-  assert.equal(gas.attrs["data-touch-response"], "progressive");
-  assert.equal(left.attrs["data-touch-response"], undefined);
+  sb.PedalTravel.setButtonProfile("left", { press: "progressive" });
+  assert.equal(gas.attrs["data-touch-response"], undefined);
+  assert.equal(left.attrs["data-touch-response"], "progressive");
   gas.fire("pointerdown", mid("btn-throttle"));
+  assert.equal(gas.attrs["data-touch-feedback"], "on");
   win("pointercancel");
-  assert.equal(gas.attrs["data-touch-response"], "progressive");
-  sb.PedalTravel.setButtonProfile("gas", { feedback: false });
   assert.equal(gas.attrs["data-touch-response"], undefined);
-  sb.PedalTravel.setButtonProfile("gas", { feedback: true });
-  sb.PedalTravel.resetButtonProfile("gas");
-  assert.equal(gas.attrs["data-touch-response"], undefined);
+  sb.PedalTravel.setButtonProfile("left", { feedback: false });
+  assert.equal(left.attrs["data-touch-response"], undefined);
+  sb.PedalTravel.resetButtonProfile("left");
+  assert.equal(left.attrs["data-touch-response"], undefined);
 });
 
 test("customized left and right travel reaches the wheel with adaptive steering disabled", () => {

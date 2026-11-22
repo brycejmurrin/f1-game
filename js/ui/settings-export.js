@@ -208,7 +208,13 @@ const SPEC = [
   { k: "manual", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "autoThrottle", lane: "json", group: "driving", def: false, src: "js/game.js (XAG 107: a held accelerator is an input barrier)" },
   { k: "mirrorControls", lane: "json", group: "driving", def: false, src: "js/game.js (left-handed dock)" },
-  { k: "dockLayout", lane: "json", group: "driving", def: null, src: "js/ui/dock-layout.js (per-scheme touch-dock offsets; null = defaults)" },
+  { k: "dockLayout", lane: "json", group: "driving", def: null, src: "js/ui/dock-layout.js (touch control placement, spacing, layout, sizes and shapes by steering scheme)", whole: true,
+    normalize: v => {
+      if (v === null) return null;
+      if (typeof DockLayout === "undefined" || !isObj(v) || Object.hasOwn(v, "v") || !DockLayout.SCHEMES.some(k => isObj(v[k]))) return undefined;
+      const clean = DockLayout.normalize(v);
+      return DockLayout.SCHEMES.every(k => DockLayout.isIdentity(clean[k])) ? null : clean;
+    } },
   // PER-DEVICE STEERING (js/input/steer-tuning.js). Each defaults to the notch
   // that reproduces exactly what shipped, so an absent key is a no-op.
   { k: "tiltCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },

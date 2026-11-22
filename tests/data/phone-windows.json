@@ -13,12 +13,12 @@
   "windows": {
     "standalone": {
       "width": 852, "height": 393,
-      "insets": { "top": 0, "left": 59, "bottom": 21, "right": 59 },
+      "insets": { "top": 0, "left": 59, "bottom": 20, "right": 59 },
       "owner": true,
-      "measured": "nothing on the device yet: size and insets are the Chromium emulation read back in PR #5216",
-      "assumed": "size and insets (the Home Screen app reading is still open on #5218)",
-      "source": "PR #5216",
-      "verified": "Home Screen app. Chromium emulation read-back (PR #5216); insets on the real device pending #5218"
+      "measured": "Landscape Home Screen app, build 28106: inner, client, fixed box and visual viewport all 852x393 at DPR 3. Both standalone flags true. env() insets L59 T0 R59 B20.",
+      "assumed": "The preset reproduces this observed landscape window. Other orientations and device states can differ.",
+      "source": "https://github.com/brycejmurrin/f1-game/issues/6049#issuecomment-7057268700",
+      "verified": "Home Screen app size and insets measured on the owner’s iPhone over the phone bridge (#6049)."
     },
     "portrait": {
       "width": 393, "height": 852,
@@ -33,10 +33,19 @@
       "width": 852, "height": 368,
       "insets": { "top": 0, "left": 59, "bottom": 21, "right": 59 },
       "owner": true,
-      "measured": "size: inner = documentElement.client = visualViewport = 852x368, scale 1, DPR 3, iOS 18_7 Safari tab, landscape title menu and race",
-      "assumed": "insets (env() was not read; taken equal to standalone) and the toolbar state (expanded or collapsed was not recorded)",
-      "source": "#5218 comment 2026-11-10T02:40Z (phone bridge thread #5168, live build e808230)",
-      "verified": "Safari tab. Size MEASURED on his iPhone over the phone bridge 2026-11-10 02:40Z (#5218, DPR 3); insets ASSUMED equal to standalone"
+      "measured": "Landscape Safari tab: inner = documentElement.client = visualViewport = 852x368 at scale 1 and DPR 3; screen.width/height returned 393x852. The portrait hello in the same session reported inner 393x695.",
+      "assumed": "insets (env() was not read; the original 59/0/59/21 emulation values are retained) and the toolbar state (expanded or collapsed was not recorded)",
+      "source": "https://github.com/brycejmurrin/f1-game/issues/5218#issuecomment-6757426492 (2026-11-10, live build e808230)",
+      "verified": "Safari tab. Size MEASURED on his iPhone over the phone bridge 2026-11-10 02:40Z (#5218, DPR 3); tab insets ASSUMED for this 368 px state"
+    },
+    "safari-short": {
+      "width": 852, "height": 283,
+      "insets": { "top": 0, "left": 59, "bottom": 20, "right": 59 },
+      "owner": true,
+      "measured": "2026-11-21 Safari tab, both standalone flags false: inner, client, visual viewport and fixed box 852x283 CSS px at scale 1 and DPR 3. svh and dvh 283, vh and lvh 393. env() insets L59 T0 R59 B20.",
+      "assumed": "The browser toolbar position was not recorded.",
+      "source": "https://github.com/brycejmurrin/f1-game/issues/6049#issuecomment-7057302258",
+      "verified": "Short Safari viewport and all four insets measured on the owner's iPhone, build 28106."
     },
     "w844": {
       "width": 844, "height": 390,

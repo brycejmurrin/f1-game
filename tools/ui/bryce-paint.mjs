@@ -92,6 +92,8 @@ export async function measureCell(browser, baseUrl, { window = "standalone", uiS
   await context.addInitScript(() => { window.__TEST_MODE = true; try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) { /* storage refused */ } });
   const out = { preset: preset.name, uiScale: preset.uiScale, screens: {} };
   try {
+    // Measure the settled screen. The parked renderer can leave the touch entrance at opacity zero.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 60000 });
     // Geometry, not frames: stop render() so every wait and evaluate below is not behind a SwiftShader frame.

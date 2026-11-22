@@ -696,63 +696,63 @@
     },
     "pine_lod0": {
       "file": "models/pine_lod0.bin",
-      "verts": 72,
-      "tris": 36,
+      "verts": 89,
+      "tris": 42,
       "mat": "FOLIAGE",
       "sizeM": [
-        1.59,
-        6.42,
-        1.43
+        4.47,
+        9.8,
+        3.87
       ],
       "source": "generated:tools/gen/trees/bake-trees.mjs",
       "licence": "CC0",
       "author": "Apex 26",
-      "md5": "2488e9f311568bd802647aed84d52137"
+      "md5": "e98f3cc239a18a6d4a42a428d5f25145"
     },
     "pine_lod1": {
       "file": "models/pine_lod1.bin",
-      "verts": 36,
-      "tris": 18,
+      "verts": 45,
+      "tris": 21,
       "mat": "FOLIAGE",
       "sizeM": [
-        1.12,
-        5.92,
-        1.21
+        3.35,
+        9.8,
+        3.52
       ],
       "source": "generated:tools/gen/trees/bake-trees.mjs",
       "licence": "CC0",
       "author": "Apex 26",
-      "md5": "2ed1011f808b30647998f1baaec52142"
+      "md5": "b49ac847bae2820af4182c8ad803512d"
     },
     "tree_lod0": {
       "file": "models/tree_lod0.bin",
-      "verts": 80,
-      "tris": 40,
+      "verts": 96,
+      "tris": 48,
       "mat": "FOLIAGE",
       "sizeM": [
-        1.43,
-        7.59,
-        1.53
+        7.68,
+        6.97,
+        8.48
       ],
       "source": "generated:tools/gen/trees/bake-trees.mjs",
       "licence": "CC0",
       "author": "Apex 26",
-      "md5": "4f6bc8496036444fb98bf7e919445878"
+      "md5": "40a9867a53cac5043e418d88d06a9276"
     },
     "tree_lod1": {
       "file": "models/tree_lod1.bin",
-      "verts": 40,
-      "tris": 20,
+      "verts": 48,
+      "tris": 24,
       "mat": "FOLIAGE",
       "sizeM": [
-        1.41,
-        7.4,
-        1.58
+        6.23,
+        5.9,
+        6.34
       ],
       "source": "generated:tools/gen/trees/bake-trees.mjs",
       "licence": "CC0",
       "author": "Apex 26",
-      "md5": "c96ad54685ebefe1c8a87842db185bac"
+      "md5": "5875b259b6bcdd7be6747e7fc777fb0c"
     },
     "palm_lod0": {
       "file": "models/palm_lod0.bin",

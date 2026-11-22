@@ -10,6 +10,50 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { ciWorkflow, gpuWorkflow } from "../helpers/ci-workflow.mjs";
+import { buildSummary, compareTimings, timingPlan, validateLiveCell, validateTimingWindow } from "../../tools/gfx/chunk-merge-timing.mjs";
+
+test("chunk-merge timing uses one path-filtered macOS job with balanced isolated boots", () => {
+  const workflow = parseYAML(fs.readFileSync(new URL("../../.github/workflows/chunk-merge-timing.yml", import.meta.url), "utf8"));
+  assert.deepEqual(Object.keys(workflow.on), ["pull_request", "workflow_dispatch"]);
+  assert.deepEqual(workflow.on.pull_request.paths, [
+    ".github/workflows/chunk-merge-timing.yml", "tools/gfx/chunk-merge-timing.mjs",
+  ]);
+  assert.deepEqual(Object.keys(workflow.jobs), ["timing"]);
+  assert.equal(workflow.jobs.timing["runs-on"], "macos-latest");
+  const plan = timingPlan();
+  assert.equal(plan.length, 18);
+  for (const [index, arm] of plan.entries()) {
+    assert.equal(arm.track, index % 2 ? "spa" : "monza");
+    assert.equal(arm.repeat, Math.floor(index / 6));
+  }
+  for (const track of ["monza", "spa"]) {
+    const arms = plan.filter((arm) => arm.track === track);
+    for (let position = 0; position < 3; position++) {
+      assert.deepEqual([arms[position], arms[position + 3], arms[position + 6]].map((x) => x.factor).sort(), [2, 3, 4]);
+    }
+  }
+});
+
+test("chunk-merge timing rejects fallback and incomplete or noisy comparisons", () => {
+  const live = { state: "race", track: "monza", factor: 3, camera: "helmet", api: "webgpu", softAdapter: false, softBlit: false,
+    skipBatches: false, lost: false, hidden: false, healed: false, errors: 0, calls: 42, presents: 4096,
+    canvas: { id: "game", visible: true } };
+  assert.doesNotThrow(() => validateLiveCell(live, "monza", 3));
+  for (const bad of [{ softAdapter: true }, { softBlit: true }, { errors: 1 }, { calls: 0 }, { factor: 2 }]) {
+    assert.throws(() => validateLiveCell({ ...live, ...bad }, "monza", 3));
+  }
+  assert.equal(compareTimings([10, 11, 12], [7, 7, 8]).verdict, "faster");
+  assert.equal(compareTimings([10, 11, 12], [13, 15, 15]).verdict, "slower");
+  assert.equal(compareTimings([10, 11, 12], [9, 10, 11]).verdict, "inconclusive", "overlapping repeats");
+  assert.equal(compareTimings([5, 10, 10], [11, 11, 12]).verdict, "inconclusive", "difference inside repeat spread");
+  assert.equal(compareTimings([10, 11, 12], [7, 8]).verdict, "inconclusive", "missing boot");
+  const rows = [10, 11, 12].map((cpuMs) => ({ track: "monza", at: 0.1, factor: 3, cpuMs }));
+  rows.push(...[7, 7, 8].map((cpuMs) => ({ track: "monza", at: 0.1, factor: 2, cpuMs })));
+  assert.equal(buildSummary(rows).find((row) => row.track === "monza" && row.at === 0.1 && row.factor === 2).verdict, "faster");
+  const cpu = Array.from({ length: 90 }, () => 10);
+  assert.equal(validateTimingWindow({ initial: 4096, final: 4186, cpu }), 90, "lifetime present count advances past the frame-time ring");
+  assert.throws(() => validateTimingWindow({ initial: 4096, final: 4185, cpu }), /incomplete/);
+});
 
 // THE FOUR CONTROL LEGS. The opt-in relaunch step (#3235: the TLX/WebGPU check twice on one
 // profile, the returning player's launch) is not a fifth control; it is cut out here and pinned

@@ -7,6 +7,8 @@
 //  * Detail 2 builds finite geometry; its triangle totals are pinned in tests/data/track-detail-tris.json with the
 //    props-tri ratchet's band (grow > 0.5 % fails, under 99 % is stale). Re-measure:
 //      node tests/unit/track-detail.test.mjs --write
+//  * 2026-11-21 (#6037): monza detail2 props 567361 -> 575591 — treesHi stamps the rebaked pine/tree LOD0 crowns
+//    (lod0 tris 36->42 / 40->48); measured, not widened.
 //  * Detail 2 adds no zero-area triangle; its drawn road (with the profiled kerbs) is what a later re-chunk draws
 //    (track.roadDrawGeo), crowd3d seats figures, treesHi stamps the pack's LOD0 trees, and Monaco's street panels
 //    wear the W-beam face (propsHi). The TLX crowd vertex stage: tests/unit/tlx-crowd-anim.test.mjs.
