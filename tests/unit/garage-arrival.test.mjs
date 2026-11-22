@@ -1132,7 +1132,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     _poseAt: null, _audioParamStep: true, _carWarm: { busy: false }, _studio: null,
     _menuGate: { warm: 0, garageWarm: 0 }, _softEl: null, canvas: { style: {} },
     loadingScreen: { phase: () => '', lowerWaitPlate: noop, active: () => false },
-    gfx: { warming: () => false, resize: noop },
+    gfx: { warming: () => false, resize: noop }, FieldLod: { updateModelBudget: noop },
     uiExperience: { renderHome: () => false, trackActive: () => false },
     UiExperience: { resumeHolding: () => false }, PerfGov: { tick: noop }, PerfSpans: { begin: noop, end: noop },
     mirrorPass: { preparing: () => false, cancelPreparation: noop },

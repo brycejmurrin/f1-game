@@ -1925,6 +1925,7 @@ const TLX = (function () {
           // Keep tag capability through an initial post failure; arm MRT only for compatible passes.
           const litCtx = { chunks, shadow: shadowSys, ssrTag: !!(TSL.mrt && renderer.setMRT),
             envCube: envRT ? envRT.texture : null, matMaps, lampGrid, garageProbeRequested,
+            brakeSpill: !isMobile && _gfxx("brakeLightSpill"),
             sharedUniforms: _sharedUniforms, circuitSurfaces: !isMobile && _gfxx("circuitSurfaces"),
             // EXTREME lightsHi: 128 slots on three's WebGPU backend only (LightBudget.tlxSlots).
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.tlxSlots(isWebGPU()) };

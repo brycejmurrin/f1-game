@@ -3505,6 +3505,9 @@
       "tier": [
         "tests/unit/field-lod.test.mjs"
       ],
+      "updateModelBudget": [
+        "tests/unit/field-lod.test.mjs"
+      ],
       "wheelsLite": [
         "tests/unit/field-lod.test.mjs"
       ],
@@ -7448,7 +7451,8 @@
       ],
       "capacity": [
         "tests/unit/car-fx.test.mjs",
-        "tests/unit/droplets-spray.test.mjs"
+        "tests/unit/droplets-spray.test.mjs",
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "clear": [
         "tests/unit/car-fx.test.mjs",
@@ -7482,6 +7486,9 @@
         "tests/unit/car-fx.test.mjs",
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/start-lights.test.mjs"
+      ],
+      "gravel": [
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "init": [
         "tests/unit/car-fx.test.mjs",
@@ -11896,6 +11903,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "detail": [
+        "tests/unit/field-lod.test.mjs",
         "tests/unit/gfx-hi-absent.test.mjs",
         "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",

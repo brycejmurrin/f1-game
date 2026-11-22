@@ -328,6 +328,7 @@
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
     if (ctx.circuitSurfaces) U.silverstoneSurface = uniform(0.0);
+    if (ctx.brakeSpill) U.brakeSpillCount = uniform(0.0);
     if (envCubeNode && ctx.garageProbeRequested) {
       U.garageBoxOn = uniform(0.0);
       U.garageBox = uniform(new THREE.Vector3(1, 1, 1));
@@ -498,6 +499,8 @@
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      const brakeCount = U.brakeSpillCount && L && nL === L.length / 15 ? frame.brakeSpillCount || 0 : 0;
+      if (U.brakeSpillCount) U.brakeSpillCount.value = mirror ? 0 : brakeCount;
       // E9: the mirror's per-chunk cap (frame.mirrorLampCap, mirror-pass.js); every other pass runs uncapped.
       // lightsHi: frame.chunkLampCap trims the 48-lamp cells to the live cap (24 once shed) without a
       // recompile; absent or 0 (every detail-0 frame) the cap stays MAX_LIGHTS exactly as before.
@@ -508,7 +511,7 @@
         const o = i * 15;
         lampPos[i].set(L[o], L[o + 1], L[o + 2]);
         lampCol[i].set(L[o + 3], L[o + 4], L[o + 5]);
-        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], hasLB ? LampBake.liveOnlyAt(L, o) : 0);
+        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], i >= nL - brakeCount ? 1 : hasLB ? LampBake.liveOnlyAt(L, o) : 0);
         lampGeo[i].set(L[o + 6], L[o + 10], L[o + 11], L[o + 12]);
       }
     }
@@ -2313,24 +2316,27 @@
         // the CHUNK'S slice; the index texture maps it to the track-lamp id.
         // The idx fetch sits INSIDE the select (an if/else in r186): off the per-chunk
         // path no iteration pays it. No .toVar() inside, or it would emit unconditionally.
-        const lampRow = PC ? (i) => {
+        const lampRow = PC ? (i, grid) => {
           const k = PC.base.add(float(i)), r = floor(k.div(U.lgIdxW));
-          return select(PC.use, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
+          return select(grid, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
         } : null;
         const _fetch = (row, col) => textureLoad(LG_TEX.lamp, ivec2(float(col), row));
-        const LGeo = PC ? ((i, r) => select(PC.use, _fetch(r, 3), U.lampGeo.element(i)))
+        const LGeo = PC ? ((i, r, grid) => select(grid, _fetch(r, 3), U.lampGeo.element(i)))
                         : ((i) => U.lampGeo.element(i));
-        const LPos = PC ? ((i, r) => select(PC.use, _fetch(r, 0).xyz, U.lampPos.element(i)))
+        const LPos = PC ? ((i, r, grid) => select(grid, _fetch(r, 0).xyz, U.lampPos.element(i)))
                         : ((i) => U.lampPos.element(i));
-        const LCol = PC ? ((i, r) => select(PC.use, _fetch(r, 1).xyz, U.lampCol.element(i)))
+        const LCol = PC ? ((i, r, grid) => select(grid, _fetch(r, 1).xyz, U.lampCol.element(i)))
                         : ((i) => U.lampCol.element(i));
         // xyz = beam aim; w = LIVE-ONLY: the bake leaves this lamp out, so no step-aside.
-        const LDirW = PC ? ((i, r) => select(PC.use, _fetch(r, 2), U.lampDir.element(i)))
+        const LDirW = PC ? ((i, r, grid) => select(grid, _fetch(r, 2), U.lampDir.element(i)))
                          : ((i) => U.lampDir.element(i));
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
         // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
-        const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
+        const cellCount = PC ? min(PC.n, U.brakeSpillCount ? max(U.lampCap.sub(U.brakeSpillCount), 0.0) : U.lampCap) : null;
+        const cellSpill = PC && U.brakeSpillCount;
+        const cellTotal = cellSpill ? min(U.lampCap, cellCount.add(U.brakeSpillCount)) : cellCount;
+        const lampN = PC ? select(PC.use, cellTotal, U.numLights) : U.numLights;
         // NoV and final wet roughness stay fixed across lamps. Negative sentinels
         // defer each positive root until its first accepted specular contribution;
         // zero lamps, rejected lamps and inactive clearcoat do no extra root work.
@@ -2339,9 +2345,14 @@
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
-          const row = lampRow ? lampRow(i) : null;
-          const geo = LGeo(i, row);
-          const LP = LPos(i, row).sub(wp).toVar();
+          // A cell stores static lamps only. Use its spare slots for the
+          // hot-disc suffix of the global set, through the same BRDF and falloff.
+          const spill = cellSpill ? PC.use.and(float(i).greaterThanEqual(cellCount)) : null;
+          const grid = PC ? (spill ? PC.use.and(spill.not()) : PC.use) : null;
+          const slot = spill ? select(spill, int(U.numLights.sub(U.brakeSpillCount).add(float(i).sub(cellCount))), i) : i;
+          const row = lampRow ? lampRow(i, grid) : null;
+          const geo = LGeo(slot, row, grid);
+          const LP = LPos(slot, row, grid).sub(wp).toVar();
           const rad = geo.x;
           // Range-reject on the SQUARED distance before the root (GLX glsl-lit.js):
           // the tests differ only within an ulp of rad, where att == 0 anyway.
@@ -2354,7 +2365,7 @@
             const att = win.mul(win).div(distC.mul(distC).add(1.0)).toVar();
             If(att.greaterThanEqual(1e-6), () => {
               // ONE colour + ONE aim read per lit lamp: each accessor call is its own fetch.
-              const lCol = LCol(i, row).toVar(), lDir = LDirW(i, row).toVar();
+              const lCol = LCol(slot, row, grid).toVar(), lDir = LDirW(slot, row, grid).toVar();
               const cd = dot(Ld.negate(), lDir.xyz);
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam

@@ -363,3 +363,22 @@ test("present() feeds setEnvStr the CAR knob and the live-probe bit", () => {
   for (const live of [{ envRT: null }, { envReady: false }, { blank: true }, { active: true }])
     assert.deepEqual(call({ tune: { carEnvCube: 0.4 } }, live), [[0, false]], JSON.stringify(live));
 });
+
+test("hot brake spill compiles with the static cell grid and resets the moving suffix as the discs cool", async () => {
+  for (const language of ["wgsl", "glsl"]) {
+    const tex = () => new THREE.DataTexture(new Float32Array(4), 1, 1, THREE.RGBAFormat, THREE.FloatType);
+    const lampGrid = { gridTex: tex(), idxTex: tex(), lampTex: tex(), G: 1, IDXW: 1, LAMPS: 1 };
+    const off = await build({ lampGrid }, language);
+    assert.equal(off.lit.uniforms.brakeSpillCount, undefined);
+    const on = await build({ lampGrid, brakeSpill: true }, language);
+    assert.notEqual(off.fs, on.fs);
+    const { uniforms, updateFrame } = on.lit;
+    const lights = new Float32Array(16 * 15);
+    for (const count of [2, 0]) {
+      updateFrame({ lights, brakeSpillCount: count });
+      assert.equal(uniforms.numLights.value, 16);
+      assert.equal(uniforms.brakeSpillCount.value, count);
+      assert.equal(uniforms.lampCap.value, 16);
+    }
+  }
+});

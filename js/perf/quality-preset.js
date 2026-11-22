@@ -58,6 +58,8 @@ function detail() {
 // Player overrides are a boot snapshot: changing several controls never rebuilds half a scene.
 // Desktop scene experiments stay opt-in until their frame cost has been measured on hardware.
 const optInEffects = new Set(["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"]);
+const automaticEffects = new Set(["adaptiveModels", "brakeLightSpill", "gravelDebris"]);
+let automaticByPreset;
 const phoneEffects = new Set(["anisotropy", "skyAtmo", "meshHi", "heroCar", "rivalLod", "garageHi", "crewHi",
   "crowd3d", "treesHi", "kerbProfile", "farTerrain", "density", "propsHi"]);
 function phoneDetail() { return typeof GLX !== "undefined" && GLX.isMobile; }
@@ -78,6 +80,14 @@ function needsBundle() {
   return detail() >= 2 || option("rivalLiveryLod", false) || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
 }
 function feature(name, building = false) {
+  if (automaticEffects.has(name)) {
+    if (phoneDetail()) return false;
+    if (automaticByPreset === undefined) {
+      const preset = presetById(gstore()?.get("gfxPreset", "high")) || presetById("high");
+      automaticByPreset = preset.tier === 0;
+    }
+    return option(name, automaticByPreset);
+  }
   if (optInEffects.has(name)) return option(name, false);
   const need = FEATURES[name];
   if (!need) return false;

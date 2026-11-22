@@ -19,6 +19,7 @@
       carMap: ["High-resolution car shadows", "Adds detail to the shadow cast by the car, especially around the wheels and wings."],
       csm: ["Cascaded sun shadows", "Divides the sun shadow map by distance so nearby shadows can stay detailed over a longer view."],
       lampShadows: ["Floodlight shadows", "Lets floodlights cast shadows during night sessions."],
+      brakeLightSpill: ["Brake heat lighting", "After dark, hot front brakes light the area around the wheels. With per-chunk lighting, ground illumination requires three.js. Automatic on desktop High and above."],
       lightsHi: ["Extended light count", "Allows more lights to illuminate the scene at once, especially around floodlit sections."],
       raysHi: ["High-quality light shafts", "Uses more samples to smooth the shafts of light visible through the air."],
       ssaoHi: ["High-quality ambient occlusion", "Adds finer shading where surfaces meet, such as beneath the car."],
@@ -31,10 +32,12 @@
       garageProbeParallax: ["Garage reflections", "Aligns reflections on the car with the walls of its garage bay as you orbit. Requires desktop three.js with hardware WebGPU. Off by default."],
       skyAtmo: ["Atmospheric sky", "Models how sunlight scatters through the air, changing the sky colour near the horizon."],
     },
-    "Weather": {
+    "Weather and debris": {
+      gravelDebris: ["Loose gravel", "Rear tyres throw small bouncing stones when a car enters gravel runoff at speed. Automatic on desktop High and above."],
       rainCurtains: ["Distant showers", "Shows the rain falling over a wet section of the circuit during a moving local shower. Off by default."],
     },
     "Cars and scenery": {
+      adaptiveModels: ["Adaptive rival models", "Keeps rivals in their detailed models farther away when rendering above 720p with spare frame time. Automatic on desktop High and above."],
       rivalLiveryLod: ["Distant team colours", "Keeps two livery colours visible when rivals switch to simplified models farther down the track. Off by default."],
       circuitSurfaces: ["Silverstone surface detail", "Shows worn asphalt, resurfaced patches and scuffed kerb paint at Silverstone with the three.js renderer. Off by default."],
       tyreWearVisual: ["Visible tyre wear", "Shows scuffing as tyres wear. Preview fresh and worn tyres in the garage. Off by default."],

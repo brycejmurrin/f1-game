@@ -260,3 +260,20 @@ test("enabling distant team colours on High loads the palette builder on desktop
     assert.equal(q.needsBundle(), !mobile);
   }
 });
+
+test("automatic desktop effects follow the saved preset and independent overrides", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  const effects = ["adaptiveModels", "brakeLightSpill", "gravelDebris"];
+  for (const preset of ["low", "medium", "high", "ultra", "extreme"]) {
+    for (const mobile of [false, true]) {
+      const prefs = { gfxPreset: preset, gfxFeatureOverrides: { brakeLightSpill: false, gravelDebris: true },
+        gfxPhoneFeatureOverrides: { gravelDebris: true } };
+      const store = { get: (k, fallback) => prefs[k] ?? fallback };
+      const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
+      assert.deepEqual(effects.map(k => q.feature(k)), [
+        !mobile && ["high", "ultra", "extreme"].includes(preset), false, !mobile,
+      ]);
+      assert.ok(effects.every(k => q.supportsOption(k) === !mobile));
+    }
+  }
+});
