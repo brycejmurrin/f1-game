@@ -1404,8 +1404,6 @@ const CarDraw = (function () {
     const _wheelLocal = new Float32Array(16);
     const _wheelWorld = new Float32Array(16);
     const _fixedWheelLocal = new Float32Array(16);
-    const _fixedWheelWorld = new Float32Array(16);
-    const _ringWorld = new Float32Array(16);
     // Scratch opts for AI brake rings — mutated in place per frame so the car loop
     // doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
     const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaWrite: true };
@@ -1906,7 +1904,7 @@ const CarDraw = (function () {
           RFixed: G.gfx.createMesh(rear.fixed),
         };
     }
-    const _cq = [], _cqMesh = [];
+    const _cq = [];
     let _cqN = 0;
     // THE STOP'S CREW at a car held in its box (CarMesh.getCrewMesh): the two
     // jacks, a wheel gun at each wheel, and the six people who work them, on
@@ -2052,7 +2050,6 @@ const CarDraw = (function () {
         F[4] = 0; F[5] = 1; F[6] = 0; F[7] = 0;
         F[8] = ss; F[9] = 0; F[10] = cs; F[11] = 0;
         F[12] = L[12]; F[13] = L[13]; F[14] = L[14]; F[15] = 1;
-        M4.mulTo(_fixedWheelWorld, base, F);
         // DEFERRED, not drawn here. Interleaving rotating/fixed per wheel gives the
         // VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every consecutive pair
         // differs, so bindVAO's cache collapses NOTHING (the alternating-toggle
@@ -2060,7 +2057,7 @@ const CarDraw = (function () {
         // runs, the wheels are opaque (alpha 1 => depth write on, blend off) and
         // non-coplanar, so any order resolves identically under LEQUAL.
         _wq[_wqN] || (_wq[_wqN] = new Float32Array(16));
-        _wq[_wqN].set(_fixedWheelWorld);
+        M4.mulTo(_wq[_wqN], base, F);
         _wqMesh[_wqN] = wd.rear ? wm.RFixed : wm.FFixed;
         _wqN++;
         // Hot brake discs: an emissive ring floating just off the outer wheel face,
@@ -2076,7 +2073,6 @@ const CarDraw = (function () {
           const Wc = _cq[_cqN];
           Wc.set(_wheelWorld);
           Wc[12] += Wc[0] * tx; Wc[13] += Wc[1] * tx; Wc[14] += Wc[2] * tx;
-          _cqMesh[_cqN] = getCompoundRing(tyreCol);
           _cqN++;
         }
         if (blur > 0.01) {
@@ -2092,7 +2088,7 @@ const CarDraw = (function () {
         }
         if (ringOk) {
           const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
-          const W = _ringWorld;
+          const W = _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
           W.set(_wheelWorld);
           W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
           // Pooled, like the AI ring path: this allocated a literal per hot wheel.
@@ -2104,8 +2100,6 @@ const CarDraw = (function () {
           // after all the opaque wheels, which is both correct and one VAO bind
           // for the whole car instead of one per ring (getBrakeRing is a single
           // shared mesh).
-          _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
-          _rq[_rqN].set(W);
           _rqEmis[_rqN] = 0.30 + 0.70 * heat;
           _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
           _rqMesh[_rqN] = null;   // the brake ring
@@ -2119,7 +2113,10 @@ const CarDraw = (function () {
       // Run 1: the fixed wheel layers, one bind for up to four draws, then
       // the compound stripes (one shared ring per colour).
       for (let i = 0; i < _wqN; i++) G.gfx.draw(_wqMesh[i], _wq[i], wo);
-      for (let i = 0; i < _cqN; i++) G.gfx.draw(_cqMesh[i], _cq[i], wo);
+      if (_cqN) {
+        const compoundRing = getCompoundRing(tyreCol);
+        for (let i = 0; i < _cqN; i++) G.gfx.draw(compoundRing, _cq[i], wo);
+      }
       _cqN = 0;
       // Run 2: the blended rings, after every opaque wheel of this car.
       const ro = _ringOpts;

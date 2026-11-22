@@ -752,7 +752,7 @@ test("R1: car-draw.js sends only the OPAQUE wheel layers through a coalescing si
   assert.match(body, /const wo = coOpt\(opt\);/);
   assert.match(body, /G\.gfx\.draw\(wd\.rear \? wm\.R : wm\.F, _wheelWorld, wo\);/);
   assert.match(body, /G\.gfx\.draw\(_wqMesh\[i\], _wq\[i\], wo\);/);
-  assert.match(body, /G\.gfx\.draw\(_cqMesh\[i\], _cq\[i\], wo\);/);
+  assert.match(body, /G\.gfx\.draw\(compoundRing, _cq\[i\], wo\);/);
   assert.match(body, /G\.gfx\.draw\(_rqMesh\[i\] \|\| getBrakeRing\(\), _rq\[i\], ro\);/, "rings and discs: the plain blended bag");
 });
 
