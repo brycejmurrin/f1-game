@@ -113,6 +113,7 @@ const MirrorPass = (function () {
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
     let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
+    let _projFov = NaN, _projAspect = NaN;
     let _coneTan = 1;        // tan(horizontal half-FOV) of the pass in flight (pass())
     // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
     // distance squared per rival that survives the arc / behind-eye / cone tests.
@@ -712,12 +713,16 @@ const MirrorPass = (function () {
     function pass(frame, frameSky, night, wet, floodEmit, w, h, fovY, centre, skip) {
       const g = G.gfx;
       const aspect = w / h;
-      M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
+      // The rear view and broadcast PiP share this lens; only the pose changes on most passes.
+      if (fovY !== _projFov || aspect !== _projAspect) {
+        M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
+        M4.invertTo(_invProj, _proj);
+        _coneTan = Math.tan(fovY / 2) * aspect;
+        _projFov = fovY; _projAspect = aspect;
+      }
       M4.lookAtTo(_view, _eye, _tgt, _up);
       M4.mulTo(_vp, _proj, _view);
-      _coneTan = Math.tan(fovY / 2) * aspect;
       M4.invertTo(_invVP, _vp);
-      M4.invertTo(_invProj, _proj);
 
       // The mirror camera goes ON `frame` (drawWorldMeshes culls the prop
       // batches through frame.viewProj, and every backend's begin reads it)
