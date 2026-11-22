@@ -167,6 +167,9 @@ function announceLane(root, paintedBand) {
 // Layout-free key for the lane memo. Gaps are empty/non-empty only — digit
 // rolloff used to re-key every tick and force a full rect pass (#1723).
 function announceLaneLayoutKey() {
+  // A placed card ignores automatic lanes. Removing the placement changes this
+  // key and forces a fresh measurement before the automatic slot is reused.
+  if (radioPlaced()) return "placed";
   const ann = typeof document !== "undefined" ? document.getElementById("announce") : null;
   const gapBit = (el) => (el && (el.textContent || "").length ? "1" : "0");
   const hid = (el) => (el && !el.hidden ? "1" : "0");
@@ -207,10 +210,11 @@ function radioTopSlot(root, bcast) {
   hUnstyle(ann, "--hud-clear-x"); hUnstyle(ann, "--hud-clear-y");
   hUnstyle(ann, "--announce-lane-w");
   // Every profile, including BROADCAST, can use the tower's free radio slots.
-  const t = top() ? top().getBoundingClientRect() : null;
+  const placed = radioPlaced();
+  const t = !placed && top() ? top().getBoundingClientRect() : null;
   void bcast;
   announceLane(root);
-  if (radioPlaced()) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
+  if (placed) { hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner"); return; }
   let right = vpW() - laneSafeInsets(root).sar - 10;
   const x = t ? t.right + RADIO_TOP_GAP : 0;
   // Pause / cam share the tower's rows. Dock groups bound a wrapping card
