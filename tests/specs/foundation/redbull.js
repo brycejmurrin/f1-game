@@ -70,14 +70,14 @@ export default function register() {
     expect(result.coordinates).toBe("racing");
     expect(result.terrainOuter).toBeGreaterThanOrEqual(28);
     expect(result.terrainOuter).toBeLessThanOrEqual(72);
-    // SRTM bake (~53 m continuous Styrian bowl). Authored cosines were ~60 m
-    // with peak mid-lap; the survey crest sits earlier and the low near SF.
-    expect(result.profile.swing).toBeGreaterThanOrEqual(50);
-    expect(result.profile.swing).toBeLessThanOrEqual(58);
+    // OpenF1 Austrian qualifying session 9541: both laps span 63.4 m,
+    // with their highest positions just after the Remus hairpin.
+    const reliefError = Math.abs(result.profile.swing - 63.4);
+    expect(reliefError).toBeLessThan(1);
     expect(result.profile.peak.frac).toBeGreaterThan(0.30);
-    expect(result.profile.peak.frac).toBeLessThan(0.40);
-    expect(result.profile.low.frac).toBeGreaterThan(0.92);
-    expect(result.profile.low.frac).toBeLessThan(1.0);
+    expect(result.profile.peak.frac).toBeLessThan(0.34);
+    const lowFromLine = Math.min(result.profile.low.frac, 1 - result.profile.low.frac);
+    expect(lowFromLine).toBeLessThan(0.025);
     expect(result.profile.maxSlope).toBeLessThan(0.14);
 
     for (const [time, session] of Object.entries(result.sessions)) {

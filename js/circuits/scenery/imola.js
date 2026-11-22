@@ -249,7 +249,7 @@
       // WEC 2024 grandstand map (Partenza opposite the pits).
       grandstandEx(sl(0.965), -1, 34, 90, null, null,
         { livery: "crimson", roof: "cantilever", endWalls: true });
-      grandstandEx(sl(0.93), -1, 36, 64, null, null,
+      grandstandEx(sl(0.934), -1, 36, 64, null, null,
         { livery: "concrete", roof: "flat" });
       // Partenza rank — opposite the pit building (+1). Long covered main stand
       // plus a shorter neighbour toward Tamburello.
@@ -770,7 +770,7 @@
         density: 0.45, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] }); // Acque Minerali — kept lighter, the hollow is the hero
 
       const PARK_GROVES = [
-        [0.345, -1, 22, 16], [0.372,  1, 25, 14],
+        [0.345, -1, 38, 16], [0.372,  1, 25, 14],
         [0.438, -1, 24, 17], [0.468,  1, 28, 18],
         [0.505, -1, 26, 16], [0.538,  1, 30, 17],
       ];

@@ -266,7 +266,7 @@ for (const id of GRADE_RUNS) {
   test(`${id}: slope gravity behaves + road-following holds on the grade`, async () => {
     const { result: r, errors } = await probed(`grad:${id}`, id, GRADIENT);
     // A def that opts out of relief (`undulate: false`, today only korea: the
-    // SRTM bake measured 0.00 m over Yeongam's tidal flat) has no grade to
+    // SRTM survey predates construction on Yeongam's tidal flat) has no grade to
     // sweep — measured 2026-11-11, the probe reads relief:false there. Assert
     // that it IS flat, so the day it gains a profile this reds and the opt-out
     // goes, rather than the circuit silently skipping the sweep.

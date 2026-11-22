@@ -19,7 +19,7 @@
     // ghost or time-trial board row was recorded with revision 1 (clockwise)
     // in its comparable-class key, so it no longer matches and is never
     // replayed or compared; it stays in storage, untouched (js/track/core/def.js).
-    revision: 3, // Leeukop elevation correction
+    revision: 4, // Leeukop approach and Mineshaft descent
     reverse: false,
     // The line on control node 0, 201 m (built arc) toward Ingwe from the old
     // node-1 line: the SRO pit-lane drawing puts S/F at the end of the pit
@@ -72,7 +72,9 @@
       // Smooth those features over their approaches; heights are relative.
       { s: 0.070, halfM: 480, rise: -14 },  // between The Kink and Crowthorne
       { s: 0.360, halfM: 340, rise:  10 },  // upper section toward Clubhouse
-      { s: 0.598, halfM: 620, rise:  29 },  // Leeukop, racing fraction 0.633
+      // Paired 30 m SRTM and Copernicus terrain sections resolve the
+      // Leeukop shoulder. The Mineshaft road loses about 29 m by lap 0.729.
+      { s: 0.598, halfM: 460, rise:  29 },  // Leeukop, racing fraction 0.633
       { s: 0.800, halfM: 340, rise:  -4 },  // lower return through Crocodiles
     ],
     hwZones: [

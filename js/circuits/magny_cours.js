@@ -6,7 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "magny_cours",
-    revision: 2,
+    revision: 3,
     classic: true,
     // Upstream fr-1960 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -59,9 +59,10 @@
       { s0: 0.905, s1: 0.960, hw: 6.4, ease: 0.012 },  // Lycée
     ],
     bankZones: [
-      { turn: 1, angleDeg: 3.0, widthM: 110 },  // re-seated frac 0.06 (was 135 m off any apex)
-      { frac: 0.400, angleDeg: 3.5, widthM: 130 },
-      { frac: 0.780, angleDeg: 3.0, widthM: 120 },
+      // IGN RGE ALTI transverse sections at the Grande Courbe, Adelaide and Imola exit.
+      { turn: 1, angleDeg: 1.5, widthM: 110 },
+      { frac: 0.408, angleDeg: 2.8, widthM: 260 },
+      { frac: 0.780, angleDeg: 0.6, widthM: 120 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

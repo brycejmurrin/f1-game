@@ -8,6 +8,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "portimao",
+    revision: 2,
     // Upstream pt-2008 already runs clockwise, matching the racing direction.
     reverse: false,
     // The pit straight opens the trace, and its first vertex is the line.
@@ -57,10 +58,7 @@
       runoff:        [0.66, 0.44, 0.30],   // Algarve red earth
       sunDir:        [0.38, 0.72, 0.28],
     },
-    // Elevation from SRTM bake in js/track/circuit-elevations.js
-    // (`node tools/gen/bake-elevation.mjs portimao`). Six authored cosine
-    // bumps kept the rollercoaster range (~26 m) but left knife-edge grade
-    // changes (~7 pp per ~70 m step). hasRealElevation(id) ignores elevations.
+    // 2021 Portuguese GP qualifying road-height fit in circuit-elevations.js.
     hwZones: [
       { s0: 0.140, s1: 0.185, hw: 6.3, ease: 0.012 },
       { s0: 0.470, s1: 0.515, hw: 6.2, ease: 0.012 },

@@ -565,10 +565,11 @@ test("Singapore migration keeps models, walls, terrain, and elevation intentiona
   assert.equal(walls.tightFrac, 1);
   gte(walls.minOverHw, 0);
   assert.equal(terrainGaps.every((gap) => gap === null || gap <= 0.18), true);
-  gt(high.y - low.y, 4);
-  lt(high.y - low.y, 6);
-  closeTo(low.frac, 0.10, 1);
-  closeTo(high.frac, 0.62, 1);
+  const hairpinRise = profile[Math.round(0.6007 * profile.length)].y - low.y;
+  lt(Math.abs(high.y - low.y - 5.4), 0.4);
+  lt(Math.abs(hairpinRise - 5.05), 0.3);
+  lt(Math.abs(low.frac - 0.122), 0.012);
+  lt(Math.abs(high.frac - 0.63), 0.035);
 });
 
 test("Shanghai declares safe required heroes and reflective water", async () => {

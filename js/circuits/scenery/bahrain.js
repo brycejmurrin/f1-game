@@ -472,7 +472,7 @@
       grandstandEx(T1F - 0.004, -1, 30, 72, STAND_CREAM, SEAT_BLUE,
         { roof: "truss", suites: true, endWalls: true });
       grandstandEx(0.025,  1, 24, 60, null, null, { livery: "steel", roof: "flat", endWalls: true });
-      grandstandEx(0.065,  1, 28, 72, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
+      grandstandEx(0.071,  1, 22, 60, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
       cameraTower(K(0.045), -1, 46, { h: 22 });
       // Michael Schumacher Corner marker (T1 renamed 2014 — circuit brief /
       // Wikipedia). Small trackside board facing the braking zone; not a
@@ -495,7 +495,7 @@
         }
       }      // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
-      lightBank(K(0.06), 1, 36);
+      lightBank(K(0.061), 1, 28);
       billboard(K(0.07), -1, 10, 14, 4, [0.85, 0.12, 0.12]);
       billboard(K(0.08),  1, 10, 12, 3.5, [0.05, 0.45, 0.75]);
       billboard(K(0.10),  1, 11, 12, 4, [0.10, 0.30, 0.70]);
@@ -607,7 +607,7 @@
         const d = 22 + (i % 3) * 10 + hash(k * 7 + i) * 12;
         if (hash(k * 13 + i) > 0.35) bush(k, side, d, SCRUB_DRY);
       }
-      lightBank(K(0.35), -1, 36);
+      lightBank(K(0.35), -1, 22);
       grandstandEx(0.37,  1, 26, 48, STAND_CREAM, SEAT_BLUE, { roof: "cantilever", pylons: true });
       grandstandEx(0.39, -1, 26, 38, null, null, { livery: "alu", endWalls: true });
       fence(0.34, 0.41, 1, 6, 3.0, [0.70, 0.72, 0.76]);
@@ -744,10 +744,10 @@
 
       // Pit-exit stand + floods (+1 paddock side), inside the in-game pit window
       // (<= ~110 m + 90 m road after the line, js/track/core/pit.js): SF+0.034 is
-      // ~185 m on. Gap 54 clears the hospitality frontage at 30 m and sits in front of
+      // ~185 m on. Gap 61 clears the hospitality frontage at 30 m and sits in front of
       // the Sakhir Tower (62) and the paddock mast (88). The old 0.912/0.940
       // absolutes and the SF+0.142..0.182 re-key both land on the T3-T4 leg.
-      grandstandEx(SF + 0.034, 1, 54, 36, null, null,
+      grandstandEx(SF + 0.034, 1, 61, 36, null, null,
         { livery: "steel", roof: "flat", endWalls: true });
       floodMast(K(SF + 0.026), 1, 44, 40);
       floodMast(K(SF + 0.044), 1, 44, 40);
@@ -836,9 +836,9 @@
             const kk = K(sf);
             const a = anchor(kk, side, gapBase + hash(kk * 5) * 12), b = [a.r, a.u, a.t];
             if (onTrack(a.c[0], a.c[2], 6)) continue;
-            addBox(out, vadd(a.c, a.u, 0.12), [5.5, 0.25, 9.5], SAND_RUNOFF, b);
+            addBox(out, vadd(a.c, a.u, 0.17), [5.5, 0.35, 9.5], SAND_RUNOFF, b);
             if (hash(kk * 11) > 0.55) {
-              addBox(out, vadd(a.c, a.u, 0.28), [2.2, 0.35, 2.0], SAND_ROCK, b);
+              addBox(out, vadd(a.c, a.u, 0.38), [2.2, 0.35, 2.0], SAND_ROCK, b);
             }
             cnt++;
             if (cnt > maxCnt) break;
@@ -1120,10 +1120,10 @@
         }
       })();
 
-      for (const [sf, side, gap, w, len, h] of [
+      for (const [sf, side, gap, w, len, h, seatHeight = 0.45] of [
         [0.135,  1, 82,  26,  46, 2.6],
         [0.225, -1, 96,  34,  62, 3.4],
-        [0.345,  1, 74,  22,  38, 2.1],
+        [0.345,  1, 74,  22,  38, 2.1, 0.08],
         [0.475, -1, 88,  30,  54, 3.0],
         [0.605,  1, 92,  28,  50, 2.4],
         [0.705, -1, 78,  24,  42, 2.8],
@@ -1140,11 +1140,11 @@
         const k = K(sf), a = anchor(k, side, gap + w * 0.5), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 30)) continue;
         // Seat on local sand — road-height a.c buried the scree skirt (#3342).
-        // Lift ~0.3 m so the wide scree top clears uneven terrain; keep the
+        // Seat the wide scree top to clear uneven terrain; keep the
         // scree underside ~0.08 m below the main slab so flatCoplanar stays 0.
         const gy = terrainYAt(a.c[0], a.c[2]);
         const foot = a.c.slice();
-        if (gy != null && Number.isFinite(gy)) foot[1] = gy + 0.45;
+        if (gy != null && Number.isFinite(gy)) foot[1] = gy + seatHeight;
         const hv = hash(k * 41 + gap);
         // Two offset slabs make a stepped ledge rather than a single block.
         addBox(out, vadd(foot, a.u, h * 0.5), [w, h, len],

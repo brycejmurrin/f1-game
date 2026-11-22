@@ -354,7 +354,7 @@
       guardrail(0.120, 0.250, -1, 11, ARMCO);
       fence(0.130, 0.235, -1, 14, 3.2, FENCE_C);
       marshalPost(K(0.1698), -1, 14);
-      sponsorHoarding(0.150, 0.200, -1, 13);
+      sponsorHoarding(0.150, 0.200, -1, 11, { style: "barrierTop" });
       // --- the crowd's own depth: catering row, store block, car park, treeline.
       for (let i = 0; i < 5; i++)
         safeBox(K(0.142 + i * 0.015), -1, 44, [5.4, 3.3, 8], i % 2 ? TENT : CREAM);
@@ -404,7 +404,7 @@
       for (let i = 0; i < 4; i++) specimen(K(0.330 + i * 0.016), 1, 46, 200 + i * 9);
       // --- behind the viewing bank: a small terrace, a pit-side shed and a
       //     field boundary with a rank of hedgerow oaks beyond it.
-      terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
+      terrace(0.303, 0.331, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
       groundPatch(K(0.340), 1, 36, [20, 0.16, 56], ROUGH);
       hedge(0.306, 0.322, 1, 54, 2.1, HEDGE_L);
@@ -634,7 +634,9 @@
       hedge(0.600, 0.668, 1, 26, 2.0, HEDGE_C);
       hedge(0.700, 0.745, -1, 26, 2.0, HEDGE_C);
       hedge(0.400, 0.448, 1, 46, 1.8, HEDGE_L);
-      hedge(0.612, 0.664, -1, 30, 1.8, HEDGE_L);
+      // Leave a field entrance where the offset hedge panels converge.
+      hedge(0.612, 0.636, -1, 30, 1.8, HEDGE_L);
+      hedge(0.641, 0.664, -1, 30, 1.8, HEDGE_L);
 
       // Debris fence on the public side of the lap.
       fence(0.545, 0.700, 1, 15, 2.8, FENCE_C);

@@ -314,7 +314,18 @@ function measure(Tracks, id) {
       }
       const near = nearestTurn(at);
       let m, bad, detail;
-      if (claim.length) {
+      // A surveyed crossfall can peak on the exit. Compare to its named
+      // station only while the actual painted bank still spans that apex.
+      const exitStation = !turnAnchor && claim.length === 1 &&
+        /^T\d+ exit, measured peak (\d+(?:\.\d+)?) m after apex$/i.exec(comment);
+      if (exitStation) {
+        const stationM = Number(exitStation[1]);
+        const apex = turns[claim[0] - 1];
+        m = lapGap(wrap01(apex + stationM / L), at) * L;
+        const halfWidth = (z.widthM || 40) / 2;
+        bad = stationM > halfWidth || lapGap(apex, at) * L > halfWidth || m > L / n;
+        detail = `claims T${claim[0]} exit +${stationM} m, builds at ${at.toFixed(4)}`;
+      } else if (claim.length) {
         m = Math.min(...claim.map((t) => lapGap(turns[t - 1], at) * L));
         bad = m > BANK_M;
         detail = `claims T${claim.join("/")} builds at ${at.toFixed(4)} (nearest T${near.t})`;

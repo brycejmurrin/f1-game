@@ -5172,7 +5172,6 @@
     },
     "js/circuits/imola.js": {
       "*": [
-        "tests/specs/imola-foundation.spec.js",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/select-specs.test.mjs"

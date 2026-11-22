@@ -99,6 +99,7 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
     return {
       elevationRange: Math.max(...profile.map((point) => point.y)) -
         Math.min(...profile.map((point) => point.y)),
+      finalCornerHeight: profile[Math.round(def.turns[16] * profile.length)].y - profile[0].y,
       maxSlope: Math.max(...profile.map((point) => Math.abs(point.slope))),
       models,
       geometry,
@@ -122,6 +123,9 @@ test("Mexico migration keeps Foro Sol grounded, bounded, and intentionally overh
   ]));
   // Formula 1 lists 2.8 m of relief. Allow for the 240-point sampler.
   expect(audit.elevationRange).toBeCloseTo(2.8, 1);
+  // Both 2024 qualifying traces place the final corner about 0.5 m below the line.
+  expect(audit.finalCornerHeight).toBeGreaterThan(-0.9);
+  expect(audit.finalCornerHeight).toBeLessThan(-0.2);
   expect(audit.maxSlope, "Mexico retains a gentle longitudinal grade").toBeLessThan(0.01);
   expect(audit.models.suppressed).toEqual([]);
   expect(audit.models.invalid).toEqual([]);

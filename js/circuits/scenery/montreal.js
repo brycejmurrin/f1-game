@@ -160,7 +160,8 @@
       grandstandEx(0.02,  1,  8, 120, null, null,
         { livery: "teal", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
-      grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
+      // Keep the full seating rake on the approach to T1, before the ground rises.
+      grandstandEx(0.055, 1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
       grandstandEx(0.96, -1, 11,  80, null, null, { livery: "teal", roof: "cantilever", endWalls: true });
 
       // Start/finish gantry spanning the main straight + a second timing arch
@@ -487,6 +488,8 @@
               const hv = hash(kk * 31 + r * 13 + c * 7);
               const p = vadd(vadd(a0.c, a0.r, r * 11), a0.t, (c - 1.5) * 11);
               if (onTrack(p[0], p[2], 14)) continue;
+              const gy = groundUnder(p[0], p[2]);
+              if (gy != null) p[1] = gy;
               // Gravel walk under and around each parterre.
               addBox(out, vadd(p, a0.u, 0.22), [10.4, 0.44, 10.4], GRAVEL, b);
               // Clipped green edging, then the massed colour inside it.
@@ -1001,8 +1004,8 @@
       grandstandEx(0.65, -1, 18, 80, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
 
-      // Short grounded open bank over the −1 m elevation dip at s≈0.72
-      // (elevations[2]); its bottom row meets the island shelf. A tube stand
+      // Short open bank on the Casino Straight. Its bottom row meets
+      // the island shelf. A tube stand
       // (awning + sparse legs) here is an 18 / 10.5 m unsupported cluster.
       {
         const a = anchor(K(0.74), -1, 16);

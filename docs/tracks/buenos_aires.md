@@ -15,10 +15,7 @@ Warm, slightly hazy River Plate light over flat green parkland. Argentine light 
 - Mass concrete: pale grey terraces, no cladding, no fascia
 
 ## 3. Elevation
-The pampa. Genuinely, honestly flat.
-- s≈0.30: +2.2 m.
-- s≈0.66: −2.0 m.
-- Nothing else, and nothing else should be invented. This circuit's drama is the Curvón's length, not any hill. (Do not flatten further; do not add knife-edge steps.)
+The short course crosses two shallow valleys. The municipal 1 m contours place the first around lap fraction 0.089 and the second around 0.358. The built circuit has 4.30 m relief, with peak longitudinal grades near 1.16%. Contours represent ground elevation and do not resolve the historical pavement crown. [Municipal elevation contours](https://data.buenosaires.gob.ar/dataset/elevacion-terreno)
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

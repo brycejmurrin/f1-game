@@ -730,14 +730,8 @@
 
       for (const s of [0.20, 0.30, 0.42, 0.82, 0.88]) {
         const a = anchor(K(s), 1, 24);
-        // s=0.30 sits on a locally steeper stretch of the promenade than the
-        // other four anchors — this 28 m-long strip's single-point ground
-        // sample there reads ~1.8 m shy of where the far end of the box
-        // actually needs to sit. Only that one anchor needs the extra drop;
-        // moving all five identically re-seated the other four flush enough
-        // with the terrain to open new same-facing coplanar spots (measured
-        // 9 -> 14 spots), so this stays per-anchor rather than a shared const.
-        const drop = s === 0.30 ? 0.6 : 0;
+        // Seat the two illuminated strips together on the steep promenades.
+        const drop = s === 0.88 ? 0.8 : s === 0.30 ? 0.6 : 0;
         addBox(out, vadd(a.c, a.u, 3.0 - drop), [3.5, 1.8, 28], WIN_WARM, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 0.8), [3.8, 1.2, 28], NEON[1],  [a.r, a.u, a.t]);
       }
@@ -1178,10 +1172,13 @@
         for (let s = -2; s <= 2; s++) addBox(out, vadd(vadd(a.c, a.t, s * 0.9 * sc), a.u, 3.4 * sc), [0.3 * sc, 0.3 * sc, 0.3 * sc], s % 2 ? NEON[2] : NEON[1], b);
       };
       for (let i = 0; i < 6; i++) {
-        const s = [0.24, 0.33, 0.42, 0.46, 0.83, 0.87][i];
-        const a = anchor(K(s), 1, 30 + (i % 3) * 12 + hash(i * 7) * 8);
+        const s = [0.20, 0.29, 0.33, 0.46, 0.83, 0.87][i];
+        const a = anchor(K(s), 1, 70 + (i % 3) * 5 + hash(i * 7) * 8);
         if (onTrack(a.c[0], a.c[2], 8)) continue;
-        bumboat(a, 1.0 + hash(i * 5) * 0.6, i % 2 ? WIN_WARM : WIN_GOLD);
+        // The hull floats on the same level as the bay waterBand at this station.
+        const scale = 1.0 + hash(i * 5) * 0.6;
+        a.c = [a.c[0], pyMin - 0.82 - 0.2 * scale, a.c[2]];
+        bumboat(a, scale, i % 2 ? WIN_WARM : WIN_GOLD);
       }
 
       // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──

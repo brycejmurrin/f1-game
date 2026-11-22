@@ -13,6 +13,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "fuji",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -31,6 +32,12 @@
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
+    // GSI 1 m laser DEM, right-minus-left sections across 8 m of asphalt.
+    bankZones: [
+      { turn: 1, angleDeg: 1.2, widthM: 130 },
+      { turn: 7, angleDeg: 4.2, widthM: 180 },
+      { turn: 8, angleDeg: 2.0, widthM: 100 },
+    ],
     pal: {
       zenith:        [0.38, 0.48, 0.60],
       horizon:       [0.66, 0.70, 0.72],

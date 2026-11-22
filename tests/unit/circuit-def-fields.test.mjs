@@ -39,6 +39,20 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
 
+test("Zolder follows the measured Turn 4 drop and signed transverse falls", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(circuit => circuit.id === "zolder");
+  const road = tracks.buildCenterline(def, { line: false });
+  const drop = road.py[0] - road.py[Math.round(def.turns[3] * road.n)];
+  assert.ok(Math.abs(drop - 4.64) < 0.35, `Turn 4 drop: ${drop} m`);
+  // DHMV II 1 m lidar, transverse sections of 8 m at the two apexes.
+  for (const [turn, measured] of [[4, -0.36], [9, -0.55]]) {
+    const distance = def.turns[turn - 1] * road.total;
+    const rise = tracks.banking(road, distance, 4, {}).dy - tracks.banking(road, distance, -4, {}).dy;
+    assert.ok(Math.abs(rise - measured) < 0.08, `Turn ${turn} crossfall: ${rise} m`);
+  }
+});
+
 // Fields the ENGINE consumes off the AUTHORED def and deliberately does not
 // carry onto the built one. Each needs a reason, because "add it to the
 // allow-list" is the easy way to reintroduce exactly the bug above — the
@@ -48,6 +62,18 @@ const ENGINE_ONLY = {
   pal: "raw palette input; built into def.palette by dayPal/nightPal",
   crossover: "read by tests/helpers/circuit-crossovers.js off the authored def; the engine never reads it",
 };
+
+test("Okayama carries Attwood’s measured right-edge fall through the exit", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(circuit => circuit.id === "okayama");
+  const road = tracks.buildCenterline(def, { line: false });
+  // GSI laser DEM transects, 4 m each side of the centreline.
+  for (const [fraction, measured] of [[0.867, -0.4], [0.895, -0.5], [0.92, -0.4]]) {
+    const distance = fraction * road.total;
+    const fall = tracks.banking(road, distance, 4, {}).dy - tracks.banking(road, distance, -4, {}).dy;
+    assert.ok(Math.abs(fall - measured) < 0.1, `Attwood at ${fraction}: ${fall} m`);
+  }
+});
 
 test("every field a circuit authors survives the copy into Tracks.LIST", () => {
   const Tracks = buildContext();
@@ -310,8 +336,8 @@ test("the folded per-circuit data reaches the built def", () => {
 // Every circuit recovered from OpenStreetMap (tools/track/osm-circuits.json) has
 // no authored `elevations`; its relief comes from the SRTM bake in
 // js/track/circuit-elevations.js — or it is flat ON PURPOSE. Korea is the flat
-// one: Yeongam is reclaimed tidal flat and the bake measured 0.00 m over the
-// lap, so its def takes the engine's `undulate: false` hatch (the only circuit
+// one: the SRTM bake predates circuit construction. Until road heights are
+// available, its def uses the engine's `undulate: false` hatch (the only circuit
 // that does). Before 2026-09-22 it had neither, and buildCenterline laid a
 // 0.14 m procedural ripple under a scenery header that says "dead flat".
 // A new OSM import must land in one column or the other, never in neither.
@@ -325,7 +351,7 @@ test("every OSM-imported circuit is either surveyed or explicitly flat", () => {
   const elev = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/track/circuit-elevations.js"), "utf8") + ";CircuitElevations", {}, { filename: absSrc("js/track/circuit-elevations.js") });
   const neither = ids.filter((id) => !(Array.isArray(elev[id]) && elev[id].length > 0) && at(id) && at(id).undulate !== false);
   assert.deepEqual(neither, [], "an OSM circuit with no SRTM profile must declare undulate: false (or bake one)");
-  assert.equal(at("korea").undulate, false, "korea is the flat one, by measurement");
+  assert.equal(at("korea").undulate, false, "korea intentionally uses the flat fallback");
   assert.ok(!elev.korea, "korea carries no profile — the bake declined it (0.00 m of relief)");
   // Flat means flat: the built centreline must carry no ripple at all.
   const built = Tracks.build(at("korea"));
@@ -352,6 +378,18 @@ test("no circuit trace has two control points closer than 1 m", () => {
     }
   }
   assert.deepEqual(close, [], "nudge the duplicate along the trace; never delete a vertex");
+});
+
+test("Kyalami follows the surveyed terrain on both sides of the Leeukop crest", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(circuit => circuit.id === "kyalami");
+  const road = tracks.buildCenterline(def, { line: false });
+  const height = fraction => road.py[Math.round(fraction * road.n)];
+  const crest = height(def.turns[9]);
+  // Copernicus and SRTM estimates bound these stations on the approach
+  // and the descent into Mineshaft. Their horizontal cells span about 30 m.
+  assert.ok(Math.abs(crest - height(28 / 48) - 14.5) < 2);
+  assert.ok(Math.abs(crest - height(35 / 48) - 30.5) < 3);
 });
 
 // Sector splits drive split times, the HUD sector colours and marshal panels;
@@ -384,6 +422,26 @@ test("no sector timing line sits inside a corner", () => {
     });
   }
   assert.deepEqual(bad, [], "snap the split to the nearest stretch with |k| < 0.0035");
+});
+
+test("Watkins Glen final turn reproduces the bank across its central eight metres", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(circuit => circuit.id === "watkins_glen");
+  const track = tracks.buildCenterline(def, { line: false });
+  const distance = def.turns[10] * track.total;
+  const rise = tracks.banking(track, distance, 4, {}).dy - tracks.banking(track, distance, -4, {}).dy;
+  // USGS 1 m surface: right 484.863 m, left 485.612 m. A modern proxy for the historic bank.
+  assert.ok(Math.abs(rise + 0.749) < 0.12, `T11 crossfall over eight metres: ${rise} m`);
+});
+
+test("Indianapolis carries Turn 13 banking through the exit", () => {
+  const tracks = buildContext();
+  const road = tracks.buildCenterline(tracks.LIST.find(d => d.id === "indianapolis"), { line: false });
+  // USGS 1 m transect at 90.5% lap: left and right samples 10 m apart.
+  const station = road.total * 0.905;
+  const left = tracks.banking(road, station, -5, {}).dy;
+  const right = tracks.banking(road, station, 5, {}).dy;
+  assert.ok(Math.abs((left - right) - 1.48) < 0.12);
 });
 
 // bankZones with a `frac` that lands on a straight > 60 m from every curated apex
@@ -449,6 +507,19 @@ test("hairpin circuits keep a node radius of at least 4 m and no folded road sur
   assert.deepEqual(bad, [], "add short-spaced path.pts either side of the hairpin (js/circuits/<id>.js)");
 });
 
+test("Yas Marina crests at the opening Turn 3 sweep", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(entry => entry.id === "abudhabi");
+  const track = tracks.buildCenterline(def, { line: false });
+  const high = Math.max(...track.py);
+  const crest = track.py.indexOf(high) / track.n;
+  const relief = high - Math.min(...track.py);
+  // OpenF1 2024 qualifying, session 9658: Norris and Piastri both crest
+  // near 14% of the racing lap with approximately 11 m of relief.
+  assert.ok(crest > 0.13 && crest < 0.15, `Yas Marina crest at ${crest}`);
+  assert.ok(relief > 10 && relief < 12, `Yas Marina relief ${relief} m`);
+});
+
 test("Silverstone follows the Stowe to Vale descent and measured lap relief", () => {
   const tracks = buildContext();
   const def = tracks.LIST.find(entry => entry.id === "silverstone");
@@ -458,6 +529,26 @@ test("Silverstone follows the Stowe to Vale descent and measured lap relief", ()
   assert.ok(Math.abs(relief - 11.3) < 0.5, `Silverstone relief ${relief} m`);
   const drop = atTurn(15) - atTurn(16);
   assert.ok(drop > 4 && drop < 6.5, `Stowe to Vale drop ${drop} m`);
+});
+
+test("Sochi rises from the physical T14 low to the T15 and T17 crests", () => {
+  const tracks = buildContext();
+  const road = tracks.buildCenterline(tracks.LIST.find(d => d.id === "sochi"), { line: false });
+  const at = f => road.py[Math.round(f * road.n)];
+  // FIA corner map matched to the centreline. Two 2021 qualifying traces
+  // gain 1.6 m by T15; the published profile gains 1.9 m by T17.
+  assert.ok(Math.abs((at(0.8405) - at(0.795)) - 1.6) < 0.25);
+  assert.ok(Math.abs((at(0.922) - at(0.795)) - 1.9) < 0.1);
+});
+
+test("Buenos Aires follows the municipal contour crossings at its two valleys", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(circuit => circuit.id === "buenos_aires");
+  const road = tracks.buildCenterline(def, { line: false });
+  const y = f => road.py[Math.round(f * road.n)];
+  // City metre contours: 10 m to 8 m approaching Turn 1, then 10 m to 7 m entering Turn 6.
+  assert.ok(Math.abs(y(0.0179) - y(0.0673) - 2) < 0.5);
+  assert.ok(Math.abs(y(0.2593) - y(0.3165) - 3) < 0.75);
 });
 
 // Spa and Monaco carry hand-authored cosine bumps. They were authored against
@@ -510,6 +601,16 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
   assert.ok(tunnel.y - low.y > 5, "Monaco tunnel deck sits above the harbour low");
   assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);
   assert.ok(mc.grade < 0.18, `Monaco grade ${(mc.grade * 100).toFixed(1)} %`);
+});
+
+test("Estoril climbs from its seventh corner to the Parabólica on the Tanque route", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find((d) => d.id === "estoril");
+  const t = tracks.buildCenterline(def, { line: false });
+  const height = (turn) => t.py[Math.round(def.turns[turn - 1] * t.n) % t.n];
+  // Interpolating the 30 m terrain at the two apex stations yields 18.66 m.
+  const climb = height(11) - height(7);
+  assert.ok(Math.abs(climb - 18.66) < 3, `T7 to Parabólica climbs ${climb.toFixed(2)} m`);
 });
 
 // tyreSeverity trailers that say "below Japan/Monza/…" must actually sit below
@@ -593,4 +694,54 @@ test("scenery api destructure bindings are all used in the same file", () => {
   }
   assert.deepEqual(bad, [],
     "remove unused names from the scenery `const { … } = api` destructure (or park the file in SCENERY_API_HYGIENE_SKIP with a reason)");
+});
+
+test("Sepang rises 22 m from the physical Turn 3 basin to Turn 11", () => {
+  const Tracks = buildContext();
+  const def = Tracks.LIST.find((circuit) => circuit.id === "sepang");
+  const track = Tracks.buildCenterline(def, { line: false });
+  // Centreline stations registered to the two extremes on Formula 1's chart.
+  const heightAt = (fraction) => track.py[Math.round(fraction * track.n)];
+  assert.ok(Math.abs(heightAt(0.58333) - heightAt(0.15625) - 22) < 0.5);
+});
+
+test("Paul Ricard reproduces the signed IGN crossfalls across 10 m of asphalt", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find(circuit => circuit.id === "paul_ricard");
+  const track = tracks.buildCenterline(def, { line: false });
+  // Signed right-minus-left heights from the 10 m IGN RGE ALTI transects.
+  for (const [corner, fraction, measuredRise] of [
+    ["Verrerie", 0.0957, 0.05],
+    ["Signes", 0.713, -0.35],
+    ["Le Beausset", 0.745, -0.11],
+  ]) {
+    const distance = fraction * track.total;
+    const rise = tracks.banking(track, distance, 5, {}).dy - tracks.banking(track, distance, -5, {}).dy;
+    assert.equal(Math.sign(rise), Math.sign(measuredRise), corner);
+    assert.ok(Math.abs(rise - measuredRise) < 0.12, `${corner}: built ${rise} m, surveyed ${measuredRise} m`);
+  }
+});
+
+test("Istanbul descends from Turn 8 to Turn 9 and Turn 1 tilts outward", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find((circuit) => circuit.id === "istanbul");
+  const road = tracks.buildCenterline(def, { line: false });
+  const height = (f) => road.py[Math.round(f * road.n)];
+  const t9 = def.turns[8];
+  // METU §1.3: 37.5 m down over 650 m, then 7.03% up over 280 m.
+  const drop = height(t9 - 650 / 5377) - height(t9);
+  const climb = height(t9 + 280 / 5377) - height(t9);
+  assert.ok(Math.abs(drop - 37.5) < 1, `Turn 9 approach descends ${drop} m`);
+  assert.ok(Math.abs(climb - 19.684) < 1, `Turn 9 exit climbs ${climb} m`);
+  assert.ok(tracks.bankAngle(road, def.turns[0] * road.total, 0) < 0,
+    "the right shoulder sits below the centre in the first left-hand corner");
+});
+
+test("Mugello descends from Poggio Secco to Arrabbiata 1", () => {
+  const tracks = buildContext();
+  const def = tracks.LIST.find((circuit) => circuit.id === "mugello");
+  const road = tracks.buildCenterline(def, { line: false });
+  const atTurn = (number) => road.py[Math.round(def.turns[number - 1] * road.n)];
+  // The operator's technical map gives 285.50 m and 247.96 m at T3 and T8.
+  assert.ok(Math.abs((atTurn(3) - atTurn(8)) - 37.54) < 2);
 });

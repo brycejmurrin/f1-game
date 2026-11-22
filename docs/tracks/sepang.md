@@ -17,7 +17,7 @@ White-hot high sun almost directly overhead, heavy humidity, saturated jungle gr
 - Sun direction near-vertical `[0.20, 0.90, 0.14]` — short hard shadows
 
 ## 3. Elevation
-Formula 1 reports 22 m of elevation change between T3 and T11. The current game has only 9.50 m of relief, with its low and high near 22% and 46% of the lap. A 48-point Open-Meteo terrain sample of the my-1999 centreline returned 23–44 m, with the T3 low at 7–8/48 of the lap and the T11 high at 28/48. The terrain grid gives approximate locations and relief. Pavement grades through the intermediate bends remain unverified. [Formula 1](https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc) · [Terrain data](https://open-meteo.com/en/docs/elevation-api)
+Formula 1’s longitudinal chart puts T3 at 27.7 m and T11 at 49.7 m. The built road reproduces the 22.0 m relief, with its low at 15.84% and crest at 58.36% of the lap. Their positions come from the geographic centreline and a 48-post terrain profile. The smaller rolls approximate the published outline. The reconstructed grades range from −5.14% to +5.32%. The adverse camber documented at T15 remains unmeasured in degrees and is still flat in the game. [F1 profile](https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc) · [Terrain data](https://open-meteo.com/en/docs/elevation-api)
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

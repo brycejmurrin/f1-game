@@ -74,8 +74,11 @@
       // Sector 2 (T3 Remus descent + back straight): dense Alpine pine on both sides.
       forestEdge(0.20, 0.48, -1, 9, { density: 0.65, hMin: 10, hMax: 18,
         col: [0.09, 0.23, 0.11], col2: [0.16, 0.34, 0.16], pineFrac: 0.75 });
-      forestEdge(0.20, 0.48, 1, 10, { density: 0.50, hMin: 9, hMax: 15,
-        col: [0.11, 0.25, 0.12], col2: [0.18, 0.36, 0.17], pineFrac: 0.68 });
+      const remusForest = { density: 0.50, hMin: 9, hMax: 15,
+        col: [0.11, 0.25, 0.12], col2: [0.18, 0.36, 0.17], pineFrac: 0.68 };
+      // Leave a small opening in the near treeline for the quarter-lap scenery orbit.
+      forestEdge(0.20, 0.253, 1, 10, remusForest);
+      forestEdge(0.258, 0.48, 1, 10, remusForest);
 
       // Sector 3 (long back straight + stadium): lighter mixed forest, let grandstands show.
       forestEdge(0.50, 0.70, -1, 10, { density: 0.45, hMin: 8, hMax: 14,
@@ -452,12 +455,12 @@
 
       // Farther out on the meadow: at gap 18 the slab sat 0.5 m into the SRTM
       // bowl (ground-audit buried @ :394).
-      building(Math.round(n * 0.55) % n, -1, 28, 12, 6, 15,
+      building(Math.round(n * 0.55) % n, -1, 30, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
       // Alpine farmhouse roof (A-frame prism above the building).
       {
         const kFarm = Math.round(n * 0.55) % n;
-        const aFarm = anchor(kFarm, -1, 34);
+        const aFarm = anchor(kFarm, -1, 36);
         addPrism(out, vadd(aFarm.c, aFarm.u, 6), [14, 4, 16], [0.36, 0.20, 0.14], [aFarm.r, aFarm.u, aFarm.t]);
       }
 
@@ -639,7 +642,7 @@
         { wall: [0.78, 0.80, 0.84], window: [0.16, 0.24, 0.34] });
       motorhome(K(0.02), -1, 46, 18, 8, 20,
         { wall: [0.90, 0.90, 0.92], window: [0.18, 0.28, 0.40] });
-      motorhome(K(0.055), -1, 42, 14, 7, 17,
+      motorhome(K(0.055), -1, 44, 14, 7, 17,
         { wall: [0.74, 0.76, 0.80], window: [0.20, 0.28, 0.38] });
 
       {
