@@ -70,8 +70,11 @@ const ShadowPass = (function () {
     let MOON_CADENCE = true;
     try { MOON_CADENCE = localStorage.getItem("apex26.moonShadowCadence") !== "0"; } catch (_) { /* no storage: on */ }
     let SUN_BACK = SUN_BACK_MAX, SUN_FAR = SUN_BACK_MAX + SUN_RECV;
+    let spanTop, spanBox;
     function sunSpan(track, box) {
       const top = track && track.propTop;
+      if (top === spanTop && box === spanBox) return;
+      spanTop = top; spanBox = box;
       SUN_BACK = (typeof top === "number" && top >= 0)
         ? Math.min(SUN_BACK_MAX, Math.max(SUN_BACK_MIN, Math.ceil(Math.hypot(top, box)) + 10)) : SUN_BACK_MAX;
       SUN_FAR = SUN_BACK + SUN_RECV;

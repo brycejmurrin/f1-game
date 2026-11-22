@@ -199,6 +199,22 @@ function dynamicShadowFixture(matrixProbe = false) {
   return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT, gov: ctx.PerfGov, M4: ctx.M4, realM4, vps };
 }
 
+test("the cached sun depth follows live shadow range and circuit height changes", () => {
+  const { sp, G, LT, frame } = dynamicShadowFixture();
+  let vp;
+  G.gfx.shadowBegin = matrix => { vp = Float32Array.from(matrix); };
+  const day = frame();
+  for (const [i, [height, range]] of [[35, 80], [35, 230], [250, 230], [undefined, 80]].entries()) {
+    G.track.propTop = height;
+    LT.shadowRange = range;
+    G.camEye[0] += 180;   // cross a snap cell to exercise the new projection
+    sp.sunPass(day, i, false);
+    const span = 2 / Math.abs(ndcZ(vp, day.sunDir) - ndcZ(vp, [0, 0, 0]));
+    const back = height == null ? 400 : Math.min(400, Math.max(150, Math.ceil(Math.hypot(height, range)) + 10));
+    assert.ok(Math.abs(span - (back + 169)) < 0.5);
+  }
+});
+
 test("tier 2 redraws the car map on even frames only and keeps it on the odd frame", () => {
   const { sp, calls, enabled, frame, G, gov } = dynamicShadowFixture();
   enabled.car = true;
