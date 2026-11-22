@@ -548,7 +548,7 @@
       } catch (e) { AA = null; try { Log.warn("gfx", "TLX TRAA build failed, FXAA kept —", e); } catch (_) { /* harness */ } }
     }
     // The TAA runs on a frame with nothing else claiming the final pass: no ?viz=, no fixed/cover targets, no SGSR.
-    const taaLive = () => !!(AA && !viz && !phys && !(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()));
+    const taaLive = () => !!(AA && !viz && !phys && !(typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling) && !(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()));
 
     // Frames a lazy block may stay shut before its targets are disposed.
     // Eight presents is ~130 ms at 60 Hz: long enough that a one-frame gate

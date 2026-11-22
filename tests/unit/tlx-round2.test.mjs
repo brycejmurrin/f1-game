@@ -229,7 +229,7 @@ test("1b-F3: the TLX mirror pass uploads the lamp shadow OFF; the main pass afte
   lit.updateFrame(litFrame());         // tlx.js begin (the main pass)
   assert.equal(U.lampShadowOn.value, 1);
   assert.equal(U.lampShadowIdx.value, 2);
-  const mb = TLX.slice(TLX.indexOf("mirrorBegin(frame, w, h) {"), TLX.indexOf("mirrorEnd() {"));
+  const mb = TLX.slice(TLX.indexOf("mirrorBegin(frame, w, h, rearView) {"), TLX.indexOf("mirrorEnd() {"));
   assert.match(mb, /lit\.updateFrame\(frame, true\)/, "mirrorBegin passes the mirror flag");
 });
 

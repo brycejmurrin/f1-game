@@ -253,10 +253,12 @@ async function mirrorRig(t, ls = {}) {
     const resetRecs = () => {}, _kidsBegin = () => {}, _poolShow = () => {}, _hideUndrawnInstanced = () => {}, pinSkyMaterial = () => {}, softOutRT = () => null;
     let _mirDead = false, _mirErr, _mirEye, _mirCull, _mirFog, _mirUsed, _dMatUsed, _fxMatUsed, _gpuLastOperation;
     let _instStamp = 0, _poolBatch = 0, _mirFails = 0, _mirFlip = true, _mirGlass = 0;
+    let mirrorRearView = false;
+    const resetMirrorRoadStats = () => {};
     const _mirRectScratch = [0, 0, 0, 0];
     const _mirCapW = 1024, _mirCapH = 512;   // mirrorBegin's clamp below mirrorHi (ULTRA+ raises it to 2048 x 1024)
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    const backend = { ${tslice("        mirrorBegin(frame, w, h) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
+    const backend = { ${tslice("        mirrorBegin(frame, w, h, rearView) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
     return { backend, prepareMirrorTarget, rt: () => mirRT, cam: () => mirCam, rect(r) { _mirRect = r; }, release: backend.releaseMirror,
       busy(active, warm) { _mirActive = active; _warmPending = warm; }, rendered() { _mirRenders++; }, renders: () => _mirRenders,
       glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);

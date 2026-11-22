@@ -332,6 +332,33 @@ test("splitRanges covers every index exactly once and boxes its own vertices", (
   assert.deepEqual(plain(S.splitRanges(pos, idx, 2)).map(c => [c.start, c.count]), [[0, 6], [6, 3]]);
 });
 
+test("rear-view road bounds retain crossing triangles and shrink submissions with the same index buffer", () => {
+  const S = shaders(), pos = [], idx = [];
+  // One long ribbon. A triangle straddles the edge of the clip volume at x=1.
+  for (let i = 0; i < 11; i++) {
+    const x = i - 4.5;
+    pos.push(x, 0, 0, x + 1, 0, 0, x, 0.5, 0);
+    idx.push(3 * i, 3 * i + 1, 3 * i + 2);
+  }
+  const mesh = { chunks: S.roadRanges(pos, idx, 4, 1) };
+  const coarse = mesh.chunks.map(({ sections, ...chunk }) => chunk);
+  assert.deepEqual(plain(coarse), plain(S.splitRanges(pos, idx, 4)));
+  const source = "js/render/shared/frustum.js";
+  const frustum = vm.runInNewContext(fs.readFileSync(absSrc(source), "utf8") + "; Frustum", {}, { filename: absSrc(source) });
+  const sys = factory([], frustum), vp = Float32Array.of(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+  function ranges(refine, distance = 0) {
+    const n = sys.cull(mesh, vp, [0, 0, 0], distance, null, refine);
+    const runs = [];
+    const count = S.mergeRuns(sys.visList, n, 4, runs);
+    return runs.slice(0, 2 * count);
+  }
+  assert.deepEqual(ranges(false), [0, 24]);
+  assert.deepEqual(ranges(true), [9, 9]); // includes both edge-crossing triangles
+  assert.deepEqual(ranges(true, 0.25), [12, 3]);
+  vp[12] = -100;
+  assert.deepEqual(ranges(true), []);
+});
+
 test("mergeRuns joins contiguous ranges and closes the smallest gaps down to the slot cap", () => {
   const S = shaders(), out = [];
   const c = (start, count) => ({ start, count });

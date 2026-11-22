@@ -510,7 +510,7 @@ test("B-F3.1: every entry warm re-decides — a race after one that used the mir
 });
 
 test("B-F3.1: tlx.js wiring — mirrorBegin's gate after the in-flight refusal, present()'s dispatch, the knob read once", () => {
-  const mb = TLX.slice(TLX.indexOf("        mirrorBegin(frame, w, h) {"), TLX.indexOf("        mirrorEnd() {"));
+  const mb = TLX.slice(TLX.indexOf("        mirrorBegin(frame, w, h, rearView) {"), TLX.indexOf("        mirrorEnd() {"));
   assert.match(mb, /if \(_mirDead \|\| _warmPending \|\| [^\n]*\) return false;\n\s*if \(mirrorWarmGate\(\)\) return false;/,
     "the gate right after the in-flight refusal, before any target is made");
   assert.ok(mb.indexOf("mirrorWarmGate()") < mb.indexOf("prepareMirrorTarget(w, h)"));
