@@ -1220,13 +1220,15 @@ test('Bahrain at night and Monaco by day retain departure contact heights and vi
 
 test("the ordinary garage selects articulated wheels before any departure or race-session load", () => {
   const builds = [], prepared = [], renderer = { prepare: (...args) => prepared.push(args) };
-  const team = { id: "test" }, tiers = { tyres: 1, brakes: 1 }, liv = { c1: [1, 0, 0], c2: [0, 0, 0] };
+  const { Car3D, Teams, Parts } = loadParts();
+  const team = Teams.LIST[0], tiers = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  const liv = { c1: team.color, c2: team.color2, wheelsShape: "style_wheels_ysplit", tyresShape: "style_tyres_whitewall" };
   const env = {
     Teams: { LIST: [team] }, G: { teamIdx: 0 }, gfx: {},
     garageSeat: () => ({ num: 1 }), previewKey: () => "car", resolveLivery: () => liv,
     partsVisualKey: () => "parts", seatTag: () => "1", hullKeyOf: () => "hull", getTeamParts: () => ({}),
     Parts: { getVisualTiers: () => tiers }, CarWheels: { createGarage: () => renderer },
-    Car3D: { FINISH_FIELDS: [], build: (_a, _b, opts) => { builds.push(opts); return { data: true }; } },
+    Car3D: { appearanceParts: Car3D.appearanceParts, FINISH_FIELDS: [], build: (_a, _b, opts) => { builds.push(opts); return { data: true }; } },
     GarageScene: { previewMesh: (_key, _hull, make) => ({ mesh: make(), hull: [] }) },
   };
   const make = new Function("env", `const {${Object.keys(env).join(",")}} = env;
@@ -1236,6 +1238,10 @@ test("the ordinary garage selects articulated wheels before any departure or rac
   const get = make(env), first = get();
   assert.equal(builds[0].noWheels, true, "an ordinary garage body must not bake stationary wheels");
   assert.equal(prepared.length, 1, "first visit prepares common wheel layers without the legacy shim");
+  const visual = prepared[0][2]._visual;
+  assert.equal(visual.wheels.spokeSplit, 1, "garage rims use the selected Y-split spokes");
+  assert.equal(visual.tyres.id, liv.tyresShape, "garage sidewalls use the selected tyre recipe");
+  assert.equal(visual.tyres.grooves, 4);
   assert.equal(get(), first);
   assert.equal(builds.length, 1, "successive preview frames reuse body geometry");
   assert.equal(prepared.length, 1, "successive preview frames reuse wheel geometry");
