@@ -207,6 +207,16 @@ test("edits mode with nothing tuned copies nothing and says so", () => {
   assert.equal(resolved(h, "monza", "dusk", "wet", "keyMul"), 1);
 });
 
+test("a saved local edit that matches a new shipped preset still copies without a global override", () => {
+  const h = loadStore({
+    presets: { "bahrain|dusk|wet": { keyMul: 0.7 } },
+    saved: { "bahrain|dusk|wet": { keyMul: 0.7 } },
+  });
+  assert.equal(h.store.tuned(), 1);
+  assert.equal(h.store.copyToTracks("edits").knobs, 1);
+  assert.equal(resolved(h, "spa", "dusk", "wet", "keyMul"), 0.7);
+});
+
 test("undo restores every target exactly, including the ones that had no profile", () => {
   const h = loadStore();
   h.state.go("monza", "dusk", "wet");
