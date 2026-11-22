@@ -16943,7 +16943,8 @@
       ],
       "pass": [
         "tests/unit/tlx-csm-lampx.test.mjs",
-        "tests/unit/tlx-hunt4c.test.mjs"
+        "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-round2.test.mjs"
       ],
       "prime": [
         "tests/unit/gfx-backend-canary.test.mjs"

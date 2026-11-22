@@ -2,7 +2,7 @@
   "files": {
     "js/game.js": {
       "codeLines": 6,
-      "lines": 7
+      "lines": 8
     },
     "js/render/glx/glx.js": {
       "lines": 7
@@ -15,6 +15,6 @@
   "tree": {
     "assertPins": -1,
     "assertPinsAll": -1,
-    "eagerCodeBytes": 1681
+    "eagerCodeBytes": 1727
   }
 }
