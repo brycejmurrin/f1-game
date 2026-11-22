@@ -112,16 +112,36 @@ const UiExperience = (function () {
   // Keep the boolean photoSubject API; cancellation belongs to its request,
   // so a stale completion cannot be mistaken for an owned preparation failure.
   const cancelledPhotoSwaps = new WeakSet();
+  let photoRequest = 0;
   function openPhoto(G, deps) {
-    // Already open: a second open would close the first without its restore (paused, pause card hidden) (#5743 P4).
+    const request = ++photoRequest;
     const ps = deps.photoStudio;
     if (ps && typeof ps.state === "function" && ps.state().open) return true;
+    if (!ps?.loaded || ps.loaded()) return openReadyPhoto(G, deps);
+    // Leave the caller interactive while the capture UI loads. Back, another
+    // menu, or starting a race must win against a late script response.
+    const state = G.state, paused = G.paused;
+    const currentPage = () => typeof SettingsNav !== "undefined" ? SettingsNav.current() : null;
+    const currentLayer = () => typeof UiLayers !== "undefined" ? UiLayers.top() : null;
+    const page = currentPage(), layer = currentLayer();
+    return ps.ensureLoaded().then(ok => {
+      if (request !== photoRequest || G.state !== state || G.paused !== paused ||
+          currentPage() !== page || currentLayer() !== layer) return false;
+      if (ok) return openReadyPhoto(G, deps);
+      if (typeof LiveRegion !== "undefined") LiveRegion.say("Photo Studio could not load. Try opening it again.", "hud");
+      return false;
+    });
+  }
+
+  function openReadyPhoto(G, deps) {
     let source = deps.source;
     if (source === "home" && deps.trackHome) {
       if (deps.trackReady === false) { if (deps.onWaiting) deps.onWaiting(); return false; }
       source = "home-track";
     }
     const wasPaused = G.paused;
+    const pauseMenu = G.$("pausemenu"), wasPauseHidden = pauseMenu?.hidden;
+    const trigger = typeof document === "undefined" ? null : document.activeElement;
     const callers = [G.$("pmsettings"), G.$("carsetup")].filter((e) => e && !e.hidden);
     const unhide = () => {
       for (const e of callers) e.hidden = false;
@@ -131,6 +151,7 @@ const UiExperience = (function () {
       if (source === "race" || source === "watch") deps.setPaused(wasPaused, "photo-done");
       unhide();
       if (deps.onDone) deps.onDone();
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
     for (const e of callers) e.hidden = true;
     if (["race", "watch"].includes(source)) { deps.setPaused(true, "photo-studio"); G.$("pausemenu").hidden = true; }
@@ -151,10 +172,20 @@ const UiExperience = (function () {
         return deps.reopen();
       });
     } : null;
-    const opened = deps.photoStudio.open({ source, metadata: { title, subtitle }, back: restore, subject,
-      view: source === "home-track" && deps.photoView ? deps.photoView() : null });
-    if (!opened) restore();
-    return opened;
+    const failed = () => {
+      restore();
+      if (pauseMenu) pauseMenu.hidden = wasPauseHidden;
+      return false;
+    };
+    try {
+      const opened = deps.photoStudio.open({ source, returnFocus: trigger, metadata: { title, subtitle }, back: restore, subject,
+        view: source === "home-track" && deps.photoView ? deps.photoView() : null });
+      if (opened && typeof opened.then === "function") return opened.then(ok => ok || failed(), failed);
+      return opened || failed();
+    } catch (error) {
+      if (typeof Log !== "undefined") Log.warn("ui", "Photo Studio unavailable: " + error);
+      return failed();
+    }
   }
 
   function create(G, deps) {

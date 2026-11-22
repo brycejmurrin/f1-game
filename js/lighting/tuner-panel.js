@@ -290,10 +290,14 @@ function buildLightTunePanel() {
         if (!setLightTune(d.id, v)) return false;
         number.value = String(LT[d.id]);
         b.textContent = fmtTune(d, LT[d.id]);
+        inp.setAttribute("aria-valuetext", b.textContent);
         if (d.id === "perChunkLights" || d.id === "roadChunkLamps") {
           const other = TUNE_DEFS.find((t) => t.id === (d.id === "perChunkLights" ? "roadChunkLamps" : "perChunkLights"));
           const value = other && $("lt-v-" + other.id);
-          if (value) value.textContent = fmtTune(other, LT[other.id]);
+          if (value) {
+            value.textContent = fmtTune(other, LT[other.id]);
+            $("lt-in-" + other.id).setAttribute("aria-valuetext", value.textContent);
+          }
         }
         updateLtProfileLabel();
         return true;
@@ -305,7 +309,12 @@ function buildLightTunePanel() {
       inp.onchange = () => persistLightTune();
       lab.appendChild(span); lab.appendChild(inp);
       item.appendChild(lab); item.appendChild(number);
-      if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
+      if (d.help) {
+        const p = document.createElement("p"); p.id = "lt-help-" + d.id;
+        p.className = "adv-help"; p.textContent = d.help; item.appendChild(p);
+        inp.setAttribute("aria-describedby", p.id);
+        number.setAttribute("aria-describedby", p.id);
+      }
       wrap.appendChild(item);
     }
     // Build one tab chip per group.
@@ -336,7 +345,10 @@ function refreshLightTunePanel() {
     if (inp) inp.value = LT[d.id];
     const number = $("lt-num-" + d.id);
     if (number) number.value = String(LT[d.id]);
-    if (b) b.textContent = fmtTune(d, LT[d.id]);
+    if (b) {
+      b.textContent = fmtTune(d, LT[d.id]);
+      if (inp) inp.setAttribute("aria-valuetext", b.textContent);
+    }
   }
   updateLtProfileLabel();
   ltDisarm();
@@ -434,7 +446,7 @@ $("lt-copy").onclick = () => {
   };
   ApexClipboard.write(json, { preferSync: true }).then(flash);
 };
-$("pm-lighting").onclick = () => {
+function openLightTuner() {
   Log.info("game", "TunerPanel.open");
   buildLightTunePanel();
   _ltPrevTOD = setTimeOfDay();   // capture the race's real conditions
@@ -450,7 +462,8 @@ $("pm-lighting").onclick = () => {
   // exactly it back on close; never the HUD & CAMERA page (#5066).
   const visualPage = $("pm-panel-visual");
   if (visualPage) visualPage.hidden = true;
-};
+}
+$("pm-lighting").onclick = openLightTuner;
 function closeLightTuner(showPauseMenu) {
   Log.info("game", "TunerPanel.close");
   if (G.photoMode) exitPhotoMode();
@@ -469,7 +482,7 @@ function closeLightTuner(showPauseMenu) {
   }
 }
 $("lt-close").onclick = () => closeLightTuner(true);
-return { buildLightTunePanel, refreshLightTunePanel, closeLightTuner };
+return { buildLightTunePanel, refreshLightTunePanel, openLightTuner, closeLightTuner };
 }
 
 return { create };

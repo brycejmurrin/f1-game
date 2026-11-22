@@ -869,6 +869,7 @@ test("Photo Lighting exact entry edits the session and follows range movement an
   change("1.35");
   assert.equal(slider.value, "1.35");
   assert.equal(b.dom.byId("ps-lt-v-exposureMul").textContent, "1.35");
+  assert.equal(slider.getAttribute("aria-valuetext"), "1.35");
   for (const bad of ["", "3.5", "1.33"]) { change(bad, false); assert.equal(exact.value, "1.35"); }
   slider.value = "1.55"; slider.dispatchEvent({ type: "input" });
   assert.equal(exact.value, "1.55");
@@ -1124,4 +1125,32 @@ test("boot stub evaluates and create() works without Log or ScriptLoader", () =>
   const api = ctx.PhotoStudio.create({ $: () => null, setTimeOfDay: () => "day", weather: () => "dry" }, { garage: {} });
   assert.equal(api.state().open, false);
   assert.equal(ctx.PhotoStudio.loaded(), false);
+});
+
+test("gallery read failure exposes retry and keeps the session gallery separate", async () => {
+  const b = boot();
+  b.api.open({source:"garage"});
+  await turn();
+  assert.equal(b.dom.byId("ps-library-error").hidden, false);
+  assert.equal(b.dom.byId("ps-library").children.length, 0);
+  await b.api.capture(); await b.api.savePhoto();
+  assert.equal(b.dom.byId("ps-library-error").hidden, false);
+  assert.equal(b.dom.byId("ps-library").children.length, 1);
+  const healthy = boot({indexedDB:photoDb([])});
+  healthy.api.open({source:"garage"}); await healthy.api.album();
+  assert.equal(healthy.dom.byId("ps-library-error").hidden, true);
+  assert.equal(healthy.dom.byId("ps-library").children[0].textContent, "Capture a frame and save it here. Photos stay on this device.");
+});
+
+test("creating a cold Photo facade and closing an unopened studio leave editor scripts unloaded", async () => {
+  const loads = [];
+  const ctx = vm.createContext({ScriptLoader:{create:() => ({load:async files => {loads.push(...files);return false;}})}});
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
+  const studio = ctx.PhotoStudio.create({}, {});
+  assert.equal(studio.state().open, false);
+  assert.equal(studio.hasCar(), false, "title render polls a synchronous boolean without loading capture UI");
+  studio.close(false);
+  assert.deepEqual(loads, []);
+  assert.equal(await studio.ensureLoaded(), false);
+  assert.deepEqual(loads, ["js/ui/photo-studio-ui.js"]);
 });

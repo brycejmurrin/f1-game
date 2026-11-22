@@ -330,6 +330,7 @@
   opacity: 0.85;
 }
 body.in-race #xr-enter[aria-pressed="false"] { display: none; }
+#xr-entry-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 #xr-enter:focus-visible { opacity: 1; }
 @media (hover: hover) and (pointer: fine) {
   #xr-enter:hover { opacity: 1; }

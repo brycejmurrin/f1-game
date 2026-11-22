@@ -13,7 +13,7 @@ const {
   CAREER_SLOT_RE, isCareerKey,
 } = SettingsExport._core;
 
-const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, the season save, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section, and season setup, circuit mastery, ghosts, onboarding marks and your own circuits in the progress section (both merged on import)";
+const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, the season save, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section, and season setup, circuit mastery, ghosts, onboarding marks and your own circuits in the progress section (best laps and progress merge, season setup is replaced)";
 
 function same(a, b) {
   if (a === b) return true;
@@ -31,6 +31,15 @@ function objDiff(v, def) {
   const out = {};
   for (const k of Object.keys(v)) if (!(k in def) || !same(v[k], def[k])) out[k] = v[k];
   return out;
+}
+// Bounded by the setting's documented structure. Whole-object and full-file restores replace the value.
+function mergeChangedFields(existing, incoming, depth) {
+  if (!depth || !isObj(existing) || !isObj(incoming)) return incoming;
+  const merged = { ...existing, ...incoming };
+  if (depth > 1) for (const k of Object.keys(incoming)) {
+    if (Object.hasOwn(existing, k)) merged[k] = mergeChangedFields(existing[k], incoming[k], depth - 1);
+  }
+  return merged;
 }
 function readStored(row) {
   const s = GameStore.store;
@@ -92,6 +101,10 @@ function collect(mode, G) {
     excluded: EXCLUDED,
     changed, settings, defaults, where,
   };
+  if (mode === "preferences") {
+    out.excluded = "Progress, leaderboards, garage, career and accounts";
+    return out;
+  }
   const ttlb = collectTtlb();
   if (ttlb && Object.keys(ttlb).length) out.ttlb = ttlb;
   const progress = typeof ProgressBackup !== "undefined" ? ProgressBackup.collect() : null;   // #5992
@@ -165,7 +178,8 @@ function collectTtlb() {
   const boards = collectJson((k) => k.startsWith("ttlb.") && TTLB_TRACK_RE.test(k.slice(5)));
   for (const [k, raw] of Object.entries(boards)) {
     const laps = ttlbParseBoard(raw);
-    if (laps.length) out[k.slice(5)] = laps;
+    if (laps.length) out[k.slice(5)] = GameStore.ttPackBoard && laps.some(lap => lap.context)
+      ? GameStore.ttPackBoard(laps) : laps;
   }
   return out;
 }
@@ -176,7 +190,9 @@ function applyTtlb(bag) {
   }
   const tracks = Object.keys(bag);
   const maxTracks = ttlbTracksMax(), maxLaps = maxTracks * 6 * 10;   // 6 classes × 10 laps per board
-  if (tracks.length > maxTracks) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
+  // A saved board can outlive the roster that supplied it (including boards from
+  // other profiles). One-lap boards cost less to restore than full 60-lap boards.
+  if (tracks.length > maxLaps) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
   let applied = 0, skipped = 0, rejected = 0, failed = 0, lapsSeen = 0;
   for (const trackId of tracks) {
     if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
@@ -185,6 +201,7 @@ function applyTtlb(bag) {
     const rawLen = Array.isArray(raw) ? raw.length : (raw && raw.laps && Array.isArray(raw.laps) ? raw.laps.length : 0);
     rejected += Math.max(0, rawLen - laps.length);
     const seen = new Set(GameStore.ttBoard(trackId).map(ttlbEntryKey));
+    const newlySaved = new Set();
     for (const lap of laps) {
       if (lapsSeen >= maxLaps) { skipped++; continue; }
       lapsSeen++;
@@ -198,8 +215,14 @@ function applyTtlb(bag) {
       try {
         const result = GameStore.ttBoardAddResult(trackId, lap);
         if (result.ok) seen.add(k);
-        if (result.durable) applied++; else failed++;
+        if (!result.durable) failed++;
+        else newlySaved.add(k);
       } catch (_) { failed++; }
+    }
+    const retained = new Set(GameStore.ttBoard(trackId).map(ttlbEntryKey));
+    for (const key of newlySaved) {
+      if (retained.has(key)) applied++;
+      else skipped++;
     }
   }
   return { applied, skipped, rejected, failed };
@@ -270,7 +293,7 @@ function applySettings(file, G) {
   const crossDevice = typeof here === "boolean" && (typeof there !== "boolean" || here !== there);
   const restoreAdaptiveDefaults = file.mode === "all" && typeof here === "boolean" && here === there;
   const writes = [];
-  let skipped = 0;
+  let skipped = 0, deviceSkipped = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
     // back: an older number would re-run migrations that have already run.
@@ -278,7 +301,10 @@ function applySettings(file, G) {
     const g = groups[row.group];
     if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     // An unset (null) value is nothing to keep out, so it is not a skip either.
-    if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) { if (g[row.k] !== null) skipped++; continue; }
+    if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) {
+      if (g[row.k] !== null) { skipped++; if (!row.noImport) deviceSkipped++; }
+      continue;
+    }
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) {
@@ -289,7 +315,11 @@ function applySettings(file, G) {
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
     if ((!row.freeShape && !typeOk(v, def, row)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
-    writes.push([row, v]);
+    // collect("changes") omits fields matching the sender's defaults on these rows.
+    // Merge at the same depth as objDiff, retaining the receiver's unrelated edits.
+    const depth = row.mergeDepth || (!row.whole && isObj(def) && Object.keys(def).length ? 1 : 0);
+    const sparse = file.mode === "changes" && depth && isObj(v);
+    writes.push([row, sparse ? mergeChangedFields(readStored(row), v, depth) : v]);
   }
   // ALL OR NOTHING (#5005). A write storage refuses (a nearly full phone) used to leave the keys before and
   // after it written: half old, half new after the next launch. Snapshot every key first; any refusal puts
@@ -325,6 +355,7 @@ function applySettings(file, G) {
     }
     return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
   }
+  const preferences = { applied, skipped, failed };
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
   skipped += ttlb.skipped;
@@ -334,7 +365,7 @@ function applySettings(file, G) {
   applied += progress.applied;
   skipped += progress.skipped;
   failed += progress.failed;
-  return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, rejectedProgress: progress.rejected, reason: null };
+  return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, rejectedProgress: progress.rejected, deviceSkipped, sections: { preferences, leaderboards: ttlb, progress }, reason: null };
 }
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
@@ -536,7 +567,8 @@ async function applyCareer(file, revisions) {
 }
 
 async function download(obj, name) {
-  const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(obj, null, obj.format === FORMAT ? undefined : 1)], { type: "application/json" });
+  if (obj.format === FORMAT && blob.size > SETTINGS_MAX_BYTES) throw new RangeError("Settings file exceeds the restore limit");
   if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
     await NativeDownload.saveBlob(blob, name);
     return;
@@ -548,6 +580,33 @@ async function download(obj, name) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+function settingsScope(file) {
+  const descriptions = [];
+  const groups = isObj(file.settings) ? file.settings : {};
+  const settings = Object.values(groups).reduce((n, group) => n + (isObj(group) ? Object.keys(group).length : 0), 0);
+  if (settings) descriptions.push(settings + (settings === 1 ? " preference applied" : " preferences applied"));
+  if (isObj(file.ttlb)) descriptions.push("time-trial boards merged for " + Object.keys(file.ttlb).length + " circuits");
+  const progress = file.progress || {};
+  if (progress.seasonCfg) descriptions.push("season setup replaced");
+  if (progress.circuitMastery) descriptions.push("circuit mastery merged");
+  if (progress.ghosts) descriptions.push("fastest ghosts kept");
+  if (progress.circuits) descriptions.push("custom circuits merged");
+  if (["onboarded", "onboardRaces", "pitTaught"].some(key => key in Object(progress))) descriptions.push("onboarding progress merged");
+  return descriptions.length ? descriptions.join(", ") : "No supported settings or progress";
+}
+function restoreSummary(result) {
+  const parts = [];
+  for (const [label, values] of Object.entries(result.sections || { preferences: result })) {
+    const totals = [];
+    for (const outcome of ["applied", "skipped", "rejected", "failed"]) {
+      if (values[outcome]) totals.push(values[outcome] + " " + outcome);
+    }
+    if (totals.length) parts.push(label + " (" + totals.join(", ") + ")");
+  }
+  if (result.deviceSkipped) parts.push(result.deviceSkipped + " device-specific preferences kept local");
+  if (result.sections?.progress.circuitNote) parts.push(result.sections.progress.circuitNote);
+  return "Restore result: " + (parts.join(". ") || "No changes") + ".";
 }
 function stamp() {
   const d = new Date();
@@ -575,6 +634,20 @@ function create(G) {
   let leaveSubscribed = false;
   let pickVersion = 0;
   let reloading = false;
+  let review = null;
+  const receiptKey = "apex26.settingsRestoreReceipt";
+  function clearReview() {
+    if (!review) return;
+    review.button.textContent = review.label;
+    review.cancel.hidden = true;
+    review = null;
+    receipt("");
+  }
+  function receipt(message, persist = false) {
+    const node = document.getElementById("pm-restore-result");
+    if (node) { node.textContent = message; node.hidden = !message; }
+    if (persist) try { sessionStorage.setItem(receiptKey, message); } catch (_) { /* private browsing */ }
+  }
 
   // ONE hidden <input type="file">, retargeted per use: iOS re-uses the sheet
   // and a second input would open a second one. `value = ""` before every click so
@@ -632,7 +705,8 @@ function create(G) {
         flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
-        flash(b, label, typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "FAILED");
+        flash(b, label, e instanceof RangeError && e.message === "Settings file exceeds the restore limit" ? "TOO LARGE TO RESTORE"
+          : typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "FAILED");
         Log.warn("ui", "file save failed", e && e.message);
       } finally {
         b.disabled = false;
@@ -645,7 +719,16 @@ function create(G) {
     b.id = id; b.type = "button"; b.textContent = label; b.title = title;
     b.onclick = () => {
       if (reloading) return;
-      if (!armed || armed.el !== b) {
+      const settingsFile = id === "pm-settings-load";
+      if (review && review.button === b) {
+        const applyReviewed = review.apply;
+        clearReview();
+        applyReviewed();
+        return;
+      }
+      clearReview();
+      if (!settingsFile && (!armed || armed.el !== b)) {
+        ++pickVersion;
         disarm(); unflash(b);
         armed = { el: b, label, snapshot: snapshot ? snapshot() : null };
         b.textContent = `${label} — OVERWRITE ${what}?`;
@@ -653,14 +736,15 @@ function create(G) {
         tick();
         return;
       }
-      const revisions = armed.snapshot;
-      disarm();
+      const revisions = armed && armed.snapshot;
+      disarm(); unflash(b);
       const loaded = (r) => {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
+        if (settingsFile) receipt(restoreSummary(r), r.applied > 0 && !r.failed);
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED${r.applied ? "" : ", NOTHING CHANGED"}`, 3200); return; }
-        if (!r.applied) { flash(b, label, "NOTHING TO LOAD", 2200); return; }
+        if (!r.applied) { flash(b, label, "NO CHANGES", 2200); return; }
         // A reload is the honest way to apply this: half these values are read
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing
@@ -675,10 +759,19 @@ function create(G) {
         let r;
         // A throw here would surface as an unhandled rejection over the game (#2191).
         const threw = (e) => { Log.warn("ui", "file load threw", e && e.message); return null; };
-        try { r = apply(obj, revisions); } catch (e) { r = threw(e); }
-        // The career loader is async: it awaits its restore points before writing.
-        if (r && typeof r.then === "function") r.then(loaded, (e) => loaded(threw(e)));
-        else loaded(r);
+        const perform = () => {
+          try { r = apply(obj, revisions); } catch (e) { r = threw(e); }
+          if (r && typeof r.then === "function") r.then(loaded, (e) => loaded(threw(e)));
+          else loaded(r);
+        };
+        if (settingsFile && obj.format === FORMAT) {
+          const cancel = document.getElementById("pm-restore-cancel");
+          receipt("Review this file: " + settingsScope(obj) + ".");
+          b.textContent = "APPLY SETTINGS FILE";
+          cancel.hidden = false;
+          review = { button: b, label, cancel, apply: perform };
+          b.focus();
+        } else perform();
       }, maxBytes);
       tick();
     };
@@ -690,7 +783,7 @@ function create(G) {
     if (!host || document.getElementById("pm-settings-file")) return;
     careerReady();   // warm CareerBackup before the first CAREER FILE tap
     if (!leaveSubscribed && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
-      SettingsNav.onLeave((page) => { if (page === "files") { disarm(); ++pickVersion; } });
+      SettingsNav.onLeave((page) => { if (page === "files") { disarm(); clearReview(); ++pickVersion; } });
       leaveSubscribed = true;
     }
     const h = document.createElement("h3");
@@ -701,12 +794,12 @@ function create(G) {
     note.className = "adv-help";
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
     note.id = "pm-settings-file-scope";
-    note.textContent = "SAVE ALL SETTINGS includes preferences, appearance profiles, tuners and control bindings. SAVE CHANGED SETTINGS includes only preference differences from defaults. Both files also include saved time-trial leaderboards, season setup, circuit mastery, ghosts, onboarding marks and your own circuits when present; loading merges them with yours and keeps the best laps. LOAD SETTINGS FILE asks twice, then reloads. Neither file is a complete game backup: garage builds, career and season saves, photos, personal background images, replays, accounts and network credentials are not included.";
+    note.textContent = "SAVE ALL SETTINGS includes preferences, appearance profiles, tuners and control bindings. SAVE CHANGED SETTINGS includes only preference differences from defaults. Both files also include saved time-trial leaderboards, season setup, circuit mastery, ghosts, onboarding marks and your own circuits when present; loading merges them with yours and keeps the best laps. A season setup in the file replaces yours. SHARE CHANGED PREFERENCES excludes all progress. LOAD SETTINGS FILE previews the selected file before applying it, then reloads. Neither file is a complete game backup: garage builds, career and season saves, photos, personal background images, replays, accounts and network credentials are not included.";
     const otherFiles = document.createElement("p");
     otherFiles.id = "pm-other-save-files";
     otherFiles.className = "adv-help";
     otherFiles.setAttribute("data-help", "keep");
-    otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots, the season save, licence badges and daily history. The same separate file controls are on the Save and Restore pages here. LOAD asks twice and replaces only the corresponding data, then reloads. Settings, garage and career remain separate files. Photos, personal backgrounds, replays and accounts are not included in these backups; ghosts travel in the settings file. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
+    otherFiles.textContent = "Separate backups: GARAGE → TEAM → SAVE GARAGE FILE saves parts, setups, liveries and your team. CAREER → CAREER MODES → SAVE CAREER FILE saves all six career slots, the season save, licence badges and daily history. The same separate file controls are on the Save and Restore pages here. Garage and career LOAD ask twice and replace their corresponding data, then reload. Settings, garage and career remain separate files. Photos, personal backgrounds, replays and accounts are not included in these backups; ghosts travel in the settings file. STORAGE HEALTH & RESTORE POINTS below reports browser storage and local career history; local history is not an exported backup.";
 
     const shareNote = document.createElement("p");
     shareNote.id = "pm-share-code-help";
@@ -778,6 +871,7 @@ function create(G) {
     const selectSection = (index) => {
       if (choices[index].getAttribute("aria-selected") === "true") return;
       disarm();
+      clearReview();
       ++pickVersion; // A chooser or read from the previous pane may still complete.
       sections.forEach((section, i) => { section.hidden = i !== index; });
       choices.forEach((button, i) => {
@@ -820,8 +914,19 @@ function create(G) {
     };
     const saveHelp = document.createElement("p");
     saveHelp.className = "adv-help";
-    saveHelp.textContent = "Save all settings for a backup, or just your changes to share a smaller file.";
-    sections[0].append(saveHelp,
+    saveHelp.textContent = "Share changed preferences alone, or save a backup with progress.";
+    const inventory = document.createElement("details");
+    const inventoryTitle = document.createElement("summary");
+    inventoryTitle.textContent = "Review backup contents";
+    const inventoryText = document.createElement("p");
+    inventory.append(inventoryTitle, inventoryText);
+    inventory.addEventListener("toggle", () => {
+      if (inventory.open) inventoryText.textContent = "Changed settings backup: " + settingsScope(collect("changes", G)) +
+        ". All settings backup: " + settingsScope(collect("all", G)) + ".";
+    });
+    sections[0].append(saveHelp, inventory,
+      saveBtn("pm-settings-share-preferences", "SHARE CHANGED PREFERENCES", "Changed preferences only, without progress or leaderboards.",
+        () => collect("preferences", G), () => `apex26-preferences-${stamp()}.json`),
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",
         "Changed preferences plus saved time-trial leaderboards, when present. This is not a full game backup.",
         () => collect("changes", G), () => `apex26-settings-changes-${stamp()}.json`),
@@ -837,11 +942,23 @@ function create(G) {
     const restoreHelp = document.createElement("p");
     restoreHelp.className = "adv-help";
     restoreHelp.setAttribute("data-help", "keep");
-    restoreHelp.textContent = "Replace settings, garage or career data from a saved file. Press Load twice to confirm, then choose the file. Each file replaces only its own data and the game reloads after applying it; best laps are merged.";
-    sections[1].append(restoreHelp,
-      loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
-        "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
-        (obj) => applySettings(obj, G), "SETTINGS", null, SETTINGS_MAX_BYTES),
+    restoreHelp.textContent = "Replace settings, garage or career data from a saved file. Choose a settings file and review it before applying. For a garage or career file, press Load twice and choose the file. Each file replaces only its own data and the game reloads after applying it; best laps are merged.";
+    const result = document.createElement("p");
+    result.id = "pm-restore-result";
+    result.className = "adv-help";
+    result.setAttribute("data-help", "keep");
+    result.setAttribute("role", "status");
+    try { result.textContent = sessionStorage.getItem(receiptKey) || ""; } catch (_) { /* private browsing */ }
+    const cancel = document.createElement("button");
+    cancel.id = "pm-restore-cancel";
+    cancel.type = "button"; cancel.hidden = true;
+    cancel.textContent = "CANCEL RESTORE";
+    const settingsLoad = loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
+      "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
+      (obj) => applySettings(obj, G), "SETTINGS", null, SETTINGS_MAX_BYTES);
+    cancel.onclick = () => { clearReview(); receipt("Restore cancelled."); settingsLoad.focus(); };
+    result.hidden = !result.textContent;
+    sections[1].append(restoreHelp, settingsLoad, cancel,
       groupHead("GARAGE FILE"),
       loadBtn("pm-garage-load", "LOAD GARAGE FILE", "Replace garage data only. Settings and career saves are kept.",
         applyGarage, "THE GARAGE", null, GARAGE_MAX_BYTES),
@@ -861,7 +978,7 @@ function create(G) {
     exclusions.setAttribute("data-help", "keep");
     exclusions.textContent = "Settings, garage and career are separate files. Photos, background images, replays and accounts are excluded.";
     selectSection(0);
-    host.append(h, nav, ...sections, exclusions, scope);
+    host.append(h, nav, result, ...sections, exclusions, scope);
     if (typeof SaveHealth !== "undefined" && SaveHealth.mount) SaveHealth.mount(host);
   }
 

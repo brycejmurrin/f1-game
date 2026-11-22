@@ -1,0 +1,14 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": -4,
+      "lines": -4
+    },
+    "js/net/lobby.js": {
+      "lines": -7
+    }
+  },
+  "tree": {
+    "eagerCodeBytes": -3839
+  }
+}

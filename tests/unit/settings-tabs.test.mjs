@@ -424,3 +424,23 @@ test("SettingsNav.lazy: the audited Settings-only initialisers go through the ga
     assert.match(src, /SettingsNav\.lazy\(initUI\); else initUI\(\);/, f + " wires its rows through SettingsNav.lazy");
   }
 });
+
+test("Graphics details can be retried after a failed load without changing the player's new page", async () => {
+  const { nav, dom, ctx } = boot({ ensure: () => true });
+  const host = dom.byId("pm-panel-graphics"), loads = [];
+  ctx.GLX = {};
+  ctx.ScriptLoader = { create: () => ({ load: () => new Promise(resolve => loads.push(resolve)) }) };
+  nav.show("graphics", false);
+  const retry = host.querySelector("[data-graphics-retry]");
+  assert.ok(retry.disabled);
+  loads.shift()(false); await tick();
+  assert.equal(retry.disabled, false);
+  assert.equal(retry.textContent, "Graphics details unavailable · Retry");
+  retry.onclick();
+  nav.show("audio", false);
+  let mounted = 0;
+  ctx.DesktopGraphics = { mount: () => mounted++ };
+  loads.shift()(true); await tick();
+  assert.equal(mounted, 1); assert.equal(nav.current(), "audio");
+  assert.ok(!host.children.includes(retry));
+});

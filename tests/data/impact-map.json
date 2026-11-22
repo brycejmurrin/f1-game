@@ -1858,6 +1858,9 @@
       "preview": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "setApiLoader": [
+        "tests/unit/flyby-panel.test.mjs"
+      ],
       "show": [
         "tests/unit/load-order.test.mjs"
       ]
@@ -2225,7 +2228,8 @@
       ],
       "applyPreset": [
         "tests/unit/cam-context-alloc.test.mjs",
-        "tests/unit/camera-defaults.test.mjs"
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs"
       ],
       "applyToAllModes": [
         "tests/unit/cam-context-alloc.test.mjs"
@@ -2350,6 +2354,7 @@
       "reset": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "resetAll": [
@@ -2375,6 +2380,7 @@
       "setGlobal": [
         "tests/unit/cam-context-alloc.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-tuner-a11y.test.mjs",
         "tests/unit/import-hardening-apxc1.test.mjs"
       ],
       "setScoped": [
@@ -6099,6 +6105,7 @@
         "tests/unit/save-schema-registry.test.mjs"
       ],
       "ttBoard": [
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/store-key-types.test.mjs"
@@ -6108,6 +6115,7 @@
         "tests/unit/store-key-types.test.mjs"
       ],
       "ttBoardAddResult": [
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/settings-ttlb-backup.test.mjs",
         "tests/unit/store-key-types.test.mjs"
       ],
@@ -6132,7 +6140,6 @@
         "tests/unit/progress-backup.test.mjs",
         "tests/unit/season-calendar-default.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
-        "tests/unit/settings-export.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/store-null-default.test.mjs",
         "tests/unit/store-raw-fail-notify.test.mjs",
@@ -8134,6 +8141,7 @@
       "snapGameCam": [
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
+        "tests/unit/flyby-panel.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "startRace": [
@@ -10658,6 +10666,11 @@
         "tests/unit/perf-try.test.mjs"
       ]
     },
+    "js/lighting/tuner-boot.js": {
+      "create": [
+        "tests/unit/load-order.test.mjs"
+      ]
+    },
     "js/lighting/tuner-panel.js": {
       "buildLightTunePanel": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
@@ -10669,6 +10682,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "gateNote": [
@@ -10678,7 +10692,8 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "update": [
-        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/load-order.test.mjs"
       ],
       "*": [
         "tests/specs/lighting-tuner-grade.spec.js",
@@ -12019,6 +12034,7 @@
       ],
       "setShed": [
         "tests/unit/extreme-lights-sky.test.mjs",
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/tier-record.test.mjs",
         "tests/unit/tsl-gi.test.mjs"
@@ -14898,6 +14914,7 @@
         "tests/unit/race-setup-sheets.test.mjs"
       ],
       "setNetRoom": [
+        "tests/unit/duel-row.test.mjs",
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "sheetTitle": [
@@ -19301,8 +19318,7 @@
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/ui/appearance-studio.js": {
@@ -19344,8 +19360,7 @@
       ],
       "*": [
         "tests/unit/appearance-shapes.test.mjs",
-        "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs"
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/ui/aria-state.js": {
@@ -19458,9 +19473,12 @@
       ]
     },
     "js/ui/desktop-graphics.js": {
+      "mount": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
       "*": [
         "tests/specs/settings-reload.spec.js",
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/settings-search.test.mjs"
       ]
     },
     "js/ui/dock-layout.js": {
@@ -20682,7 +20700,6 @@
       ],
       "create": [
         "tests/specs/photo-studio.spec.js",
-        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
       "crop": [
@@ -20721,6 +20738,7 @@
       ],
       "create": [
         "tests/specs/photo-studio.spec.js",
+        "tests/unit/photo-kit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
       "crop": [
@@ -21417,6 +21435,9 @@
       ],
       "register": [
         "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/settings-search.test.mjs"
+      ],
+      "registerRaceSettings": [
         "tests/unit/settings-search.test.mjs"
       ],
       "reveal": [
@@ -22129,6 +22150,9 @@
     },
     "js/xr/xr-ui.js": {
       "ensureButton": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "flashMessage": [
         "tests/unit/xr-phase0.test.mjs"
       ],
       "mount": [

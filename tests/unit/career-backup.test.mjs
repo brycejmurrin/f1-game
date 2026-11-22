@@ -1056,12 +1056,12 @@ function bootBackupUi(options = {}) {
   return { G, dom, ui, exports, notices, clickImport, selectBackup };
 }
 
-test("career slot cards expose EXPORT and IMPORT buttons", () => {
+test("career file actions identify their scope and slot cards offer recovery", () => {
   const { G, exports } = bootBackupUi();
   const left = G.$("cr-left");
   const acts = left.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
-  assert.ok(acts.includes("EXPORT"), "used slot must offer EXPORT");
-  assert.ok(acts.includes("IMPORT"), "slot cards must offer IMPORT");
+  assert.ok(acts.includes("EXPORT ALL CAREER SAVES"), "one export includes both modes");
+  assert.ok(acts.includes("RESTORE DRIVER CAREER SAVES"), "restore belongs to the mode");
   const dels = left.querySelectorAll(".cr-slot-del").map((n) => n.textContent);
   assert.deepEqual(dels, ["DELETE"], "cr-slot-del is DELETE-only (never EXPORT/IMPORT)");
 
@@ -1073,11 +1073,30 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
   // Empty slots still get IMPORT (restore into an empty card).
   const right = G.$("cr-right");
   const emptyActs = right.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
-  assert.ok(emptyActs.includes("IMPORT"));
-  assert.ok(!emptyActs.includes("EXPORT"), "empty slots do not EXPORT");
+  assert.ok(emptyActs.includes("RESTORE MY TEAM SAVES"));
+  assert.ok(emptyActs.includes("RECOVER SLOT 1"));
+  assert.equal(right.querySelectorAll('[data-cr-act="import"]').length, 1);
+  assert.equal(right.querySelectorAll('[data-cr-act="export"]').length, 0, "one export across both modes");
   assert.equal(right.querySelectorAll(".cr-slot-del").length, 0, "empty slots have no DELETE");
 });
 
+
+test("finishing a previous restore preserves a newer file review", async () => {
+  const h = loadHarness();
+  let finish;
+  const ui = bootBackupUi({ Career: h.Career, store: h.store, CareerBackup: {
+    ...h.CareerBackup, applyWithUndo: () => new Promise(resolve => { finish = resolve; }),
+  } });
+  const envelope = { format: h.CareerBackup.FORMAT, slots: [{ flavour: "driver", i: 0, data: save() }] };
+  await ui.selectBackup(envelope);
+  await ui.clickImport();
+  ui.ui.close(); ui.ui.openSlots();
+  await ui.selectBackup(envelope, "right");
+  finish({ ok: true, needsConfirm: true });
+  await Promise.resolve();
+  assert.equal(ui.G.$("cr-right").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
+  assert.equal(ui.G.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "RESTORE DRIVER CAREER SAVES");
+});
 
 test("IMPORT confirmation keeps the reviewed revision and previews backup destinations", async () => {
   const h = loadHarness();
@@ -1613,7 +1632,7 @@ test('recovery qualifying uses the merged PR1517 validator without losing owners
  const restored=h.store.get('season');for(const key of ['qualiOrder','qualiTrack','qualiMode','qualiSeat'])assert.deepEqual(JSON.parse(JSON.stringify(restored[key])),season[key]);
 });
 async function chooseRecovery(ui, raw) {
- const button=ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1];
+ const button=ui.G.$('cr-left').querySelectorAll('[data-cr-act="recover"]')[1];
  ui.G.$('cr-left').replaceChildren();ui.G.$('cr-right').replaceChildren();button.onclick({stopPropagation(){}});
  const picker=ui.dom.document.body.querySelector('input'),text=JSON.stringify(raw);
  picker.files=[{size:text.length,text:async()=>text}];picker.onchange();await Promise.resolve();await Promise.resolve();
@@ -1627,7 +1646,7 @@ test('recovery file UI previews its chosen destination and Cancel leaves every s
 });
 test('recovery file UI confirms only its reviewed card and reports durable completion',async()=>{
  const h=loadHarness();h.Career.start({teamId:'haas',seed:1});const ui=bootBackupUi({Career:h.Career,CareerBackup:h.CareerBackup,store:h.store});
- await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777})});ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1].onclick({stopPropagation(){}});
+ await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777})});ui.G.$('cr-left').querySelectorAll('[data-cr-act="recover"]')[1].onclick({stopPropagation(){}});
  for(let i=0;i<4;i++)await Promise.resolve(); // the confirm awaits CareerBackup.applyWithUndo
  assert.equal(h.store.get('career.driver.1').money,777);assert.notEqual(h.store.get('career.driver.0').money,777);assert.equal(ui.notices.at(-1),'CAREER RESTORED');
 });

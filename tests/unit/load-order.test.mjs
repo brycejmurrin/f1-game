@@ -847,6 +847,8 @@ test("LAZY_CAM_EDITOR is tagless; FULL keeps FlybyPanel algebra + CamTunerPanel 
   const full = new Set(MANIFEST.FULL);
   assert.ok(full.has("js/camera/flyby-panel.js"), "shot algebra stays FULL for loadSaved at boot");
   assert.ok(full.has("js/camera/cam-tuner-boot.js"), "CamTunerPanel stub stays FULL");
+  assert.ok(full.has("js/lighting/tuner-boot.js"));
+  assert.ok(MANIFEST.LAZY_CAM_EDITOR.includes("js/lighting/tuner-panel.js"));
   assert.ok(!full.has("js/camera/tuner-panel.js"));
   assert.ok(!full.has("js/camera/flyby-editor.js"));
   for (const f of (MANIFEST.LAZY_CAM_EDITOR || [])) {

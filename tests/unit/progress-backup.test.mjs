@@ -124,7 +124,7 @@ test("custom circuits travel in their apex26.tracks collection and merge through
   assert.deepEqual(b.P.apply(file), { applied: 1, skipped: 0, rejected: 0, failed: 0 });
   assert.deepEqual(Array.from(dst.C.list(), (it) => it.name), ["BACKUP LOOP"]);
   assert.deepEqual(b.P.apply(file), { applied: 0, skipped: 1, rejected: 0, failed: 0 }, "an existing design wins");
-  assert.deepEqual(b.P.apply({ circuits: { format: "apex26.tracks", v: 9, items: [] } }), { applied: 0, skipped: 0, rejected: 1, failed: 0 });
+  assert.deepEqual(b.P.apply({ circuits: { format: "apex26.tracks", v: 9, items: [] } }), { applied: 0, skipped: 0, rejected: 1, failed: 0, circuitNote: "Custom circuits omitted (format)" });
 });
 
 test("circuit-only restore counts the registry's duplicate-write retry by durability", () => {

@@ -821,6 +821,7 @@
     ]
   ],
     LAZY_CAM_EDITOR: [
+    "js/lighting/tuner-panel.js",
     "js/camera/tuner-panel.js",
     "js/camera/flyby-editor.js"
   ],

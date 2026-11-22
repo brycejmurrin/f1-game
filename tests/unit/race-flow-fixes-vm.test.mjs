@@ -410,7 +410,9 @@ test("a flag that falls under the pause closes the pause tools: no lt-open / pho
     assert.equal(G.state, "race");
     const tod0 = G.raceTimeOfDay;
     $("pausebtn").onclick();
-    $("pm-lighting").onclick();   // SETTINGS > LIGHTING TUNER, then a preview and FREE CAMERA inside it
+    $("pm-settings").onclick();
+    $("pm-open-visual").onclick();
+    await $("pm-lighting").onclick();   // SETTINGS > LIGHTING TUNER, then a preview and FREE CAMERA inside it
     G.setTimeOfDay(tod0 === "night" ? "day" : "night");
     $("pc-toggle").onclick();
     assert.ok(doc.body.classList.contains("lt-open") && G.photoMode, "precondition: the tuner and photo mode are up");

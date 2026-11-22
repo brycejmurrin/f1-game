@@ -48,6 +48,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   element("vs-roster");
   element("vs-player-count");
   element("vs-race-summary");
+  element("vs-race-note");
   const room = element("vs-room");
   const status = element("vs-status");
   status.classList = { toggle() {} };
@@ -1200,6 +1201,27 @@ test("a guest accepts STORM in settings and in a MIXED plan, and still rejects u
     h.G.raceLaps = 3;
     s.deliver("settings", initialGuestSettings({ laps: 9, weather: "rain", wxArc: { to: "storm", dur: 200 }, revision: 2 }));
     assert.equal(h.G.raceLaps, 9, "a MIXED plan drawn toward storm is accepted");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest sees the rule that cleared ready and keeps their solo Duel choice after a failed qualifying start", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    h.G.duel = true;
+    s.deliver("settings", initialGuestSettings({ difficulty: "hard", quali: true, revision: 1 }));
+    assert.match(h.elements.get("vs-race-note").textContent, /Difficulty/);
+    h.lobby.setReady(true);
+    assert.doesNotMatch(h.elements.get("vs-race-note").textContent, /Host changed/);
+    let duelDuringQualifying;
+    h.G.openQualiForNet = async () => {
+      duelDuringQualifying = h.G.duel;
+      throw new Error("qualifying scene failed");
+    };
+    s.deliver("go", { revision: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(duelDuringQualifying, false);
+    assert.equal(h.lobby.qualifying(), false);
+    assert.equal(h.G.duel, true);
   } finally { h.lobby.cancel(); }
 });
 

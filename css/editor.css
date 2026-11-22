@@ -118,7 +118,7 @@
 .td-pane { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .td-group { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-label {
-  font-size: var(--label); font-weight: 700; font-style: italic;
+  font-size: max(var(--label), var(--td-fs-floor)); font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
 }
 /* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
@@ -810,6 +810,24 @@
   --tap-sm: max(30px, calc(24px / var(--td-zoom)));
   --tap-min: max(24px, calc(24px / var(--td-zoom)));
   --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--td-zoom)));
+}
+/* The designer has its own zoom, including the default phone size when no
+   Appearance override exists. Keep its controls usable in painted pixels. */
+@media (pointer: coarse) {
+  #trackdesigner[open],
+  :root[data-look-designer-size] #trackdesigner {
+    --td-touch-floor: calc(44px / var(--td-zoom));
+    --tap: max(var(--tap-0), var(--td-touch-floor));
+    --tap-sm: max(30px, var(--td-touch-floor));
+    --tap-paint: max(44px, var(--td-touch-floor));
+    --chip-h: max(40px, var(--td-touch-floor));
+  }
+  #trackdesigner[open] :is(button, summary, .td-input),
+  #trackdesigner[data-foot="in"] [data-role="mode-bar"] > [data-role="context-help"] {
+    min-block-size: var(--td-touch-floor);
+    min-inline-size: var(--td-touch-floor);
+  }
+  #trackdesigner[open] .td-stage > canvas[data-role="profile"] { min-height: var(--td-touch-floor); }
 }
 :root[data-look-designer-split] #trackdesigner[data-foot="in"] .td-body { grid-template-columns: minmax(0, 1fr) minmax(250px, calc(100% - var(--look-designer-split))); }
 @media (min-width: 761px) and (orientation: landscape) {

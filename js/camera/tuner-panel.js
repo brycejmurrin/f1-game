@@ -21,10 +21,32 @@ function syncContext() {
   const team = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[G.teamIdx];
   CamTune.setContext(trackId, team && team.id);
 }
-function framingValue(d, mode) {
-  if (_scope === "global") return CamTune.getGlobal(d.id);
-  if (_scope === "track" || _scope === "car") return CamTune.getScoped(_scope, mode, d.id);
-  return CamTune.getModeOnly(mode, d.id);
+const layerLabel = { factory: "Factory", global: "All cameras", mode: "This camera", car: "This car", track: "This track" };
+function addLayerInfo(item, input, d, framing) {
+  const note = document.createElement("p");
+  note.id = input.id + "-scope"; note.className = "as-note";
+  input.setAttribute("aria-describedby", note.id);
+  const reset = document.createElement("button");
+  reset.type = "button"; reset.className = "opt-btn lt-preview-btn";
+  reset.textContent = "Use inherited value";
+  reset.setAttribute("aria-label", "Use inherited value for " + d.label);
+  reset.onclick = () => {
+    CamTune.clearField(_scope, framing ? curMode() : null, d.id);
+    CamTune.persist(_scope === "mode" ? "modes" : _scope);
+    refreshCamTunePanel(); input.focus();
+    applyLive();
+  };
+  item.appendChild(note); item.appendChild(reset);
+  return () => {
+    const state = CamTune.editorValue(_scope, framing ? curMode() : null, d.id);
+    let message = state.editSource === state.layer ? "" : "Inherited from " + layerLabel[state.editSource];
+    if (state.source !== state.editSource) {
+      message += (message ? " · " : "") + "Preview uses " + layerLabel[state.source] + " " + fmtCt(d, state.value);
+    }
+    note.textContent = message; note.hidden = !message;
+    reset.hidden = state.layer === "global" || state.layer !== state.editSource;
+    return state.editValue;
+  };
 }
 function setFraming(d, mode, value) {
   if (_scope === "global") return CamTune.setGlobal(d.id, value);
@@ -40,10 +62,6 @@ function resetScopedCam() {
   CamTune.resetScoped(_scope);
   const modes = entry && entry.modes || {};
   for (const m of Object.keys(modes)) if (m !== mode) for (const id of Object.keys(modes[m])) CamTune.setScoped(_scope, m, id, modes[m][id]);
-}
-function comfortValue(d) {
-  return _scope === "track" || _scope === "car"
-    ? CamTune.comfortGetScoped(_scope, d.id) : CamTune.comfortGetGlobal(d.id);
 }
 function setComfort(d, value) {
   return _scope === "track" || _scope === "car"
@@ -134,7 +152,7 @@ function buildTools(host) {
   presets.id = "ct-presets";
   const pLbl = document.createElement("span");
   pLbl.className = "lt-preview-lbl";
-  pLbl.textContent = "PRESET";
+  pLbl.textContent = "ALL CAMERAS PRESET";
   presets.appendChild(pLbl);
   const table = CamTune.presets();
   for (const id of Object.keys(table)) {
@@ -145,8 +163,6 @@ function buildTools(host) {
     b.onclick = () => {
       CamTune.applyPreset(id);
       CamTune.persist();
-      CamTune.persist("track");
-      CamTune.persist("car");
       applyLive();
       refreshCamTunePanel();
     };
@@ -237,7 +253,7 @@ function buildTools(host) {
     inp.setAttribute("aria-label", d.label);
     inp.oninput = () => {   // live apply per tick; the save waits for the release (#5042)
       setComfort(d, parseFloat(inp.value));
-      b.textContent = fmtCt(d, comfortValue(d));
+      b.textContent = fmtCt(d, inp.readLayer());
       updateCtProfileLabel();
       applyLive();
     };
@@ -245,6 +261,7 @@ function buildTools(host) {
     lab.appendChild(span); lab.appendChild(inp);
     item.appendChild(lab);
     if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
+    inp.readLayer = addLayerInfo(item, inp, d, false);
     host.appendChild(item);
   }
   for (const d of FX) {
@@ -305,7 +322,7 @@ function buildCamTunePanel() {
       inp.oninput = () => {
         if (_scope === "mode") CamTune.set(curMode(), d.id, parseFloat(inp.value));
         else setFraming(d, curMode(), parseFloat(inp.value));
-        const v = framingValue(d, curMode());
+        const v = inp.readLayer();
         b.textContent = fmtCt(d, v);
         updateCtProfileLabel();
         applyLive();
@@ -314,6 +331,7 @@ function buildCamTunePanel() {
       lab.appendChild(span); lab.appendChild(inp);
       item.appendChild(lab);
       if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
+      inp.readLayer = addLayerInfo(item, inp, d, true);
       item.id = "ct-row-" + d.id;   // toggled per mode in refreshCamTunePanel
       host.appendChild(item);
     }
@@ -373,13 +391,13 @@ function updateCtProfileLabel() {
   }
   const modes = $("ct-modes");
   if (modes) for (const b of modes.children) {
-    const on = _scope === "mode" && b.dataset.mode === curMode();
+    const on = b.dataset.mode === curMode();
     b.classList.toggle("active", on);
     b.classList.toggle("tuned", CamTune.count(b.dataset.mode) > 0);
     b.setAttribute("aria-selected", on ? "true" : "false");
     b.tabIndex = on ? 0 : -1;
     if (on) {
-      b.scrollIntoView({ block: "nearest", inline: "center" });
+      if (_scope === "mode") b.scrollIntoView({ block: "nearest", inline: "center" });
       $("ct-rows").setAttribute("aria-labelledby", b.id);
     }
   }
@@ -395,17 +413,19 @@ function updateCtProfileLabel() {
 function refreshCamTunePanel() {
   if (!$("ct-rows").dataset.built) return;
   syncContext();
+  $("ct-presets").hidden = scoped();
+  $("ct-copyrow").hidden = scoped() || _scope === "global";
   const mode = curMode();
   for (const d of DEFS) {
     const inp = $("ct-in-" + d.id), b = $("ct-v-" + d.id), row = $("ct-row-" + d.id);
-    const v = framingValue(d, mode);
+    const v = inp.readLayer();
     if (inp) inp.value = v;
     if (b) b.textContent = fmtCt(d, v);
     if (row) row.style.display = knobApplies(d, mode) ? "" : "none";
   }
   for (const d of COMFORT) {
     const inp = $("ct-cin-" + d.id), b = $("ct-cv-" + d.id);
-    const v = comfortValue(d);
+    const v = inp.readLayer();
     if (inp) inp.value = v;
     if (b) b.textContent = fmtCt(d, v);
   }
@@ -457,7 +477,11 @@ $("ct-reset").onclick = () => {
   else CamTune.reset(curMode());
   CamTune.persist(scoped() ? _scope : undefined); applyLive(); refreshCamTunePanel();
 };
+$("ct-reset-all").textContent = "RESET ALL PROFILES";
 $("ct-reset-all").onclick = () => {
+  const pack = CamTune.exportPack();
+  const tracks = Object.keys(pack.tracks || {}).length, cars = Object.keys(pack.cars || {}).length;
+  if (!window.confirm("Reset all camera profiles, including " + tracks + " track profiles and " + cars + " car profiles?")) return;
   CamTune.resetAll(); CamTune.persist(); CamTune.persist("track"); CamTune.persist("car");
   applyLive(); refreshCamTunePanel(); $("ct-json").hidden = true;
 };

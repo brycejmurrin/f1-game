@@ -154,6 +154,23 @@ test("every live Settings row left off its value comes back after a reload (pers
 
 test.describe("individual desktop graphics", () => {
   test.use({ viewport: { width: 1366, height: 768 }, hasTouch: false, isMobile: false });
+  test("updates open detail rows after an edit from another tab", async ({ page, context }) => {
+    const peer = await context.newPage();
+    for (const tab of [page, peer]) {
+      await tab.goto("/");
+      await boot(tab);
+      await tab.locator("#mb-settings").click();
+      await tab.locator("#pm-open-graphics").click();
+      await tab.getByText("Graphics details", { exact: true }).click();
+    }
+    const hdr = tab => tab.getByRole("combobox", { name: "HDR output", exact: true });
+    const trees = tab => tab.getByRole("combobox", { name: "High-detail trees", exact: true });
+    await hdr(page).selectOption("on");
+    await expect(hdr(peer)).toHaveValue("on");
+    await trees(peer).selectOption("on");
+    await expect(trees(page)).toHaveValue("on");
+    await expect(hdr(page)).toHaveValue("on");
+  });
   test("saves independent effects across a reload and restores preset choices", async ({ page }) => {
     async function openDetail() {
       await page.locator("#mb-settings").click();

@@ -367,6 +367,7 @@ const NetLobby = (function () {
       clearInterval(pumpTimer); pumpTimer = null;
       for (const timer of rosterTimers.values()) clearTimeout(timer);
       rosterTimers.clear();
+      changedRuleNames = [];
       settingsAccepted = true; settingsNeedsReady = false; settingsRevision = 0; settingsFingerprint = null;
       clearFailReason();
       // onJoiner stamps codeReopen before waitForOpen; a failed ICE then
@@ -862,7 +863,7 @@ const NetLobby = (function () {
         : "The host is picking the race. Choose your car.");
     }
 
-    const { GRID_LABEL, RULES, own, normaliseSettings, circuitPayload, installCircuit } = LobbySettings;
+    const { raceRuleRows, roomOnly, RULES, own, normaliseSettings, circuitPayload, installCircuit } = LobbySettings;
     const customPicked = () => LobbySettings.customPicked(G);
 
     function publishSettings() {
@@ -915,31 +916,21 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, Object.assign(snapshot, { revision: settingsRevision }));
     }
 
-    // ROOM RULES ARE IN MEMORY ONLY. G.raceTyreWear / G.raceReliability are
-    // the PERSISTING setters (store "tyreWear" / "reliability"), so a guest's
-    // own saved choice was overwritten for good by any room it joined. The
-    // race reads the in-memory value; the save is put back exactly as it was
-    // (unset stays unset). The other rules' G setters do not touch the store.
-    function roomOnly(key, apply) {
-      const st = G.store;
-      const before = st && st.get ? st.get(key, undefined) : undefined;
-      apply();
-      if (!st) return;
-      if (before === undefined) { if (st.rawDel) st.rawDel(key); }
-      else if (st.set) st.set(key, before);
-    }
-
     // A GUEST GETS ITS OWN RULES BACK when the room or the race is over: the
     // host's overwrote them in memory and nothing put them back. RULES lives
     // on LobbySettings; wxArc restores to "no plan" (its getter would draw one).
     let ownRules = null;
+    let soloDuel = null;
+    let changedRuleNames = [];
     function restoreOwnRules() {
       const snap = ownRules;
-      if (!snap || (G.netPlay && G.netPlay.active && G.netPlay.active())) return false;   // never mid-race
+      if (G.netPlay && G.netPlay.active && G.netPlay.active()) return false;   // never mid-race
+      if (soloDuel !== null) { G.duel = soloDuel; soloDuel = null; }
+      if (!snap) return false;
       ownRules = null;
       for (const [, prop, key] of RULES) {
         if (!own(snap, prop) || snap[prop] === undefined) continue;
-        if (key) roomOnly(key, () => { G[prop] = snap[prop]; }); else G[prop] = snap[prop];
+        if (key) roomOnly(G.store, key, () => { G[prop] = snap[prop]; }); else G[prop] = snap[prop];
       }
       G.wxArcPlan = null;
       return true;
@@ -964,6 +955,7 @@ const NetLobby = (function () {
       if (settingsFingerprint === null || fingerprint !== settingsFingerprint || revision !== settingsRevision) {
         settingsNeedsReady = true; _ready.clear(); if (selfReady) setReady(false);
       }
+      const previousRows = settingsAccepted && settingsFingerprint !== null ? new Map(raceRuleRows(G)) : null;
       settingsRevision = revision; settingsFingerprint = fingerprint; settingsAccepted = true;
       if (!ownRules) { ownRules = {}; for (const [, prop] of RULES) ownRules[prop] = G[prop]; }
       if (own(next, "circuit")) {
@@ -985,12 +977,15 @@ const NetLobby = (function () {
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
-      if (own(next, "tyres")) roomOnly("tyreWear", () => { G.raceTyreWear = next.tyres; });
-      if (own(next, "reliab")) roomOnly("reliability", () => { G.raceReliability = next.reliab; });
-      if (own(next, "dirtyAir")) roomOnly("dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
-      if (own(next, "aiPace")) roomOnly("aiPace", () => { G.aiPace = next.aiPace; });
+      if (own(next, "tyres")) roomOnly(G.store, "tyreWear", () => { G.raceTyreWear = next.tyres; });
+      if (own(next, "reliab")) roomOnly(G.store, "reliability", () => { G.raceReliability = next.reliab; });
+      if (own(next, "dirtyAir")) roomOnly(G.store, "dirtyAir", () => { G.raceDirtyAir = next.dirtyAir; });
+      if (own(next, "aiPace")) roomOnly(G.store, "aiPace", () => { G.aiPace = next.aiPace; });
       if (own(next, "seed")) G.seed = next.seed;           // rewinds the sim stream: pre-race only, by construction
       if (own(next, "round")) G.raceRound = next.round;
+      if (previousRows) {
+        changedRuleNames = raceRuleRows(G).filter(([name, value]) => previousRows.get(name) !== value).map(([name]) => name);
+      }
       renderRoom();
       return true;
     }
@@ -1015,7 +1010,7 @@ const NetLobby = (function () {
       }
       const unticked = selfReady && unverified()[0];
       if (unticked) { selfReady = false; say("Check that both screens show code " + _verify.get(unticked) + ", then tap CODES MATCH before READY.", true); }
-      if (selfReady) settingsNeedsReady = false;
+      if (selfReady) { settingsNeedsReady = false; changedRuleNames = []; }
       if (sessions.size) broadcast(NetPlay.EV.READY, { ready: selfReady, revision: settingsRevision });
       renderRoom();
     }
@@ -1206,25 +1201,15 @@ const NetLobby = (function () {
       const e = els();
       if (!e.roomStep || e.roomStep.hidden) return;
       const host = role === "host";
-      const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
-      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Cloudy", fog: "Fog", storm: "Storm" };
-      const arc = G.raceChangeable && G.wxArcPlan;
-      const wx = (WX_LABEL[G.raceWeather] || "Mixed") + (arc && WX_LABEL[arc.to] ? " → " + WX_LABEL[arc.to] : "");
-      const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
-        ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
       if (e.raceSummary) {
         const frag = document.createDocumentFragment();
-        frag.appendChild(summaryRow("Circuit", track ? (track.name || track.id) : "—"));
-        frag.appendChild(summaryRow("Laps", G.raceLaps));
-        frag.appendChild(summaryRow("Qualifying lap", G.raceQuali ? "On" : "Off"));
-        frag.appendChild(summaryRow("Grid", GRID_LABEL[G.raceGrid] || (G.raceQuali ? "Qualifying lap" : "Pace order")));
-        frag.appendChild(summaryRow("Weather", wx));
-        frag.appendChild(summaryRow("Time", tod));
+        for (const [label, value] of raceRuleRows(G)) frag.appendChild(summaryRow(label, value));
         replace(e.raceSummary, frag);
       }
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
         e.raceNote.textContent = host ? ""
+          : changedRuleNames.length ? "Host changed " + changedRuleNames.join(", ") + ". Review the rules and mark Ready again."
           : "The host chooses the circuit and conditions. If they leave, their rivals continue as AI.";
         e.raceNote.hidden = host;
       }
@@ -1348,6 +1333,12 @@ const NetLobby = (function () {
     }
 
     let friendQualifying = false;
+    function qualifyingFailed() {
+      cancel();
+      if (G.quitToMenu) G.quitToMenu();
+      if (G.announce) G.announce("COULD NOT START QUALIFYING — BACK TO MENU", 4, "info");
+    }
+
     function beginRace() {
       // BOTH peers start the sim stream from its seed: the guest was rewound by
       // applySettings, but the host sat wherever its earlier races left it, so
@@ -1355,6 +1346,8 @@ const NetLobby = (function () {
       // different AI fields on the two screens. Re-setting the seed resets the
       // stream only (simSeed keeps _simSeed, which luckSeed reads).
       G.seed = G.seed;
+      if (soloDuel === null) soloDuel = !!G.duel;
+      G.duel = false;   // qualifying and the race both use the full room grid
       qualiAborted = false;
       if (G.raceQuali && G.openQualiForNet) {
         friendQualifying = true;
@@ -1366,16 +1359,17 @@ const NetLobby = (function () {
           G.flow = "gp";
           opened = G.openQualiForNet(finishStart);   // calls back when TO THE GRID is pressed
         } catch (e) {
-          friendQualifying = false;
-          say("Could not start qualifying: " + (e && e.message), true);
+          qualifyingFailed();
           return;
         }
         close();         // the sheet is the screen now — but the SESSION stays open
         // Prepare failure leaves friendQualifying true; cancel if sheet stays hidden.
+        const generation = operationGeneration;
+        const stillOpening = () => operationCurrent(generation) && friendQualifying;
         Promise.resolve(opened).then(() => {
           const sheet = $("quali");
-          if (friendQualifying && sheet && sheet.hidden) cancel();
-        }, () => {});
+          if (stillOpening() && sheet && sheet.hidden) qualifyingFailed();
+        }, () => { if (stillOpening()) qualifyingFailed(); });
         return;
       }
       finishStart();
@@ -1405,7 +1399,6 @@ const NetLobby = (function () {
         // or a time trial. flow/session are the authority (js/game.js).
         G.flow = "gp";
         G.session = "race";
-        G.duel = false;   // the room's grid is every peer's; a duel would trim the host's to two cars
         // startRace is ASYNC (it awaits ensureScenery) — without the await,
         // netPlay.start() below ran before makeCars()/gridUp(): on a fresh
         // page G.cars was [] (no_slot → cancel → quitToMenu, the friend race

@@ -41,10 +41,6 @@ function boot(file, extra = {}, dom = {}) {
   });
   ctx.globalThis = ctx; ctx.self = ctx;
   for (const f of [file].flat()) {
-    if (f === "js/ui/appearance-studio.js") {
-      const body = "js/ui/appearance-studio-ui.js";
-      vm.runInContext(read(body), ctx, { filename: absSrc(body) });
-    }
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   const at = { lookups: lookups.slice(), listeners: docListeners.slice(), rows: rowCalls.slice() };
@@ -65,7 +61,6 @@ const CASES = [
   { file: "js/ui/hud-layout.js", half: "HUD LAYOUT fold", marker: { id: "pm-hud-details" } },
   { file: "js/ui/captions.js", half: "CAPTIONS rows", marker: { id: "pm-cvd" } },
   { file: "js/ui/appearance-opts.js", half: "COLOUR VISION / APP ICON / TEXT SIZE rows", marker: { id: "pm-contrast" } },
-  { file: "js/ui/appearance-studio.js", half: "APPEARANCE studio", marker: { id: "pm-panel-appearance" } },
   { file: "js/ui/setting-deps.js", half: "SettingDeps listeners + observer", marker: { listener: "change" } },
   { file: "js/ui/save-health.js", half: "STORAGE HEALTH section", marker: { id: "pm-panel-files" } },
   { file: "js/camera/cockpit-opts.js", half: "COCKPIT fold", marker: { id: "pm-panel-display" } },

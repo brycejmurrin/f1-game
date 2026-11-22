@@ -93,6 +93,15 @@ test("tools fold on the sheet's own density, never on window height alone", () =
   assert.equal(tools.open, true, "leaving compact hides the summary, so the tools must be open");
 });
 
+test("a tool keeps focus and stays visible when the sheet becomes compact", () => {
+  const h = boot(true, false, true);
+  h.media.matches = false; h.resize();
+  h.action.focus();
+  h.sheet.dataset.density = "compact"; h.density();
+  assert.equal(h.sheet.querySelector("details").open, true);
+  assert.equal(h.doc.activeElement, h.action);
+});
+
 test("closing restores the captured Settings page after domain cleanup", () => {
   const h = boot();
   h.settings.hidden = false; h.click();

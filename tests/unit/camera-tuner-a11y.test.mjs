@@ -165,3 +165,25 @@ test("camera tuner export box stays readOnly on open and COPY; IMPORT opens it e
   h.dom.byId("ct-copy").onclick();
   assert.equal(ta.readOnly, true, "a COPY after IMPORT locks it again");
 });
+
+test("track sliders inherit values, show masking and restore one setting at a time", () => {
+  const { dom, CamTune } = bootPanel();
+  const select = id => dom.byId("ct-scope").children.find(b => b.dataset.scope === id).onclick();
+  CamTune.setGlobal("height", 2);
+  CamTune.setScoped("track", "chase", "dist", 1);
+  select("track");
+  const slider = dom.byId("ct-in-height");
+  assert.equal(Number(slider.value), 2);
+  assert.equal(dom.byId("ct-in-height-scope").textContent, "Inherited from All cameras");
+  slider.value = "3"; slider.oninput(); slider.onchange();
+  select("car");
+  assert.equal(Number(slider.value), 2);
+  assert.match(dom.byId("ct-in-height-scope").textContent, /Preview uses This track/);
+  assert.equal(dom.byId("ct-tab-chase").tabIndex, 0);
+  select("track");
+  dom.byId("ct-row-height").children.find(b => b.tagName === "BUTTON").onclick();
+  assert.equal(CamTune.get("chase", "height"), 2);
+  assert.equal(CamTune.getScoped("track", "chase", "dist"), 1);
+  CamTune.applyPreset("stock");
+  assert.equal(CamTune.getScoped("track", "chase", "dist"), 1);
+});

@@ -329,6 +329,7 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   await expect(page.locator('#ct-modes .lt-tab[data-mode="hood"]')).toHaveClass(/tuned/);
 
   // RESET ALL clears every mode, global baseline and comfort; DONE closes the panel.
+  page.once("dialog", dialog => dialog.accept());
   await page.locator("#ct-reset-all").click();
   expect(await page.evaluate(() => __apex.camTune().tuned)).toEqual({});
   expect(await page.evaluate(() => {

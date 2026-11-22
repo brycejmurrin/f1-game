@@ -1,7 +1,7 @@
 "use strict";
 /* PhotoStudio — FULL boot stub (#4978 row 5). Title home reads background() at eval;
  * game.js still calls PhotoStudio.create(G, …). The capture UI (PhotoStudioBody) is
- * LAZY_UI_PRESETS and lands with APPEARANCE / the first create. */
+ * LAZY_UI_PRESETS and loads when a photo action first needs it. */
 const PhotoStudio = (function () {
   const KEY = "apex26.photoBackground";
   const ASPECTS = { scene: 0, wide: 16 / 9, square: 1, portrait: 4 / 5 };
@@ -33,12 +33,8 @@ const PhotoStudio = (function () {
   function ensureBody() {
     if (typeof PhotoStudioBody !== "undefined") return Promise.resolve(true);
     if (_load) return _load;
-    const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS) || [];
-    const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS_EDGES) || [];
-    // No ScriptLoader / Log on bare Playwright pages — stay silent and resolve false.
-    if (!files.length || typeof ScriptLoader === "undefined") return Promise.resolve(false);
-    const presets = typeof SettingsNav !== "undefined" && SettingsNav.presets ? SettingsNav.presets() : null;
-    _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), presets]).then(() => {
+    if (typeof ScriptLoader === "undefined") return Promise.resolve(false);
+    _load = ScriptLoader.create().load(["js/ui/photo-studio-ui.js"], [], { strict: true }).then(() => {
       if (typeof PhotoStudioBody === "undefined") { _load = null; logWarn("photo studio body did not load"); return false; }
       if (newest) newest();
       return true;
@@ -52,6 +48,24 @@ const PhotoStudio = (function () {
 
   function create(G, deps) {
     deps = deps || {};
+    // Photo looks belong to the free-camera visit, not to the lighting profile.
+    // Writes stay live-only; the observer restores the exact pre-visit values
+    // whenever FreeCam hides its panel, including Escape and teardown.
+    if (typeof PhotoKit !== "undefined" && typeof LightTune !== "undefined" && LightTune.LT) {
+      const freeRows = G.$("fc-rows"), freeRoot = G.$("freecam");
+      if (freeRows && freeRoot && !G.$("fc-looks")) {
+        const lookSession = PhotoKit.createLookSession((id) => LightTune.LT[id], (id, value) => deps.ltStore ? deps.ltStore.set(id, value) : deps.ltSet?.(id, value));
+        const lookControls = PhotoKit.mountLookControls(freeRows, lookSession, document);
+        if (lookControls && typeof MutationObserver !== "undefined") {
+          new MutationObserver(() => {
+            if (!freeRoot.hidden) return;
+            if (lookSession.end()) {
+              for (const button of lookControls.children) button.setAttribute("aria-pressed", "false");
+            }
+          }).observe(freeRoot, { attributes: true, attributeFilter: ["hidden"] });
+        }
+      }
+    }
     let /** @type {ReturnType<typeof PhotoStudioBody.create> | null} */ mine = null;
     /** Guarded creation: bare `G` so check-gctx's scanRealFactories finds PhotoStudioBody. */
     const body = () => {
@@ -62,7 +76,6 @@ const PhotoStudio = (function () {
     };
     newest = body; live = null;
     body();
-    ensureBody().then(() => body());
     const wait = (name) => (...args) => {
       const r = body();
       if (r && typeof r[name] === "function") return r[name](...args);
@@ -73,11 +86,12 @@ const PhotoStudio = (function () {
       });
     };
     return {
-      open: wait("open"), close: wait("close"), capture: wait("capture"),
+      loaded: () => typeof PhotoStudioBody !== "undefined", ensureLoaded: ensureBody,
+      open: wait("open"), close: (...args) => mine && mine.close(...args), capture: wait("capture"),
       state: () => { const r = mine || body(); return r && typeof r.state === "function" ? r.state() : { open: false, generation: 0, source: null, subject: false, aspect: "scene", grid: false, postcard: false, busy: false, captured: false, width: 0, height: 0, background: !!background() }; },
       contactSheet: wait("contactSheet"), album: wait("album"),
       background, setBackground, exportPhoto: wait("exportPhoto"), savePhoto: wait("savePhoto"),
-      hasCar: wait("hasCar"),
+      hasCar: () => !!mine && mine.hasCar(),
     };
   }
 

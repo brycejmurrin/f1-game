@@ -226,7 +226,7 @@ body:has(> main#overlay) {
     right: auto;
   }
 }
-#trackdesigner > .screen-arrange-entry { position: static; grid-row: 4; justify-self: end; }
+#trackdesigner > .screen-arrange-entry { min-height: max(44px, var(--td-touch-floor, 0px)); position: static; grid-row: 4; justify-self: end; }
 /* Short landscape phone, foot tucked under the rail (js/editor/designer.js
    seatFoot): a fourth 44 px row made the dialog scroll 16 px at 734x343 and
    852x344. The entry shares the body's cell, at its end, a fixed width the

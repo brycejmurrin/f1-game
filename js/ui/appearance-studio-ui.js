@@ -406,20 +406,11 @@ const AppearanceStudioBody = (function () {
       };
       const observer = new MutationObserver(visible); observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
       if (settings) observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
+      // A cold Appearance visit mounts after navigation has already revealed
+      // its panel, so the observer cannot see that first hidden transition.
+      if (settings && !settings.hidden && !panel.hidden) visible();
     }
     render();
-    if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
-      { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
-      { id: "title-button-style", label: "Title button style", page: "appearance", target: "pm-titlebuttonstyle-sel", aliases: "main menu home racing angled flat straight auto portrait landscape" },
-      { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system endurance drafting colour color" },
-      { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
-      { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
-      { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "pm-contrast-sel", aliases: "readability sunlight outlines" },
-      { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "pm-hudaccent-sel", aliases: "race colour color" },
-      { id: "appearance-home-scene", label: "Home scene", page: "appearance", target: "as-homeScene", aliases: "garage night studio circuit pitlane background" },
-      { id: "appearance-home-camera", label: "Home camera", page: "appearance", target: "as-homeCamera", aliases: "hero front side rear view" },
-      { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
-    ]);
   }
   // #4529 PORTRAIT & LANDSCAPE watch lives on the FULL stub (appearance-studio.js):
   // SEPARATE must swap without opening APPEARANCE. afterShapeSwap clears undo + repaints.

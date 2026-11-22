@@ -1,9 +1,6 @@
 /* Per-effect graphics preferences. Renderer and world builders consume one snapshot per boot. */
-const DesktopGraphics = Object.freeze({ mount() {
+const DesktopGraphics = (() => {
   "use strict";
-  const panel = document.getElementById("pm-panel-graphics");
-  if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
-  const values = [["", "Use preset"], ["on", "On"], ["off", "Off"]];
   const groups = {
     "Image quality": {
       msaa: ["Multisample anti-aliasing", "Samples the edges of geometry several times per pixel to smooth jagged outlines."],
@@ -67,75 +64,137 @@ const DesktopGraphics = Object.freeze({ mount() {
       ss2x: ["2× cinema supersampling", "Renders cinematic views at twice the resolution before scaling them down for a cleaner image."],
     },
   };
-  function add(parent, tag, text) {
-    const el = document.createElement(tag);
-    if (text) el.textContent = text;
-    parent.appendChild(el);
-    return el;
-  }
-  const fold = add(panel, "details");
-  fold.dataset.desktopGraphics = "";
-  fold.className = "pm-renderer-sub";
-  add(fold, "summary", "Graphics details").className = "adv-more-btn";
-  fold.addEventListener("toggle", () => {
-    if (!fold.open || fold.children.length > 1) return;
-    const store = GameStore.store;
-    const key = GfxQuality.choicesKey();
-    const choices = { ...store.get(key, {}) };
-    const help = GLX.isMobile ? "Use preset follows Graphics. Higher detail can reduce frame rate. Texture filtering and atmospheric sky use the three.js renderer."
-      : "Use preset follows Graphics. Some effects require three.js WebGPU or a compatible display.";
-    const body = add(fold, "div");
-    body.id = "pm-graphics-details-body";
-    add(body, "p", help + " Changes take effect after reloading.").className = "adv-help";
-    const rows = [];
-    const status = document.createElement("p");
-    status.className = "adv-help";
-    status.setAttribute("role", "status");
-    function save() {
-      const saved = { ...choices };
-      const ok = key === "gfxPhoneFeatureOverrides" ? store.set("gfxPhoneFeatureOverrides", saved) : store.set("gfxFeatureOverrides", saved);
-      status.textContent = ok === false ? "Could not save graphics settings." : "Saved for the next reload.";
+  let expand;
+  function mount() {
+    const panel = document.getElementById("pm-panel-graphics");
+    if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
+    const values = [["", "Use preset"], ["on", "On"], ["off", "Off"]];
+    function add(parent, tag, text) {
+      const el = document.createElement(tag);
+      if (text) el.textContent = text;
+      parent.appendChild(el);
+      return el;
     }
-    for (const [title, options] of Object.entries(groups)) {
-      const available = Object.entries(options).filter(([name]) => GfxQuality.supportsOption(name));
-      if (!available.length) continue;
-      add(body, "h3", title).className = "pm-group-h";
-      for (const [key, [name, explanation]] of available) {
-        const { row, label, sel } = SettingRow.build("desktop-detail-" + key, name, values);
-        sel.dataset.effect = key;
-        const detail = document.createElement("details");
-        label.replaceWith(detail);
-        const summary = add(detail, "summary");
-        summary.className = "adv-more-btn";
-        summary.appendChild(label);
-        const note = add(detail, "p", explanation);
-        note.className = "adv-help";
-        note.dataset.help = "keep";
-        body.appendChild(row);
-        SettingRow.wire(row, {
-          read: () => typeof choices[key] === "boolean" ? (choices[key] ? "on" : "off") : "",
-          write(value) {
-            if (value) choices[key] = value === "on";
-            else delete choices[key];
-            save();
-          },
+    const fold = add(panel, "details");
+    fold.dataset.desktopGraphics = "";
+    fold.className = "pm-renderer-sub";
+    add(fold, "summary", "Graphics details").className = "adv-more-btn";
+    let refresh;
+    function buildRows() {
+      if (!fold.open) return;
+      if (refresh) { refresh(); return; }
+      const store = GameStore.store;
+      const key = GfxQuality.choicesKey();
+      function readChoices() { return store.get(key, {}) || {}; }
+      const help = GLX.isMobile ? "Use preset follows Graphics. Higher detail can reduce frame rate. Texture filtering and atmospheric sky use the three.js renderer."
+        : "Use preset follows Graphics. Some effects require three.js WebGPU or a compatible display.";
+      const body = add(fold, "div");
+      body.id = "pm-graphics-details-body";
+      add(body, "p", help + " Changes take effect after reloading.").className = "adv-help";
+      const rows = [];
+      const status = document.createElement("p");
+      status.className = "adv-help";
+      status.setAttribute("role", "status");
+      function save(saved) {
+        const ok = key === "gfxPhoneFeatureOverrides" ? store.set("gfxPhoneFeatureOverrides", saved) : store.set("gfxFeatureOverrides", saved);
+        status.textContent = ok === false ? "Could not save graphics settings." : "Saved for the next reload.";
+      }
+      for (const [title, options] of Object.entries(groups)) {
+        const available = Object.entries(options).filter(([name]) => GfxQuality.supportsOption(name));
+        if (!available.length) continue;
+        add(body, "h3", title).className = "pm-group-h";
+        for (const [effect, [name, explanation]] of available) {
+          const { row, label, sel } = SettingRow.build("desktop-detail-" + effect, name, values);
+          sel.dataset.effect = effect;
+          const detail = document.createElement("details");
+          label.replaceWith(detail);
+          const summary = add(detail, "summary");
+          summary.className = "adv-more-btn";
+          summary.appendChild(label);
+          const note = add(detail, "p", explanation);
+          note.className = "adv-help";
+          note.dataset.help = "keep";
+          body.appendChild(row);
+          const runtime = add(body, "p");
+          runtime.className = "adv-help";
+          runtime.id = row.id + "-runtime";
+          const valueOf = choices => typeof choices[effect] === "boolean" ? (choices[effect] ? "on" : "off") : "";
+          function paintRuntime(choice) {
+            let reason = "";
+            const requested = choice === "on" || (choice === "" && GfxQuality.feature(effect, true));
+            if (requested && effect === "garageProbeParallax" && !GLX.garageProbeEnabled)
+              reason = GLX.backend !== "three" || !GLX.isWebGPU ? "Inactive on this renderer. Requires hardware WebGPU with three.js." : "Garage reflections are inactive in this session.";
+            else if (requested && effect === "hdrOut" && !GLX.hdrOutputActive)
+              reason = "This session is displaying standard dynamic range.";
+            else if (choice !== "off" && GfxQuality.shedFeature(effect))
+              reason = "Temporarily reduced to maintain frame rate.";
+            runtime.hidden = !reason;
+            runtime.textContent = reason;
+            if (reason) sel.setAttribute("aria-describedby", runtime.id);
+            else sel.removeAttribute("aria-describedby");
+          }
+          SettingRow.wire(row, {
+            read: () => valueOf(readChoices()),
+            write(value) {
+              const saved = { ...readChoices() };
+              if (value) saved[effect] = value === "on";
+              else delete saved[effect];
+              save(saved);
+            },
+          });
+          const repaint = choices => {
+            const value = valueOf(choices);
+            SettingRow.paint(row, value);
+            paintRuntime(value);
+          };
+          detail.addEventListener("toggle", () => paintRuntime(valueOf(readChoices())));
+          rows.push(repaint);
+        }
+      }
+      const reset = add(body, "button", "Use preset for all");
+      reset.type = "button";
+      refresh = () => {
+        const choices = readChoices();
+        for (const repaint of rows) repaint(choices);
+      };
+      document.addEventListener("apex-graphics-shed", () => { if (fold.open && !panel.hidden) refresh(); });
+      store.subscribe(change => {
+        if (fold.open && (change.key == null || change.key === key || change.key === "gfxPreset")) refresh();
+      });
+      refresh();
+      reset.onclick = () => save({});
+      const reload = add(body, "button", "Reload to apply");
+      reload.type = "button";
+      reload.onclick = () => {
+        if (document.body.dataset.race === "1") status.textContent = "Return to the title screen before reloading.";
+        else location.reload();
+      };
+      body.appendChild(status);
+    }
+    fold.addEventListener("toggle", buildRows);
+    expand = () => { fold.open = true; buildRows(); };
+  }
+
+  let indexed = false;
+  function indexSearch() {
+    if (indexed || typeof GfxQuality === "undefined") return;
+    const options = [];
+    for (const [group, entries] of Object.entries(groups)) {
+      for (const [key, [label]] of Object.entries(entries)) {
+        if (!GfxQuality.supportsOption(key)) continue;
+        options.push({
+          id: "graphics-" + key, page: "graphics", label, target: "desktop-detail-" + key + "-sel",
+          aliases: "graphics details " + group + " " + key,
+          navigate: (arrived) => SettingsNav.show("graphics", true, () => {
+            mount();
+            if (expand) expand();
+            return arrived();
+          }),
         });
-        rows.push(row);
       }
     }
-    const reset = add(body, "button", "Use preset for all");
-    reset.type = "button";
-    reset.onclick = () => {
-      for (const key of Object.keys(choices)) delete choices[key];
-      for (const row of rows) SettingRow.paint(row, "");
-      save();
-    };
-    const reload = add(body, "button", "Reload to apply");
-    reload.type = "button";
-    reload.onclick = () => {
-      if (document.body.dataset.race === "1") status.textContent = "Return to the title screen before reloading.";
-      else location.reload();
-    };
-    body.appendChild(status);
-  });
-} });
+    SettingsSearch.register("graphics-details", options);
+    indexed = true;
+  }
+  return Object.freeze({ mount, indexSearch });
+})();

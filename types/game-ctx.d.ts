@@ -939,6 +939,7 @@ declare const CarSfx: GameModuleFactory;
 declare const VoicePack: GameModuleFactory;
 declare const Spotter: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
+declare const LightingTunerDoor: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
 declare const DockLayout: GameModuleFactory;
