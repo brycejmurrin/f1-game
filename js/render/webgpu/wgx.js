@@ -5073,7 +5073,9 @@ const WGX = (function () {
       const n = (matrices && matrices.length) ? (matrices.length / 16) | 0 : 0;
       const packed = new Float32Array(n * 20);
       for (let i = 0; i < n; i++) {
-        packed.set(matrices.subarray ? matrices.subarray(i * 16, i * 16 + 16) : matrices.slice(i * 16, i * 16 + 16), i * 20);
+        // Build the GPU instance row directly; a circuit can have thousands of these matrices.
+        const source = i * 16, target = i * 20;
+        for (let k = 0; k < 16; k++) packed[target + k] = matrices[source + k];
         if (colors && colors.length) {
           packed[i * 20 + 16] = colors[i * 3];
           packed[i * 20 + 17] = colors[i * 3 + 1];
