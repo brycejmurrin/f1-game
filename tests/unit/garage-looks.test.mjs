@@ -66,6 +66,7 @@ test("GaragePrims keeps BOX_F / WALL_KEYED / sideOnly module-local", () => {
 
 test("every look builds valid bay meshes", () => {
   const { GaragePrims } = harness();
+  assert.equal(GaragePrims.lookId(), "flood");
   assert.ok(GaragePrims.LOOK_IDS.length >= 5, "stock plus at least four looks");
   assert.equal(GaragePrims.setLook("no-such-look"), false);
   for (const id of GaragePrims.LOOK_IDS) {
@@ -96,6 +97,7 @@ test("each look changes the room (no silent fallback to stock)", () => {
 
 test("trackside bays (buildStatic) ignore the look", () => {
   const a = harness(), b = harness();
+  a.GaragePrims.setLook("stock");
   b.GaragePrims.setLook("flood");
   assert.equal(typeof a.GarageScene.buildStatic, "function", "GarageScene exports buildStatic");
   const sa = a.GarageScene.buildStatic(LIV), sb = b.GarageScene.buildStatic(LIV);
@@ -111,6 +113,7 @@ test("new room looks rebuild a live bay and restore its stock shell", () => {
     assert.ok(shell, "a changed room builds a new shell");
     return shell;
   };
+  GaragePrims.setLook("stock");
   const stock = shellAfterDraw();
   for (const id of ["porcelain", "heritage", "endurance", "rainready", "qualify"]) {
     assert.equal(GaragePrims.setLook(id), true, `${id} is selectable`);
@@ -264,8 +267,8 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
                    "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const crew = vm.runInContext("GarageCrew", ctx), scene = vm.runInContext("GarageScene", ctx);
-  assert.equal(crew.setLook("pitstop"), "pitstop");
-  assert.equal(saved.get("apex26.crewLook"), "pitstop");
+  assert.equal(crew.setLook("classic"), "classic");
+  assert.equal(saved.get("apex26.crewLook"), "classic");
   assert.equal(scene.setMood("night"), "night");
   assert.equal(scene.mood(), "night");
   assert.equal(saved.get("apex26.garageMood"), "night");
@@ -275,6 +278,7 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
 test("new working-light moods preserve fixtures and restore the standard rig", () => {
   const { GarageScene: scene } = harness();
   const rig = () => Array.from(scene.live(LIV, 0, scene.moodCtx({ night: false, ambient: true })));
+  scene.setMood("shipped");
   const base = rig();
   const signatures = new Set();
   for (const id of ["inspection", "goldenhour", "endurance"]) {

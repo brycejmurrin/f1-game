@@ -597,8 +597,8 @@
 }
 /* THE NUMBERS RIDE ON THE STILL: a lower-third band over its bottom edge, the
    caption (flag, name) top-left, the outline in the clear middle (the map
-   button pads the band out of the outline's slot; js/ui/select-screen.js
-   sizes the canvas to that content box). The band passes pointer events to
+   canvas sits in the space between overlays; js/ui/select-screen.js
+   sizes it to that band). The band passes pointer events to
    the map door under it; only the CIRCUIT DETAIL chip takes them. */
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
@@ -610,7 +610,6 @@
   border-radius: 0 0 var(--r-lg) var(--r-lg);
   background: linear-gradient(to top in oklab, var(--plate-opaque) 60%, transparent);
 }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) .sel-map-btn { padding-bottom: calc(var(--chip-h) * 1.35); }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
   display: flex; flex: 1 1 auto; min-width: 0; flex-wrap: wrap; gap: var(--gap);
 }
@@ -636,7 +635,6 @@
     padding: 0; background: none; border-radius: 0;
   }
   #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta { display: none; }
-  #sel-inner[data-density="compact"]:not([data-shape="tall"]) .sel-map-btn { padding-bottom: 0; }
 }
 /* PORTRAIT PHONE: THE ACTION BAR WAS A THIRD OF THE SHEET. MEASURED
    (layout-audit, ios-iphone-portrait 393x659, 2026-10-05, tip a7d27757f):
@@ -719,12 +717,17 @@
    paints on it. */
 .sel-map-btn {
   position: absolute; inset: 0; z-index: 1;
+  width: 100%; height: 100%; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
   padding: 0; border: none; border-radius: 0;
   background: none;
   cursor: pointer;
 }
-#sel-preview-map { display: block; max-width: 100%; max-height: 100%; }
+#sel-preview-map {
+  position: absolute; inset: var(--map-band-top, 0px) 0 var(--map-band-bottom, 0px); margin: auto;
+  display: block; max-width: 100%; object-fit: contain;
+  max-height: max(0px, calc(100% - var(--map-band-top, 0px) - var(--map-band-bottom, 0px)));
+}
 /* AN OUTLINE TOO SMALL TO READ IS HIDDEN, NOT SHRUNK FURTHER. The canvas is
    fitted by js/ui/select-screen.js to ~60% of the hero's height, so the hero's
    height is the whole question — and only a size container can ask it.
@@ -860,7 +863,6 @@
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-hero-cap {
   top: calc(var(--pad) * 0.6); bottom: auto;
 }
-#sel-inner[data-density="compact"] .sel-map-btn { align-items: flex-start; padding-top: calc(var(--gap) * 0.5); }
 #sel-inner[data-density="compact"] #sel-preview-flag { width: calc(var(--chip-h) * 1.1); }
 #sel-inner[data-density="compact"] #sel-preview-meta dd { font-size: var(--fs-2); }
 #sel-inner[data-density="compact"] #sel-track-preview { gap: calc(var(--gap) * 0.6); }

@@ -396,22 +396,40 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   const waitMin = argv.includes("--wait") ? Number(opt("--timeout") || 30) : 0;
   let resolved = resolve({ sha: opt("--sha"), pr: opt("--pr"), request });
   if (resolved.error) { say(`= ready-gate unknown — ${resolved.error}`); return 3; }
-  if (resolved.pr) {
-    const dp = draftProblem({ state: resolved.state, draft: resolved.draft, merged: resolved.merged });
-    if (dp) {
-      say(`= ready-gate ${dp.state} — ${dp.evidence} sha=${resolved.sha}`);
-      for (const line of nextAction(dp.state, resolved.pr) || []) say(line);
-      record(resolved.pr, resolved.sha, false, `${dp.state}: ${dp.evidence}`);
+  const refreshPull = () => {
+    const again = resolve({ pr: opt("--pr"), request });
+    if (again.error) { say(`= ready-gate unknown — ${again.error}`); return 3; }
+    if (again.sha !== resolved.sha) {
+      say(`= ready-gate moved — head is now ${again.sha} (was ${resolved.sha}); re-run on the new head`);
       return 1;
     }
-    // mergeability: `unknown` is re-read up to 3 times (2, 4, 8 s), `dirty` refuses with its own row.
-    for (let i = 0; i < 3 && resolved.mergeableState === "unknown"; i++) {
-      sleep(2 ** (i + 1));
-      resolved = resolve({ pr: opt("--pr"), request });
-      if (resolved.error) { say(`= ready-gate unknown — ${resolved.error}`); return 3; }
+    resolved = again;
+    return 0;
+  };
+  const checkPull = () => {
+    for (let retry = 0; ; retry++) {
+      const dp = draftProblem(resolved);
+      if (dp) {
+        say(`= ready-gate ${dp.state} — ${dp.evidence} sha=${resolved.sha}`);
+        for (const line of nextAction(dp.state, resolved.pr) || []) say(line);
+        record(resolved.pr, resolved.sha, false, `${dp.state}: ${dp.evidence}`);
+        return 1;
+      }
+      const mp = mergeableProblem(resolved.mergeableState);
+      if (!mp) return 0;
+      if (mp.state !== "unknown" || retry === 3) {
+        say(`= ready-gate conflicting — ${mp.evidence} sha=${resolved.sha}`);
+        record(resolved.pr, resolved.sha, false, `conflicting: ${mp.evidence}`);
+        return 1;
+      }
+      sleep(2 ** (retry + 1));
+      const code = refreshPull();
+      if (code) return code;
     }
-    const mp = mergeableProblem(resolved.mergeableState);
-    if (mp) { say(`= ready-gate conflicting — ${mp.evidence} sha=${resolved.sha}`); record(resolved.pr, resolved.sha, false, `conflicting: ${mp.evidence}`); return 1; }
+  };
+  if (resolved.pr) {
+    const code = checkPull();
+    if (code) return code;
   }
   let judged = judge({ sha: resolved.sha, localOnly, request });
   if (waitMin > 0) {
@@ -421,8 +439,8 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
       if (now() - lastSaid > 5 * 60_000) { say(`= ready-gate waiting — ${judged.evidence} sha=${resolved.sha}`); lastSaid = now(); }
       sleep(30);
       if (resolved.pr) {
-        const again = resolve({ pr: opt("--pr"), request });
-        if (!again.error && again.sha !== resolved.sha) { say(`= ready-gate moved — head is now ${again.sha} (was ${resolved.sha}); re-run on the new head`); return 1; }
+        const code = refreshPull() || checkPull();
+        if (code) return code;
       }
       judged = judge({ sha: resolved.sha, localOnly, request });
     }

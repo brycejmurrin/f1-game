@@ -14,6 +14,12 @@ async function waitApex(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
+async function enableTitleSound(page) {
+  const sound = page.locator("#soundbtn");
+  if (await sound.getAttribute("aria-pressed") === "false") await sound.click();
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+}
+
 /** Seed keys, then reload so AudioPanel.init reads them on a virgin heap. */
 async function bootWithStore(page, entries) {
   await page.evaluate((pairs) => {
@@ -105,8 +111,8 @@ test("persisted SOUND OFF and out-of-range volumes apply on first load", async (
     svolInput: document.getElementById("as-svol").value,
     svolLabel: document.getElementById("as-svol-v").textContent,
   }));
-  // 0..1 gain maps to the panel's 0..10 slider by x10 — 1 -> "10", 0 -> "0".
-  expect(shown).toEqual({ mvolInput: "10", mvolLabel: "10", svolInput: "0", svolLabel: "0" });
+  // Full music gain is 143% of the 0.7 mix reference, while zero SFX remains mute.
+  expect(shown).toEqual({ mvolInput: "10", mvolLabel: "143%", svolInput: "0", svolLabel: "0%" });
 
   // Re-enable with a real click. init() must run synchronously in this gesture
   // so autoplay policies permit resume, and only now may samples be requested.
@@ -128,6 +134,7 @@ test("persisted SOUND OFF and out-of-range volumes apply on first load", async (
 
 test("recorded voice choices, radio presets and previews work in the settings panel", async ({ page }) => {
   await toMenu(page);
+  await enableTitleSound(page);
   await page.evaluate(() => window.__apex.headless(true));
   await page.locator("#mb-settings").click();
   await page.locator("#pm-audio").click();
@@ -179,6 +186,7 @@ test("recorded voice choices, radio presets and previews work in the settings pa
 
 test("re-enabling sound during a race restarts race music", async ({ page, loadTrack }) => {
   await toMenu(page);
+  await enableTitleSound(page);
   // startRace() is async (ensureScenery). loadTrack waits for the build AND
   // go() so the race-start startMusic has already fired before we wrap.
   // The old body called race()+go() in one evaluate, cleared the spy, then
@@ -212,6 +220,7 @@ test("re-enabling sound during a race restarts race music", async ({ page, loadT
 
 test("real GameAudio unlock and engine synthesis run after a user gesture", async ({ page }) => {
   await toMenu(page);
+  await enableTitleSound(page);
   // STOP THE RENDER LOOP BEFORE CLICKING THROUGH. #rs-go lives on
   // #race-settings, which js/game.js calls "the one menu screen that shows the
   // flyby" — the canvas is live behind that sheet, where it is hidden under the

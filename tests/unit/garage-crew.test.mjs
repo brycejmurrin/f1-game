@@ -61,8 +61,9 @@ test("the lollipop man stands on the camera's side, board down while parked, up 
   }
 });
 
-test("drawn only while a pose plays: three figures and one pole", () => {
+test("the classic crew draws three figures and one pole only while a pose plays", () => {
   const { Crew, Arrival, draws } = load();
+  Crew.setLook("classic");
   Crew.draw(LIV, [-3.8, 2.1, -4.8], null);
   assert.equal(draws.length, 0, "no pose, no crew");
   Crew.draw(LIV, [-3.8, 2.1, -4.8], Arrival.poseOut(6, Arrival.DEFAULT, true));
@@ -83,7 +84,7 @@ test("the angle map lights the chosen eye, both for the cut, and draws the bay, 
   assert.match(Arrival.angleMap("cut"), />1<\/text>.*>2<\/text>/s, "the cut numbers its two eyes in order");
 });
 
-test("design-preview crew looks: each builds valid, distinct geometry; classic stays the default", () => {
+test("design-preview crew looks: each builds valid, distinct geometry; pitstop is the default", () => {
   const meshes = [];
   const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
@@ -91,7 +92,7 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
-  assert.equal(Crew.look(), "classic");
+  assert.equal(Crew.look(), "pitstop");
   const sizes = {};
   for (const id of Crew.LOOKS) {
     meshes.length = 0;

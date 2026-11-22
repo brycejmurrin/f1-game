@@ -3362,6 +3362,13 @@ const WGX = (function () {
       }
       d[140] = _absShadowIdx;
       d[141] = (T && T.puddles != null) ? T.puddles : 1.0;   // params10.y: PUDDLES knob (GLX uPuddles, TLX U.puddles)
+      // WIND knobs → LIT vs_main (foliage sway): params10.zw = unit direction in
+      // world xz, pitBox.z = speed scale. Same defaults as GLX uWind / TLX U.wind.
+      {
+        const wd = ((T && T.windDir != null) ? T.windDir : 35) * (Math.PI / 180);
+        d[142] = Math.cos(wd);
+        d[143] = Math.sin(wd);
+      }
       // pitLane (floats 144..147, off 576): the PAINTED pit lane — entry s,
       // window length, pit side, lap length. Mirrors GLX's uPitLane. A null
       // frame.pitLane writes a zero LENGTH, which is what roadMarkings tests,
@@ -3373,8 +3380,11 @@ const WGX = (function () {
         // pitBox (floats 148..151, off 592): YOUR box — how far into the window
         // it sits and half its length. A zero halfLen is "no box", the same
         // length-0-means-absent convention pitLane's y uses one slot up.
+        // z carries windSpeed for FOLIAGE sway (roadMarkings reads only xy).
         const pb = f.pitBox;
-        d[148] = pb ? pb[0] : 0; d[149] = pb ? pb[1] : 0; d[150] = 0; d[151] = 0;
+        d[148] = pb ? pb[0] : 0; d[149] = pb ? pb[1] : 0;
+        d[150] = (T && T.windSpeed != null) ? T.windSpeed : 1.0;
+        d[151] = 0;
       }
       // bakeA/B/C/D (floats 152..167, off 608): BAKED LAMP POOLS — GLX bindLampBake.
       {

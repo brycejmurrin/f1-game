@@ -101,7 +101,9 @@ function fakeEl() {
   };
 }
 
-function load(stored = {}, extra = {}) {
+// The second argument is true (a phone, the PHONE_STANDARD tests) or { doc, ctx, phone } (an extended fake page).
+function load(stored = {}, opts = {}) {
+  const extra = opts === true ? { phone: true } : opts || {}, phone = !!extra.phone;
   const written = Object.assign({}, stored);
   const els = {};
   const doc = {
@@ -115,12 +117,39 @@ function load(stored = {}, extra = {}) {
     console,
     ...extra.ctx,
     document: doc,
+    HudElements: { phone: () => phone },
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   return { H: ctx.HudLayout, written, els };
 }
+
+test("standard phone placements apply when fresh, respect explicit empty sets, and reset per camera", () => {
+  const { H, written, els } = load({}, true);
+  assert.equal(H.get("tower", "other").s, 80);
+  assert.equal(H.get("tower", "helmet").s, 70);
+  assert.equal(H.get("tower", "helmet", "minimal").s, 100);
+  assert.equal(H.get("tower", "cockpit").s, 100);
+  assert.equal(els[".hud-top"].hasAttribute("data-hl-v4"), true);
+  assert.equal(H.isShipped(undefined, "all"), true);
+  assert.equal(H.presetOf("other"), "shipped");
+  assert.deepEqual(written, {});
+  H.set("tower", { s: 122 }, "other");
+  assert.equal(H.get("tower", "helmet").s, 70);
+  assert.equal(H.isShipped("other"), false);
+  H.resetEl("tower", "other");
+  assert.equal(H.get("tower", "other").s, 80);
+  assert.equal(written.hudLayout, null);
+
+  const explicit = load({ hudLayout: { v: 4, standard: { other: {}, helmet: {} } } }, true);
+  assert.equal(explicit.H.get("tower", "other").s, 100);
+  assert.equal(explicit.H.isShipped("other"), false);
+  explicit.H.resetSet("other");
+  assert.equal(explicit.H.get("tower", "other").s, 80);
+  assert.equal(explicit.H.get("tower", "helmet").s, 100);
+  assert.equal(load().H.get("tower", "other").s, 100);
+});
 
 test("untouched: nothing stored, no element carries data-hl", () => {
   const { H, written, els } = load();
@@ -1440,7 +1469,7 @@ test("only the unplaced touch broadcast map clears pedals without resizing or sa
 
 // Real SettingRow + HudElements + HudLayout, including the original preference
 // rows. A saved JSON change alone must not masquerade as a live game change.
-function visibilityEditor() {
+function visibilityEditor(phone = false) {
   const dom = makeDom({ readyState: 'loading' }), document = dom.document;
   const lookup = document.getElementById, create = document.createElement;
   document.getElementById = id => dom.has(id) ? lookup(id) : null;
@@ -1457,6 +1486,7 @@ function visibilityEditor() {
   const ctx = { document, GameStore: { store }, setTimeout: fn => timers.push(fn),
     Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } } };
   ctx.window = ctx;
+  if (phone) Object.assign(ctx, { innerWidth: 852, innerHeight: 393, matchMedia: () => ({ matches: true }) });
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/setting-row.js'), 'utf8'), ctx, { filename: absSrc("js/ui/setting-row.js") });
   for (const [id, key, initial] of [['map', 'hudMapVis', 'on'], ['gaps', 'hudGapsVis', 'on'], ['mirror', 'hudMirror', 'auto']]) {
@@ -1471,6 +1501,19 @@ function visibilityEditor() {
   return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes, ctx, dom,
     flush() { while (timers.length) timers.shift()(); } };
 }
+
+test("HUD size readout uses the selected element's factory scale and keeps exact numeric input", () => {
+  const e = visibilityEditor(true);
+  e.choose("pm-hl-set-sel", "helmet");
+  e.choose("pm-hl-el-sel", "tower");
+  const size = e.document.getElementById("pm-hl-s"), readout = size.parentNode.children[0].children[1];
+  assert.equal(size.value, "70");
+  assert.equal(readout.textContent, "100% of default");
+  size.value = "35";
+  e.dom.dispatch(size, { type: "change" });
+  assert.equal(readout.textContent, "50% of default");
+  assert.equal(e.H.get("tower", "helmet").s, 35);
+});
 
 test('numeric HUD drafts stay readable and commit once when moving between fields', () => {
   const e = visibilityEditor(), previews = [];
@@ -1681,6 +1724,32 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
   assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
 });
 
+test("HUD arrangement drafts preserve sparse ownership, scope, external imports and mirror settings", () => {
+  const {H, written} = load({hudMirror:"off"});
+  H.set("map", {x:13}, "helmet", "broadcast");
+  const original = written.hudLayout;
+  const snapshot = H.arrangeSnapshot("other", "standard");
+  H.holdArrangePreview(true);
+  H.set("mirror", {x:7}, "other", "standard", true);
+  const moved = H.arrangeSnapshot("other", "standard");
+  H.resetSet("other", "standard", true);
+  H.restoreSnapshot("other", "standard", moved);
+  assert.equal(H.get("mirror", "other", "standard").x, 7);
+  assert.equal(written.hudLayout, original);
+  assert.equal(written.hudMirror, "off");
+  H.endArrangeDraft(false, "other", "standard", snapshot);
+  assert.deepEqual(plain(H.arrangeSnapshot("other", "standard")), {});
+  assert.equal(written.hudLayout, original);
+  H.set("mirror", {x:15}, "other", "standard", true);
+  H.endArrangeDraft(true, "other", "standard", snapshot);
+  assert.equal(written.hudMirror, "on");
+  assert.equal(written.hudLayout.standard.other.mirror.x, 15);
+  assert.equal(written.hudLayout.broadcast.helmet.map.x, 13);
+  H.set("mirror", {x:25}, "other", "standard", true);
+  written.hudLayout = original;
+  H.endArrangeDraft(true, "other", "standard", moved);
+  assert.equal(written.hudLayout, original, "a newer settings import wins");
+});
 
 test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMContentLoaded) and on a pointer-kind flip", () => {
   // hud-layout applies at eval, before platform-session's syncPointerKind writes
@@ -1699,4 +1768,39 @@ test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMCo
   cls.delete("desktop");                                  // iPad undocked: pointer goes coarse
   for (const cb of kindCbs) cb(true);
   assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "a pointer-kind flip re-applies the touch helmet");
+});
+
+// Bryce 2026-11-20 ("Keep the caps"): the factory PHONE_STANDARD seed sets where the
+// pieces start, but fitHud's screen-fit caps still size them; a piece the player
+// moved or sized owns its geometry. 852x393 helmet, measured: HUD 100 paints every
+// seed rect where it was, HUD 200 caps the top band at 1.11 (the tip: 1.1).
+test("the factory phone seed keeps the screen-fit caps; a player's own placement does not", () => {
+  const { H, els } = load({}, true);
+  H.setCam("chase");
+  const tower = els[".hud-top"];
+  assert.equal(tower.hasAttribute("data-hl-user"), true, "the seed is an explicit placement");
+  assert.equal(tower.hasAttribute("data-hl-seed"), true, "…still the factory entry");
+  H.set("tower", { s: 122 }, "other");
+  assert.equal(tower.hasAttribute("data-hl-seed"), false, "sized by the player: it owns its geometry");
+  H.resetEl("tower", "other");
+  assert.equal(tower.hasAttribute("data-hl-seed"), true, "reset returns it to the seed");
+  const desk = load({}, false);
+  desk.H.set("tower", { s: 80 }, "other");
+  assert.equal(desk.els[".hud-top"].hasAttribute("data-hl-seed"), false, "no seed off a phone, even at the seed's numbers");
+
+  // fitHud's cap passes count a seed piece like an automatic one (layoutRect undoes its offset and size).
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const defs = hud.slice(hud.indexOf("const manualHud = "), hud.indexOf("\n", hud.indexOf("const capManual = ")));
+  const capManual = vm.runInNewContext(defs + "; capManual", {}, { filename: absSrc("js/ui/hud.js") });
+  const piece = (...a) => ({ hasAttribute: (k) => a.includes(k) });
+  assert.equal(capManual(piece()), false, "automatic: measured");
+  assert.equal(capManual(piece("data-hl-user", "data-hl-seed")), false, "the factory seed: measured");
+  assert.equal(capManual(piece("data-hl-user")), true, "the player's own placement: left out");
+  const fit = hud.slice(hud.indexOf("function fitHud()"));
+  assert.equal(fit.split("capManual(").length - 1, 8, "the eight cap-measurement sites");
+  // …and paints it at its band's capped zoom: only a non-seed placement takes the raw --hud-scale.
+  const rules = cssRules(CSS);
+  assert.equal(decl(rules, "[data-hl][data-hl-v4]", "--hud-z"), "var(--hl-z-seed, var(--hud-scale)) !important");
+  assert.equal(decl(rules, "[data-hl-seed]", "--hl-z-seed"), "var(--hud-z-top, var(--hud-scale))");
+  assert.equal(decl(rules, "[data-hl-seed][data-hl-bottom]", "--hl-z-seed"), "var(--hud-z-bot, var(--hud-scale))");
 });

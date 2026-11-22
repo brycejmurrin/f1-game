@@ -1,5 +1,6 @@
 // @doc Consistent device identities for UI probes; CSS viewports are never inferred from screenshot pixels.
 import { devices } from "playwright";
+import { BRYCE_WINDOWS, brycePhone } from "./bryce-phone.mjs";
 
 /** Native descriptors at 100% browser zoom. Overrides are explicitly synthetic, not a phone reproduction.
  * https://playwright.dev/docs/emulation
@@ -7,15 +8,21 @@ import { devices } from "playwright";
 export function resolveUIProfile({ touch = false, viewport = null, deviceScaleFactor = null, device = null } = {}) {
   if (viewport && ![viewport.width, viewport.height].every(n => Number.isInteger(n) && n >= 64 && n <= 8192)) throw new Error("Invalid CSS viewport");
   if (deviceScaleFactor !== null && (!Number.isFinite(deviceScaleFactor) || deviceScaleFactor <= 0 || deviceScaleFactor > 4)) throw new Error("Invalid deviceScaleFactor");
-  const name = device || (touch ? "iPhone 13" : "Desktop Chrome");
+  const safari = BRYCE_WINDOWS.safari;
+  const phoneWindow = viewport?.width === safari.width && viewport.height === safari.height ? "safari"
+    : viewport && viewport.width > viewport.height ? "standalone" : "portrait";
+  const phone = touch && !device ? brycePhone({ window: phoneWindow, profile: false }) : null;
+  const name = device || phone?.model || "Desktop Chrome";
   const landscape = viewport && viewport.width > viewport.height;
   const selected = landscape && devices[name + " landscape"] ? name + " landscape" : name;
   const descriptor = devices[selected];
   if (!descriptor) throw new Error(`Unknown UI device: ${selected}`);
   // defaultBrowserType is launcher metadata, not a BrowserContext option.
-  const { defaultBrowserType, ...contextOptions } = descriptor;
+  const { defaultBrowserType, ...deviceOptions } = descriptor;
+  const contextOptions = { ...deviceOptions, ...phone?.contextOptions };
+  const baseViewport = contextOptions.viewport;
   if (!contextOptions.screen) contextOptions.screen = { ...descriptor.viewport };
-  const customViewport = !!viewport && (viewport.width !== descriptor.viewport.width || viewport.height !== descriptor.viewport.height);
+  const customViewport = !!viewport && (viewport.width !== baseViewport.width || viewport.height !== baseViewport.height);
   if (viewport) contextOptions.viewport = { ...viewport };
   if (customViewport) contextOptions.screen = { ...viewport };
   if (deviceScaleFactor !== null) contextOptions.deviceScaleFactor = deviceScaleFactor;

@@ -47,13 +47,18 @@ export const receiptPath = (root, kind, pr) => path.join(receiptDir(root, kind),
  * and the draft→ready hook still refused #3131).
  */
 export function mainCheckout(root) {
-  const r = spawnSync("git", ["rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"], { cwd: root, encoding: "utf8" });
-  if (r.status !== 0) return null;
-  const [top, common] = r.stdout.trim().split("\n");
-  // Only a linked worktree's own top level mirrors: a scratch dir inside a checkout is not a checkout.
-  if (!top || !common || path.resolve(top) !== path.resolve(root)) return null;
-  const main = path.dirname(common);
-  return path.resolve(main) === path.resolve(root) ? null : main;
+  const git = (cwd, args) => spawnSync("git", args, { cwd, encoding: "utf8" });
+  const list = git(root, ["worktree", "list", "--porcelain", "-z"]);
+  if (list.status !== 0) return null;
+  const records = list.stdout.split("\0\0").map(record => record.split("\0"));
+  const primary = records[0];
+  if (primary.includes("bare") || !primary[0].startsWith("worktree ")) return null;
+  // A subdirectory inside a checkout is not itself a registered worktree.
+  if (!records.slice(1).some(([entry]) => entry === `worktree ${path.resolve(root)}`)) return null;
+  const main = primary[0].slice("worktree ".length);
+  // With a separate git dir, Git can list the metadata directory as the primary.
+  const top = git(main, ["rev-parse", "--show-toplevel"]);
+  return top.status === 0 && top.stdout.replace(/\n$/, "") === main ? main : null;
 }
 
 /**

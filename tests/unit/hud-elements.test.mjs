@@ -31,6 +31,7 @@ function load(stored = {}, opts = {}) {
   const ctx = {
     console,
     document: doc,
+    window: opts.window,
     GameStore: {
       store: {
         get(k, d) { return k in written ? written[k] : (k in stored ? stored[k] : d); },
@@ -61,6 +62,24 @@ test("defaults every chrome element on; hide writes data-hud-hide", () => {
   H.set("speed", true);
   // Only the opt-in readouts (shipped off) are left in the hide list.
   assert.equal(ctx.__body.dataset.hudHide, "rel strat inputs");
+});
+
+test("phone visibility applies only on a fresh phone and preserves an empty saved selection", () => {
+  const phone = { innerWidth: 852, innerHeight: 393, matchMedia: () => ({ matches: true }) };
+  const fresh = load({}, { window: phone });
+  assert.deepEqual({ ...fresh.HudElements.defaults() }, {
+    speed: "off", gear: "off", energy: "off", ot: "off", aero: "off", rel: "on",
+  });
+  assert.equal(fresh.HudElements.isOn("speed"), false);
+  assert.equal(fresh.HudElements.isOn("rel"), true);
+  assert.deepEqual(fresh.__written, {});
+  fresh.HudElements.set("rel", false);
+  assert.equal(fresh.HudElements.isOn("speed"), false);
+  assert.equal(load({ hudElements: fresh.__written.hudElements }, { window: phone }).HudElements.isOn("rel"), false);
+  fresh.__setProfile("broadcast");
+  assert.equal(fresh.HudElements.isOn("rel"), false);
+  assert.equal(load({ hudElements: {} }, { window: phone }).HudElements.isOn("speed"), true);
+  assert.equal(load({}, { window: { ...phone, innerHeight: 768 } }).HudElements.isOn("speed"), true);
 });
 
 test("stored offs restore on load", () => {

@@ -91,7 +91,7 @@ revRange, curve, pitch })` (ranges: `__apex.audio().range`) covers a wide spread
    `resumeIfNeeded` listeners only recover a
    context that already exists (iOS lock / interruption). After the first tap
    read `GameAudio._stub`, `GameAudio.context().state` and
-   `navigator.userActivation.hasBeenActive` (phone profile, 844×390 touch).
+   `navigator.userActivation.hasBeenActive` (phone profile, 852×393 touch).
    Script-dispatched events are untrusted and never unlock. Handlers doubled
    after a failed bundle load point at the bundle's `onAudioReady` path, not at
    `engine.js`.

@@ -53,6 +53,8 @@ export const KNOWN = {
   // bench.html and not under css/ — `body.linked` swaps the pairing screen
   // for the pedals, `#status.bad` colours a refusal.
   "bad": "controller.html <style> (#status.bad) — the phone page, not css/",
+  "feedback-off": "controller.html <style> (.pedal.feedback-off.on hides the pedal input meter)",
+  "grip-cue": "controller.html <style> (.pedal.grip-cue shows the grip mark on the held pedal)",
   "linked": "controller.html <style> (body.linked) — the phone page, not css/",
   "awaiting": "controller.html <style> (body.awaiting: link open, not yet admitted, no controls) — the phone page, not css/",
   "placed": "controller.html <style> (.placed, a control moved by MOVE & SIZE) — the phone page, not css/",

@@ -145,6 +145,7 @@ test("a SUBSYSTEM key is never silently promoted to a shipped default", () => {
   // with its reason. Adding one here is that decision, reviewed; a drive-by
   // export still fails the loop below.
   const DELIBERATE = {
+    sound: "The November 20 owner profile explicitly sets the fresh-install master switch off.",
     unlimitedBudget: "FREE BUILD ships on (2026-10-09): the shipped garage builds exceed Parts.BUDGET, so with the cap on 8 of 11 teams have no clickable part row on a fresh install",
   };
   for (const [k, why] of Object.entries(review)) {

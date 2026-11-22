@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-77g6LRXo2ZvQIJF13Xy9y0t9AlA1mwp1XACwJASXaRY=' 'sha256-fdjnL+DyHyVypDKJ+raB4EBUJYLzTtT3memEypclyqg=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-rRCUE+YvfRr2q8WXGMvSesHb84Lhqt92fxdk9ppVtck=' 'sha256-fdjnL+DyHyVypDKJ+raB4EBUJYLzTtT3memEypclyqg=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -134,6 +134,7 @@
 <link rel="stylesheet" href="css/career.css?v=dev" media="print" data-route="career career-offers career-guide career-history quali results standings">
 <link rel="stylesheet" href="css/data.css?v=dev" media="print" data-route="datahub track-detail trackdesigner results spotifypanel">
 <link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/screen-arranger.css?v=dev" media="print">
 <link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print">
 <link rel="stylesheet" href="css/career-experience.css?v=dev" media="print" data-route="career results ceremony-podium">
 <link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print" data-route="carsetup customize">
@@ -578,18 +579,19 @@
     // OFF never. Focus ring: apex26.focusRing ("high" → data-focus). Colourblind
     // cues: apex26.cbCues ("on" → data-cb-cues).
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
-    // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
-    // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
+    // Wash: apex26.menuWash ("full" | "medium" | "soft" | "off"); unset = full.
+    // Title art: apex26.titleArt ("on" | "medium" | "soft" | "off"); unset = on.
     // Pause menu (js/ui/pause-opts.js): apex26.pauseLayout ("list" |
     // "compact" | "wide" | "sidebar"),
     // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
     // Help text (js/ui/appearance-opts.js): apex26.menuHelp ("off").
     // Unset, or the shipped answer, writes nothing.
-    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
+    var mv = null, ti = null, mw = null, ta = null, ts = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
     try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
+    try { ts = JSON.parse(localStorage.getItem("apex26.titleButtonStyle")); } catch (e) { /* unset */ }
     try { pl = JSON.parse(localStorage.getItem("apex26.pauseLayout")); } catch (e) { /* unset */ }
     try { ps = JSON.parse(localStorage.getItem("apex26.pauseSide")); } catch (e) { /* unset */ }
     try { pd = JSON.parse(localStorage.getItem("apex26.pauseDim")); } catch (e) { /* unset */ }
@@ -611,10 +613,11 @@
       if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
-      if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
+      if (mw === "medium" || mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
-      if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
+      if (ts === "flat" || ts === "racing") document.documentElement.dataset.titleButtonStyle = ts;
+      if (ta === "medium" || ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       var de = document.documentElement.dataset;
@@ -689,9 +692,12 @@
     // arithmetic as TitleLayout.vars, held equal by tests/unit/title-layout.test.mjs.
     try {
       var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
-      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[b.getAttribute("data-shape") === "tall" ? "tall" : "wide"];
-      // An unset landscape layout on a PHONE ships bigger doors (js/ui/title-layout.js PHONE_WIDE, #5358).
-      if (!(tl && typeof tl === "object") && b.getAttribute("data-shape") !== "tall" && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) <= 500) tl = { btns: { x: 2, y: 1, size: 123 } };
+      var tallTitle = b.getAttribute("data-shape") === "tall";
+      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[tallTitle ? "tall" : "wide"];
+      if (!(tl && typeof tl === "object") && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) <= 500) {
+        tl = tallTitle ? { btns: { size: 105 } } :
+          { btns: { size: 106, width: 25 }, title: { size: 108 }, art: { x: -7, y: -2, size: 86 } };
+      }
       if (tl && typeof tl === "object") {
         ["btns", "title", "art"].forEach(function (k) {
           var o = tl[k] || {};
@@ -713,7 +719,7 @@
       var hsRaw = null;
       try { hsRaw = JSON.parse(localStorage.getItem("apex26.homeScene")); } catch (e4) { /* unset */ }
       var hsModes = ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"];
-      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "photo";
+      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "static";
       if (hsMode === "auto") {
         // homeVariation.peek before enter() — index starts at 0 (homeVisit applies
         // only once renderHome calls enter(), after the first paint).
@@ -1578,11 +1584,11 @@
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
+              <p class="adv-help">100% uses the default size for race speed, position, timing and map readouts. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
               <!-- Independent touch-control preference. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>reset button size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
-              <p class="adv-help">The on-screen pedals, arrows and race buttons. Independent of HUD SIZE; only the screen limits their size.</p>
+              <p class="adv-help">100% uses the default pedal, arrow and race button size for this window. Available space limits the maximum.</p>
               <!-- BUTTON OPACITY. XAG 104 asks for an adjustable backing behind
                    anything read over live gameplay, and the dock sits over a
                    bright, moving 3D scene. Its own 20-100 range, not the size
@@ -1631,7 +1637,7 @@
               <button id="pm-uitheme-next" type="button" data-step="1" aria-label="Next theme">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">DARK is the classic look. LIGHT is easier to read in bright sun. SYSTEM matches your phone.</p>
+          <p class="adv-help">DARK is the classic look. LIGHT suits bright sun. SYSTEM follows your device. ENDURANCE pairs deep green with ivory headings. DRAFTING uses crisp blue panels. Themes preserve your layout, accents and accessibility choices.</p>
           <div id="pm-menuaccent" class="set-row" role="group" aria-labelledby="pm-menuaccent-label">
             <span class="tune-label" id="pm-menuaccent-label">MENU ACCENT</span>
             <div>
@@ -1661,7 +1667,7 @@
           <h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h5>
           <label class="tune-row">
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size" aria-describedby="pm-uiscale-help"></label>
-          <p id="pm-uiscale-help" class="adv-help">Scales every menu and settings screen. The race HUD and the touch buttons have their own sizes under DISPLAY › HUD.</p>
+          <p id="pm-uiscale-help" class="adv-help">100% uses the default menu size for this window. The race HUD and the touch buttons have their own sizes under DISPLAY › HUD.</p>
           <div id="pm-textsize" class="set-row" role="group" aria-labelledby="pm-textsize-label">
             <span class="tune-label" id="pm-textsize-label">TEXT SIZE</span>
             <div>
@@ -1762,7 +1768,7 @@
                   <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help" id="pm-menuwash-help">The coloured glow behind the main menu. SOFT tones it down; OFF leaves a plain dark background.</p>
+              <p class="adv-help" id="pm-menuwash-help">Choose FULL, MEDIUM or SOFT for the coloured glow behind the main menu. OFF removes it.</p>
               <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
                 <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
                 <div>
@@ -1771,7 +1777,7 @@
                   <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help" id="pm-titleart-help">The car drawing behind the main menu. SOFT fades it; OFF removes it.</p>
+              <p class="adv-help" id="pm-titleart-help">Choose ON, MEDIUM or SOFT for the car drawing behind the main menu. OFF hides the drawing.</p>
               <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
             </div>
           </details>
@@ -1785,7 +1791,7 @@
 
     <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
     <label class="tune-row">
-      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-describedby="pm-pace-help"></label>
+      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-valuetext="84%" aria-describedby="pm-pace-help"></label>
     <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker.</p>
 
 
@@ -1806,8 +1812,8 @@
       <button id="pm-tiltdeg-jump" type="button" class="adv-more-btn" data-settings-jump="controls" data-jump-target="pm-tiltsimple">TILT SENSITIVITY is in CONTROLS › FEEL &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
-        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
+      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">3</b></span>
+        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="3" aria-label="Steer smoothing"></label>
       <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
     </div>
     <div class="adv-item">
@@ -1859,29 +1865,29 @@
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help, fine steps"></label>
+      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">1</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="1" aria-label="Driving help, fine steps"></label>
       <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob. GRIP STEER (below, and in ROOKIE / RELAX) caps lock at the front peak without reading the road arc.</p>
       <button id="pm-help-jump" type="button" class="adv-more-btn" data-settings-jump="driving" data-jump-target="pm-helplevel-sel">DRIVING HELP is in DRIVING AIDS &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
-        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5" aria-label="Response"></label>
+      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">2</b></span>
+        <input id="pm-rate" type="range" min="1" max="10" step="1" value="2" aria-label="Response"></label>
       <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
-        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5" aria-label="Linearity"></label>
+      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">6</b></span>
+        <input id="pm-expo" type="range" min="1" max="10" step="1" value="6" aria-label="Linearity"></label>
       <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
-        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5" aria-label="Steer lock"></label>
+      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">7</b></span>
+        <input id="pm-lock" type="range" min="1" max="10" step="1" value="7" aria-label="Steer lock"></label>
       <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
-        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5" aria-label="Speed steer"></label>
+      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">7</b></span>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="7" aria-label="Speed steer"></label>
       <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
     </div>
     <div class="adv-item">
@@ -1912,7 +1918,7 @@
       <!-- Closed like DISPLAY: the summary is the label and carries ON / source.
            ON/OFF live in the body so a summary tap only opens the fold. -->
       <details id="as-music-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
+        <summary class="adv-more-btn" id="as-music-sum">MUSIC · OFF · ALL</summary>
         <div id="as-music" class="set-row" role="group" aria-labelledby="as-music-label">
           <span class="tune-label" id="as-music-label">MUSIC</span>
           <div>
@@ -1921,8 +1927,8 @@
             <button id="as-music-next" type="button" data-step="1" aria-label="Next music">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">5</b></span>
-          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+        <label class="tune-row"><span class="tune-label">MUSIC VOLUME · % OF DEFAULT MIX <b id="as-mvol-v">100%</b></span>
+          <input id="as-mvol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="7" aria-label="Music volume"></label>
         <p class="as-note">The soundtrack in the menus and on track. VOLUME sets the music alone; SOURCE picks which songs play.</p>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
              once it is connected; picking another source releases it without
@@ -1956,7 +1962,7 @@
       </details>
 
       <details id="as-sound-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
+        <summary class="adv-more-btn" id="as-sound-sum">SOUND · MUTED</summary>
         <div id="as-sound" class="set-row" role="group" aria-labelledby="as-sound-label">
           <span class="tune-label" id="as-sound-label">SOUND EFFECTS</span>
           <div>
@@ -1965,8 +1971,8 @@
             <button id="as-sound-next" type="button" data-step="1" aria-label="Next sound effects">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME <b id="as-svol-v">10</b></span>
-          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
+        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME · % OF DEFAULT MIX <b id="as-svol-v">100%</b></span>
+          <input id="as-svol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="4" aria-label="Sound effects volume"></label>
         <div id="as-ui" class="set-row" role="group" aria-labelledby="as-ui-label">
           <span class="tune-label" id="as-ui-label">MENU SOUNDS</span>
           <div>
@@ -1984,7 +1990,7 @@
            it, and binding it there would look right and then desync the moment
            somebody turned SFX off and left the radio on. -->
       <details id="as-radio-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF</summary>
+        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF · NORMAL · SPOTTER OFF</summary>
         <div id="as-radio" class="set-row" role="group" aria-labelledby="as-radio-label">
           <span class="tune-label" id="as-radio-label">TEAM RADIO</span>
           <div>
@@ -2067,8 +2073,8 @@
             <button id="as-rpreset-next" type="button" data-step="1" aria-label="Next radio sound">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
-          <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
+        <label class="tune-row"><span class="tune-label">VOICE VOLUME · % OF DEFAULT MIX <b id="as-rvol-v">100%</b></span>
+          <input id="as-rvol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
              tail (js/audio/engine.js radioSting). NOT gated on the TEAM RADIO
              switch above and deliberately so: that switch is the SPOKEN radio,
@@ -2103,7 +2109,7 @@
            ships OFF, this talks over a menu and ships ON, and a control that
            greys out with a switch it does not obey is a lie about the wiring. -->
       <details id="as-ann-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · ON</summary>
+        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · MUTED · TV CAMERAS</summary>
         <div id="as-ann" class="set-row" role="group" aria-labelledby="as-ann-label">
           <span class="tune-label" id="as-ann-label">ANNOUNCER</span>
           <div>
@@ -2166,52 +2172,52 @@
         <p class="as-note">How the note climbs with the revs. Each readout is a trim percentage on that control (100&nbsp;=&nbsp;1&times;). TEAM profile is your manufacturer&rsquo;s factory mix, so the numbers are not all 100&nbsp;&mdash; PITCH, REV&nbsp;RANGE, SUB and DEPTH follow the team sound. RESET&nbsp;TO&nbsp;TEAM&nbsp;SOUND restores that profile. IDLE is the bottom, PITCH shifts the whole note, REV&nbsp;RANGE the spread to the limiter, CURVE how early it rises.</p>
         <label class="tune-row"><span class="tune-label">IDLE <b id="as-t-idle-v">100</b></span>
           <input id="as-t-idle" type="range" min="0" max="22" step="1" value="10" aria-label="Idle pitch"></label>
-        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
-          <input id="as-t-pitch" type="range" min="0" max="24" step="1" value="8" aria-label="Engine pitch"></label>
-        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
-          <input id="as-t-range" type="range" min="0" max="38" step="1" value="8" aria-label="Rev range"></label>
+        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">85</b></span>
+          <input id="as-t-pitch" type="range" min="0" max="120" step="1" value="25" aria-label="Engine pitch"></label>
+        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">130</b></span>
+          <input id="as-t-range" type="range" min="0" max="380" step="1" value="110" aria-label="Rev range"></label>
         <label class="tune-row"><span class="tune-label">CURVE <b id="as-t-curve-v">100</b></span>
-          <input id="as-t-curve" type="range" min="0" max="21" step="1" value="6" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
+          <input id="as-t-curve" type="range" min="0" max="42" step="1" value="12" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
         <h3 class="adv-sec">CHARACTER</h3>
         <p class="as-note">The engine&rsquo;s timbre: GRAVEL is low-rev roughness, DETUNE a thicker, less pure note, BRIGHTNESS the treble, SUB the low-octave weight.</p>
         <label class="tune-row"><span class="tune-label">GRAVEL LEVEL <b id="as-t-gravel-v">100</b></span>
-          <input id="as-t-gravel" type="range" min="0" max="16" step="1" value="4" aria-label="Low-rev roughness"></label>
-        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
-          <input id="as-t-detune" type="range" min="0" max="16" step="1" value="4" aria-label="Engine detune"></label>
+          <input id="as-t-gravel" type="range" min="0" max="80" step="1" value="20" aria-label="Low-rev roughness"></label>
+        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">0</b></span>
+          <input id="as-t-detune" type="range" min="0" max="80" step="1" value="0" aria-label="Engine detune"></label>
         <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
-          <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
-        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">100</b></span>
-          <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
+          <input id="as-t-bright" type="range" min="0" max="220" step="1" value="70" aria-label="Engine brightness"></label>
+        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">25</b></span>
+          <input id="as-t-sub" type="range" min="0" max="80" step="1" value="5" aria-label="Sub-octave weight"></label>
         <h3 class="adv-sec">LIMITER</h3>
         <p class="as-note">The rev-limiter cut: DEPTH is how hard it chops, RATE how fast, PITCH SAG how far the note dips on each cut.</p>
-        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
-        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">100</b></span>
-          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="6" aria-label="Rev limiter chop rate"></label>
-        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">100</b></span>
-          <input id="as-t-limsag" type="range" min="0" max="16" step="1" value="4" aria-label="Rev limiter pitch sag on each cut"></label>
+        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">225</b></span>
+          <input id="as-t-lim" type="range" min="0" max="60" step="1" value="45" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">80</b></span>
+          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="4" aria-label="Rev limiter chop rate"></label>
+        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">0</b></span>
+          <input id="as-t-limsag" type="range" min="0" max="80" step="1" value="0" aria-label="Rev limiter pitch sag on each cut"></label>
         <h3 class="adv-sec">BOOST</h3>
         <p class="as-note">While ERS deploys: LEVEL is the electric whine and whoosh, REV LIFT how far the note rises.</p>
-        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">100</b></span>
-          <input id="as-t-boost" type="range" min="0" max="100" step="1" value="25" aria-label="ERS deploy whine and whoosh level"></label>
+        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">112</b></span>
+          <input id="as-t-boost" type="range" min="0" max="400" step="1" value="112" aria-label="ERS deploy whine and whoosh level"></label>
         <label class="tune-row"><span class="tune-label">REV LIFT <b id="as-t-boostlift-v">100</b></span>
           <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
         <p class="as-note">The sounds stacked on the engine. The sliders set their levels; the switches under them mute a layer entirely.</p>
-        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="200" step="1" value="50" aria-label="Turbo whine and wastegate level"></label>
+        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">62</b></span>
+          <input id="as-t-whine" type="range" min="0" max="400" step="1" value="62" aria-label="Turbo whine and wastegate level"></label>
         <label class="tune-row"><span class="tune-label">HARVEST LEVEL <b id="as-t-harvest-v">100</b></span>
-          <input id="as-t-harvest" type="range" min="0" max="16" step="1" value="4" aria-label="MGU-K harvest whirr level"></label>
+          <input id="as-t-harvest" type="range" min="0" max="80" step="1" value="20" aria-label="MGU-K harvest whirr level"></label>
         <label class="tune-row"><span class="tune-label">WIND LEVEL <b id="as-t-wind-v">100</b></span>
-          <input id="as-t-wind" type="range" min="0" max="16" step="1" value="4" aria-label="Airflow level"></label>
+          <input id="as-t-wind" type="range" min="0" max="80" step="1" value="20" aria-label="Airflow level"></label>
         <label class="tune-row"><span class="tune-label">TYRES LEVEL <b id="as-t-tyres-v">100</b></span>
-          <input id="as-t-tyres" type="range" min="0" max="16" step="1" value="4" aria-label="Tyre screech level"></label>
+          <input id="as-t-tyres" type="range" min="0" max="80" step="1" value="20" aria-label="Tyre screech level"></label>
         <label class="tune-row"><span class="tune-label">BRAKES LEVEL <b id="as-t-brakes-v">100</b></span>
-          <input id="as-t-brakes" type="range" min="0" max="16" step="1" value="4" aria-label="Brake roar level"></label>
+          <input id="as-t-brakes" type="range" min="0" max="80" step="1" value="20" aria-label="Brake roar level"></label>
         <label class="tune-row"><span class="tune-label">SHIFT LEVEL <b id="as-t-shift-v">100</b></span>
-          <input id="as-t-shift" type="range" min="0" max="12" step="1" value="4" aria-label="Gear-shift crack level"></label>
+          <input id="as-t-shift" type="range" min="0" max="60" step="1" value="20" aria-label="Gear-shift crack level"></label>
         <label class="tune-row"><span class="tune-label">RIVALS LEVEL <b id="as-t-rivals-v">100</b></span>
-          <input id="as-t-rivals" type="range" min="0" max="16" step="1" value="4" aria-label="Rival engine level"></label>
+          <input id="as-t-rivals" type="range" min="0" max="80" step="1" value="20" aria-label="Rival engine level"></label>
         <label class="tune-row"><span class="tune-label">SPACE LEVEL <b id="as-t-rev-v">100</b></span>
           <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
         <label class="tune-row"><span class="tune-label">OVERRUN LEVEL <b id="as-t-ovr-v">100</b></span>
@@ -2330,6 +2336,7 @@
      the title intro's start state; js/ui/title-fx.js takes it off after one
      pass (css/menus.css THE TITLE INTRO). -->
 <div id="overlay" class="grain" data-intro role="main" aria-label="Title menu">
+  <button type="button" id="title-arrange-entry" class="screen-arrange-entry">Arrange this screen</button>
   <!-- THE TITLE CAR — decorative, static, and deliberately not a renderer.
        #game is visibility:hidden on this screen, so the title costs no GL boot;
        drawing the hero in SVG keeps it that way. STATIC because WCAG SC 2.2.2
@@ -2430,7 +2437,7 @@
            the &#9834; character: U+266A is in none of the bundled fonts, so the
            text glyph fell back to a host font and the phone title baseline
            flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
-      <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
+      <button id="soundbtn" class="minibtn" aria-pressed="false">SOUND OFF</button>
       <!-- Never hidden (css/menus.css). One short line: the full trade-mark sentence
            Formula 1's fan guidelines give (formula1.com/en/toolbar/guidelines.html)
            ran 8 lines in portrait and pushed Home past one screen (390x844: 556px
@@ -3373,7 +3380,7 @@
             <summary class="adv-more-btn">TOUCH / MOBILE</summary>
             <p>Choose SETTINGS › CONTROLS › STEERING INPUT. Rotate to landscape to drive. Stuck or facing the wrong way? Tap PAUSE, then RECOVER CAR.</p>
             <p><b>TILT:</b> roll the phone to steer; use GAS and BRAKE. It calibrates at the lights. If motion permission is denied, the game switches to BUTTONS.</p>
-            <p><b>BUTTONS:</b> hold an on-screen arrow and slide back to ease steering. Pedals sit opposite the arrows.</p>
+            <p><b>BUTTONS:</b> tap an arrow to steer, or hold it and slide toward the other arrow to ease off. In SETTINGS › CONTROLS › TOUCH BUTTON RESPONSE, choose Left, Right, Gas or Brake. PROGRESSIVE starts light and builds as you drag away from where you touched.</p>
             <p><b>TOUCH:</b> drag from where your finger lands on the track. Gas is automatic; use BRAKE to slow down. A tap alone does not steer.</p>
             <p>CONTROLS also has pedal layout and handedness. DISPLAY lets you size the interface, HUD and touch buttons separately.</p>
           </details>
@@ -3740,7 +3747,7 @@
      bar (piece, SIZE, WIDTH, RESET PIECE) is built by js/ui/title-layout.js,
      which adopts tl-done into it. -->
 <div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>
-  <button id="tl-done" type="button">DONE</button>
+  <button id="tl-done" type="button">Apply</button>
 </div>
 
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
@@ -4081,7 +4088,6 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-groups.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/hud-arrange.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>

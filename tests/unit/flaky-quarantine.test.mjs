@@ -48,13 +48,9 @@ test("no quarantine row is past its expiry: an expired row is inert, so it must 
   assert.deepEqual(expired, [], "delete the expired rows from tests/data/flaky-quarantine.json (AGENTS.md rule 9: a pass on retry is a red)");
 });
 
-test("every exact quarantine title is collected by the real browser runner", () => {
-  // --list starts no browser. It expands dynamic titles and applies the real
-  // project/manifest filters; a substring in source proves neither.
-  const listed = JSON.parse(execFileSync(process.execPath, [
-    path.join(ROOT, "node_modules/@playwright/test/cli.js"), "test",
-    ...FILE.quarantine.map((r) => r.spec), "--list", "--reporter=json",
-  ], { cwd: ROOT, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 }));
+function verifyQuarantineTitles(rows, listSpecs) {
+  if (!rows.length) return;  // Playwright treats zero path filters as “list the entire suite”.
+  const listed = listSpecs([...new Set(rows.map(row => row.spec))]);
   assert.deepEqual(listed.errors, []);
   const collected = [];
   function visit(suites, parents = []) {
@@ -67,10 +63,37 @@ test("every exact quarantine title is collected by the real browser runner", () 
     }
   }
   visit(listed.suites);
-  for (const row of FILE.quarantine) {
+  for (const row of rows) {
     assert.equal(collected.filter((t) => "tests/" + t.file === row.spec && t.title === row.title).length, 1,
       `${row.spec}: ${row.title} must identify exactly one runnable test`);
   }
+}
+
+test("every exact quarantine title is collected by the real browser runner", () => {
+  // --list expands dynamic titles under the real project filters without starting a browser.
+  verifyQuarantineTitles(FILE.quarantine, specs => JSON.parse(execFileSync(process.execPath, [
+    path.join(ROOT, "node_modules/@playwright/test/cli.js"), "test",
+    ...specs, "--list", "--reporter=json",
+  ], { cwd: ROOT, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })));
+});
+
+test("an empty quarantine registry starts no collection", () => {
+  verifyQuarantineTitles([], () => assert.fail("listing without a spec filter collects the whole suite"));
+});
+
+test("collected titles must match exactly once within each quarantined spec", () => {
+  const file = "specs/race.spec.js";
+  const row = { spec: "tests/" + file, title: "race › results" };
+  const other = { ...row, title: "race › grid" };
+  const specs = [{ file, title: "results" }, { file, title: "grid" }];
+  const list = paths => {
+    assert.deepEqual(paths, [row.spec], "two titles in one spec need one path filter");
+    return { errors: [], suites: [{ title: file, suites: [{ title: "race", specs }] }] };
+  };
+  verifyQuarantineTitles([row, other], list);
+  assert.throws(() => verifyQuarantineTitles([{ ...row, title: "results" }], list), /exactly one runnable test/);
+  specs.push({ file, title: "results" });
+  assert.throws(() => verifyQuarantineTitles([row], list), /exactly one runnable test/);
 });
 
 test("the loader returns the quarantined spec paths, and an empty set for a missing file", () => {
