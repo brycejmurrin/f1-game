@@ -840,7 +840,7 @@ function getSetupPreviewMesh() {
   const key = previewKey() + (split ? "|wheels" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
-    const fitted = Parts.getVisualTiers(getTeamParts(team.id), team);
+    const parts = Parts.getVisualTiers(getTeamParts(team.id), team);
     const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|wheels" : "");
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
@@ -855,7 +855,7 @@ function getSetupPreviewMesh() {
         teamId: team.id,   // per-team chassis style shows in the setup turntable too
         num: seat && seat.num,
         helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
-        parts: fitted,
+        parts,
         ...(Car3D.garageDetail ? Car3D.garageDetail() : null),
       }) }).data));
     if (split) {
@@ -863,7 +863,7 @@ function getSetupPreviewMesh() {
         departureWheels = (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.create)
           ? GarageDepartureWheels.create(gfx) : CarWheels.createGarage(gfx);
       }
-      departureWheels.prepare(key, liv, Car3D.appearanceParts(fitted, liv));
+      departureWheels.prepare(key, liv, Car3D.appearanceParts(parts, liv));
     }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
