@@ -205,7 +205,7 @@ const PROFILE = flag("--profile", null);
 // https://playwright.dev/docs/videos and /docs/api/class-video (context close flushes video).
 const garageCapture = !PROFILE && entry === "menu-full" && backend === "three" && path3 === "webgpu"
   ? (extraLs.join(" ").match(/apex26\.garageEvidence=(phone|desktop)\b/) || [])[1] : null;
-const garageViewport = garageCapture === "phone" ? { width: 844, height: 390 } : { width: 1280, height: 720 };
+const garageViewport = garageCapture === "phone" ? { width: 844, height: 390 } : { width: 1600, height: 900 };
 let captureContext = null, captureVideo = null;
 let persistent = null, browser;
 if (PROFILE) {
@@ -1043,6 +1043,9 @@ try {
     console.log("PACK " + JSON.stringify(out.pack));
     await bounded(() => page.evaluate(() => window.__apex.freeze(false)), 10000, "pack-unfreeze").catch(() => null);
   }
+  out.automaticDesktopEffects = await page.evaluate(() => Object.fromEntries(
+    ["adaptiveModels", "brakeLightSpill", "gravelDebris"].map(name => [name, GfxQuality.feature(name)])));
+  if (Object.values(out.automaticDesktopEffects).some(value => !value)) throw new Error("Automatic desktop effect disabled");
   out.parkCall = await bounded(() => page.evaluate(() => { window.__apexMark("parked"); return window.__apex.park(0.1); }), 60000, "park");
   // WHAT IS THE FRAME BOUND BY. The one question that decides whether "render
   // only what we can see" is the right lever: occlusion culling removes
@@ -1886,6 +1889,20 @@ try {
     else await page.locator("#btn-cam").click();
     await page.waitForFunction(saved => localStorage.getItem("apex26.camMode") !== saved, out.garageCameraControl.before.saved, { polling: 100, timeout: 5000 });
     out.garageCameraControl.after = await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on }));
+  }
+  out.brakeEvidence = await page.evaluate(() => {
+    const A = window.__apex;
+    A.park(0.15);
+    A.jump(0.15, 85, 0);
+    A.setInput({ brake: true });
+    try { A.step(1 / 60, 36); } finally { A.clearInput(); }
+    A.snapCam(1 / 60);
+    return { heat: A.carEffects().brakeHeat, lights: A.lightState().brakeSpillLights,
+      governor: PerfGov.autoTier(), sun: A.lightState().sunColor };
+  });
+  if (shot && out.brakeEvidence.lights === 2) {
+    await freshFrame("hot-brakes");
+    await page.screenshot({ path: shot.replace(/\.png$/, ".brakes.png") });
   }
   out.ok = true;
   checkpoint("done");
