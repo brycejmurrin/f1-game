@@ -2081,20 +2081,45 @@ test("phone touch steering restores the remaining held arrow and ignores old-key
   } finally { ctl.cancel(); }
 });
 
-test("last-touch fallback releases fingers while preserving keyboard pedals and steering", async () => {
+test("last-touch fallback releases fingers while preserving keyboard pedals and steering", async (t) => {
   const previous = { document: globalThis.document, window: globalThis.window };
   const listeners = {};
   globalThis.document = { hidden: false, addEventListener(type, fn) { (listeners[type] ||= []).push(fn); } };
   globalThis.window = { addEventListener() {} };
-  let receive, closed, ctl;
-  const transport = { status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; }, send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); } };
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  let ctl;
+  const [transport, host] = NetTransport.loopback({ latencyMs: 0 });
+  transport.pump(0); host.pump(0);
+  const samples = [];
+  host.onMessage((channel, data) => { if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data)); });
   const dom = { gas: fakeEl(), brake: fakeEl(), lookBack: fakeEl(), steer: fakeEl() };
   const documentEvent = (type, event) => { for (const fn of listeners[type] || []) fn(event); };
   try {
-    ctl = PhonePad.pad(dom, { deps: { rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }) } });
+    ctl = PhonePad.pad(dom, { now: () => 0, deps: { rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true, privateRelay: () => false, swap: async () => ({ ok: true }) } });
     await ctl.connect("ABC234");
-    receive("event", PhonePad.encodeHello("host", false, true));
-    ctl.setSteeringMode("touch");
+    host.send(NetTransport.EVENT, PhonePad.encodeHello("host", false, true));
+    ctl.pump();
+    for (const type of ["touchend", "touchcancel"]) documentEvent(type, { touches: [] });
+    host.pump(0);
+    assert.equal(samples.length, 0, "idle touch cleanup sends no state");
+    t.mock.timers.tick(PhonePad.HEARTBEAT_MS);
+    host.pump(0);
+    assert.equal(samples.length, 1, "the periodic heartbeat still sends while idle");
+
+    assert.equal(ctl.setSteeringMode("touch"), true);
+    for (const release of ["pointerup", "touchend"]) {
+      dom.steer.dispatch("pointerdown", { pointerId: 0, clientX: 10 });
+      dom.steer.dispatch("pointermove", { pointerId: 0, clientX: 50 });
+      assert.equal(ctl.state().steer, 1);
+      host.pump(0);
+      const before = samples.length;
+      if (release === "pointerup") dom.steer.dispatch(release, { pointerId: 0 });
+      else documentEvent(release, { touches: [] });
+      documentEvent("touchend", { touches: [] });
+      host.pump(0);
+      assert.equal(samples.length, before + 1, release + " sends one immediate release sample");
+      assert.equal(samples.at(-1).steer, 0);
+    }
     dom.gas.dispatch("keydown", { key: " " });
     dom.brake.dispatch("keydown", { key: "Enter" });
     dom.steer.dispatch("keydown", { key: "ArrowLeft" });
