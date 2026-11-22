@@ -680,16 +680,14 @@ const HudArrange = (() => {
         // second finger on the same piece: a pinch
         paint();
         const p0 = pointers.get(drag.pid);
-        pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: current(id).s };
+        pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: drag.orig ? current(id).s : null };
         try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
         return;
       }
       if (drag) return;   // another finger must not switch the gesture to a different piece
       flush();
       selected = id;
-      remember();
-      let orig = dragOrig(id);
-      drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig };
+      drag = { id, pid: e.pointerId, startX: e.clientX, startY: e.clientY, orig: null };
       pinch = null;
       try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
       const rects0 = rectsNow();
@@ -700,14 +698,27 @@ const HudArrange = (() => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && (e.pointerId === pinch.pid || (drag && e.pointerId === drag.pid))) {
         const a = pointers.get(drag.pid), b = pointers.get(pinch.pid);
-        if (a && b) queue(pinch.id, { s: pinchTo(pinch.s0, pinch.d0, dist(a, b)) });
+        if (!a || !b) return;
+        const distance = dist(a, b);
+        if (!pinch.d0) { pinch.d0 = distance; return; }
+        if (!drag.orig && Math.abs(distance - pinch.d0) < 3) return;
+        if (!drag.orig) { remember(); drag.orig = dragOrig(drag.id); }
+        pinch.s0 ??= drag.orig.s;
+        queue(pinch.id, { s: pinchTo(pinch.s0, pinch.d0, distance) });
         return;
       }
       if (!drag || e.pointerId !== drag.pid) return;
-      queue(drag.id, dragTo(drag.orig, e.clientX - drag.startX, e.clientY - drag.startY, window.innerWidth, window.innerHeight));
+      const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+      if (!drag.orig) {
+        if (Math.hypot(dx, dy) < 3) return;
+        remember(); drag.orig = dragOrig(drag.id);
+      }
+      queue(drag.id, dragTo(drag.orig, dx, dy, window.innerWidth, window.innerHeight));
     }
     function onPointerUp(e) {
       if (!editing) return;
+      const last = pointers.get(e.pointerId);
+      if (last && (last.x !== e.clientX || last.y !== e.clientY)) onPointerMove(e);
       paint();
       pointers.delete(e.pointerId);
       let ended = false;
@@ -715,7 +726,7 @@ const HudArrange = (() => {
         const pid = e.pointerId === pinch.pid ? drag.pid : pinch.pid;
         const point = pointers.get(pid), id = drag.id;
         pinch = null;
-        drag = point ? { id, pid, startX: point.x, startY: point.y, orig: dragOrig(id) } : null;
+        drag = point ? { id, pid, startX: point.x, startY: point.y, orig: drag.orig && current(id) } : null;
         ended = true;
       } else if (drag && e.pointerId === drag.pid) { drag = null; ended = true; }
       if (ended) after();
@@ -727,7 +738,7 @@ const HudArrange = (() => {
       if (!drag || (e.pointerId != null && e.pointerId !== drag.pid && e.pointerId !== pinch?.pid)) return;
       pending = null;
       paint();
-      const previous = history.pop();
+      const previous = drag.orig && history.pop();
       if (previous) HudLayout.restoreSnapshot(context.set, context.profile, previous.layout);
       drag = null; pinch = null; pointers.clear(); after();
     }

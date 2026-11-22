@@ -131,7 +131,7 @@ const Input = (function () {
   const touches = new Map();
   let touchSeq = 0;
   let touchSteer = 0;      // the winning touch's drag, -1..1
-  let touchActive = false; // is any finger on the glass (vs. ramping back home)
+  let activeTouch = null;  // winning steering contact; null while ramping back home
   let touchSteerVal = 0;   // what steer() emits: touchSteer while held, ramped on release
   let touchSteerT = 0;     // last ramp timestamp, ms
 
@@ -1046,8 +1046,7 @@ const Input = (function () {
     }
     // Native HUD buttons own their activation keys. Let the browser deliver
     // their click once; releases still clear keys held before focus moved here.
-    const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
-      active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore") &&
+    const nativeHudActivation = tag === "BUTTON" && hudControl &&
       (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
     if (nativeHudActivation) {
       if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
@@ -1281,7 +1280,8 @@ const Input = (function () {
   // drag outside its dead zone, or the first resting touch before any drag.
   function recomputeTouchSteer() {
     const rec = steeringTouchRec();
-    touchActive = !!rec;
+    if (!rec) dragFilterClear();
+    activeTouch = rec;
     touchSteer = rec ? touchCmd(rec) : 0;
     updateDragAnchor(rec);
   }
@@ -1353,7 +1353,8 @@ const Input = (function () {
   }
 
   function onTouchMove(e) {
-    if (!canvasTouchIsDriving()) return;
+    // A held canvas touch still moves under Pause. Track it for Resume; the menu gates driving.
+    if (!touches.size) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
@@ -1376,8 +1377,12 @@ const Input = (function () {
     const t = nowMs();
     const dt = rampDtSince(touchSteerT, t);
     touchSteerT = t;
-    if (touchActive) { touchSteerVal = dragFilter(touchSteer, dt > 0 ? dt : 0.016); return touchSteerVal; }
-    dragOeInit = false;   // a fresh press starts from where the finger lands, not from the last lap
+    if (activeTouch) {
+      const command = touchCmd(activeTouch);
+      if (command !== touchSteer) { touchSteer = command; updateDragAnchor(activeTouch); }
+      touchSteerVal = dragFilter(command, dt > 0 ? dt : 0.016);
+      return touchSteerVal;
+    }
     touchSteerVal = moveToward(touchSteerVal, 0, KEY_RAMP_OUT * dt);
     return touchSteerVal;
   }
@@ -1881,6 +1886,7 @@ const Input = (function () {
   function navBlocksTouch() { return _navLatch < 0 ? navBlocksTouchLive() : _navLatch === 1; }
   function poll() {
     const menu = menuOverlayOpen();
+    if (menu !== _menuWasOpen && activeTouch) { dragFilterClear(); updateDragAnchor(activeTouch); }
     if (menu && !_menuWasOpen) clearDriveToggles();
     _menuWasOpen = menu;
     const inRace = !!(window.UiLayers && typeof window.UiLayers.inRace === "function" && window.UiLayers.inRace());
@@ -1891,11 +1897,11 @@ const Input = (function () {
   }
 
   function throttle() {
-    return keyThrottle || (!navBlocksTouch() && btnThrottle) || padThrottle || remoteThrottle();
+    return keyThrottle || (touchThrottleLevel() > 0 && !navBlocksTouch()) || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || (!navBlocksTouch() && btnBrake) || padBrake || remoteBrake();
+    return keyBrake || (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -1903,15 +1909,17 @@ const Input = (function () {
   // Priority matches throttle()/braking(): whichever source is pressed wins, and
   // the keyboard wins over everything so a desktop player is never modulated by
   // a stray pad axis.
+  function touchThrottleLevel() { return btnThrottle ? (throttleLatched ? 1 : btnThrottleVal) : 0; }
   function throttleLevel() {
     if (keyThrottle) return 1;
-    if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
+    const touch = touchThrottleLevel();
+    if (touch > 0 && !navBlocksTouch()) return touch;
     if (remoteThrottle()) return remotePedalLevel(remThr);
     return padThrottleVal;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
-    if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
+    if (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) return btnBrakeVal;
     if (remoteBrake()) return remotePedalLevel(remBrk);
     return padBrakeVal;
   }
@@ -2057,9 +2065,9 @@ const Input = (function () {
       btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     }
     if (steerMode !== "touch") {
-      if (touchActive) hideDragAnchor();
+      if (activeTouch) hideDragAnchor();
       touches.clear();
-      touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+      touchSteer = 0; activeTouch = null; touchSteerVal = 0; touchSteerT = 0;
       dragFilterClear();
     }
     if (steerMode !== "tilt") { ++gyroRequestGeneration; detachGyro(); }
@@ -2192,7 +2200,7 @@ const Input = (function () {
     // A drag's anchor is in the old screen space; the next move would read W - 2x as a steer.
     // Zero the ramp state too (setSteerMode / reset already do): leaving touchSteerVal
     // at full lock made steer() unwind via KEY_RAMP_OUT after the fingers were cleared.
-    touches.clear(); touchSteer = 0; touchActive = false;
+    touches.clear(); touchSteer = 0; activeTouch = null;
     touchSteerVal = 0; touchSteerT = 0;
     dragFilterClear(); hideDragAnchor();
     // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
@@ -2298,7 +2306,7 @@ const Input = (function () {
     // The same net frees a ghost steering finger: a lost canvas touchend left `touches` pinned at its last offset.
     const noFingers = function (e) {
       if (e.touches.length !== 0) return;
-      holdReleaseAll(true);
+      holdReleaseAll(true, true);
       if (touches.size) { touches.clear(); recomputeTouchSteer(); }
     };
     window.addEventListener("touchend", noFingers, { capture: true, passive: true });
@@ -2424,7 +2432,7 @@ const Input = (function () {
     heldKeys.clear();
     touches.clear();
     hideDragAnchor();
-    touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+    touchSteer = 0; activeTouch = null; touchSteerVal = 0; touchSteerT = 0;
     dragFilterClear();   // else a press right after a blur/reset blends from the last drag
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
@@ -2536,7 +2544,7 @@ const Input = (function () {
       rateIn: digitalRateIn(),
       pad: { connected: padConnected, steer: padSteer, throttle: padThrottle, brake: padBrake },
       touchSteer,
-      touchActive,
+      touchActive: !!activeTouch,
       touchRangePx: touchRangePx(),
       touchRangeFrac,
       touchSpeedMix,

@@ -138,7 +138,7 @@
 .touchbtn:is([data-touch-feedback="on"], [data-touch-response]) { contain: layout; }
 /* Gas uses its full-face feedback. Other progressive controls also show travel bars.
    An active grip warning takes the same slot above the label. */
-.touchbtn[data-touch-response="progressive"]:not(#btn-throttle, [data-grip-cue], [aria-pressed])::before {
+.touchbtn[data-touch-response="progressive"]:not(#btn-throttle, [data-grip-cue], [aria-pressed], [data-touch-indicator="percent"])::before {
   content: ""; position: absolute; pointer-events: none; top: 10%; left: 50%;
   width: 14px; height: 7px; transform: translateX(-50%); background: var(--hud-ink-light);
   clip-path: polygon(0 100%, 0 65%, 26% 65%, 26% 100%, 37% 100%, 37% 32%, 63% 32%, 63% 100%, 74% 100%, 74% 0, 100% 0, 100% 100%);

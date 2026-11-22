@@ -329,3 +329,29 @@ test("the saved floating wheel centers on contact and shows the signed steering 
   touch("touchmove", 320, 150);
   assert.equal(dragOff(dragEl), "15px");
 });
+
+test("held drag updates at speed without another move, tracks the thumb under pause and resets on regrip", () => {
+  const { Input, onCanvas, sb, classOn } = boot();
+  Input.setSteerMode("touch"); Input.setAnalogSpeedMix(0); Input.setAdaptiveButtons(1);
+  Input.setTouchSpeedMix(1); Input.setSteerSpeedRef(41.7); Input.setSpeedStd(0);
+  let paused = false;
+  sb.UiLayers = { anyOpen: () => paused, inRace: () => true };
+  Input.poll();
+  const touch = (type, x) => onCanvas(type, { changedTouches: [{ identifier: 1, clientX: x, clientY: 60 }] });
+  touch("touchstart", 100); touch("touchmove", 155.64);
+  const partial = Input.steer(0.016);
+  Input.setSpeedStd(41.7);
+  assert.ok(Math.abs(Input.steer(0.016) - partial / 2) < 1e-6);
+  Input.setDragSmoothing(2);
+  touch("touchmove", 900);
+  assert.equal(Input.steer(0.016), 1);
+  paused = true; Input.poll();
+  assert.equal(classOn.has("on"), false);
+  touch("touchmove", 100);
+  paused = false; Input.poll();
+  assert.equal(Input.steer(0.016), 0, "resume starts where the thumb is now");
+  touch("touchmove", 900);
+  assert.ok(Input.steer(0.016) > 0);
+  touch("touchend", 900); touch("touchstart", 150);
+  assert.equal(Input.steer(0.016), 0, "fresh press between physics steps starts centered");
+});

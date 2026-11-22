@@ -2,11 +2,11 @@
 /* Opt-in driver colors take precedence over the race and controller themes.
    The idle rim leaves status and energy fills visible. */
 [data-custom-idle] { border-color: var(--touch-custom-idle) !important; }
-[data-custom-pressed]:is(:active, [data-slid="on"], .on) {
+[data-custom-pressed]:is(:active:not(:where([data-slid="off"], #gas, #brake)), [data-slid="on"], .on, [data-touch-feedback="on"]) {
   border-color: var(--touch-custom-pressed) !important;
   --touch-fill: var(--touch-custom-pressed) !important;
 }
-[data-custom-pressed]:is(:active, [data-slid="on"], .on):not(:focus-visible) {
+[data-custom-pressed]:is(:active:not(:where([data-slid="off"], #gas, #brake)), [data-slid="on"], .on, [data-touch-feedback="on"]):not(:focus-visible) {
   outline: 3px solid var(--touch-custom-pressed);
 }
 /* Analog controls already paint a variable-strength fill. */

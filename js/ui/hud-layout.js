@@ -825,7 +825,7 @@ const HudLayout = (function () {
       const el = doc.querySelector(sel);
       if (!el || !el.style || (only && el !== only)) continue;
       if (el.hasAttribute("data-hl-keep")) { el.style.removeProperty("--hud-clear-x"); el.style.removeProperty("--hud-clear-y"); el.removeAttribute("data-hl-keep"); }
-      if (editing || !manuallyPlaced(el) || el.hidden) continue;
+      if (editing || !fixedReadout(el) || el.hidden) continue;
       const r = maxRect(id, el), area = (r.right - r.left) * (r.bottom - r.top);
       if (!(area > 0)) continue;
       // PARKED is a choice: a piece saved mostly off the screen stays there (unrestricted placement, hud-layout.spec).
@@ -840,12 +840,17 @@ const HudLayout = (function () {
 
   // Temporary screen-pixel corrections never enter the saved MOVE & SIZE layout.
   // Controls and primary instruments reserve their space before optional panels.
-  const CLEAR_READOUTS = ["map", "speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
+  const CLEAR_READOUTS = ["map", "tyre", "gearbox", "speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
+  // A factory phone readout can yield when the screen or the flag/radio content
+  // changes. Saved edits and the Arrange preview keep their exact positions.
+  const seedWidgets = new Set(["announce", "hud-tyre", "hud-gearbox", "hud-speed", "hud-limits", "hud-damage", "hud-rel", "hud-strat", "hud-inputs"]);
+  const seedReadout = (el) => !!(el && seedWidgets.has(el.id) && el.hasAttribute("data-hl-seed") && !bodyAttr("data-hud-arrange"));
+  const fixedReadout = (el) => manuallyPlaced(el) && !seedReadout(el);
   function resetClearance() {
     if (!doc || !doc.querySelector) return;
     for (const [id, , sel] of ELEMENTS) {
       const el = doc.querySelector(sel);
-      if (manuallyPlaced(el)) { releaseAutomatic(el); continue; }
+      if (fixedReadout(el)) { releaseAutomatic(el); continue; }
       if (CLEAR_READOUTS.indexOf(id) < 0) continue;
       if (el && el.style) {
         el.style.removeProperty("--hud-clear-x"); el.style.removeProperty("--hud-clear-y");
@@ -878,15 +883,16 @@ const HudLayout = (function () {
     const blocks = [];
     for (const el of doc.querySelectorAll(".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
       if (autoMap && el === mapEl) continue;
+      if ((el.id === "hud-tyre" || el.id === "hud-gearbox") && seedReadout(el)) continue;
       const r = box(el); if (r) blocks.push(r);
     }
     // A player-placed radio is an obstacle, never another automatic candidate.
-    const placedRadio = bodyAttr("data-radio-placed");
+    const placedRadio = bodyAttr("data-radio-placed") && !seedReadout(doc.querySelector("#announce"));
     if (placedRadio) { const r = box(doc.querySelector("#announce")); if (r) blocks.push(r); }
     // Edited secondary readouts are fixed obstacles too, not placement candidates.
     for (const [, , sel] of rows) {
       const el = doc.querySelector(sel);
-      if (manuallyPlaced(el)) { const r = box(el); if (r) blocks.push(r); }
+      if (fixedReadout(el)) { const r = box(el); if (r) blocks.push(r); }
     }
     // Scalar form of the rect-vs-block overlap test: findSlot tries ~1000 candidates, so no object or closure per try.
     // Obstacle bounds (already inflated by EDGE) live in a reused Float64Array, synced lazily as `blocks` grows:
@@ -919,7 +925,8 @@ const HudLayout = (function () {
     };
     for (const id of CLEAR_READOUTS) {
       const row = rows.find((e) => e[0] === id), el = doc.querySelector(row[2]);
-      if (manuallyPlaced(el)) continue;
+      if (fixedReadout(el)) continue;
+      if ((id === "tyre" || id === "gearbox") && !seedReadout(el)) continue;
       // A stale lane collapse has no rectangle to place after rotation or a
       // camera switch. Reopen it locally; the lane producer owns the next reset.
       if (id === "announce" && el && el.hasAttribute("data-lane-collapsed")) {
@@ -1005,12 +1012,10 @@ const HudLayout = (function () {
       const el = doc.querySelector(sel);
       if (el) clearanceObserver.observe(el, { box: "border-box" });
     }
-    // TYRES is a block for clearReadouts and grows up from its dock anchor (the PLAN and pit rows).
-    { const t = doc.querySelector("#hud-tyre"); if (t) clearanceObserver.observe(t, { box: "border-box" }); }
     // A saved piece that appears (DAMAGE) or grows mid-race is re-kept on its own; others cost a hasAttribute.
     const keepObs = new ResizeObserver((es) => {
       if (typeof window === "undefined" || !window.innerWidth) return;
-      for (const e of es) if (manuallyPlaced(e.target)) keepUser(window.innerWidth, window.innerHeight, e.target);
+      for (const e of es) if (fixedReadout(e.target)) keepUser(window.innerWidth, window.innerHeight, e.target);
     });
     for (const [id, , sel] of ELEMENTS) { const el = id !== "announce" && doc.querySelector(sel); if (el) keepObs.observe(el, { box: "border-box" }); }
   }

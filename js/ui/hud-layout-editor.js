@@ -100,9 +100,9 @@ const HudLayoutEditor = (() => {
   function createColors(ELEMENTS, store, doc) {
     const parts = [];
     const add = (id, label, selector, property) => parts.push({ id, label, selector, property });
-    function panel(id, label, selector) {
+    function panel(id, label, selector, ink = selector) {
       add(id + "-fill", label + " · Background", selector, "background-color");
-      add(id + "-text", label + " · Text", selector, "color");
+      add(id + "-text", label + " · Text", ink, "color");
     }
     for (const [id, label, selector] of ELEMENTS) {
       if (id === "map") {
@@ -113,7 +113,7 @@ const HudLayoutEditor = (() => {
       } else if (id === "tower") {
         panel(id, label, ".hud-top .hud-box, #bc-tower");
       } else {
-        panel(id, label, selector);
+        panel(id, label, selector, id === "energy" ? "#hud-energy .hud-energy-label" : selector);
       }
     }
     for (const [id, label] of [["pos", "POSITION"], ["lap", "LAP"], ["time", "LAP TIME"], ["best", "BEST"], ["delta", "DELTA"]]) {
@@ -231,8 +231,22 @@ const HudLayoutEditor = (() => {
         sheet = doc.createElement("style");
         doc.head.appendChild(sheet);
       }
-      if (sheet) sheet.textContent = parts.filter(p => p.selector && colors[p.id]).map(p =>
-        p.selector + " { " + p.property + ": " + colors[p.id] + " !important; }").join("\n");
+      if (!sheet) return;
+      const rules = parts.filter(p => p.selector && colors[p.id]).map(p =>
+        p.selector + " { " + p.property + ": " + colors[p.id] + " !important; }");
+      // LAP and running TIME inherit tower ink on a dark strip. Give dark custom
+      // digits a light backing in high contrast unless the player chose the plate too.
+      for (const id of ["lap", "time"]) {
+        const ink = colors[id + "-text"] || colors["tower-text"];
+        if (!ink || colors[id + "-fill"] || colors["tower-fill"]) continue;
+        if (typeof AppearanceOpts !== "undefined" && AppearanceOpts.needsLightHudPlate(ink)) {
+          const customLap = colors["tower-time-lap-fill"] || colors["tower-time-lap-text"];
+          const timeState = customLap ? ":not([data-hold])" : ':not([data-hold="pb"])';
+          const value = "#hud-" + id + (id === "time" ? timeState : "");
+          rules.push(':root[data-ui-contrast="high"] ' + value + " { background-color: white; text-shadow: none; }");
+        }
+      }
+      sheet.textContent = rules.join("\n");
     }
     function save(id, value) {
       if (!parts.some(part => part.id === id) || (value !== null && !/^#[0-9a-f]{6}$/i.test(value))) return;

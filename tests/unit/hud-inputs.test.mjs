@@ -121,6 +121,20 @@ test("frame: off hides; on samples at a fixed step at any fps, sizes for DPR, re
   assert.ok(I.trace.count <= 2);
 });
 
+test("placing or resetting the touch inputs chart remeasures its CSS box at the same zoom", () => {
+  const d = fakeDom(), I = load({ document: d.doc, window: d.win });
+  const p = { throttleDemand: 1, gear: 3 };
+  let placed = false;
+  d.root.hasAttribute = name => name === "data-hl-user" && placed;
+  for (const state of [false, true, false]) {
+    placed = state;
+    d.cv.clientWidth = placed ? 128 : 84;
+    d.cv.clientHeight = placed ? 48 : 32;
+    I.frame({}, p, 100);
+    assert.deepEqual([d.cv.width, d.cv.height], [d.cv.clientWidth * 2, d.cv.clientHeight * 2]);
+  }
+});
+
 test("reduced motion draws still bars, not a scrolling trace", () => {
   const d = fakeDom();
   d.doc.documentElement.dataset.motion = "reduce";

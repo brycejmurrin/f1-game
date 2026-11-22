@@ -1502,14 +1502,20 @@
     },
     "js/camera/cam-picker.js": {
       "attach": [
+        "tests/unit/touch-button-settings.test.mjs",
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/a11y-pwa-pass.test.mjs"
+      ],
+      "start": [
+        "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "*": [
-        "tests/unit/a11y-pwa-pass.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/camera-ride.test.mjs",
         "tests/unit/extra-rigs.test.mjs",
-        "tests/unit/real-replay-transport.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
     },
@@ -9848,6 +9854,7 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "pollGamepad": [
@@ -9906,9 +9913,11 @@
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setAnalogSpeedMix": [
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9951,6 +9960,7 @@
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -9974,6 +9984,7 @@
       "setSteerSpeedRef": [
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setTiltDeadzone": [
@@ -9989,6 +10000,7 @@
         "tests/unit/photomode-hold.test.mjs"
       ],
       "setTouchSpeedMix": [
+        "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "simTilt": [
@@ -19444,6 +19456,9 @@
       ],
       "simulateLinear": [
         "tests/unit/cvd-palette.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-minimap-pitmark.test.mjs"
       ]
     },
     "js/ui/deep-link.js": {
@@ -20184,7 +20199,8 @@
       ],
       "flashSector": [
         "tests/specs/time-trial.spec.js",
-        "tests/unit/hud-feel.test.mjs"
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-readouts.test.mjs"
       ],
       "gapDecimals": [
         "tests/unit/hud-gap-decimals.test.mjs"

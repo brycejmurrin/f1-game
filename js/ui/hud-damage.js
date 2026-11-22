@@ -15,12 +15,17 @@ const HudDamage = (function () {
   /** 0 none … 3 severe. */
   function level(v) { return v >= 0.75 ? 3 : v >= 0.45 ? 2 : v >= 0.15 ? 1 : 0; }
 
-  /** Text fallback: the worst part in a few characters, + SUSP for a knock. */
-  function text(r) {
-    if (!r) return "";
+  function worstPart(r) {
     let best = -1, bv = 0;
     for (let i = 0; i < PARTS.length; i++) { const v = r[PARTS[i][0]]; if (v > bv) { bv = v; best = i; } }
-    const t = best >= 0 && bv >= 0.15 ? PARTS[best][1] + " " + Math.round(bv * 10) * 10 + "%" : "";
+    return bv >= 0.15 ? best : -1;
+  }
+
+  /** Text fallback: the worst part in a few characters, + SUSP for a knock. */
+  function text(r, best) {
+    if (!r) return "";
+    if (best === undefined) best = worstPart(r);
+    const t = best >= 0 ? PARTS[best][1] + " " + Math.round(r[PARTS[best][0]] * 10) * 10 + "%" : "";
     return r.knock ? (t ? t + " SUSP" : "SUSP") : t;
   }
   /** Screen-reader label: every damaged part in words. */
@@ -48,7 +53,8 @@ const HudDamage = (function () {
     const on = !!(r && show);
     if (el.hidden === on) el.hidden = !on;
     if (!on) return false;
-    const s = sig(r);
+    const best = worstPart(r);
+    const s = sig(r) * (PARTS.length + 1) + best;
     if (el._dmgSig === s) return true;
     el._dmgSig = s;
     for (let i = 0; i < PARTS.length; i++) {
@@ -58,7 +64,7 @@ const HudDamage = (function () {
     const k = el.querySelector('[data-part="knock"]');
     if (k) k.setAttribute("data-lvl", r.knock ? "3" : "0");
     const t = el.querySelector("[data-dmg-text]");
-    if (t) t.textContent = text(r);
+    if (t) t.textContent = text(r, best);
     el.setAttribute("aria-label", label(r));
     return true;
   }

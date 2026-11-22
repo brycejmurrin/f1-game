@@ -299,8 +299,8 @@ function syncMetricsOverlayCompact() {
 // Manual gears: tilt (thumbs free) or desktop keyboard. BUTTONS already owns
 // both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
 // hand for a shifter.
-function gearsManual() {
-  return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
+function gearsManual(forceTouch = false) {
+  return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded() && !forceTouch);
 }
 /* AUTO-THROTTLE IS AN OPTION NOW, not only a consequence of TOUCH mode.
    XAG 107's worked example of an input barrier is literally a racing game's
@@ -311,7 +311,7 @@ function gearsManual() {
    thumb, so it is not a preference but a fact about the control scheme. */
 let autoThrottleOpt = store.get("autoThrottle", false);
 let throttleLatchOpt = store.get("throttleLatch", false);
-function autoThrottle() { return autoThrottleOpt || (Input.touchControlsNeeded() && steerMode === "touch"); }
+function autoThrottle(forceTouch = false) { return autoThrottleOpt || ((forceTouch || Input.touchControlsNeeded()) && steerMode === "touch"); }
 // Left/right-handed docks. F1 Mobile enumerates both as first-class control
 // schemes rather than hiding a toggle; the whole feature here is which dock
 // each thumb group lands in, so CSS does it (body.mirror-controls).
@@ -2751,11 +2751,11 @@ function startRace() {
   return request;
 }
 
-function showTouchControls(show, cooldown = false) {
-  const t = show && Input.touchControlsNeeded();
-  const manual = !cooldown && gearsManual();
+function showTouchControls(show, cooldown = false, preview = false) {
+  const t = show && (preview || Input.touchControlsNeeded());
+  const manual = !cooldown && gearsManual(preview);
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
-  els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle()));
+  els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle(preview)));
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = els.btnOT.hidden = !t || cooldown;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
@@ -3559,7 +3559,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G, uiScale);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G, uiScale, show => showTouchControls(show, false, show));
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);

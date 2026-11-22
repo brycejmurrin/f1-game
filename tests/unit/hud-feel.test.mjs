@@ -222,7 +222,12 @@ test("the OVERTAKE chip spells every state differently and reads the 2026 allowa
   assert.equal(els.ot.textContent, "OVERTAKE 0.31 MJ", "the push reads what is LEFT of the allowance");
 
   player.otT = 0; tick();
-  assert.equal(els.ot.textContent, "OT READY 0.31 MJ", "paused below the speed floor is still an allowance, not a lockout");
+  assert.equal(els.ot.textContent, "OT HELD 0.31 MJ");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
+  player.otOn = true; tick();
+  assert.equal(els.ot.textContent, "OT PAUSED 0.31 MJ");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "false", "the driver can switch off a paused push");
+  player.otOn = false;
 
   // N2 (2026-10-14): a grant HELD behind a closed gate (the lap-0 grant overtake-mode.js keeps, or any
   // grant under a safety car) must not pulse the yellow "ready" plate while the text and the button say
@@ -258,7 +263,7 @@ test("the pit limiter holds an Overtake grant until the driver leaves the exit r
   assert.equal(els.ot.getAttribute("aria-label"), "Overtake unavailable in the pit lane");
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
   assert.equal(els.btnOT.getAttribute("data-state"), "pit-lane");
-  limiterHeld = false;
+  limiterHeld = false; player.otArmed = true;
   tick();
   assert.equal(els.ot.textContent, "OT READY 0.50 MJ");
   assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");

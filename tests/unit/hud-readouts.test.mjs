@@ -793,3 +793,45 @@ test("pedal feedback follows the active pedal's grip and distinguishes classic r
   car.wheelSpin = 1;
   assert.equal(R.pedalGrip(car, true), "");
 });
+
+test("a hidden race HUD keeps the shared timing clock current through a rival's stop", () => {
+  const { G, dom, player, rival, sb, frame, els } = boot();
+  G.track.total = 5000;
+  for (let t = 0; t <= 100; t++) {
+    dom.body.classList.toggle("hud-hidden", t > 0 && t < 100);
+    G.raceT = t;
+    player.prog = t * 10;
+    rival.prog = Math.min(t * 50, 1100);
+    frame(1000);
+  }
+  assert.equal(sb.HudReadouts.gaps.gap(rival, player), 80);
+  assert.match(els.gapA.textContent, /80\.0s/, "first restored reading discards the old display average");
+});
+
+test("hiding race readouts preserves the touch controls and ages sector indications", () => {
+  const { $, G, dom, els, player, frame, tick, hud } = boot();
+  G.hudProfile = "standard"; G.hudMetricsLayout = "full";
+  G.sectorLast[0] = G.sectorBests[0] = 30;
+  els.workBtn = $("hud-pit-work"); els.endSessionBtn = $("hud-pit-end-session");
+  G.timeTrial = true;
+  G.pits = { commitFrac: () => 0, cue: () => null, canWork: c => c.pitState === "box" };
+  tick();
+  dom.body.classList.add("hud-hidden");
+  player.pitState = "box";
+  player.otArmed = true;
+  G.sectorLast[0] = 31;
+  hud.flashSector(0);
+  frame(100);
+  assert.equal(els.workBtn.hidden, false);
+  assert.equal(els.endSessionBtn.hidden, false);
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");
+  assert.equal(els.btnAero.getAttribute("aria-disabled"), "true");
+  player.pitState = "none"; player.xArmed = true;
+  frame(4000);
+  assert.equal(els.workBtn.hidden, true);
+  assert.equal(els.btnAero.getAttribute("aria-disabled"), "false");
+  dom.body.classList.remove("hud-hidden");
+  tick();
+  assert.equal(els.hudSectors.children[0].children[1].textContent, "▲31.000");
+  assert.equal(hud.secFlash().flash[0], 0);
+});

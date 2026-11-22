@@ -157,6 +157,14 @@ test("HUD chip: hidden under the threshold, tinted levels + text + aria-label ab
   assert.equal(parts.fwL.attrs["data-lvl"], "1");
   assert.equal(txt.textContent, "FW L 40%");
   assert.match(el.attrs["aria-label"], /^Car damage: front wing left 40%/);
+  const smallHits = D.blank();
+  D.apply(smallHits, 3, -0.1, 0.21);
+  D.apply(smallHits, 3, 0.1, 0.20);
+  H.paint(el, smallHits, true);
+  assert.equal(txt.textContent, "FW L 20%");
+  D.apply(smallHits, 3, 0.1, 0.02);
+  H.paint(el, smallHits, true);
+  assert.equal(txt.textContent, "FW R 20%", "the worst side can change within the same displayed percentage");
   assert.match(H.text({ fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 1 }), /^SUSP$/);
 });
 

@@ -2,6 +2,8 @@
 const CamPicker = (function () {
   "use strict";
 
+  const touchHolds = new WeakMap();
+
   function attach(host) {
     const G = host.G, $ = host.$, CAM_MODES = host.CAM_MODES, HOLD_MS = host.HOLD_MS;
     const watchReplay = host.watchReplay, pickCam = host.pickCam, toAuto = host.toAuto, cycleCam = host.cycleCam;
@@ -98,27 +100,45 @@ const CamPicker = (function () {
       let holdT = 0, holdGeneration = 0, downTs = NaN;
       let held = false;
       let released = false;
-      b.addEventListener("pointerdown", (e) => {
+      let holdMs = HOLD_MS;
+      function start(e, delay = HOLD_MS) {
         cancelCamHold();
-        downTs = e && e.timeStamp;
+        holdMs = delay; downTs = e && e.timeStamp;
         const generation = holdGeneration;
-        holdT = setTimeout(() => { if (generation !== holdGeneration) return; holdT = 0; held = camPicker.show(); }, HOLD_MS);
-      });
+        holdT = setTimeout(() => { if (generation !== holdGeneration) return; holdT = 0; held = camPicker.show(); }, holdMs);
+      }
+      b.addEventListener("pointerdown", e => start(e));
       // The hold is judged by the press's own event times, not by which task
       // ran first: a long frame queues pointerup BEHIND the timer, so an 80 ms
       // tap opened the picker (UI hunt 2026-10-29 row 3). A press shorter than
       // HOLD_MS that the timer already "held" is undone and clicks as a tap.
-      b.addEventListener("pointerup", (e) => {
+      function finish(e) {
         clearTimeout(holdT);
-        if (held && e && e.timeStamp - downTs < HOLD_MS) camPicker.hide();
+        if (held && e && e.timeStamp - downTs < holdMs) camPicker.hide();
         released = true;
-      });
+      }
+      b.addEventListener("pointerup", finish);
       b.addEventListener("pointerleave", () => clearTimeout(holdT));
       // A cancelled touch is not a long press. iOS cancels touches routinely
       // (edge swipe, notification, gesture arbitration) and a touch pointer
       // holds implicit capture, so pointerleave never fires either: the timer
       // opened the picker mid-corner and `held` then ate the next genuine tap.
-      const cancelHold = cancelCamHold = () => { holdGeneration++; clearTimeout(holdT); holdT = 0; held = false; released = false; };
+      const cancelHold = cancelCamHold = () => { holdGeneration++; clearTimeout(holdT); holdT = 0; held = false; released = false; downTs = NaN; };
+      // A custom touch gesture owns pointer dispatch. It borrows this same picker
+      // timer so pausing or changing screens cancels it just like a default press.
+      touchHolds.set(b, {
+        start(e, mode) { start(e, mode === "hold" ? 900 : mode === "long" ? 1350 : HOLD_MS); },
+        finish(e) {
+          if (!Number.isFinite(downTs)) return true; // the screen retired this press
+          const elapsed = e.timeStamp - downTs;
+          finish(e);
+          if (elapsed < holdMs) return false;
+          if (!held) camPicker.show(); // release may arrive before the timer runs
+          held = false;
+          return true;
+        },
+        cancel: cancelHold,
+      });
       b.addEventListener("pointercancel", cancelHold);
       // Touch implicitly releases capture AFTER pointerup and BEFORE click.
       // Preserve the consumed long press through that normal release.
@@ -154,6 +174,6 @@ const CamPicker = (function () {
     return { hide: camPicker.hide };
   }
 
-  return { attach };
+  return { attach, touchHold: button => touchHolds.get(button) };
 })();
 Object.freeze(CamPicker);

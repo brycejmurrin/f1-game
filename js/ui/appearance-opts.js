@@ -584,6 +584,8 @@ const AppearanceOpts = (function () {
     hudHex: () => hudHex,
     hudUsesTeam: () => hudAccent === "team",
     teamHex, resolveAccent, pickInk,
+    // The high-contrast HUD plate is 92% black, including over a white scene.
+    needsLightHudPlate: hex => wcag(hexRgb(hex), [0.08, 0.08, 0.08]) < 4.5,
     setTheme, setMenuAccent, setHudAccent, setMenuHex, setHudHex,
     applyAll, applyMenuAccent, applyHudAccent, restore, initUI,
   };

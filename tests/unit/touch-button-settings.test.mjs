@@ -59,6 +59,11 @@ test("changing, reopening and resetting a touch response edits only the selected
   choose("button", "left");
   assert.equal(field("press").value, "progressive");
   assert.equal(describedBy(field("feedback")).includes("Three rising bars"), true);
+  choose("indicator", "percent");
+  assert.match(describedBy(field("feedback")), /percentage/);
+  assert.doesNotMatch(describedBy(field("feedback")), /Three rising bars/);
+  choose("button", "brake"); choose("press", "progressive"); choose("sliderEdge", "bottom");
+  assert.doesNotMatch(describedBy(field("feedback")), /Three rising bars/);
   choose("button", "gas");
   choose("press", "progressive");
   assert.equal(describedBy(field("feedback")).includes("Three rising bars"), false);
@@ -134,9 +139,9 @@ test("Boost keeps its own colors and accepts only the chosen touch gesture", () 
   controls.bindControl(el, "boost");
   assert.equal(style["--touch-custom-idle"], "var(--gold)");
   assert.equal(model.buttonOverrides("pause").activation, undefined);
-  const send = (type, time, x = 5, detail = 1) => {
+  const send = (type, time, x = 5, detail = 1, pointerId = 1) => {
     let consumed = false;
-    events[type]({ timeStamp: time, detail, pointerId: 1, pointerType: "touch", clientX: x, clientY: 5,
+    events[type]({ timeStamp: time, detail, pointerId, pointerType: "touch", clientX: x, clientY: 5,
       preventDefault() {}, stopImmediatePropagation() { consumed = true; } });
     return consumed;
   };
@@ -165,6 +170,13 @@ test("Boost keeps its own colors and accepts only the chosen touch gesture", () 
   send("pointerdown", 4000); send("pointerup", 4899);
   send("pointerdown", 5000); send("pointerup", 5900);
   assert.equal(actions, 5);
+  choose("activation", "double");
+  send("pointerdown", 6000);
+  dom.dispatch(dom.document, { type: "touchend", touches: [] }); // missing pointerup
+  send("pointerdown", 6100, 5, 1, 2); send("pointerup", 6120, 5, 1, 2);
+  dom.dispatch(dom.document, { type: "touchend", touches: [] }); // normal first tap
+  send("pointerdown", 6200, 5, 1, 3); send("pointerup", 6220, 5, 1, 3);
+  assert.equal(actions, 6, "an interrupted touch releases ownership; normal lifts preserve the first tap");
   host.querySelector("button").onclick();
   assert.equal(send("pointerdown", 2900), false);
   assert.equal(style["--touch-custom-idle"], undefined);
@@ -279,4 +291,37 @@ test("absolute slider paints a single decorative quarter scale and restores its 
   model.setButtonProfile("brake", { feedback: true, sliderEdge: "relative" });
   assert.equal(attributes.get("data-touch-edge"), "top");
   assert.equal(children.length, 0);
+});
+
+test("custom camera gestures share the picker hold and cancel with the camera screen", () => {
+  const dom = makeDom(), el = dom.byId("btn-cam"), handlers = new Map();
+  let timer, cycles = 0;
+  const context = vm.createContext({ document: dom.document, window: {},
+    setTimeout(fn, delay) { timer = { fn, delay }; return 1; }, clearTimeout() { timer = null; } });
+  for (const file of ["js/input/pedal-travel.js", "js/input/touch-button-actions.js", "js/camera/cam-picker.js"]) {
+    vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), context, { filename: absSrc(file) });
+  }
+  const [model, actions, picker] = vm.runInContext("[PedalTravel, TouchButtonActions, CamPicker]", context);
+  el.getBoundingClientRect = () => ({ left: 0, right: 50, top: 0, bottom: 50 });
+  // The action recognizer captures each pointer before the CAM button's ordinary listener.
+  const register = el.addEventListener.bind(el);
+  el.addEventListener = (type, fn, capture) => capture ? handlers.set(type, fn) : register(type, fn);
+  const camera = picker.attach({ $: () => el, G: { state: "race" }, CAM_MODES: [{ label: "Helmet" }],
+    watchReplay: () => null, HOLD_MS: 340, cycleCam: () => cycles++ });
+  actions.bindControl(el, "camera");
+  el.click = () => el.onclick();
+  const send = (type, timeStamp) => handlers.get(type)({ type, timeStamp, pointerId: 3, pointerType: "touch",
+    clientX: 25, clientY: 25, preventDefault() {}, stopImmediatePropagation() {} });
+  for (const [mode, threshold] of [["quick", 340], ["double", 340], ["hold", 900], ["long", 1350]]) {
+    model.setButtonProfile("camera", { activation: mode });
+    send("pointerdown", 100); assert.equal(timer.delay, threshold);
+    timer.fn(); send("pointerup", 100 + threshold);
+    assert.equal(el.getAttribute("aria-expanded"), "true", mode);
+    assert.equal(cycles, 0);
+    camera.hide();
+  }
+  send("pointerdown", 2000); send("pointerup", 2900);
+  assert.equal(cycles, 1, "the selected long-hold action still cycles on release");
+  send("pointerdown", 3200); camera.hide(); send("pointerup", 4100);
+  assert.equal(cycles, 1, "a hold retired by pause cannot switch camera on resume");
 });
