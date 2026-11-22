@@ -64,9 +64,8 @@ test('tier 4 keeps the main camera view and inverse projection current across le
       camEye: [3, 2, 7], camTgt: [1, 1, -4], _camUp: [0, 1, 0],
       PerfGov: { autoTier: () => tier }, _roadReflectionTransition: { value: 0 },
       frame: { proj, invProj: inverse, viewProj: vp }, camera, _wgpu: webgpu, renderer: { coordinateSystem: 2001 },
-      _mul4Col: M4.mulTo, _projGpu: new Float32Array(16), _tmpMat4: new Matrix4(), _tmpMat4b: new Matrix4(),
-      Z01: new Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, .5, .5, 0, 0, 0, 1).elements,
-    }, '');
+      _projGpu: new Float32Array(16), _tmpMat4: new Matrix4(), _tmpMat4b: new Matrix4(),
+    }, fn(tlx, 'remapClipDepth'));
     // First seed the inverse normally, then hold the fully shed, zero-SSR state.
     for (const [label, fov, aspect, near] of [
       ['baseline', 60, 2, .3], ['FOV', 80, 2, .3], ['rotation', 80, .5, .3], ['external camera near plane', 80, .5, .9],

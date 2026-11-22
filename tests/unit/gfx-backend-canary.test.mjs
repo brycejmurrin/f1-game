@@ -2811,8 +2811,22 @@ test("TLX coalesces window resize to one target realloc per frame", () => {
 test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL invProj", () => {
   const tlx = code("js/render/three/tlx.js");
   // Rasterisation: three's WebGPU backend wants z in [0,1], same as WGX.
-  assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
-  assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
+  const remap = new Function("out", "projection", fnBody(tlx, "remapClipDepth"));
+  const z01 = [1,0,0,0, 0,1,0,0, 0,0,.5,0, 0,0,.5,1];
+  for (const projection of [
+    [1.7,0,0,0, 0,2,0,0, .03125,.125,-1.001,-1, 0,0,-.3002,0],
+    Float32Array.from({ length: 16 }, (_, i) => Math.sin(i * 57) * (i + 1)),
+  ]) {
+    const expected = new Float32Array(16), actual = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      let value = 0;
+      for (let k = 0; k < 4; k++) value += z01[k * 4 + r] * projection[c * 4 + k];
+      expected[c * 4 + r] = value;
+    }
+    remap(actual, projection);
+    assert.deepEqual(actual, expected);
+  }
+  assert.match(tlx, /remapClipDepth\(_projGpu, frame\.proj\)/);
   assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
 
   // Post is the OTHER convention, and the split is real, not an oversight.

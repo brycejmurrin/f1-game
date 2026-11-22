@@ -2943,18 +2943,15 @@ const TLX = (function () {
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
       // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
       // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
-      const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
       const _projGpu = new Float32Array(16);
       const _vpGpuTlx = new Float32Array(16);
-      function _mul4Col(out, a, b) {
-        for (let c = 0; c < 4; c++) {
-          const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
-          out[c * 4]     = a[0] * b0 + a[4] * b1 + a[8] * b2  + a[12] * b3;
-          out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2  + a[13] * b3;
-          out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
-          out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+      function remapClipDepth(out, projection) {
+        for (let i = 0; i < 16; i += 4) {
+          out[i] = projection[i];
+          out[i + 1] = projection[i + 1];
+          out[i + 2] = 0.5 * projection[i + 2] + 0.5 * projection[i + 3];
+          out[i + 3] = projection[i + 3];
         }
-        return out;
       }
 
       // M6 FX plumbing
@@ -6074,7 +6071,7 @@ const TLX = (function () {
           // The camera the way begin() builds the main one: P and V kept apart
           // (WebGPU folds Z01 into P only).
           if (renderer.backend && renderer.backend.isWebGPUBackend) {
-            _mul4Col(_mirProjGpu, Z01, frame.proj);
+            remapClipDepth(_mirProjGpu, frame.proj);
             mirCam.projectionMatrix.fromArray(_mirProjGpu);
             if (renderer.coordinateSystem != null) mirCam.coordinateSystem = renderer.coordinateSystem;
           } else mirCam.projectionMatrix.fromArray(frame.proj);
@@ -6424,7 +6421,7 @@ const TLX = (function () {
           const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (eye.proj && eye.view) {
             if (_wgpu) {
-              _mul4Col(_projGpu, Z01, eye.proj);
+              remapClipDepth(_projGpu, eye.proj);
               camera.projectionMatrix.fromArray(_projGpu);
             } else {
               camera.projectionMatrix.fromArray(eye.proj);
@@ -6468,7 +6465,7 @@ const TLX = (function () {
           const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
             if (_wgpu) {
-              _mul4Col(_projGpu, Z01, frame.proj);
+              remapClipDepth(_projGpu, frame.proj);
               camera.projectionMatrix.fromArray(_projGpu);
               if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
             } else {
@@ -6487,7 +6484,7 @@ const TLX = (function () {
           } else if (frame && frame.viewProj) {
             if (_wgpu) {
               // No proj/invProj split — fold VP (OK when P is on-axis, e.g. legacy paths).
-              _mul4Col(_vpGpuTlx, Z01, frame.viewProj);
+              remapClipDepth(_vpGpuTlx, frame.viewProj);
               camera.projectionMatrix.fromArray(_vpGpuTlx);
               if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
             } else {
