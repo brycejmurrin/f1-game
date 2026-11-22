@@ -123,6 +123,14 @@ const TrackBuildProps = (function () {
     const waterOccupied = new Set();
     const waterRects = new Map();   // cell width -> emitted world rectangles
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
+    // Quantize horizontal layout intervals against the plan-view lap when authored.
+    // A height-only update can otherwise move a half-node tie and re-seed whole streets.
+    const sceneryStepM = def.planarScenerySpacing
+      ? px.reduce((sum, x, i) => {
+        const j = (i + 1) % n;
+        return sum + Math.hypot(px[j] - x, pz[j] - pz[i]);
+      }, 0) / n : ds;
+    track.sceneryStepM = sceneryStepM;
     const NIGHT = track._night != null ? track._night : !!def.night;
 
     // Rendered-terrain raycast for exact prop anchoring: anchor-based props
@@ -1202,7 +1210,7 @@ const TrackBuildProps = (function () {
     const HK = (k) => (((Math.round(k) - HKSHIFT) % n) + n) % n;
     // Phase every() by the same shift so the walk revisits the same places.
     const every = (m, fn) => {
-      const stp = Math.max(1, Math.round(m / ds));
+      const stp = Math.max(1, Math.round(m / sceneryStepM));
       for (let i = 0; i < n; i += stp) fn((i + HKSHIFT) % n);
     };
     // dressingExclusions are authored in the def's scenery frame, exactly like
@@ -1337,7 +1345,7 @@ const TrackBuildProps = (function () {
 
     const ctx = {
       // output buffers + per-build state
-      out, glassBuf, waterBuf, track, def, theme, pal, n, ds, px, py, pz, hw,
+      out, glassBuf, waterBuf, track, def, theme, pal, n, ds, sceneryStepM, px, py, pz, hw,
       pyMin, NIGHT, MAT, lod,
       // desktop detail level (0 today) and its feature flags (TrackDetail.NAMES; all false at 0)
       detail: track._detail || 0, detailFeatures: DF,
@@ -2156,7 +2164,7 @@ const TrackBuildProps = (function () {
       const dens = (typeof LightTune !== "undefined" && LightTune.LT &&
         typeof LightTune.LT.lampDensity === "number" && LightTune.LT.lampDensity > 0)
         ? LightTune.LT.lampDensity : 1;
-      const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
+      const mstride = Math.max(1, Math.round((22 / dens) / sceneryStepM));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
       const globeStreet = fz.lamp === "globe";
       const pickKind = (k, roll) => {

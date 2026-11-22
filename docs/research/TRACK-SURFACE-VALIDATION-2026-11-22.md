@@ -362,7 +362,7 @@ Portimão's previous terrain fit lost both midfield descents. The game dropped j
 
 The 1,157-node surface spans 28.32 m against 28.72 m on both driven laps. Its steepest descent is 14.79% versus 5.49% before. Aston Martin identifies a 16% peak downhill and names both midfield dips in its race guide. The peak climb is 9.26%. Game banking remains −4° to +4.5° with zero shoulder discrepancies at 2,314 edges. The circuit operator lists a maximum 8% bank (4.57°) for its 4,684 m configuration. Neither qualifying lap measures transverse camber or validates the sign at individual turns. [Aston Martin](https://www.astonmartinf1.com/en-GB/races/2021-portuguese-gp) · [Circuit operator](https://autodromodoalgarve.com/the-park/racing-track/)
 
-The windmill was seated 28 m nearer the road, the right T8 rail moved 1 m inward, and a short terrace and scrub section were cleared. The final build, shoulder, grounding, clipping, vertical and overhead coplanar, and float checks passed. No folds, buried props, unsupported props, severe clips, coplanar spots or floating clusters remain. One minor clip, 14 advisory footprint warnings and 24 unjudged footprint samples remain. The measured-drop regression, densified grade check and all seven definition-factory tests passed.
+Fixed-interval scenery follows the horizontal length of the circuit. This brings the finished props mesh to 236,564 triangles, compared with 235,880 on the parent scene and 237,670 with the new elevations applied to the old spacing rule. The windmill was seated 28 m nearer the road, the right T8 rail moved 1 m inward, and a short terrace and scrub section were cleared. The final build, shoulder, grounding, clipping, vertical and overhead coplanar, and float checks passed. No folds, buried props, unsupported props, severe clips, coplanar spots or floating clusters remain. One minor clip, 14 advisory footprint warnings and 24 unjudged footprint samples remain. The measured-drop regression, densified grade check and all seven definition-factory tests passed.
 
 ### Sochi
 
@@ -390,7 +390,7 @@ Across 8 m transverse sections, positive angles raise the right edge. Game cross
 
 Both shoulders passed at every built node. The revised profile includes a regression for the two measured climbs.
 
-Track verification, grounding, clipping, vertical and overhead coplanarity, and floating-prop gates all passed. The build has zero surface folds, buried or unsupported scenery, clipping spots or elevated clusters. Grounding retains one horizontal coplanar spot within the existing baseline, 18 footprint advisories and 116 unjudged samples.
+Track verification, grounding, clipping, vertical and overhead coplanarity, and floating-prop gates all passed. The build has zero surface folds, buried or unsupported scenery, clipping spots or elevated clusters. Starting the Estoril hedge 35 m later clears the remaining horizontal overlap. Grounding retains 18 footprint advisories and 116 unjudged samples.
 
 ### Estoril
 
@@ -450,7 +450,7 @@ Japan’s GSI elevation API returned 1 m laser DEM heights for 126 stations on t
 
 Three bank zones use 8 m transverse sections. Across nine sections around each apex, mean absolute angular error falls from 1.03° to 0.41° at TGR, 4.05° to 0.44° at ADVAN, and 1.75° to 0.41° at the Dunlop entry. Peak signed bank is −1.2°, +4.2° and −2.0° respectively. The laser DEM reports elevations in 0.1 m increments, which limits the precision of individual transects. All 1,131 nodes pass both shoulder probes. [ADVAN left edge sample](https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=138.9281195&lat=35.3705699&outtype=JSON) · [Right edge sample](https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=138.9281055&lat=35.3706409&outtype=JSON)
 
-Shortened the adjoining front-straight grandstand sections, cleared a marshal post from the hedge and omitted the middle paddock transporter with buried low trim. The circuit and scenery gates passed. Fine-ground counts are 12 buried, zero unsupported and one horizontally coplanar spot, with 23 partial-footprint advisories. One pre-existing clipping spot remains near lap fraction 0.376. The rebuilt road has zero folds, and the measured-descent and signed-crossfall regressions pass.
+Shortened the adjoining front-straight grandstand sections, cleared a marshal post from the hedge and omitted the middle paddock transporter with buried low trim. Parked the two remaining transporters on the final-corner service yard so their road-facing stripes clear the terrain. Fixed-interval scenery uses horizontal lap distance to preserve its spacing as the elevation changes. The final props mesh measures 559,854 triangles. Fine-ground counts are 10 buried, zero unsupported and one horizontally coplanar spot, with 23 partial-footprint advisories. One pre-existing clipping spot remains near lap fraction 0.376. The rebuilt road has zero folds, and the measured-descent and signed-crossfall regressions pass.
 
 ### Okayama
 

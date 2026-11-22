@@ -253,15 +253,12 @@
       }
 
       // 5. PADDOCK, THEN THE HOTEL AND MOTORSPORTS MUSEUM  [0.150 +1 40]
-      //    Team transporters: sparse near-apron only (a dense double row here
-      //    buried 23 prims into the infield rise; leave the hotel mass clear).
-      // Gap 62 / skip 0.048: hospitality at gap 28 shared a roof plane
-      // (flatCoplanar), and gap 48 landed on the race-control annex at 0.048
-      // (coplanar 22 m² motorhome × neonTower). Transporters sit clear of both.
-      for (const [s, accent] of [
-        [0.068, [0.72, 0.16, 0.16]], [0.128, [0.20, 0.26, 0.52]],
+      // Park the team transporters on the level part of the service yard
+      // behind the final corner; the straight-side apron buries their lower decks.
+      for (const [s, gap, accent] of [
+        [0.947, 68, [0.72, 0.16, 0.16]], [0.950, 80, [0.20, 0.26, 0.52]],
       ]) {
-        motorhome(K(s), 1, 62, 6.5, 3.6, 11, { accent, roof: true });
+        motorhome(K(s), 1, gap, 6.5, 3.6, 11, { accent, roof: true });
       }
       broadcastCompound(K(0.088), 1, 62, { vans: 6, dishes: 3, spacing: 9 });
       // Fuji Speedway Hotel (Hyatt Unbound Collection) + Fuji Motorsports

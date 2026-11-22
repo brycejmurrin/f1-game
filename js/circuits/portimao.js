@@ -9,6 +9,7 @@
   {
     id: "portimao",
     revision: 2,
+    planarScenerySpacing: true,
     // Upstream pt-2008 already runs clockwise, matching the racing direction.
     reverse: false,
     // The pit straight opens the trace, and its first vertex is the line.
