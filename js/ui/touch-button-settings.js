@@ -29,8 +29,8 @@ const TouchButtonSettings = (() => {
     const palette = [["default", "DEFAULT"], ...Object.keys(PedalTravel.colors).map(k => [k, k.toUpperCase()])];
     const idle = choice("idleColor", "IDLE BORDER COLOR", palette);
     const pressed = choice("pressedColor", "PRESSED COLOR", palette);
-    const activation = choice("activation", "ACTIVATION", [["default", "DEFAULT"], ["tap", "TAP ON RELEASE"], ["hold", "HOLD AND RELEASE"], ["double", "DOUBLE TAP"]]);
-    const gestureHelp = node("p", "Hold for at least 0.45 seconds before lifting, or double-tap within 0.35 seconds. Default keeps the original gesture for this action.");
+    const activation = choice("activation", "ACTIVATION", [["default", "DEFAULT"], ["tap", "TAP ON RELEASE"], ["quick", "QUICK TAP"], ["hold", "HOLD AND RELEASE"], ["long", "LONG HOLD AND RELEASE"], ["double", "DOUBLE TAP"]]);
+    const gestureHelp = node("p", "Quick Tap requires a lift within 0.18 seconds. Hold requires 0.45 seconds, Long Hold requires 0.9 seconds, and Double Tap requires two taps within 0.35 seconds. Default keeps the original gesture for this action.");
     gestureHelp.className = "adv-help"; gestureHelp.id = host.id + "-activation-help";
     activation.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
     const response = node("div"); host.appendChild(response); section = response;
@@ -47,7 +47,8 @@ const TouchButtonSettings = (() => {
     const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...["up", "down", "left", "right"].map(d => [d, d.toUpperCase()])]);
     const start = choice("start", "STARTING INPUT", [["default", "MODE DEFAULT"], ...Array.from({ length: 21 }, (_, i) => [String(i * 5), i * 5 + "%"])]);
     const build = choice("buildMs", "HOLD BUILD TIME", [["0", "OFF"], ["250", "0.25 S"], ["500", "0.5 S"], ["1000", "1 S"], ["2000", "2 S"]]);
-    const buildHelp = node("p", "From the starting input, a steady hold builds to full over this time. Choose a starting input below 100% to feel it. You can still slide during the hold.");
+    const curve = choice("buildPower", "HOLD BUILD CURVE", [["1", "LINEAR"], ["2", "GENTLE START"], ["0.5", "FAST START"]]);
+    const buildHelp = node("p", "From the starting input, a steady hold builds to full over this time. Choose a starting input below 100% to feel it. Linear builds evenly. Gentle Start builds slowly at first. Fast Start builds quickly and eases into full input. You can still slide during the hold.");
     buildHelp.className = "adv-help"; buildHelp.id = host.id + "-build-help";
     build.setAttribute("aria-describedby", buildHelp.id); section.appendChild(buildHelp);
     const slide = choice("slide", "SLIDE ONTO PEDAL", [["inherit", standalone ? "STAY ON ORIGINAL PEDAL" : "DEFAULT"], ["instant", "INSTANT"], ["ease", "EASE"]]);
@@ -93,6 +94,7 @@ const TouchButtonSettings = (() => {
       feedback.value = profile.feedback ? "on" : "off";
       direction.value = profile.direction || "default";
       start.value = profile.start == null ? "default" : String(profile.start);
+      curve.value = String(profile.buildPower || 1); curve.disabled = !profile.buildMs;
       build.value = String(profile.buildMs || 0);
       brightness.value = String(profile.brightness || 46);
       brightness.disabled = !profile.feedback;
@@ -118,6 +120,7 @@ const TouchButtonSettings = (() => {
     travel.onchange = () => change({ travel: Number(travel.value) });
     direction.onchange = () => change({ direction: direction.value });
     start.onchange = () => change({ start: start.value === "default" ? null : Number(start.value) });
+    curve.onchange = () => change({ buildPower: Number(curve.value) });
     build.onchange = () => change({ buildMs: Number(build.value) });
     brightness.onchange = () => change({ brightness: Number(brightness.value) });
     slide.onchange = () => change({ slide: slide.value });

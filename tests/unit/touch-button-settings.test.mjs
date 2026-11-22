@@ -157,7 +157,32 @@ test("Boost keeps its own colors and accepts only the chosen touch gesture", () 
   choose("activation", "tap");
   send("pointerdown", 2800); send("pointerup", 2820);
   assert.equal(actions, 3);
+  choose("activation", "quick");
+  send("pointerdown", 3000); send("pointerup", 3181);
+  send("pointerdown", 3200); send("pointerup", 3380);
+  assert.equal(actions, 4);
+  choose("activation", "long");
+  send("pointerdown", 4000); send("pointerup", 4899);
+  send("pointerdown", 5000); send("pointerup", 5900);
+  assert.equal(actions, 5);
   host.querySelector("button").onclick();
   assert.equal(send("pointerdown", 2900), false);
   assert.equal(style["--touch-custom-idle"], undefined);
+});
+
+test("build curves share the same start and finish and save separately per button", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const select = (key, value) => {
+    const el = dom.byId("touch-test-" + key); el.value = value; el.onchange();
+  };
+  select("button", "brake"); select("start", "20"); select("buildMs", "1000");
+  for (const [power, quarter] of [["2", 0.25], ["0.5", 0.6], ["1", 0.4]]) {
+    select("buildPower", power);
+    const profile = model.buttonProfile("brake");
+    assert.equal(model.level(profile, 0, 0), 0.2);
+    assert.ok(Math.abs(model.level(profile, 0, 0.25) - quarter) < 1e-10);
+    assert.equal(model.level(profile, 0, 1), 1);
+    assert.equal(model.buttonProfile("gas").buildPower, undefined);
+  }
 });

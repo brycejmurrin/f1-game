@@ -116,13 +116,14 @@ link. The designer's HOW TO tab walks through it; the long form is
 
 #### Touch buttons
 
-Open **Settings › Controls › Touch Button Response** and choose the control to edit. Each control remembers its own settings. Choose an idle border and a pressed accent for each race button. For Boost, Overtake, Aero, shifts, Camera, Pause and Show HUD, choose the original gesture, tap on release, hold for 0.45 seconds and release, or double-tap within 0.35 seconds. Camera’s default keeps its hold-to-open view picker. Gas, Brake and steering use the analog settings below. The paired phone also lists its own actions in its layout editor.
+Open **Settings › Controls › Touch Button Response** and choose the control to edit. Each control remembers its own settings. Choose an idle border and a pressed accent for each race button. For Boost, Overtake, Aero, shifts, Camera, Pause and Show HUD, choose the original gesture, tap on release, quick tap (within 0.18 seconds), hold for 0.45 or 0.9 seconds and release, or double-tap within 0.35 seconds. Camera’s default keeps its hold-to-open view picker. Gas, Brake and steering use the analog settings below. The paired phone also lists its own actions in its layout editor.
 
 | Setting | What you feel or see |
 | --- | --- |
 | First Touch | **Instant** requests full input on contact. Slide up a pedal or inward on an arrow to ease off. **Progressive** starts at 12%. Slide away from the landing point in any direction to build input, or back toward it to ease off. Lift to release in Hold mode. |
 | Starting Input | Choose the input at touchdown in 5% steps. Mode Default uses 100% for Instant and 12% for Progressive. |
 | Slide Direction | Choose which way to ease off an Instant button or build a Progressive button. Mode Default keeps the original gesture. For example, choose Instant Gas with Up and Progressive Brake with Down to ease both pedals by sliding up. |
+| Hold Build Curve | Linear builds evenly. Gentle Start builds slowly at first, and Fast Start builds quickly at first. Each reaches full at the selected hold time. |
 | Hold Build Time | With a starting input below full, a stationary hold builds to full over 0.25, 0.5, 1 or 2 seconds. Off keeps the starting input steady. Sliding still adjusts the request. |
 | Full-input Color Intensity | Choose how vivid the button becomes at full input, from 25% to 100% color. The standard mix is 46%. This affects the display only and requires On-button Feedback. |
 | Slide Distance | This is thumb travel in screen pixels. At 40 px, a progressive pedal reaches full input quickly. At 160 px there is more room to make small changes. |

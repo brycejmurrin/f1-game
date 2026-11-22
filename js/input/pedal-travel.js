@@ -50,7 +50,7 @@ const PedalTravel = (function () {
 
   function level(profile, advancePx, holdFraction = 0) {
     const start = startPercent(profile) / 100;
-    const resting = start + (1 - start) * holdFraction;
+    const resting = start + (1 - start) * (holdFraction ** (profile.buildPower || 1));
     if (profile.press === "progressive") {
       if (!profile.direction) advancePx = Math.max(0, advancePx);
       const span = advancePx < 0 ? start : 1 - start;
@@ -83,7 +83,7 @@ const PedalTravel = (function () {
       if (Object.hasOwn(colors, value[field])) out[field] = value[field];
     }
     if (!BUTTONS.includes(id)) {
-      if (id !== "look" && ["tap", "hold", "double"].includes(value.activation)) out.activation = value.activation;
+      if (id !== "look" && ["tap", "quick", "hold", "long", "double"].includes(value.activation)) out.activation = value.activation;
       return out;
     }
     if (value.press === "progressive") out.press = value.press;
@@ -95,6 +95,7 @@ const PedalTravel = (function () {
       out.adaptive = Math.max(1, Math.min(10, Math.round(value.adaptive)));
     if (["up", "down", "left", "right"].includes(value.direction)) out.direction = value.direction;
     if (Number.isFinite(value.start)) out.start = Math.max(0, Math.min(100, Math.round(value.start)));
+    if ([0.5, 2].includes(value.buildPower)) out.buildPower = value.buildPower;
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
     if ([25, 70, 100].includes(value.brightness)) out.brightness = value.brightness;
     if (value.feedback === false) out.feedback = false;
@@ -188,7 +189,9 @@ const PedalTravel = (function () {
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom ||
           el.disabled || el.hidden || el.getAttribute?.("aria-disabled") === "true") { previous = -Infinity; return; }
       const elapsed = e.timeStamp - began;
-      const fire = mode === "tap" || (mode === "hold" ? elapsed >= 450 : elapsed < 350 && e.timeStamp - previous <= 350);
+      const fire = mode === "tap" || (mode === "quick" && elapsed <= 180) ||
+        (mode === "hold" && elapsed >= 450) || (mode === "long" && elapsed >= 900) ||
+        (mode === "double" && elapsed < 350 && e.timeStamp - previous <= 350);
       previous = !fire && elapsed < 350 ? e.timeStamp : -Infinity;
       if (fire) el.click();
     }, true);
