@@ -125,7 +125,7 @@ const TrackBuildProps = (function () {
     const def = track.def, theme = def.theme, pal = def.palette, ds = track.total / n;
     // Quantize horizontal layout intervals against the plan-view lap when authored.
     // A height-only update can otherwise move a half-node tie and re-seed whole streets.
-    const sceneryStepM = def.planarScenerySpacing
+    const sceneryStepM = def.planarScenerySpacing === true
       ? px.reduce((sum, x, i) => {
         const j = (i + 1) % n;
         return sum + Math.hypot(px[j] - x, pz[j] - pz[i]);

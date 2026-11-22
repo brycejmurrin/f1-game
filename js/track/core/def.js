@@ -171,7 +171,7 @@ const TrackDef = (function () {
       // (tests/unit/track-def-factory.test.mjs).
       ...(d.terrainMat === "SAND" || d.terrainMat === "SNOW" || d.terrainMat === "CONCRETE" ? { terrainMat: d.terrainMat } : {}),
       sceneryCoordinates: d.sceneryCoordinates || "legacy",
-      planarScenerySpacing: d.planarScenerySpacing === true,
+      planarScenerySpacing: d.planarScenerySpacing,
       // Read off the COPIED def by TrackSpace.lapMirror, so it has to be copied
       // here — the sixth member of the family the comment below describes. It
       // fails the same silent way: omitted, lapMirror() just reads undefined,
