@@ -21,7 +21,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const { buildContext } = require(path.join(ROOT, "tools/lib/track-build-vm.cjs"));
 const { measureStandGaps, outsideBound } = require(path.join(ROOT, "tests/helpers/stand-gaps.cjs"));
 const MANIFEST = require(path.join(ROOT, "tools/manifest.cjs"));
-const { scope } = require(path.join(ROOT, "tools/lib/circuit-scope.cjs"));
+const { scope, scoped } = require(path.join(ROOT, "tools/lib/circuit-scope.cjs"));
 
 // Joints the FOLD guard owns: one side is a station past a hairpin's centre of
 // curvature (|k x spacing| >= 0.55: tangent-aimed, capped by design), so the
@@ -41,7 +41,13 @@ const ROSTER = scope(MANIFEST.CIRCUITS).filter((id) => {
 });
 
 test("every curved-stand circuit holds the outside-of-bend joint contract (#2204)", { timeout: 900000 }, () => {
-  assert.ok(ROSTER.length > 0, "measured at least one circuit that uses a stand emitter");
+  // APEX_CIRCUITS may name only circuits whose scenery file matches USES via a
+  // local helper (nurburgring's scaffoldStand) or has no outside-of-bend joint.
+  // Unscoped runs still require a real roster and measured joints.
+  if (!ROSTER.length) {
+    assert.ok(scoped(), "unscoped fleet found no curved-stand circuits");
+    return;
+  }
   const env = buildContext();
   const bad = [];
   let measured = 0;
@@ -55,6 +61,9 @@ test("every curved-stand circuit holds the outside-of-bend joint contract (#2204
         bad.push(`${id} ${x.helper} k=${x.k} ${x.role} gap=${g.toFixed(2)} bound=${outsideBound(x).toFixed(2)} turn=${x.turnDeg.toFixed(1)}`);
     }
   }
-  assert.ok(measured > 0, "found outside-of-bend joints to measure");
+  if (!measured) {
+    assert.ok(scoped(), "unscoped fleet found no outside-of-bend joints");
+    return;
+  }
   assert.deepEqual(bad.slice(0, 12), [], `${bad.length} outside joint(s) over the #2204 bound`);
 });

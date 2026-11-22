@@ -33,7 +33,7 @@ import assert from "node:assert/strict";
 import {
   checkParity, checkElsParity, scanGameCtx, scanDts, scanGameEls, scanDtsEls,
   collectUsage, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc, factoryCoverage,
-  scanCtxEntries, usageFiles, entryCoverage, UNCOVERED_ENTRIES,
+  scanCtxEntries, usageFiles, entryCoverage, UNCOVERED_ENTRIES, lazyBodyEntry,
 } from "../../tools/check/check-gctx.mjs";
 
 /* Members game.js publishes that NOTHING reads — the other direction of drift, and
@@ -110,7 +110,7 @@ test("module reads through direct, destructured and aliased G.els are emitted ag
 
 test("the usage extractor finds the G reference sites it is supposed to check", () => {
   const shadow = emitShadow();
-  assert.ok(shadow.sites > 5600, `only ${shadow.sites} G reference sites extracted — the scope walk broke`);   // actual 5877 (2026-11-20, #5980 entries + helpers)
+  assert.ok(shadow.sites >= 5930, `only ${shadow.sites} G reference sites extracted — the scope walk broke`);   // measured 5930 on the #6044 deployment base
   assert.ok(shadow.files > 115, `only ${shadow.files} files in the shadow — the entry scan broke`);   // actual 121 (98 factories + 23 entry-only)
   const writes = (shadow.text.match(/= __never;/g) || []).length;
   const destructures = (shadow.text.match(/^ {2}\{ const \{/gm) || []).length;
@@ -194,9 +194,13 @@ test("a same-file helper handed the ctx is scanned like create()'s own parameter
 });
 
 test("cross-file entries: X.fn(ctx) hand-offs are followed without widening the factory roster", () => {
-  const rows = scanCtxEntries().rows.map((r) => `${r.global}.${r.fn}#${r.argIndex}`);
+  const { rows: entries, byFile } = scanCtxEntries();
+  const rows = entries.map((r) => `${r.global}.${r.fn}#${r.argIndex}`);
+  for (const [rel, ownsCollect] of [["js/ui/settings-export.js", false], ["js/ui/settings-export-body.js", true]]) {
+    assert.equal(!!byFile.get(rel)?.some(e => e.fn === "collect" && e.argIndex === 1), ownsCollect, rel);
+  }
   const want = ["ApexCam.hooks#0", "ApexTrack.hooks#0", "ApexLobby.hooks#0", "ApexNet.hooks#0",
-    "TvGraphics.create#0", "QualiWire.bindQuali#2"];
+    "TvGraphics.create#0", "QualiWire.bindQuali#2", "SettingsExportBody.collect#1"];
   assert.deepEqual(want.filter((w) => rows.indexOf(w) < 0), [], "not a scanned ctx entry — its G use is unchecked");
   assert.ok(rows.length > 30, `only ${rows.length} cross-file entries found`);   // actual 34 (2026-11-20)
   const files = usageFiles();
@@ -213,8 +217,6 @@ test("a skipped entry is named in UNCOVERED_ENTRIES, and every named entry still
   // A row of the skipped-entry kind names its call site: `<file>: <Global>.<fn>(<args>) (<caller>:<line>) — why`.
   // (CrowdAudio.bind is the other kind: a call site whose ctx is a call result, never a scanned entry.)
   const named = UNCOVERED_ENTRIES.map((u) => /^([^:]+): ([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\([^)]*\) \(js\//.exec(u)).filter(Boolean);
-  // SettingsExport.collect: the lazy-split forwarder (#6044 follows it, then drops the row).
-  assert.ok(named.some(([, rel, g, fn]) => rel === "js/ui/settings-export.js" && g === "SettingsExport" && fn === "collect"));
   const stale = named.filter(([, rel, g, fn]) => !rows.some((r) => r.rel === rel && r.global === g && r.fn === fn)).map(([u]) => u);
   assert.deepEqual(stale, [], "an UNCOVERED_ENTRIES row names an entry that no longer exists: delete the row");
 });
@@ -228,4 +230,38 @@ test("positive control: a bad read behind Mod.hooks(G) is a tsc error row at the
   assert.equal(r.skipped, false, r.reason);
   assert.equal(r.ok, false, "tsc accepted a read of a member GameCtx does not declare");
   assert.ok(r.errors.some((e) => e.startsWith("fixture/mod.js:3: ") && /notAMember/.test(e)), r.errors.join("\n"));
+});
+
+test("a lazy forwarder's ctx parameter reaches the body's tsc error at its real line", t => {
+  const body = "const ModBody = { collect(mode, ctx) {\n  return ctx.notAMember;\n} }; Mod._bind(ModBody);";
+  const direct = "const Mod = { collect: (...args) => ModBody.collect(...args) };";
+  const factory = `const Mod = (() => {
+    let slot;
+    function _bind(body) { slot = body; }
+    const bodyApi = () => slot;
+    const fwd = name => (...args) => bodyApi()[name](...args);
+    const api = {};
+    for (const key of ["collect", "save"]) api[key] = fwd(key);
+    return { ...api, _bind };
+  })();`;
+  for (const shell of [direct, factory]) assert.equal(lazyBodyEntry(shell, body, "Mod", "collect"), true);
+  assert.equal(lazyBodyEntry(factory, body, "Mod", "unlisted"), false);
+  const overridden = factory.replace("...api, _bind", "...api, _bind, collect(mode, ctx) { return ctx.bad; }");
+  assert.equal(lazyBodyEntry(overridden, body, "Mod", "collect"), false);
+  const unused = direct.replace("=> ModBody.collect(...args)", "=> { const unused = () => ModBody.collect(...args); }");
+  assert.equal(lazyBodyEntry(unused, body, "Mod", "collect"), false);
+  const delayed = factory.replace("=> bodyApi()[name](...args)", "=> ready().then(() => bodyApi()[name](...args))");
+  assert.equal(lazyBodyEntry(delayed, body, "Mod", "collect"), true);
+  assert.equal(lazyBodyEntry(factory.replace("fwd(key)", 'fwd("save")'), body, "Mod", "collect"), false);
+  assert.equal(lazyBodyEntry(direct.replace("ModBody.collect(...args)", "ModBody.collect(null, ...args)"), body, "Mod", "collect"), false);
+  assert.equal(lazyBodyEntry(factory.replace("() => slot", "() => unrelated"), body, "Mod", "collect"), false);
+  assert.equal(lazyBodyEntry(factory, body.replace("Mod._bind(ModBody)", "Other._bind(ModBody)"), "Mod", "collect"), false);
+  const entry = { fn:"collect", argIndex:1 };
+  const file = { rel:"fixture/lazy-body.js", hits:collectUsage("fixture/lazy-body.js", body,
+    { create:false, entries:lazyBodyEntry(factory, body, "Mod", entry.fn) ? [entry] : [] }) };
+  assert.deepEqual(file.hits.map(h => [h.names, h.line]), [[["notAMember"], 2]]);
+  if (!findTsc()) { t.skip("no TypeScript resolvable"); return; }
+  const result = runTsc(emitShadow([file]), "artifacts/gctx-forwarder-fixture");
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some(error => error.startsWith("fixture/lazy-body.js:2: ") && error.includes("notAMember")), result.errors.join("\n"));
 });

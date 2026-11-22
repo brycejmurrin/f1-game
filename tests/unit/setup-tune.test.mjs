@@ -69,6 +69,23 @@ test("bars move the four channels the way the sheet says, inside the ±5 % clamp
   assert.deepEqual(host(S.mods("mclaren")), { speed: 1, accel: 1, cornering: 1, braking: 1 });
 });
 
+test("stiff ARBs move cornering by a measured percent", () => {
+  const { S } = load();
+  S.set("mclaren", { arbF: 11, arbR: 11 });          // total ≈ +4.5 clicks from works
+  const m = S.mods("mclaren");
+  // 0.006 per click of average ARB stiffness → ~2.7% at this set; a token
+  // coefficient leaves cornering within 0.05% of identity.
+  assert.ok(m.cornering >= 1.02, `stiff ARBs must raise cornering by ≥2%, got ${m.cornering}`);
+});
+
+test("stiff ARBs cut accel by a measured percent", () => {
+  const { S } = load();
+  S.set("mclaren", { arbF: 11, arbR: 11 });          // total ≈ +4.5, split +1 vs works
+  const m = S.mods("mclaren");
+  // 0.003·total and 0.004·split compound to ~1.7% cut; token coeffs leave accel ≈ 1.
+  assert.ok(m.accel <= 0.99, `stiff ARBs must cut accel by ≥1%, got ${m.accel}`);
+});
+
 test("rake adds aero load on top of the wing and clamps at the ends; the factory path ignores it", () => {
   const { Teams, Parts, S } = load();
   const t = Teams.LIST.find((x) => x.id === "williams");
@@ -94,6 +111,15 @@ test("brake bias: forward spends the front's circle, rearward the rear's; the wh
   S.set("ferrari", { brakeBias: 99 });
   assert.equal(S.get("ferrari").brakeBias, 62, "clamped to the wheel's range");
   assert.equal(S.brakeBias("ferrari"), 0.62);
+});
+
+test("brake bias 60/52 moves ellipse past ±5%", () => {
+  const { S } = load();
+  const fwd = S.bbScales(0.60), rear = S.bbScales(0.52);
+  // bbScales may stretch the brake ellipse well past the ±5% mods clamp; a
+  // 1.05/0.95 clamp would pin 60% and 52% exactly on that wall.
+  assert.ok(fwd.f > 1.05 && fwd.r < 0.95, `60% F must move past ±5%, got f=${fwd.f} r=${fwd.r}`);
+  assert.ok(rear.f < 0.95 && rear.r > 1.05, `52% F must move past ±5%, got f=${rear.f} r=${rear.r}`);
 });
 
 test("a damaged sheet falls back per field, and reset restores the works numbers", () => {

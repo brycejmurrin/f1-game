@@ -41,9 +41,20 @@ const DesignerProfile = (function () {
     // prior selection or short hold). Horizontal motion is ignored.
     let drag = null;                            // { id, i, y0, h0, cur, moved, mpp, frame, wasSel, t0, touch, group, origins }
     let liveH = null;                           // heights overlay while dragging
+    let idleWaiters = [];
     const groupOf = (a, b) => S.spanIndices(a, b, ticks.length || nodeH.length);
     const inGroup = (i) => S.inSpan(i, sel, span, ticks.length || nodeH.length);
     function tellSelect() { if (hooks.onSelect) hooks.onSelect(sel, span); }
+    function busy() { return !!drag; }
+    function notifyIdle() {
+      if (busy() || !idleWaiters.length) return;
+      const waiters = idleWaiters; idleWaiters = [];
+      for (const resolve of waiters) resolve();
+    }
+    function whenIdle() {
+      if (!busy()) return Promise.resolve();
+      return new Promise((resolve) => { idleWaiters.push(resolve); });
+    }
 
     function heightsShown() {
       if (!tr) return null;
@@ -192,17 +203,21 @@ const DesignerProfile = (function () {
     }
     function onUp(ev) {
       if (drag && drag.id === ev.pointerId) {
-        try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* */ }
-        const d = drag; drag = null;
-        if (d.range) { render(); return; }
-        // Tap / below-threshold jitter: selection only — height unchanged.
-        if (d.moved) hand(d.i, d.h0, d.cur);
-        else liveH = null;
-        render();
+        try {
+          try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* */ }
+          const d = drag; drag = null;
+          if (d.range) { render(); return; }
+          // Tap / below-threshold jitter: selection only — height unchanged.
+          if (d.moved) hand(d.i, d.h0, d.cur);
+          else liveH = null;
+          render();
+        } finally {
+          notifyIdle();
+        }
       }
     }
     function onCancel(ev) {
-      if (drag && drag.id === ev.pointerId) { drag = null; liveH = null; render(); }
+      if (drag && drag.id === ev.pointerId) { drag = null; liveH = null; render(); notifyIdle(); }
     }
     function onKey(ev) {
       const k = ev.key, n = ticks.length;
@@ -334,7 +349,7 @@ const DesignerProfile = (function () {
       g.textAlign = "start";
     }
 
-    function reset() { drag = null; liveH = null; render(); }
+    function reset() { drag = null; liveH = null; render(); notifyIdle(); }
     const api = {
       setBuilt(t, v, pts) {
         tr = t && t.n > 2 && t.py ? t : null;
@@ -386,6 +401,7 @@ const DesignerProfile = (function () {
       pan(delta) { viewStart = Math.max(0, Math.min(1 - viewSpan, viewStart + delta * viewSpan)); render(); },
       fit() { viewStart = 0; viewSpan = 1; render(); },
       view() { return { start: viewStart, span: viewSpan }; },
+      busy, whenIdle,
       resize, render, reset,
       destroy() {
         if (destroyed) return;

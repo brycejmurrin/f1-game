@@ -4,11 +4,11 @@ Load this before the first MCP measurement.
 
 ## The setup ritual — all four steps, in order
 
-Playwright MCP (preferred for resize / a11y / CSS):
+Playwright MCP (preferred for resize / a11y / CSS). Use the iPhone 15 device profile for touch and DPR 3. Resize sets the CSS viewport.
 
 ```
 browser_navigate   http://127.0.0.1:3456/index.html?stallwatch=0
-browser_resize     width: 844, height: 390
+browser_resize     width: 852, height: 393
 browser_evaluate   hide #game + __apex.headless(true)  (body below)
 browser_snapshot   boxes: true
 ```
@@ -16,7 +16,7 @@ browser_snapshot   boxes: true
 Chrome DevTools MCP (emulate string; `resize_page` is unreliable here):
 
 ```
-mcp__chrome-devtools__emulate      viewport: "844x390x3,mobile,touch,landscape"
+mcp__chrome-devtools__emulate      viewport: "852x393x3,mobile,touch,landscape"
 mcp__chrome-devtools__navigate_page  http://127.0.0.1:3456/index.html?stallwatch=0
 ```
 

@@ -544,6 +544,22 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
      accent-color chrome (not a custom thumb). See css/tokens.css. */
   width: 100%; margin: 0; accent-color: var(--red); height: var(--slider); cursor: pointer;
 }
+/* Keep the label and slider together, with a separate labelled spinbutton. */
+:is(#lt-rows, #ps-lt-rows) .adv-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, min(11ch, 48%));
+  align-items: end; column-gap: calc(var(--gap) / 2);
+}
+:is(#lt-rows, #ps-lt-rows) .adv-item > .adv-help { grid-column: 1 / -1; }
+:is(#lt-rows, #ps-lt-rows) .adv-item > input[type="number"] {
+  box-sizing: border-box; width: 100%; min-height: var(--tap-min); padding-inline: .2em;
+  color: var(--text); background: var(--panel); border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm); font: inherit; font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
+}
+@media (pointer: coarse) {
+  :is(#lt-rows, #ps-lt-rows) .adv-item > input[type="number"] {
+    min-height: max(var(--tap-paint), calc(44.2px / var(--sheet-scale, var(--ui-scale))));
+  }
+}
 /* ---------- MUSIC & SOUND panel ----------
    Five closed folds, same disclosure language as DISPLAY. ON/OFF lives in
    the fold body so a summary tap only opens. */

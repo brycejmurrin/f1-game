@@ -35,16 +35,14 @@ globalThis.PhonePadCodec = load("js/input/phone-pad-codec.js", "PhonePadCodec");
 globalThis.PhonePadPage = load("js/input/phone-pad-page.js", "PhonePadPage");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");
 
-// phonePadDash is the sampler the game paints the wheel from. It is nested in PlatformSession.create(G), so
-// the test cuts it out of the source and runs it over a stub G — the flags are asserted, not the text.
+const PAIRING_UI = "js/net/phone-pairing-ui.js";
+function loadPairingUI(ctx) {
+  return vm.runInContext(read(PAIRING_UI) + ";PhonePairingUI", ctx, { filename: absSrc(PAIRING_UI) });
+}
 function phonePadDash(G, controls) {
-  const src = read("js/ui/platform-session.js");
-  const a = src.indexOf("function phonePadDash()");
-  const fnSrc = src.slice(a, src.indexOf("\n}\n", a) + 3);
-  const ctx = vm.createContext({ PhonePad, MAX_RPM: 12000, IDLE_RPM: 4000,
-    G: { recordControls: () => controls, aeroZones: [1], dashKph: (v) => v, cars: [], cautionLevel: () => 0, lapsTarget: 5, state: "race", ...G } });
-  vm.runInContext(fnSrc + "\n;this.f = phonePadDash;", ctx, { filename: absSrc("js/ui/platform-session.js") });
-  return ctx.f();
+  const ctx = vm.createContext({ PhonePad, PhysicsConsts: { MAX_RPM: 12000, IDLE_RPM: 4000 } });
+  return loadPairingUI(ctx).dash({ recordControls: () => controls, aeroZones: [1], dashKph: (v) => v, cars: [],
+    cautionLevel: () => 0, lapsTarget: 5, state: "race", ...G });
 }
 const player = { gear: 3, speed: 50, rpm: 6000, lap: 1, rank: 2, energy: 0.5, team: null, lastLap: 0 };
 const manual = { gearsManual: true, autoThrottle: false };
@@ -492,9 +490,10 @@ test("the dash reaches the phone ~15 Hz on the unreliable channel and paints the
   frame();
   assert.equal(phone.huds.length, 0, "a sampler returning null sends nothing");
   dash.value = { gear: 5, kmh: 241, rpm: 0.8, lap: 2, laps: 10, pos: 3, cars: 20, ers: 0.4,
-    flags: PhonePad.DASH.otArmed | PhonePad.DASH.xOpen, caution: 0, lastLapMs: 88123, state: "race", team: "#dc0000" };
+    flags: PhonePad.DASH.otArmed | PhonePad.DASH.xOpen, caution: 0, lastLapMs: 88123, state: "race", team: "#dc0000", grip: "spin" };
   for (let i = 0; i < 60; i++) frame();    // one second of frames
   assert.ok(phone.huds.length >= 12 && phone.huds.length <= 17, `about 15 dash packets a second, got ${phone.huds.length}`);
+  assert.equal(phone.huds.at(-1).grip, "spin", "capability hello enables the host grip cue");
   const sent = link.stats().huds;
   assert.ok(sent >= phone.huds.length && sent - phone.huds.length <= 1, `sent ${sent}, received ${phone.huds.length} — the last one may still be on the wire`);
   const el = lcd();
@@ -674,7 +673,8 @@ test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, 
 function fakeEl() {
   const listeners = {};
   const el = {
-    children: [], append(...nodes) { this.children.push(...nodes); }, setAttribute() {},
+    children: [], append(...nodes) { this.children.push(...nodes); },
+    attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; },
     textContent: "", disabled: false, value: "", style: { setProperty(k, v) { this[k] = v; } },
     classes: new Set(),
     addEventListener(t, f) { (listeners[t] ||= []).push(f); },
@@ -685,6 +685,63 @@ function fakeEl() {
   el.classList = { add: (c) => el.classes.add(c), remove: (c) => el.classes.delete(c), toggle: (c, on) => (on ? el.classes.add(c) : el.classes.delete(c)) };
   return el;
 }
+
+test("phone pedals use the selected response independently, and carry it across a pedal handoff", () => {
+  const oldDoc = globalThis.document, events = {}, dom = { gas: fakeEl(), brake: fakeEl() };
+  dom.gas.getBoundingClientRect = () => ({ left: 100, right: 190, top: 0, bottom: 200 });
+  dom.brake.getBoundingClientRect = () => ({ left: 0, right: 90, top: 0, bottom: 200 });
+  globalThis.document = { addEventListener(type, fn) { (events[type] ||= []).push(fn); }, elementFromPoint: x => x < 91 ? dom.brake : dom.gas };
+  let ctl;
+  try {
+    ctl = PhonePad.pad(dom);
+    const gas = (type, x, y, pointerId = 7) => dom.gas.dispatch(type, { pointerId, clientX: x, clientY: y });
+    gas("pointerdown", 120, 100);
+    gas("pointermove", 60, 100);
+    assert.equal(ctl.state().brk, 0, "fresh profiles keep their legacy capture when dragging across the other pedal");
+    assert.equal(ctl.state().thr, 1);
+    gas("pointerup", 60, 100);
+    PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
+    assert.equal(dom.gas.attrs["data-touch-response"], "progressive", "the wheel shows the mark before the first progressive press");
+    assert.equal(dom.brake.attrs["data-touch-response"], undefined);
+    PedalTravel.setButtonProfile("gas", { feedback: false });
+    assert.equal(dom.gas.attrs["data-touch-response"], undefined);
+    PedalTravel.setButtonProfile("brake", { slide: "ease" });
+    gas("pointerdown", 120, 100);
+    assert.equal(ctl.state().thr, PedalTravel.MIN);
+    assert.ok(dom.gas.classes.has("feedback-off"));
+    gas("pointermove", 144, 132);
+    assert.equal(ctl.state().thr, 1, "40 pixels diagonally gives full throttle");
+    gas("pointermove", 120, 100);
+    assert.equal(ctl.state().thr, PedalTravel.MIN, "returning to touchdown eases throttle");
+    gas("pointermove", 60, 100);
+    assert.equal(ctl.state().thr, 0);
+    assert.equal(ctl.state().brk, PedalTravel.MIN, "brake crossover has its own response");
+    gas("pointermove", 20, 100);
+    assert.equal(ctl.state().brk, 1);
+    for (const fn of events.pointercancel) fn({ pointerId: 7 });
+    assert.equal(ctl.state().brk, 0);
+    dom.brake.dispatch("pointerdown", { clientX: 20, clientY: 100 });
+    assert.equal(ctl.state().brk, 1, "fresh brake press keeps its independent instant style");
+    assert.ok(!dom.brake.classes.has("feedback-off"));
+  } finally {
+    ctl?.cancel(); PedalTravel.resetButtonProfile("gas"); PedalTravel.resetButtonProfile("brake");
+    if (oldDoc === undefined) delete globalThis.document; else globalThis.document = oldDoc;
+  }
+});
+
+test("paired phones receive grip feedback only on the pedal reported by the host", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  const state = { state: "race", flags: 0, grip: "spin" };
+  assert.equal(JSON.parse(PhonePad.encodeHud(state)).length, 14, "legacy phones keep the original dash format");
+  for (const grip of ["spin", "slip", "lock", ""]) {
+    const packet = PhonePad.decodeHud(PhonePad.encodeHud({ ...state, grip }, true));
+    PhonePad.paintHud(dom, packet);
+    assert.equal(dom.gas.classes.has("grip-cue"), grip === "spin" || grip === "slip");
+    assert.equal(dom.brake.classes.has("grip-cue"), grip === "lock");
+  }
+  PhonePad.paintHud(dom, { ...state, flags: PhonePad.DASH.paused });
+  assert.ok(!dom.gas.classes.has("grip-cue"));
+});
 
 test("pad(): GAS and BRAKE keep the strongest contact and clear travel on release or blur", () => {
   const previous = { document: globalThis.document, window: globalThis.window };
@@ -1261,6 +1318,8 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.ok(MANIFEST.FULL.indexOf("js/input/tilt-roll.js") < MANIFEST.FULL.indexOf("js/input/input.js"),
     "tilt-roll loads before input.js, which calls it");
   assert.ok(MANIFEST.LAZY_NET.includes("js/input/phone-pad.js"), "the desktop half loads with the net stack");
+  assert.deepEqual([MANIFEST.FULL, MANIFEST.LAZY_NET, MANIFEST.CONTROLLER].map(list => list.includes(PAIRING_UI)), [false, true, false],
+    "desktop pairing UI only loads on the desktop after the network bundle is requested");
   const { STAGE_ROOT_FILES } = await import("../../tools/desktop/stage-files.mjs");
   assert.ok(STAGE_ROOT_FILES.includes("controller.html"),
     "controller.html must be in the shared stage allow-list (tools/desktop/stage-files.mjs)");
@@ -1275,12 +1334,6 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
   assert.match(gameJs, /function syncPointerKind\(\) \{[\s\S]*?\$\("mb-phonepad"\)\.hidden = !touch;[\s\S]*?\$\("pm-phonepad-go"\)\.hidden = !touch;/,
     "both doors flip with the live pointer kind");
   assert.match(gameJs, /location\.assign\(new URL\("controller\.html", location\.href\)\.href\)/, "the door is a navigation beside index.html");
-  // A linked phone is the wheel, so the screen shows VISOR (the cockpit eye past the drawn wheel)
-  // while it drives, and the player's own camera comes back when the phone is gone.
-  assert.match(gameJs, /const VISOR_CAM = CamModes\.CAM_MODES\.findIndex\(\(c\) => c\.id === "visor"\)/, "the visor mode is looked up by id, never by index");
-  assert.match(gameJs, /linked: \(\) => \{[\s\S]*?if \(VISOR_CAM >= 0 && G.camMode !== VISOR_CAM\) \{ phonePadCam = G.camMode; G\.setCamMode\(VISOR_CAM, \{ persist: false \}\); \}/, "linking switches to VISOR (not saved as the player's camera) and remembers the camera it left");
-  assert.match(gameJs, /phonePad\.cancel\(\);\s+phonePad = null;[\s\S]{0,200}?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "UNPAIR PHONE restores that camera too (cancel() never calls lost())");
-  assert.match(gameJs, /lost: \(\) => \{[\s\S]*?if \(phonePadCam >= 0 && G.camMode === VISOR_CAM\) G\.setCamMode\(phonePadCam\);/, "losing the phone restores that camera, unless the player cycled away");
   assert.match(gameJs, /\$\("mb-phonepad"\)\.onclick = goPhonePad;[\s\S]*?\$\("pm-phonepad-go"\)\.onclick = goPhonePad;/, "both doors wired");
   // The face keys (OT/BOOST/AERO/CAM/RADIO/LOOK/RESET/PAUSE) are thumb-sized:
   // never under a 48px tap target, growing with the phone's height; the
@@ -1343,9 +1396,9 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     assert.ok(page.includes(`id="${id}"`), `controller.html declares #${id}, which its inline script hands to PhonePad.pad`);
   }
   assert.equal((page.match(/<div id="leds"[^>]*>((?:<span><\/span>)+)/) || [])[1]?.length, 15 * "<span></span>".length, "fifteen rev LEDs");
-  const game = read("js/ui/platform-session.js");
-  assert.match(game, /hud: phonePadDash/, "game.js hands the dash sampler to PhonePad.host");
-  assert.match(game, /function phonePadDash\(\)[\s\S]*G\.dashKph\(p\.speed\)[\s\S]*G\.cautionLevel\(\)/, "the sampler reads the HUD's own fields");
+  const sample = phonePadDash({ player, dashKph: (speed) => speed * 3.6, cautionLevel: () => 2 }, manual);
+  assert.equal(sample.kmh, player.speed * 3.6);
+  assert.equal(sample.caution, 2);
 });
 
 test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (R3-PHONE-7)", () => {
@@ -1354,7 +1407,7 @@ test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (
   const app = read("js/ui/appearance-opts.js");
   const def = (k) => (app.match(new RegExp(`store\\.get\\(${k},\\s*"(\\w+)"\\)`)) || [])[1];
   const game = { uiTheme: def("K_THEME"), menuAccent: def("K_MENU"), textSize: def("K_TEXT"), uiContrast: def("K_CONTRAST") };
-  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" }, "appearance-opts defaults moved: update controller.html with them");
+  assert.deepEqual(game, { uiTheme: "dark", menuAccent: "ember", textSize: "normal", uiContrast: "off" }, "appearance-opts defaults moved: update controller.html with them");
   // controller.html's first inline script, run against a phone that never saved a look.
   const page = read("controller.html");
   const script = page.match(/<script>\s*(\/\/ THE PLAYER'S LOOK[\s\S]*?)<\/script>/)[1];
@@ -1365,10 +1418,10 @@ test("controller.html's pre-paint look gives a fresh phone the GAME's defaults (
     return el.dataset;
   };
   // The page writes no data-text-size for "normal" and no data-ui-contrast unless "high", like appearance-opts.
-  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember", textSize: "large", uiContrast: "high" },
-    "a phone with nothing saved wears LARGE text, HIGH contrast and the ember accent, as the game does");
-  assert.deepEqual({ ...run({ "apex26.textSize": "normal", "apex26.uiContrast": "off", "apex26.menuAccent": "cyan" }) },
-    { uiTheme: "dark", menuAccent: "cyan" }, "a saved choice still wins over the defaults");
+  assert.deepEqual({ ...run({}) }, { uiTheme: "dark", menuAccent: "ember" },
+    "a fresh controller follows the game appearance");
+  assert.deepEqual({ ...run({ "apex26.textSize": "large", "apex26.uiContrast": "high", "apex26.menuAccent": "cyan" }) },
+    { uiTheme: "dark", menuAccent: "cyan", textSize: "large", uiContrast: "high" }, "a saved choice still wins over the defaults");
 });
 
 test("the Android shell holds a permission for every device API the web code calls (R3-ARCHITECTURE-12)", () => {
@@ -1448,6 +1501,7 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
     PhonePad: { ...PhonePad, padUrl: () => "https://apex.test/controller.html",
       host(options) { sample = options.hud; return { cancel() {} }; } },
   });
+  loadPairingUI(context);
   const source = fs.readFileSync(new URL("../../js/ui/platform-session.js", import.meta.url), "utf8");
   vm.runInContext(source, context);
   vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true) }).wirePhone();", context);
@@ -1572,15 +1626,16 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
 });
 
 test("PlatformSession: STOP cancels a pending phone load and a fresh attempt owns its host", async () => {
-  const elements = new Map(), loads = [], hosts = [];
-  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+  const elements = new Map(), loads = [], hosts = [], cameras = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i, options) { this.camMode = i; cameras.push({ i, persist: options?.persist }); },
     $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
-  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "chase" }, { id: "visor" }] },
     ensureNet: () => new Promise((resolve) => loads.push(resolve)),
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) {
       const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
     } },
   });
+  loadPairingUI(context);
   vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext("PlatformSession.create(G, { ensureNet }).wirePhone();", context);
   const btn = G.$("pm-phonepad"), box = G.$("pm-phonepad-box");
@@ -1594,12 +1649,18 @@ test("PlatformSession: STOP cancels a pending phone load and a fresh attempt own
   assert.equal(hosts.length, 0);
   loads[2](true); await settle();
   assert.equal(hosts.length, 1, "only the newest start creates a host");
-  hosts[0].options.linked(); assert.equal(G.camMode, 0, "a linked phone switches to visor");
+  hosts[0].options.linked(); assert.deepEqual(cameras.at(-1), { i: 2, persist: false }, "visor is found by id and the temporary change is not saved");
   btn.onclick();
   assert.equal(G.camMode, 1, "UNPAIR restores the prior camera");
   assert.equal(hosts[0].cancelled, 1, "STOP owns and cancels the sole host");
   assert.equal(box.hidden, true);
-  btn.onclick(); loads[3](false); await settle();
+  btn.onclick(); loads[3](true); await settle();
+  hosts[1].options.linked(); hosts[1].options.lost();
+  assert.equal(G.camMode, 1, "losing the phone restores the previous camera");
+  btn.onclick(); loads[4](true); await settle();
+  hosts[2].options.linked(); G.setCamMode(0); hosts[2].options.lost();
+  assert.equal(G.camMode, 0, "a camera chosen by the player after linking is preserved");
+  btn.onclick(); loads[5](false); await settle();
   assert.equal(btn.textContent, "STEER THIS GAME WITH A PHONE", "a load failure offers retry, not a misleading STOP");
 });
 
@@ -1682,7 +1743,7 @@ test("host(): private exchange and unreadable-answer failures release their tran
 function wakePad(over = {}, extra = {}) {
   const events = {}, requests = [], transports = [], timeouts = [];
   const sb = { URL, URLSearchParams, Promise, Log: { info() {}, warn() {} }, NetTransport,
-    setInterval: () => 1, clearInterval() {},
+    setInterval: extra.interval || (() => 1), clearInterval() {},
     // Recorded, never run: a test fires one by hand (the re-dial backoff).
     setTimeout: (fn, ms) => { timeouts.push({ fn, ms, cleared: false }); return timeouts.length; },
     clearTimeout(id) { if (timeouts[id - 1]) timeouts[id - 1].cleared = true; },
@@ -1696,6 +1757,7 @@ function wakePad(over = {}, extra = {}) {
   };
   sb.window = sb;
   if (extra.location) sb.location = extra.location;
+  if (extra.sensor) { sb.DeviceOrientationEvent = {}; sb.TiltRoll = TiltRoll; }
   const ctx = vm.createContext(sb);
   for (const f of ["js/input/pedal-travel.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -1715,7 +1777,7 @@ function wakePad(over = {}, extra = {}) {
     return { releases: 0, addEventListener(_t, fn) { onRelease = fn; },
       release() { this.releases++; return Promise.resolve(); }, signal() { if (onRelease) onRelease(); } };
   };
-  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t) => { for (const fn of events[t] || []) fn(); } };
+  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t, e) => { for (const fn of events[t] || []) fn(e); } };
 }
 
 test("phone wake lock is released on pairing failure, including acquisition arriving after failure", async () => {
@@ -1834,6 +1896,7 @@ test('PlatformSession MAKE NEW CODE cancels the current owner before replacement
     $(id) { if (!nodes.has(id)) nodes.set(id, fakeEl()); return nodes.get(id); } };
   const context = vm.createContext({ G, Date, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: 'visor' }] },
     PhonePad: { padUrl: () => 'https://apex.test/controller.html', host(options) { const id = hosts.length; order.push('host' + id); const h = { options, cancel() { order.push('cancel' + id); options.recovery({ phase: 'cancelled', publicRelay: true }); } }; hosts.push(h); return h; } } });
+  loadPairingUI(context);
   vm.runInContext(read('js/ui/platform-session.js'), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext('PlatformSession.create(G, { ensureNet: async () => true }).wirePhone()', context);
   G.$('pm-phonepad').onclick(); await settle();
@@ -2459,6 +2522,7 @@ test("#5739 row 3: PlatformSession pauses a running SOLO race under the ALLOW ca
     ensureNet: () => Promise.resolve(true), setPaused: (p, why) => { pauses.push([p, why]); G.paused = p; },
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { options, cancel() {} }; hosts.push(h); return h; } },
   });
+  loadPairingUI(context);
   vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext("PlatformSession.create(G, { ensureNet, setPaused }).wirePhone();", context);
   G.$("pm-phonepad").onclick(); await settle();
@@ -2520,6 +2584,74 @@ test("#5739 row 4: pagehide on a LINKED controller sends suspend, and pageshow r
   h.fire("pageshow"); await settle();
   assert.deepEqual(swaps, ["ABC234", "ABC234"], "the same code, no CONNECT tap");
   assert.equal(h.ctl.state().linked, true);
+  h.ctl.cancel();
+});
+
+test("returning to tilt after touch steering waits for a fresh sensor reading", async () => {
+  let receive, heartbeat;
+  const samples = [];
+  const h = wakePad({ rtc: () => ({
+    status: "open", pump() {}, close() {}, onClose() {}, onMessage(fn) { receive = fn; },
+    send(channel, data) {
+      if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+      return true;
+    },
+  }) }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  try {
+    await h.ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    h.fire("deviceorientation", { beta: 0, gamma: 35 });
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    heartbeat();
+    assert.equal(samples.at(-1).roll, 35, "keeping the same mode preserves its current reading");
+
+    assert.equal(h.ctl.setSteeringMode("touch"), true);
+    h.fire("deviceorientation", { beta: 0, gamma: 0 });
+    heartbeat();
+    assert.equal(samples.at(-1).steer, 0, "the touch axis owns steering");
+    assert.equal(h.ctl.setSteeringMode("tilt"), true);
+    assert.equal(samples.at(-1).roll, null, "the handoff packet cannot revive the previous tilt");
+    heartbeat();
+    assert.equal(samples.at(-1).roll, null);
+    h.fire("deviceorientation", { beta: 0, gamma: -20 });
+    heartbeat();
+    assert.equal(samples.at(-1).roll, -20, "a fresh tilt reading restores motion steering");
+  } finally { h.ctl.cancel(); }
+});
+
+test("the phone heartbeat releases tilt on background and redial until a fresh reading", async () => {
+  const streams = [];
+  let heartbeat;
+  const h = wakePad({ rtc: () => {
+    let close;
+    const samples = [];
+    streams.push(samples);
+    return { status: "open", pump() {}, onMessage() {}, onClose(fn) { close = fn; },
+      send(channel, data) {
+        if (channel === NetTransport.STATE) samples.push(PhonePad.decodeSample(data));
+        return true;
+      },
+      close() { this.status = "closed"; close("local"); } };
+  } }, { sensor: true, interval(fn) { heartbeat = fn; return 1; } });
+  await h.ctl.connect("ABC234");
+  h.fire("deviceorientation", { beta: 0, gamma: 35 });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, 35);
+  h.fire("touchend", { touches: [] });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, 35, "lifting the last finger preserves motion steering");
+
+  h.doc.hidden = true; h.doc.visibilityState = "hidden"; h.fire("visibilitychange");
+  h.fire("deviceorientation", { beta: 0, gamma: 45 });
+  heartbeat();
+  assert.equal(streams[0].at(-1).roll, null, "a hidden sensor event cannot renew stale steering");
+  h.fire("pagehide");
+  h.doc.hidden = false; h.doc.visibilityState = "visible"; h.fire("pageshow"); await settle();
+  heartbeat();
+  assert.equal(streams[1][0].roll, null, "the new link starts without a steering owner");
+  h.fire("deviceorientation", { beta: 0, gamma: -20 });
+  heartbeat();
+  assert.equal(streams[1].at(-1).roll, -20, "the next visible sensor event restores steering");
   h.ctl.cancel();
 });
 
@@ -2724,6 +2856,7 @@ test("PlatformSession: the desktop's title door PHONE CONTROLLER opens Settings 
     openSettingsPage: (p) => pages.push(p),
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) { const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h; } },
   });
+  loadPairingUI(context);
   vm.runInContext(read("js/ui/platform-session.js"), context, { filename: absSrc("js/ui/platform-session.js") });
   vm.runInContext("PlatformSession.create(G, { ensureNet: () => Promise.resolve(true), openSettingsPage }).wirePhone();", context);
   const door = G.$("mb-steerphone");

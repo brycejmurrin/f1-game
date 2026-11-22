@@ -351,7 +351,18 @@ const HudReadouts = (function () {
   // GAP_FINE_LT stays module-local (gapDecimals only).
   /** One in-pit predicate (REL tyre cell, STRATEGY rival/behind): any pitState but "none" (lane, box, out). */
   function inPit(car) { return !!(car && car.pitState && car.pitState !== "none"); }
-  return { inPit, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
+  // Wheel state measures longitudinal spin directly. In the classic model use
+  // the same rear-versus-front grip limits as the rear-slide haptic.
+  function pedalGrip(car, wheelModelActive) {
+    if (!car) return "";
+    if (car.brakeDemand > 0) return car.wheelLock > 0.25 ? "lock" : "";
+    if (!(car.throttleDemand > 0)) return "";
+    if (wheelModelActive) return car.wheelSpin > 0.25 ? "spin" : "";
+    if (typeof TyreModel === "undefined") return "";
+    const rear = car.rearUtil * TyreModel.CURVE_PEAK_X / TyreModel.CURVE_HOLD_R;
+    return rear > 1 && rear > car.frontUtil ? "slip" : "";
+  }
+  return { inPit, pedalGrip, lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S, gapClock, gaps,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };

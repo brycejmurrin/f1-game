@@ -159,7 +159,7 @@ test("SPOKEN ONLY captions only the lines actually heard; ON captions every line
   on.onAnnouncerLine("Welcome to Monza.");
   assert.equal(on.ring().length, 2, "ON captions a line whether or not it was voiced");
 
-  const store = memStore({ captions: "spoken" });
+  const store = memStore({ captions: "spoken", sound: true });   // SOUND ships off (game.js): this player turned it on
   const C = loadCaptions(store);
   C.onSpotter("Car left", "car left");
   C.onAnnouncerLine("Welcome to Monza.");

@@ -79,7 +79,7 @@
 // nothing checked out or run. land.yml's `trusted-rows` job runs it, so `post` never takes those rows from the
 // artifact of the leg that ran the PR's scripts (WP-L2).
 //
-// Exit: 0 every row ok, 2 a row failed, 3 waiting on CI, 1 usage or API/git error. `--check` is accepted (the
+// Exit: 0 every row ok, 2 a row failed, 3 waiting on CI, 4 trusted API quota backoff, 1 other usage/API/git error. `--check` is accepted (the
 // workflow's spelling). `--json <path>` writes the row summary there; nothing else is written outside the
 // throw-away worktree under artifacts/merge-gate/.
 import { spawnSync } from "node:child_process";
@@ -93,7 +93,7 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 import { AGENT_APP_SLUG, OWNER, byAgent, byOwner, describeActor, labelEvents, newestLabelEvent, ownerSet } from "./lib/provenance.mjs";
 import { readDeployTip } from "./lib/deploy-tip.mjs";
 import { runTipGate, tipView } from "./lib/tip-gate.mjs";
-import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain } from "./merge-train.mjs";
+import { TRAIN_PREFIX, trainManifest, trainRow, verifyTrain, boardedTrainOf } from "./merge-train.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
@@ -416,19 +416,57 @@ export function configPushState({ pr, head, headRef, labelAt, request, base = DE
     : { state: "covered", from, evidence: `the PR's own ${what} diff is unchanged since ${from.slice(0, 8)} (${b.size} file(s), same ${moved.length ? "hunks" : "blobs, patches"} and modes${also})` };
 }
 
+const RATCHET_TABLE = "tests/data/ratchets.json";
+const RATCHET_DIR = "tests/data/ratchets.d";
+
+/** Full-depth gate checkouts normally already contain both compared commits.
+ * Read only committed regular blobs, without a worktree checkout, attributes or
+ * replacement refs. A fork or historical commit may be absent: use Contents at
+ * that exact ref in that case. Errors reading a resident tree are gate errors. */
+function localRatchetFiles(ref, root) {
+  if (!root || !/^[0-9a-f]{40}$/.test(ref)) return null;
+  const object = args => git(["--no-replace-objects", ...args], root);
+  const type = object(["cat-file", "-t", ref]);
+  if (type.status !== 0) return null;
+  if (type.stdout.trim() !== "commit") return { error: `ratchet ref ${ref} is not a commit` };
+  const listing = object(["ls-tree", "-r", "-t", "-z", ref, "--", RATCHET_TABLE, RATCHET_DIR]);
+  if (listing.status !== 0) return { error: `ratchet tree at ${ref}: ${listing.error || listing.stderr}` };
+  const files = new Map(), fragments = [];
+  for (const entry of listing.stdout.split("\0").filter(Boolean)) {
+    const tab = entry.indexOf("\t"), file = entry.slice(tab + 1);
+    const [mode, kind, oid] = entry.slice(0, tab).split(" ");
+    if (file === RATCHET_DIR && kind !== "tree") return { error: `${file} at ${ref} is not a directory` };
+    const fragment = /^tests\/data\/ratchets\.d\/[^/]+\.json$/s.test(file);
+    if (file !== RATCHET_TABLE && (!fragment || kind === "tree")) continue;
+    if (!/^100(644|755)$/.test(mode) || kind !== "blob" || files.has(file)) return { error: `${file} at ${ref} is not a unique regular blob` };
+    files.set(file, oid);
+    if (fragment) fragments.push(file);
+  }
+  const read = file => {
+    const oid = files.get(file);
+    if (!oid) return { error: `${file} at ${ref} is missing` };
+    const blob = object(["cat-file", "blob", oid]);
+    if (blob.status !== 0) return { error: `${file} at ${ref}: ${blob.error || blob.stderr}` };
+    try { return { json: JSON.parse(blob.stdout) }; } catch (e) { return { error: `${file} at ${ref}: ${e.message}` }; }
+  };
+  return { read, fragments };
+}
+
 /**
  * The effective tree-wide ceilings at `ref`: ratchets.json `tree` plus every ratchets.d delta's `tree` part, with
  * tools/check/ratchets.mjs applyFragments' rule (a delta for a metric the table does not carry moves nothing). Kept
- * here, not imported: the gate must not change when a non-config file does. GitHub reads only.
+ * here, not imported: the gate must not change when a non-config file does.
  * → { tree: { metric: ceiling } } | { error }.
  */
-export function treeCeilingsAt(ref, request) {
-  const read = (file) => {
+export function treeCeilingsAt(ref, request, root) {
+  const local = localRatchetFiles(ref, root);
+  if (local?.error) return local;
+  const read = local?.read || ((file) => {
     const r = request(`contents/${file}?ref=${encodeURIComponent(ref)}`);
     if (r.error || r.json?.encoding !== "base64" || typeof r.json?.content !== "string") return { error: `${file} at ${String(ref).slice(0, 8)}: ${r.error || "unreadable"}` };
     try { return { json: JSON.parse(Buffer.from(r.json.content, "base64").toString("utf8")) }; } catch (e) { return { error: `${file} at ${String(ref).slice(0, 8)}: ${e.message}` }; }
-  };
-  const base = read("tests/data/ratchets.json");
+  });
+  const base = read(RATCHET_TABLE);
   if (base.error) return base;
   const tree = {}, absorb = {};
   for (const [m, v] of Object.entries(base.json?.tree || {})) {
@@ -437,9 +475,12 @@ export function treeCeilingsAt(ref, request) {
     // B+D (2026-11-20): an entry's `absorb` is growth a PR may add with no label (treeRaises below).
     if (v && typeof v === "object" && Number.isFinite(v.absorb) && v.absorb > 0) absorb[m] = v.absorb;
   }
-  const dir = request(`contents/tests/data/ratchets.d?ref=${encodeURIComponent(ref)}`);
-  if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `tests/data/ratchets.d at ${String(ref).slice(0, 8)}: ${dir.error}` };
-  const frags = dir.error ? [] : (Array.isArray(dir.json) ? dir.json : []).filter((e) => e?.type === "file" && /\.json$/.test(e.name || "")).map((e) => e.path);
+  let frags = local?.fragments;
+  if (!frags) {
+    const dir = request(`contents/${RATCHET_DIR}?ref=${encodeURIComponent(ref)}`);
+    if (dir.error && !/\b404\b|Not Found/i.test(String(dir.error))) return { error: `${RATCHET_DIR} at ${String(ref).slice(0, 8)}: ${dir.error}` };
+    frags = dir.error ? [] : (Array.isArray(dir.json) ? dir.json : []).filter((e) => e?.type === "file" && /\.json$/.test(e.name || "")).map((e) => e.path);
+  }
   for (const f of frags.sort()) {
     const r = read(f);
     if (r.error) return r;
@@ -495,13 +536,13 @@ export function raiseVerdict(raises, labels, events = null, owner = OWNER, push 
 
 /** The PR's own tree raises at `sha`: its ceilings vs those at its merge base with `base` (so a sync, which moves the
  *  merge base, brings other PRs' fragments into both sides and they cancel). → { raises } | { error }. */
-export function prRaisesAt(sha, base, request) {
+export function prRaisesAt(sha, base, request, root) {
   const cmp = request(`compare/${encodeURIComponent(base)}...${encodeURIComponent(sha)}`);
   const mb = cmp.json?.merge_base_commit?.sha;
   if (cmp.error || !mb) return { error: `merge base of ${String(sha).slice(0, 8)}: ${cmp.error || "unreadable"}` };
-  const before = treeCeilingsAt(mb, request);
+  const before = treeCeilingsAt(mb, request, root);
   if (before.error) return before;
-  const after = treeCeilingsAt(sha, request);
+  const after = treeCeilingsAt(sha, request, root);
   if (after.error) return after;
   return { raises: treeRaises(before.tree, after.tree, before.absorb, after.absorb) };
 }
@@ -518,16 +559,16 @@ export function raisesCovered(now, then) {
  *  Bound to what Bryce labelled: a push after his click that touches a ratchet file still counts as covered when the
  *  PR's own raise at the head is no wider than its own raise at the head he labelled, so a sync that brings in other
  *  PRs' ratchets.d fragments does not need a fresh click, and any further raise does. */
-export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request, credited = "" }) {
+export function raiseRow({ pr, head, headRef, base, changed, labels, events, owner = OWNER, request, credited = "", root }) {
   if (!ratchetFiles(changed).length) return row(true, "no ratchet ceiling file in the diff");
-  const now = prRaisesAt(head, base, request);
+  const now = prRaisesAt(head, base, request, root);
   if (now.error) return { error: now.error };
   const raises = now.raises;
   const last = newestLabelEvent(events, RAISE_LABEL);
   let push = raises.length && configLabelKind(last, owner)
     ? configPushState({ pr, head, headRef, labelAt: last.created_at, request, base, touches: ratchetFiles, what: "ratchet file", credited }) : null;
   if (push?.state === "after" && push.from) {
-    const then = prRaisesAt(push.from, base, request);
+    const then = prRaisesAt(push.from, base, request, root);
     if (then.error) return { error: then.error };
     if (raisesCovered(raises, then.raises)) push = { state: "covered", evidence: `the pushes since ${push.from.slice(0, 8)} touch a ratchet file but raise nothing beyond what he labelled there` };
   }
@@ -1041,7 +1082,7 @@ export function trainGate({ pr, pull, head, base, request, root = ROOT, owner = 
     manifest: trainManifest(pull.body), head, headRef: pull.head?.ref || "", tip: fetched.tip,
     verify: (a) => verifyTrain({ ...a, cwd: root }),
     carPull: (n) => request(`pulls/${n}`),
-    carGate: (n, h) => evaluate({ pr: n, sha: h, request, root, trusted: true, owner }),
+    carGate: (n, h) => evaluate({ pr: n, sha: h, request, root, trusted: true, owner, forTrainCar: true }),
   });
 }
 
@@ -1065,7 +1106,7 @@ export function ciCredit({ pr, pull, head, base, request, root = ROOT }) {
   return creditPriorCi({ cwd: root, head, base, ciOf });
 }
 
-export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit } = {}) {
+export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge = localMergeGenCheck, trusted = false, queueCandidate = false, owner = OWNER, trainCheck = trainGate, tipCheck = runTipGate, credit = ciCredit, openPulls, forTrainCar = false } = {}) {
   const order = trusted ? TRUSTED_ROWS : ROWS;
   const one = request(`pulls/${pr}`);
   if (one.error) return { error: `PR #${pr}: ${one.error}` };
@@ -1076,11 +1117,27 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   rows.open = openVerdict(pull);
   const want = String(sha || "").toLowerCase();
   if (rows.open.ok && want && !(head.startsWith(want) || want.startsWith(head))) rows.open = row(false, `PR head is ${head.slice(0, 8)}, not the --sha ${want.slice(0, 8)} this run gated: a newer push gets its own run`);
+  // #6055: a car boarded on an open train must not pass (or arm) alone. Nested trainGate rows set forTrainCar.
+  // No new open-PR listing here (quota): only when the caller injects `openPulls` (tests). land.yml resolve already
+  // drops boarded cars from its landable list using the pulls it fetched for this run.
+  if (rows.open.ok && !forTrainCar && !String(pull.head?.ref || "").startsWith(TRAIN_PREFIX) && openPulls !== undefined) {
+    const train = boardedTrainOf(pr, head, openPulls);
+    if (train != null) rows.open = row(false, `car of open train #${train}: lands with the train, not alone`);
+  }
+  // A Pages queue scan can reject this candidate as soon as a required row fails.
+  // Direct events still collect all rows so their published verdict explains each refusal.
+  const plan = planRow(pull.body, pull.user?.login || "");
+  if (trusted && queueCandidate) {
+    if (!rows.open.ok || pull.mergeable === false || pull.mergeable_state === "dirty") return { skip: "closed, draft, conflicting or superseded" };
+    if (!(pull.labels || []).some(l => (l.name || l) === "land")) return { skip: "land removed" };
+    if (!plan.ok) return { skip: plan.evidence };
+  }
   // The label events: who added or removed `hold` / `config-ok`, and through which app (provenance).
   const ev = listAll(`issues/${pr}/events`, request, (j) => j, 10);
   if (ev.error) return { error: `events of PR #${pr}: ${ev.error}` };
   rows.hold = holdVerdict(pull.labels, ev.rows, owner);
-  rows.plan = planRow(pull.body, pull.user?.login || "");
+  rows.plan = plan;
+  if (trusted && queueCandidate && !rows.hold.ok) return { skip: rows.hold.evidence };
   if (!head) return { error: `PR #${pr}: no head sha` };
   const checks = checkRunsFor(head, request);
   if (checks.error) return { error: `check-runs on ${head.slice(0, 8)}: ${checks.error}` };
@@ -1104,6 +1161,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
       rows.ci = { ...row(true, `credited H0 ${c.credit.sha} across clean tip-sync${n > 1 ? ` (a chain of ${n})` : ""}: ${c.credit.evidence}, first attempt, on ${c.credit.sha.slice(0, 8)}; the head's own: ${rows.ci.evidence}; the retest row runs against the credited head`), credited: c.credit.sha };
     } else rows.ci = { ...rows.ci, evidence: `${rows.ci.evidence} (no CI credit: ${c.none})` };
   }
+  if (trusted && queueCandidate && !rows.ci.ok) return { skip: rows.ci.evidence };
   const pages = readDeployTip(base, request);
   if (pages.error) return { error: pages.error };
   // The tip itself (#5714 + #5634, 2026-11-19): Pages lags the tip by hours in a backlog, so when no completed run
@@ -1145,7 +1203,7 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, localMerge 
   if (!isTrain) {
     rows.config = configVerdict(changed, pull.labels, ev.rows, owner, push);
     // The raise row reads the PR's own paths (not the generated-package filter's narrowed list).
-    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request, credited: credited?.sha || "" });
+    const raise = raiseRow({ pr, head, headRef: pull.head?.ref || "", base: baseTip, root, changed: filePaths(files.rows), labels: pull.labels, events: ev.rows, owner, request, credited: credited?.sha || "" });
     if (raise.error) return { error: raise.error };
     rows.raise = raise;
   }
@@ -1199,6 +1257,7 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     \`${CONFIG_LABEL}\` added by ${OWNER} in person after the last push touching one), raise (a tree-wide ratchet ceiling
     rises only with \`${RAISE_LABEL}\` added by ${OWNER} in person after the last push touching a ratchet file), gen (clean merge onto the current base tip + gen:check), ratchets (on
     that merge result), retest (the unit tests both the tip merges since the CI run and the PR select, re-run on that merge result).
+  --queue-candidate with --trusted: stop at an ineligible candidate (exit 5) before reading the remaining rows.
   --trusted: only the rows that run no PR code (open, hold, plan, ci, base, config, raise); land.yml's trusted-rows job.
   A row still waiting (CI, a red deploy tip) prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other
   row ok, CI not finished or the tip red on code), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
@@ -1212,7 +1271,17 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
     log("= merge-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)");
     return 1;
   }
-  const v = evaluate({ pr, sha: opt("--sha") || "", request, root, localMerge, trusted: argv.includes("--trusted"), owner, credit });
+  const trusted = argv.includes("--trusted");
+  let quota;
+  const trustedRequest = (pathQs) => {
+    if (quota) return quota;
+    const result = request(pathQs, { deferRateLimit: true });
+    if (result.rateLimited) quota = result;
+    return result;
+  };
+  const v = evaluate({ pr, sha: opt("--sha") || "", request: trusted ? trustedRequest : request, root, localMerge, trusted, queueCandidate: argv.includes("--queue-candidate"), owner, credit });
+  if (quota) { log(`= merge-gate deferred — GitHub API rate limit: ${quota.error}`); return 4; }
+  if (v.skip) { log(`= merge-gate skipped — ${v.skip}`); return 5; }
   if (v.error) { log(`= merge-gate error — ${v.error}`); return 1; }
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");

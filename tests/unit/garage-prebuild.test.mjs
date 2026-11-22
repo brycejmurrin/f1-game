@@ -651,7 +651,7 @@ test("garage release frees arrival crew meshes once and the next arrival rebuild
   const beforeArrival = h.handles.length;
   garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
   const crew = h.handles.slice(beforeArrival);
-  assert.equal(crew.length, 3, "the real arrival crew creates two figures and its pole");
+  assert.equal(crew.length, 4, "the pitstop crew adds its posed crew mesh alongside the two figures and pole");
   for (const mesh of crew) assert.equal(h.live.has(mesh), true);
   const afterArrival = h.handles.length;
   garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
@@ -669,7 +669,7 @@ test("garage release frees arrival crew meshes once and the next arrival rebuild
   const beforeNextArrival = h.handles.length;
   garage.draw(TEAM, LIV, eye, null, 0, context, null, pose);
   const rebuiltCrew = h.handles.slice(beforeNextArrival);
-  assert.equal(rebuiltCrew.length, 3, "the same paint still rebuilds released crew on the next visit");
+  assert.equal(rebuiltCrew.length, crew.length, "the same paint still rebuilds released crew on the next visit");
   for (const mesh of rebuiltCrew) {
     assert.equal(h.live.has(mesh), true);
     assert.equal(crew.includes(mesh), false, "no disposed crew handle is reused");
@@ -717,7 +717,7 @@ test("renderer replacement releases garage resources through their original owne
   const beforeArrival = h.handles.length;
   garage.draw(TEAM, LIV, [0, 1.6, 0], null, 0, { ambient: false }, {}, { door: 0.5, x: 0, z: 0 });
   const crew = h.handles.slice(beforeArrival);
-  assert.equal(crew.length, 3, "the arrival creates its two figure meshes and pole");
+  assert.equal(crew.length, 4, "the pitstop arrival creates its two figure meshes, posed crew and pole");
   for (const mesh of crew) assert.equal(h.live.has(mesh), true);
   const held = h.live.size;
   const freed = h.freed.length;
@@ -814,6 +814,20 @@ test('exterior owns terrain, scenery, tagged lights, glass and water across draw
   assert.equal(h.draws[20].opts.emissive, 0, 'ordinary architecture cannot become a glowing white slab');
   assert.equal(h.draws[21].opts.emissive, .78, 'only authored light-source faces receive night emission');
   h.ext.release(); assert.equal(h.freed.length, 16);
+});
+
+test("departure lamp levels scale only exterior energy and preserve the room rig", async () => {
+  const mesh = { pos: [0, 0, 0] };
+  const lamp = [1, 2, 3, 20, 40, 60, 30, 0, -1, 0, .9, .8, .1, 0, 0];
+  const h = exteriorHarness({ geometry: () => ({ ground: mesh, road: mesh, props: mesh, lamps: [lamp] }) });
+  assert.equal(await h.ext.request(h.selection("bahrain", "dry", "night")), true);
+  const room = Array(15).fill(1), rig = room.slice();
+  h.ext.appendLights(rig, 0, .55);
+  assert.deepEqual(rig, room);
+  h.ext.appendLights(rig, .5, .25);
+  assert.deepEqual(rig.slice(0, 15), room);
+  assert.deepEqual(rig.slice(18, 21), [2.5, 5, 7.5]);
+  assert.deepEqual(lamp.slice(3, 6), [20, 40, 60]);
 });
 
 test('scenery-authored atmosphere uses its owned palette without changing the selected circuit', async () => {

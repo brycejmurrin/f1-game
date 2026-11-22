@@ -250,6 +250,13 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   translate: calc(var(--tl-title-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-title-y, 0px) + var(--tf-dy, 0px));
   zoom: calc(var(--ui-scale) * var(--tl-title-size, 1) * var(--tf, 1));
 }
+/* A layout scales compact's cap (css/menus.css). */
+:root[data-title-layout] :where(body[data-density="compact"]) #menu-buttons {
+  zoom: calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
+}
+:root[data-title-layout] :where(body[data-density="compact"]) #menu-brand {
+  zoom: calc(var(--ui-compact-brand-scale) * var(--tl-title-size, 1) * var(--tf, 1));
+}
 :root[data-title-layout] #title-car {
   translate: var(--tl-art-x, 0) var(--tl-art-y, 0);
   scale: var(--tl-art-size, 1);
@@ -320,14 +327,7 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
 :root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
 :root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }   /* a ring would read through the ghost; it returns with the page */
-/* EDIT ON TITLE SCREEN (html[data-tl-edit], js/ui/title-layout.js): the pieces
-   are outlined and dragged whole — their own controls take no pointer, so a
-   press on a door is the door's piece, never its click. #tl-art is the
-   drawing's transparent stand-in (the drawing itself is pointer-events:none),
-   laid under the doors so where they overlap the doors win. #tl-editor is a
-   small bar docked at the foot, above #overlay (z 20); #tl-handle, fixed at the
-   selected piece's corner, sizes it. No zoom on the bar: its fixed handle
-   would move with it. */
+/* Title edit: groups drag; #tl-editor stays unzoomed (its handle tracks a corner). */
 :root[data-tl-edit] :is(#menu-buttons, #menu-brand, #tl-art) {
   outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
   outline-offset: 4px;
@@ -340,13 +340,23 @@ body:not(.hud-hidden) #hud-restore { display: none; }
 :root[data-tl-edit] #tl-art { position: absolute; z-index: -1; zoom: normal; pointer-events: auto; }
 :root[data-tl-edit] #tl-editor {
   position: fixed; z-index: 44;
-  left: 0; right: 0; bottom: var(--safe-b); margin-inline: auto;
+  left: var(--safe-l); right: var(--safe-r); bottom: var(--safe-b); margin-inline: auto;
   width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
+  max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
   gap: calc(var(--gap) * 0.5); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
   background: var(--panel); border: 1px solid var(--plate-line); border-radius: 10px;
 }
-:root[data-tl-edit] #tl-editor > button { margin: 0; min-height: var(--tap-min); }
+:root[data-tl-edit] #tl-editor[data-top] { top: var(--safe-t); bottom: auto; }
+:root[data-tl-edit] #tl-editor button {
+  margin: 0; min-height: max(44px, var(--tap-min)); min-width: 44px;
+  padding-inline: .5em;
+}
+:root[data-tl-edit] #tl-adjustments:not([hidden]) {
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: .25em;
+}
+:root[data-tl-edit] #tl-values { flex: 0 0 100%; text-align: center; }
 :root[data-tl-edit] #tl-piece { padding-inline: calc(var(--gap) / 3); }
 :root[data-tl-edit] #tl-handle {
   position: fixed; width: 22px; height: 22px; translate: -50% -50%;
@@ -375,6 +385,9 @@ body:not(.hud-hidden) #hud-restore { display: none; }
   :where(body:not([data-density="compact"])) #menu-buttons {
     width: min(100%, var(--col-max));
     justify-self: center;
+  }
+  :where(body:not([data-density="compact"])) #menu-buttons {
+    --home-label: min(clamp(var(--fs-4), 1.85vw, 2.25rem), calc(var(--col-max) * .045 / var(--ui-scale, 1)));
   }
 }
 

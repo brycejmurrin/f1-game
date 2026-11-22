@@ -25,7 +25,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows } = {}) {
+function createHarness({ fetchImpl, putImpl, matchImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test", registration, posted, workerURL, globals, clientWindows } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -51,6 +51,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
           store.set(requestKey(request), response.clone());
         },
         async match(request) {
+          if (matchImpl) await matchImpl(name, request);
           return store.get(requestKey(request));
         },
         async keys() {
@@ -2369,6 +2370,95 @@ test("install carries runtime entries into the new generation, revalidated, and 
   await Promise.all(manifest.lifetimes);
   const strip = harness.fetchEvent(new Request(`${ORIGIN}/assets/pack/x.ktx2?h=${H1}`));
   assert.equal(await (await strip.responsePromise).text(), "pack-x");
+});
+
+test("a retained generation cannot supply wrong pack bytes after an upgrade", async () => {
+  const asset = `${ORIGIN}/assets/pack/x.bin`, contents = "expected bytes";
+  const url = asset + "?h=" + createHash("md5").update(contents).digest("hex");
+  const base = installFetch();
+  let online = false, attempts = 0;
+  const h = createHarness({ clientWindows: 1, fetchImpl: (request, init) => {
+    if (requestKey(request) !== url) return base(request, init);
+    attempts++;
+    if (!online) throw new TypeError("offline");
+    return new Response(contents);
+  } });
+  const previous = new Map([
+    [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    [url, new Response("wrong generation")],
+  ]);
+  h.stores.set("apex26-320", previous);
+  await h.lifecycleEvent("install").done();
+  await h.lifecycleEvent("activate").done();
+  assert.ok(h.stores.has("apex26-320"), "an open window retains its shell");
+  async function read() {
+    const event = h.fetchEvent(new Request(url));
+    const response = await event.responsePromise;
+    await Promise.all(event.lifetimes);
+    return response;
+  }
+  assert.equal((await read()).type, "error", "offline must not serve the rejected predecessor");
+  online = true;
+  assert.equal(await (await read()).text(), contents, "an online retry repairs it");
+  online = false;
+  assert.equal(await (await read()).text(), contents, "the repaired copy works offline");
+  assert.equal(attempts, 2, "only the miss and online recovery needed the network");
+
+  // An old worker can also pre-fill the new cache before its own worker installs.
+  // It must not mask a valid retained copy when the network is unavailable.
+  h.stores.get("apex26-321").set(url, new Response("bad pre-fill"));
+  previous.set(url, new Response(contents));
+  assert.equal(await (await read()).text(), contents);
+  assert.equal(attempts, 2);
+});
+
+for (const [badBuild, unreadable] of [[320, false], [321, false], [320, true], [321, true]]) {
+  test(`install recovers a pack after a ${unreadable ? "read error" : "digest mismatch"} in generation ${badBuild}`, async () => {
+    const body = "downloaded model", hash = createHash("md5").update(body).digest("hex");
+    const url = ORIGIN + "/assets/pack/model.bin?h=" + hash;
+    const install = installFetch();
+    let packRequests = 0;
+    const h = createHarness({
+      clientWindows: 0,
+      matchImpl(name, request) {
+        if (unreadable && name === "apex26-" + badBuild && requestKey(request) === url) throw new Error("cache read failed");
+      },
+      fetchImpl(request, init) {
+        if (requestKey(request) !== url) return install(request, init);
+        packRequests++;
+        throw new TypeError("pack unavailable");
+      },
+    });
+    const previous = new Map([
+      [ORIGIN + "/__apex_install_settled__", new Response("settled")],
+      [url, new Response(body)],
+    ]);
+    h.stores.set("apex26-" + (badBuild - 1), previous);
+    h.stores.set("apex26-" + badBuild, new Map([[url, new Response("different model")]]));
+
+    await h.lifecycleEvent("install").done();
+    await h.lifecycleEvent("activate").done();
+    assert.equal(h.stores.has("apex26-" + (badBuild - 1)), false, "activation swept the valid predecessor");
+    const event = h.fetchEvent(new Request(url));
+    assert.equal(await (await event.responsePromise).text(), body, "valid downloaded bytes survive the sweep");
+    await Promise.all(event.lifetimes);
+    assert.equal(packRequests, 0, "repairing and reading this content-addressed entry requires no download");
+  });
+}
+
+test("a failed cache read still lets a hashed pack file recover from the network", async () => {
+  const contents = "pack", url = ORIGIN + "/assets/pack/x.bin?h=" + createHash("md5").update(contents).digest("hex");
+  const h = createHarness({
+    globals: { caches: {
+      async keys() { return ["apex26-321"]; },
+      async match(req) { if (requestKey(req) === url) throw new Error("cache read failed"); },
+      async open() { return { async put() {} }; },
+    } },
+    fetchImpl: async (req) => requestKey(req) === url ? new Response(contents) : new Response('{"build":321}'),
+  });
+  const event = h.fetchEvent(new Request(url));
+  assert.equal(await (await event.responsePromise).text(), contents);
+  await Promise.all(event.lifetimes);
 });
 
 // ── W24 row 4: the version.json kill switch ──

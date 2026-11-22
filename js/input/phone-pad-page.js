@@ -1,6 +1,6 @@
 /* PhonePadPage — the phone wheel. LCD paint and the controller.html page.
    Elements arrive from the shell; this file never looks an id up. The wire
-   format is PhonePadCodec. The desktop session (PhonePad.padSession) stays in
+   format is PhonePadCodec. The transport session (PhonePad.padSession) stays in
    phone-pad.js and is called once that file has evaluated. */
 "use strict";
 
@@ -47,6 +47,8 @@ const PhonePadPage = (function () {
       const n = el.leds.children.length, lit = Math.round(h.rpm * n);
       for (let i = 0; i < n; i++) el.leds.children[i].classList.toggle("on", inRace && i < lit);
     }
+    if (el.gas) el.gas.classList.toggle("grip-cue", inRace && !(h.flags & DASH.paused) && (h.grip === "spin" || h.grip === "slip"));
+    if (el.brake) el.brake.classList.toggle("grip-cue", inRace && !(h.flags & DASH.paused) && h.grip === "lock");
     if (el.screen && el.screen.classList) {
       el.screen.classList.toggle("redline", !!(h.flags & DASH.redline));
       el.screen.classList.toggle("boost", !!(h.flags & DASH.boost));
@@ -120,7 +122,7 @@ const PhonePadPage = (function () {
       dom.rim.style.transform = "rotate(" + r.toFixed(1) + "deg)";
     }
     function onOrient(e) {
-      if (steeringMode !== "tilt") return;
+      if (steeringMode !== "tilt" || (typeof document !== "undefined" && document.hidden)) return;
       const r = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
       if (r === null) return;
       roll = r;
@@ -157,12 +159,23 @@ const PhonePadPage = (function () {
     // it landed eases it off. An absolute "height on the pedal" mapping gave a
     // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
     const releases = [], pointerReleases = [];
-    const releaseAll = (pointersOnly) => { for (const r of releases) r(pointersOnly === true); };
+    const releaseAll = (pointersOnly) => {
+      const clearRoll = pointersOnly !== true && roll !== null;
+      if (clearRoll) { roll = null; paintRoll(); }
+      for (const r of releases) r(pointersOnly === true);
+      if (clearRoll && session) session.sample(true);
+    };
+    const pedalTargets = new Map(), pedalOwners = new Map();
     function hold(el, on, off, travel) {
       if (!el) return;
       const ids = new Set();
-      const anchors = new Map();   // pointerId -> clientY at touch-down
+      const anchors = new Map();   // Freeze the response and landing point for each contact.
       const levels = new Map();    // each contact keeps its own pedal travel
+      if (travel) PedalTravel.watchButtonProfile(travel, profile => {
+        el.classList.toggle("feedback-off", !profile.feedback);
+        if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
+        else el.removeAttribute?.("data-touch-response");
+      });
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
       const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v, edge); };
       const paintLevel = (edge = true) => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest, edge); };
@@ -171,24 +184,61 @@ const PhonePadPage = (function () {
         // Blur, backgrounding and disconnect still clear every input source.
         if (pointersOnly) { for (const id of Array.from(ids)) if (typeof id !== "string") up({ pointerId: id }); return; }
         if (!ids.size) return;
+        for (const id of anchors.keys()) pedalOwners.delete(id);
         ids.clear(); anchors.clear(); levels.clear(); el.classList.remove("on"); if (travel) paintLevel(); else off();
       });
+      const start = (e, transfer) => {
+        ids.add(e.pointerId);
+        el.classList.add("on");
+        if (!travel) { on(1); return; }
+        const profile = PedalTravel.buttonProfile(travel);
+        const cross = transfer && profile.slide === "ease";
+        const peerId = travel === "gas" ? "brake" : "gas";
+        // Standalone phones historically capture a pedal until lift, including a
+        // slide through the other pedal. Only an explicit destination crossover opts in.
+        const bounds = PedalTravel.buttonOverrides(peerId).slide && dom[peerId]?.getBoundingClientRect?.();
+        const contact = { x: e.clientX, y: e.clientY, profile, cross, transfer, bounds };
+        anchors.set(e.pointerId, contact);
+        pedalOwners.set(e.pointerId, target);
+        levels.set(e.pointerId, cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0));
+        paintLevel();
+      };
       const down = (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
-        ids.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
-        el.classList.add("on");
-        if (travel) { anchors.set(e.pointerId, e.clientY); levels.set(e.pointerId, 1); paintLevel(); } else on(1);
-        e.preventDefault();
+        start(e, false); e.preventDefault();
       };
-      const move = (e) => { if (travel && anchors.has(e.pointerId)) { levels.set(e.pointerId, travelOf(anchors.get(e.pointerId), e.clientY)); paintLevel(false); } };
+      function slide(e) {
+        const c = anchors.get(e.pointerId);
+        if (!c) return;
+        const peer = travel === "gas" ? dom.brake : dom.gas;
+        const r = c.bounds;
+        if (r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom &&
+            typeof document !== "undefined" && document.elementFromPoint) {
+          const hit = document.elementFromPoint(e.clientX, e.clientY);
+          if (peer && (hit === peer || peer.contains?.(hit))) {
+            up(e); pedalTargets.get(peer).start(e, true); return;
+          }
+        }
+        const dy = c.y - e.clientY, dist = Math.hypot(e.clientX - c.x || 0, dy || 0);
+        let value;
+        if (c.cross) {
+          value = Math.max(levels.get(e.pointerId), PedalTravel.arrive(dist));
+          if (value >= 1) { c.cross = false; c.y = e.clientY; }
+        } else if (c.transfer) value = PedalTravel.ease(c.y, e.clientY, c.profile.travel);
+        else value = PedalTravel.level(c.profile, c.profile.press === "progressive" ? dist : dy);
+        levels.set(e.pointerId, value); paintLevel(false);
+      }
+      const move = (e) => { if (travel) pedalOwners.get(e.pointerId)?.slide(e); };
       const up = (e) => {
-        anchors.delete(e.pointerId);
+        if (anchors.delete(e.pointerId)) pedalOwners.delete(e.pointerId);
         levels.delete(e.pointerId);
         if (!ids.delete(e.pointerId)) return;
         if (!ids.size) el.classList.remove("on");
         if (travel) paintLevel(); else if (!ids.size) off();
       };
+      const target = { start, slide };
+      if (travel) pedalTargets.set(el, target);
       // Keyboard holds share the contact set, so releasing a key cannot
       // cancel a thumb that is still down (or vice versa).
       const keyId = (key) => key === " " || key === "Enter" ? "key:" + key : null;
@@ -234,9 +284,6 @@ const PhonePadPage = (function () {
       document.addEventListener("touchcancel", allUp, { capture: true, passive: true });
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
     }
-    // PedalTravel: 12 px of slop, then 90 px to the 0.12 floor. Moving down
-    // past the landing point stays full.
-    function travelOf(anchorY, y) { return PedalTravel.ease(anchorY, y); }
     // aria-valuenow is an integer percent (controller.html: min -100, max 100), written
     // only when it changes; a drag/slide (edge false) keeps the session's 15 ms cap.
     let steerAria = "0";
@@ -248,6 +295,7 @@ const PhonePadPage = (function () {
     function setSteeringMode(mode) {
       if (mode !== "tilt" && mode !== "touch") return false;
       if (mode === "touch" && (!session || !session.health().touchSupported)) { say("Touch steering needs an updated game. Reload the game and reconnect.", true); return false; }
+      if (mode !== steeringMode) { roll = null; paintRoll(); }
       steeringMode = mode; steer = 0; push();
       if (dom.steeringMode) dom.steeringMode.value = mode;
       if (dom.steer) dom.steer.hidden = mode !== "touch";
@@ -271,8 +319,8 @@ const PhonePadPage = (function () {
       });
       dom.steer.addEventListener("blur", () => release());
     }
-    hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, true);
-    hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, true);
+    hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, "gas");
+    hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, "brake");
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
     // Edges fire on the DOWN, not the click: a paddle on a wheel answers the
     // finger, and a click waits for the release (and can be lost to a drag).
@@ -476,11 +524,11 @@ const PhonePadPage = (function () {
       connecting = false;
       const active = session;
       steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.steer) dom.steer.hidden = true;
-      if (active) { steer = 0; thr = brk = held = 0; active.sample(true); }
       session = null;
-      if (active) active.close();
+      releaseAll();
+      if (active) { steer = 0; thr = brk = held = 0; active.sample(true); active.close(); }
       else if (old && old.transport) { try { old.transport.close(); } catch (_) { /* already closed */ } }
-      dropWake(); releaseAll();
+      dropWake();
       if (dom.body) { dom.body.classList.remove("linked"); dom.body.classList.remove("awaiting"); }
       if (dom.connect) dom.connect.disabled = false;
     }
@@ -870,10 +918,18 @@ const PhonePadPage = (function () {
     if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
     if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
     if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
-    const show = (on) => { if (dom.sheet) dom.sheet.hidden = !on; if (on && dom.done && dom.done.focus) dom.done.focus(); else if (!on && dom.open && dom.open.focus) dom.open.focus(); };
+    function show(on) {
+      if (dom.sheet) dom.sheet.hidden = !on;
+      if (on && dom.responses && typeof TouchButtonSettings !== "undefined") {
+        TouchButtonSettings.mount(dom.responses, ["gas", "brake"], { standalone: true });
+      }
+      (on ? dom.done : dom.open)?.focus?.();
+    }
     // ARRANGE: capture-phase pointers on the stage, so a drag on GAS moves GAS and never presses it.
     const A = dom.arrange || {}, idOf = new Map(Object.entries(A).map(([id, el]) => [el, id]));
-    let picked = null, drag = null;
+    let picked = null, drag = null, baseline, opener, frame = 0, coarse = false;
+    const history = [];
+    const remember = () => { if (history.length >= 50) history.shift(); history.push(cur); };
     const pts = new Map();
     const W = () => (typeof innerWidth === "number" ? innerWidth : 800), H = () => (typeof innerHeight === "number" ? innerHeight : 400);
     const placeOf = (id) => cur.place[id] || { x: 0, y: 0, s: 100 };
@@ -892,23 +948,71 @@ const PhonePadPage = (function () {
     function pick(id) {
       if (picked && A[picked] && A[picked].classList) A[picked].classList.remove("picked");
       picked = id; if (id && A[id] && A[id].classList) A[id].classList.add("picked");
-      if (dom.barName) dom.barName.textContent = id ? label(id).toUpperCase() + " · " + Math.round(placeOf(id).s) + "%" : "TAP A CONTROL";
+      if (dom.picker && id) dom.picker.value = id;
+      if (dom.undo) dom.undo.disabled = !history.length;
+      const p = placeOf(id);
+      if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "%" : "Select a control";
       markClashes();
     }
     function put(id, p, save) {
       const place = Object.assign({}, cur.place, { [id]: p });
       if (save) set(Object.assign({}, cur, { place })); else { cur = Object.assign({}, cur, { place: normalisePlace(place) }); placeEl(A[id], cur.place[id]); }
-      pick(id);
+      if (!drag) pick(id);
     }
     function sizeBy(id, factor, save) {
       const el = A[id], p = placeOf(id), r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
       put(id, { x: p.x, y: p.y, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
     }
     const arranging = () => !!(dom.body && dom.body.classList && dom.body.classList.contains("arranging"));
-    function arrange(on) {
-      if (dom.body && dom.body.classList) dom.body.classList.toggle("arranging", on);
+    function restore(snapshot) { cur = applyLayout(dom, snapshot); paint(); pick(picked); }
+    function arrange(on, accept = true) {
+      if (on === arranging()) return;
+      if (on) { baseline = cur; opener = dom.doc?.activeElement; }
+      else { stopDrag(true); if (accept && cur !== baseline) set(cur); else restore(baseline); }
+      dom.body.classList.toggle("arranging", on);
       if (dom.bar) dom.bar.hidden = !on;
-      if (on) { show(false); pick(null); } else { pts.clear(); drag = null; pick(null); }
+      history.length = 0;
+      if (on) {
+        show(false);
+        if (dom.tools) { dom.tools.hidden = true; dom.adjust.setAttribute("aria-expanded", "false"); }
+        dom.bar?.removeAttribute("data-bottom");
+        const ids = Object.keys(A).filter(id => A[id]?.getClientRects().length);
+        if (dom.picker) {
+          dom.picker.replaceChildren();
+          for (const id of ids) {
+            const option = dom.doc.createElement("option");
+            option.value = id; option.textContent = id === "screen" ? "Dashboard" : label(id);
+            dom.picker.appendChild(option);
+          }
+          dom.picker.focus();
+        }
+        pick(ids[0] || null);
+      } else {
+        pick(null);
+        (opener?.getClientRects?.().length ? opener : dom.open)?.focus?.();
+      }
+    }
+    function paintDrag() {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      if (!drag || !drag.next) return;
+      put(drag.id, drag.next, false);
+      drag.next = null;
+    }
+    function stopDrag(keep) {
+      if (!drag) return;
+      if (keep) paintDrag();
+      else {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0; restore(drag.before);
+      }
+      const before = drag.before;
+      drag = null; pts.clear();
+      if (keep && cur !== before) {
+        if (history.length >= 50) history.shift();
+        history.push(before);
+      }
+      pick(picked);
     }
     if (dom.stage) {
       const stop = (e) => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); };
@@ -916,10 +1020,16 @@ const PhonePadPage = (function () {
       dom.stage.addEventListener("pointerdown", (e) => {
         if (!arranging()) return;
         stop(e);
-        const id = hit(e.target); if (!id) return;
+        const id = hit(e.target); if (!id || (drag && (id !== drag.id || pts.size >= 2))) return;
+        if (dom.tools && !dom.tools.hidden) {
+          dom.tools.hidden = true;
+          dom.adjust.setAttribute("aria-expanded", "false");
+        }
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pts.size === 1) { const p = placeOf(id); drag = { id, x0: e.clientX, y0: e.clientY, p }; pick(id); }
-        else if (pts.size === 2 && drag) { const [a, b] = [...pts.values()]; drag.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: placeOf(drag.id).s }; }
+        if (pts.size === 1) { const p = placeOf(id); drag = { id, before: cur, x0: e.clientX, y0: e.clientY, p }; pick(id); }
+        else if (pts.size === 2 && drag) { const [a, b] = [...pts.values()]; paintDrag();
+          const box = A[id].getBoundingClientRect(), floor = minScale(box.width, box.height, placeOf(id).s);
+          drag.pinch = { floor, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: placeOf(drag.id).s }; }
         try { dom.stage.setPointerCapture && dom.stage.setPointerCapture(e.pointerId); } catch (_) { /* a drag without capture still tracks while over the stage */ }
       }, true);
       dom.stage.addEventListener("pointermove", (e) => {
@@ -927,25 +1037,66 @@ const PhonePadPage = (function () {
         stop(e); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (drag.pinch && pts.size >= 2) {
           const [a, b] = [...pts.values()], f = Math.hypot(a.x - b.x, a.y - b.y) / drag.pinch.d0;
-          const p = placeOf(drag.id); sizeBy(drag.id, (drag.pinch.s0 * f) / p.s, false);
+          drag.next = { ...placeOf(drag.id), s: Math.max(drag.pinch.floor, drag.pinch.s0 * f) };
         } else if (!drag.pinch) {
-          put(drag.id, { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s }, false);
+          drag.next = { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s };
         }
+        if (!frame && typeof requestAnimationFrame === "function") frame = requestAnimationFrame(paintDrag);
+        else if (!frame) paintDrag();
       }, true);
       const end = (e) => {
         if (!arranging()) return;
+        if (!pts.has(e.pointerId)) return;
         stop(e); pts.delete(e.pointerId);
-        if (drag && !pts.size) { const id = drag.id; drag = null; set(Object.assign({}, cur)); pick(id); }
+        if (!pts.size || e.type !== "pointerup") stopDrag(e.type === "pointerup");
+        else if (drag) {
+          paintDrag();
+          const [point] = pts.values();
+          Object.assign(drag, {pinch:null, p:placeOf(drag.id), x0:point.x, y0:point.y});
+        }
       };
       dom.stage.addEventListener("pointerup", end, true); dom.stage.addEventListener("pointercancel", end, true);
-      for (const t of ["click", "contextmenu"]) dom.stage.addEventListener(t, (e) => { if (arranging()) stop(e); }, true);
+      dom.stage.addEventListener("lostpointercapture", end, true);
+      for (const t of ["click", "contextmenu", "keydown", "keyup"]) dom.stage.addEventListener(t, (e) => { if (arranging()) stop(e); }, true);
     }
     if (dom.arrangeBtn) dom.arrangeBtn.addEventListener("click", () => arrange(true));
     if (dom.arrangeDone) dom.arrangeDone.addEventListener("click", () => arrange(false));
-    if (dom.minus) dom.minus.addEventListener("click", () => { if (picked) sizeBy(picked, 0.9, true); });
-    if (dom.plus) dom.plus.addEventListener("click", () => { if (picked) sizeBy(picked, 1.1, true); });
-    if (dom.resetOne) dom.resetOne.addEventListener("click", () => { if (!picked) return; const place = Object.assign({}, cur.place); delete place[picked]; const id = picked; set(Object.assign({}, cur, { place })); pick(id); });
-    if (dom.resetAll) dom.resetAll.addEventListener("click", () => { set(Object.assign({}, cur, { place: {} })); pick(null); });
+    dom.cancel?.addEventListener("click", () => arrange(false, false));
+    dom.picker?.addEventListener("change", () => pick(dom.picker.value));
+    dom.adjust?.addEventListener("click", () => {
+      dom.tools.hidden = !dom.tools.hidden; dom.adjust.setAttribute("aria-expanded", String(!dom.tools.hidden));
+    });
+    dom.edge?.addEventListener("click", () => dom.bar.toggleAttribute("data-bottom"));
+    dom.step?.addEventListener("click", () => {
+      coarse = !coarse; dom.step.textContent = coarse ? "Coarse" : "Fine"; dom.step.setAttribute("aria-pressed", String(coarse));
+    });
+    const edit = fn => { stopDrag(true); remember(); fn(); };
+    const dirs = {left:[-1,0], right:[1,0], up:[0,-1], down:[0,1]};
+    for (const button of dom.nudges || []) button.addEventListener("click", () => {
+      if (!picked) return;
+      const [x,y] = dirs[button.dataset.nudge], n = coarse ? 5 : 1;
+      edit(() => { const p = placeOf(picked); put(picked, { ...p, x:p.x + x*n, y:p.y + y*n }, false); });
+    });
+    for (const [button, factor] of [[dom.minus, 0.9], [dom.plus, 1.1]]) button?.addEventListener("click", () => {
+      if (picked) edit(() => sizeBy(picked, factor, false));
+    });
+    dom.undo?.addEventListener("click", () => { stopDrag(true); if (history.length) restore(history.pop()); });
+    dom.resetOne?.addEventListener("click", () => { if (picked) edit(() => put(picked, {x:0,y:0,s:100}, false)); });
+    dom.resetAll?.addEventListener("click", () => edit(() => restore(LAYOUT_PRESETS.classic)));
+    dom.bar?.addEventListener("keydown", e => {
+      if (e.key !== "Tab") return;
+      const controls = Array.from(dom.bar.querySelectorAll("button,select")).filter(el => !el.disabled && el.getClientRects().length);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (e.shiftKey ? e.target === first : e.target === last) {
+        e.preventDefault(); (e.shiftKey ? last : first).focus();
+      }
+    });
+    dom.doc?.addEventListener?.("keydown", e => {
+      if (arranging() && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); arrange(false, false); }
+    }, true);
+    if (typeof window !== "undefined") {
+      for (const name of ["blur", "resize"]) window.addEventListener(name, () => stopDrag(false));
+    }
     if (dom.open) dom.open.addEventListener("click", () => show(true));
     if (dom.done) dom.done.addEventListener("click", () => show(false));
     cur = applyLayout(dom, cur); paint();

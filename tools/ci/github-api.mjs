@@ -38,15 +38,16 @@ const defaultSleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuff
 export const urlFor = (pathQs) => /^https?:\/\//.test(pathQs) ? pathQs : `https://api.github.com/repos/${REPO}/${pathQs}`;
 
 function requestOnce(pathQs, { run = spawnSync, env = process.env, gh, token, anonymous = false,
-  method = "GET", body, etags, etagMax = ETAG_CACHE_MAX, timeoutS = 30, follow = false } = {}) {
+  method = "GET", body, etags, etagMax = ETAG_CACHE_MAX, timeoutS = 30, follow = false, deferRateLimit = false } = {}) {
   if (token === undefined) token = githubToken(gh !== undefined ? { env, gh } : { env });
   if (!token && !anonymous) return { error: NO_TOKEN_HINT };
   const url = urlFor(pathQs);
   const conditional = method === "GET" && etags;
   const prior = conditional ? etags.get(url) : undefined;
   // -w: the status code, the response ETag and Retry-After on the last line (`%header{}`, curl >= 7.84).
+  const report = "\n%{http_code} %header{etag} %header{retry-after}" + (deferRateLimit ? " %header{x-ratelimit-remaining}" : "");
   const args = ["-sS", ...(follow ? ["-L"] : []), "--max-time", String(timeoutS), ...(token ? ["-K", "-"] : []),
-    ...(method !== "GET" ? ["-X", method] : []), "-w", "\n%{http_code} %header{etag} %header{retry-after}",
+    ...(method !== "GET" ? ["-X", method] : []), "-w", report,
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
     // Revalidate stored HTTP responses when polling mutable CI/PR state (RFC 9111 §5.2.1.4).
     "-H", "Cache-Control: no-cache",
@@ -65,7 +66,7 @@ function requestOnce(pathQs, { run = spawnSync, env = process.env, gh, token, an
   if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
   const out = (r.stdout || "").split("\n");
   // Split on single spaces: an absent header prints as an empty field ("429  3": no ETag, Retry-After 3).
-  const [codeText = "", etag = "", retryAfter = ""] = (out.pop() || "").replace(/\r/g, "").replace(/^\s+/, "").split(" ");
+  const [codeText = "", etag = "", retryAfter = "", remaining = ""] = (out.pop() || "").replace(/\r/g, "").replace(/^\s+/, "").split(" ");
   const status = Number(codeText);
   if (status === 304 && prior) return { status: 200, json: prior.json, text: "", etag: prior.etag, cached: true };
   const text = out.join("\n");
@@ -76,7 +77,9 @@ function requestOnce(pathQs, { run = spawnSync, env = process.env, gh, token, an
     etags.set(url, { etag, json });
     if (etags.size > etagMax) etags.delete(etags.keys().next().value);
   }
-  return { status, json, text, etag, ...(retryAfter ? { retryAfter: Number(retryAfter) } : {}), ...(bad ? { badJson: true } : {}) };
+  const rateLimited = deferRateLimit && (status === 429 ||
+    (status === 403 && (remaining === "0" || !!retryAfter || /rate limit/i.test(json?.message || ""))));
+  return { status, json, text, etag, ...(rateLimited ? { rateLimited: true } : {}), ...(retryAfter ? { retryAfter: Number(retryAfter) } : {}), ...(bad ? { badJson: true } : {}) };
 }
 
 /** Longest Retry-After a CLI waits out in-process; a longer one is returned as the error. */
@@ -91,6 +94,7 @@ export function request(pathQs, opts = {}) {
   const { retries = RETRY_DELAYS_MS, sleepSync: nap = defaultSleepSync } = opts;
   for (let attempt = 0; ; attempt++) {
     const r = requestOnce(pathQs, opts);
+    if (r.rateLimited) return r;
     const retryable = r.status === 429 || (r.status >= 500 && r.status < 600);
     if (!retryable || attempt >= retries.length) return r;
     if (r.retryAfter > MAX_RETRY_AFTER_S) return r;
@@ -102,12 +106,12 @@ export function request(pathQs, opts = {}) {
  * The common shape: `{ json }` on 2xx (a 204 is `{ json: null }`), else `{ error }`.
  * @param {string} pathQs
  * @param {{ run?: typeof spawnSync, env?: NodeJS.ProcessEnv, gh?: () => string|null, retries?: number[], sleepSync?: (ms: number) => void,
- *   etags?: Map<string, {etag: string, json: any}>|null, etagMax?: number, method?: string, body?: any, token?: string|null, anonymous?: boolean, timeoutS?: number, follow?: boolean }} [opts]
+ *   etags?: Map<string, {etag: string, json: any}>|null, etagMax?: number, deferRateLimit?: boolean, method?: string, body?: any, token?: string|null, anonymous?: boolean, timeoutS?: number, follow?: boolean }} [opts]
  */
 export function api(pathQs, opts = {}) {
   const r = request(pathQs, opts);
   if (r.error) return { error: r.error };
-  if (!(r.status >= 200 && r.status < 300)) return { error: `HTTP ${r.status}` };
+  if (!(r.status >= 200 && r.status < 300)) return { error: `HTTP ${r.status}`, ...(r.rateLimited ? { rateLimited: true } : {}) };
   if (r.badJson) return { error: "bad JSON" };
   return r.cached ? { json: r.json, cached: true } : { json: r.json };
 }

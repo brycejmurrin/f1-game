@@ -327,7 +327,7 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   expect(reset).toEqual(shipped);
 });
 
-// #5562, Bryce's phone: 844x390 landscape, touch. The docked sheet is 380 own px wide, under the 640 the rail
+// #5562, 844x390 landscape touch regression. The docked sheet is 380 own px wide, under the 640 the rail
 // tier needs, so the compact rail-off tier IS the phone. At UI SIZE 70 (his) it hid the TIME / WEATHER chips and
 // the profile label; at 55 the sheet is NOT compact (390 / 0.55 = 709 own px > 620), so the tools disclosure has
 // no summary, and a window-height query closed it anyway: no tabs, scope, RESET or COPY in any tuner.

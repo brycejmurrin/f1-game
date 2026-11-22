@@ -66,20 +66,26 @@ runs:
         else
           echo "::warning::open-bot-pr: tools/ci/bot-pr-body.mjs failed; opening with the plain body (the gate will want a Plan)"
         fi
-        if GH_TOKEN="$tok" gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng \
-          --head "$BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2> "$err"; then
-          PR_OK=1; echo "PR opened with $via"
+        if pr_url="$(GH_TOKEN="$tok" gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng \
+          --head "$BRANCH" --title "$PR_TITLE" --body "$PR_BODY" 2> "$err")"; then
+          PR_OK=1; echo "PR opened with $via: $pr_url"
         else
           PR_OK=0; cat "$err"
         fi
         # A PR opened with GITHUB_TOKEN starts no pull_request run; a workflow_dispatch always does
         # (https://docs.github.com/en/actions/concepts/security/github_token). A LAND_TOKEN PR runs CI itself.
         if [ "$PR_OK" = 0 ] || [ "$via" = GITHUB_TOKEN ]; then
-          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" \
-            || echo "::warning::ci.yml dispatch failed; dispatch it on $BRANCH by hand"
+          if gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"; then
+            ci_note="CI was dispatched."
+          else
+            printf -v retry 'gh workflow run ci.yml --repo %q --ref %q' "$GITHUB_REPOSITORY" "$BRANCH"
+            ci_note="CI dispatch failed. Retry with: $retry"
+            echo "::error::${pr_url:+$pr_url — }$ci_note"
+            if [ "$PR_OK" = 1 ]; then exit 1; fi
+          fi
         fi
         [ "$PR_OK" = 1 ] && exit 0
-        NOTE="The scheduled $WHAT pushed \`$BRANCH\` ($(git rev-parse --short HEAD)) but \`gh pr create\` ($via) was refused: $(head -1 "$err"). Open the PR from \`$BRANCH\` by hand (its ci.yml run was dispatched), or set the LAND_TOKEN secret. Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        NOTE="The scheduled $WHAT pushed \`$BRANCH\` ($(git rev-parse --short HEAD)) but \`gh pr create\` ($via) was refused: $(head -1 "$err"). Open the PR from \`$BRANCH\` by hand, or set the LAND_TOKEN secret. $ci_note Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
         row="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title,updatedAt \
           --jq '[.[] | select(.title == env.ISSUE_TITLE)][0] // empty | "\(.number) \(.updatedAt)"')"
         if [ -z "$row" ]; then

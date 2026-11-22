@@ -1,32 +1,22 @@
 "use strict";
-/* Apex 26 — PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent
-   player settings (GRAPHICS). Both ship ON, so nothing changes until a player
-   turns one off. OFF zeroes the strengths game.js hands present() — ssao +
-   contact for the AO pass, godray + lampVol for the god-ray march — and every
-   backend (GLX glx/post.js, TLX tlx-post.js, WGX wgx.js) already skips a pass
-   whose strengths are all 0: the GPU work goes, not just the picture (the
-   autoTier 4 shed uses the same gate).
-
-   Keys: `apex26.gfxSsao`, `apex26.gfxGodrays` — raw lane, "1"/"0", unset = ON.
-   Read per frame, so the answer is held in a variable, not re-read from storage.
-
-   PostFxOpts.debris (the former DebrisOpts module, folded in 2026-11-10): the DEBRIS switch. The Rapier
-   side-world (js/physics/debris-world.js) is a perf lever — a WASM physics world every frame — so it gets a row,
-   not only a console flag. Nothing here touches DebrisWorld at eval. The key is the one DebrisWorld reads,
-   `apex26.debris`, raw lane, "1"/"0": its create() reads it once at boot to decide whether to start the 2.2 MB
-   Rapier import, so the switch has two halves: setEnabled() now, the key at the next boot. */
+/* Post-processing settings. iPhone starts with ambient occlusion off.
+   The renderer skips AO or god-rays when all strengths for that pass are zero.
+   Read raw preferences once and cache them for the render loop.
+   The debris switch also controls the next boot's optional Rapier import. */
 const PostFxOpts = (function () {
   "use strict";
 
   const KEYS = { ssao: "gfxSsao", godrays: "gfxGodrays" };
   const store = GameStore.store;
-  const state = { ssao: true, godrays: true };
+  const defaultSsao = () => !(typeof GfxQuality !== "undefined" && GfxQuality.isIPhone());
 
-  function read(which) {
-    try { return store.raw(`apex26.${KEYS[which]}`) !== "0"; } catch (_) { return true; }
+  function read(which, fallback) {
+    try {
+      const stored = store.raw(`apex26.${KEYS[which]}`);
+      return stored == null ? fallback : stored !== "0";
+    } catch (_) { return fallback; }
   }
-  state.ssao = read("ssao");
-  state.godrays = read("godrays");
+  const state = { ssao: read("ssao", defaultSsao()), godrays: read("godrays", true) };
 
   function set(which, want) {
     if (!(which in KEYS)) return false;
@@ -116,6 +106,6 @@ const PostFxOpts = (function () {
     else initUI();
   }
 
-  return { KEYS, set, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI, debris };
+  return { KEYS, set, defaultSsao, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI, debris };
 })();
 Object.freeze(PostFxOpts);

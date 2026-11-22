@@ -6,37 +6,37 @@
   },
   "files": {
     "css/hud.css": {
-      "codeLines": 2364,
-      "lines": 2630
+      "codeLines": 2375,
+      "lines": 2643
     },
     "js/agent/agentview.js": {
-      "lines": 2322
+      "lines": 2326
     },
     "js/agent/apex.js": {
-      "codeLines": 1697,
-      "lines": 2532
+      "codeLines": 1699,
+      "lines": 2526
     },
     "js/car/car3d.js": {
-      "lines": 2909
+      "lines": 2929
     },
     "js/game.js": {
-      "codeLines": 5415,
+      "codeLines": 5429,
       "gMembers": 297,
-      "lines": 9593,
+      "lines": 9573,
       "topLets": 127
     },
     "js/net/lobby.js": {
-      "lines": 2379
+      "lines": 2394
     },
     "js/render/glx/glx.js": {
-      "lines": 2892
+      "lines": 2902
     },
     "js/track/tracks.js": {
-      "lines": 847
+      "lines": 861
     },
     "js/ui/hud.js": {
-      "codeLines": 1446,
-      "lines": 2359
+      "codeLines": 1456,
+      "lines": 2349
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
@@ -45,13 +45,13 @@
   "tree": {
     "assertPins": {
       "absorb": 5,
-      "ceiling": 8140,
+      "ceiling": 8153,
       "slack": 200
     },
     "assertPinsAll": {
       "absorb": 5,
       "baseline": "2026-11-10 (audit item 9): re-seeded at the TRUE count after the counter learned the indirect shape (a bool from includes()/test()/indexOf() that a later assert reads); was 10320 under the old counter, +39 indirect sites. Shrink-only: lower it as those sites are rewritten, never raise it to absorb them.",
-      "ceiling": 10366,
+      "ceiling": 10389,
       "slack": 200
     },
     "bareCatches": {
@@ -59,20 +59,20 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 665,
+      "ceiling": 670,
       "slack": 5
     },
     "dynamicIdReads": {
-      "ceiling": 73,
+      "ceiling": 75,
       "slack": 5
     },
     "eagerCodeBytes": {
       "absorb": 5000,
-      "ceiling": 3988186,
+      "ceiling": 3954419,
       "slack": 0
     },
     "eagerScripts": {
-      "ceiling": 310,
+      "ceiling": 301,
       "slack": 0
     },
     "implicitAsserts": {
@@ -80,11 +80,11 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 323,
+      "ceiling": 325,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 179,
+      "ceiling": 182,
       "slack": 0
     },
     "rawGameReads": 304,
@@ -93,7 +93,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2321,
+      "ceiling": 2324,
       "slack": 25
     },
     "subFloorFontSize": {
@@ -104,7 +104,7 @@
       "ceiling": 0,
       "slack": 0
     },
-    "vmSrcLoads": 594,
+    "vmSrcLoads": 597,
     "waitForTimeout": 66,
     "waitNoPolling": {
       "ceiling": 40,

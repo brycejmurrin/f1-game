@@ -44,6 +44,16 @@ function bootPanel(disk = new Map([["trackId", "monza"], ["team", 1]])) {
   return { dom, panel, G, disk, writes, CamTune: ctx.CamTune };
 }
 
+test("camera tuner readout displays every digit of a framing step", () => {
+  const { dom } = bootPanel();
+  for (const [id, value, display] of [["height", 0.025, "+0.025m"], ["dist", -0.075, "−0.075m"], ["pitch", -0.25, "−0.25°"]]) {
+    const slider = dom.byId("ct-in-" + id);
+    slider.value = String(value);
+    slider.oninput();
+    assert.equal(dom.byId("ct-v-" + id).textContent, display);
+  }
+});
+
 test("camera tuner scope buttons expose exactly one aria-pressed after every click", () => {
   const { dom } = bootPanel();
   const btns = dom.byId("ct-scope").children.filter((c) => c.tagName === "BUTTON");
