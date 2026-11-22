@@ -412,7 +412,6 @@ const FULL = [
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
   "js/camera/cam-groups.js", // CamGroups: ONBOARD / COCKPIT_LAYOUT camera tables (hud-layout + hud.js read at eval)
   "js/ui/hud-layout.js",     // per-element HUD move/size (profile x cockpit/other layouts); builds DISPLAY › HUD › MOVE & SIZE
-  "js/ui/hud-arrange.js",    // ARRANGE HUD: the on-screen drag / pinch editor for the same MOVE & SIZE layout (pause card)
   "js/ui/title-layout.js",   // --tl-* tokens at eval (index.html painted the first answer); builds APPEARANCE › TITLE LAYOUT
   "js/ui/pause-opts.js",     // <html data-pause-*> at eval (index.html painted the first answer); APPEARANCE › PAUSE MENU + the QUIT/RESTART confirm
   "js/ui/screen-looks.js",   // <html data-look-*> + --look-* at eval; the per-screen APPEARANCE folds and the see-through PEEK
@@ -438,9 +437,9 @@ const FULL = [
   "js/race/quali-model.js",
   // share-card-data / -layout / -card are LAZY_RESULTS_SHEET (#5821 paid for its re-land with them)
   "js/race/daily-challenge.js",
-  "js/ui/appearance-studio.js",
+  "js/ui/appearance-studio.js", // AppearanceStudio stub; body is LAZY_UI_PRESETS (#4978 row 5)
   "js/ui/home-world.js",
-  "js/ui/photo-studio.js",
+  "js/ui/photo-studio.js",      // PhotoStudio stub; body is LAZY_UI_PRESETS (#4978 row 5)
   "js/ui/experience.js",
   "js/ui/share-code.js", // ShareCode: APXS/APXL/APXD envelopes + #share= (player-a11y slice 4)
   "js/ui/title-menu.js",
@@ -486,7 +485,7 @@ const CSS = [
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
-  "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
+  "css/appearance-studio.css", "css/screen-arranger.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
   "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
@@ -509,7 +508,7 @@ const CSS_DEFERRED = [
   "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css", "css/a11y-loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
-  "css/appearance-studio.css", "css/watch-transport.css",
+  "css/appearance-studio.css", "css/screen-arranger.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
   "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css", "css/helmet-visor.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
@@ -735,6 +734,7 @@ const HARD_EDGES = [
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
+  ["js/perf/quality-preset.js", "js/ui/post-fx-opts.js"],   // iPhone AO default is read at eval
   ["js/core/store.js", "js/ui/post-fx-opts.js"],   // binds GameStore.store at eval
   ["js/core/i18n-pseudo.js", "js/core/i18n.js"],
   ["js/core/store.js", "js/core/i18n.js"],
@@ -918,7 +918,6 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/dock-layout.js", "js/game.js"], // game.js calls DockLayout.create(G) at eval time
-  ["js/ui/hud-arrange.js", "js/game.js"], // game.js calls HudArrange.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
@@ -1354,15 +1353,24 @@ const LAZY_CAREER_UI = [
 ];
 const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
 
-// LAYOUT PRESET row (G9, ~14 KB): SETTINGS › APPEARANCE's one-tap whole-UI
-// layout. js/ui/settings-tabs.js loads it on the first APPEARANCE enter; every
-// global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
-// is FULL and read at call time, so it has no edges and no boot stub.
+// LAYOUT PRESET row + APPEARANCE / PHOTO studio bodies (#4978 row 5). The FULL
+// stubs (appearance-studio.js, photo-studio.js) answer scene/homeCamera/background
+// and PhotoStudio.create at eval; the DOM studios land with this group on the
+// first APPEARANCE enter (SettingsNav.presets) or the stub's own ensureBody.
+// look-avail / layout-presets stay first so an APPEARANCE-only visit still gets
+// them without waiting on the studio painters.
 const LAZY_UI_PRESETS = [
-  "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
-  "js/ui/layout-presets.js", // LayoutPresets
+  "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+  "js/ui/hud-arrange.js",          // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it alone on the first pause-card tap
+  "js/ui/look-avail.js",           // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
+  "js/ui/layout-presets.js",       // LayoutPresets
+  "js/ui/appearance-studio-ui.js", // AppearanceStudioBody: presets / profiles / preview DOM (#4978 row 5)
+  "js/ui/photo-studio-ui.js",      // PhotoStudioBody: capture UI + photo library (#4978 row 5)
 ];
-const LAZY_UI_PRESETS_EDGES = [];
+const LAZY_UI_PRESETS_EDGES = [
+  ["js/ui/screen-regions.js", "js/ui/screen-placement.js"],
+  ["js/ui/appearance-studio-ui.js", "js/ui/photo-studio-ui.js"], // AppearanceStudioBody.refreshPhotos reads PhotoStudio.album
+];
 
 // SAVES & DATA body (#4748, ~50 KB): SettingsExportBody — collect / apply for the SETTINGS, GARAGE
 // and CAREER files, ttlb, and the SETTINGS › FILES / GARAGE FILE / CAREER FILE UI. The FULL
@@ -1486,8 +1494,10 @@ const LAZY_NET = [
   // and the phone page evaluate before the session (eval-time destructure).
   // controller.html's CONTROLLER subset below carries the same three.
   "js/input/phone-pad-codec.js",
+  "js/ui/touch-button-settings.js", // Phone wheel editor, also loaded directly by Controls.
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
+  "js/net/phone-pairing-ui.js", // Desktop pairing surface; controller.html only loads the wheel.
 ];
 
 // WORKER SCRIPTS: no <script> tag and never injected into the page — each is
@@ -1516,7 +1526,7 @@ const TRACK_WORKER_EXTRA = [
 
 // controller.html (the PHONE AS CONTROLLER page, a root page like bench.html)
 // <script> subset, in order: the signalling + transport half of js/net, the
-// shared roll math, and the pad module. No game, no renderer, no store.
+// shared roll math, the pad module, and persistent screen arrangement.
 const CONTROLLER = [
   "js/core/log.js",
   "js/core/dev-flags.js",
@@ -1531,9 +1541,15 @@ const CONTROLLER = [
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/ui/touch-button-settings.js",
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
+  "js/career/save-migrate.js",
+  "js/core/store.js",
+  "js/ui/screen-regions.js",
+  "js/ui/screen-placement.js",
+  "js/ui/screen-arranger.js",
 ];
 // Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
 // the data hub these are a real graph (rendezvous needs nostr, handshake needs

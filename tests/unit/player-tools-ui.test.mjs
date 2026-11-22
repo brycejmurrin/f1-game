@@ -54,7 +54,8 @@ test("setting search recognizes player terms and never changes target values", (
   assert.equal(api.reveal(control), true); assert.equal(fold.open, true); assert.equal(h.dom.document.activeElement, control); assert.equal(control.value, "auto");
 });
 test("setting search exposes the lazily-built appearance and screen layout controls", () => {
-  const source = read("js/ui/appearance-studio.js");
+  // #4978: SettingsSearch.register + as-* control ids live in the LAZY_UI_PRESETS body.
+  const source = read("js/ui/appearance-studio-ui.js");
   assert.match(source, /controls\.id\s*=\s*"as-" \+ key/);
   assert.match(source, /SettingsSearch\.register\("appearance-studio"/);
   const looks = read("js/ui/screen-looks.js");

@@ -41,7 +41,6 @@ const ALLOWLIST = {
   // Monaco night: R4 #3 dropped sunTemp/ssrWetMul/whites/toe; remaining
   // extremes are intentional city-chunk / car-paint pins.
   "monaco|night|wet": "after R4 #3 wet-pin trim: blacks/carEnvCube/carReflect/roadChunkLamps still intentional",
-  "monaco|night|dry": "Monaco harbour chunk-road lamps (roadChunkLamps) + lampFlicker/surfDetail",
   "nurburgring|dusk|dry": "dusk dry COPY-ALL bleed/bounce/godray extremes — not wet-pin scope",
   "anderstorp|dusk|dry": "dusk dry COPY-ALL bleed/bounce/godray extremes — not wet-pin scope",
 };
@@ -55,6 +54,8 @@ const STAMP_MAX_FRAC = 0.9;
 const STAMP_ALLOWLIST = {
   "*|dawn|dry": ["grMul=2.279@max", "bleedMul=2.425@max", "godrayAniso=0.943@max", "godrayBase=0@min",
     "lampFlicker=0.011@min", "roadRough=1.175@max", "ssrDryNight=0.014@min"],
+  // Night lighting intentionally disables bounce in rain.
+  "*|night|rain": ["bounceK=0@min"],
   "*|day|rain": ["lampLevel=0@min"],
   "*|day|overcast": ["lampLevel=0@min"],
   "*|day|fog": ["lampLevel=0@min"],

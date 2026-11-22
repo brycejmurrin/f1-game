@@ -220,6 +220,59 @@ test("TLX soft blit pools the unstride buffer and writes ImageData in one pass",
     "capturePixels must clone off the pool so a held shot stays stable");
 });
 
+test("TLX soft present drops the first completed read after invalidate (#6041 clear-colour frame)", async () => {
+  // Tip repro (1c0bdc1a, software WebGPU showroom): blit 1 max luma ~13 uniform
+  // clear; blit 2 max 255 lit. Dropping the first completed read makes the
+  // first presented frame the lit one. invalidateSoftPresent arms _softDrop=1.
+  const src = read("js/render/three/tlx.js");
+  assert.match(src, /let _softDrop = 0/);
+  assert.match(src, /if \(_softDrop > 0\) _softDrop--;/);
+  assert.match(src, /invalidateSoftPresent\(\) \{ _cancelSoftBlits\(\); if \(_softBlit\) _softDrop = Math\.max\(_softDrop, 1\); \}/);
+  const scheduler = src.slice(src.indexOf("function _softBlitNotify()"), src.indexOf("// present()'s failure ladder"));
+  const pending = [];
+  let putCount = 0;
+  const sandbox = {
+    Date,
+    performance: { now: () => Date.now() },
+    renderer: { readRenderTargetPixelsAsync: (rt) => new Promise((resolve) => pending.push({ rt, resolve })) },
+    _displayCanvas: { width: 4, height: 1 },
+    _displayCtx: {
+      createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+      putImageData() { putCount++; },
+    },
+    _unstrideIntoSoft: () => 64,
+  };
+  vm.runInNewContext(`
+    let _softBlit = true, _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
+    let _softSubmittedGen = 0, _softShownGen = 0, _softBlitGen = 0, _softImg = null;
+    let _softDrop = 0, _softDarkRun = 0;
+    let W = 4, H = 1;
+    const _softPresentWaiters = [];
+    ${scheduler}
+    function invalidateSoftPresent() { _cancelSoftBlits(); if (_softBlit) _softDrop = Math.max(_softDrop, 1); }
+    globalThis.queue = _queueSoftBlit;
+    globalThis.invalidate = invalidateSoftPresent;
+    globalThis.dropLeft = () => _softDrop;
+    globalThis.state = () => ({ submitted: _softSubmittedGen, shown: _softShownGen, drop: _softDrop, gen: _softBlitGen });
+  `, sandbox, { filename: absSrc("tests/unit/renderer-soft-lifecycle.test.mjs") });
+  const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+  sandbox.invalidate();
+  assert.equal(sandbox.dropLeft(), 1);
+  sandbox.queue({ name: "clear-frame", width: 4, height: 1 });
+  assert.equal(pending.length, 1, "clear frame is still read (drop happens on completion)");
+  pending[0].resolve(new Uint8Array(16)); await flush();
+  assert.equal(putCount, 0, "first completed read must not present");
+  assert.equal(sandbox.state().shown, 0);
+  assert.equal(sandbox.state().gen, 0);
+  assert.equal(sandbox.dropLeft(), 0);
+  sandbox.queue({ name: "lit-frame", width: 4, height: 1 });
+  assert.equal(pending.length, 2);
+  pending[1].resolve(new Uint8Array(16)); await flush();
+  assert.equal(putCount, 1, "second completed read presents the lit frame");
+  assert.equal(sandbox.state().shown, 2);
+  assert.equal(sandbox.state().gen, 1);
+});
+
 test("TLX soft present serializes reads, coalesces newest, and rejects stale sizes", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0/);
@@ -255,6 +308,7 @@ test("TLX displayed source generation rejects old async completion and follows n
   vm.runInNewContext(`
     let _softBlit = true, _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
     let _softSubmittedGen = 0, _softShownGen = 0, _softBlitGen = 0, _softImg = null;
+    let _softDrop = 0, _softDarkRun = 0;
     let W = 4, H = 1;
     const _softPresentWaiters = [];
     ${scheduler}
@@ -368,7 +422,8 @@ test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
     assert.match(src, /keep\.push\(ws\[i\]\)/);
   }
   const tlx = read("js/render/three/tlx.js");
-  assert.match(tlx, /invalidateSoftPresent\(\) \{ _cancelSoftBlits\(\); \}/);
+  // #6041: invalidate also arms drop=1 so the clear-colour read is discarded.
+  assert.match(tlx, /invalidateSoftPresent\(\) \{ _cancelSoftBlits\(\); if \(_softBlit\) _softDrop = Math\.max\(_softDrop, 1\); \}/);
   const soft = read("js/render/glx/soft.js");
   const softAwait = soft.slice(soft.indexOf("function awaitSoftPresent"), soft.indexOf("function blitIfDue"));
   assert.match(softAwait, /no display ctx/);

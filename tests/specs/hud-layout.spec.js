@@ -13,15 +13,21 @@
 // Safe-area insets are injected rather than emulated: headless Chromium reports
 // env(safe-area-inset-*) as 0, so a notched phone is otherwise untestable, and
 // the notch is exactly where a 59px inset eats the width these rules assume.
+import { LANDSCAPE } from "../helpers/iphone15.mjs";
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { awaitApexBoot } from "../helpers/await-track-build.js";
 import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
 
+function notchedView(name, { width, height, insets }) {
+  return { name, w: width, h: height, sal: insets.left, sar: insets.right, sat: insets.top, sab: insets.bottom };
+}
+const notchedLandscape = notchedView("notched-landscape", BRYCE_WINDOWS.standalone);
 const VIEWS = [
-  // iPhone 15 Pro landscape: 59px of notch either side, 21px home indicator.
-  { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 },
-  { name: "notched-portrait", w: 393, h: 852, sal: 0, sar: 0, sat: 59, sab: 34 },
+  // iPhone 15 landscape: 59px of notch either side, 21px home indicator.
+  notchedLandscape,
+  notchedView("notched-portrait", BRYCE_WINDOWS.portrait),
   // iPhone SE: the smallest screen still in service, and the tightest fit.
   { name: "small-landscape", w: 667, h: 375, sal: 0, sar: 0, sat: 0, sab: 0 },
   { name: "small-portrait", w: 375, h: 667, sal: 0, sar: 0, sat: 0, sab: 0 },
@@ -89,6 +95,8 @@ const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors",
 // "POS cell ink follows its plate" test below switches HC on live to cover it.
 const PIN_PREVIOUS_LOOK = () => {
   try {
+    if (!localStorage.getItem("apex26.hudLayout")) localStorage.setItem("apex26.hudLayout", '{"v":4}');
+    if (!localStorage.getItem("apex26.hudElements")) localStorage.setItem("apex26.hudElements", '{}');
     localStorage.setItem("apex26.textSize", '"normal"');
     localStorage.setItem("apex26.uiContrast", '"off"');
     localStorage.setItem("apex26.homeScene", '"garage"');
@@ -599,9 +607,9 @@ for (const c of [
 ]) {
   test.describe(c.name, () => {
     test.setTimeout(300_000);
-    test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+    test.use({ viewport: LANDSCAPE, hasTouch: true });
     test("no HUD element sits on another, and none leaves the safe area", async ({ page }) => {
-      const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+      const v = notchedLandscape;
       await race(page, "buttons", false, v, { profile: c.profile, cam: c.cam });
       const r = await measure(page, CTRL, [...HUD, ...HUD_LANDSCAPE_ONLY], v.w, v.h, v);
       const dump2 = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash, unsafe: r.unsafe, diagnostics: r.diagnostics });
@@ -633,9 +641,9 @@ for (const c of [
 // Before the fix it was 0.4 against ~1.
 test.describe("minimal profile", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("hiding the sector box does not shrink every other cluster", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { profile: "minimal" });
     const zoomNow = () => page.evaluate(() => {
       const r = document.documentElement;
@@ -679,7 +687,7 @@ test.describe("minimal profile", () => {
   // therefore the profile's doing. (Its two neighbours above pass a cam for the
   // same reason — this one was simply missed.)
   test("drops the analysis widgets and keeps what you drive by", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { profile: "minimal", cam: "chase" });
     const r = await page.evaluate(() => {
       const w = (sel) => {
@@ -702,7 +710,7 @@ test.describe("minimal profile", () => {
 
 test.describe("HUD editing drafts and explicit recovery", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
 
   const bootDefaults = async page => {
     await page.goto("/");
@@ -712,7 +720,10 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       coarse: matchMedia("(pointer: coarse)").matches,
       desktop: document.body.classList.contains("desktop"),
       layout: localStorage.getItem("apex26.hudLayout"),
-    }))).toEqual({ coarse: true, desktop: false, layout: null });
+      tower: HudLayout.get("tower", "helmet", "standard").s,
+      speed: HudElements.isOn("speed"),
+      relative: HudElements.isOn("rel"),
+    }))).toEqual({ coarse: true, desktop: false, layout: null, tower: 70, speed: false, relative: true });
   };
   const openDisplay = async page => {
     await page.locator("#pm-settings").tap();
@@ -767,7 +778,7 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       return input;
     };
     for (const [index, cell] of [
-      { width: 852, height: 393, scale: 109, x: "125.5", y: "-90.25" },
+      { ...LANDSCAPE, scale: 109, x: "125.5", y: "-90.25" },
       { width: 667, height: 320, scale: 150, x: "-175.25", y: "125.5" },
     ].entries()) {
       await page.setViewportSize({ width: cell.width, height: cell.height });
@@ -790,10 +801,11 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       await visibleInput(page.locator("#pm-hl-s"));
       expect(await page.evaluate(() => HudLayout.get("sectors").y)).toBe(Number(cell.y));
       const beforeInvalid = await saved();
+      const previousSize = await page.locator("#pm-hl-s").inputValue();
       const size = await typeDraft("#pm-hl-s", "0");
       await size.press("Tab");
       expect(await saved(), "zero size does not change the committed layout").toBe(beforeInvalid);
-      await expect(size).toHaveValue("100");
+      await expect(size).toHaveValue(previousSize);
     }
     const size = await typeDraft("#pm-hl-s", "30.5");
     await size.press("Tab");
@@ -821,11 +833,12 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       bounds: HudLayout.screenBounds(),
     }));
     expect(before.rect.x > before.bounds.right || before.rect.y + before.rect.height < before.bounds.top).toBe(true);
+    await page.locator("#hud-arrange-move").click();
     await page.locator("#hud-arrange-recover").tap();
     const recovered = await page.evaluate(() => ({
       value: HudLayout.get("sectors"), all: HudLayout.all()[HudLayout.shown()],
       rect: document.getElementById("hud-sectors").getBoundingClientRect().toJSON(),
-      bounds: HudLayout.screenBounds(), saved: localStorage.getItem("apex26.hudLayout"),
+      bounds: HudLayout.screenBounds(),
     }));
     expect(recovered.value.s).toBe(before.value.s);
     expect(Math.abs(recovered.rect.width - before.rect.width)).toBeLessThanOrEqual(.5);
@@ -838,13 +851,14 @@ test.describe("HUD editing drafts and explicit recovery", () => {
       if (id !== "sectors") expect(recovered.all[id], id + " was not selected for recovery").toEqual(value);
     }
     await page.locator("#hud-arrange-done").tap();
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await closeDisplayAndResume(page);
     await page.evaluate(async () => {
       GameHud.invalidateFit(); __apex.jump(.1, 30, 0);
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     expect(await page.evaluate(() => HudLayout.get("sectors"))).toEqual(recovered.value);
-    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(recovered.saved);
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
     const resumed = await page.locator("#hud-sectors").boundingBox();
     for (const key of ["x", "y", "width", "height"]) {
       expect(Math.abs(resumed[key] - recovered.rect[key]), key + " survives Resume").toBeLessThanOrEqual(.5);
@@ -864,9 +878,9 @@ test.describe("HUD editing drafts and explicit recovery", () => {
 // directions — and MAP/GAPS, which have their own controls, must survive it.
 test.describe("metrics layout", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("COMPACT drops both metric halves and leaves MAP and GAPS alone", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { layout: "compact" });
     const r = await page.evaluate(() => {
       // Solo fixture: both gap lines are "". Empty-collapse (css/hud.css) hides
@@ -907,9 +921,9 @@ test.describe("metrics layout", () => {
 // with BOOST/OT and overlapped the pedal discs (steer-touch fix, 2026-10-07).
 test.describe("buttons steer high HUD scale", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("sector plate clears BOOST and OT (notched landscape, ~140%)", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v, { hudScale: 140, btnScale: 140 });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
@@ -1017,7 +1031,7 @@ for (const [i, v] of HUD_INDEPENDENCE_VIEWPORTS.entries()) for (const btn of [[1
 // own width and hold one size across ticks; manual overlap is now permitted.
 test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("keeps its width and does not resize across ticks", async ({ page }) => {
     // The SHIPPED look (no PIN_PREVIOUS_LOOK): its text size is what makes the filled plate wider than 48 px.
     await page.goto("/");
@@ -1032,8 +1046,11 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.go());
-    await page.waitForFunction(() => document.getElementById("hud-sectors").getBoundingClientRect().height > 65,
-      null, { polling: 100, timeout: BOOT_MS }); // first race HUD tick builds the rows: frame-bound on SwiftShader, like the boot waits above
+    // The race HUD is up and has painted the plate: frame-bound on SwiftShader, like the boot waits above. Not a
+    // height: the phone seed (PHONE_STANDARD, js/ui/hud-layout.js) sizes this plate at 70 %, 61 px tall (#5976).
+    await page.waitForFunction(() => window.__apex.info().state === "race" && !document.getElementById("hud").hidden
+      && document.getElementById("hud-sectors").getBoundingClientRect().height > 0,
+      null, { polling: 100, timeout: BOOT_MS });
     // Hold timing content steady while normal HUD ticks continue fitting.
     await page.evaluate(() => { __apex.freeze(true); __apex.headless(true); });
     // DRAGGED THERE, not dropped: the old pass was bistable; a finger drag crosses both positions.
@@ -1085,6 +1102,7 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.locator("#hud-arrange-element").selectOption("sectors");
+    await page.locator("#hud-arrange-move").click();
     for (let i = 0; i < 4; i++) await page.locator("#hud-arrange-smaller").click();
     await page.locator("#hud-arrange-move").focus();
     const target = await page.evaluate(() => {
@@ -1094,8 +1112,8 @@ test.describe("moved sector plate above the pedals (iPhone 15, BUTTON SIZE 237)"
     });
     await page.mouse.move(target.x, target.y); await page.mouse.down();
     await page.mouse.move(target.x + target.dx, target.y + target.dy, { steps: 4 }); await page.mouse.up();
-    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await page.locator("#hud-arrange-done").click();
+    const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
     await page.locator("#pm-settings-close").click();
     await page.locator("#pm-settings-close").click();
     await page.locator("#pm-resume").click();
@@ -1531,9 +1549,9 @@ for (const v of [
 
 test.describe("track-limits chip", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("clears the touch dock when a warning shows", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v);
     const r = await page.evaluate(() => {
       const el = document.getElementById("hud-limits");
@@ -1654,9 +1672,9 @@ test.describe("desktop", () => {
 // only (not the PR fast tier) — say so in the PR body when this case lands.
 test.describe("fitHud zoom determinism", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test.use({ viewport: LANDSCAPE, hasTouch: true });
   test("two fits publish the same zTop and #minimap zoom matches it", async ({ page }) => {
-    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    const v = notchedLandscape;
     await race(page, "buttons", false, v);
     await page.evaluate(() => {
       if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(200);
@@ -1853,12 +1871,16 @@ test.describe("unrestricted manual widgets", () => {
     await page.locator("#pausebtn").click(); await page.locator("#pm-settings").click();
     await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
+    // ARRANGE HUD is lazy (#5976): its first tap loads js/ui/hud-arrange.js, then builds the picker.
+    await page.waitForFunction(() => typeof HudArrange !== "undefined" && document.querySelector("#hud-arrange-element option"),
+      null, { polling: 100, timeout: BOOT_MS });
     const ids = await page.locator("#hud-arrange-element option").evaluateAll(es => es.map(e => e.value));
     // 19 widgets; on touch the three the buttons carry (OVERTAKE / AERO / BRAKE BIAS) have no box and are not offered (#5256).
     const offered = await page.evaluate(() => ({ all: HudLayout.ELEMENTS.length,
       want: HudLayout.ELEMENTS.length - (document.body.classList.contains("desktop") ? 0 : HudArrange.TOUCH_CARRIED.length) }));
     expect(offered.all).toBe(19);
     expect(ids).toHaveLength(offered.want);
+    await page.locator("#hud-arrange-move").click();
     for (const id of ids) {
       await page.locator("#hud-arrange-element").selectOption(id);
       await page.locator("#hud-arrange-move").focus();
@@ -1870,11 +1892,15 @@ test.describe("unrestricted manual widgets", () => {
     const detached = await page.evaluate(() => {
       const el = document.getElementById("hud-energy"), parent = el.parentNode.id;
       HudLayout.resetEl("energy");
-      const restored = el.parentNode.classList.contains("hud-bottom");
+      // Reset restores the FACTORY placement. On a touch phone's STANDARD HUD that is the PHONE_STANDARD seed
+      // (js/ui/hud-layout.js, Bryce 2026-11-20): #hud owns it, flagged data-hl-seed + data-hl-bottom so the
+      // bottom band's caps still measure it. Anything without a seed goes back into .hud-bottom.
+      const seeded = el.hasAttribute("data-hl-seed");
+      const restored = seeded ? el.parentNode.id === "hud" && el.hasAttribute("data-hl-bottom") : el.parentNode.classList.contains("hud-bottom");
       HudLayout.set("energy", { x: 125.25, y: -110.5, s: 20 });
-      return { parent, restored, detachedAgain: el.parentNode.id };
+      return { parent, seeded, restored, detachedAgain: el.parentNode.id, seedAgain: el.hasAttribute("data-hl-seed") };
     });
-    expect(detached).toEqual({ parent: "hud", restored: true, detachedAgain: "hud" });
+    expect(detached).toEqual({ parent: "hud", seeded: true, restored: true, detachedAgain: "hud", seedAgain: false });
     const mapSizes = await page.evaluate(() => {
       const body = document.body, previous = body.getAttribute("data-density");
       const sizes = ["compact", "normal"].map(density => {
@@ -1913,11 +1939,13 @@ test.describe("unrestricted manual widgets", () => {
     const cameraParents = await page.evaluate(() => {
       const set = HudLayout.shown(), el = document.getElementById("hud-energy");
       HudLayout.setCam(set === "other" ? "helmet" : "chase");
-      const automatic = el.parentNode.classList.contains("hud-bottom");
+      // The other camera set has no stored entry: it paints its factory placement (the phone seed, as above).
+      const seeded = el.hasAttribute("data-hl-seed");
+      const automatic = seeded ? el.parentNode.id === "hud" && el.hasAttribute("data-hl-bottom") : el.parentNode.classList.contains("hud-bottom");
       HudLayout.setCam(set === "other" ? "chase" : set);
-      return { automatic, manualAgain: el.parentNode.id };
+      return { seeded, automatic, manualAgain: el.parentNode.id, seedAgain: el.hasAttribute("data-hl-seed") };
     });
-    expect(cameraParents).toEqual({ automatic: true, manualAgain: "hud" });
+    expect(cameraParents).toEqual({ seeded: true, automatic: true, manualAgain: "hud", seedAgain: false });
     await page.setViewportSize({ width: 390, height: 844 }); await check();
     await page.setViewportSize({ width: 844, height: 390 }); await check();
     await page.reload(); await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

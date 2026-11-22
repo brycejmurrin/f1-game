@@ -88,7 +88,7 @@ const PhonePad = (function () {
     // A clock on every pump: the rtc transport ignores it, loopback (the test
     // wire) schedules by it, and an undefined `now` there delivers nothing.
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
-    let lastSeq = -1, ackAt = -1e9, peerAck = false, helloPending = false;
+    let lastSeq = -1, ackAt = -1e9, peerAck = false, peerGrip = false, helloPending = false;
     let samples = 0, events = 0, stale = 0, junk = 0, huds = 0;
     let closed = false;
     let raf = 0;
@@ -145,7 +145,7 @@ const PhonePad = (function () {
       const ev = decodeEvent(data);
       if (!ev) { junk++; return; }
       if (ev.t === "hi" && ev.side === "pad" && ev.p === PROTO) {
-        peerAck = !!ev.ack;
+        peerAck = !!ev.ack; peerGrip = !!ev.grip;
         helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
         hapticsOn = !!ev.haptics;
         if (admitted) applyHaptics();
@@ -192,7 +192,7 @@ const PhonePad = (function () {
       hudAt = t;
       let h = null;
       try { h = opts.hud(); } catch (e) { h = null; }
-      const text = encodeHud(h);
+      const text = encodeHud(h, peerGrip);
       if (text && transport.send(T.STATE, text)) huds++;
     }
     // Samples land in the transport's inbox and reach Input only on pump(): once

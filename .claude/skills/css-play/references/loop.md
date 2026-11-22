@@ -16,7 +16,7 @@ Load from the SKILL.md index when opening a non-catalog screen, reading a
 ## 1. Host + open
 
 `tools/ui/css-play.mjs` uses `harness.mjs` (`Cache-Control: no-store`, loopback).
-Default and `--desktop` viewports: `node tools/ui/css-play.mjs --help`; Bryce's is `--viewport 844x390`.
+Default and `--desktop` viewports: `node tools/ui/css-play.mjs --help`; Bryce's is `--viewport 852x393`.
 
 Boot ritual (already in the CLI; paste into `browser_evaluate` only for a
 live MCP tab):

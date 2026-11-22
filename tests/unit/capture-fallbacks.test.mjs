@@ -101,7 +101,7 @@ test("loadPlayerModels / prefetchCaptureModels default to the circuit set (#6037
   assert.equal(player.scope, "player");
   assert.equal(player.n, 1);
   assert.deepEqual(player.ids, ["pine"]);
-  assert.match(lines[0], /PLAYER set for spa/);
+  assert.deepEqual(lines, ["models: this tool loaded the PLAYER set for spa (1 resident, ids: pine); pass --all-models to prefetch the whole pack"]);
   const viaDefault = await prefetchCaptureModels(page, { trackId: "spa", log: () => {} });
   assert.equal(viaDefault.scope, "player");
   assert.equal(viaDefault.n, 1);

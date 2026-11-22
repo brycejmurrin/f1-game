@@ -921,6 +921,8 @@ declare const TitleMenu: GameModuleFactory;
 declare const UiExperience: GameModuleFactory;
 declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
+/** LAZY_UI_PRESETS body; PhotoStudio stub creates it (#4978 row 5). */
+declare const PhotoStudioBody: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const Director: GameModuleFactory;
@@ -950,6 +952,7 @@ declare const DrivingCoachBody: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
 
 declare const PlatformSession: GameModuleFactory;
+declare const PhonePairingUI: GameModuleFactory;
 
 declare const DeepLink: GameModuleFactory;
 declare const TitleFlow: GameModuleFactory;

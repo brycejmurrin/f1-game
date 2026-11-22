@@ -11,6 +11,8 @@ import path from "node:path";
 import vm from "node:vm";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { analyzeOverlap, controlClash, probeHudElements, rectHit } from "../../tools/lib/hud-geometry.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import * as M from "../../tools/lib/hud-survey-matrix.mjs";
@@ -812,6 +814,24 @@ test("MCP: apex_hud_mock is a pinned browser wrap with bounded arrays, a job by 
   assert.equal(r.cells[0].overlaps[0].pair, "damage+inputs");
 });
 
+test("MCP SDK accepts the HUD mock dry-run plan in full and compact modes", async (t) => {
+  const client = new Client({ name: "hud-survey-test", version: "1.0.0" });
+  const { command, args } = JSON.parse(read(".mcp.json")).mcpServers["apex-tools"];
+  t.after(() => client.close());
+  await client.connect(new StdioClientTransport({ command, args, cwd: ROOT, env: { ...process.env, APEX_MCP_MOCK: "1" } }));
+  await client.listTools(); // Cache the published schemas used by callTool to validate results.
+  for (const outputLevel of ["full", "compact"]) {
+    const result = await client.callTool({ name: "apex_hud_mock", arguments: {
+      devices: ["phone-landscape-844x390"], dryRun: true, outputLevel,
+    } });
+    assert.ok(!result.isError);
+    const plan = result.structuredContent;
+    assert.equal(plan.dryRun, true);
+    assert.equal(plan.argv[plan.argv.indexOf("--devices") + 1], "phone-landscape-844x390");
+    assert.ok(!Object.hasOwn(plan, "out"));
+  }
+});
+
 // Expected-visible false positives salvaged from PR #1316 (closed) and the phone sweep (2026-10-10).
 test("expectedVisibility: a touch cockpit never expects the floating SPEED, nor chips a NAMED preset holds", () => {
   const css = read("css/track-detail.css");
@@ -967,7 +987,7 @@ test("hud-survey: DEFAULT_CELL.contrast is the game's shipped default (appearanc
   // A knobless cell carries no contrast part in its id; naming the non-default does.
   const parts = (c) => M.cellId(M.normalizeCell(c)).split("-");
   assert.deepEqual(parts({}).filter((p) => p === "contrast"), []);
-  assert.deepEqual(parts({ contrast: "off" }).slice(-2), ["contrast", "off"]);
+  assert.deepEqual(parts({ contrast: "high" }).slice(-2), ["contrast", "high"]);
 });
 
 test("hud-survey: classifyFindings flags text below WCAG 1.4.3 (4.5:1 small, 3:1 large)", () => {

@@ -587,9 +587,15 @@ harness and on the deployed site, and nothing under `vendor/three-0.187.0/addons
 
 ### The owner's phone, one preset (2026-11-10)
 
-- `node tools/ui/bryce-phone.mjs [--measure]` prints, or boots and reads back, the ONE emulation recipe for his iPhone
-  (`tools/lib/bryce-phone.mjs`: 852x393, DPR 3, real `env()` insets 59/0/59/21 through CDP, his settings export seeded;
-  `--window safari`, `--ui-scale P`, `--dpr 1` for HUD fit on this box). A tool or spec imports `openBrycePhone(browser)`.
+Print the standard iPhone 15 preset with `node tools/ui/bryce-phone.mjs`. Its default window is landscape and its default scale is DPR 3. The capture command seeds the owner's saved settings and reports the viewport and emulated safe-area insets. [Shared window record](../tests/data/phone-windows.json)
+
+```sh
+node tools/ui/bryce-phone.mjs --window portrait --measure --shot scratch/iphone15-portrait.png
+node tools/ui/bryce-phone.mjs --window standalone --measure --shot scratch/iphone15-landscape.png
+```
+
+The native PNG sizes are 1179 × 2556 and 2556 × 1179 respectively. Choose `--window safari` to reproduce the measured 852 × 368 CSS px landscape tab. For faster geometry-only probes, `--dpr 1` keeps the logical viewport and produces one output pixel per CSS pixel. Tools and specs can import `openBrycePhone(browser, { window: "portrait" })` or select `"standalone"` or `"safari"`. [Viewport matrix](COMPONENTS.md#the-viewports-and-what-each-one-is-for)
+
 - `node tools/ui/issue-shots.mjs <n> [--branch]` saves the screenshots attached to an issue and names the window each
   one shows from its aspect. A cloud worker's proxy refuses GitHub attachment URLs: use `--branch`, which reads
   `origin/phone-shots:<n>/`, filled by `.github/workflows/phone-shots.yml` whenever the owner attaches an image (#5246).

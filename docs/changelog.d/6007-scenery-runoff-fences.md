@@ -1,0 +1,1 @@
+Fixed: Catch fences on Spa, Shanghai, Hockenheim and the Nürburgring sat inside the run-off, so a car running wide drove through them; they now sit at 10.3 m behind the edge, with Spa's stands moved just behind those fences (#6007).

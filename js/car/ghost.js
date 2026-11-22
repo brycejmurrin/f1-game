@@ -96,11 +96,8 @@ const Ghost = (function () {
       if (!valid(store[id])) { delete store[id]; changed = true; }
     }
     json = JSON.stringify(store);
-    const oldest = Object.keys(store).sort((a, b) => {
-      const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
-      const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
-      return at - bt;
-    });
+    const used = (g) => Number.isFinite(g && g._used) ? g._used : 0;
+    const oldest = Object.keys(store).sort((a, b) => used(store[a]) - used(store[b]));
     // Deduct each evicted entry’s serialized size, then verify the final serialized store.
     let size = byteLength(json);
     while (oldest.length > 1 && size > MAX_STORE_BYTES) {
@@ -245,10 +242,12 @@ const Ghost = (function () {
   function record(t, s, x) {
     if (!rec) return;
     if (!Number.isFinite(t) || !Number.isFinite(s) || !Number.isFinite(x)) return;   // a NaN frame would become the stored best
+    // Period-advance (not lastSampleT=t): summed 1/60 steps undershoot 1/HZ in
+    // float and would otherwise skip to ~15 Hz (#5783 I4).
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
     if (rec.t.length >= MAX_SAMPLES || (rec.t.length && t - rec.t[0] > MAX_LAP_S)) { rec = null; return; }
     if (rec.s.length && s < rec.s[rec.s.length - 1]) return;
-    lastSampleT = t;
+    lastSampleT = rec.t.length ? lastSampleT + 1 / HZ : t;
     rec.t.push(round(t, 3));
     rec.s.push(round(s, 2));
     rec.x.push(round(x, 2));

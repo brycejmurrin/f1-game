@@ -29,7 +29,7 @@ function line(p0, v, x, t0, t1) {
 
 test("WATCH followed car and rivals rev with speed, not idle rpm", async () => {
   let fa = null;
-  const g = await createGame({ track: "baku", carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  const g = await createGame({ track: "baku", carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { fa = install(sb); } });
   try {
     const sb = g.sandbox;
     const G = g.G;
@@ -87,8 +87,8 @@ async function watchStraight(g, transportSpeed) {
 }
 
 test("WATCH transport speed scales the rpm, never the car's speed (camera readers see the trace's m/s)", async () => {
-  const g1 = await createGame({ track: "baku", carMeshes: false, onSandbox: (sb) => { install(sb); } });
-  const g4 = await createGame({ track: "baku", carMeshes: false, onSandbox: (sb) => { install(sb); } });
+  const g1 = await createGame({ track: "baku", carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { install(sb); } });
+  const g4 = await createGame({ track: "baku", carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { install(sb); } });
   try {
     const one = await watchStraight(g1, 1);
     const four = await watchStraight(g4, 4);
