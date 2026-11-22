@@ -183,11 +183,9 @@ const DataHub = (function () {
     }
     closeBtn.hidden = false;
     closeBtn.addEventListener("click", close);
-    header.appendChild(closeBtn);
     card.appendChild(header);
     // ONE BAR (design pass #2d): the tab strip and a ⋯ developer menu ride in the head
     // row, so at 844x390 the data panel holds 86 % of the card, not 56 % (#4241).
-    const inHead = function (node) { header.insertBefore(node, closeBtn); };
 
     // tabs
     const tabs = el("div", "dh-tabs");
@@ -209,9 +207,10 @@ const DataHub = (function () {
       tabButtons[t.id] = b;
       (t.developer ? developerTools : tabs).appendChild(b);
     });
-    inHead(tabs);
-    inHead(developerTools);
+    header.appendChild(tabs);
+    header.appendChild(developerTools);
     if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, header, "datahub", "Arrange");
+    header.appendChild(closeBtn);
 
     // content
     contentEl = el("div", "dh-content");

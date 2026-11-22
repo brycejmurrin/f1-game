@@ -104,13 +104,13 @@ const PhonePadPage = (function () {
     };
     // Sensor state — what padSession reads on every send.
     let roll = null, thr = 0, brk = 0, held = 0, steer = 0, steeringMode = "tilt";
-    let session = null;
+    let session = null, glanceTimer = null;
     // This page's peer id, sent in every hello: the game lets a re-dial from the
     // phone it ALLOWed straight back in, and asks again for any other.
     const peerId = opts.peerId || PhonePadCodec.makePeerId();
     let sensorOn = false;
     let lastHud = null;
-    const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held, steer: () => steeringMode === "touch" ? steer : null };
+    const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held | (glanceTimer !== null ? HELD.lookBack : 0), steer: () => steeringMode === "touch" ? steer : null };
 
     // The rim turns with the phone: the wheel the player sees is the wheel
     // they are holding. Geared down and clamped — the controls on top stay
@@ -172,6 +172,8 @@ const PhonePadPage = (function () {
       const anchors = new Map();   // Freeze the response and landing point for each contact.
       const levels = new Map();    // each contact keeps its own pedal travel
       if (travel) PedalTravel.watchButtonProfile(travel, profile => {
+        if (profile.brightness) el.style?.setProperty?.("--touch-brightness", profile.brightness + "%");
+        else el.style?.removeProperty?.("--touch-brightness");
         el.classList.toggle("feedback-off", !profile.feedback);
         if (travel !== "gas" && profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
         else el.removeAttribute?.("data-touch-response");
@@ -191,8 +193,8 @@ const PhonePadPage = (function () {
         ids.add(e.pointerId);
         el.classList.add("on");
         if (!travel) { on(1); return; }
-        const profile = PedalTravel.buttonProfile(travel);
-        const cross = transfer && profile.slide === "ease";
+        const profile = PedalTravel.contactProfile(travel, undefined, transfer ? null : e, el);
+        const cross = transfer && !profile.sliderEdge && profile.slide === "ease";
         const peerId = travel === "gas" ? "brake" : "gas";
         // Standalone phones historically capture a pedal until lift, including a
         // slide through the other pedal. Only an explicit destination crossover opts in.
@@ -200,8 +202,17 @@ const PhonePadPage = (function () {
         const contact = { x: e.clientX, y: e.clientY, profile, cross, transfer, bounds };
         anchors.set(e.pointerId, contact);
         pedalOwners.set(e.pointerId, target);
-        levels.set(e.pointerId, cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0));
+        const initial = profile.sliderEdge ? PedalTravel.sliderLevel(profile, e) :
+          cross ? PedalTravel.arrive(0) : transfer ? 1 : PedalTravel.level(profile, 0);
+        levels.set(e.pointerId, initial);
         paintLevel();
+        if (!transfer && !profile.sliderEdge && profile.buildMs) {
+          const pointer = e.pointerId;
+          PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
+            levels.set(pointer, value);
+            paintLevel(false);
+          });
+        }
       };
       const down = (e) => {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -222,11 +233,15 @@ const PhonePadPage = (function () {
         }
         const dy = c.y - e.clientY, dist = Math.hypot(e.clientX - c.x || 0, dy || 0);
         let value;
-        if (c.cross) {
+        if (c.profile.sliderEdge) value = PedalTravel.sliderLevel(c.profile, e);
+        else if (c.cross) {
           value = Math.max(levels.get(e.pointerId), PedalTravel.arrive(dist));
           if (value >= 1) { c.cross = false; c.y = e.clientY; }
         } else if (c.transfer) value = PedalTravel.ease(c.y, e.clientY, c.profile.travel);
-        else value = PedalTravel.level(c.profile, c.profile.press === "progressive" ? dist : dy);
+        else {
+          c.advance = PedalTravel.advance(c.profile, e.clientX - c.x || 0, -dy || 0, dy);
+          value = PedalTravel.level(c.profile, c.advance, c.holdFraction);
+        }
         levels.set(e.pointerId, value); paintLevel(false);
       }
       const move = (e) => { if (travel) pedalOwners.get(e.pointerId)?.slide(e); };
@@ -319,6 +334,10 @@ const PhonePadPage = (function () {
       });
       dom.steer.addEventListener("blur", () => release());
     }
+    for (const id of PedalTravel.phoneButtons) {
+      const target = id === "look" ? dom.lookBack : id === "calib" ? dom.center : dom.buttons?.[id] || dom[id];
+      for (const el of (Array.isArray(target) ? target : [target])) TouchButtonActions.bindControl(el, id);
+    }
     hold(dom.gas, (v, edge) => { thr = v; push(edge); }, () => { thr = 0; push(); }, "gas");
     hold(dom.brake, (v, edge) => { brk = v; push(edge); }, () => { brk = 0; push(); }, "brake");
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
@@ -398,6 +417,129 @@ const PhonePadPage = (function () {
     }
     edge(dom.center, "calib");
 
+    if (dom.shiftFlick) {
+      const strip = dom.shiftFlick;
+      let contact = null;
+      const available = () => dom.body?.dataset?.shifts === "flick" && !dom.body.classList.contains("gears-auto") &&
+        !dom.body.classList.contains("arranging") && !dom.body.classList.contains("menu");
+      const shift = key => { if (available() && session) { buzz(); session.event(key); } };
+      const clear = () => { contact = null; strip.classList.remove("on"); };
+      strip.addEventListener("pointerdown", e => {
+        if (contact || !available() || (e.pointerType === "mouse" && e.button !== 0)) return;
+        e.preventDefault();
+        contact = { id: e.pointerId, x: e.clientX, y: e.clientY, shifted: false };
+        strip.classList.add("on");
+        try { strip.setPointerCapture(e.pointerId); } catch (_) { /* document release still clears the strip */ }
+      });
+      const move = e => {
+        if (!contact || e.pointerId !== contact.id || contact.shifted) return;
+        const dy = e.clientY - contact.y;
+        if (!Number.isFinite(dy) || Math.abs(dy) < 24 || Math.abs(dy) < Math.abs(e.clientX - contact.x)) return;
+        contact.shifted = true;
+        shift(dy < 0 ? "shiftUp" : "shiftDown");
+      };
+      const end = e => {
+        if (!contact || e.pointerId !== contact.id) return;
+        if (e.type === "pointerup") move(e);
+        clear();
+      };
+      strip.addEventListener("pointermove", move);
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) strip.addEventListener(type, end);
+      pointerReleases.push(end); releases.push(clear);
+      // Both ends are native buttons: keyboard and assistive activation can
+      // choose a direction without dragging. A native pointer click follows
+      // the gesture and must never emit another shift.
+      for (const key of ["shiftUp", "shiftDown"]) dom.flickKeys?.[key]?.addEventListener("click", e => {
+        if (e.detail === 0) shift(key);
+      });
+    }
+
+    // The same actions can share a single slot. Dragging shows the available
+    // targets; only a lift over one commits. A tap opens their native buttons.
+    const utility = dom.utility;
+    let utilityPointer = null, downX = 0, downY = 0, dragged = false, aimed = null;
+    function aimUtility(key) {
+      if (key === aimed) return;
+      if (aimed) utility.choices[aimed].removeAttribute("data-aimed");
+      aimed = key;
+      if (key) utility.choices[key].setAttribute("data-aimed", "");
+    }
+    function hideUtilities() {
+      if (!utility) return;
+      utilityPointer = null; aimUtility(null);
+      utility.panel.hidden = true;
+      utility.trigger.setAttribute("aria-expanded", "false");
+    }
+    function closeUtilities() {
+      hideUtilities();
+      if (glanceTimer !== null) { timers.clearTimeout(glanceTimer); glanceTimer = null; push(); }
+    }
+    if (utility) {
+      const { trigger, panel, choices } = utility;
+      const options = Object.entries(choices);
+      let targets = [];
+      const open = () => {
+        panel.hidden = false; trigger.setAttribute("aria-expanded", "true");
+        const anchor = trigger.getBoundingClientRect(), box = panel.getBoundingClientRect();
+        panel.style.left = Math.max(0, Math.min(window.innerWidth - box.width, anchor.left + (anchor.width - box.width) / 2)) + "px";
+        panel.style.top = (anchor.top >= box.height + 4 ? anchor.top - box.height - 4 :
+          Math.min(window.innerHeight - box.height, anchor.bottom + 4)) + "px";
+        targets = options.map(([key, button]) => [key, button.getBoundingClientRect()]);
+      };
+      const activate = key => {
+        hideUtilities(); buzz();
+        if (key === "look") {
+          if (glanceTimer !== null) timers.clearTimeout(glanceTimer);
+          glanceTimer = timers.setTimeout(() => { glanceTimer = null; push(); }, 1000);
+          push();
+        } else session?.event(key);
+      };
+      const hit = e => targets.find(([, r]) =>
+        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom)?.[0];
+      trigger.addEventListener("pointerdown", e => {
+        if (e.button !== 0 || utilityPointer !== null) return;
+        e.preventDefault();
+        if (!panel.hidden) { hideUtilities(); return; }
+        utilityPointer = e.pointerId; downX = e.clientX; downY = e.clientY; dragged = false;
+        open();
+        try { trigger.setPointerCapture(e.pointerId); } catch (_) { /* document release still finishes this gesture */ }
+      });
+      trigger.addEventListener("pointermove", e => {
+        if (utilityPointer !== e.pointerId) return;
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) > 8) dragged = true;
+        aimUtility(hit(e));
+      });
+      const end = e => {
+        if (e.pointerId !== utilityPointer) return;
+        utilityPointer = null;
+        if (e.type !== "pointerup") { hideUtilities(); return; }
+        const key = hit(e);
+        if (key) activate(key);
+        else if (dragged || Math.hypot(e.clientX - downX, e.clientY - downY) > 8) hideUtilities();
+      };
+      for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) trigger.addEventListener(event, end);
+      pointerReleases.push(end);
+      releases.push(pointersOnly => {
+        if (!pointersOnly) closeUtilities();
+        else if (utilityPointer !== null) hideUtilities();
+      });
+      trigger.addEventListener("click", e => {
+        if (e.detail !== 0) return;
+        if (panel.hidden) { open(); choices.camera.focus(); } else hideUtilities();
+      });
+      window.addEventListener("resize", hideUtilities);
+      trigger.addEventListener("contextmenu", e => e.preventDefault());
+      for (const [key, button] of options) button.addEventListener("click", () => {
+        if (panel.hidden) return;
+        activate(key); trigger.focus();
+      });
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && !panel.hidden) { e.preventDefault(); hideUtilities(); trigger.focus(); }
+      });
+      document.addEventListener("pointerdown", e => {
+        if (utilityPointer === null && !panel.hidden && !trigger.contains(e.target) && !panel.contains(e.target)) hideUtilities();
+      }, true);
+    }
     // THE MENU STICK: one disc that is both the D-pad and a thumbstick. A tap
     // on an edge fires that arrow at once; a thumb dragged from anywhere on it
     // fires the direction it points and repeats while held, and turning the
@@ -677,6 +819,7 @@ const PhonePadPage = (function () {
           // FIRST dash, already in the right mode; until then the page stays "awaiting".
           onHud: (h) => {
             lastHud = h; paintHud(dom.hud, h);
+            if (utility && (!utility.panel.hidden || glanceTimer !== null) && (h.flags & DASH.paused || (h.state !== "race" && h.state !== "count"))) closeUtilities();
             if (gen !== bindGen || surfaced) return;
             surfaced = true;
             if (dom.body) { dom.body.classList.remove("awaiting"); dom.body.classList.add("linked"); }
@@ -802,14 +945,14 @@ const PhonePadPage = (function () {
       connect,
       cancel,
       scan,
-      setSteeringMode,
+      setSteeringMode, closeUtilities,
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).
       paintHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
       armSensor: requestSensor,   // the demo turns the rim with a real phone's tilt, unlinked
       setRoll: (r) => { roll = r; paintRoll(); if (session) session.sample(); },   // stands in for the sensor
       pump: () => (session ? session.pump() : 0),   // the frame tick, for a harness with no rAF
-      state: () => ({ linked: !!session, roll, thr, brk, held, steer, steeringMode, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),
+      state: () => ({ linked: !!session, roll, thr, brk, held: src.held(), steer, steeringMode, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),
     };
   }
 
@@ -824,18 +967,19 @@ const PhonePadPage = (function () {
   // same element (its listeners move with it).
   const LAYOUT_KEYS = Object.freeze(["overtake", "boost", "aero", "camera", "radio", "look", "recover", "pause"]);
   const LAYOUT_LABEL = Object.freeze({ overtake: "OT", boost: "BOOST", aero: "AERO", camera: "CAM", radio: "RADIO", look: "LOOK", recover: "RESET", pause: "PAUSE" });
+  const UTILITY_KEYS = ["camera", "look", "radio"];
   const LAYOUT_KEY = "apex26.padLayout";
   const zonesWith = (side, keys) => Object.fromEntries(LAYOUT_KEYS.map((k) => [k, keys.includes(k) ? side : "C"]));
   const TRIO = ["overtake", "boost", "aero"];
-  const preset = (zone, more) => Object.assign({ zone, swap: false, pedals: "stack", strip: "row", place: {} }, more);
+  const preset = (zone, more) => Object.assign({ zone, swap: false, pedals: "stack", strip: "row", shifts: "paddles", place: {} }, more);
   // ARRANGE (MOVE & SIZE, like the game's ARRANGE HUD): any control can be dragged
   // off its slot and sized. place[id] = { x, y } offset in % of the screen's
   // width / height, and s, the size in %. The grid stays the base, so a preset
   // or RESET puts every control back.
+  const BUTTON_SHAPES = ["square", "rounded", "capsule", "arch", "shield", "paddle-left", "paddle-right", "leaf"];
   const ARRANGE_MIN_PX = 44;   // the touch floor: no control sizes below it
   const clampN = (v, lo, hi, d) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
-  const PLACE_IDS = new Set([...LAYOUT_KEYS, "screen", "shiftUp", "shiftDown", "otBig", "boostBig", "brake", "gas", "steering"]);
-  const wheelShapes = { square: "0", rounded: "14px", pill: "999px" };
+  const PLACE_IDS = new Set([...LAYOUT_KEYS, "screen", "utility", "shiftFlick", "shiftUp", "shiftDown", "otBig", "boostBig", "brake", "gas", "steering"]);
   function normalisePlace(raw) {
     const out = {};
     if (!raw || typeof raw !== "object") return out;
@@ -847,7 +991,9 @@ const PhonePadPage = (function () {
       for (const axis of ["w", "h"]) {
         if (Number.isFinite(p[axis])) q[axis] = r1(clampN(p[axis], 1, 90, 1));
       }
-      if (typeof p.shape === "string" && Object.hasOwn(wheelShapes, p.shape)) q.shape = p.shape;
+      // Earlier wheel files used "pill" for the same capsule silhouette.
+      const shape = p.shape === "pill" ? "capsule" : p.shape;
+      if (BUTTON_SHAPES.includes(shape) && id !== "screen" && id !== "steering") q.shape = shape;
       if (q.x || q.y || q.s !== 100 || q.w || q.h || q.shape) out[id] = q;
     }
     return out;
@@ -856,13 +1002,15 @@ const PhonePadPage = (function () {
     classic: preset(zonesWith("C", [])),
     right: preset(zonesWith("R", TRIO)),   // OT/BOOST/AERO above the pedals
     left: preset(zonesWith("L", TRIO)),    // ... above the paddles
+    split: preset({ ...zonesWith("L", ["overtake", "aero"]), boost: "R" }, { pedals: "side" }),
+    views: preset({ ...zonesWith("L", ["look", "camera"]), radio: "R" }),
     mirror: preset(zonesWith("C", []), { swap: true }),
     phone: preset(zonesWith("R", TRIO), { pedals: "side", strip: "column" }),   // tall BRAKE | GAS, OT/BOOST/AERO in a column beside them
   });
   function normaliseLayout(raw) {
     const r = raw && typeof raw === "object" ? raw : {}, z = r.zone && typeof r.zone === "object" ? r.zone : {};
     return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true,
-      pedals: r.pedals === "side" ? "side" : "stack", strip: r.strip === "column" ? "column" : "row", place: normalisePlace(r.place) };
+      pedals: r.pedals === "side" ? "side" : "stack", strip: r.strip === "column" ? "column" : "row", shifts: r.shifts === "flick" ? "flick" : "paddles", place: normalisePlace(r.place), ...(r.utility === "wheel" ? { utility: "wheel" } : {}) };
   }
   function readWheelBackup(file) {
     const layout = file?.layout;
@@ -882,17 +1030,20 @@ const PhonePadPage = (function () {
     const n = normaliseLayout(lay), g = dom.grips || {};
     const box = { C: dom.home, L: n.swap ? g.R : g.L, R: n.swap ? g.L : g.R };
     for (const k of LAYOUT_KEYS) {
-      const el = dom.keys && dom.keys[k], to = box[n.zone[k]];
+      const el = dom.keys && dom.keys[k];
+      const to = n.utility && UTILITY_KEYS.includes(k) && dom.utilityStore ? dom.utilityStore : box[n.zone[k]];
       if (el && to && to.appendChild) to.appendChild(el);   // canonical order: appended in LAYOUT_KEYS order
     }
+    if (dom.utilityTrigger) dom.utilityTrigger.hidden = !n.utility;
+    dom.closeUtilities?.();
     const b = dom.body && dom.body.dataset;
-    if (b) { if (n.swap) b.swap = "1"; else delete b.swap; b.pedals = n.pedals; b.strip = n.strip; }
+    if (b) { if (n.swap) b.swap = "1"; else delete b.swap; b.pedals = n.pedals; b.strip = n.strip; b.shifts = n.shifts; }
     for (const [id, el] of Object.entries(dom.arrange || {})) placeEl(el, n.place[id]);   // gears AUTO keeps its big OT/BOOST tiles on the paddle grip wherever the small keys went
     return n;
   }
   function placeEl(el, p) {
     if (!el || !el.style) return;
-    el.style.translate = p ? p.x + "vw " + p.y + "vh" : "";
+    el.style.translate = p && (p.x || p.y) ? p.x + "vw " + p.y + "vh" : "";
     el.style.scale = p && p.s !== 100 ? String(p.s / 100) : "";
     // Equal bounds also resize controls that normally stretch in a flex or grid slot.
     const floor = ARRANGE_MIN_PX / ((p?.s || 100) / 100);
@@ -901,8 +1052,9 @@ const PhonePadPage = (function () {
       el.style["min" + axis] = size;
       el.style["max" + axis] = size;
     }
-    el.style.borderRadius = p?.shape ? wheelShapes[p.shape] : "";
-    if (el.classList) el.classList.toggle("placed", !!p);
+    if (p?.shape) el.setAttribute("data-wheel-shape", p.shape);
+    else el.removeAttribute?.("data-wheel-shape");
+    if (el.classList) el.classList.toggle("placed", !!p && !!(p.x || p.y || p.s !== 100));
   }
   /** The smallest size (%) that keeps an element's shorter side at the touch floor. */
   function minScale(w, h, s) {
@@ -934,6 +1086,8 @@ const PhonePadPage = (function () {
       const p = layoutPreset(cur);
       for (const el of dom.presets || []) el.setAttribute("aria-pressed", String(el.dataset.preset === p));
       for (const k of LAYOUT_KEYS) for (const z of ["L", "C", "R"]) if (picks[k]) picks[k][z].setAttribute("aria-pressed", String(cur.zone[k] === z));
+      if (dom.flickBtn) dom.flickBtn.setAttribute("aria-pressed", String(cur.shifts === "flick"));
+      dom.utilityBtn?.setAttribute("aria-pressed", String(!!cur.utility));
       if (dom.swapBtn) dom.swapBtn.setAttribute("aria-pressed", String(cur.swap));
       if (dom.pedalsBtn) dom.pedalsBtn.setAttribute("aria-pressed", String(cur.pedals === "side"));
       if (dom.stripBtn) dom.stripBtn.setAttribute("aria-pressed", String(cur.strip === "column"));
@@ -968,13 +1122,16 @@ const PhonePadPage = (function () {
       } catch { if (serial === importSerial) dom.fileStatus.textContent = "Choose an Apex 26 wheel layout file."; }
     });
     for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
+    dom.flickBtn?.addEventListener("click", () => set({ ...cur, shifts: cur.shifts === "flick" ? "paddles" : "flick" }));
+    dom.utilityBtn?.addEventListener("click", () => set({ ...cur, utility: cur.utility ? null : "wheel" }));
     if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
     if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
     if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
     function show(on) {
+      if (on) dom.closeUtilities?.();
       if (dom.sheet) dom.sheet.hidden = !on;
       if (on && dom.responses && typeof TouchButtonSettings !== "undefined") {
-        TouchButtonSettings.mount(dom.responses, ["gas", "brake"], { standalone: true });
+        TouchButtonSettings.mount(dom.responses, PedalTravel.phoneButtons, { standalone: true });
       }
       (on ? dom.done : dom.open)?.focus?.();
     }
@@ -1006,7 +1163,10 @@ const PhonePadPage = (function () {
       const p = placeOf(id);
       if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "% · Width " +
         (p.w ? p.w + "vw" : "auto") + " · Height " + (p.h ? p.h + "vh" : "auto") : "Select a control";
-      if (dom.shape) dom.shape.value = p.shape || "auto";
+      if (dom.shape) {
+        dom.shape.disabled = !id || id === "screen" || id === "steering";
+        dom.shape.value = p.shape || "default";
+      }
       markClashes();
     }
     function put(id, p, save) {
@@ -1126,6 +1286,9 @@ const PhonePadPage = (function () {
       coarse = !coarse; dom.step.textContent = coarse ? "Coarse" : "Fine"; dom.step.setAttribute("aria-pressed", String(coarse));
     });
     const edit = fn => { stopDrag(true); remember(); fn(); };
+    dom.shape?.addEventListener("change", () => {
+      if (picked && !dom.shape.disabled) edit(() => put(picked, { ...placeOf(picked), shape: dom.shape.value }, false));
+    });
     const dirs = {left:[-1,0], right:[1,0], up:[0,-1], down:[0,1]};
     for (const button of dom.nudges || []) button.addEventListener("click", () => {
       if (!picked) return;
@@ -1143,9 +1306,6 @@ const PhonePadPage = (function () {
         const size = p[axis] ?? (width ? rect.width / W() : rect.height / H()) * 10000 / p.s;
         put(picked, { ...p, [axis]: size + Number(button.dataset.step) * (coarse ? 5 : 1) }, false);
       });
-    });
-    dom.shape?.addEventListener("change", () => {
-      if (picked) edit(() => put(picked, { ...placeOf(picked), shape: dom.shape.value }, false));
     });
     dom.undo?.addEventListener("click", () => { stopDrag(true); if (history.length) restore(history.pop()); });
     dom.resetOne?.addEventListener("click", () => { if (picked) edit(() => put(picked, {x:0,y:0,s:100}, false)); });

@@ -443,6 +443,7 @@ const SPEC_LOAD_LINE = /addScriptTag|readFileSync|require\(|import\(|\burl\s*:|\
 export function standaloneSpecs(files, opts = {}) {
   const mods = files.filter((f) => /^(?:js|css)\/.+\.(?:js|css)$/.test(f));
   if (!mods.length) return [];
+  const matchers = mods.map((m) => ({ module: m, pattern: new RegExp(`["'\`](?:\\./|/)?${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`) }));
   const dir = opts.specsDir || path.join(ROOT, "tests/specs");
   let names = [];
   try { names = fs.readdirSync(dir).filter((n) => n.endsWith(".spec.js")); } catch (_) { return []; }
@@ -452,9 +453,9 @@ export function standaloneSpecs(files, opts = {}) {
     let text = "";
     try { text = read(n); } catch (_) { continue; }
     const lines = text.split("\n").filter((l) => SPEC_LOAD_LINE.test(l));
-    for (const m of mods) {
-      const hit = lines.some((l) => new RegExp(`["'\`](?:\\./|/)?${m.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`).test(l));
-      if (hit) out.push({ spec: `tests/specs/${n}`, module: m });
+    for (const { module, pattern } of matchers) {
+      const hit = lines.some((line) => pattern.test(line));
+      if (hit) out.push({ spec: `tests/specs/${n}`, module });
     }
   }
   return out;

@@ -95,6 +95,8 @@ const FieldLod = (function () {
     if (car) _farOf.set(car, far);
     return far;
   }
+  // Share the main camera's hysteretic body decision with its wheel draw.
+  function farWheels(car) { return on && car._lodTier === 2 && _farOf.get(car) === true; }
   function wheelsLite(dist2, fovY) { return on && dist2 * lensK2(fovY) > sq(T.WHEEL_EXTRAS_M); }
   function flapsM() { return on ? T.FLAPS_M * reach : T.LEGACY_FLAPS_M; }
   // lensK2 carries rk2 (the ULTRA reach), so flame / shadow scale by both.
@@ -135,6 +137,6 @@ const FieldLod = (function () {
       castsShadow: isPlayer || castsShadow(dist2),
     };
   }
-  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
+  return { T, init, setEnabled, get on() { return on; }, d2, lensK2, tier, farBody, farWheels, wheelsLite, flapsM, flame, castsShadow, mirrorCap, nearest, parts };
 })();
 Object.freeze(FieldLod);

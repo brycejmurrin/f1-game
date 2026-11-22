@@ -13,7 +13,7 @@ const els = {
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
   tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
-  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"), workBtn: $("hud-work"),
+  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"), workBtn: $("hud-work"), endSessionBtn: $("hud-end-session"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -1054,6 +1054,13 @@ function renderPosOf(c) {
     _rp.world = false;
   }
   return _rp;
+}
+// Opposite legs of Suzuka's crossover are kilometres apart along the lap.
+// Skip the distant field only when the rival is also far from the camera.
+function outsideFieldRange(c, dx, dz) {
+  if (!player || dbgCam || dx * dx + dz * dz <= 550 * 550) return false;
+  const ds = Math.abs(c.s - player.s);
+  return Math.min(ds, track.total - ds) > 550;
 }
 // Unified render anchor: the (s, x) the camera, the car body's
 // height/orientation, and banking should all sample — derived from the SAME
@@ -6745,14 +6752,12 @@ function clearRaceEntrySoften() {
   // Scale stays where PerfGov.chooseSoftwareRaceScale put it. A restore here
   // is a second canvas setSize (tens of seconds on SwiftShader).
   if (typeof PerfGov !== "undefined" && PerfGov.softwareGaragePreviewEnd) PerfGov.softwareGaragePreviewEnd(gfx);
-  try { if (gfx && gfx.envProbeOptOut) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
 }
 function installRaceEntrySoften() {
   if (typeof GfxEscalation === "undefined" || !GfxEscalation.registerRaceEntrySoften) return;
-  GfxEscalation.registerRaceEntrySoften((g) => {
+  GfxEscalation.registerRaceEntrySoften(() => {
     if (typeof RaceEntryProfile === "undefined" || !RaceEntryProfile.softwareRaster || !RaceEntryProfile.softwareRaster()) return;
     _raceEntryEnvProbeSession = true;
-    try { if (g) g.envProbeOptOut = true; } catch (_) { /* harness */ }
   });
 }
 // Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
@@ -7480,6 +7485,7 @@ function render(dt) {
   // boundary there is nothing to smooth — the two vantages are unrelated, and
   // easing between them turns a cut into a long swim through whatever lies
   // between. Set by the flyby sequencer at a shot boundary only.
+  const rainCameraCut = camSnapNext;
   if (camSnapNext) {
     for (let i = 0; i < 3; i++) { camEye[i] = eyeT[i]; camTgt[i] = tgtT[i]; }
     camFov = fovT; camFovBoost = fovBoostT;
@@ -7703,7 +7709,7 @@ function render(dt) {
     (gfx.getRenderScale && gfx.getRenderScale() < 0.98) ||
     (PerfGov.autoShed && PerfGov.autoShed() > 0)
   )) ? 7 : 3;
-  if (player && (state === "race" || state === "count") && !_envProbeOff && !_raceEntryEnvProbeSession && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  if (player && (state === "race" || state === "count") && !_envProbeOff && !_raceEntryEnvProbeSession && !PerfGov.softwareGaragePreviewActive && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & _envMask) === 0) && gfx.envFaceBegin && gfx.envProbeOptOut !== true && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x, _pey = smp2.p[1] + 0.9, _pez = smp2.p[2] + smp2.r[2] * player.x;
     const _es = frame.sunDir || _envUp, _ew = frame.wetness || 0, _elg = frame.lampSetGen || 0;   // the lamp SET and scale, not the flicker (hunt 2 F9)
@@ -7715,15 +7721,19 @@ function render(dt) {
         { _envHold = false; _envFace = -1; }
     }
     if (!_envHold) {
-      _envFace = (_envFace + 1) % 6;
+      const nextFace = (_envFace + 1) % 6;
       _envEye[0] = _pex; _envEye[1] = _pey; _envEye[2] = _pez;
-      const _envInv = gfx.envFaceBegin(_envFace, _envEye, frame);
+      const _envInv = gfx.envFaceBegin(nextFace, _envEye, frame);
       if (_envInv) {
         frameSky.invViewProj = _envInv;
         // THE `finally` IS LOAD-BEARING: envFaceBegin raises `_envActive`; envFaceEnd
         // is its ONLY lowering — a throw here froze the tab into a 64px cube (2026-09-22).
+        let accepted;
         try { drawWorldMeshes(frame, night, wet, _floodEmit, false, true); gfx.drawSky(frameSky); }
-        finally { gfx.envFaceEnd(_envFace); }
+        finally { accepted = gfx.envFaceEnd(nextFace); }
+        // A refused begin leaves this face pending. A rejected capture starts
+        // a fresh cycle, even when a previous cube is still available.
+        _envFace = accepted === false ? -1 : nextFace;
       }
       if (_envFace === 5) {
         _envHold = true; _envLatchTod = raceTimeOfDay;
@@ -7735,7 +7745,9 @@ function render(dt) {
     gfx.envProbeReset(); _envHold = false; _envFace = -1;   // tier 1 sheds PRODUCER; envReady latches
   }
   // Advance render-only wheel phases once, shared by mirror, PiP and main view.
-  carDraw.advanceWheelPhases(dt);
+  // Solo photo and tuner views redraw while physics holds the car in place.
+  const wheelDt = paused && !setupPreviewOn && !netPlay.active() && !replayBuf.isScrubbing() ? 0 : dt;
+  carDraw.advanceWheelPhases(wheelDt);
   // REAR-VIEW MIRROR: its own camera and target, BEFORE the main begin() like the probe above.
   mirrorPass.render(frame, frameSky, night, wet, _floodEmit);
   let _b;
@@ -7787,7 +7799,6 @@ function render(dt) {
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
   if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
-  // Driving fog culls by player arc; camera overrides use the view frustum below.
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -7797,9 +7808,13 @@ function render(dt) {
   // closer to the front and lower (js/camera/vantage.js VISOR_EYE_*); the player
   // body is skipped exactly as in cockpit.
   const visorEye = !dbgCam && (state === "race" || state === "count") && CAM_MODES[camMode].id === "visor";
-  // Camera forward (horizontal) for the behind-camera AI cull below.
+  // A steep or wide lens can see behind its horizontal heading. Bound the
+  // entire frustum (including roll and lens shift) by its widest corner ray.
   let _camFwdX = camTgt[0] - camEye[0], _camFwdZ = camTgt[2] - camEye[2];
-  { const l = Math.hypot(_camFwdX, _camFwdZ) || 1; _camFwdX /= l; _camFwdZ /= l; }
+  const _headingLength = Math.hypot(_camFwdX, _camFwdZ);
+  const _cornerSlope = Math.hypot((1 + Math.abs(_mProj[8])) / _mProj[0], (1 + Math.abs(_mProj[9])) / _mProj[5]);
+  const _useHorizontalCull = _headingLength > Math.abs(camTgt[1] - camEye[1]) * _cornerSlope;
+  if (_useHorizontalCull) { _camFwdX /= _headingLength; _camFwdZ /= _headingLength; }
   const _carCullPlanes = (gfx.makeFrustumPlanes && frame.viewProj)
     ? gfx.makeFrustumPlanes(frame.viewProj, _pbPlanes) : null;
   // Glossy automotive paint is identical for every car this frame (depends only
@@ -7808,8 +7823,10 @@ function render(dt) {
   const paint = carPaintMat(wet
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
-  if (!gfx.mobileTier) carFx.haze.pick(cars, player, onboard, track ? track.total : 0, dt);   // The mobile post pass omits exhaust haze.
-  shadowPass.beginFrame(); carDraw.beginDecals(); carDraw.primeRace(paint, night);   // Batch shadows and decals for the car loop; prime warm-built car meshes (#5387).
+  const haze = gfx.mobileTier ? null : carFx.haze;
+  if (haze) haze.pick(cars, player, onboard, track ? track.total : 0, dt);
+  shadowPass.beginFrame();   // per-frame: the haze anchor is re-marked in the loop below (the menu flyby breaks before any car: nothing stale warps), car shadows flush in one batch after the loop
+  carDraw.beginDecals(); carDraw.primeRace(paint, night);   // accumulate car decals, flush in one batch after the loop; primeRace: warm-built car meshes (#5387)
   // Particle emit ball: 110 m at full quality; shrinks with PerfGov.autoShed so
   // a struggling device stops spawning sub-pixel puffs that only starve the pool.
   // Squared once per frame — same divisor spray/rain already use for density.
@@ -7834,14 +7851,12 @@ function render(dt) {
     // Still nothing after quitToMenu: that leaves the loading screen inactive,
     // which is the same break as before.
     if (state === "menu" && !loadingScreen.active() && !(photoStudio && photoStudio.hasCar())) break;
-    if (!c.isPlayer && player && !dbgCam) {
-      const ds = Math.abs(c.s - player.s);
-      if (Math.min(ds, track.total - ds) > 550) continue;
-    }
-    // Reject world-space rivals before playerAnchor projects onto the road.
-    // Keep the same interpolated pose and 6 m grace as the later fallback cull.
     const rp = renderPosOf(c);
-    if (!c.isPlayer && rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;
+    if (!c.isPlayer && rp.world) {
+      const dx = rp.x - camEye[0], dz = rp.z - camEye[2];
+      if (_useHorizontalCull && dx * _camFwdX + dz * _camFwdZ < -6) continue;
+      if (outsideFieldRange(c, dx, dz)) continue;
+    }
     // Player: reuse frame-cached (s,x). Field: playerAnchor (world px).
     let cS, cX;
     if (c.isPlayer && _plOk) { cS = _plCS; cX = _plCX; }
@@ -7881,7 +7896,10 @@ function render(dt) {
       // rival casting onto the visible road); FieldLod moves it after the test.
       if (!c.isPlayer) {
         const dx = tmpP[0] - camEye[0], dz = tmpP[2] - camEye[2];
-        if (dx * _camFwdX + dz * _camFwdZ < -6) continue;   // 6 m grace behind the eye
+        if (!rp.world) {
+          if (_useHorizontalCull && dx * _camFwdX + dz * _camFwdZ < -6) continue;
+          if (outsideFieldRange(c, dx, dz)) continue;
+        }
         const dy = tmpP[1] - camEye[1];
         if (GameCams.eyeInsideCar(-(dx * smp2.t[0] + dz * smp2.t[2]), -(dx * smp2.r[0] + dz * smp2.r[2]), -dy, _nearM + 0.3)) continue;
       }
@@ -7957,7 +7975,7 @@ function render(dt) {
     if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     if (!FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
     carFx.marks(c, _groundMat, dt, state);   // AI lock-up marks persist: laid BEFORE the frustum cull (#4669)
-    if (!gfx.mobileTier) carFx.haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
+    if (haze) haze.mark(c, tmpMat);   // EXHAUST HEAT HAZE: the anchor's wake (the player, or from an onboard eye the car ahead on power — js/fx/car-fx.js)
     const _lodD2 = FieldLod.d2(tmpP, camEye, c.isPlayer), _lod = FieldLod.tier(_lodD2, fovY, c);   // rival LOD by projected size: camera distance x lens, with hysteresis (js/car/field-lod.js)
     // Side frustum: 8 m sphere, same planes as propBatches. Player never culled.
     if (!c.isPlayer && _carCullPlanes) {
@@ -8080,7 +8098,7 @@ function render(dt) {
       GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,
         GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"));
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
-      drawCockpitRig(c, _cockMat, dt, paint, visorEye);   // VISOR: no steering wheel
+      drawCockpitRig(c, _cockMat, wheelDt, paint, visorEye);   // VISOR: no steering wheel
       // THE STOP'S CREW still: cockpit/visor continue before the exterior path,
       // so without this the player's own stop drew no crew at all. Kit stands
       // on the grounded basis (not the camera-anchored viewmodel). The
@@ -8102,7 +8120,7 @@ function render(dt) {
       gfx.draw(body, tmpMat, sharedBody ? carDraw.coOpt(paint) : paint);
       if (_lod < 2) queueCarDecals(pt, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
       _wheelOpts.emissive = night ? 0.12 : 0;
-      drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
+      drawPlayerWheels(c, _groundMat, wheelDt, _wheelOpts);
       if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // crew + kit, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
@@ -8253,18 +8271,17 @@ function render(dt) {
   // with the RENDER dt and drawn into the HDR scene before present, so smoke
   // and spray tone-map with the world and the HDR spark tints feed bloom.
   // Render-path only — headless physics never touches the pool.
-  // Falling rain: the streak field around the camera, drawn inside the alpha
-  // particle batch (depth-tested, fogged by nothing, in the frame — never an
-  // overlay). Full storm streaks when raining, the sparse DRIZZLE tier when
-  // merely WET (rainSeed picked which). Open-cockpit cars have no windscreen,
-  // so onboard views get the same field as the chase cam — no water-on-glass
-  // beading and no wiper (there is nothing to wipe).
-  if (Particles.rainActive()) Particles.rainUpdate(dt, camEye, wxArc.viewRainfall());
+  // Only falling water is blocked by the tunnel. Wet tyres still throw spray
+  // and the droplets already on this lens continue to run off under cover.
+  const rainField = Particles.rainActive();
+  const rainfall = rainField ? wxArc.viewRainfall() : 0;
+  const underCover = (rainfall > 0 || frame.rain > 0) && wxArc.sheltered(camEye);
+  if (rainField) Particles.rainUpdate(dt, camEye, underCover ? 0 : rainfall, camId, rainCameraCut);
   startLights.update();   // the gantry's lit lamps: one-frame flares each count frame
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
-  Particles.draw();
-  Droplets.tick(paused ? 0 : dt, onboard && !photoMode, frame.rain || 0, Storm.is(raceWeather), player ? vStd(player.speed) : 0, motionReduced());   // lens/visor rain (js/fx/droplets.js)
+  Particles.draw(!_xrEyes && _carCullPlanes ? _carCullPlanes[4] : null);   // XR replays one packet for both eyes
+  Droplets.tick(paused ? 0 : dt, onboard && !photoMode, underCover ? 0 : frame.rain || 0, Storm.is(raceWeather), player ? vStd(player.speed) : 0, motionReduced(), camId);   // lens/visor rain (js/fx/droplets.js)
 
   // Per-time cinematic grade + bloom. DRAMATIC = high contrast, deep shadows,
   // bloom ONLY on genuinely bright sources (floodlights, sun disc, neon) against
@@ -8449,7 +8466,7 @@ function render(dt) {
     po.grLite = _ut >= 2 || _as >= 1;
   }
   // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
-  po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
+  po.haze = haze ? haze.at(_mVP) : null;
   po.visorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens() : null;
   po.visorFolded = false;
   armBackendProbe();
@@ -9072,7 +9089,7 @@ function openGarage(from) {
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
   $("cs-done").textContent = from === "select" ? "RACE SETUP" :
-    from === "pit" ? "RETURN TO RACE" : from === "career" ? "RETURN TO CAREER" :
+    from === "pit" ? (isTimeTrial() ? "RETURN TO TIME TRIAL" : "RETURN TO RACE") : from === "career" ? "RETURN TO CAREER" :
     from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
   // Fresh camera every visit: a garage that reopened on the last angle someone
   // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
@@ -9118,7 +9135,7 @@ function carSpecKey() {
   try { return JSON.stringify([getTeamParts(team.id), SetupTune.get(team.id)]); } catch (e) { return null; }
 }
 function openPitWork() {
-  if (!pits || !pits.canWork(player)) return;
+  if (state !== "race" || paused || netPlay.active() || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
   paused = true;
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();   // no pause card here, so RadioVoice's #pausemenu halt never fires (radio-voice.js halt)
@@ -9167,7 +9184,11 @@ function garageBack() {
   if (soundOn) GameAudio.uiTick();
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
-  if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
+  if (garageReturn === "tt-results") {
+    els.results.hidden = false;
+    setTimeout(() => { if (!setupPreviewOn) garagePre.release(); }, 0);
+  }
+  else if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
   else {
@@ -9179,6 +9200,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
+  if (garageReturn === "tt-results") { garageBack(); return; }
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
@@ -9303,10 +9325,23 @@ function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPendin
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; G.endRace(); return true; }   // G.endRace: RealRace's wrap
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
-// END TIME TRIAL (#5789): the box WORK ON CAR slot; the drive-in, then the TT sheet.
-function endTimeTrialFromBox() { if (!isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return; paused = true; GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
-  openGarage("pit"); setupCam.startPitIn(() => { leaveGarage(); G.endRace(); setTimeout(() => { if ($("carsetup").hidden && !setupPreviewOn) garagePre.release(); }, 0); }); }
-els.workBtn.onclick = () => (isTimeTrial() ? endTimeTrialFromBox() : openPitWork());
+// Finish the run after the pit drive-in and keep the garage open until the driver asks for the lap sheet.
+function endTimeTrialFromBox() {
+  if (state !== "race" || !isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return;
+  paused = true;
+  GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
+  openGarage("pit");
+  setupCam.startPitIn(() => {
+    setupCam.cancelArrival();
+    G.endRace();
+    els.results.hidden = true;
+    garageReturn = "tt-results";
+    $("cs-done").textContent = "VIEW RESULTS";
+    buildSetup();
+  });
+}
+els.workBtn.onclick = openPitWork;
+els.endSessionBtn.onclick = endTimeTrialFromBox;
 
 // ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class

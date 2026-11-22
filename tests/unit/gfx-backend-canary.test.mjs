@@ -2918,7 +2918,7 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
   assert.ok(testAt >= 0 && armAt > testAt, "the re-test must precede the arm");
   const endFn = fnBody(glx, "envFaceEnd");
   const clearAt = endFn.indexOf("_envActive = false");
-  const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
+  const bailAt = endFn.indexOf("if (!gl || !envTex) return false;");
   assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
     "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
 });

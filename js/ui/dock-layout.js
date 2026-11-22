@@ -9,6 +9,11 @@ const DockLayout = (function () {
   // on the painted control sizes, home positions, safe insets and handedness.
   const MAX = 1;
   const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero", "shift-up", "shift-down"];
+  const DRIVE_LAYOUTS = Object.freeze([
+    ["", "Layout: Auto"], ["pedal-row", "Pedals side by side"], ["gas-left", "Gas left of Brake"],
+    ["gas-above", "Gas above Brake"], ["tap-row", "Actions side by side"],
+    ["action-grid", "Compact action grid"], ["stack", "Two rows"],
+  ]);
   const ZERO = Object.freeze({ x: 0, y: 0 });
 
   function clamp01(n, lo, hi) {
@@ -26,7 +31,10 @@ const DockLayout = (function () {
 
   // Auto follows the shipped corner style and is stored as null.
   const SHAPE_KEY = "hudBtnShape";
-  const SHAPES = Object.freeze([["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"]]);
+  const SHAPES = Object.freeze([
+    ["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"],
+    ["arch", "ARCH"], ["shield", "SHIELD"], ["paddle-left", "LEFT PADDLE"], ["paddle-right", "RIGHT PADDLE"], ["leaf", "LEAF"],
+  ]);
   function shapeOf(v) { return SHAPES.some((s) => s[0] === v) ? v : "auto"; }
   function applyShape(v) {
     const s = shapeOf(v);
@@ -50,7 +58,7 @@ const DockLayout = (function () {
       out[s] = emptyScheme();
       if (!src || typeof src !== "object") continue;
       if (Number.isFinite(src.gap)) out[s].gap = clamp01(src.gap, 0, 80);
-      if (["pedal-row", "tap-row", "stack"].includes(src.layout)) out[s].layout = src.layout;
+      if (src.layout && DRIVE_LAYOUTS.some(([id]) => id === src.layout)) out[s].layout = src.layout;
       for (const id of CONTROL_IDS) {
         const values = src.controls?.[id];
         if (!values || typeof values !== "object") continue;
@@ -365,19 +373,10 @@ const DockLayout = (function () {
     };
 
     function viewportChanged() { if (toolbar?.dragging()) toolbar.cancelDrag(); else paint(); }
-    if (typeof document !== "undefined") {
-      document.addEventListener("pointerdown", e => toolbar?.onPointerDown(e), true);
-      document.addEventListener("pointermove", e => toolbar?.onPointerMove(e), true);
-      document.addEventListener("pointerup", e => toolbar?.onPointerUp(e), true);
-      document.addEventListener("pointercancel", e => toolbar?.cancelDrag(e), true);
-      document.addEventListener("lostpointercapture", e => toolbar?.cancelDrag(e), true);
-
-    }
     // apply() bakes the fractions into PIXELS of the pad at paint time, so a
     // rotation must repaint: a portrait offset kept its pixels in landscape and
     // pushed the dock off the top (the header promises relative placement).
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("blur", e => toolbar?.cancelDrag(e));
       window.addEventListener("resize", viewportChanged, { passive: true });
       window.addEventListener("orientationchange", viewportChanged, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
@@ -506,7 +505,7 @@ const DockLayout = (function () {
   }
 
   return Object.freeze({
-    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, arrangeDoor,
+    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, DRIVE_LAYOUTS, arrangeDoor,
     clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create, shapeOf, applyShape, sizeStep,
   });
 })();

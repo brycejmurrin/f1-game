@@ -1344,7 +1344,7 @@ body:not(.photo-mode):has(> #flyby:not([hidden]) > #flyby-inner[data-density="co
    menu's own buttons showing through the docked panel: fade the menu out the
    way css/components.css does under any open dialog. */
 body:has(> #garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
-#ga-head h2 { margin: 0 0 calc(var(--gap) * 0.5); }
+#ga-head { margin: 0 0 calc(var(--gap) * 0.5); }
 
 /* ---------- UI Fit r5: camera tuner compact tap floor (#camtune only) ----------
    Survey (artifacts/ui-fit-r5): on short landscape docks the shared rail-off /

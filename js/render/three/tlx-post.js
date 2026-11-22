@@ -524,7 +524,7 @@
     }
     if (!EX) agx = false;
     ownTexture(P.composite && P.composite.giOffTex);
-    let _hiLive = null, _hiAge = 0;
+    let _hiLive = null, _hiAge = 0, _hiLatched = false;
     // feature() reads storage; a 15-present cadence keeps it off the hot path (a shed or the cinema flag lands <0.25 s late).
     function hiLive() {
       if (!HI) return null;
@@ -565,6 +565,7 @@
     }
     function releaseAO() {
       if (!ssaoRT && !ssaoBlurRT) return;
+      if (P.gi && P.gi.gtaoH) { unbind(P.gi.gtaoH.tex, whiteTex); unbind(P.gi.gtaoV.tex, whiteTex); }
       if (P.blurAOH) unbind(P.blurAOH.tex, whiteTex);
       if (P.blurAOV) unbind(P.blurAOV.tex, whiteTex);
       if (P.blurAO) unbind(P.blurAO.tex, whiteTex);
@@ -627,7 +628,7 @@
       return true;
     }
     function ensureCine() {
-      if (!cineA) { cineA = makeRT(1, 1, THREE.UnsignedByteType); cineB = makeRT(1, 1, THREE.UnsignedByteType); layoutHalf(); }
+      if (!cineA) { cineA = makeRT(1, 1, ldrRT.texture.type); cineB = makeRT(1, 1, ldrRT.texture.type); layoutHalf(); }
       return true;
     }
     function ensureFocus() {
@@ -640,7 +641,7 @@
       layoutHalf();
     }
     // CINEMA (dof / motionBlur live): composite output -> motion blur -> depth of field, ping-ponging cineA / cineB.
-    // Returns the target FXAA reads (src itself when neither runs, which is every frame below EXTREME).
+    // Returns the target the AA resolve reads (src itself when neither runs, which is every frame below EXTREME).
     function cinemaPost(src, F, o) {
       const HV = _hiLive, G = P.gi;
       _last.dof = false; _last.mblur = false;
@@ -922,7 +923,7 @@
       const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, THREE.UnsignedByteType);
+          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, ldrRT.texture.type);
           aaRT.texture.name = "TLXPostAA";
         }
         const aaPW = fixed ? postSize(PW) : (orientCover ? PW : pW);
@@ -996,12 +997,13 @@
       }
       P.fxaa.U.bend.value.set(field ? field.x : 0, field ? field.y : 0);
     }
-    // Direct-to-canvas FXAA retains its input, not its finished pixels. Replay only
+    // Direct-to-canvas presentation retains the final pass input. Replay only
     // the final pass(es) on a screenshot request, then let three read the target asynchronously.
     let fxaaCaptureRT = null;
     function captureTarget() {
       if (viz) return _vizDest;
-      if (!_last.fxaa || _last.sgsr || _lastPresentRT !== ldrRT) return cap8(_lastPresentRT || ldrRT);
+      const direct = _lastPresentRT && _lastPresentRT === (_last.sgsr ? aaRT : ldrRT);
+      if (!direct || !(_last.fxaa || _last.taa)) return cap8(_lastPresentRT || ldrRT);
       const w = renderer.domElement.width, h = renderer.domElement.height;
       if (!fxaaCaptureRT) {
         fxaaCaptureRT = makeRT(w, h, THREE.UnsignedByteType);
@@ -1017,9 +1019,11 @@
         const blend = P.fxaa.U.lightBlend, previousBlend = blend && blend.value;
         if (blend) blend.value = 0;
         if (bend) bend.set(0, 0);   // captures contain the world without helmet optics
-        try { runPass(P.fxaa.mat, fxaaCaptureRT); }
-        finally { if (bend) bend.set(x, y); if (blend) blend.value = previousBlend; }
-        if (!P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
+        try {
+          if (_last.taa) AA.copyLast(fxaaCaptureRT);
+          else runPass(_last.sgsr ? P.sgsr.mat : P.fxaa.mat, fxaaCaptureRT);
+        } finally { if (bend) bend.set(x, y); if (blend) blend.value = previousBlend; }
+        if (_last.taa || _last.sgsr || !P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
       } finally {
         quad.material = mat;
         renderer.setMRT(mrt);
@@ -1085,7 +1089,8 @@
       // warm (compileJobs) still queues the standalone pair: AO without god-rays
       // (no sun shadow, GOD-RAY knob 0) keeps the program set it had.
       // Desktop tiers: 2 = GTAO + bilateral denoise, 1 = the 16-tap SSAO, both at full post size and never folded.
-      const HV = hiLive();
+      const HV = _hiLatched ? _hiLive : hiLive();
+      _hiLatched = false;
       const aoHi = !HV || viz ? 0 : HV.gtao && P.gi && P.gi.gtao ? 2 : HV.ssaoHi && P.ssaoHi ? 1 : 0;
       if (wantAO) setAoFull(aoHi > 0);
       const aoFold = _aoFold && wantAO && wantGR && viz !== "ssao" && !aoHi;
@@ -1446,7 +1451,10 @@
         _vizDest = dest;   // the blit must read what this pass wrote, not ldrRT
         _last.taa = false;
         if (AA) AA.skipped();
-        if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
+        if (phys) {
+          const output = dest || renderer.domElement;
+          vset(B, output.width, output.height);
+        }
         runPass(B.mat, dest);
       } else {
         vset(P.composite, pW, pH); vset(P.fxaa, pW, pH);
@@ -1461,7 +1469,7 @@
           // TRAA: history <- resolve(ldr, history), history -> dest, the mirror inset on top (never jittered: its
           // own camera, composited after the resolve). Its retained target may be the pre-AA LDR when drawing to the canvas.
           if (P.fxaa.mirTex) fxaaMirror(false);
-          AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm);
+          AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm, P.fxaa.tex.value);
           _last.taa = true;
           mirrorPass(dest);
           _lastPresentRT = dest || ldrRT;
@@ -1472,10 +1480,10 @@
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
           P.sgsr.U.viewport.value.set(1 / pW, 1 / pH, pW, pH);
-          if (fixed) {
+          if (phys) {
             const ps = presentSize();
             vset(P.sgsr, ps[0], ps[1]);   // the canvas / soft target: always present-sized
-            P.sgsr.U.plain.value = ctx.userSpatialUpscale && ctx.userSpatialUpscale() ? 0 : 1;
+            P.sgsr.U.plain.value = fixed && !(ctx.userSpatialUpscale && ctx.userSpatialUpscale()) ? 1 : 0;
           }
           runPass(P.sgsr.mat, dest);
           mirrorPass(dest);
@@ -1604,6 +1612,8 @@
     }
     // Before the scene pass (tlx.js present): decide, and tell an MSAA target whether to resolve depth.
     function depthBegin(opts, F) {
+      // Decide which desktop passes will read these attachments before the scene sets its store ops.
+      if (HI) { hiLive(); _hiLatched = true; }
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
       _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2
@@ -1743,7 +1753,7 @@
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
       ldrTarget: () => cap8(ldrRT),
       // Soft-present target, or the latest offscreen intermediate when rendering to the canvas.
-      // captureTarget reproduces direct-to-canvas FXAA on demand.
+      // captureTarget replays direct-to-canvas presentation on demand.
       captureTarget,
       presentedTarget: () => (viz ? _vizDest : cap8(_lastPresentRT || ldrRT)),
       // TRAA: this frame's NDC jitter for the main camera (tlx.js begin), or null while the TAA would not run.

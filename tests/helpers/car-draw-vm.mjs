@@ -89,6 +89,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
         if (o.seats) for (const n of o.seats.keys()) o.seats.set(n, { kind, team: o.teamId, num: n, seated: o.num });
         return { kind, team: o.teamId, num: o.num };
       },
+      buildFarWheel: () => ({ kind: "wheel", far: true }),
       buildWheelLayers: () => { rec.wheels++; return { rotating: { kind: "wheel" }, fixed: { kind: "wheelFixed" } }; },
       TYRE_BAND: [null, [1, 1, 0]], BRAKE_CALIPER: [null, [1, 0, 0]],
       aeroLevelOf: () => 2, aeroStyleOf: () => null, appearanceParts: (p) => p,
@@ -148,7 +149,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
     drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still, viewLivery) => {
-      const record = { team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still };
+      const record = { team: team.id, blend, m: m[12] + "," + m[14], y: m[13], only: only || null, still: !!still };
       if (viewLivery !== undefined) record.viewLivery = viewLivery;
       rec.flaps.push(record);
     },

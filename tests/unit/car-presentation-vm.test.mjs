@@ -27,6 +27,68 @@ import vm from "node:vm";
 import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("the far body and its wheels change detail together through distance and zoom", () => {
+  const v = carDrawVm();
+  v.field((_car, i) => i * 8);
+  const c = v.G.cars.find(car => !car.isPlayer);
+  const m = Float32Array.of(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
+  const lod = v.ctx.FieldLod;
+  function wheels(distance, degrees, bare = false, subject = c) {
+    const fov = degrees * Math.PI / 180;
+    m[14] = distance;
+    const tier = lod.tier(distance * distance, fov, subject);
+    if (tier >= 2) lod.farBody(distance * distance, fov, subject);
+    v.rec.draws.length = 0;
+    v.carDraw.drawPlayerWheels(subject, m, 0, { doubleSided: true }, false, 0, 1, bare);
+    const rims = v.rec.draws.filter(mesh => mesh.kind === "wheel");
+    assert.equal(rims.length, 4);
+    for (const rim of rims) if (!rim.far) assert.equal(!!rim._field, !subject.isPlayer, "player and field use their own fitted wheels");
+    return rims.filter(mesh => mesh.far).length;
+  }
+  assert.equal(wheels(80, 60), 0);
+  assert.equal(wheels(400, 60), 4);
+  assert.equal(wheels(245, 60), 4, "hysteresis holds on approach");
+  assert.equal(wheels(400, 60, true), 0, "mirror uses its own camera");
+  assert.equal(wheels(400, 60, false, v.G.player), 0);
+  assert.equal(wheels(400, 18), 0, "zoom restores detailed wheels");
+  assert.equal(wheels(400, 60), 4);
+  lod.setEnabled(false);
+  assert.equal(wheels(400, 60), 0);
+});
+
+test("partial far-wheel uploads draw fitted wheels until both axles are ready", () => {
+  const v = carDrawVm();
+  v.field((_car, i) => i * 8);
+  const c = v.G.cars.find(car => !car.isPlayer);
+  v.ctx.FieldLod.tier(400 ** 2, undefined, c);
+  v.ctx.FieldLod.farBody(400 ** 2, undefined, c);
+  v.ctx.Car3D.buildFarWheel = width => ({ kind: "wheel", far: true, width });
+  const farUploads = [], farFrees = [];
+  v.G.gfx.createMesh = mesh => {
+    if (mesh.far) {
+      farUploads.push(mesh);
+      if (farUploads.length === 2) throw new Error("lost rear upload");
+      if (farUploads.length === 3) return null;
+    }
+    return mesh;
+  };
+  v.G.gfx.freeMesh = mesh => { if (mesh.far) farFrees.push(mesh); };
+  const base = Float32Array.of(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,400,1);
+  function draw() {
+    v.rec.draws.length = 0;
+    v.carDraw.drawPlayerWheels(c, base, 0, { doubleSided: true });
+    assert.equal(v.rec.draws.length, 4);
+    return v.rec.draws.filter(mesh => mesh.far).length;
+  }
+  assert.equal(draw(), 0);
+  assert.equal(draw(), 0);
+  assert.equal(draw(), 4);
+  assert.equal(draw(), 4);
+  assert.deepEqual(farUploads.map(m => m.width), [0.32, 0.38, 0.38, 0.38]);
+  v.carDraw.invalidateFactoryMeshCaches();
+  assert.deepEqual(farFrees, [farUploads[0], farUploads[3]]);
+});
+
 test("factory invalidation frees both shared rival LODs and rebuilds the far body", async () => {
   const v = carDrawVm();
   let decimates = 0;

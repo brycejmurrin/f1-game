@@ -3559,6 +3559,12 @@ test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", (
 // The entry shares the body's cell (no fourth row) at its end. An absolute bottom anchored it to the visible box, so
 // a dialog that scrolls at UI SIZE 150 % put it over SHARE & FILES (CI run 44853962507, 852x344@150).
 test("the tucked designer seats the arrange entry in the body's cell instead of adding a grid row", async () => {
+  const b = bootScreen();
+  b.root.ownerDocument = b.dom.document;
+  vm.runInContext(read("js/ui/editor-workspace.js"), b.ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const button = b.root.querySelector(":scope > .screen-arrange-entry");
+  assert.equal(button?.getAttribute("data-arrange-screen"), "trackdesigner", "the live action occupies the designer's reserved cell");
   const { cssRules, decl } = await import("../helpers/css-rules.mjs");
   const rules = cssRules(read("css/screen-arranger.css"));
   const entry = '#trackdesigner[data-foot="in"] > .screen-arrange-entry';
@@ -3572,4 +3578,42 @@ test("the tucked designer seats the arrange entry in the body's cell instead of 
   assert.equal(decl(rules, entry, "justify-self"), "end");
   assert.equal(decl(rules, entry, "width"), "9rem");
   assert.equal(decl(cssRules(read("css/editor.css")), '#trackdesigner[data-foot="in"] .td-foot .td-msg', "padding-inline-end"), "calc(9rem + var(--gap) / 2)");
+});
+
+test("closing the designer cancels candidate and thumbnail work before the next visit", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const frames = [], timers = new Map();
+  let id = 0, drawn = 0, generated = 0;
+  const realRandom = b.ctx.TrackRandom, realCanvas = b.ctx.DesignerCanvas;
+  b.ctx.TrackRandom = { ...realRandom, designOne(...args) { generated++; return realRandom.designOne(...args); } };
+  b.ctx.DesignerCanvas = { ...realCanvas, thumb(...args) { drawn++; return realCanvas.thumb(...args); } };
+  b.ctx.requestAnimationFrame = fn => frames.push(fn);
+  b.ctx.setTimeout = fn => { timers.set(++id, fn); return id; };
+  b.ctx.clearTimeout = handle => timers.delete(handle);
+  const flushFrames = () => { while (frames.length) frames.shift()(); };
+  const flushTimer = () => { const [key, fn] = timers.entries().next().value; timers.delete(key); fn(); };
+  b.D.toggleStartFrom();
+  const pending = b.D.designed("FAST", 21);
+  b.D.close();
+  assert.equal(await pending, false);
+  b.D.open();
+  flushFrames();
+  assert.equal(drawn, 0);
+  assert.equal(generated, 0);
+  assert.equal(b.D.state().candidates.length, 0);
+  const fast = chipsIn(panes(b)[0], "FAST")[0];
+  assert.equal(fast.disabled, false);
+  assert.equal(fast.getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.toggleStartFrom(), true, "the card panel reopens");
+  flushFrames();
+  assert.ok(drawn > 40);
+  const fresh = b.D.designed("FAST", 22);
+  while (timers.size) flushTimer();
+  assert.equal(await fresh, true);
+  assert.equal(generated, 16);
+  assert.equal(b.D.state().candidates.length, 4);
+  b.D.close();
+  flushFrames();
+  assert.equal(b.D.state().candidates.length, 0);
 });

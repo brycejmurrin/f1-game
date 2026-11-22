@@ -30,7 +30,8 @@ if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, s
 const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
-  "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
+  "js/render/three/tsl-viewport.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js",
+  "js/render/three/tsl-aa.js", "js/render/three/tsl-gi.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
   "js/render/three/tlx-shadow.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
@@ -242,7 +243,7 @@ async function mirrorRig(t, ls = {}) {
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
   const mk = new Function("THREE", "localStorage", "hooks", "renderer", "scene", `"use strict";
     let mirRT = null, mirCam = null, _mirRect = null, _mirActive = false, _warmPending = null, _mirRenders = 0;
-    let _mirReleaseWait = null, _mirReady = false;
+    let _mirReleaseWait = null, _mirReady = false, _mirFreeze = false;
     const W = 1280, H = 720, presentW = 1280, presentH = 720;
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
     const post = { hdrOk: () => true, releaseMirror: () => { hooks.post++; } };
@@ -436,19 +437,25 @@ function withStore(ls, fn) {
   }
 }
 // The REAL post chain (tlx-post + tsl-post) on three r186 over the fake WebGL2, plus one lit mesh to draw.
-async function postRig(t, { ls = {}, samples = 0, ssrTag = false, softDest = () => null, wantSpatialUpscale = () => false } = {}) {
+async function postRig(t, { ls = {}, samples = 0, ssrTag = false, temporal = false, softDest = () => null,
+  wantSpatialUpscale = () => false } = {}) {
   const fg = makeFakeGL(320, 180);
   const inv = [];
   fg.gl.invalidateFramebuffer = (target, list) => { inv.push([target, list.slice()]); };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
+  if (temporal) {
+    renderer.backend.isWebGPUBackend = true;
+    const getExtension = fg.gl.getExtension.bind(fg.gl);
+    fg.gl.getExtension = (name) => name === "EXT_color_buffer_float" ? {} : getExtension(name);
+  }
   const shaders = globalThis.TLXShaders, makeGraph = shaders.post;
   let graph, post;
   try {
     shaders.post = (...args) => (graph = makeGraph(...args));
-    post = withStore(ls, () => shaders.postChain(THREE, TSL, { renderer, isMobile: true,
+    post = withStore(ls, () => shaders.postChain(THREE, TSL, { renderer, isMobile: !temporal, traa: temporal, hdrPeak: temporal ? 2 : 1,
       chunks: shaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest,
-      wantSpatialUpscale, getPresentSize: () => [320, 180], sceneSamples: samples }));
+      wantSpatialUpscale, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: samples }));
   } finally {
     shaders.post = makeGraph;
   }
@@ -544,12 +551,24 @@ for (const fold of [true, false]) test(`FXAA capture replays the final full-size
 
 test("disabling spatial upscale releases its input texture before disposing the AA target", async (t) => {
   let upscale = true;
-  const { post, graph } = await postRig(t, { wantSpatialUpscale: () => upscale });
+  const { post, graph, renderer } = await postRig(t, { wantSpatialUpscale: () => upscale });
+  post.resize(160, 90);
+  const mirror = new THREE.Texture();
+  t.after(() => mirror.dispose());
+  post.setMirror(mirror, [20, 10, 80, 48], false, true);
+  const draws = [];
+  renderer.render = (quad) => draws.push([quad.material, renderer.getRenderTarget()]);
   const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
   post.present(opts, NIGHT);
   const aa = post.presentedTarget();
   assert.equal(aa.texture.name, "TLXPostAA");
-  assert.equal(post.captureTarget(), aa, "SGSR keeps its existing capture path");
+  assert.deepEqual(graph.sgsr.V.size.value.toArray(), [320, 180], "the cover maps the full output");
+  assert.equal(graph.sgsr.U.plain.value, 0, "the selected upscaler sharpens on orientation-cover phones");
+  draws.length = 0;
+  const shot = post.captureTarget();
+  assert.deepEqual([shot.width, shot.height], [320, 180]);
+  assert.deepEqual(draws, [[graph.sgsr.mat, shot], [graph.mirror.mat, shot]]);
+  assert.equal(graph.mirror.tex.value, mirror);
   let sampledAA = false;
   const readsAA = () => graph.sgsr.tex.value === aa.texture;
   assert.equal(readsAA(), true);
@@ -564,6 +583,45 @@ test("disabling spatial upscale releases its input texture before disposing the 
   post.present(opts, NIGHT);
   assert.notEqual(post.presentedTarget(), aa);
   assert.equal(post.presentedTarget().texture.name, "TLXPostAA");
+});
+
+test("temporal AA resolves the cinema output and captures its last live history with the mirror", async (t) => {
+  const originalAA = globalThis.TLXAA, originalQuality = globalThis.GfxQuality;
+  let input, cinema = true;
+  globalThis.TLXAA = { ...originalAA, taa(three, tsl, ctx) {
+    return originalAA.taa(three, { ...tsl, texture(value) {
+      const node = tsl.texture(value);
+      if (value === ctx.ldrTex) input = node;
+      return node;
+    } }, ctx);
+  } };
+  globalThis.GfxQuality = { detail: () => 2, FEATURES: { dof: 3, motionBlur: 3 },
+    feature: (name) => cinema && (name === "dof" || name === "motionBlur") };
+  t.after(() => { globalThis.TLXAA = originalAA; globalThis.GfxQuality = originalQuality; });
+  const { post, graph, renderer } = await postRig(t, { temporal: true });
+  const mirror = new THREE.Texture();
+  t.after(() => mirror.dispose());
+  post.setMirror(mirror, [20, 10, 80, 48], false, true);
+  const draws = [];
+  renderer.render = (quad) => draws.push({ mat: quad.material, target: renderer.getRenderTarget() });
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present(opts, NIGHT);
+  const dof = draws.find((d) => d.mat === graph.gi.dof.mat);
+  assert.ok(dof);
+  assert.equal(input.value, dof.target.texture);
+  assert.equal(input.value.type, THREE.HalfFloatType, "cinema preserves the HDR resolve input");
+  const canvasCopy = draws.filter((d) => !d.target)[0].mat;
+  assert.equal(canvasCopy.name, "tlx-post-traa-out");
+  const frames = post.state().aa.state.frames;
+  draws.length = 0;
+  const shot = post.captureTarget();
+  assert.deepEqual(draws, [{ mat: canvasCopy, target: shot }, { mat: graph.mirror.mat, target: shot }]);
+  assert.equal(graph.mirror.tex.value, mirror);
+  assert.equal(post.state().aa.state.frames, frames, "capturing must not advance the temporal history");
+  cinema = false;
+  for (let i = 0; i < 16; i++) post.present(opts, NIGHT);
+  const composite = draws.find((d) => d.mat === graph.composite.mat);
+  assert.equal(input.value, composite.target.texture, "returning to the race uses the ordinary composite");
 });
 
 test("disposing a post chain abandons its queued canvas compiles", async (t) => {
@@ -703,7 +761,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
   const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: false,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+    wantSpatialUpscale: () => false, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: 0 });
   post.resize(320, 180);
   t.after(() => post.dispose());
   const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
@@ -1075,7 +1133,7 @@ async function rig11(t, { ls = {}, isMobile = true, ssrTag = true, wgpu = false 
   if (wgpu) renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
   const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+    wantSpatialUpscale: () => false, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: 0 }));
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   return { post, renderer, gl: fg.gl };
@@ -1135,7 +1193,7 @@ async function godrayRig(t, { ls = {}, wgpu = true, aoFold = "0" } = {}) {
     S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
   const post = withStore(store, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow, viz: null, ssrTag: false, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+    wantSpatialUpscale: () => false, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: 0 }));
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity,

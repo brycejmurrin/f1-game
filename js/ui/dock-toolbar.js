@@ -111,7 +111,7 @@ const DockToolbar = (() => {
       const size = same("size", 100), buttonShape = same("shape", "auto");
       const out = $("pm-btnscale-v");
       field("size").textContent = target === "all" ? "SIZE " + (out?.textContent || "") : size == null ? "Mixed sizes" : size + "%";
-      field("shape").textContent = "Shape: " + (target === "all" ? getShape() : buttonShape === "auto" ? "Default" : buttonShape || "Mixed");
+      field("shape").value = target === "all" ? getShape() : buttonShape || "";
       for (const id of Object.keys(labels)) {
         const el = byId.get(id);
         if (el && visible && ids.includes(id)) el.setAttribute("data-dock-selected", "");
@@ -144,9 +144,9 @@ const DockToolbar = (() => {
         const sel = document.createElement("select");
         sel.dataset.k = key;
         sel.setAttribute("aria-label", aria);
-        for (const [value, text] of choices) {
+        for (const [value, text, disabled = false] of choices) {
           const option = document.createElement("option");
-          option.value = value; option.textContent = text; sel.appendChild(option);
+          option.value = value; option.textContent = text; option.disabled = disabled; sel.appendChild(option);
         }
         sel.onchange = () => change(sel.value);
         editBar.appendChild(sel);
@@ -158,7 +158,7 @@ const DockToolbar = (() => {
         if (value === "") delete getScheme().gap; else getScheme().gap = Number(value);
         commitLayout();
       });
-      select("layout", "Driving button layout", [["", "Layout: Auto"], ["pedal-row", "Pedals side by side"], ["tap-row", "Actions side by side"], ["stack", "Two rows"]], value => {
+      select("layout", "Driving button layout", DockLayout.DRIVE_LAYOUTS, value => {
         if (value) getScheme().layout = value; else delete getScheme().layout;
         commitLayout();
       });
@@ -181,12 +181,10 @@ const DockToolbar = (() => {
       size.setAttribute("aria-live", "polite");
       editBar.appendChild(size);
       mk("bigger", "+", "Bigger buttons", () => stepSize(1));
-      mk("shape", "SHAPE", "Next button shape", () => {
-        const ids = targetButtons();
-        const current = target === "all" ? getShape() : getScheme().controls?.[ids[0]]?.shape || "auto";
-        const next = SHAPES[(SHAPES.findIndex(([s]) => s === current) + 1) % SHAPES.length][0];
-        if (target === "all") { setShape(next); remember(); paintBar(); return; }
-        for (const id of ids) record(id).shape = next;
+      const shapes = [["", "Mixed shapes", true], ...SHAPES.map(([value, label]) => [value, "Shape · " + label.toLowerCase()])];
+      select("shape", "Button shape", shapes, value => {
+        if (target === "all") { setShape(value); remember(); paintBar(); return; }
+        for (const id of targetButtons()) record(id).shape = value;
         commitLayout();
       });
       mk("reset", "Reset selection", "", () => {
@@ -351,7 +349,13 @@ const DockToolbar = (() => {
         },
       };
     }
+    if (typeof window !== "undefined") window.addEventListener?.("blur", cancelDrag);
     if (typeof document !== "undefined" && document.addEventListener) {
+      document.addEventListener("pointerdown", onPointerDown, true);
+      document.addEventListener("pointermove", onPointerMove, true);
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", cancelDrag, true);
+      document.addEventListener("lostpointercapture", cancelDrag, true);
       document.addEventListener("click", e => {
         if (!visible) return;
         const id = e.target.closest?.(".touchbtn")?.id;
@@ -397,7 +401,7 @@ const DockToolbar = (() => {
         commitLayout();
       }, true);
     }
-    return { show, paint: paintBar, onPointerDown, onPointerMove, onPointerUp, cancelDrag, dragging: () => !!drag, remember, cancel: () => restore(initial),
+    return { show, paint: paintBar, cancelDrag, dragging: () => !!drag, remember, cancel: () => restore(initial),
       shapeChanged: () => getShape() !== initial.shape, layoutChanged: () => !equal(readLayout(), initial.layout) };
   }
   return Object.freeze({ create });

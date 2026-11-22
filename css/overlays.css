@@ -1397,6 +1397,16 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root #hud-dock .touchbtn[data-control-shape="round"] { border-radius: 50%; }
 :root #hud-dock .touchbtn[data-control-shape="squircle"] { border-radius: 28%; }
 :root #hud-dock .touchbtn[data-control-shape="square"] { border-radius: 12%; }
+:root[data-btn-shape="arch"] .touchbtn:not([data-control-shape]),
+:root #hud-dock .touchbtn[data-control-shape="arch"] { border-radius: 50% 50% 12% 12%; }
+:root[data-btn-shape="shield"] .touchbtn:not([data-control-shape]),
+:root #hud-dock .touchbtn[data-control-shape="shield"] { border-radius: 12% 12% 50% 50%; }
+:root[data-btn-shape="paddle-left"] .touchbtn:not([data-control-shape]),
+:root #hud-dock .touchbtn[data-control-shape="paddle-left"] { border-radius: 50% 12% 12% 50%; }
+:root[data-btn-shape="paddle-right"] .touchbtn:not([data-control-shape]),
+:root #hud-dock .touchbtn[data-control-shape="paddle-right"] { border-radius: 12% 50% 50% 12%; }
+:root[data-btn-shape="leaf"] .touchbtn:not([data-control-shape]),
+:root #hud-dock .touchbtn[data-control-shape="leaf"] { border-radius: 50% 12% 50% 12%; }
 /* A chosen gap is measured on the screen, after the dock zoom. */
 #hud-dock #grp-steer[data-steer-gap] { gap: calc(var(--steer-gap) / var(--touch-label-z, 1)); }
 
@@ -1421,6 +1431,11 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 #hud-dock [data-drive-layout="tap-row"] #grp-taps,
 #hud-dock [data-drive-layout="stack"] :is(#grp-pedals, #grp-taps) {
   flex-direction: row; align-items: flex-end;
+}
+#hud-dock [data-drive-layout="gas-left"] #grp-pedals { flex-direction: row-reverse; align-items: flex-end; }
+#hud-dock [data-drive-layout="gas-above"] #grp-pedals { flex-direction: column-reverse; }
+#hud-dock [data-drive-layout="action-grid"] #grp-taps:not([hidden]):has(> :not([hidden]) ~ :not([hidden])) {
+  display: grid; grid-template-columns: repeat(2, max-content); align-items: end;
 }
 #hud-dock .dock[data-drive-layout="stack"] { flex-direction: column; }
 #hud-dock #dock-right[data-drive-layout="stack"],

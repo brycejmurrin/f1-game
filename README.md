@@ -116,11 +116,20 @@ link. The designer's HOW TO tab walks through it; the long form is
 
 #### Touch buttons
 
-Open **Settings › Controls › Touch Button Response** and choose Left, Right, Gas or Brake. Each button remembers its own response.
+Open **Settings › Controls › Touch Button Response** and choose the control to edit. Each control remembers its own settings. Choose an idle border and a pressed accent for each race button. For Boost, Overtake, Aero, shifts, Camera, Pause and Show HUD, choose the original gesture, tap on release, quick tap (within 0.18 seconds), hold for 0.45 or 0.9 seconds and release, or double-tap within 0.35 seconds. Camera’s default keeps its hold-to-open view picker. Gas, Brake and steering use the analog settings below. The paired phone also lists its own actions in its layout editor.
 
 | Setting | What you feel or see |
 | --- | --- |
 | First Touch | **Instant** requests full input on contact. Slide up a pedal or inward on an arrow to ease off. **Progressive** starts at 12%. Slide away from the landing point in any direction to build input, or back toward it to ease off. Lift to release in Hold mode. |
+| Start From Touch Position | Choose which edge gives 100% at touchdown. A double border marks that edge when feedback is on. The opposite edge gives 0%, and the middle gives 50%. Sliding then follows the selected direction and distance. Off restores the saved fixed starting input. |
+| Pedal Mapping | Choose **Absolute** for Gas or Brake to read your thumb’s current position across the pedal. Pick the edge that gives full input. Quarter marks help you find 25%, 50% and 75% again. **Relative Slide** uses movement from where you first touched. |
+| Pressure Indicator | Show color alone, color plus a live percentage, or a colored fill that rises from the bottom. Grip warnings take priority over the percentage. |
+| Starting Input | Choose the input at touchdown in 5% steps. Mode Default uses 100% for Instant and 12% for Progressive. |
+| Slide Direction | Choose which way to ease off an Instant button or build a Progressive button. Mode Default keeps the original gesture. For example, choose Instant Gas with Up and Progressive Brake with Down to ease both pedals by sliding up. |
+| Hold Build Curve | Linear builds evenly. Gentle Start builds slowly at first, and Fast Start builds quickly at first. Each reaches full at the selected hold time. |
+| Hold Build Time | With a starting input below full, a stationary hold builds to full over 0.25, 0.5, 1 or 2 seconds. Off keeps the starting input steady. Sliding still adjusts the request. |
+| Full-input Color Intensity | Choose how vivid the button becomes at full input, from 25% to 100% color. The standard mix is 46%. This affects the display only and requires On-button Feedback. |
+| Slide Response | Linear changes pressure evenly over the slide. Fine Start gives more precision near touchdown, Quick Start makes a short slide count more, and S-Curve makes small adjustments near both ends. |
 | Slide Distance | This is thumb travel in screen pixels. At 40 px, a progressive pedal reaches full input quickly. At 160 px there is more room to make small changes. |
 | Slide onto Pedal | Applies when your thumb crosses from one pedal onto the other without lifting. **Instant** fully presses the receiving pedal. **Ease** starts it at 12% and reaches full input over another 40 px. **Default** follows the global **Pedal Slide** choice. On a paired controller, **Stay on Original Pedal** keeps the pedal you first pressed. |
 | Adaptive Buttons | Applies to the steering arrows. Higher levels soften a short tap at speed. Holding the arrow builds more steering. **1** turns speed smoothing off, **10** gives the most, and **Follow Global** uses the level in Driving Aids. |
@@ -128,7 +137,11 @@ Open **Settings › Controls › Touch Button Response** and choose Left, Right,
 | Throttle mode | **Hold** gives manual Gas until you lift. **Latch** toggles full Gas on each tap. **Auto** manages acceleration while you steer and brake. |
 | Reset | In Touch Button Response, reset restores only the selected button’s response. |
 
-During a race, pause and open **Settings › Controls › Reposition Touch Controls**. Drag the arrows or the driving controls as a group, or choose a button to move, resize or reshape independently. Choose **Steering buttons** to adjust the space between the arrows. Choose **Driving buttons** to put the pedals side by side, the actions side by side, or the two groups in separate rows. Choose **Gas + Brake** to move or size both pedals together, or **Race actions** for controls such as Boost, Overtake and Aero. Individual size is a percentage of the main Button Size setting. **Auto** restores the automatic row arrangement. With a button focused, the arrow keys move it 2 px, or 16 px with Shift. **Done** returns to Settings. Positions and customizations are saved for the active steering scheme.
+During a race, pause and open **Settings › Controls › Reposition Touch Controls**. Drag the arrows or the driving controls as a group, or choose a button to move, resize or reshape independently. Choose **Steering buttons** to adjust the space between the arrows. Choose **Driving buttons** to place Gas above or to the left of Brake, arrange the actions in a compact grid, or use one of the row layouts. The shape selector includes Arch, Shield, Left Paddle, Right Paddle and Leaf. Choose **Gas + Brake** to move or size both pedals together, or **Race actions** for controls such as Boost, Overtake and Aero. Individual size is a percentage of the main Button Size setting. **Auto** restores the automatic row arrangement. With a button focused, the arrow keys move it 2 px, or 16 px with Shift. **Done** returns to Settings. Positions and customizations are saved for the active steering scheme.
+
+With **Touch** steering, choose **Floating Wheel** under **Touch Steering Guide** to show a wheel centered where your steering finger lands. It turns as you drag. **Drag Ring** keeps the original guide.
+
+On the **paired phone**, open the layout editor. **Split Actions** puts OT and Aero on the left grip and Boost on the right. **Race Views** puts Camera and Look on the left and Radio on the right. Under **Move & Size**, select an individual button to change its shape, then choose **Apply** to save the phone arrangement. With manual gears, **Flick to Shift** replaces the paddles with a strip. Flick up or down at least 24 px for one gear change. **Utility Wheel** groups Camera, Look and Radio under one button. Hold Utilities, slide to an action and lift, or tap Utilities and select a button. Look gives a one-second glance behind the car.
 
 
 The **CAM** button (top-right, next to pause) cycles cameras the same

@@ -985,6 +985,7 @@ test("the Data Hub header arranges the standings tab on a first visit", async ()
   h.DataHub.open("standings"); await h.drain();
   const door = h.root.find(el => el.getAttribute("data-arrange-screen") === "datahub");
   assert.ok(door && door.parentNode.classList.contains("sheet-head"));
+  assert.equal(door.parentNode.lastChild.id, "dh-close-btn", "Close stays at the end of the header after Arrange");
   door.getClientRects = () => [{}];
   door.onclick();
   assert.equal(opened.id, "datahub");

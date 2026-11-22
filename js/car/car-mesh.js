@@ -557,8 +557,7 @@ const _compoundRings = new Map();
       out.pos.push(0, R0 * c0, R0 * s0,  0, R1 * c0, R1 * s0,
                    0, R1 * c1, R1 * s1,  0, R0 * c1, R0 * s1);
       for (let v = 0; v < 4; v++) { out.nrm.push(1, 0, 0); out.col.push(col[0], col[1], col[2]); }
-      out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
-                   base, base + 2, base + 1, base, base + 3, base + 2);
+      out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
     m = _gfx.createMesh(out);
     _compoundRings.set(key, m);

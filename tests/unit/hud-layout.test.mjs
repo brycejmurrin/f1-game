@@ -860,6 +860,7 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
     };
   }
   vm.createContext(ctx);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
@@ -1349,6 +1350,7 @@ test("optional strategy compacts, explains a drop, and restores when space retur
   assert.ok(strat.getBoundingClientRect().top >= 154);
   viewport.innerHeight = 170;ctx.HudLayout.clearReadouts();
   assert.ok(strat.hasAttribute("data-col-drop"));
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   assert.equal(ctx.HudLayout.hiddenReason("strat").reason,"not enough room");
   correctionWrites = 0;
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
@@ -1450,6 +1452,7 @@ test("optional input trace yields to occupied space and restores without saving"
   vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
   ctx.HudLayout.clearReadouts();
   assert.ok(inputs.hasAttribute("data-col-drop"));
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   assert.equal(ctx.HudLayout.hiddenReason("inputs").reason,"not enough room");
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
   assert.ok(!inputs.hasAttribute("data-col-drop"));
