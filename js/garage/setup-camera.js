@@ -1405,7 +1405,7 @@ function setSetupCamPanel(open) {
         wear.classList.toggle("active", previewWorn);
         wear.setAttribute("aria-pressed", String(previewWorn));
       };
-      p.appendChild(wear);
+      p.firstElementChild.after(wear);
     }
     if (wear) wear.hidden = !enabled;
   }
