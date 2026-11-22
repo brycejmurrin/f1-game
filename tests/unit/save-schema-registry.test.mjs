@@ -97,7 +97,11 @@ function loadRegistry() {
   return vm.runInContext("SaveSchemaRegistry", ctx);
 }
 
-function scanStoreCalls(file, ops) {
+const STORE_OPS = new Set([...READ_OPS, ...WRITE_OPS]);
+const scannedFiles = new Map();
+
+function scanStoreCalls(file) {
+  if (scannedFiles.has(file)) return scannedFiles.get(file);
   const rel = file;
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   const lines = src.split("\n");
@@ -122,7 +126,7 @@ function scanStoreCalls(file, ops) {
     return false;
   };
 
-  const sites = [];
+  const reads = [], writes = [];
   walk(ast, (n) => {
     if (n.type !== "CallExpression") return;
     const c = n.callee;
@@ -130,12 +134,12 @@ function scanStoreCalls(file, ops) {
     let onLs = false, onStore = false, how = null;
     if (c.type === "Identifier" && wrappers.has(c.name)) {
       how = wrappers.get(c.name).op;
-      if (!ops.has(how)) return;
+      if (!STORE_OPS.has(how)) return;
       onLs = true;
     } else {
       if (c.type !== "MemberExpression" || c.computed) return;
       how = c.property && c.property.name;
-      if (!ops.has(how)) return;
+      if (!STORE_OPS.has(how)) return;
       const recv = storageReceiver(c.object);
       onLs = recv === "ls"; onStore = recv === "store";
       if (!onLs && !onStore) return;
@@ -155,18 +159,21 @@ function scanStoreCalls(file, ops) {
       key = alias.get(kNode.expressions[0].name);
     }
     const line = kNode.loc ? kNode.loc.start.line : 0;
+    const sites = READ_OPS.has(how) ? reads : writes;
     if (key) sites.push({ file: rel, line, key, kind: onLs ? "ls" : "store", op: how, value: n.arguments[1] || null });
     else if (onLs && kNode.type === "Literal") sites.push({ file: rel, line, key: String(kNode.value).replace(/^apex26\./, ""), kind: "ls" });
     // An ls key the scan cannot resolve (a non-alias identifier, a call, a concat) is a
     // dynamic write like a store one: never silently dropped (M1-17 write half).
-    else sites.push({ file: rel, line, key: null, kind: "dynamic", text: lines[line - 1] || "" });
+    else if (sites === writes) writes.push({ file: rel, line, key: null, kind: "dynamic", text: lines[line - 1] || "" });
   });
-  return sites;
+  const result = { reads, writes };
+  if (file.startsWith("js/")) scannedFiles.set(file, result);
+  return result;
 }
 
-const scanStoreWrites = (file) => scanStoreCalls(file, WRITE_OPS);
+const scanStoreWrites = (file) => scanStoreCalls(file).writes;
 /** Reads with a literal / const-alias key; a dynamic read key is never a finding (see PASSTHROUGH_FILES). */
-const scanStoreReads = (file) => scanStoreCalls(file, READ_OPS).filter((x) => x.key);
+const scanStoreReads = (file) => scanStoreCalls(file).reads;
 
 function dynamicCovered(text) {
   for (const p of PREFIX_WRITES) if (p.re.test(text)) return p.prefix + "*";

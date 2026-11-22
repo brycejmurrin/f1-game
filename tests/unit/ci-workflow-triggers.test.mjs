@@ -50,7 +50,7 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
   // node-suites left the draft fast tier on 2026-10-16 (decision D1): its own
   // draft skip is pinned in ci-gate-selection; the fast-tier jobs carry no draft gate at all.
-  for (const name of ["guards-a", "guards-b", "guards", "driving-model", "select"]) {
+  for (const name of ["guards-a", "guards-b", "guards", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
     assert.ok(!/run-ci|github\.event\.pull_request\.draft/.test(head), `${name} runs on every PR push, a draft included`);

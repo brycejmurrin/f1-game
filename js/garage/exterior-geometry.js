@@ -47,9 +47,8 @@ const GarageExteriorGeometry = (function () {
     adjust(b, a, -1);
   }
 
-  function vertex(source, i, a) {
+  function vertex(source, i, a, c, s) {
     const j = i * 3, dx = source.pos[j] - a.position[0], dz = source.pos[j + 2] - a.position[2];
-    const c = Math.cos(a.yaw), s = Math.sin(a.yaw);
     const nx = source.nrm[j], nz = source.nrm[j + 2];
     return [dx * c - dz * s, source.pos[j + 1] - a.position[1], dx * s + dz * c,
       nx * c - nz * s, source.nrm[j + 1], nx * s + nz * c,
@@ -68,19 +67,28 @@ const GarageExteriorGeometry = (function () {
     }
     return result;
   }
+  // One bit per clip plane. A common outside bit rejects the whole triangle.
+  function outside(v, bounds) {
+    return (v[0] < bounds[0] ? 1 : 0) | (v[0] > bounds[1] ? 2 : 0) |
+      (v[1] < bounds[2] ? 4 : 0) | (v[1] > bounds[3] ? 8 : 0) |
+      (v[2] < bounds[4] ? 16 : 0) | (v[2] > bounds[5] ? 32 : 0);
+  }
   function* clipSteps(source, anchor, limits, budget, lights = null) {
     const out = empty(), indexed = new Map(), lightIndexed = new Map();
+    const cos = Math.cos(anchor.yaw), sin = Math.sin(anchor.yaw);
     for (let i = 0; i + 2 < source.idx.length; i += 3) {
-      if (i % 6144 === 0) yield;
+      if (i % 3072 === 0) yield;
       const ids = [source.idx[i], source.idx[i + 1], source.idx[i + 2]];
       // Above-white authored albedo is the race shader's light-source tag.
       // Split those faces once, so night emission cannot wash out concrete.
       const target = lights && ids.some(id => source.col[id * 3] > 1 || source.col[id * 3 + 1] > 1 || source.col[id * 3 + 2] > 1) ? lights : out;
       const cache = target === out ? indexed : lightIndexed;
-      let poly = ids.map(id => vertex(source, id, anchor));
+      let poly = ids.map(id => vertex(source, id, anchor, cos, sin));
       if (!poly.every(v => v.every(Number.isFinite))) throw new Error("Non-finite circuit exterior geometry");
-      const inside = poly.every(v => v[0] >= limits[0] && v[0] <= limits[1] && v[1] >= limits[2] && v[1] <= limits[3] && v[2] >= limits[4] && v[2] <= limits[5]);
-      for (let axis = 0; axis < 3 && poly.length; axis++) {
+      const aMask = outside(poly[0], limits), bMask = outside(poly[1], limits), cMask = outside(poly[2], limits);
+      if (aMask & bMask & cMask) continue;
+      const inside = !(aMask | bMask | cMask);
+      for (let axis = 0; !inside && axis < 3 && poly.length; axis++) {
         poly = clipPlane(poly, axis, limits[axis * 2], 1);
         if (poly.length) poly = clipPlane(poly, axis, limits[axis * 2 + 1], -1);
       }
@@ -133,7 +141,7 @@ const GarageExteriorGeometry = (function () {
     const cell = 2, triangles = [], cells = Object.create(null), contact = [-55, 55, GaragePrims.Z_DOOR, 110];
     let refs = 0, cellCount = 0, maxFaces = 0, work = 0;
     for (let i = 0; i + 2 < road.idx.length; i += 3) {
-      if (i % 6144 === 0) yield;
+      if (i % 3072 === 0) yield;
       const ia = road.idx[i], ib = road.idx[i + 1], ic = road.idx[i + 2];
       const mat = road.mat[ia];
       if (mat !== 0 && mat !== 16) continue;
@@ -225,10 +233,11 @@ const GarageExteriorGeometry = (function () {
     track._gfx = { mobileTier: true }; // Detached CPU soup; no renderer/instance-cache ownership.
     yield { phase: "surface" };
     const limits = bounds(options.contextScale), floorLimits = groundBounds(), budget = { vertices: 0, indices: 0 };
-    let raw = TrackMesh.buildRoad(track);
+    let raw = yield* TrackMesh.buildRoadSteps(track);
     // The race appends this ribbon to start-line geometry; use its SAME generator,
     // with its own buffer here, without building grid boxes or the whole scenery.
-    TrackMesh.buildPitLane(track, raw); TrackMesh.buildPitBoxes(track, raw);
+    yield* TrackMesh.buildPitLaneSteps(track, raw);
+    TrackMesh.buildPitBoxes(track, raw);
     yield { phase: "road" };
     const road = yield* clipSteps(raw, anchor, limits, budget); raw = null;
     yield { phase: "road-clipped" };
@@ -254,6 +263,7 @@ const GarageExteriorGeometry = (function () {
       const bay = empty(), [x, y, z] = frame.center;
       GaragePrims.buildLaneBay(bay, 0, frame.col, frame.left, frame.right);
       TrackGeom.addMesh(rowWorld, bay, { x, y, z, rotY: frame.yaw });
+      yield;
     }
     yield { phase: "pit" };
     const props = yield* clipSteps(raw, anchor, limits, budget); raw = null;

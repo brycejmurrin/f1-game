@@ -312,23 +312,15 @@ const ShadowPass = (function () {
         // Sun direction is part of the gate: a sunDir change (SUN ELEVATION/AZIMUTH
         // sliders, a time-of-day flip) would otherwise leave the map STALE until the
         // next cell crossing — shadows look dead while dragging, then all jump at once.
-        // PRODUCER/CONSUMER GATE. glsl-lit.js's sampleShadow opens with
-        // `if (uShadowStr <= 0.0) return 1.0;` — so when the key has faded out
-        // (overcast, wet or foggy night) NOTHING reads this map: the god-ray march
-        // is the only other reader and it is gated on uStr > 0.0, which is 0 below
-        // the same key. The consumer side of that was already taken; the PRODUCER
-        // was not, so the frame still paid a 2048² depth clear, the full terrain and
-        // road ribbons cast unchunked (44,826 verts on vegas), and shadowEnd's 512²
-        // PCSS blocker downsample — for a texture with zero readers, once per 20 m
-        // snap cell, i.e. 300+ times a lap.
-        //
-        // The predicate is NOT new: it is the identical expression already used
-        // below to gate the props cast and again at the car sun pass. Hoisted here
-        // so all three agree. When it closes, the snap cache is INVALIDATED rather
-        // than left alone — otherwise weather clearing mid-race would re-open the
-        // gate onto a stale map and hold it until the next cell crossing.
+        // Directional lighting and volumetric sun shafts share the static map.
+        // Shafts can still read it at zero shadow darkness. Only directional
+        // lighting uses the extra cascades. Invalidate the snap when both stop
+        // so reenabling either reader refreshes the map even while stationary.
         const _shKeyG = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
-        const _shadowsRead = _shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01);
+        const _directionalRead = !(LT.shadowStr <= 0) &&
+            (_shKeyG > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01));
+        const _shadowsRead = _directionalRead || (_shKeyG > 0.28 && !(LT.grMul <= 0) &&
+            (typeof PostFxOpts === "undefined" || (PostFxOpts.godraysOn() && !PostFxOpts.lookPostOff())));
         let _sunBuilt = false;
         if (!_shadowsRead) {
           _shadowSnapX = _shadowSnapZ = _shadowBox = null;
@@ -374,32 +366,12 @@ const ShadowPass = (function () {
           // Lazy-build shares roadChunked with the lamp draw path.
           _castRibbonSh(G.track.terrainGeo, "terrainChunked", G.track.meshes.terrain);
           _castRibbonSh(G.track.roadGeo, "roadChunked", G.track.meshes.road, G.gfx.chunkedTrackCoords !== false);
-          // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
-          // map at NIGHT — directional sun shadows are invisible under the dim
-          // moonlight, so this is the biggest night saving. Gate on the KEY's actual
-          // BRIGHTNESS, not sunDir.y: the night moon-key is deliberately held high
-          // (sunDir.y ≈ 0.97) to drive the sky glow, so an elevation test never fired
-          // at night and the whole city rasterised into the shadow map every recentre.
-          // Cutoff 0.28 = the BOTTOM of the renderer's key-luminance strength fade
-          // (uShadowStr ramps over key 0.28→0.42): props only leave the map once the
-          // whole shadow pass has faded to zero strength. A cutoff in the MIDDLE of
-          // that band pops prop shadows out at ~50% strength on a dusk→night flip /
-          // SUN ELEVATION drag while terrain shadows linger.
-          const _shKey = _shKeyG;   // hoisted above; same expression, one source
-          // Clear-night moon shadows re-open the gate: props must be in the map for
-          // the moonlight floor to have anything to cast (snap-cached, so the night
-          // saving only goes when MOON SHADOWS is active and the sky is clear — or,
-          // above 0.5, the knob itself forces the gate open regardless of weather;
-          // see frame.moonGate above).
-          if (_shKey > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
-            G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
-            // Cull instanced props to the light ortho before cast — same frustum
-            // castShadowChunked already uses (shadowCullVP || sun lightVP).
-            _castPropBatchesShadow();
-          }
+          // Both lighting and shafts need the same prop silhouettes.
+          G.gfx.castShadowChunked(G.track.meshes.props, MAT_IDENT);
+          _castPropBatchesShadow();
           G.gfx.shadowEnd();
         }
-        if (_hx) _hx.csm(sd, sBox, SUN_FAR, _sunBuilt, _shadowsRead, _frameNo, _hasLivePlayerShadow);
+        if (_hx) _hx.csm(sd, sBox, SUN_FAR, _sunBuilt, _directionalRead, _frameNo, _hasLivePlayerShadow);
         // Dynamic CAR shadow pass — every frame (cars move, so they can't live in
         // the snap-cached static map above; that's why cars only had blob shadows).
         // AI casts use the preceding frame's pooled transforms; the player is

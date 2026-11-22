@@ -37,7 +37,7 @@ const FieldLod = (function () {
     let v = 1;
     try { v = store && store.get ? store.get("fieldLod", 1) : 1; } catch (_) { v = 1; }
     on = !(v === 0 || v === "0" || v === false);
-    try { reach = GfxQuality.detail() > 0 ? 2 : 1; } catch (_) { reach = 1; }
+    try { const preset = GfxQuality.detail() > 0; reach = (GfxQuality.option ? GfxQuality.option("rivalLod", preset) : preset) ? 2 : 1; } catch (_) { reach = 1; }
     rk2 = 1 / (reach * reach);
     return on;
   }

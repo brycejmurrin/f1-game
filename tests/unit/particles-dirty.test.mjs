@@ -54,6 +54,20 @@ test("continuous rainfall scales the bounded particle field and clears stale geo
   assert.equal(uploads.at(-1).floats, full, "the field recovers within its original cap");
 });
 
+test("rain ignores eye displacement across player and director camera cuts", () => {
+  const uploads = [], P = make(uploads);
+  P.rainSeed(false); P.rainShow(true);
+  function streakLength(z, camera, cut = false) {
+    P.rainUpdate(1 / 60, [0, 1, z], 1, camera, cut); P.draw();
+    const { data } = uploads.at(-1);
+    return Math.hypot(data[2] - data[52], data[3] - data[53], data[4] - data[54]);
+  }
+  const still = streakLength(0, "chase");
+  assert.ok(Math.abs(streakLength(6, "helmet") - still) < 1e-5);
+  assert.ok(streakLength(7, "helmet") > still * 2, "normal eye motion stretches the streak");
+  assert.ok(Math.abs(streakLength(13, "helmet", true) - still) < 1e-5);
+});
+
 test("rain streaks drift with the actual race wind vector", () => {
   const centreX = (wx) => {
     const uploads = [], P = make(uploads, { on: true, wx, wz: 0 });
