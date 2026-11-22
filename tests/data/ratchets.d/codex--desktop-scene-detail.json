@@ -6,8 +6,8 @@
     }
   },
   "tree": {
-    "assertPins": 1,
-    "assertPinsAll": 2,
+    "assertPins": 2,
+    "assertPinsAll": 3,
     "eagerCodeBytes": 4822,
     "vmSrcLoads": 3
   }

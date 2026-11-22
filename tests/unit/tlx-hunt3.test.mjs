@@ -214,6 +214,23 @@ test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube 
   assert.match(TLX.slice(optAt, allocAt), /if \(!_envOptOut\) try \{/, "the allocation is gated on the opt-out");
   assert.match(TLX.slice(litAt, litAt + 400), /envCube:\s*envRT \? envRT\.texture : null/, "lit gets null with no target");
   assert.equal((TLX.match(/let _envOptOut\b/g) || []).length, 1, "one declaration");
+  // Enabling a garage-only capture may reserve the shared cube. It must not
+  // opt the race into six-face world renders. Exercise the actual boot decision.
+  const declaration = TLX.indexOf("let _envOptOut = true;");
+  const gate = TLX.indexOf("if (!_envOptOut) try {", optAt);
+  const decide = new Function("race", "garage", "isMobile", "webgpu", "softwareGL", `
+    const _ultra = false, GameStore = { store: { raw: () => null } };
+    const _detailOpt = () => race, _gfxx = () => garage, isWebGPU = () => webgpu, softContent = () => softwareGL;
+    ${TLX.slice(declaration, gate)}
+    return [!_envOptOut, raceProbeOff, garageProbeRequested];
+  `);
+  assert.deepEqual(decide(false, false, false, true, false), [false, true, false]);
+  assert.deepEqual(decide(true, false, false, true, false), [true, false, false]);
+  assert.deepEqual(decide(false, true, false, true, false), [true, true, true]);
+  assert.deepEqual(decide(false, true, true, true, false), [false, true, false]);
+  assert.deepEqual(decide(false, true, false, false, false), [false, true, false]);
+  assert.deepEqual(decide(false, true, false, true, true), [false, true, false]);
+  assert.match(TLX, /envProbeOptOut:\s*raceProbeOff/);
   // envFaceBegin stays the producer-side early return (an opted-in session still probes).
   assert.match(TLX, /envFaceBegin\(face, eye, frame\) \{\s*if \(_envOptOut\) return null;/);
 });
