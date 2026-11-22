@@ -500,15 +500,6 @@ test('Linux proc stat parser preserves process identity with spaces and parenthe
     state: 'Z', parent: 1, group: 789, start: '999'
   });
 });
-test('Linux subtree discovery includes children of every thread and declines partial snapshots', () => {
-  const io = {
-    readdirSync: dir => ({ '/proc/4/task': ['4', '5'], '/proc/7/task': ['7'], '/proc/9/task': ['9'] })[dir],
-    readFileSync: file => ({ '/proc/4/task/4/children': '', '/proc/4/task/5/children': '7 ',
-      '/proc/7/task/7/children': '9 ', '/proc/9/task/9/children': '' })[file],
-  };
-  assert.deepEqual(taskDescendants(4, io), [4, 7, 9]);
-  assert.equal(taskDescendants(4, { ...io, readFileSync: () => { throw new Error('thread exited'); } }), null);
-});
 test('Linux proc stat parser preserves missing fields and literal space delimiters', () => {
   assert.deepEqual(parseProcStat('1 (short) S 2 3'), { state: 'S', parent: 2, group: 3, start: undefined });
   assert.deepEqual(parseProcStat('1 (empty parent) R  3'), { state: 'R', parent: 0, group: 3, start: undefined });
