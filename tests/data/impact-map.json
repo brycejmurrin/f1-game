@@ -19344,6 +19344,9 @@
     "js/ui/dock-toolbar.js": {
       "create": [
         "tests/unit/dock-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs"
       ]
     },
     "js/ui/dom.js": {
