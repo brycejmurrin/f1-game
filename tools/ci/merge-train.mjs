@@ -53,6 +53,8 @@ export const TRAIN_MARK = /<!-- merge-train (\{[^\n]*\}) -->/;
 export const RESULT_MARK = /<!-- merge-train-result (\{[^\n]*\}) -->/;
 /** The trusted rows a car must pass on its own. `base` is the train's (a red tip holds the train, not the car). */
 export const CAR_ROWS = Object.freeze(["open", "hold", "plan", "ci", "config", "raise"]);
+/** land.yml resolve's per-run gate cap (`sort_by(…) | .[:4]`). A train can hold TRAIN_MAX cars, so the cap alone can starve it. */
+export const RESOLVE_CAP = 4;
 
 const SHA = /^[0-9a-f]{40}$/;
 const labelNames = (labels) => (labels || []).map((l) => (typeof l === "string" ? l : l?.name)).filter(Boolean);
@@ -118,6 +120,51 @@ export function carCandidates(pulls, { exclude = new Set(), gateOk = new Set() }
   }
   out.sort((a, b) => (b.priority - a.priority) || a.created.localeCompare(b.created) || a.pr - b.pr);
   return { cars: out.map(({ pr, head, ref }) => ({ pr, head, ref })), skipped };
+}
+
+function eligibleManifest(p, pulls) {
+  const names = labelNames(p?.labels);
+  if (p?.state !== "open" || p.draft || p.mergeable === false || names.includes("hold")
+      || !names.includes("land") || !names.includes(TRAIN_LABEL) || !String(p.head?.ref || "").startsWith(TRAIN_PREFIX)) return null;
+  const m = trainManifest(p.body);
+  if (m?.cars.some(c => {
+    const current = pulls.find(r => r.number === c.pr)?.head?.sha;
+    return current && current !== c.head;
+  })) return null;
+  return m;
+}
+
+/** A car's current head only rides a train whose manifest contains that exact commit. */
+export function openTrainCarIds(pulls) {
+  const ids = new Set();
+  for (const p of pulls || []) for (const c of eligibleManifest(p, pulls)?.cars || []) ids.add(`${c.pr}@${c.head}`);
+  return ids;
+}
+
+export function boardedTrainOf(pr, head, pulls) {
+  for (const p of pulls || []) {
+    if (eligibleManifest(p, pulls)?.cars.some(c => c.pr === Number(pr) && c.head === head)) return p.number;
+  }
+  return null;
+}
+
+/**
+ * land.yml resolve's landable pick (#6055): an open train ahead of its cars, cars of an open train dropped so they
+ * cannot take a slot or arm alone, then `priority`, then oldest; at most `cap`. Pure.
+ * `rows`: `{ number, head, prio?, created?, train? }` (`train: true` or a `train/` ref marks the train PR).
+ * `trainCarIds`: from `openTrainCarIds`.
+ */
+export function resolveLandable(rows, { trainCarIds = new Set(), cap = RESOLVE_CAP } = {}) {
+  const out = [];
+  for (const r of rows || []) {
+    if (r?.number == null) continue;
+    const isTrain = r.train === true || String(r.ref || "").startsWith(TRAIN_PREFIX);
+    if (!isTrain && trainCarIds.has(`${r.number}@${r.head}`)) continue;
+    const prio = isTrain ? -1 : (r.prio ?? 1);
+    out.push({ number: r.number, head: r.head, prio, created: String(r.created || "") });
+  }
+  out.sort((a, b) => (a.prio - b.prio) || a.created.localeCompare(b.created) || (a.number - b.number));
+  return out.slice(0, Math.max(0, cap)).map(({ number, head }) => ({ number, head }));
 }
 
 /** A car's own trusted gate (merge-gate evaluate --trusted): every CAR_ROWS row ok. Pure. */

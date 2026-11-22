@@ -3,9 +3,9 @@
 const DriveTune = (function () {
   "use strict";
 
-  function create() {
+  function create(pace = 1.0) {
     return {
-      PACE: 1.0,
+      PACE: pace,
       WHEELBASE: 3.2,
       STEER_EXPO: 2.4,
       STEER_MAX_SLIP: 0.32,

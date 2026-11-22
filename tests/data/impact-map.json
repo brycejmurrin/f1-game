@@ -4871,6 +4871,7 @@
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-save-kept.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
       ]
@@ -6069,7 +6070,8 @@
         "tests/unit/store-key-types.test.mjs"
       ],
       "ttBoardAddResult": [
-        "tests/unit/settings-ttlb-backup.test.mjs"
+        "tests/unit/settings-ttlb-backup.test.mjs",
+        "tests/unit/store-key-types.test.mjs"
       ],
       "*": [
         "tests/specs/parts-physics.spec.js",
@@ -6086,6 +6088,7 @@
         "tests/unit/i18n-lang-validate.test.mjs",
         "tests/unit/i18n.test.mjs",
         "tests/unit/legend-parts-seed.test.mjs",
+        "tests/unit/load-order.test.mjs",
         "tests/unit/net-authority.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/progress-backup.test.mjs",
@@ -8154,6 +8157,7 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/perf-sentinel.test.mjs",
+        "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
@@ -8298,7 +8302,6 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/perf-vm-alloc-budget.test.mjs",
         "tests/unit/perf-vm-leak-cycles.test.mjs",
-        "tests/unit/phone-pad-netplay-vm.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
@@ -8614,6 +8617,9 @@
       ]
     },
     "js/garage/exterior.js": {
+      "appendLights": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "cancel": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -9837,6 +9843,7 @@
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setAnalogSpeedMix": [
@@ -9852,7 +9859,8 @@
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setKeyRampIn": [
-        "tests/specs/gamepad.spec.js"
+        "tests/specs/gamepad.spec.js",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "setPadAxisMap": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -9880,11 +9888,13 @@
       "setSpeedStd": [
         "tests/specs/touch-buttons.spec.js",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "setSteerExpo": [
-        "tests/unit/digital-steer.test.mjs"
+        "tests/unit/digital-steer.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "setSteerMode": [
         "tests/specs/gamepad.spec.js",
@@ -9901,6 +9911,7 @@
       ],
       "setSteerSpeedRef": [
         "tests/specs/touch-buttons.spec.js",
+        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs"
       ],
       "setTiltDeadzone": [
@@ -10025,9 +10036,24 @@
       ]
     },
     "js/input/pedal-travel.js": {
+      "buttonOverrides": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "buttonProfile": [
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
       "ease": [
         "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "level": [
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "setButtonProfile": [
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/throttle-latch.test.mjs"
       ],
       "*": [
         "tests/unit/a11y-pwa-pass.test.mjs",
@@ -10042,7 +10068,6 @@
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-kit.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
-        "tests/unit/throttle-latch.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
@@ -10099,6 +10124,9 @@
       ]
     },
     "js/input/phone-pad-page.js": {
+      "arrange": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
       "cancel": [
         "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
@@ -10350,6 +10378,7 @@
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-density.test.mjs",
@@ -10364,6 +10393,7 @@
         "tests/unit/lighting-rebuild.test.mjs",
         "tests/unit/lighting-sun-scratch.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
+        "tests/unit/night-washout-presets.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-canopy-cull.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -10481,6 +10511,9 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "garageLamps": [
+        "tests/unit/light-store-cond-layer.test.mjs"
+      ],
       "liveEffects": [
         "tests/unit/lighting-rebuild.test.mjs"
       ],
@@ -10493,6 +10526,7 @@
         "tests/unit/light-store-cond-layer.test.mjs"
       ],
       "reset": [
+        "tests/unit/light-presets.test.mjs",
         "tests/unit/light-store-cond-layer.test.mjs",
         "tests/unit/light-store-copy.test.mjs",
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
@@ -10525,6 +10559,7 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/perf-try.test.mjs"
       ]
@@ -10546,6 +10581,9 @@
         "tests/unit/light-store-perchunk-pin.test.mjs"
       ],
       "refreshLightTunePanel": [
+        "tests/unit/lighting-tuner-reset-weather.test.mjs"
+      ],
+      "update": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs"
       ],
       "*": [
@@ -11006,6 +11044,9 @@
         "tests/unit/net-authority.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
       ],
+      "relayPush": [
+        "tests/unit/net-authority.test.mjs"
+      ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
@@ -11061,6 +11102,19 @@
       ],
       "*": [
         "tests/unit/no-bare-console.test.mjs"
+      ]
+    },
+    "js/net/phone-pairing-ui.js": {
+      "cancel": [
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "create": [
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "dash": [
+        "tests/unit/phone-pad.test.mjs"
       ]
     },
     "js/net/qr.js": {
@@ -14099,6 +14153,9 @@
       "committing": [
         "tests/unit/pit-lane.test.mjs"
       ],
+      "compoundDue": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
       "create": [
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -14231,6 +14288,7 @@
       ],
       "twoCompoundApplies": [
         "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/pit-lane.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs"
       ],
       "update": [
@@ -15331,6 +15389,9 @@
       ],
       "restoreBase": [
         "tests/unit/weather-arc-plan.test.mjs"
+      ],
+      "segs": [
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "setTimeOfDay": [
         "tests/unit/weather-arc-plan.test.mjs"
@@ -19010,9 +19071,8 @@
         "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
-    "js/ui/appearance-studio.js": {
+    "js/ui/appearance-studio-ui.js": {
       "applyPreset": [
-        "tests/unit/appearance-shapes.test.mjs",
         "tests/unit/appearance-studio.test.mjs"
       ],
       "applySnapshot": [
@@ -19049,8 +19109,8 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "reset": [
-        "tests/unit/appearance-shapes.test.mjs",
-        "tests/unit/appearance-studio.test.mjs"
+        "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
       ],
       "saveProfile": [
         "tests/unit/appearance-studio.test.mjs"
@@ -19065,18 +19125,61 @@
         "tests/unit/appearance-studio.test.mjs"
       ],
       "snapshot": [
-        "tests/unit/appearance-studio.test.mjs"
+        "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
       ],
       "undo": [
-        "tests/unit/appearance-shapes.test.mjs",
-        "tests/unit/appearance-studio.test.mjs"
+        "tests/unit/appearance-studio.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
       ],
       "*": [
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs",
-        "tests/unit/settings-one-home.test.mjs"
+        "tests/unit/settings-lazy-gate.test.mjs"
+      ]
+    },
+    "js/ui/appearance-studio.js": {
+      "applySnapshot": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "attach": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "effectiveSceneMotion": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "homeCamera": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "initUI": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "normalizeSnapshot": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "onSceneChange": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "profiles": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "scene": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "setHomeCamera": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "setScene": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "snapshot": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/appearance-shapes.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/aria-state.js": {
@@ -19193,20 +19296,25 @@
       "applyShape": [
         "tests/unit/dock-layout.test.mjs"
       ],
+      "arrangeDoor": [
+        "tests/unit/hud-arrange-door.test.mjs"
+      ],
       "clampXY": [
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs"
       ],
       "create": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/dock-layout.test.mjs"
+        "tests/unit/dock-layout.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs"
       ],
       "isIdentity": [
         "tests/unit/dock-layout.test.mjs"
       ],
       "load": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/dock-layout.test.mjs"
+        "tests/unit/dock-layout.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs"
       ],
       "normalize": [
         "tests/unit/dock-layout.test.mjs"
@@ -19365,10 +19473,14 @@
       ],
       "create": [
         "tests/specs/ui-button-touch.spec.js",
+        "tests/unit/hud-arrange-door.test.mjs",
         "tests/unit/hud-arrange.test.mjs"
       ],
       "dragTo": [
         "tests/unit/hud-arrange.test.mjs"
+      ],
+      "flush": [
+        "tests/unit/layout-presets.test.mjs"
       ],
       "pinchTo": [
         "tests/unit/hud-arrange.test.mjs"
@@ -19380,6 +19492,7 @@
         "tests/unit/hud-arrange.test.mjs"
       ],
       "*": [
+        "tests/specs/hud-layout.spec.js",
         "tests/unit/menu-a11y-audit.test.mjs"
       ]
     },
@@ -19456,6 +19569,10 @@
       "applyPreset": [
         "tests/unit/hud-layout.test.mjs"
       ],
+      "arrangeSnapshot": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
       "build": [
         "tests/unit/hud-layout-hidden.test.mjs",
         "tests/unit/hud-layout.test.mjs"
@@ -19469,6 +19586,10 @@
       ],
       "effective": [
         "tests/unit/hud-elements.test.mjs"
+      ],
+      "endArrangeDraft": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
       ],
       "hiddenReason": [
         "tests/unit/hud-layout-hidden.test.mjs",
@@ -19514,6 +19635,11 @@
         "tests/unit/hud-layout.test.mjs"
       ],
       "resetSet": [
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "restoreSnapshot": [
+        "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-layout.test.mjs"
       ],
       "scaleOf": [
@@ -19634,6 +19760,9 @@
         "tests/unit/hud-readouts.test.mjs"
       ],
       "paintSectorRow": [
+        "tests/unit/hud-readouts.test.mjs"
+      ],
+      "pedalGrip": [
         "tests/unit/hud-readouts.test.mjs"
       ],
       "push": [
@@ -19893,6 +20022,7 @@
       "*": [
         "tests/specs/hud-mirror.spec.js",
         "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/apex-tools-mcp-args.test.mjs",
         "tests/unit/apex-tools-mcp-occupancy.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
@@ -19958,7 +20088,8 @@
     "js/ui/layout-presets.js": {
       "apply": [
         "tests/unit/appearance-shapes.test.mjs",
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "current": [
         "tests/unit/layout-presets.test.mjs"
@@ -20258,7 +20389,9 @@
       "apply": [
         "tests/specs/wake-lock.spec.js",
         "tests/unit/layout-presets.test.mjs",
-        "tests/unit/pause-opts.test.mjs"
+        "tests/unit/pause-opts.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/screen-looks.test.mjs"
       ],
       "initUI": [
         "tests/unit/pause-opts.test.mjs"
@@ -20270,12 +20403,11 @@
         "tests/specs/custom-team.spec.js",
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/screen-looks.test.mjs",
         "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs"
       ]
     },
-    "js/ui/photo-studio.js": {
+    "js/ui/photo-studio-ui.js": {
       "album": [
         "tests/unit/photo-studio.test.mjs"
       ],
@@ -20321,11 +20453,32 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "state": [
-        "tests/specs/photo-studio-conditions.spec.js",
         "tests/specs/photo-studio.spec.js",
         "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
+        "tests/unit/layout-presets.test.mjs"
+      ]
+    },
+    "js/ui/photo-studio.js": {
+      "background": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "create": [
+        "tests/specs/photo-studio.spec.js",
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "crop": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "filename": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "setBackground": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "*": [
+        "tests/specs/photo-studio-conditions.spec.js",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
@@ -20352,9 +20505,6 @@
       ],
       "onFirstGesture": [
         "tests/unit/audio-recovery.test.mjs"
-      ],
-      "phonePadDash": [
-        "tests/unit/phone-pad.test.mjs"
       ],
       "refresh": [
         "tests/unit/a11y-pwa-pass.test.mjs"
@@ -20565,7 +20715,8 @@
         "tests/unit/scale-defaults.test.mjs"
       ],
       "sizeRow": [
-        "tests/unit/hud-feel.test.mjs"
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "*": [
         "tests/specs/phone-shipped-defaults.spec.js",
@@ -20576,16 +20727,32 @@
         "tests/unit/layout-tokens.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/phone-tools.test.mjs",
-        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/test-groups.test.mjs"
       ]
     },
+    "js/ui/screen-arranger.js": {
+      "button": [
+        "tests/unit/title-layout.test.mjs"
+      ],
+      "flush": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "open": [
+        "tests/unit/title-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/css-has-scope.test.mjs",
+        "tests/unit/load-order.test.mjs"
+      ]
+    },
     "js/ui/screen-looks.js": {
       "apply": [
         "tests/unit/layout-presets.test.mjs",
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/screen-looks.test.mjs"
       ],
       "build": [
         "tests/unit/layout-presets.test.mjs",
@@ -20616,17 +20783,49 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "reset": [
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
+      "resetGeometry": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
       "save": [
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/screen-looks.test.mjs"
       ],
       "*": [
         "tests/specs/phone-shipped-defaults.spec.js",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/settings-lazy-gate.test.mjs"
+      ]
+    },
+    "js/ui/screen-placement.js": {
+      "apply": [
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/screen-looks.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "normalize": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
+      "read": [
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/screen-looks.test.mjs",
+        "tests/unit/settings-export.test.mjs"
+      ],
+      "save": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
+      "*": [
+        "tests/unit/load-order.test.mjs"
+      ]
+    },
+    "js/ui/screen-regions.js": {
+      "*": [
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/load-order.test.mjs"
       ]
     },
     "js/ui/scroll-fade.js": {
@@ -20751,6 +20950,7 @@
       "fill": [
         "tests/specs/photo-studio.spec.js",
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -20760,7 +20960,8 @@
       ],
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/audio-panel-settings-ui.test.mjs"
+        "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/title-layout.test.mjs"
       ],
       "step": [
         "tests/specs/quali.spec.js",
@@ -20786,6 +20987,7 @@
         "tests/unit/dom-id-literals.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/settings-export.test.mjs"
       ]
     },
@@ -21119,9 +21321,6 @@
       ]
     },
     "js/ui/title-fx.js": {
-      "artMode": [
-        "tests/unit/title-fx.test.mjs"
-      ],
       "choice": [
         "tests/unit/a11y-opts.test.mjs",
         "tests/unit/title-fx.test.mjs"
@@ -21151,9 +21350,6 @@
       "setWash": [
         "tests/unit/title-fx.test.mjs"
       ],
-      "washMode": [
-        "tests/unit/title-fx.test.mjs"
-      ],
       "*": [
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/settings-lazy-gate.test.mjs",
@@ -21162,7 +21358,8 @@
     },
     "js/ui/title-layout.js": {
       "apply": [
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs"
       ],
       "build": [
         "tests/unit/appearance-opts.test.mjs",
@@ -21194,10 +21391,12 @@
       ],
       "move": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/settings-lazy-gate.test.mjs"
       ],
       "normalize": [
+        "tests/specs/title-fit.spec.js",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -21206,6 +21405,7 @@
       ],
       "reset": [
         "tests/specs/ui-scale.spec.js",
+        "tests/unit/layout-presets.test.mjs",
         "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
@@ -21222,10 +21422,12 @@
         "tests/specs/title-fit.spec.js"
       ],
       "step": [
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/menu-nav-spatial.test.mjs"
       ],
       "vars": [
         "tests/unit/appearance-opts.test.mjs",
+        "tests/unit/phone-shipped-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "*": [
@@ -21258,6 +21460,17 @@
       "*": [
         "tests/specs/boot-guard.spec.js",
         "tests/unit/share-code.test.mjs"
+      ]
+    },
+    "js/ui/touch-button-settings.js": {
+      "change": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/touch-button-settings.test.mjs"
+      ],
+      "*": [
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/track-maps.js": {

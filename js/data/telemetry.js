@@ -330,6 +330,8 @@ const DataTelemetry = (function () {
       hdr.appendChild(titleEl);
       const closeBtn = el("button", "dh-close", "✕");
       closeBtn.type = "button";
+      closeBtn.id = "dh-tpopup-close";
+      overlay.setAttribute("data-esc-close", closeBtn.id);
       // autofocus: showModal's focusing steps then GUARANTEE initial focus here,
       // instead of racing whatever the async body build makes focusable first.
       closeBtn.autofocus = true;

@@ -2,13 +2,7 @@
 "use strict";
 
 const InputHoldButtons = (function () {
-  // Eval-time: a harness that loads this file without PedalTravel fails here,
-  // not on the first analog slide.
-  const PEDAL_DEAD_PX = PedalTravel.DEAD_PX;
-  const PEDAL_TRAVEL_PX = PedalTravel.TRAVEL_PX;
-  const PEDAL_MIN = PedalTravel.MIN;
-
-  function create({ clamp, beforeReleaseAll, slideEase }) {
+  function create({ beforeReleaseAll, slideEase }) {
     // Every wireHold button registers here so its private pressed-pointer set can
     // be cleared from OUTSIDE the closure. Nets that hang off this list:
     //   1. window-level capture-phase pointerup/pointercancel (init) release that
@@ -97,9 +91,8 @@ const InputHoldButtons = (function () {
     // left. A hold button wired with `opts.sibling` now gives the contact away the
     // moment it is inside that sibling's box: THE CONTROL UNDER THE FINGER WINS.
     //   - only THAT pointer moves; a second finger on either control is untouched;
-    //   - the arrival is a full press (no ease: the slide that brought it there
-    //     is the same motion as the ease gesture, so it must not read as a lift),
-    //     unless PEDAL SLIDE = EASE (#5996, `opts.easeIn`): PedalTravel.arrive ramps it in;
+    //   - arrival normally stays full. A pedal with eased crossover ramps up;
+    //     a progressive steering arrow treats the entry point as a fresh press;
     //   - it hands back the same way, and every release net above still applies
     //     to whichever control holds the pointer now.
     // The sibling's box is read once per contact, never per pointermove: a
@@ -113,54 +106,56 @@ const InputHoldButtons = (function () {
     }
     const inBox = (r, x, y) => !!r && x >= r.left && x <= r.left + r.width && y >= r.top && y <= r.top + r.height;
 
-    // PEDAL TRAVEL ON A TOUCHSCREEN. The analog-trigger note above says the
-    // physics rewards MODULATION and that thresholding a trigger to a boolean
-    // throws all of it away — and then the on-screen pedals did exactly that, so
-    // the one platform with no triggers at all was also the one that could only
-    // stamp or lift. Trail-braking, the mechanic the friction ellipse exists to
-    // reward, was unreachable on an iPad.
-    //
-    // The gesture is STAMP THEN EASE: touching the pedal is full travel, which is
-    // precisely what it did before, so nothing is taken away from a player who
-    // taps and never discovers this. Sliding the thumb UP the screen, away from
-    // the pedal, lifts it — the direction a foot comes off a real one. Pointer
-    // capture (below) is what makes it work past the edge of a 72 px button.
-    // The 12 / 90 / 0.12 numbers live in js/input/pedal-travel.js.
-
-    // Hold semantics, multi-pointer safe: the button stays "held" until
-    // every pointer that pressed it has been released/cancelled/left.
-    // `level`, when given, additionally reports 0..1 pedal travel.
-    // `opts.axis` "x" + `opts.dir` (±1) is the steer-button analog-trigger path:
-    // tap is full travel (same compatibility promise as the pedals); sliding
-    // opposite the steer direction eases off. The default (no opts) is the
-    // original vertical pedal gesture and must stay bit-identical.
+    // Each held pointer snapshots its button response. Direct presses can ease
+    // off along the original axis or build pressure by sliding in any direction.
+    // Hand-offs use the receiving control's separate crossover preference.
     function wireHold(id, apply, level, opts) {
       const el = document.getElementById(id);
       if (!el) return;
       const axis = (opts && opts.axis) === "x" ? "x" : "y";
       const dir = (opts && opts.dir) || 1;
       const ids = new Set();
-      const anchors = level ? new Map() : null;   // pointerId -> axis pos at touch-down
+      const anchors = level ? new Map() : null;   // pointerId -> touchdown position and response
       const levels = level ? new Map() : null;    // pointerId -> current travel
       const live = new Map();                     // pointerId -> visible at pointerdown
       const sibId = opts && opts.sibling;
-      const slid = new Set();                     // pointerIds that ARRIVED by a slide: full travel, no ease
+      const slid = new Set();                     // contacts that arrived by a slide (pressed look)
       const gone = new Set();                     // pointerIds that slid AWAY and are still down (pressed-look only)
       const rects = new Map();                    // pointerId -> the sibling's box for this contact
-      const easeIn = !!(level && opts && opts.easeIn);
       const ramps = new Map();                    // pointerId -> EASE arrival point, until full
       // Every contact holds independently: easing or releasing one finger must
       // not override another finger's stronger press. Both release routes use
       // the same aggregation, including window capture before the local event.
       // The last travel reported: a thumb resting in the dead band sends pointermove at the
       // digitizer rate with an unchanged level, so only a CHANGE reaches the callback.
-      let painted = NaN;
-      const paint = level ? (v) => { painted = v; level(v); } : null;
+      if (level) PedalTravel.watchButtonProfile(opts?.button || id, profile => {
+        if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
+        else el.removeAttribute?.("data-touch-response");
+      });
+      let painted = NaN, paintedCommand = NaN, paintedProfile = null;
+      const paint = level ? (v, profile = null) => {
+        const command = v && opts?.command ? opts.command(v, profile) : v;
+        if (painted === v && paintedCommand === command && paintedProfile === profile) return;
+        if (el.style && el.style.setProperty && (profile?.feedback || paintedProfile?.feedback)) {
+          if (v > 0 && profile?.feedback) {
+            if (command !== paintedCommand || !paintedProfile?.feedback) el.style.setProperty("--touch-level", String(command));
+            if (!paintedProfile?.feedback) el.setAttribute("data-touch-feedback", "on");
+          } else {
+            el.style.removeProperty("--touch-level");
+            el.removeAttribute("data-touch-feedback");
+            el.removeAttribute("data-grip-cue");
+          }
+        }
+        painted = v; paintedCommand = command; paintedProfile = profile;
+        level(v, command, profile);
+      } : null;
       function paintLevel() {
         if (!level) return;
-        let strongest = 0;
-        for (const value of levels.values()) strongest = Math.max(strongest, value);
-        if (strongest !== painted) paint(strongest);
+        let strongest = 0, profile = null;
+        for (const [id, value] of levels) {
+          if (value > strongest) { strongest = value; profile = anchors.get(id).profile; }
+        }
+        paint(strongest, profile);
       }
       function release(pointerId) {
         if (gone.delete(pointerId) && gone.size === 0 && slid.size === 0) look(el, null);
@@ -186,10 +181,13 @@ const InputHoldButtons = (function () {
         live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
         if (firstContact) apply(true);
         if (level) {
-          anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY);
-          const ramp = arrived && easeIn && !!slideEase && slideEase();
+          const profile = PedalTravel.buttonProfile(opts?.button || id, slideEase?.() ? "ease" : "instant");
+          const trackTravel = !arrived || (axis === "x" && profile.press === "progressive");
+          anchors.set(e.pointerId, { x: e.clientX, y: e.clientY, profile, trackTravel });
+          const ramp = arrived && profile.slide === "ease";
           if (ramp) ramps.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          levels.set(e.pointerId, ramp ? PedalTravel.arrive(0) : 1);
+          const initial = trackTravel ? PedalTravel.level(profile, 0) : ramp ? PedalTravel.MIN : 1;
+          levels.set(e.pointerId, initial);
           paintLevel();
         }
         gone.clear();
@@ -208,7 +206,7 @@ const InputHoldButtons = (function () {
         to.press(e, true);
         return true;
       }
-      const rec = { ids, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, ramps, move: null };
+      const rec = { ids, apply, level: paint, anchors, levels, el, live, release, press, slid, gone, rects, ramps, paintLevel, move: null };
       holdBtns.push(rec);
       holdByEl.set(el, rec);
       holdById.set(id, rec);
@@ -236,16 +234,10 @@ const InputHoldButtons = (function () {
           return;
         }
         const a = anchors ? anchors.get(e.pointerId) : null;
-        if (a == null || slid.has(e.pointerId)) return;
-        if (axis === "x") {
-          const ease = Math.max(0, (e.clientX - a) * (-dir) - PEDAL_DEAD_PX);
-          levels.set(e.pointerId, clamp(1 - ease / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
-          paintLevel();
-          return;
-        }
-        // Vertical ease is PedalTravel.ease: same clamp as M4.clamp for finite
-        // numbers (v < lo ? lo : v > hi ? hi : v).
-        levels.set(e.pointerId, PedalTravel.ease(a, e.clientY));
+        if (!a?.trackTravel) return;
+        const dx = e.clientX - a.x, dy = e.clientY - a.y;
+        const advance = a.profile.press === "progressive" ? Math.hypot(dx, dy) : axis === "x" ? -dir * dx : -dy;
+        levels.set(e.pointerId, PedalTravel.level(a.profile, advance));
         paintLevel();
       };
       el.addEventListener("pointerup", (e) => release(e.pointerId));
@@ -290,6 +282,7 @@ const InputHoldButtons = (function () {
     }
 
     return { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease,
+      refreshLevels() { for (const h of holdBtns) if (h.ids.size) h.paintLevel(); },
       pointerCounts: () => holdBtns.map((h) => h.ids.size) };
   }
 

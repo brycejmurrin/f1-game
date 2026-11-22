@@ -6,10 +6,8 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 // PACE PINNED. The assertions here are in METRES (dProg > 50) and M/S (offSpeed
 // bounds, the reverse crawl), and PACE is a ground-speed scale that moves both.
-// The OVERALL SPEED default is 0.84 since the Phase C regrid, so a spec that
-// inherits it is measuring a slower car than it was written against — and a red
-// result would be ambiguous between "the physics broke" and "the car is slower
-// now, by design". State the pace instead of inheriting one.
+// State the test's pace directly so a change to the player default cannot
+// move these absolute speed and distance measurements.
 const pinPace = (page) => page.evaluate(() => window.__apex.setPhysics({ pace: 1 }));
 
 

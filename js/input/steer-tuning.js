@@ -105,8 +105,8 @@ const STEER_MIGRATIONS = [
   // the player's ground speed away without saying anything.
   //
   // A store with NO pace key is left alone on purpose: it has never been chosen,
-  // so the new default (notch 11 = 0.840) applies through st.get() and there is
-  // nothing to migrate. Writing 11 here would be indistinguishable on disk from a
+  // so the current default applies through st.get() and there is nothing to
+  // migrate. Writing a notch here would be indistinguishable on disk from a
   // deliberate choice and would pin that player to today's default forever.
   //
   // steerSmooth is deliberately NOT touched: SMOOTHING keeps its 1..10 notches and
@@ -407,7 +407,7 @@ const PRESETS = {
   // missing keys, and an explicit default must still read as STANDARD.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 5, brakeCue: 1, audioCues: 1, gripSteer: 1 },
+              adaptiveButtons: 6, brakeCue: 1, audioCues: 1, gripSteer: 1 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 4, brakeCue: 4, audioCues: 1, gripSteer: 1 },
@@ -471,6 +471,12 @@ function paintRow(id, v, label) {
   const el = $(id), out = $(id + "-v");
   if (el) el.value = v;
   if (out) out.textContent = label === undefined ? String(v) : label;
+}
+function paintPace(v) {
+  const input = $("pm-pace"), label = paceLabel(v);
+  input.value = v;
+  input.setAttribute("aria-valuetext", label);
+  $("pm-pace-v").textContent = label;
 }
 
 function applyPreset(name) {
@@ -578,7 +584,7 @@ function applySteerTuning() {
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
-  const adapt   = clamp(store.get("adaptiveButtons", 5), SLIDER_MIN, SLIDER_MAX);
+  const adapt   = clamp(store.get("adaptiveButtons", PRESETS.standard.adaptiveButtons), SLIDER_MIN, SLIDER_MAX);
   // CAR WEIGHT is the ONE slider of the shipped profile that is device-aware,
   // and it is device-aware because it collides with a measurement rather than
   // with a taste. 10 (YAW_INERTIA 1.0) is what they drive on a PHONE, where the
@@ -680,7 +686,7 @@ function applySteerTuning() {
       ? DrivingCues.labelOf(audioCues) : (audioCues <= 1 ? "OFF" : "CUES " + audioCues);
   }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
-  $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
+  paintPace(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
   paintRow("pm-tiltcurve", tiltCurve);
   paintRow("pm-touchcurve", touchCurve);
@@ -778,7 +784,7 @@ $("pm-help").oninput = (e) => {
 };
 $("pm-pace").oninput = (e) => {
   const v = clamp(+e.target.value, PACE_MIN, PACE_MAX); store.set("pace", v);
-  G.PACE = paceFromSlider(v); $("pm-pace-v").textContent = paceLabel(v);
+  G.PACE = paceFromSlider(v); paintPace(v);
 };
 $("pm-line").oninput = (e) => {
   const v = clamp(+e.target.value, LINE_MIN, LINE_MAX); store.set("raceLine", v);
@@ -872,23 +878,8 @@ if (wheelAnchor && wheelAnchor.parentNode && wheelAnchor.parentNode.parentNode &
   SettingRow.wire("pm-wheelmodel", { values: WHEEL_VALUES, read: WheelState.mode, write: (m) => { WheelState.setMode(m); if (G.soundOn) GameAudio.uiSelect(); } });
   SettingRow.paint(built.row, WheelState.mode(), WHEEL_VALUES);
 }
-// PEDAL SLIDE (#5996), built at runtime under LEFT-HANDED like WHEEL LOCK.
-if (typeof Input !== "undefined" && Input.setPedalSlide) {
-  Input.setPedalSlide(store.get("pedalSlide", "instant"));
-  const mirrorHelp = $("pm-mirror") && $("pm-mirror").nextElementSibling;
-  if (mirrorHelp && typeof document !== "undefined") {
-    const SLIDE_VALUES = [["instant", "INSTANT"], ["ease", "EASE"]];
-    const built = SettingRow.build("pm-pedalslide", "PEDAL SLIDE", SLIDE_VALUES);
-    const help = document.createElement("p");
-    help.className = "adv-help"; help.id = "pm-pedalslide-help";
-    help.textContent = "Sliding a thumb from GAS onto BRAKE, or back. INSTANT presses it fully at once. EASE builds it up over a short slide, so sliding off GAS cannot slam the brakes.";
-    built.sel.setAttribute("aria-describedby", help.id);
-    mirrorHelp.after(built.row, help);
-    SettingRow.wire("pm-pedalslide", { values: SLIDE_VALUES, read: Input.pedalSlide,
-      write: (v) => { store.set("pedalSlide", Input.setPedalSlide(v)); if (G.soundOn) GameAudio.uiSelect(); } });
-    SettingRow.paint(built.row, Input.pedalSlide(), SLIDE_VALUES);
-  }
-}
+// The input mode applies from boot; Controls mounts the pedal and response rows on first open.
+if (typeof Input !== "undefined" && Input.setPedalSlide) Input.setPedalSlide(store.get("pedalSlide", "instant"));
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();
 };
@@ -928,6 +919,6 @@ applySteerTuning();
 return { applySteerTuning };
 }
 
-return { create, migrateValues, STEER_SCHEMA };
+return { create, migrateValues, STEER_SCHEMA, defaultPace: paceFromSlider(PACE_DEF) };
 })();
 Object.freeze(SteerTuning);

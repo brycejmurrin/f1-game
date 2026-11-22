@@ -914,13 +914,14 @@ async function checkHudVisibilityEditors(page, testInfo) {
   await page.locator("#pm-hudlayout > summary").click();
   await page.locator("#pm-hud-arrange").click();
   await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+  await page.locator("#hud-arrange-move").click();
   for (const id of ["map", "gaps", "mirror"]) {
     await page.locator("#hud-arrange-element").selectOption(id);
     await expect(page.locator("#hud-arrange-vis")).toHaveValue("off");
     await page.locator("#hud-arrange-vis").selectOption(id === "mirror" ? "auto" : "on");
-    await expect(page.locator("#pm-hud" + id + "-sel")).toHaveValue(id === "mirror" ? "auto" : "on");
+    await expect(page.locator("#pm-hud" + id + "-sel")).toHaveValue("off");
   }
-  await expect(page.locator("body")).not.toHaveClass(/\bhud-hide-map\b|\bhud-hide-gaps\b/);
+  // Previewed pieces are revealed for editing while the saved values stay off.
   await expect(page.locator("#minimap")).toBeVisible();
   await page.locator("#hud-arrange-element").selectOption("map");
   const visibility = page.locator("#hud-arrange-vis");
@@ -931,7 +932,8 @@ async function checkHudVisibilityEditors(page, testInfo) {
   await expect(visibility).toHaveValue("off");
   await page.keyboard.press("ArrowUp");
   await expect(visibility).toHaveValue("on");
-  await expect(page.locator("#pm-hudmap-sel")).toHaveValue("on");
+  await expect(page.locator("#pm-hudmap-sel")).toHaveValue("off");
+  await page.locator("#hud-arrange-move").click();
   expect((await page.locator("#hud-arrange-bar").boundingBox()).height).toBeLessThan(80);
   await page.screenshot({ path: testInfo.outputPath("hud-controls-" + page.viewportSize().width + ".png") });
   await page.locator("#hud-arrange-done").click();
@@ -985,15 +987,18 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
     await page.screenshot({ path: testInfo.outputPath("hud-adaptive-" + viewport.width + "x" + viewport.height + ".png") });
   }
   const sizeBefore = await page.evaluate(() => HudLayout.get("map").s);
+  await page.locator("#hud-arrange-move").click();
   await page.locator("#hud-arrange-larger").click();
   const sizeAfter = await page.evaluate(() => HudLayout.get("map").s);
   expect(sizeAfter, "Larger adds ten points to the adopted painted size").toBeCloseTo(sizeBefore + 10, 8);
   const sizeLabel = await page.locator("#hud-arrange-name").textContent();
-  expect(sizeLabel).toMatch(/^\d+(?:\.\d+)?%$/);
-  expect(sizeLabel.length, "the toolbar reports a readable percentage").toBeLessThanOrEqual(8);
-  // The label is the PAINTED size (#5256): the stored factor times the zoom the map paints under.
+  // "N%" (of the factory size, #5977) and, when the map paints under a zoom, " · M% painted" (#5256).
+  const parts = /^(\d+(?:\.\d+)?)%(?: · (\d+(?:\.\d+)?)% painted)?$/.exec(sizeLabel);
+  expect(parts, `the toolbar reports a readable percentage: "${sizeLabel}"`).not.toBeNull();
+  expect(parts[1].length, "each figure stays short").toBeLessThanOrEqual(7);
+  // The painted figure is the stored factor times the zoom the map paints under.
   const painted = sizeAfter * await page.evaluate(() => document.getElementById("minimap").currentCSSZoom || 1);
-  expect(Math.abs(parseFloat(sizeLabel) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
+  expect(Math.abs(parseFloat(parts[2] ?? parts[1]) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
   await page.locator("#hud-arrange-done").click();
   await expect(page.locator("#pmsettings")).toBeVisible();
   await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
@@ -1022,8 +1027,7 @@ for (const shape of [
       await expect(bar).toBeVisible(); await expect(page.locator("#hud")).toBeVisible();
       await expect(page.locator("#overlay")).toBeHidden();
       for (const selector of [".hud-top", "#minimap", "#hud-limits", "#announce"]) await expect(page.locator(selector)).toBeVisible();
-      // The shared layer lifecycle remembers RESET when this toolbar reopens.
-      await expect(page.locator(door === "Escape" ? "#hud-arrange-element" : "#hud-arrange-reset")).toBeFocused();
+      await expect(page.locator("#hud-arrange-element")).toBeFocused();
       expect(await page.evaluate(() => UiLayers.top()?.id)).toBe("hud-arrange-bar");
       expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
       await page.locator("#hud-arrange-element").focus();
@@ -1038,6 +1042,7 @@ for (const shape of [
       await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
       expect(await page.evaluate(() => HudLayout.get("map").x)).toBe(before + 1);
       await expect(page.locator("#hud-arrange-move")).toBeFocused();
+      await page.locator("#hud-arrange-move").click();
       await page.locator("#hud-arrange-reset").click();
       if (door === "Escape") await page.screenshot({ path: testInfo.outputPath("title-hud-" + shape.name + ".png") });
       if (door === "Escape") await page.keyboard.press("Escape"); else await page.locator("#hud-arrange-done").click();
@@ -1115,6 +1120,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(page.locator("#pmsettings")).toBeHidden();
     await expect(page.locator("#pausemenu")).toBeHidden();
     await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+    // A fresh store: the map sits at this device's factory placement (on a phone, hud-layout.js PHONE_STANDARD).
+    const factory = await page.evaluate(() => HudLayout.get("map"));
     expect(await page.locator("[data-hl-arr]").count()).toBeGreaterThan(5);
     // The pieces the race hides until something happens show sample content while arranging.
     await expect(page.locator("#announce")).toBeVisible();
@@ -1134,6 +1141,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(page.locator("#hud-arrange-element")).toHaveValue("map");
 
     // − / + act on the piece last touched; RESET returns it to the shipped layout.
+    await page.locator("#hud-arrange-move").click();
     await page.locator("#hud-arrange-larger").click();
     expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s + 10, 8);
     await page.locator("#hud-arrange-smaller").click();
@@ -1141,7 +1149,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-smaller").click();
     expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s - 10, 8);
     await page.locator("#hud-arrange-reset").click();
-    expect(await page.evaluate(() => HudLayout.get("map"))).toEqual({ x: 0, y: 0, s: 100 });
+    expect(await page.evaluate(() => HudLayout.get("map")), "RESET restores the factory placement").toEqual(factory);
 
     // The drag again, then DONE: the layout persists, every handle is released, the
     // sample content goes, and the pause card comes back.
@@ -1171,12 +1179,12 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    await page.locator("#hud-arrange-move").click();
     const vis = page.locator("#hud-arrange-vis");
     // Keyboard access starts with the first visible piece selected.
     await expect(page.locator("#hud-arrange-element")).toHaveValue("tower");
     await expect(vis).toBeEnabled();
     await vis.selectOption("off");
-    expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].filter(id => HudElements.isOn(id)))).toEqual([]);
     await expect(vis).toHaveValue("off");
     await vis.selectOption("on");
     expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].every(id => HudElements.isOn(id)))).toBe(true);
@@ -1190,8 +1198,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(vis).toBeEnabled();
     await expect(vis).toHaveValue("on");
     await vis.selectOption("off");
-    // Stored as hidden, yet still on screen as a ghost so it can be touched again.
-    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(false);
+    // The draft shows a ghost; Apply commits its visibility.
+    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(true);
     await expect(page.locator("#hud-sectors")).toHaveAttribute("data-hl-off", "");
     await expect(page.locator("#hud-sectors")).toBeVisible();
     await expect(vis).toHaveValue("off");
@@ -1203,13 +1211,14 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     // Back in: SHOW restores it.
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
-    const sec2 = await page.locator("#hud-sectors").boundingBox();
-    await page.mouse.move(sec2.x + sec2.width / 2, sec2.y + sec2.height / 2);
-    await page.mouse.down();
-    await page.mouse.up();
+    // By the picker this time: ARRANGE shows a piece's SAVED spot (hud-race-keep-5678), and the
+    // PHONE_STANDARD sectors seed, authored with 59 px insets, saves it at 838.9..873.6 on this
+    // inset-free 844 screen, so its centre is off the glass (measured 2026-11-20).
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    await page.locator("#hud-arrange-move").click();
     await expect(vis).toHaveValue("off");
     await vis.selectOption("on");
-    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(true);
+    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(false);
     await page.locator("#hud-arrange-done").click();
     await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).not.toContain("sectors");
@@ -1236,16 +1245,20 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-move").focus();
     await page.keyboard.press("ArrowRight");
     const after = await page.locator("#announce").boundingBox();
-    // HudLayout persists whole percentages: the first placement snaps the
-    // visible origin to that existing grid, then adds the keyboard step.
-    const expectedX = LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
-    const expectedY = LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
+    // An automatic card: HudLayout persists whole percentages, so the first placement snaps the
+    // visible origin to that grid, then adds the step. A stored placement (the phone's
+    // PHONE_STANDARD seed, x -43.505 %) moves by exactly one step of the screen.
+    const seeded = await page.evaluate(() => document.getElementById("announce").hasAttribute("data-hl-user"));
+    const expectedX = seeded ? before.x + LANDSCAPE.width / 100
+      : LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
+    const expectedY = seeded ? before.y : LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
     expect(Math.abs(after.x - expectedX)).toBeLessThan(2);
     expect(Math.abs(after.y - expectedY)).toBeLessThan(2);
     await page.keyboard.press("Shift+ArrowDown");
     const shifted = await page.locator("#announce").boundingBox();
     expect(Math.abs(shifted.y - after.y - LANDSCAPE.height / 20)).toBeLessThan(2);
     await picker.selectOption("inputs");
+    await page.locator("#hud-arrange-move").click();
     await expect(page.locator("#hud-arrange-vis")).toHaveValue("off");
     await page.locator("#hud-arrange-vis").selectOption("on");
     await expect(page.locator("#hud-arrange-vis")).toHaveValue("on");
@@ -1292,6 +1305,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(toolbar.x + toolbar.width).toBeLessThanOrEqual(LANDSCAPE.width - 59);
     expect(toolbar.y).toBeGreaterThanOrEqual(0);
     expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(LANDSCAPE.height - 21);
+    await page.locator("#hud-arrange-move").click();
     const picker = page.locator("#hud-arrange-element");
     for (const id of ["rel", "strat", "inputs"]) {
       await picker.selectOption(id);
@@ -1343,6 +1357,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const card = page.locator("#announce");
     await expect(card).toBeVisible();
+    // The factory placement RESET returns to: automatic, or on a phone the PHONE_STANDARD seed.
+    const factory = await page.evaluate(() => ({ v: HudLayout.get("announce"), placed: document.body.hasAttribute("data-radio-placed") }));
     // Drop in the tower's row (the phone report, 2026-10-14). Leave half the
     // viewport for the card: this checks manual placement, not edge clamping.
     const tower = await page.locator(".hud-top").boundingBox();
@@ -1376,7 +1392,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(Math.abs(a2.x - tx), "message at the drop point (x)").toBeLessThanOrEqual(6);
     expect(Math.abs(a2.y - ty), "message at the drop point (y)").toBeLessThanOrEqual(6);
     await page.evaluate(() => HudLayout.resetEl("announce"));
-    await page.waitForFunction(() => !document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction((placed) => document.body.hasAttribute("data-radio-placed") === placed, factory.placed, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => HudLayout.get("announce")), "RESET restores the factory placement").toEqual(factory.v);
   });
 
   test("rotation exits Arrange and keeps restored Settings interactive above Pause", async ({ page }) => {
@@ -1579,6 +1596,7 @@ test.describe("Arrange map clearance handoff", () => {
     expect(Math.abs(moved.y-before.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(moved.w-before.w)).toBeLessThanOrEqual(1);
     expect(Math.abs(moved.h-before.h)).toBeLessThanOrEqual(1);
+    await page.locator("#hud-arrange-move").click();
     await page.locator("#hud-arrange-reset").click();
     const reset=await snap(); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-larger").click(); const resized=await snap();

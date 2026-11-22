@@ -1,5 +1,6 @@
 # UI map — navigation and DOM
 
+See the [screen arrangement matrix](notes/SCREEN-ARRANGEMENT.md) for region ownership and player controls.
 This is the lookup map for Apex 26's menu web: where a title-screen action
 leads, which overlays can appear along the way, and which stable DOM roots an
 agent can inspect.
@@ -704,3 +705,5 @@ environment, the Chromium CDN returned a 195-byte HTML page titled "Site
 Unavailable" instead of a ZIP. The cloud browser also reported "WebGL2
 unavailable" in the actual car studio. Use the CI route for native captures in
 that situation; the static gallery preview alone cannot verify game rendering.
+
+The [arrangement baseline](notes/SCREEN-ARRANGEMENT-BASELINE.md) records the starting deployment and Career capture.

@@ -31,10 +31,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 let gPin = null, gShip = null, mPin = null, mShip = null;
 before(async () => {
-  gPin = await createGame({ track: "monza", seat: "pin", storage: { difficulty: "normal", autoThrottle: false } });
+  gPin = await createGame({ track: "monza", seat: "pin", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await gPin.race("monza", "day", "dry");
   mPin = measure(gPin, 0);
-  gShip = await createGame({ track: "monza", seat: "shipped", storage: { difficulty: "normal", autoThrottle: false } });
+  gShip = await createGame({ track: "monza", seat: "shipped", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await gShip.race("monza", "day", "dry");
   mShip = measure(gShip, 0);
 });
@@ -99,7 +99,8 @@ test("pin mid-corner: yaw rise ≤ 25% relative pin (#1266 aRmax stays ~14.6° w
 });
 
 test("step-steer and skidpad magnitudes barely move on either seat", () => {
-  // Anchors from the pre-fix tip (player-dyn --json, monza FRAC 0).
+  // Anchors from the pre-fix tip (player-dyn --json, monza FRAC 0), at PACE notch 11: both seats seed it,
+  // since #5977 moved the shipped default to 17 (the ground-speed scale, not the driving model).
   assert.ok(Math.abs(mPin.stepSteer.final - 0.435) < 0.02, `pin stepSteer ${mPin.stepSteer.final}`);
   assert.ok(Math.abs(mShip.stepSteer.final - 0.447) < 0.02, `shipped stepSteer ${mShip.stepSteer.final}`);
   const skPin = mPin.skidpad.find((r) => r.v === 60 && r.steer === 0.8);

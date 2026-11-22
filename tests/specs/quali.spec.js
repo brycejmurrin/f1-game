@@ -15,6 +15,7 @@
 // That is the wrong axis. What decides it is whether the spec drives MENU
 // SCREENS, because screen state is the thing the shared-page reset cannot
 // restore. Count the locator() calls before converting, not the goto()s.
+import { CONTRACT_WINDOWS } from "../helpers/iphone15.mjs";
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { RACE_BUILD_MS } from "../helpers/fixtures.js";
@@ -453,11 +454,6 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
 // NORMAL beside a compact career hub (C, 381.4, was already compact). The short-touch gates in css/race-setup.css and
 // css/career.css hold both compact in every window; painted heads 23.4 (29.6 normal), feet 48.2 / 56.
 const OWNER_EXPORT = JSON.parse(await readFile(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
-const CONTRACT_WINDOWS = [
-  { name: "A home-screen 852x393", viewport: { width: 852, height: 393 } },
-  { name: "C safari 852x283", viewport: { width: 852, height: 283 } },
-  { name: "D spec phone 844x390", viewport: { width: 844, height: 390 } },
-];
 const sheetCell = (id) => {
   const sheet = document.querySelector("#" + id + " > .sheet");
   const foot = sheet.querySelector(".sheet-foot").getBoundingClientRect();

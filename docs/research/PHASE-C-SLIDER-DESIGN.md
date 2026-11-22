@@ -1,5 +1,8 @@
 > **Dated record (2026-08).** Design + verification numbers for the Phase C
-> slider recalibration; all four sections shipped (see Status below).
+> slider recalibration. All four sections shipped (see Status below). In November
+> 2026 the factory moved to notch 17 and the displayed pace became relative to
+> that factory value. The August measurements below use the earlier default.
+> [November settings review](../notes/2026-11-20-settings-range-review.md)
 >
 > Errata: `tools/tune-sweep.mjs` has since been renamed
 > `tools/check/physics-tune-sweep.mjs`.
