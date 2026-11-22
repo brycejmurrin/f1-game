@@ -238,25 +238,31 @@ const TLX = (function () {
         label: desc.label,
       });
       let staging = new ArrayBuffer(size);
-      const parts = [];
+      // Keep the staging handlers only for the initial upload. Later mapAsync
+      // calls on this buffer must use the device's own mapping methods.
+      const nativeRange = buf.getMappedRange, nativeUnmap = buf.unmap;
+      let parts;
       buf.getMappedRange = function (offset, mapSize) {
         const o = offset | 0;
         const n = mapSize == null ? (size - o) : (mapSize | 0);
         if (o === 0 && n === size) return staging;
         const part = new ArrayBuffer(n);
+        if (!parts) parts = [];
         parts.push({ o, part });
         return part;
       };
       buf.unmap = function () {
         try {
-          for (let i = 0; i < parts.length; i++) {
+          for (let i = 0; parts && i < parts.length; i++) {
             const p = parts[i];
             new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
           }
           if (staging && size) dev.queue.writeBuffer(buf, 0, staging);
         } catch (_) { /* one failed upload must not take down present() */ }
         staging = null;
-        parts.length = 0;
+        parts = null;
+        buf.getMappedRange = nativeRange;
+        buf.unmap = nativeUnmap;
       };
       return buf;
     }
