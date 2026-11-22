@@ -450,6 +450,32 @@ test("visor refraction builds and resizes with reflections OFF in a fresh helmet
   assert.equal(V.stats().paints, 0, "reflections stay off after resize");
 });
 
+test("sky-only reflections keep the painted bitmap until its pixels or canvas change", () => {
+  const scene = { ...DAY, tgt: [0, 1, 10] };
+  const { V, win, live } = load({ apex: { visorScene: () => scene } });
+  const paint = () => { V.tick(1 / 15, true, 40, false); return V.stats().paints; };
+  assert.equal(paint(), 1);
+  scene.tgt = [0.05, 1, 10];
+  assert.equal(paint(), 1, "a moving camera still sees the same sky gradient");
+  scene.ambientSky = [0.1, 0.1, 0.2];
+  assert.equal(paint(), 2, "sky brightness changed");
+  win.innerHeight++;
+  assert.equal(paint(), 3, "viewport changed");
+  scene.tgt = DAY.tgt;
+  assert.equal(paint(), 4, "a sun glint appeared");
+  scene.tgt = [0, 1, 10];
+  assert.equal(paint(), 5, "remove the glint from the canvas");
+  live.visor = "off";
+  paint();
+  live.visor = "clear";
+  assert.equal(paint(), 6, "restore the cleared reflection canvas");
+  scene.ambientSky = [0, 0, 0];
+  assert.equal(paint(), 6, "an unlit shield needs no reflection paint");
+  assert.equal(V.stats().shown, false);
+  scene.ambientSky = DAY.ambientSky;
+  assert.equal(paint(), 7, "sky light returns");
+});
+
 test("only visible optics fold into the final scene, with draining water above world refraction", () => {
   const { V, ctx, calls } = load({ apex: { visorScene: () => DAY }, refraction: "medium" });
   const hud = { hidden: false }, water = { hidden: true };

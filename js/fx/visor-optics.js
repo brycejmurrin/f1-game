@@ -51,7 +51,7 @@ const VisorOptics = (function () {
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
-  let _budget = 0, _paintHz = HZ;
+  let _budget = 0, _paintHz = HZ, _lastHaze = null;
   let _portKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
   // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
@@ -450,7 +450,7 @@ const VisorOptics = (function () {
       _bendW = 0;
     }
     if (!geometryChanged && !newCanvas && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
-    _w = w; _h = h;
+    _w = w; _h = h; _lastHaze = null;
     if (_cv && (newCanvas || resized || _cv.width !== lightW || _cv.height !== lightH)) {
       // The broad reflected light is low-frequency. Keep projection, stroke widths
       // and paths in CSS pixels, and leave the bezel and scene at full resolution.
@@ -576,6 +576,7 @@ const VisorOptics = (function () {
   function _show(on) {
     if (on === _shown) return;
     _shown = on;
+    _lastHaze = null;
     if (_cv) _cv.hidden = !on;
     if (!on && _ctx && _w) _ctx.clearRect(0, 0, _w, _h);
   }
@@ -737,13 +738,20 @@ const VisorOptics = (function () {
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
     if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
-    _show(true);
     const fringe = FRINGE[refraction] || 0;
     const beams = budget.beams ? _beams() : 0;
     const kn = readKnobs(t0 || 0);
     let m;
     try {
       m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams, glintLimit: budget.glints });
+      // With the sun behind the driver and no visible lamps, only the sky gradient remains.
+      // Its pixels depend on sky brightness and viewport size, even as the helmet moves.
+      const hazeOnly = !m.sun && !m.rim && !m.glints.length && m.fringe <= 0.004;
+      if (hazeOnly && m.haze <= 0.004) { _show(false); return; }
+      _show(true);
+      const hazeAlpha = hazeOnly ? m.haze.toFixed(3) : null;
+      if (hazeOnly && hazeAlpha === _lastHaze && _lightValid) return;
+      _lastHaze = hazeAlpha;
       _paint(m);
       _lightValid = true;
     } catch (e) {
