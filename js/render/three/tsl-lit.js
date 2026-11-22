@@ -2858,8 +2858,8 @@
             fogCol.addAssign(lampFogC);
             color.assign(mix(color, fogCol, f));
           });
-          // low-lying ground mist: drifting 2-oct cloudFBM band
-          If(U.groundMist.greaterThan(0.001), () => {
+          // The mist ramp is zero through 8 m: the cockpit and near road need no band or noise.
+          If(U.groundMist.greaterThan(0.001).and(vd.greaterThan(8.0)), () => {
             const lowH = max(wp.y.sub(cameraPosition.y.sub(5.0)), 0.0);
             const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
             const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
