@@ -1453,8 +1453,9 @@ test("START FROM hydrates a metadata-only pick and revokes stale replacements", 
   b.D.close();
 });
 
-// Hydration may finish between pointermove and pointerup. Exercise the real
-// gesture handlers rather than calling the final commit hooks directly.
+// Hydration may finish while a gesture is still live. startFrom waits for the
+// map/profile to go idle, then re-checks the generation so a deliberate move
+// revokes and a selection-only tap still applies (#6031).
 for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test(`pending START FROM ${move ? "yields to an in-progress " : "survives a selection-only "}${gesture} gesture`, async () => {
   const b = bootScreen(), captured = {}, arcs = [];
   for (const [global, key] of [["DesignerCanvas", "map"], ["DesignerProfile", "profile"]]) {
@@ -1493,15 +1494,81 @@ for (const gesture of ["map", "profile", "draw"]) for (const move of [true, fals
     if (gesture === "draw") fire("pointermove", x + 60, y + 30);
   }
   assert.deepEqual(plain(b.D.state().design), before, "live gesture has not committed");
-  release(); assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement before pointerup");
-  if (move) assert.deepEqual(plain(b.D.state().design), before);
+  release();
   fire("pointerup", x + 60, y + 30);
+  assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement");
   const after = b.D.state();
   assert.equal(after.design.name, move ? before.name : "MONZA REMIX");
   assert.equal(after.undo, undo + 1, "one gesture or replacement remains one undo transaction");
   assert.equal(b.D.undo(), true);
   assert.deepEqual(plain(b.D.state().design.pts), before.pts);
   assert.deepEqual(plain(b.D.state().design.heights), before.heights);
+  b.D.close();
+});
+
+// Hydration between pointerdown and the drag threshold used to apply the remix
+// under the finger; the drag then mutated MONZA REMIX (#6031 press-window).
+test("pending START FROM yields when hydrate finishes during a map press before the drag arms", async () => {
+  const b = bootScreen(), captured = {};
+  const real = b.ctx.DesignerCanvas;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks); captured.map = { canvas: c, api }; return api;
+  } });
+  openGreen(b); b.D.setMode("edit"); b.D.setSelectionMode("point"); b.D.preview();
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured.map; h.api.resize(); h.api.fit();
+  const v = h.api.view(), p = before.pts[4];
+  const x = (p[0] - v.cx) * v.scale + v.w / 2, y = (p[1] - v.cz) * v.scale + v.h / 2;
+  const fire = (type, cx, cy) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: cx, clientY: cy });
+  fire("pointerdown", x, y);
+  release();
+  fire("pointermove", x + 30, y - 15);
+  fire("pointerup", x + 60, y + 30);
+  assert.equal(await pending, false, "a press that becomes a drag revokes even when hydrate won the race");
+  assert.equal(b.D.state().design.name, before.name);
+  assert.notDeepEqual(plain(b.D.state().design.pts), before.pts);
+  assert.equal(b.D.state().undo, undo + 1);
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  b.D.close();
+});
+
+// A Loading / SW reflow used to re-fit (#6000) under stale aim coords so the
+// press missed into a pan: no onBegin, startFrom resolved true (#6031).
+test("pending START FROM holdFit keeps a pre-reflow map aim on the grip after a large resize", async () => {
+  const b = bootScreen(), captured = {};
+  const real = b.ctx.DesignerCanvas;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks); captured.map = { canvas: c, api }; return api;
+  } });
+  openGreen(b); b.D.setMode("edit"); b.D.setSelectionMode("point"); b.D.preview();
+  const before = plain(b.D.state().design);
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured.map;
+  h.canvas._rect = { left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 };
+  h.api.resize(); h.api.fit();
+  const v1 = h.api.view(), p = before.pts[4];
+  const at = { x: (p[0] - v1.cx) * v1.scale + v1.w / 2, y: (p[1] - v1.cz) * v1.scale + v1.h / 2 };
+  h.canvas._rect = { left: 0, top: 0, right: 900, bottom: 600, width: 900, height: 600 };
+  h.api.resize();
+  const v2 = h.api.view();
+  assert.equal(v2.scale, v1.scale, "holdFit skipped the re-fit");
+  const fire = (type, cx, cy) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: cx, clientY: cy });
+  fire("pointerdown", at.x, at.y);
+  fire("pointermove", at.x + 30, at.y - 15);
+  release();
+  fire("pointerup", at.x + 60, at.y + 30);
+  assert.equal(await pending, false, "stale pre-reflow aim still hits the grip and revokes");
+  assert.equal(b.D.state().design.name, before.name);
   b.D.close();
 });
 
@@ -3088,6 +3155,43 @@ test("native CARD share title remains captured when the design changes during PN
 });
 
 
+test("CARD from a closed visit cannot share its PNG or release the reopened visit's pending card", async () => {
+  const b = bootScreen(); openGreen(b); b.ctx.File = File;
+  const create = b.dom.document.createElement, shared = [];
+  let onPng;
+  b.dom.document.createElement = tag => {
+    const el = create(tag);
+    if (tag === "canvas") el.toBlob = done => onPng(() => done(new Blob(["png"], { type: "image/png" })));
+    return el;
+  };
+  b.ctx.navigator = { canShare: () => true, share: async data => { shared.push(data.title); } };
+  const oldPng = new Promise(resolve => { onPng = resolve; });
+  const old = b.D.shareCard(), finishOld = await oldPng;
+  b.D.close(); b.D.open(); b.D.setName("Next visit");
+  const newPng = new Promise(resolve => { onPng = resolve; });
+  const newer = b.D.shareCard(), finishNew = await newPng;
+  finishOld(); assert.equal(await old, false); assert.deepEqual(shared, []);
+  assert.equal(await b.D.shareCard(), false, "older completion keeps the current card busy");
+  finishNew(); assert.equal(await newer, true); assert.deepEqual(shared, [b.D.state().design.name]);
+  b.D.close();
+});
+
+for (const outcome of ["resolve", "reject"]) {
+  test(`CARD native share ${outcome} after close leaves the next visit alone`, async () => {
+    const b = bootScreen(); openGreen(b); recordingCanvas(b, [], []); b.ctx.File = File;
+    let onShare, saves = 0;
+    const entered = new Promise(resolve => { onShare = resolve; });
+    b.ctx.navigator = { canShare: () => true, share: () => new Promise((resolve, reject) => onShare({ resolve, reject })) };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    const old = b.D.shareCard(), finish = await entered;
+    b.D.close(); b.D.open(); const message = msgText(b);
+    finish[outcome](new Error("share unavailable"));
+    assert.equal(await old, false); assert.equal(saves, 0);
+    assert.equal(msgText(b), message);
+    b.D.close();
+  });
+}
+
 test("close cancels pending single-file and decoded imports without blocking a new closed API load", async () => {
   for (const path of ["file","decode"]) {
     const b=bootScreen();b.D.init(b.G,{custom:b.C,root:b.root});b.D.open();b.D.load(design({name:"ORIGINAL"}));
@@ -3172,6 +3276,105 @@ test("authored road bridge adds, refuses overlap/unsafe inputs, edits, undoes an
   assert.equal(b.D.state().design.bridges.length, 1);
   b.D.close(); b.D.open();
   assert.equal(b.D.state().design.bridges.length, 1, "draft reopens with its bridge");
+});
+
+test("SHARE copies the newer circuit when its encode finishes first", async () => {
+  const b = bootScreen(); openGreen(b);
+  const finish = [], written = [];
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => finish.push(resolve)) };
+  b.ctx.ApexClipboard = { write: async url => { written.push(url); return true; } };
+  const old = b.D.share();
+  b.D.setName("New circuit");
+  const latest = b.D.share();
+  finish[1]("new"); const url = await latest;
+  finish[0]("old"); assert.equal(await old, null);
+  assert.deepEqual(written, [b.CD.shareUrl("new")]);
+  assert.equal(url, written[0]);
+  assert.equal(b.root.querySelector('[aria-label="Share code or link"]').value, url);
+  assert.equal(b.D.state().lastCode, "new");
+  b.D.close();
+});
+
+for (const action of ["share", "shareCard"]) {
+  test(`${action} from a replaced circuit leaves the imported design and its controls alone`, async () => {
+    const b = bootScreen(); openGreen(b);
+    const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+    let finish, copies = 0, saves = 0;
+    b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+    b.ctx.ApexClipboard = { write: async () => { copies++; return false; } };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    recordingCanvas(b, [], []);
+    const pending = b.D[action]();
+    assert.equal(await b.D.loadFrom(incoming), true);
+    assert.equal(b.D.state().design.name, "IMPORTED");
+    const field = b.root.querySelector('[aria-label="Share code or link"]'), value = field.value;
+    const focus = b.dom.document.activeElement, status = msgText(b);
+    finish("old-code");
+    assert.equal(await pending, action === "share" ? null : false);
+    assert.equal(copies, 0); assert.equal(saves, 0);
+    assert.equal(field.value, value); assert.equal(msgText(b), status);
+    assert.ok(b.dom.document.activeElement === focus);
+    assert.notEqual(b.D.state().lastCode, "old-code");
+    b.D.close();
+  });
+}
+
+test("undoing a document replacement withdraws the replaced circuit's pending SHARE", async () => {
+  const b = bootScreen(); openGreen(b);
+  const original = b.D.state().design.name;
+  const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+  assert.equal(await b.D.loadFrom(incoming), true);
+  let finish, copied = false;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async () => { copied = true; return true; } };
+  const pending = b.D.share();
+  assert.equal(b.D.undo(), true); assert.equal(b.D.state().design.name, original);
+  finish("imported-code");
+  assert.equal(await pending, null); assert.equal(copied, false);
+  b.D.close();
+});
+
+test("a refused import leaves the pending SHARE on its original circuit", async () => {
+  const b = bootScreen(); openGreen(b);
+  const copied = []; let finish;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async url => { copied.push(url); return true; } };
+  const pending = b.D.share();
+  assert.equal(await b.D.loadFrom("invalid"), false);
+  finish("original");
+  assert.equal(await pending, b.CD.shareUrl("original"));
+  assert.deepEqual(copied, [b.CD.shareUrl("original")]);
+  b.D.close();
+});
+
+test("SHARE waits for an in-flight clipboard write and suppresses its fallback after reopening", async () => {
+  const b = bootScreen(); openGreen(b);
+  vm.runInContext(read("js/core/clipboard.js"), b.ctx, { filename: absSrc("js/core/clipboard.js") });
+  const writes = [], pending = [];
+  let copiedSelection = 0;
+  b.dom.document.execCommand = () => { copiedSelection++; return true; };
+  b.ctx.navigator = { clipboard: { writeText(url) {
+    writes.push(url);
+    return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+  } } };
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: async item => item.name };
+  const old = b.D.share();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  b.D.close(); b.D.open(); b.D.setName("New circuit"); b.D.showPane("library");
+  const latest = b.D.share();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1, "second native write waits for first to settle");
+  pending[0].reject(new Error("permission denied"));
+  assert.equal(await old, null);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 2);
+  assert.equal(copiedSelection, 0, "old clipboard fallback never copies or takes focus");
+  assert.equal(b.root.dataset.pane, "library");
+  pending[1].resolve();
+  assert.equal(await latest, writes[1]);
+  assert.equal(msgText(b), "Share link copied");
+  b.D.close();
 });
 
 test("share clipboard fallback opens the workspace containing its copy field", async () => {
@@ -3337,4 +3540,25 @@ test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", (
     as(0, 3);
     assert.equal(checks.textContent, "CHECKS · 3 WARNINGS");
   } finally { b.ctx.TrackValidate = V; }
+});
+
+// track-designer:71 (734x343 / 852x344 at 100 %, foot tucked): the screen
+// arranger's entry took a fourth 44 px grid row and the dialog scrolled 16 px.
+// Tucked, it floats at the foot's end at a fixed width the status line keeps clear.
+// The entry shares the body's cell (no fourth row) at its end. An absolute bottom anchored it to the visible box, so
+// a dialog that scrolls at UI SIZE 150 % put it over SHARE & FILES (CI run 44853962507, 852x344@150).
+test("the tucked designer seats the arrange entry in the body's cell instead of adding a grid row", async () => {
+  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
+  const rules = cssRules(read("css/screen-arranger.css"));
+  const entry = '#trackdesigner[data-foot="in"] > .screen-arrange-entry';
+  const body = cssRules(read("css/editor.css")), cell = '#trackdesigner[data-foot="in"] > .td-body';
+  for (const [r, sel] of [[rules, entry], [body, cell]]) {
+    assert.equal(decl(r, sel, "grid-row"), "2", sel);
+    assert.equal(decl(r, sel, "grid-column"), "1", sel);
+  }
+  assert.notEqual(decl(rules, entry, "position"), "absolute");
+  assert.equal(decl(rules, entry, "align-self"), "end");
+  assert.equal(decl(rules, entry, "justify-self"), "end");
+  assert.equal(decl(rules, entry, "width"), "9rem");
+  assert.equal(decl(cssRules(read("css/editor.css")), '#trackdesigner[data-foot="in"] .td-foot .td-msg', "padding-inline-end"), "calc(9rem + var(--gap) / 2)");
 });

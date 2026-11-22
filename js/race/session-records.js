@@ -5,6 +5,7 @@ var SessionRecords = (function () {
   function create(G) {
     let key = null, revision = -1, spoiled = false, dailyRestore = null, assistRestore = null;
     let comparedGuest = null, comparedKey = null;
+    // Keep the daily rules fixed so earlier daily records stay comparable.
     const STANDARD = { PACE: 0.84, DRIFT: 0, FRONT_GRIP: 0.94, PLAYER_GRIP: 1.15, ROAD_FOLLOW: 0,
       STEER_EXPO: 2.4, STEER_MAX_SLIP: 0.29, STEER_SPEED_REF: 41.7, WHEELBASE: 3.6, YAW_DAMP: 1, YAW_INERTIA: 0.58, raceLineAssist: 0 };
     function prepareDaily() {

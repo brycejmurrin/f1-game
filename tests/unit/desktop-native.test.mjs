@@ -312,6 +312,7 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
       PhonePad: { padUrl: pad.padUrl, host: (ui) => { pairingUi = ui; return { cancel() {} }; } },
       LobbyCodes: { paintQr: (_wrap, _canvas, url) => qrs.push(url) },
     });
+    vm.runInContext(readFileSync(join(ROOT, "js/net/phone-pairing-ui.js"), "utf8"), ctx, { filename: absSrc("js/net/phone-pairing-ui.js") });
     vm.runInContext(readFileSync(join(ROOT, "js/ui/platform-session.js"), "utf8"), ctx, { filename: absSrc("js/ui/platform-session.js") });
     const session = vm.runInContext("PlatformSession", ctx).create({ $, els: {}, store: {} }, { ensureNet: async () => true });
     session.wirePhone();

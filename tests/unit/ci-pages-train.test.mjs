@@ -135,6 +135,37 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
     "once the environment job starts, unpublishable must fail rather than report success");
 });
 
+test("Pages publishes the staged artifact directly after the in-lock recheck", () => {
+  const { steps } = parseYAML(pagesWorkflow).jobs.deploy;
+  const recheck = steps.findIndex(step => step.id === "recheck");
+  assert.ok(recheck >= 0);
+  assert.match(steps[recheck + 1].uses, /^actions\/deploy-pages@/);
+});
+
+test("a deploy-only rerun publishes the artifact from the successful staging attempt", () => {
+  const { stage, deploy } = parseYAML(pagesWorkflow).jobs;
+  const name = stage.steps.find(step => step.id === "artifact");
+  const upload = stage.steps.find(step => step.uses?.startsWith("actions/upload-pages-artifact@"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-artifact-"));
+  try {
+    for (const attempt of [1, 4]) {
+      const output = path.join(dir, "outputs-" + attempt);
+      cp.execFileSync("bash", ["-ec", name.run], {
+        env: { ...process.env, GITHUB_RUN_ATTEMPT: String(attempt), GITHUB_OUTPUT: output },
+      });
+      assert.equal(fs.readFileSync(output, "utf8").trim(), "name=github-pages-" + attempt);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  assert.equal(upload.with.name, "${{ steps.artifact.outputs.name }}");
+  assert.equal(stage.outputs.artifact_name, upload.with.name);
+  const publish = deploy.steps.filter(step => step.uses?.startsWith("actions/deploy-pages@"));
+  assert.deepEqual(publish.map(step => step.with.artifact_name), [
+    "${{ needs.stage.outputs.artifact_name }}", "${{ needs.stage.outputs.artifact_name }}",
+  ]);
+});
+
 test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys", () => {
   // Drive the script against a throwaway repo (A -> B -> C) and a fake `curl`
   // on PATH that serves whatever apex-sha the case names. The verdict is the

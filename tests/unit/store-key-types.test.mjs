@@ -218,3 +218,37 @@ test("TT board: junk in a v2 blob is dropped, not thrown on", () => {
   assert.deepEqual(host(GameStore.ttBoard("monza")), [{ t: 90 }, { t: 88, context: "a" }], "an out-of-range class reads as the legacy class");
   assert.deepEqual(host(GameStore.ttBoard("spa")), []);
 });
+
+// isFinite coerces '89.5', true, [89.5] and {valueOf:()=>90} into numbers, so
+// ttBoardAddResult used to write them; ttParseBoard then drops them on reload
+// (Number.isFinite on a string / bool / array / object is false). Refuse the
+// write so a non-number lap never lands on disk and then vanishes.
+test("TT board: a string lap time must not write then vanish on reload", () => {
+  const base = { teamId: "mclaren", code: "NOR", name: "Lando Norris", ts: 1 };
+  const bad = [
+    { ...base, t: "89.5" },
+    { ...base, t: true },
+    { ...base, t: [89.5] },
+    { ...base, t: { valueOf: () => 90 } },
+  ];
+  for (const entry of bad) {
+    const { GameStore, disk } = loadStore();
+    const add = GameStore.ttBoardAddResult("monza", entry);
+    assert.equal(add.ok, false, `refuses ${typeof entry.t === "object" ? "object" : JSON.stringify(entry.t)}`);
+    assert.equal(add.durable, false);
+    assert.equal(add.laps.length, 0);
+    assert.equal(disk.has("apex26.ttlb.monza"), false, "nothing written");
+    const { GameStore: reloaded } = loadStore(
+      disk.has("apex26.ttlb.monza") ? { "apex26.ttlb.monza": disk.get("apex26.ttlb.monza") } : {}
+    );
+    assert.deepEqual(host(reloaded.ttBoard("monza")), [], "reload stays empty");
+  }
+  const { GameStore, disk } = loadStore();
+  const good = GameStore.ttBoardAddResult("monza", { ...base, t: 89.5 });
+  assert.equal(good.ok, true);
+  assert.equal(good.durable, true);
+  assert.equal(good.laps.length, 1);
+  const { GameStore: after } = loadStore({ "apex26.ttlb.monza": disk.get("apex26.ttlb.monza") });
+  assert.equal(after.ttBoard("monza").length, 1);
+  assert.equal(after.ttBoard("monza")[0].t, 89.5);
+});

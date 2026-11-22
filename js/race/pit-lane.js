@@ -94,6 +94,7 @@ var PitLane = (function () {
     const noService = () => !enabled();
     /** How long a Time Trial holds the car in its box: the stop plus time to tap END TIME TRIAL (#5789). */
     const TT_DECIDE_S = 4;
+    function boxHoldSeconds(zz) { return zz.boxS + (ttStop() ? TT_DECIDE_S : 0); }
 
     /** The speed cap inside the lane, in m/s at the CURRENT pace scale. */
     function limit() {
@@ -327,8 +328,9 @@ var PitLane = (function () {
       return Math.max(1, zz.lenM - boxThroughFor(c, zz, t.total) + exitRoadM());
     }
     /** Is a stop worth making for this car right now — any ONE of a used set,
-     *  the wrong tread for the conditions, a free stop under caution. The
-     *  cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
+     *  the wrong tread for the conditions, a free stop under caution, or the
+     *  second dry compound still owed in the last COMPOUND_WARN_LAPS (#5775 R1).
+     *  The cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
      *  marker on the map and the words on the HUD can never disagree. */
     function worthStopping(c) {
       if (!enabled() || !c || c.retired || c.finished) return false;
@@ -336,7 +338,7 @@ var PitLane = (function () {
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
       const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
-      return wear >= CUE_WEAR || wrongTread || free;
+      return wear >= CUE_WEAR || wrongTread || free || compoundDue(c);
     }
     // `frac` is the distance BAR's fill (js/ui/hud.js --pit-dist): 0 at the
     // start of a countdown, 1 at its end. The last cue given to the local car
@@ -544,16 +546,16 @@ var PitLane = (function () {
      *  also ends the teach. */
     function release(c, zz) {
       c.pitOutT = SERVED_S;
+      const held = boxHoldSeconds(zz) + (c.pitWorked || 0);
       // One line per stop: the player at info, the AI field at debug (20 cars).
       Log[c.local ? "info" : "debug"]("race", "Pit stop done car=" + c.code + " lap=" + c.lap + " stop=" + (c.pitStops || 0) +
-        " held=" + ((zz ? zz.boxS : 0) + (c.pitWorked || 0)).toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
+        " held=" + held.toFixed(1) + "s pos=" + rankOf(c) + (c.pitWorked > 0 ? " work" : ""));
       if (!c.local) return;
       const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
       const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
       // The stop's REAL length, work included: a summary that reported 2.2 s
       // after twenty seconds in the garage would be the one number the driver
       // knows is wrong.
-      const held = zz.boxS + (c.pitWorked || 0);
       if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
       c.pitPos0 = 0; c.pitWorked = 0;
       // Only the FIRST stop writes: a store write bumps store.rev, which re-resolves every team's
@@ -1019,7 +1021,7 @@ var PitLane = (function () {
         Tracks.sample(G.track, c.s, _smp);
         if (!boxSquare(c, _smp, zz.side)) return;
         c.pitState = "box";
-        c.pitT = zz.boxS + (ttStop() ? TT_DECIDE_S : 0);
+        c.pitT = boxHoldSeconds(zz);
         c.pitArmed = false;
         c.pitStops = (c.pitStops || 0) + 1;
         // The set is fitted mid-hold (see the box branch above) so the wheels
@@ -1251,15 +1253,23 @@ var PitLane = (function () {
      *  no real team makes. The PLAYER is held to it too: endRace disqualifies
      *  a car that ran one dry compound (js/race/sporting-regs.js), and
      *  compoundDue() is the engineer's warning with COMPOUND_WARN_LAPS left.
+     *  Same exemptions as endRace's cmpOn (#5775 R2): armed practice and a
+     *  free-play DUEL never DSQ, so the planner / compoundDue must not either.
      *  Only where a stop is possible at all (enabled(): a lane and wear on). */
     const TWO_COMPOUND_MIN_LAPS = 8;
     function sprintLeg() {
       return !!G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.stage(G.season) === "sprint";
     }
+    /** Matches game.js endRace: !isPractice() && !duelOn(). G.duel is the sticky
+     *  setting; duelOn also needs !championship — G.seasonMode covers that. */
+    function compoundExemptSession() {
+      return !!G.practice || (!!G.duel && !G.seasonMode && G.session === "race");
+    }
     function twoCompoundRule(laps) {
       return laps >= TWO_COMPOUND_MIN_LAPS
         && TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) === 0
-        && !sprintLeg();
+        && !sprintLeg()
+        && !compoundExemptSession();
     }
     const COMPOUND_WARN_LAPS = 5;
     function twoCompoundApplies() { return enabled() && twoCompoundRule(G.lapsTarget); }

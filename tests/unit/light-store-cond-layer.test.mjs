@@ -134,3 +134,12 @@ test("the day key never fires at night and vice versa", () => {
   const h = loadStore({ presets: { "*|day": { perChunkLights: 0.9 } }, tod: "night" });
   assert.equal(h.LT.perChunkLights, 0);
 });
+
+test("garage lamps resolve the selected circuit and preserve the active race profile", () => {
+  const { store, LT } = loadStore({ presets: { "monza|night|rain": { lampLevel: .43 } } });
+  const selection = { trackId: "monza", tod: "default", night: true, weather: "storm" };
+  assert.equal(store.garageLamps(selection, {}).lampLevel, .43);
+  store.profiles = { "monza|night|rain": {lampLevel: 0} };
+  assert.equal(store.garageLamps(selection, {}).lampLevel, 0);
+  assert.equal(LT.lampLevel, .2);
+});

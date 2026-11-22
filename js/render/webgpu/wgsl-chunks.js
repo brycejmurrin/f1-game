@@ -583,11 +583,13 @@ struct FrameU {
   params8    : vec4<f32>,     // off 528  (lampFog, lampShadowOn, lampIdx, matTexMix)
   params9    : vec4<f32>,     // off 544  (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow)
   params10   : vec4<f32>,     // off 560  (chunkShadowIdx — ABSOLUTE index of the armed shadow
-                              //           lamp in the baked trackLights array, -1 unarmed; y PUDDLES knob; zw pad)
+                              //           lamp in the baked trackLights array, -1 unarmed; y PUDDLES knob;
+                              //           zw = wind.xy unit direction in world xz — GLX uWind.xy)
   pitLane    : vec4<f32>,     // off 576  (entry s, window length, pit side, lap length) — the
                               //           PAINTED pit lane; length 0 = no lane (roadMarkings)
-  pitBox     : vec4<f32>,     // off 592  (through, half length, 0, 0) — YOUR box in
-                              //          the row; a zero half length means no box
+  pitBox     : vec4<f32>,     // off 592  (through, half length, wind.z speed, 0) — YOUR box in
+                              //          the row; a zero half length means no box. z = GLX uWind.z
+                              //          (foliage sway speed); roadMarkings reads only xy.
   bakeA      : vec4<f32>,     // off 608  BAKED LAMP POOLS: (origin x, origin z, size x m, size z m)
   bakeB      : vec4<f32>,     // off 624  (scale rgb = frame.lampBakeScale, on)
   bakeC      : vec4<f32>,     // off 640  (shadow lamp's baked rgb = LampBake.shadowCol, T texels per tile)
@@ -835,9 +837,48 @@ fn vs_main(
     model = mat4x4<f32>(aInst0, aInst1, aInst2, aInst3);
     col = aCol * aInstColor;
   }
-  var wp = model * vec4<f32>(aPos, 1.0);
+  // Material ids travel in normal.w, independent of indexed vertex_index.
+  // World ids use a +1 prefix so authored MAT0 differs from a missing lane;
+  // restore the integer snorm word before decoding fractional FLAG/foliage ids.
+  // Code 18 includes the rounded upper edge of valid world ids below 17.
+  // Decode BEFORE the model transform so FLAG wave can displace object-space
+  // pos (GLX LIT_VS) and FOLIAGE sway can read the same fractional weight.
+  let packedWorldCode = round(aNrm.w * 32767.0) / 256.0;
+  let hasWorldMat = packedWorldCode >= 1.0 && packedWorldCode <= 18.0;
+  // Keep the existing integer-car encoding and its priority over world ids.
+  let packedCarId = floor(aNrm.w * (32767.0 / 256.0) + 0.5);
+  // World mat (with fraction) when present; car ids win later for o.matId.
+  // Motion gates on the world id only — car codes never equal FLAG/FOLIAGE.
+  let motionMat = select(0.0, packedWorldCode - 1.0, hasWorldMat);
+  let mid = i32(motionMat + 0.5);
+  let mfr = clamp(motionMat - f32(mid), 0.0, 1.0);
+  var pos = aPos;
+  // FLAG material (id 15, 15.0..15.4): cloth wind-wave. Fraction = per-vertex
+  // wave weight (0 = hoist pinned, 0.4 → weight 1). GLX LIT_VS / TLX vertexMotionNode.
+  if (mid == 15) {
+    let fw = mfr * 2.5;
+    let ph = F.params0.z * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
+    pos += aNrm.xyz * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
+  }
+  var wp = model * vec4<f32>(pos, 1.0);
   // Upper-left 3x3 of the (column-major) model matrix — GLX mat3(uModel).
   let nm = mat3x3<f32>(model[0].xyz, model[1].xyz, model[2].xyz);
+  // FOLIAGE (id 6, 6.0..6.45): wind sway in WORLD space. Fraction = height
+  // weight (TrackGeom.SWAY_FRAC = 0.45). params10.zw = wind.xy, pitBox.z = speed
+  // (GLX uWind). Bare FOLIAGE (fraction 0) keeps the exact static path.
+  if (mid == 6 && mfr > 0.002) {
+    let w = clamp(mfr / 0.45, 0.0, 1.0);
+    let spd = F.pitBox.z;
+    let windX = F.params10.z;
+    let windY = F.params10.w;
+    let along = wp.x * windX + wp.z * windY;
+    let gust = F.params0.z * (spd * 1.1 + 0.6) - along * 0.07;
+    let bend = sin(gust) * 0.55 + sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+    let amp = spd * 0.32 * w * w;
+    let wn = nm * aNrm.xyz;
+    let flPh = F.params0.z * (spd * 3.2 + 1.5) + wp.x * 1.3 + wp.z * 1.1 + wp.y * 0.7;
+    wp = vec4<f32>(wp.xyz + vec3<f32>(windX, 0.0, windY) * (bend * amp) + wn * (sin(flPh) * spd * 0.05 * w), wp.w);
+  }
   // No 4th vertex attribute — Dawn zeros it (and pos fetch) even in a
   // separate stride-16 slot. Road pieces bind authored storage[vid]
   // (mat,s,x,hw). The LUT (magic 12345) is only a fallback when group 2
@@ -848,22 +889,14 @@ fn vs_main(
   } else if (D.mat2.z > 15.5 && D.mat2.z < 16.5) {
     let wt = trkFromWorld(wp.xyz);
     if (wt.w > 0.5) {
-      let mid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
-      pulled = vec4<f32>(mid, wt.x, wt.y, wt.z);
+      let roadMid = select(0.0, 16.0, abs(wt.y) < wt.z - 0.45);
+      pulled = vec4<f32>(roadMid, wt.x, wt.y, wt.z);
     }
   }
   // Do not lift the ribbon. An 8 cm Y bump won the floor/terrain depth
   // fight and then buried cars, AI, and fence feet in the tarmac.
   o.trk = pulled.yzw;           // s, x, hw — vec3 at location 3
-  // Material ids travel in normal.w, independent of indexed vertex_index.
-  // World ids use a +1 prefix so authored MAT0 differs from a missing lane;
-  // restore the integer snorm word before decoding fractional FLAG/foliage ids.
-  // Code 18 includes the rounded upper edge of valid world ids below 17.
-  let packedWorldCode = round(aNrm.w * 32767.0) / 256.0;
-  let hasWorldMat = packedWorldCode >= 1.0 && packedWorldCode <= 18.0;
   let worldMatId = select(pulled.x, packedWorldCode - 1.0, hasWorldMat);
-  // Keep the existing integer-car encoding and its priority over world ids.
-  let packedCarId = floor(aNrm.w * (32767.0 / 256.0) + 0.5);
   o.matId = select(worldMatId, packedCarId, packedCarId >= 20.0 && packedCarId <= 85.0);
   o.worldMatPresent = select(0u, 1u, hasWorldMat);
   o.nrm  = nm * aNrm.xyz;

@@ -525,8 +525,8 @@ test("runFlakeTally --base-red: a run whose jobs call fails is a printed note, a
 
 test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same least privilege; the base-red label exists", () => {
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
-  assert.match(wf, /^\s+- cron: "17 \*\/2 \* \* \*"$/m, "every 2 h");
-  assert.match(wf, /MODE: \$\{\{ github\.event\.schedule == '17 \*\/2 \* \* \*' && 'base-red' \|\| inputs\.mode \|\| 'daily' \}\}/);
+  assert.match(wf, /^\s+- cron: "8 \*\/2 \* \* \*"$/m, "every 2 h");
+  assert.match(wf, /MODE: \$\{\{ github\.event\.schedule == '8 \*\/2 \* \* \*' && 'base-red' \|\| inputs\.mode \|\| 'daily' \}\}/);
   // The window runs from the last successful base-red run, not a fixed 3 h
   // (a dropped 2-hourly slot left its runs unread); the run-name carries the
   // mode so that lookup can tell base-red runs from daily ones.

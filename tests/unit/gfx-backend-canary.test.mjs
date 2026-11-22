@@ -5349,6 +5349,58 @@ test("WGX SAA widens roughness before wet like GLX", () => {
     "wet must recompute a after polishing, like GLX lit.js");
 });
 
+test("WGX LIT vs_main applies FLAG wave and FOLIAGE sway from normal.w like GLX", () => {
+  // #5777 row 5: material fraction lives in normal.w (wgx.js pack); vs_main must
+  // displace like GLX LIT_VS. Deploy tip 0d6e65b783 measured wp = model * aPos
+  // with no mid==15 / mid==6 branch (scratch/prove-wgx-sway-gap.mjs). Uses
+  // assert.equal (not assert.match) so the pin ratchet stays flat.
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const vs = chunks.match(/@vertex\s+fn vs_main\([\s\S]*?\) -> VSOut \{([\s\S]*?)\n  return o;\n\}/);
+  assert.equal(!!vs, true, "LIT vs_main must be present");
+  const body = vs[1];
+  const checks = [
+    ["body", body, /let mid = i32\(motionMat \+ 0\.5\)/],
+    ["body", body, /if \(mid == 15\)/],
+    ["body", body, /sin\(ph\) \* 0\.085 \+ sin\(ph \* 2\.17 \+ 1\.3\) \* 0\.045/],
+    ["body", body, /if \(mid == 6 && mfr > 0\.002\)/],
+    ["body", body, /F\.params10\.z/],
+    ["body", body, /F\.pitBox\.z/],
+    ["body", body, /bend \* amp/],
+    ["body", body, /var pos = aPos/],
+    ["body", body, /var wp = model \* vec4<f32>\(pos, 1\.0\)/],
+    ["glx", glx, /mid == 15/],
+    ["glx", glx, /mid == 6 && mfr > 0\.002/],
+    ["wgx", wgx, /T\.windDir/],
+    ["wgx", wgx, /T\.windSpeed/],
+  ];
+  const absent = checks.filter(([, src, re]) => !re.test(src)).map(([where, , re]) => `${where}:${re}`);
+  assert.equal(absent.length, 0, `WGX motion parity missing: ${absent.join("; ")}`);
+  // Behaviour: FLAG free edge and FOLIAGE tip must leave the static position
+  // under the same constants GLX / WGX share.
+  const aPos = [1, 2, 3], aNrm = [0, 1, 0], time = 1.25, wind = [0.8, 0.6, 1.5];
+  const roundMid = (m) => (m + 0.5) | 0;
+  const frac = (m) => Math.min(1, Math.max(0, m - roundMid(m)));
+  const flagMat = 15.4, foliageMat = 6.45;
+  const fw = frac(flagMat) * 2.5;
+  const ph = time * 5.5 + aPos[0] * 1.9 + aPos[2] * 1.9;
+  const wave = (Math.sin(ph) * 0.085 + Math.sin(ph * 2.17 + 1.3) * 0.045) * fw;
+  const flagDelta = Math.hypot(aNrm[0] * wave, aNrm[1] * wave, aNrm[2] * wave);
+  const w = Math.min(1, Math.max(0, frac(foliageMat) / 0.45));
+  const spd = wind[2], along = aPos[0] * wind[0] + aPos[2] * wind[1];
+  const gust = time * (spd * 1.1 + 0.6) - along * 0.07;
+  const bend = Math.sin(gust) * 0.55 + Math.sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+  const amp = spd * 0.32 * w * w;
+  const flPh = time * (spd * 3.2 + 1.5) + aPos[0] * 1.3 + aPos[2] * 1.1 + aPos[1] * 0.7;
+  const flutter = Math.sin(flPh) * spd * 0.05 * w;
+  const foliageDelta = Math.hypot(wind[0] * bend * amp + aNrm[0] * flutter, aNrm[1] * flutter, wind[1] * bend * amp + aNrm[2] * flutter);
+  assert.equal(roundMid(flagMat), 15);
+  assert.equal(roundMid(foliageMat), 6);
+  assert.equal(flagDelta > 1e-6, true, "FLAG free edge must leave aPos");
+  assert.equal(foliageDelta > 1e-6, true, "FOLIAGE tip must leave static wp");
+});
+
 test("TLX FS mat stays a smooth attribute (flat varying blanks the garage car)", () => {
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tsl, /const matA = float\(attribute\("mat", "float"\)\)\.toVar\(\)/,
@@ -6334,7 +6386,8 @@ test("TLX defers resize during compilation and applies the latest requested size
       return { width: cssW, height: cssH };
     },
   };
-  const wantSpatialUpscale = () => false, calls = [];
+  let spatialUpscale = false;
+  const wantSpatialUpscale = () => spatialUpscale, calls = [];
   const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
   } };
@@ -6356,6 +6409,30 @@ test("TLX defers resize during compilation and applies the latest requested size
   assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
   assert.equal(_softReadPending, false, "the voided old-size read must not hold the gate");
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
+
+  // With spatial upscaling the post chain owns render-scale steps and the
+  // canvas stays at presentation size on both Three backends.
+  spatialUpscale = true;
+  for (const backend of [
+    { isWebGPUBackend: true, device: { limits: { maxTextureDimension2D: 8192 } } },
+    { isWebGPUBackend: false, gl: { getParameter: () => 8192 } },
+  ]) {
+    renderer.backend = backend;
+    _layoutCanvas.clientWidth = 1100; _layoutCanvas.clientHeight = 500;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1650, 750], ["post", 1238, 563]]);
+    calls.length = 0;
+    for (const scale of [0.6, 0.7, 0.8, 0.7, 0.6, 0.5]) {
+      renderScale = scale; resize();
+    }
+    assert.deepEqual(calls, [0.6, 0.7, 0.8, 0.7, 0.6, 0.5].map(scale =>
+      ["post", Math.round(1650 * scale), Math.round(750 * scale)]));
+    _layoutCanvas.clientWidth = 1000; renderScale = 0.75;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1500, 750], ["post", 1125, 563]]);
+  }
 });
 
 function tlxTimerFixture(webgl = false) {

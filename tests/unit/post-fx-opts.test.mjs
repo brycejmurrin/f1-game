@@ -2,7 +2,7 @@
  * switches that skip their pass's GPU work.
  *
  * Runs the REAL module over a stub SettingRow and the shipped SettingsDefaults:
- * both rows exist in the shell, both default ON, each flips without moving the
+ * both rows exist in the shell, each flips without moving the
  * other, and each persists through its own apex26.* raw key. The "skip the
  * work" half is pinned at its one gate in game.js — every backend (GLX, TLX,
  * WGX) already drops a pass whose strengths are all 0, so OFF must zero ALL of
@@ -31,10 +31,11 @@ const DEFAULTS = (() => {
 const SHELL = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 
-function load(stored = {}) {
+function load(stored = {}, iphone = false) {
   const rows = new Map();
   const sb = {
     Math, console, Object, Array, JSON, String, Number,
+    GfxQuality: { isIPhone: () => iphone },
     GameStore: { store: {
       raw: (k) => (k in stored ? stored[k] : DEFAULTS.has(k.replace(/^apex26\./, "")) ? DEFAULTS.get(k.replace(/^apex26\./, "")) : null),
       rawSet: (k, v) => { stored[k] = String(v); return true; },
@@ -62,8 +63,10 @@ test("it claims pm-debris, pm-ssao and pm-godrays (DEBRIS is PostFxOpts.debris),
   assert.ok(gfx.indexOf('id="pm-godrays"') > 0 && gfx.indexOf('id="pm-godrays"') < gfx.indexOf("</section>"));
 });
 
-test("both ship ON: an unset key reads ON from the shipped SettingsDefaults", () => {
-  assert.equal(DEFAULTS.get("gfxSsao"), "1");
+test("desktop defaults both effects ON; a fresh iPhone disables only AO", () => {
+  assert.equal(load({}, true).M.ssaoOn(), false);
+  assert.equal(load({}, true).M.godraysOn(), true);
+  assert.equal(load({ "apex26.gfxSsao": "1" }, true).M.ssaoOn(), true);
   assert.equal(DEFAULTS.get("gfxGodrays"), "1");
   const { M, rows } = load();
   assert.equal(M.ssaoOn(), true);

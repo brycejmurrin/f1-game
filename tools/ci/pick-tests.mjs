@@ -303,7 +303,7 @@ export const RULES = [
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
-  [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
+  [/^js\/net\//, ["net-unit", "net"], "wire logic first (node only, no browser), then the browser session"],
   [/^vendor\/trystero-[^/]+\//, ["net-unit"], "vendored action framing, payload bounds and peer cleanup — net-trystero-api.test.mjs"],
   // Same-named suite: real-race-script.test.mjs lives in state-unit. The
   // directory rule below names hooks and lifecycle-unit, which do not run it.
@@ -325,6 +325,7 @@ export const RULES = [
   [/^css\/career\.css$/, ["modes", "ui"], "career sheet: #cr-left phone overflow + hub still fit"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
+  [/^js\/ui\/touch-button-settings\.js$/, ["input", "steering-unit"], "per-button profiles in Controls and on the standalone wheel"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
   [/^js\/ui\/setting-deps\.js$/, ["steering-unit"], "settings grey-out dependency map: every rule greys with a reason"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
@@ -705,7 +706,7 @@ An unknown option prints this usage and exits 2.`;
       groups: named.map((n) => ({ group: n, script: `test:${n}`, because: [...g.get(n)][0] })),
       specs,
       // An empty list read as "no spec needed" to a cold agent (MCP-REFINE-2026-10-30): name where the spec comes from.
-      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: for the ONE pre-push spec run select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field)` }),
+      ...(specs.length || !files.length ? {} : { specsNote: `groups, not specs: the browser specs CI routes for these files: select-specs --files ${files.slice(0, 3).join(",")}${files.length > 3 ? ",…" : ""} (its floor field is the cheapest; agents never run it locally, AGENTS.md rule 5)` }),
     }));
     process.exit(0);
   }

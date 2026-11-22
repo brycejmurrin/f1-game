@@ -35,6 +35,7 @@ import {
 import { collectDesignTokens, collectAxe, tokenHTML } from "./design-evidence.mjs";
 import { execFileSync } from "node:child_process";
 import { menuReady } from "./menu-readiness.mjs";
+import { brycePhone } from "../lib/bryce-phone.mjs";
 import { resolveUIProfile } from "../lib/ui-device-profile.mjs";
 const ROOT = pathFromModule(import.meta.url);
 
@@ -111,7 +112,7 @@ export function parseCssPlayArgs(argv) {
     sel: null,
     css: null,
     inject: null,
-    viewport: { width: 852, height: 393 },
+    viewport: brycePhone({ profile: false }).viewport,
     desktop: false,
     out: null,
     json: false,

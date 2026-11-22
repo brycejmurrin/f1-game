@@ -23,13 +23,13 @@
 // the CLI that recorded the ceilings runs. Imported from @playwright/test, not the shared fixtures: this spec owns its
 // context (the preset's viewport, insets and storage), and the fixtures' page would boot a second game.
 import { test, expect } from "@playwright/test";
-import { BRYCE_WINDOWS, UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
-import { ACCEPT_SCREENS, cellKey, judgeCells, measureCell, readCeilings } from "../../tools/ui/bryce-paint.mjs";
+import { UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
+import { PAINT_WINDOWS, ACCEPT_SCREENS, cellKey, judgeCells, measureCell, readCeilings } from "../../tools/ui/bryce-paint.mjs";
 import { paintLine } from "../../tools/lib/paint-floor.mjs";
 
 const CEILINGS = readCeilings();
 
-for (const window of Object.keys(BRYCE_WINDOWS)) {
+for (const window of PAINT_WINDOWS) {
   for (const uiScale of UI_SIZE_AXIS) {
     const key = cellKey(window, uiScale);
     test(`${key}: painted text, taps, safe box and page scroll hold their recorded ceilings`, async ({ browser, baseURL }) => {

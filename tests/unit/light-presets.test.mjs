@@ -396,21 +396,21 @@ test("M37: dawn rain/overcast/fog share dawn lamp pools (47+ rain fallthrough)",
   assert.deepEqual(drift, []);
 });
 
-test("overcast and fog nights resolve the dry night's lamp pools on every track", () => {
+test("overcast and fog nights retain their own lamp pools on every track", () => {
   // Weather does not brighten a street lamp: per-track lampLevel 0.28-0.50 made
   // an overcast/foggy night out-light a clear one (Bryce's 2026-10-21 matrices).
-  const P = presets(), dry = P["*|night|dry"], drift = [];
+  const P = presets(), expected = { lampLevel: 0.2, poolEnergy: 0.6, lampRadiusMul: 0.8 }, drift = [];
   const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
     .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
   assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
   for (const wx of ["overcast", "fog"]) {
     for (const id of ["lampLevel", "poolEnergy", "lampRadiusMul"]) {
-      assert.equal(P[`*|night|${wx}`][id], dry[id], `*|night|${wx}.${id} matches *|night|dry`);
+      assert.equal(P[`*|night|${wx}`][id], expected[id], `*|night|${wx}.${id}`);
     }
     for (const track of circuits) {
       const { LT } = resolveLive(track, "night", wx);
       for (const id of ["lampLevel", "poolEnergy", "lampRadiusMul"]) {
-        if (LT[id] !== dry[id]) drift.push(`${track}|night|${wx}.${id}=${LT[id]} want ${dry[id]}`);
+        if (LT[id] !== expected[id]) drift.push(`${track}|night|${wx}.${id}=${LT[id]} want ${expected[id]}`);
       }
     }
   }
@@ -581,15 +581,17 @@ test("shared *|night|wet stamp supplies the fleet wet-night authenticity knobs",
   assert.deepEqual(pinned, [], "per-track night|wet must defer core authenticity knobs to *|night|wet");
 });
 
-test("spa|night|wet lamp spread matches its dry twin (no amber flood)", () => {
-  // Maxed beamCone/bleedMul/lampWallSpill/lampRadiusMul washed the whole wet
-  // night amber (road luma ~0.42 vs Monaco night|wet ~0.14); #1403 trimmed
-  // only spa|night|dry.
-  const P = presets(), wet = P["spa|night|wet"], dry = P["spa|night|dry"];
-  for (const id of ["beamCone", "bleedMul", "lampWallSpill", "lampRadiusMul"]) {
-    assert.equal(wet[id], dry[id], `spa|night|wet.${id} drifted from spa|night|dry`);
-    assert.equal(P["*|night|wet"][id], undefined, `*|night|wet.${id} now stamped — re-check this test`);
-  }
+test("Spa keeps independent wet and dry night lamp settings", () => {
+  const wet = resolveLive("spa", "night", "wet").LT, dry = resolveLive("spa", "night", "dry").LT;
+  assert.equal(wet.lampRadiusMul, 0.9);
+  assert.equal(dry.lampRadiusMul, 0.8);
+  assert.equal(dry.beamCone, 0.5);
+  assert.equal(dry.bleedMul, 0.6);
+  const player = resolveLive("spa", "night", "rain", { saved: { "spa|night|rain": { lampLevel: 0 } } });
+  assert.equal(player.LT.lampLevel, 0);
+  player.store.reset();
+  player.store.apply();
+  assert.equal(player.LT.lampLevel, 0.479);
 });
 
 test("no preset sets a condition-gated knob where its gate is shut (dead entries)", () => {

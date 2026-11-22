@@ -39,6 +39,11 @@ const HudElements = (function () {
   const dflt = (e) => e[2] || "on";
   const PROFS = { standard: 1, minimal: 1, broadcast: 1 };
 
+  const PHONE_DEFAULTS = Object.freeze({ speed: "off", gear: "off", energy: "off", ot: "off", aero: "off", rel: "on" });
+  const phone = () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches
+    && Math.min(window.innerWidth, window.innerHeight) <= 500;
+  const defaults = () => phone() ? PHONE_DEFAULTS : {};
+
   const store = typeof GameStore !== "undefined" ? GameStore.store : null;
   let state = readState();
 
@@ -76,7 +81,7 @@ const HudElements = (function () {
   }
 
   function readState() {
-    const raw = store ? store.get(K, null) : null;
+    const raw = (store && store.get(K, null)) ?? defaults();
     const out = {};
     for (let i = 0; i < ELEMENTS.length; i++) out[ELEMENTS[i][0]] = shippedOf(ELEMENTS[i][0]);
     if (!raw || typeof raw !== "object") return out;
@@ -87,17 +92,17 @@ const HudElements = (function () {
     return out;
   }
 
-  function persist() {
+  function persist(changedIds) {
     if (!store) return;
     // Store only what differs from the shipped default — compact, and a new
     // key keeps its own default (on, or off for the opt-in readouts). REL's
     // default follows the current HUD style.
     const slim = {};
     let any = false;
-    const p = store.get(K, null);
+    const p = store.get(K, null) ?? defaults();
     for (let i = 0; i < ELEMENTS.length; i++) {
       const id = ELEMENTS[i][0];
-      if (state[id] !== shippedOf(id) || (id === "rel" && p && p.rel === state.rel)) { slim[id] = state[id]; any = true; }
+      if (state[id] !== shippedOf(id) || (id === "rel" && (p?.rel === state.rel || (phone() && changedIds.includes(id))))) { slim[id] = state[id]; any = true; }
     }
     store.set(K, any ? slim : {});
   }
@@ -142,7 +147,7 @@ const HudElements = (function () {
       // The store subscriber below applies synchronously on a write; only
       // apply here when it did not (no subscribe, or an unchanged value).
       const before = applies;
-      persist();
+      persist(ids);
       if (applies === before) apply();
     }
     return valid;
@@ -276,7 +281,7 @@ const HudElements = (function () {
 
   // Store key `K` stays module-local (settings-export / store use the string).
   return {
-    ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
+    ELEMENTS, defaults, phone, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
     effective, configure, refreshVisibility: syncChecks,
     state: () => Object.assign({}, state),
   };

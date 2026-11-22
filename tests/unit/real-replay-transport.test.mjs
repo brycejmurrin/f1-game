@@ -93,6 +93,10 @@ test("WATCH transport pause holds the replay clock, and seek reposes ended and r
   const { replay, cars, snaps } = transportReplay();
   replay.setPaused(true); replay.tick(5);
   assert.equal(replay.status().T, 0, "paused playback does not advance");
+  replay.seek(5.004);
+  assert.equal(replay.status().T, 5, "public display clock is rounded");
+  assert.equal(replay.isPausedAt(5), false, "a nearby release still needs a seek");
+  assert.equal(replay.isPausedAt(5.004), true);
   replay.seek(20);
   assert.equal(cars[0].prog, 1000);
   assert.equal(cars[1].prog, 450, "a forward seek parks the stopped car at its final recorded position");

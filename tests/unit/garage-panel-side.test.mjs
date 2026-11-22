@@ -376,3 +376,28 @@ test("#4529: PANEL WIDTH below 100 % really shrinks; PANEL HEIGHT caps the portr
   assert.equal(body(at, block), "max-height: max(calc(min(70vh, 100%) * var(--look-garage-ph, 1)), min(100%, calc(var(--tap) * 9)));");
   assert.equal(body(at, ":root[data-look-garage-pw] #carsetup #cs-inner { "), "width: calc(100% * min(var(--look-garage-pw, 1), 1)); justify-self: end;");
 });
+
+test("arranged Garage camera fits the largest free strip after a move or resize", () => {
+  // Floating at x=600, a 500px sheet leaves 600px on the left, 340 on the right.
+  const right = panelCover(rect(600, 0, 500, 900), CANVAS, 1440, 900, noCam, true);
+  assert.equal(right.x, 1 - 600 / 1440);
+  const left = panelCover(rect(100, 0, 500, 900), CANVAS, 1440, 900, noCam, true);
+  assert.equal(left.x, -(1 - 840 / 1440));
+  const portrait = rect(0, 0, 390, 844);
+  const low = panelCover(rect(0, 550, 390, 270), portrait, 390, 844, () => 844, true);
+  assert.equal(low.y, 550 / 844 - 1);
+});
+
+// garage-aero "garage camera stays clickable…" (568x320, panel LEFT): the screen
+// arranger's entry sat at the right inset, over DONE at the panel's right end
+// (entry 363..509 x 8..52 over DONE 392..497 x 9..44), so CLOSE GARAGE never took a
+// click. Narrow landscape keeps the entry at the left inset, as the right panel does.
+test("a narrow landscape garage with the panel on the left keeps the arrange entry off DONE", async () => {
+  const { cssRules } = await import("../helpers/css-rules.mjs");
+  const sel = ':root[data-look-garage-side="left"] #carsetup > .screen-arrange-entry';
+  const rules = cssRules(read("css/screen-arranger.css")).filter((r) => r.selector === sel);
+  const narrow = rules.find((r) => r.context.some((c) => /orientation: landscape/.test(c) && /max-width: 700px/.test(c)));
+  assert.ok(narrow, "a narrow-landscape rule for the left panel");
+  assert.equal(narrow.decls.get("left"), "var(--safe-l)");
+  assert.equal(narrow.decls.get("right"), "auto");
+});

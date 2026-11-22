@@ -76,6 +76,67 @@ function createHarness(opts = {}) {
   };
 }
 
+// #5783 I4: lap time is summed from fixed 1/60 steps. Resetting lastSampleT = t
+// makes three steps land just under 1/HZ (float), so the recorder waits a fourth
+// (~15 Hz). Advancing lastSampleT by the sample period keeps the average at 20.
+test("Ghost.record averages 20 Hz on summed 1/60 physics steps (#5783 I4)", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  const dt = 1 / 60;
+  let t = 0;
+  // Issue evidence window: a ~126.7 s flying lap at 60 Hz physics.
+  const lapS = 126.7;
+  while (t < lapS) {
+    Ghost.record(t, t * 40, 0);
+    t += dt;
+  }
+  assert.equal(Ghost.finishLap(lapS), true);
+  const n = Ghost.snapshot().t.length;
+  const rate = n / lapS;
+  assert.ok(rate >= 19.5 && rate <= 20.5,
+    `stated HZ is 20; got ${n} samples over ${lapS}s (${rate.toFixed(2)} Hz)`);
+  // Recipe from the hunt: 60 steps of 1/60 → 20 samples.
+  Ghost.startLap();
+  t = 0;
+  for (let i = 0; i < 60; i++) {
+    Ghost.record(t, i * 2, 0);
+    t += dt;
+  }
+  assert.equal(Ghost.finishLap(1), true);
+  assert.equal(Ghost.snapshot().t.length, 20, "60 steps of 1/60 → 20 samples");
+});
+
+// Pre-fix sparse traces (~15 Hz / 0.1 s nodes) still interpolate; denser
+// 20 Hz traces do too. Playback never assumes a fixed sample spacing.
+test("Ghost.at interpolates both legacy-sparse and 20 Hz traces", () => {
+  const { Ghost, store } = createHarness();
+  const sparse = {
+    time: 1,
+    t: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+    s: [0, 40, 80, 120, 160, 200, 240, 280, 320, 360],
+    x: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+    _used: 1,
+  };
+  store.setItem("apex26.ghost.v1", JSON.stringify({ monza: sparse }));
+  Ghost.setTrack("monza");
+  const mid = Ghost.at(0.15);
+  assert.ok(Math.abs(mid.s - 60) < 1e-6, "legacy 0.1 s nodes still lerp");
+  assert.equal(mid.done, false);
+
+  Ghost.startLap();
+  const dt = 1 / 60;
+  let t = 0;
+  for (let i = 0; i < 60; i++) {
+    Ghost.record(t, t * 40, t);
+    t += dt;
+  }
+  assert.equal(Ghost.finishLap(0.9), true);
+  const dense = Ghost.at(0.5);
+  assert.ok(Math.abs(dense.s - 20) < 0.5, "20 Hz trace interpolates near the recorded s");
+  assert.equal(dense.done, false);
+});
+
 test("Ghost lap recording and playback basics", () => {
   const { Ghost } = createHarness();
   Ghost.setTrack("monza");
@@ -470,6 +531,33 @@ test("clearing an exact context key preserves sibling contexts and clears the se
   const saved = JSON.parse(h.store.getItem("apex26.ghost.v1"));
   assert.equal(saved["v2:monza:dry"], undefined);
   assert.equal(saved["v2:monza:wet"].time, 42);
+});
+
+test("refused ghost deletion preserves the disk PB and a faster pending lap until retry", () => {
+  for (const id of ["monza", "v2:monza:dry", null]) {
+    const opts = { deferWrites: true };
+    const h = createHarness(opts);
+    const coldBest = () => {
+      const cold = createHarness({ disk: Object.fromEntries(h.disk) });
+      cold.Ghost.setTrack("monza", "dry");
+      return cold.Ghost.bestTime();
+    };
+    h.Ghost.setTrack("monza", "dry");
+    recordLap(h.Ghost, 42);
+    h.Ghost.flush();
+    recordLap(h.Ghost, 40);
+    opts.failWrites = true;
+    assert.equal(h.Ghost.clear(id), false);
+    assert.equal(h.Ghost.bestTime(), 40, "the pending PB is still playable");
+    assert.equal(coldBest(), 42, "the prior durable PB survives reload");
+    opts.failWrites = false;
+    h.Ghost.flush();
+    assert.equal(coldBest(), 40, "the refused clear preserved the pending save");
+    assert.equal(h.Ghost.clear(id), true);
+    h.flushTimers();
+    assert.equal(h.Ghost.hasGhost(), false);
+    assert.equal(coldBest(), Infinity, "retry commits the clear through reload");
+  }
 });
 
 function recordLap(Ghost, time) {

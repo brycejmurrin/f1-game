@@ -116,20 +116,24 @@ test("every live Settings row left off its value comes back after a reload (pers
   await boot(page);
   expect(await visitPages(page), "the settings door index").toBeGreaterThanOrEqual(8);
   const before = await snapRows(page);
-  const moved = await page.evaluate((skip) => {
+  const moved = await page.evaluate(({ skip, initial }) => {
     const out = [];
-    for (const s of document.querySelectorAll("select")) {
+    // Applying the THUMB layout preset also writes the individual screen looks.
+    // Exercise that player action first, then leave each independent row off its original value.
+    const selects = Array.from(document.querySelectorAll("select"));
+    selects.sort((a, b) => Number(b.id === "pm-layoutpreset-sel") - Number(a.id === "pm-layoutpreset-sel"));
+    for (const s of selects) {
       if (!s._srLive || s.disabled) continue;
       const row = s.id ? s : s.closest("[id]");
       if (!row || skip.includes(row.id)) continue;
-      const v = [...s.options].filter((o) => !o.disabled).map((o) => o.value).find((x) => x !== s.value);
+      const v = [...s.options].filter((o) => !o.disabled).map((o) => o.value).find((x) => x !== initial[row.id] && x !== s.value);
       if (v == null) continue;
       s.value = v;
       s.dispatchEvent(new Event("change", { bubbles: true }));
       out.push(row.id);
     }
     return out;
-  }, [...NAVIGATES]);
+  }, { skip: [...NAVIGATES], initial: before });
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const set = await snapRows(page);
   const offDefault = Object.keys(set).filter((id) => set[id] !== before[id]);

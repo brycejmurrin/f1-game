@@ -132,7 +132,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 | `compatibility-recovery.js` | `GfxRecovery` | tag | a player-controlled escape from a known failed WebGPU renderer. |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
-| `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
+| `mirror-pass.js` | `MirrorPass` | tag | HUD rear-view mirror and broadcast picture-in-picture. |
 | `puddles.js` | `Puddles` | LAZY_AGENT | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
 | `mesh-detail.js` | `MeshDetail` | LAZY_TRACK_BUILD | MeshDetail: the shared geometry-refinement kit for procedural meshes (subdivide, bevel, normals, simplify). |
 | `gfx-hi.js` | `GfxHi` | LAZY_GFX_HI | GfxHi: the desktop EXTREME / CINEMA render and perf extras (GfxQuality.detail() >= 2). |
@@ -177,7 +177,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `teams.js` | `Teams` | tag | Teams: hardcoded, verified 2026 grid (11 teams, 22 drivers). |
 | `driver-ratings.js` | `DriverRatings` | tag | DRIVER RATINGS: the five-axis skill table for the 2026 grid. |
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
-| `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
+| `settings-defaults.js` | `SettingsDefaults` | tag | Global factory preferences. |
 | `garage-defaults.js` | `GarageDefaults` | tag | GarageDefaults: the SHIPPED DEFAULT garage (parts, liveries, setups, team/driver) in one file, as data. |
 | `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `garage-entrance-motion.js` | `GarageEntranceMotionData` | LAZY_RACE | Blender evaluated entrance curves. |
@@ -251,7 +251,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › SAVES & DATA, which carries a player's state OUT of the browser and back IN. |
 | `captions.js` | `Captions` | tag | Captions: on-screen text for radio, spotter, and pre-race announcer. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
-| `dock-layout.js` | `DockLayout` | tag | DockLayout: per-scheme touch-dock REPOSITION offsets. |
+| `dock-layout.js` | `DockLayout` | tag | Per-scheme touch-dock offsets. |
 | `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `cvd-palette.js` | `CvdPalette` | tag | CvdPalette: the one JS table of semantic colours. |
 | `appearance-opts.js` | `AppearanceOpts` | tag | AppearanceOpts: THEME + MENU ACCENT + HUD ACCENT preferences, and READABILITY (TEXT SIZE / HIGH CONTRAST / SPEED UNITS / HELP TEXT). |
@@ -262,22 +262,21 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `live-region.js` | `LiveRegion` | tag | LiveRegion: the ONE writer of #announce-live, the always-present polite region screen readers hear the race through. |
 | `hud-skin.js` | `HudSkin` | tag | HudSkin: the runtime team accent of the HUD (skinAccent + its WCAG ink pick). |
 | `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
-| `hud-relative.js` | `HudRelative` | tag | the opt-in RELATIVE box (iRacing-style) for GameHud. |
+| `hud-relative.js` | `HudRelative` | tag | Opt-in RELATIVE HUD. |
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
-| `hud-layout.js` | `HudLayout` | tag | HudLayout: move and size each race HUD element, as a player setting under SETTINGS › DISPLAY › HUD › MOVE & SIZE. |
-| `hud-arrange.js` | `HudArrange` | tag | HudArrange: ARRANGE HUD, the on-screen editor for MOVE & SIZE. |
-| `title-layout.js` | `TitleLayout` | tag | TitleLayout: where the title screen's three pieces sit and how big they are, as a player setting under SETTINGS › APPEARANCE › TITLE SCREEN › TITLE LAYOUT. |
+| `hud-layout.js` | `HudLayout` | tag | Race HUD storage contract: docs/notes/SCREEN-LOOKS-STORAGE.md. |
+| `title-layout.js` | `TitleLayout` | tag | Title layout owns viewport offsets, fit, and separate wide/tall v2 snapshots. |
 | `pause-opts.js` | `PauseOpts` | tag | PauseOpts: the PAUSE MENU fold under SETTINGS › APPEARANCE, and the two-press confirm on its QUIT TO MENU / RESTART RACE buttons. |
-| `screen-looks.js` | `ScreenLooks` | tag | ScreenLooks: one engine for every per-screen fold under SETTINGS › APPEARANCE (PAUSE MENU's extra knobs, DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER,… |
-| `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
+| `screen-looks.js` | `ScreenLooks` | tag | Per-screen appearance settings and preview. |
+| `post-fx-opts.js` | `PostFxOpts` | tag | Post-processing settings. iPhone starts with ambient occlusion off. |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
 | `results-boot.js` | `GameResults` | tag | results sheet boot stub (FULL). |
-| `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — visual presets, named profiles and a readable preview. |
+| `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — FULL boot stub (#4978 row 5). |
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
-| `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
+| `photo-studio.js` | `PhotoStudio` | tag | PhotoStudio — FULL boot stub (#4978 row 5). |
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
 | `share-code.js` | `ShareCode` | tag | ShareCode: pasteable APX envelopes for setup / livery / daily / card lap (+ #share=). |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
@@ -292,8 +291,15 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
+| `touch-button-settings.js` | `TouchButtonSettings` | LAZY_NET | Shared response editor for in-game touch buttons and the phone controller. |
+| `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
+| `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
+| `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
+| `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `appearance-studio-ui.js` | `AppearanceStudioBody` | LAZY_UI_PRESETS | AppearanceStudioBody — LAZY_UI_PRESETS (#4978 row 5). |
+| `photo-studio-ui.js` | `PhotoStudioBody` | LAZY_UI_PRESETS | PhotoStudioBody — LAZY_UI_PRESETS (#4978 row 5). |
 | `progress-backup.js` | `ProgressBackup` | LAZY_SAVES_DATA | ProgressBackup: the `progress` section of the SAVES & DATA settings file (#5992). |
 | `settings-export-body.js` | `SettingsExportBody` | LAZY_SAVES_DATA | SAVES & DATA body (SettingsExportBody, LAZY_SAVES_DATA, #4748): collect / apply for the SETTINGS, GARAGE and CAREER files, the optional time-trial ttlb… |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -369,7 +375,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `light-tune-edit.js` | `LightTuneEdit` | tag | LightTuneEdit: the lighting-tuner write path (latch clear + store). |
 | `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. |
 | `sporting-regs.js` | `SportingRegs` | tag | SPORTING REGULATIONS the player is held to, as pure rules. |
-| `tv-graphics.js` | `TvGraphics` | tag | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
 | `real-race-boot.js` | `RealRace` | tag | REAL RACE boot stub (FULL, #4978 row 6). game.js still makes `RealRace.create(G)` at eval and reads update/owns/isWatch/status/raceT0 every frame; until a… |
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
@@ -403,6 +408,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
 | `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
 | `driving-coach.js` | `DrivingCoachBody` | LAZY_RACE_SESSION | Read-only driving feedback and explicitly unscored solo practice: the BODY (DrivingCoachBody, LAZY_RACE_SESSION, #4748). |
+| `tv-graphics.js` | `TvGraphics` | LAZY_REAL_RACE | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race-pace.js` | `RealRacePace` | LAZY_REAL_RACE | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
 | `real-race.js` | `RealRaceBody` | LAZY_REAL_RACE | REAL RACE body (RealRaceBody.create(G), LAZY_REAL_RACE; game.js holds the RealRace boot stub, js/race/real-race-boot.js, which creates this once it lands)… |
@@ -616,7 +622,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `replay-buf.js` | `ReplayBuf` | tag | INSTANT REPLAY RING (ReplayBuf.create(G)): a solo-only 20 s / 30 Hz Float32 ring of the live field (~0.6 MB / 24 cars, under a 0.7 MB cap). |
+| `replay-buf.js` | `ReplayBuf` | tag | Solo instant replay keeps 20 s of field poses at 30 Hz in a bounded RAM ring. |
 | `results-cam.js` | `ResultsCam` | tag | RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut, slow orbit behind the results sheet, and a short highlights montage from the solo ReplayBuf tags. |
 | `cam-tuner-boot.js` | `CamTunerPanel` | tag | CAMERA TUNER boot stub (FULL). |
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
@@ -762,6 +768,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
+| `phone-pairing-ui.js` | `PhonePairingUI` | LAZY_NET | PhonePairingUI — desktop side of the paired phone wheel. |
 
 **`js/share/`**
 

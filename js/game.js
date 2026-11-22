@@ -235,8 +235,8 @@ if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "real";
 Wind.setLevel(store.get("wind", "real"));   // WIND (js/race/wind.js): "off" is the fixtures' pin, a true no-op
 if (!PhysicsConsts.DirtyAir.isLevel(raceDirtyAir)) raceDirtyAir = PhysicsConsts.DirtyAir.defaultLevel;
-let soundOn = store.get("sound", true);
-let musicEnabled = store.get("music", true);    // music on/off, independent of sound
+let soundOn = store.get("sound", false);
+let musicEnabled = store.get("music", false);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 let unlimitedBudget = store.get("unlimitedBudget", true); // removes credit cap in car setup (free play ships with the cap off)
 // How the player steers: "tilt" | "buttons" | "touch". Defaults to buttons —
@@ -335,7 +335,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
 // live behind PaceMath (js/race/pace-math.js) — it reads PhysicsConsts itself.
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
-// stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
+// stays competitive. Driven by the OVERALL SPEED slider, with 1.0 as the internal physics scale.
 // driveTune.PACE scales the car's real GROUND speed and nothing else. Every threshold and
 // normaliser here is written against the bare VMAX, so comparing raw speeds would
 // shrink the envelope with it: at pace 2 the top speed (~45 m/s) sits inside 6th
@@ -352,7 +352,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
 // driveTune.PACE / ERS math lives in js/race/pace-math.js (PaceMath.create) — pure move,
 // byte-identical. deps are getters so live `let`s (driveTune.PACE, cars, track, raceCtl)
 // stay owned here; VMAX is the destructured PhysicsConsts binding.
-const driveTune = DriveTune.create();
+const driveTune = DriveTune.create(SteerTuning.defaultPace);
 const {
   vTop, vStd, aStd, xVmaxGain, paceRef, xCoastCut, xDfLoss,
   isErsDeploying, drainFor, regenFor, otTimeFor, aeroDfMult, gearHi, rpmFor,
@@ -1190,7 +1190,7 @@ function saveTeamParts(teamId, parts) {
 // call through the destructured helpers.
 const customLiv = CustomLiveries.create({ store });
 const {
-  getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
+  getLiveryId, saveLiveryId, getCustomLiveries,
   getLiveries, resolveLivery, factoryLivery, wingColorOfLivery,
 } = customLiv;
 
@@ -3015,11 +3015,10 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
 let /** @type {ReturnType<typeof LightStore.create> | null} */ ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 
 // ── The shared ctx façade over game.js closure state ─────────────────────────
-// Extracted modules (js/ui/results-sheet.js, hud.js, apex.js, …) can't reach the
-// closure `let`s in this file, so game.js hands them ONE object of live
-// getters/setters + stable helpers. Getters read the current value at call
-// time; setters write back into the closure. Grown as extractions need it —
-// add a getter here rather than passing state ad hoc.
+// Modules can't reach the closure `let`s, so game.js hands them ONE object of
+// live getters/setters + helpers; add a getter here, never pass state ad hoc.
+// CLOSED (#5982): a typo'd new name throws. Not seal: select-screen.js
+// re-defines startRace/state in place.
 let /** @type {ReturnType<typeof RaceSettings.create> | null} */ raceSettings = null, /** @type {ReturnType<typeof CustomTeam.create> | null} */ customTeam = null, /** @type {ReturnType<typeof TitleMenu.create> | null} */ titleMenu = null, /** @type {ReturnType<typeof UiExperience.create> | null} */ uiExperience = null, /** @type {ReturnType<typeof PhotoStudio.create> | null} */ photoStudio = null;
 
 const G = {
@@ -3048,7 +3047,7 @@ const G = {
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
-  openDailyPicker: () => openTimeTrial(true),
+  openTimeTrialPicker: (request) => openTimeTrial(request.kind === "daily", request),
   closeSettings: () => closeSettings(),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
@@ -3263,7 +3262,7 @@ const G = {
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; clampDriverIdx(); },
   // Stable helpers consumed by js/garage/setup-sheet.js.
   arrToHex, hexToArr, getTeamParts, saveTeamParts, recomputePlayerMods, getLiveryId, saveLiveryId,
-  getCustomLiveries, setCustomLiveries, getLiveries,
+  getCustomLiveries, getLiveries,
   invalidateDecalTextures: (id) => carDraw.invalidateDecalTextures(id),   // const from CarDraw.create(G) below — defer
   // Drop every procedural body/wheel GPU cache (CarDraw). Specs that hook
   // Car3D.build call this via __apex.clearCarMeshCaches so a warm sharedTest
@@ -3443,7 +3442,7 @@ const G = {
   endWeatherSession: () => wxArc.endSession(true),   // the agent's race()/tt(): a start follows, so a plan set for it stays (race-settings-vm)
   startRace, update, wrapS, quitToMenu,
   raceIntro,   // the pre-race screen, for a launch that is not RACE! (js/race/real-race.js: the Data Hub's JUMP IN)
-};
+}; Object.preventExtensions(G);
 
 // Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
 // the module wires: it reads the saved profiles at construction, and
@@ -3499,10 +3498,10 @@ const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
 const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
-const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G);
+const { buildSetup, openSetup, lookRowSpecs } = SetupUI.create(G, customLiv);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
 // Select-screen UI (js/ui/select-screen.js).
-const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G);
+const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt, showCtxLostNotice, restoreMenuAfterGraphicsReset } = Menus.create(G, () => raceSettings.preparePickerTrack());
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
 // wheel spec, decal queue, cockpit rig, planted wheels, warm-ups, GLB body.
 // resolveLivery lives in CustomLiveries; partsVisualKey / drawAeroFlaps / damp
@@ -3520,7 +3519,7 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
   prepareExterior: async (id) => {
     const idx = Tracks.LIST.findIndex((t) => t.id === id); if (idx < 0) return null;
-    const ok = await Promise.all([ensureGarageExterior(), ensureScenery(idx)]);
+    const ok = await Promise.all([ensureGarageExterior(), ensureScenery(idx), ensureLightPresets()]);
     return ok[0] && ok[1] && Tracks.LIST[idx].id === id ? Tracks.LIST[idx] : null;
   },
   teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render,
@@ -3565,7 +3564,7 @@ customTeam = CustomTeam.create({
 });
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
-const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G); if (typeof HudArrange !== "undefined" && HudArrange.create) HudArrange.create(G);
+const uiScale = UiScale.create(G), { setScale, applyResMode } = uiScale; if (typeof DockLayout !== "undefined" && DockLayout.create) DockLayout.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
 // and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
@@ -8627,7 +8626,7 @@ function tickBody(now) {
 
 // ---------- car setup panel ----------
 // The CAR SETUP panel UI (stat bars, tabs, options, livery creator) lives in
-// js/garage/setup-sheet.js (SetupUI.create(G) — wired after the G façade).
+// js/garage/setup-sheet.js (SetupUI.create — wired after the G façade).
 
 // ---------- UI wiring ----------
 // Select-screen UI (team/track grids, preview, circuit detail modal) lives in

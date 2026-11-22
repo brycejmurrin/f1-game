@@ -68,7 +68,7 @@ function collect(mode, G) {
     // LOW resolution, its touch steering weight) exports as null, so loading
     // the file elsewhere keeps THAT device's default instead of pinning ours.
     let value = has ? stored : (all && row.perDevice ? null : def);
-    if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
+    if (diff && !row.whole && isObj(stored) && isObj(def) && Object.keys(def).length) {
       const d = objDiff(stored, def);
       if (!Object.keys(d).length) diff = false;
       if (!all) value = d;   // CHANGES carries the moved fields; ALL the whole effective value (B·H11 hunt)
@@ -220,6 +220,7 @@ function collectGarage() {
 // allowlist never named being written into the namespace. Nothing outside SPEC
 // (settings) or isGarageKey (garage) is written, whatever the file says.
 function typeOk(v, def, row) {
+  if (v === null && row && row.nullable) return true;  // legacy empty race draft clears its override
   if (row && row.table) return isObj(v);               // an engine table, known or not yet (engineTable)
   // A raw row is a bare string flag: an object or array stored "[object Object]" (#5743 S2).
   if (row && row.lane === "raw" && v !== null && typeof v === "object") return false;
@@ -245,6 +246,15 @@ function applySettings(file, G) {
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
     groups.a11y = Object.assign({}, groups.a11y, { motion: groups.appearance.motion });
   }
+  // Old changes-only files can carry the line-speed flag in the predictive slider row.
+  const oldCue = groups.steering?.brakeCue;
+  if (oldCue === "on" || oldCue === "off") {
+    if ((groups.driving == null || isPlain(groups.driving)) && !Object.hasOwn(groups.driving || {}, "lineBrakeCue")) {
+      groups.driving = { ...groups.driving, lineBrakeCue: oldCue };
+    }
+    groups.steering = { ...groups.steering };
+    delete groups.steering.brakeCue;
+  }
   // A STEERING SHEET FROM AN OLDER SCHEMA (#5004): the boot migration never runs over imported values (this
   // device is already at STEER_SCHEMA), so the file's own version runs the same ladder here first: a v2 PACE 3
   // is 0.750 of ground speed there and would read as 0.527 on today's grid.
@@ -258,6 +268,7 @@ function applySettings(file, G) {
   // is treated as the other kind on a page that knows its own: pinning its resolution and renderer here is
   // the #5005 failure (#5743 S4).
   const crossDevice = typeof here === "boolean" && (typeof there !== "boolean" || here !== there);
+  const restoreAdaptiveDefaults = file.mode === "all" && typeof here === "boolean" && here === there;
   const writes = [];
   let skipped = 0;
   for (const row of SPEC) {
@@ -270,7 +281,11 @@ function applySettings(file, G) {
     if (row.noImport || (crossDevice && (row.perDevice || row.deviceBound))) { if (g[row.k] !== null) skipped++; continue; }
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
-    if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
+    if (v === null && row.perDevice) {
+      // An ALL backup from the same device class records that this preference was unpinned.
+      if (restoreAdaptiveDefaults) writes.push([row, null]);
+      continue;
+    }
     const def = defaultOf(row, G);
     // null restores OS-following motion; it is not an unknown enum member.
     if ((!row.freeShape && !typeOk(v, def, row)) || (row.oneOf && !(v === null && def === null) && !row.oneOf.includes(v))) { skipped++; continue; }
@@ -729,6 +744,15 @@ function create(G) {
         shareStatus.textContent = ShareCode.messageFor(decoded);
         return;
       }
+      const opensTrial = decoded.kind === "lap" || decoded.kind === "daily";
+      if (opensTrial && G.paused) {
+        shareStatus.textContent = "Return to the main menu before opening a shared time trial.";
+        return;
+      }
+      const openPicker = request => {
+        if (G.closeSettings) G.closeSettings();
+        G.openTimeTrialPicker(request);
+      };
       const applied = ShareCode.apply(decoded, {
         store: G.store,
         startRace: () => { started.n++; },
@@ -737,9 +761,12 @@ function create(G) {
           if (ti >= 0) G.teamIdx = ti;
         },
         openGarage: (from) => { if (G.openGarage) { if (G.closeSettings) G.closeSettings(); G.openGarage(from || "share"); } },
-        openDaily: () => { if (G.openDailyPicker) { if (G.closeSettings) G.closeSettings(); G.openDailyPicker(); } },
+        today: G.daily && G.daily.dayKey(),
+        openDaily: (_decoded, staged) => openPicker(staged),
+        openTrack: openPicker,
       });
       shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
+      if (opensTrial && applied.ok && G.announce) G.announce(shareStatus.textContent, 3, "info");
     };
 
     const nav = document.createElement("div");

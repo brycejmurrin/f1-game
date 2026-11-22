@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -82,11 +83,14 @@ function bootTuner(weather = "wet", saved = null) {
     .map((d) => ({ ...d, group: "LAMPS", label: d.id, step: 0.1 }));
   const h = loadStore(weather, saved, defs), nodes = new Map(), storage = new Map();
   const element = () => ({ children: [], dataset: {}, textContent: "", hidden: false,
-    classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {},
+    classList: { toggle() {}, add() {}, remove() {} }, attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
     appendChild(child) { this.children.push(child); if (child.id) nodes.set(child.id, child); },
     scrollIntoView() {}, focus() {}, setSelectionRange() {} });
   const $ = (id) => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
   h.ctx.document = { createElement: element, getElementById: $, body: element() };
+  vm.runInContext(read("js/ui/setting-row.js"), h.ctx, { filename: absSrc("js/ui/setting-row.js") });
+  h.ctx.SettingRow = h.ctx.window.SettingRow;
   h.ctx.localStorage = { getItem: (k) => storage.get(k), removeItem: (k) => storage.delete(k) };
   h.ctx.PerfGov = { autoShed: () => h.tier || 0 };
   h.ctx.setTimeout = () => 1; h.ctx.clearTimeout = () => {};
@@ -106,6 +110,29 @@ function bootTuner(weather = "wet", saved = null) {
   h.input = (id, value) => { const input = $("lt-in-" + id); input.value = String(value); input.oninput(); };
   return h;
 }
+
+test("the exact lighting field commits once through the knob setter and follows slider and profile resets", () => {
+  const h = bootTuner(), field = h.$("lt-num-sunElev"), slider = h.$("lt-in-sunElev");
+  assert.deepEqual([field.type, field.min, field.max, field.step, field.inputMode], ["number", -90, 90, 0.1, "text"]);
+  assert.equal(field.getAttribute("aria-label"), "sunElev exact value");
+  Object.defineProperty(field, "valueAsNumber", { get() { return Number(this.value); } });
+  field.validity = { valid: true };
+  field.value = "-4.2";
+  field.onchange();
+  assert.equal(h.LT.sunElev, -4.2);
+  assert.equal(+slider.value, -4.2);
+  field.onchange();
+  assert.equal(h.writes.length, 1);
+  assert.deepEqual(host(h.store.profiles), { "monaco|dusk|dry": { sunElev: -4.2 } });
+  field.value = "-4.256"; field.validity.valid = false;
+  field.onchange();
+  assert.equal(field.value, "-4.2", "an off-step edit restores the saved value");
+  h.input("sunElev", -1.1);
+  assert.equal(field.value, "-1.1");
+  assert.equal(h.writes.length, 1, "dragging does not persist on each tick");
+  h.$("lt-reset").onclick();
+  assert.equal(field.value, "0");
+});
 
 test("lighting-1: drag updates profile count and returning to baseline restores defaults without persistence", () => {
   const h = bootTuner();
@@ -266,13 +293,13 @@ function bootArc({ headless = false } = {}) {
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   vm.runInContext(read("js/race/weather-arc.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/race/weather-arc.js") });
   const applied = [];
-  const G = {
+  const G = fakeG({
     raceWeather: "dry", soundOn: false, track: {}, headlessMode: headless, frame: { wetness: 0 },
     announce() {}, simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3, netPlay: { active: () => false },
     applyRaceSettings: (b) => applied.push(b),
-    isWetRoad: () => G.raceWeather === "wet" || G.raceWeather === "rain", isRaining: () => G.raceWeather === "rain",
+    isWetRoad: () => G.raceWeather === "wet" || G.raceWeather === "rain",
     initRainDrops() {}, trackWetness: () => 1,
-  };
+  });
   const wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
   return { G, wa, rain, applied };
 }
@@ -330,10 +357,12 @@ function bootAtmo() {
   vm.runInContext("LightTune = { LT: LightKnobs.LT, TUNE_DEFS: LightKnobs.TUNE_DEFS, buildTrackLights: () => [] };", sandbox);
   vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
   const saved = {};
-  const G = {
+  const G = fakeG({
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
     store: { get: (k, d) => (k in saved ? saved[k] : d), set: (k, v) => { saved[k] = JSON.parse(JSON.stringify(v)); } },
-    satAdjust: (c) => c, isRaining: () => G.raceWeather === "rain", isWetRoad: () => G.raceWeather === "rain" || G.raceWeather === "wet",
+    // the atmosphere module writes these real G members (js/game.js declares them)
+    _cloudBase: undefined, _ltBase: undefined, _ltFlash: 0, _ltNextT: 0, _lastFloodEmit: undefined,
+    satAdjust: (c) => c, isWetRoad: () => G.raceWeather === "rain" || G.raceWeather === "wet",
     isFloodActiveSession: () => false, _nightAmbientBand: () => 0, initRainDrops: () => {},
     applyLightTune: (f, o) => ltStore.apply(f, o), applyRaceSettings: (b) => atmo.applyRaceSettings(b),
     frame: { ambientSky: [0.3, 0.3, 0.3], ambientGround: [0.1, 0.1, 0.1], sunDir: [0, 1, 0], sunColor: [1, 1, 1], fogColor: [0.5, 0.5, 0.5] },
@@ -341,7 +370,7 @@ function bootAtmo() {
     gfx: null, state: "race", raceTimeOfDay: "default", raceWeather: "dry",
     track: { def: { id: "t", night: false, palette: { sunDir: [0.4, 0.7, 0.3], sunColor: [1, 0.95, 0.9], sun: [1, 0.95, 0.9],
       ambientSky: [0.26, 0.33, 0.50], ambientGround: [0.24, 0.19, 0.12], zenith: [0.1, 0.3, 0.8], horizon: [0.7, 0.8, 0.9] } } },
-  };
+  });
   const ltStore = vm.runInContext("LightStore", sandbox).create(G);
   const atmo = vm.runInContext("Atmosphere", sandbox).create(G);
   return { G, atmo, ltStore, LT: vm.runInContext("LightKnobs.LT", sandbox) };

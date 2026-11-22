@@ -58,7 +58,7 @@ var VoicePack = (() => {
   const SLACK_S = 0.2;
   const STALL_MS = 15000;        // a pack fetch with no progress (response, chunk, hash) for this long fails (#5886)
   const RETRY_MS = 30000;        // a failed fetch (offline, 404) is tried again after this
-  const WATCHDOG_MS = 4000;      // a decode that never settles frees the channel after this
+  const WATCHDOG_MS = 4000;      // stall limit for each cached clip decode
 
   /** Speakable text (RadioVoice.speakable's output) → words and pauses.
    *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word.
@@ -341,7 +341,11 @@ var VoicePack = (() => {
       if (hit) { v.cache.delete(k); v.cache.set(k, hit); v.stamp.set(k, ++tick); return hit; }   // LRU touch
       const [off, len] = v.man.clips[k];
       const part = v.bin.slice(off, off + len);   // Blob or ArrayBuffer: the same byte range
-      const p = BLOB_OK && typeof part.arrayBuffer === "function" ? part.arrayBuffer().then((ab) => GameAudio.decodeClip(ab)) : GameAudio.decodeClip(part);
+      const work = BLOB_OK && typeof part.arrayBuffer === "function" ? part.arrayBuffer().then((ab) => GameAudio.decodeClip(ab)) : GameAudio.decodeClip(part);
+      // A hung native decode must expire in the shared cache so a later line can retry it.
+      let timer;
+      const deadline = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("clip decode timed out")), WATCHDOG_MS); });
+      const p = Promise.race([work, deadline]).finally(() => clearTimeout(timer));
       v.cache.set(k, p);
       v.stamp.set(k, ++tick);
       v.secs += clipS(v, k);
@@ -410,13 +414,9 @@ var VoicePack = (() => {
       const release = () => { if (live[ch] === token) delete live[ch]; done(); };
       const token = { stop: done, end: at + pl.secs };
       live[ch] = token;
-      // A decode that never settles (a context closed under it) must not hold
-      // the channel — busy() would silence the spotter for the rest of the race.
-      const watchdog = setTimeout(() => { if (!token.h) release(); }, WATCHDOG_MS);
       const gen0 = GameAudio.ctxGen ? GameAudio.ctxGen() : 0;
       Promise.all(pl.seq.map((s) => (s.k ? decode(v, s.k) : s.p)))
         .then((parts) => {
-          clearTimeout(watchdog);
           if (live[ch] !== token) return;                   // preempted while decoding
           // A context rebuilt mid-decode restarts its clock near 0: `at` is in
           // the old one and would schedule the line minutes ahead, holding the
@@ -442,7 +442,7 @@ var VoicePack = (() => {
             } catch (e) { Log.info("audio", "VoicePack onStart observer failed: " + (e && e.message)); }
           }
         })
-        .catch(() => { clearTimeout(watchdog); release(); });
+        .catch(release);
       spoke++; lastSeq = pl.seq.map((s) => s.k || "|");
       return true;
     }

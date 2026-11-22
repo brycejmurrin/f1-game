@@ -54,6 +54,7 @@ const PASSTHROUGH_FILES = new Set([
   "js/ui/screen-looks.js",
   "js/ui/pause-opts.js",
   "js/ui/appearance-studio.js",
+  "js/ui/appearance-studio-ui.js", // VISUAL_KEYS relay moved with the body (#4978 row 5)
   "js/ui/key-binds.js",
   "js/ui/share-code.js",
   "js/input/steer-tuning.js",

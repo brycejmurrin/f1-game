@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 const run = (ctx, f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
@@ -42,16 +43,16 @@ function bootArc(hash) {
   P.init({ drawParticles: (d, floats, additive) => { if (!additive) drawn += floats / 60; } });
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   let wa = null;
-  const G = {
+  const isRaining = () => wa.wetness() >= 0.72;   // game.js's top-level isRaining(): not a G member
+  const G = fakeG({
     raceWeather: "dry", soundOn: false, track: null, announce() {}, applyRaceSettings() {},
     simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3,
     netPlay: { active: () => false },
     isWetRoad: () => wa.wetness() >= 0.25,
-    isRaining: () => wa.wetness() >= 0.72,
-    initRainDrops: () => P.rainSeed(G.isWetRoad() && !G.isRaining()),
-  };
+    initRainDrops: () => P.rainSeed(G.isWetRoad() && !isRaining()),
+  });
   wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
-  const drops = () => { P.rainUpdate(1 / 60, [0, 1.2, 0], G.isRaining()); drawn = 0; P.draw(); return drawn; };
+  const drops = () => { P.rainUpdate(1 / 60, [0, 1.2, 0], isRaining()); drawn = 0; P.draw(); return drawn; };
   return { ctx, G, wa, P, TM: ctx.TyreModel, WA: ctx.WeatherArc, S: ctx.Storm, drops };
 }
 
@@ -165,6 +166,11 @@ test("lightning: interval filtering preserves exact strike records and endpoint 
   }
   for (const [t0, t1] of [[8, 8], [9, 8], [0, 1.01], [NaN, 1], [0, NaN]])
     assert.equal(S.strikeIn(1, t0, t1, 1, "storm"), null);
+});
+
+test("Storm no longer exports asRain (WeatherArc / TyreModel own the storm→rain map)", () => {
+  const { S } = bootArc();
+  assert.equal(Object.prototype.hasOwnProperty.call(S, "asRain"), false);
 });
 
 test("lightning never flashes under reduced motion (source guard on renderLightingPrep strike)", () => {

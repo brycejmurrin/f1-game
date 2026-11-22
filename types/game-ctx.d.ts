@@ -384,7 +384,7 @@ interface GameCtx {
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
-  readonly openDailyPicker: () => void;
+  readonly openTimeTrialPicker: (request: { kind: "daily"; day?: string; mode?: "standard" | "open" } | { kind: "lap"; track: string }) => void;
   readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
@@ -429,7 +429,7 @@ interface GameCtx {
   readonly setupTrialRestart: (options: { teamId: string; tune: Record<string, number>; mode: "launch"; isCurrent: () => boolean }) => Promise<{ ok: boolean; context?: Record<string, unknown>; reason?: string }>;
   readonly setupTrialContext: () => Record<string, unknown> | null;
   readonly setupTrialCancel: () => void;
-  readonly realRace: { status(): { active: boolean } };
+  readonly realRace: { status(): { active: boolean; watch?: boolean }; isWatch(): boolean; isActive(): boolean; owns(car: CarState): boolean };
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;
@@ -609,7 +609,6 @@ interface GameCtx {
   readonly getLiveryId: (teamId: string) => string;
   readonly saveLiveryId: (teamId: string, id: string) => void;
   readonly getCustomLiveries: (teamId: string) => unknown[];
-  readonly setCustomLiveries: (teamId: string, arr: unknown[]) => void;
   readonly getLiveries: (team: TeamDef) => unknown[];
   readonly invalidateDecalTextures: (teamId: string) => void;
   /** Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds through Car3D.build. */
@@ -922,6 +921,8 @@ declare const TitleMenu: GameModuleFactory;
 declare const UiExperience: GameModuleFactory;
 declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
+/** LAZY_UI_PRESETS body; PhotoStudio stub creates it (#4978 row 5). */
+declare const PhotoStudioBody: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const Director: GameModuleFactory;
@@ -951,6 +952,7 @@ declare const DrivingCoachBody: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
 
 declare const PlatformSession: GameModuleFactory;
+declare const PhonePairingUI: GameModuleFactory;
 
 declare const DeepLink: GameModuleFactory;
 declare const TitleFlow: GameModuleFactory;

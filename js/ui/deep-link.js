@@ -105,6 +105,6 @@ function create(G) {
   setTimeout(() => fire(0), 0);
   return { go };
 }
-return { create, parse, DOORS, onBack, onSectionLink, MARK, BASE };
+return { create, parse, DOORS, onSectionLink, MARK, BASE };
 })();
 Object.freeze(DeepLink);
