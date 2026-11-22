@@ -1645,7 +1645,8 @@
         "tests/unit/cockpit-preview.test.mjs"
       ],
       "draw": [
-        "tests/unit/cockpit-wheels.test.mjs"
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/livery-wheels.test.mjs"
       ],
       "mount": [
         "tests/unit/cockpit-preview.test.mjs"
@@ -1659,7 +1660,6 @@
       "*": [
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/shell-ids.test.mjs"
       ]
     },
@@ -2808,6 +2808,7 @@
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "drawPlayerWheels": [
+        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "farRivalBodyReady": [
@@ -2941,7 +2942,6 @@
         "tests/specs/quali.spec.js",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
-        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ]
@@ -2974,7 +2974,8 @@
         "tests/unit/car-detail-tiers.test.mjs"
       ],
       "build": [
-        "tests/unit/car-detail-tiers.test.mjs"
+        "tests/unit/car-detail-tiers.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs"
       ],
       "refine": [
         "tests/unit/car-detail-tiers.test.mjs"
@@ -3236,6 +3237,7 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/livery-wheels.test.mjs",
         "tests/unit/wheel-phase-math.test.mjs"
       ],
       "phaseStep": [
@@ -7499,6 +7501,9 @@
         "tests/unit/particles-dirty.test.mjs",
         "tests/unit/skidmarks-cadence.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs"
+      ],
+      "rainCurtain": [
+        "tests/unit/particles-dirty.test.mjs"
       ],
       "rainSeed": [
         "tests/unit/particles-dirty.test.mjs",
@@ -11928,6 +11933,9 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs"
       ],
+      "needsBundle": [
+        "tests/unit/quality-preset-phone.test.mjs"
+      ],
       "setCinema": [
         "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
@@ -11940,6 +11948,9 @@
         "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/tier-record.test.mjs",
         "tests/unit/tsl-gi.test.mjs"
+      ],
+      "supportsOption": [
+        "tests/unit/quality-preset-phone.test.mjs"
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
@@ -17091,7 +17102,8 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "_restoreEnvFrame": [
-        "tests/unit/tlx-hunt-5699.test.mjs"
+        "tests/unit/tlx-hunt-5699.test.mjs",
+        "tests/unit/tlx-mat-detail.test.mjs"
       ],
       "_showInstanced": [
         "tests/unit/tlx-fail-scope.test.mjs",
@@ -17151,6 +17163,9 @@
       "buildPost": [
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "captureGarageFace": [
+        "tests/unit/tlx-mat-detail.test.mjs"
       ],
       "castShadowInstanced": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -17802,6 +17817,7 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-mat-detail.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
       "*": [

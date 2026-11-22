@@ -1,0 +1,14 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": 1,
+      "lines": 1
+    }
+  },
+  "tree": {
+    "assertPins": 1,
+    "assertPinsAll": 2,
+    "eagerCodeBytes": 4810,
+    "vmSrcLoads": 3
+  }
+}
