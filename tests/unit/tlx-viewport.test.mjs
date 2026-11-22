@@ -40,7 +40,8 @@ test("canary: every texture node in tsl-post is a VP.tex wrapper or on the expli
   // Full-image textures that are not render-target layouts: the lens-dirt map, the
   // mirror target (its own rect-relative read), the godray slot's "off" texture
   // object, the shadow compare taps (godray march) and the import/destructure.
-  const allowed = new Set(["ctx.dirtTex || ctx.blackTex", "ctx.blackTex", "SHD.sunTex, flipUV(sc.xy",
+  // The visor light and displacement maps also fill their entire textures at every render scale.
+  const allowed = new Set(["lensPlaceholder", "ctx.dirtTex || ctx.blackTex", "ctx.blackTex", "SHD.sunTex, flipUV(sc.xy",
     "SHD.lampTex, flipUV(lqs.xy", "ctx.sceneTex"].map((x) => x));
   const stray = raw.filter((a) => !allowed.has(a));
   assert.deepEqual(stray, [], "unwrapped texture(): " + stray.join(" | "));

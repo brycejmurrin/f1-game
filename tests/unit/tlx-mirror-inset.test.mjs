@@ -29,6 +29,9 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
       chunks: window.TLXShaders.chunks(THREE, THREE.TSL), blackTex: tex(), whiteTex: tex(),
       sceneTex: tex(), sceneDepthTex: tex(), trackMaterial: m => materials.push(m),
     });
+    const slots = [p.fxaa.mirTex, p.fxaa.bendTex, p.fxaa.lightTex];
+    assert.equal(new Set(slots.map(node => node.value.uuid)).size, 3,
+      "warmed with optics off, the mirror, bend and light keep independent sampler uniforms");
     p.fxaa.mirTex.value = tex();
     const Builder = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
     const builder = new Builder(new THREE.QuadMesh(p.fxaa.mat), renderer);

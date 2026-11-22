@@ -1902,7 +1902,7 @@ function updateHud(force, dtMs) {
     // anyone the hue does not reach — and the chip's aria-label (role="img")
     // says compound, heat, laps left and the plan in words.
     if (typeof HudTyres !== "undefined") {
-      HudTyres.paint(els.tyre, tyres.info ? tyres.info(player) : null,
+      HudTyres.paint(els.tyre, tyres.temperatureInfo?.(player),
         { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
     }
   }

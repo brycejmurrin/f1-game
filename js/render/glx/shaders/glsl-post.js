@@ -553,33 +553,16 @@ vec3 ssrViewPos(vec2 uv) {
 ${GLXChunks.ignoise}
 void main() {
   outColor = vec4(0.0);
-  // Scene .a is the SSR car tag (same fetch COMPOSITE used before the F3 split).
-  vec4 scn = texture(uScene, vUV);
-  float carPx = 1.0 - smoothstep(0.42, 0.55, scn.a);
-    // Opaque .75 porous receivers reject road SSR; .35 car paint keeps its own path.
-    float roadPx = smoothstep(0.85, 0.95, scn.a);
-    // TWO EXACT CHANGES TO THIS GATE, both about paying before rejecting.
-    //
-    // 1. 'carPx > 0.3' gained '&& uCarReflect > 0.001'. The outer gate never
-    //    consulted uCarReflect, so with the CAR reflection slider at zero every
-    //    car-paint pixel still reconstructed P, ran 3 ssrViewPos, a cross, a
-    //    normalize and both masks before the later 'ssrGate > 0.001' threw it
-    //    away. Exactly equivalent: ssrGate is max(roadMask*uReflect,
-    //    carMask*uCarReflect), and both masks are products of smoothstep()s and
-    //    carPx so both lie in [0,1] — hence if uReflect <= 0.001 (the only way
-    //    this operand is reached) and uCarReflect <= 0.001, ssrGate <= 0.001 and
-    //    the inner block was already skipped.
-    //
-    // 2. The free varying compare now precedes the depth fetch. GLSL ES 3.00 §5.9
-    //    gives && short-circuit semantics, so operand order IS cost order, and
-    //    'vUV.y < uSsrTopUV' (a varying against a uniform) was sitting behind a
-    //    full-res dependent texture(uDepth). uSsrTopUV is 0.62 chase / 0.82
-    //    onboard, so that is 38% / 18% of full-res pixels each dropping one
-    //    discarded fetch on a wet frame. Both operands are pure and side-effect
-    //    free, so the swap is exact.
-    if (uSsrOk > 0.5 && (roadPx * uReflect > 0.001 || (carPx > 0.3 && uCarReflect > 0.001))
-        && vUV.y < uSsrTopUV && texture(uDepth, vUV).r < 0.9999) {
-      vec3 P = ssrViewPos(vUV);
+  // Upper-screen pixels always keep the clear result. Test the seam before
+  // reading either single-level scene target; explicit LOD needs no derivatives.
+  if (uSsrOk <= 0.5 || vUV.y >= uSsrTopUV) return;
+  float tag = textureLod(uScene, vUV, 0.0).a;
+  float carPx = 1.0 - smoothstep(0.42, 0.55, tag);
+  float roadPx = smoothstep(0.85, 0.95, tag);
+    if (roadPx * uReflect > 0.001 || (carPx > 0.3 && uCarReflect > 0.001)) {
+      float d = textureLod(uDepth, vUV, 0.0).r;
+      if (d >= 0.9999) return;
+      vec3 P = invProjP(vUV * 2.0 - 1.0, d * 2.0 - 1.0);
       vec2 roadFar = uSsrQuality > 1.5 ? vec2(-12.0, -42.0) : (uSsrQuality > 0.5 ? vec2(-18.0, -60.0) : vec2(-22.0, -78.0));
       // Both masks below are zero outside these ranges: skip their normal depth taps.
       if ((uReflect > 0.001 && P.z > roadFar.y) || (uCarReflect > 0.001 && P.z > -55.0)) {

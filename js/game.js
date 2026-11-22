@@ -76,7 +76,7 @@ const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
-  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
+  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
   // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
     once("radio", () => { radioVoice = RadioVoice.create(G); });
@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam });
+    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true) });
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -2756,13 +2756,13 @@ function startRace() {
   return request;
 }
 
-function showTouchControls(show) {
+function showTouchControls(show, cooldown = false) {
   const t = show && Input.touchControlsNeeded();
-  const manual = gearsManual();
+  const manual = !cooldown && gearsManual();
   // GAS pedal whenever throttle is manual (tilt/button); touch auto-throttle hides it
-  els.btnThrottle.hidden = !(t && !autoThrottle());
+  els.btnThrottle.hidden = !(t && (cooldown || !autoThrottle()));
   els.btnBrake.hidden = !t;
-  els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
+  els.btnBoost.hidden = els.btnOT.hidden = !t || cooldown;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
   // the control has no job at all — and a dock of GROUPS can afford to drop it,
   // because the survivors just close ranks. That was not true of the old
@@ -2774,7 +2774,7 @@ function showTouchControls(show) {
   // exists, it is this CIRCUIT that cannot use it, and the struck-through
   // NO AERO ZONE chip beside a faded button says so. Removing it would silently
   // suggest the game has no such feature.
-  if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
+  if (els.btnAero) els.btnAero.hidden = !t || cooldown || raceAeroMode === "auto";
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -4567,6 +4567,7 @@ function update(dt) {
     _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetRoad(); _gridIdleOpts.step = _audioParamStep;
     GameAudio.setGridIdle(player, _gridIdleOpts); return;
   }
+  if (state === "results") return RaceCeremony.get()?.stepResultsField(cars, dt, updateCar);
   if (state !== "race") return;
   if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks
   if (netGreen && !netPlay.active()) netGreen = null;   // the rival left: a solo pause must not add its wall time on resume
@@ -4612,16 +4613,15 @@ function update(dt) {
     }
   }
 
-  // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
+  // Catch-up needs the leading active human. Scripted pace only needs the poses.
+  const catchup = AiBand.mode() === "catchup";
   _leadHuman = null;
-  // !finished: a flagged human coasts on advancing prog — don't band toward it.
-  for (let i = 0; i < cars.length; i++) { const c = cars[i]; if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c; }
-
   // Traffic scans read last step's poses. Writing prog/x/speed inside
   // updateCar and then scanning the next car made a side-by-side look like a
   // pass in array order.
   for (let i = 0; i < cars.length; i++) {
     const s = cars[i];
+    if (catchup && s.human && !s.retired && !s.finished && (!_leadHuman || s.prog > _leadHuman.prog)) _leadHuman = s;
     s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
   }
   // One wrap-aware fill for the whole field; each updateCar walks adjacent
@@ -4858,7 +4858,7 @@ function updateCar(c, dt, ranked) {
   // The revs follow the coast DOWN in the gear it crossed in (a lift, not a downshift ladder):
   // returning before `c.rpm = rpmFor(...)` below held the crossing's revs — flat out on the
   // limiter — while coast() bled the car to a crawl (setEngine / RivalAudio read c.rpm).
-  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); if (c === player && cooldownDrives()) cooldownDrive(c, dt); else coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); if (c === player && state === "results" && RaceCeremony.get()?.playerDrives()) cooldownDrive(c, dt); else coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -4903,8 +4903,10 @@ function updateCar(c, dt, ranked) {
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and driveTune.PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
-  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness());   // standing water UNDER the car (a local shower)
-  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE, gmC = gripMult(c) * aq.mul, gm0 = gripMult();
+  const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
+  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, surfaceWet);
+  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
+  const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.carGrip(null, raceWeather, meanWet, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -4917,7 +4919,7 @@ function updateCar(c, dt, ranked) {
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both
+  if (!c.human && _leadHuman) {
     const bc = _bandCtx; bc.leadProg = _leadHuman.prog; bc.carProg = c.prog; bc.trackTotal = track.total; bc.raceT = raceT; bc.launchT0 = launchT0; bc.bandAuth = dd.band;
     const applied = AiBand.applyVmax(vmax, AiBand.factor(bc), c.tierV * c.skill * dd.ai, BAND_CEIL, _bandOut);   // reused: no objects per AI car
     vmax = applied.vmax; c._bandNow = applied.bandNow;
@@ -5092,8 +5094,8 @@ function updateCar(c, dt, ranked) {
   //
   // The O(n) ahead walk is only needed when a detection-line crossing can earn
   // OT (otDetectOpen + crossed since last tick), or the car already holds
-  // allowance (AI fire / spend). Seed the crossing trackers the same way
-  // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
+  // allowance (AI fire / spend). Both consumers use the same crossing.
+  // Profiled Monza 22-car: the walk was ~17 % of
   // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
   // Keep the ahead-search radius meaningful while reversing. A held allowance
   // can outlive a forward pass, so c.speed may be negative even though this
@@ -5102,10 +5104,8 @@ function updateCar(c, dt, ranked) {
   // speed for OT timing, but it still needs a finite, non-negative search.
   const otSpeed = Math.max(0, c.speed);
   let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * otSpeed + 1;
-  if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
-  const otOpen = raceCtl.otDetectOpen();
-  const otNeedAhead = (c.otE > 0 || c.otOn) ||
-    (!!track && otOpen && OvertakeMode.crossed(c._otS, c.s, OvertakeMode.detectS(track), otL));
+  const otOpen = raceCtl.otDetectOpen(), detected = OvertakeMode.detectionCrossed(c, track);
+  const otNeedAhead = c.otE > 0 || c.otOn || (otOpen && detected);
   if (otNeedAhead) {
     const ot = Collide.scanOtAhead(c, otL, otW, _otSkipLane);
     ahead = ot.ahead; gapAhead = ot.gapAhead;
@@ -5115,7 +5115,7 @@ function updateCar(c, dt, ranked) {
   // at every OVERALL SPEED setting (vstd-invariant A13). Never while the pit
   // limiter holds the car (pits.held: entry line to exit) — a queue in the lane
   // is inside OT_GAP (docs/research/PIT-NEXT-STEPS-2026-09.md §4e).
-  OvertakeMode.lines(c, track, gapAhead, otOpen && !pitHeld);   // no detection-line EARN in the lane either
+  OvertakeMode.lines(c, track, gapAhead, otOpen && !pitHeld, detected);   // no detection-line EARN in the lane either
   const otGate = otEnabled() && !c.finished && !pitHeld, otFast = vStd(c.speed) > OT_MIN_SPEED;
   OvertakeMode.arm(c, otGate, otFast);
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
@@ -6619,7 +6619,6 @@ function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.
 
 // CEREMONY COOLDOWN: the flag is down and RaceCeremony's cooldown beat lets the human drive the finished car
 // (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
-function cooldownDrives() { const rc = RaceCeremony.get(); return state === "results" && !!rc && rc.status().inputOwner === "player"; }
 function cooldownDrive(c, dt) {
   const inp = inputOf(c), thr = inp ? !!inp.throttle : Input.throttle(), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
   const steer = inp ? clamp(+inp.steer || 0, -1, 1) : Input.steer(dt), vMax = vTop() * 0.55;
@@ -8451,8 +8450,11 @@ function render(dt) {
   }
   // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
   po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
+  po.visorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens() : null;
+  po.visorFolded = false;
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
+  if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
   // Boot canary disarmed once the backend has presented a RUN of world frames,
@@ -8584,7 +8586,7 @@ function tickBody(now) {
   // step (which would change the slip/grip behaviour). Leftover time carries to
   // the next frame; cap the substeps so a stall can't trigger a spiral of death.
   // Only where update() advances anyone — elsewhere it returns immediately.
-  if (!frozen && track && (state === "race" || state === "count" || (state === "results" && RaceCeremony.get()?.status().inputOwner === "player"))) {   // track: null mid stepped switch (K1)
+  if (!frozen && track && (state === "race" || state === "count" || (state === "results" && RaceCeremony.get()?.playerDrives()))) {   // track: null mid stepped switch (K1)
     physAcc += simTime;
     let steps = 0;
     PerfSpans.begin("physics");
@@ -8599,7 +8601,7 @@ function tickBody(now) {
         c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
       _audioParamStep = physAcc - PHYS_DT < PHYS_DT || steps === 4;   // this frame's last step
-      if (state === "results") { for (let i = 0; i < cars.length; i++) if (cars[i].finished || cars[i].retired) updateCar(cars[i], PHYS_DT, cars); } else update(PHYS_DT);
+      update(PHYS_DT);
       physAcc -= PHYS_DT; steps++;
     }
     PerfSpans.end("physics");
@@ -8614,7 +8616,7 @@ function tickBody(now) {
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   PerfSpans.begin("camera"); director.tick(dt); PerfSpans.end("camera");   // TV director (dbgCam only): after the step, on the pose render draws (camPoseOf)
   if (photoMode && paused && netPlay.active()) updatePhotoCam(Math.min(dt, 1 / 20));
-  if (state === "results") { resultsCam.tick(dt); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.min(dt, 1 / 20)); }
+  if (state === "results") { resultsCam.tick(dt); const rc = RaceCeremony.get(); if (rc) rc.tick(Math.max(0, _dtMs / 1000)); }
   if (state !== "race" && state !== "count") GameAudio.feedReplayScrub(soundOn && player, state === "results" && replayBuf.isScrubbing(), cars, naturalGear, rpmFor, rivalAudio, isWetRoad, vTop);   // results HIGHLIGHTS: engines + field per clip; orbit, NEXT, RACE AGAIN or MENU (each ends the scrub) silences once
   RenderRate.observe(_dtMs);
   if (RenderRate.gate(dt, _dtMs, XrBoot.comfort(), state === "race" && !paused)) {   // a skipped rAF hands its dt/ms to the next drawn frame

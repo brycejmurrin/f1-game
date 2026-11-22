@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { bootGlx } from "../helpers/glx-mock.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -198,4 +199,29 @@ test("the batched trail drops marks beyond the cull radius and rebuilds when the
   skids.draw(gfx, [5, 0, 0]);
   skids.draw(gfx, [990, 0, 0]);
   assert.deepEqual(seen, [[6, true], [6, false], [6, true]], "far mark culled; eye move >16 m rebuilds");
+});
+
+test("GLX reserves the skid trail once and streams only live vertices", () => {
+  const skids = make(), h = bootGlx();
+  h.GLX.begin(h.frame());
+  h.reset();
+  for (let i = 1; i <= 120; i++) {
+    skids.stamp(IDENT, true, 0.1);
+    skids.draw(h.GLX, [0, 0, 0]);
+  }
+  const args = (name) => h.calls.filter(([op]) => op === name).map(([, values]) => values);
+  const counts = Array.from({ length: 120 }, (_, i) => (i + 1) * 6);
+  assert.deepEqual(args("bufferData").map(a => a[1]), [120 * 6 * 5 * 4], "one store for the 120-mark trail");
+  assert.deepEqual(args("bufferSubData").map(a => a[4]), counts.map(n => n * 5), "upload only the live floats");
+  assert.deepEqual(args("drawArrays").map(a => a[2]), counts);
+
+  h.reset();
+  skids.draw(h.GLX, [0, 0, 0]);
+  assert.equal(h.count("bufferSubData"), 0, "a resident clean trail only draws");
+  assert.ok(h.GLX.init(h.canvas));
+  h.GLX.begin(h.frame());
+  h.reset();
+  skids.draw(h.GLX, [0, 0, 0]);
+  assert.equal(h.count("bufferData"), 1, "new VBO needs its store");
+  assert.deepEqual(args("bufferSubData").map(a => a[4]), [120 * 6 * 5], "restore the trail even with a clean CPU copy");
 });

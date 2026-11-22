@@ -50,6 +50,27 @@ test("rollout stops at the flag instead of averaging frozen frames", async () =>
   assert.equal(again.error, "RaceOverError");
 });
 
+test("agent steps move the cooldown field until player control ends", async () => {
+  await load();
+  const { player, cars } = g.G;
+  const rival = cars.find(c => c !== player);
+  rival.speed = 40;
+  g.apex.finishRace({ ceremony: true });
+  assert.equal(g.apex.ceremony().inputOwner, "player");
+  const pos = player.finPos, time = player.finishT;
+  const start = player.s, rivalStart = rival.s;
+  g.apex.step(1 / 60, 3);
+  assert.notEqual(player.s, start);
+  assert.notEqual(rival.s, rivalStart);
+  assert.equal(player.finPos, pos);
+  assert.equal(player.finishT, time);
+
+  g.apex.ceremony("results");
+  const parked = cars.map(c => c.s);
+  g.apex.step(1 / 60, 3);
+  assert.deepEqual(cars.map(c => c.s), parked);
+});
+
 test("rollout refuses a policyHz that is not positive", async () => {
   await load("monza", 0.05, 50);
   for (const policyHz of [0, -5]) {
@@ -607,4 +628,27 @@ test("world full carries feel; pit() carries the lane loss", async () => {
   const pit = g.apex.pit();
   // Monza's lane at racing speed (the real figure is ~22-24 s).
   assert.equal(pit.lossS, 22.54);
+});
+
+test("race() leaves a career in the saved free-play seat on the requested circuit", async () => {
+  const game = await createGame({ storage: { trackId: "monza" }, carMeshes: false });
+  try {
+    const { apex, G } = game;
+    const teams = game.sandbox.Teams.LIST;
+    G.store.set("team", teams.findIndex(t => t.id === "mclaren"));
+    G.store.set("driver", 0);
+    apex.career({ teamId: "haas", seat: 1, seed: 7 });
+    assert.equal(teams[G.teamIdx].id, "haas");
+    assert.equal(G.driverIdx, 1);
+    assert.equal(apex.race("unknown-circuit"), false);
+    assert.equal(G.flow, "career");
+
+    await game.race("bahrain");
+    assert.equal(G.flow, "gp");
+    assert.equal(G.track.def.id, "bahrain");
+    assert.equal(G.player.team.id, "mclaren");
+    assert.equal(G.driverIdx, 0);
+    assert.equal(apex.career().team, "haas");
+    assert.equal(apex.career().seat, 1);
+  } finally { game.close(); }
 });
