@@ -649,6 +649,8 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
   const fine = sys.fineCells(mesh);
   assert.equal(fine.chunks.length, 36, "3x3 draw blocks -> the 36 cells");
   assert.equal(sys.fineCells(mesh), fine, "built once per record");
+  assert.equal(fine.chunks.filter(c => c.geo instanceof BufferGeometry).length, 0, "CPU-only mirror cells allocate no THREE geometries");
+  assert.equal(fine.chunks.filter(c => c.geo.index instanceof BufferAttribute).length, 0, "cell index views need no THREE attributes");
   const blocks = new Set(mesh.chunks.map((c) => c.geo.index.array.buffer));
   let n = 0;
   const tris = [];
@@ -686,4 +688,29 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
   assert.ok(freed.has(g), "the fine merge slot is freed with the record");
   assert.equal(fine.chunks, null);
   assert.equal(sys.fineCells(mergeFactory("1").build(gridMesh(), 72)), null, "merge 1: the chunks already are the cells");
+});
+
+test("chunk culls share planes across meshes and refresh on an in-place projection change", () => {
+  const source = fs.readFileSync(new URL("../../js/render/shared/frustum.js", import.meta.url), "utf8");
+  const frustum = vm.runInNewContext(source + "\nFrustum", {}, { filename: absSrc("js/render/shared/frustum.js") });
+  let extractions = 0;
+  const sys = factory([], { ...frustum, extractPlanes(vp, out) {
+    extractions++; frustum.extractPlanes(vp, out);
+  } });
+  const vp = Float32Array.of(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
+  const centre = { min: [-.1,-.1,-.1], max: [.1,.1,.1] };
+  const far = { min: [9.9,-.1,-.1], max: [10.1,.1,.1] };
+  const road = { chunks: [centre, far] }, props = { chunks: [far] };
+  assert.equal(sys.cull(road, vp), 1);
+  assert.equal(sys.visList[0], centre);
+  assert.equal(sys.cull(props, vp.slice()), 0);
+  assert.equal(extractions, 1);
+  vp[12] = -10;
+  assert.equal(sys.cull(road, vp), 1);
+  assert.equal(sys.visList[0], far);
+  assert.equal(sys.cull(props, vp), 1);
+  assert.equal(extractions, 2);
+  vp[12] = 0;
+  assert.equal(sys.cull(props, vp), 0);
+  assert.equal(extractions, 3);
 });

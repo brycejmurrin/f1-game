@@ -571,7 +571,6 @@ const GLXBackend = (function () {
   function init(canvasEl) {
     canvas = canvasEl;
     LightBudget.setSlots(litSlots = MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
-    watchCanvasSize();
     // HeadlessChrome's CDP / Playwright page screenshots race the cleared backbuffer
     // without preserveDrawingBuffer — and even with it, SwiftShader often never
     // composites the WebGL layer (a black gap). GLX keeps the buffer AND blits.
@@ -584,7 +583,6 @@ const GLXBackend = (function () {
         || !!navigator.webdriver);
     let capNative = false;
     try { capNative = (sessionStorage.getItem("apex26.wgxCapture") || localStorage.getItem("apex26.wgxCapture")) === "0"; } catch (_) { /* AUTO */ }
-    Soft.setEnabled(headlessUa && !capNative);
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -599,7 +597,6 @@ const GLXBackend = (function () {
     });
     if (!gl) return false;
     _softwareGl = detectSoftwareGl();
-    if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
@@ -779,10 +776,20 @@ const GLXBackend = (function () {
     glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
     if (!litProg && litSlots > LightBudget.LITE) litProg = link(LIT_VS, litFsFor(litSlots = LightBudget.LITE));   // drivers pack differently: one retry
     LightBudget.setSlots(litSlots);
+    if (!litProg || !skyProg || !markProg || !blobBatchProg) {
+      // checkLink has already released failed links. Drop their successful
+      // siblings too: an abandoned backend will never draw with this batch.
+      for (const prog of [litProg, skyProg, markProg, markBatchProg, blobBatchProg, glowProg, lineProg, particleProg, decalProg]) {
+        if (prog) gl.deleteProgram(prog);
+      }
+      litProg = skyProg = markProg = markBatchProg = blobBatchProg = glowProg = lineProg = particleProg = decalProg = null;
+      return false;
+    }
+    watchCanvasSize();
+    Soft.setEnabled(headlessUa && !capNative);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
       "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
     _decalVPToken = -1; _lastDecalGlow = NaN;
-    if (!litProg || !skyProg || !markProg || !blobBatchProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules

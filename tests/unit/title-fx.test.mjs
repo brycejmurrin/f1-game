@@ -118,7 +118,7 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return {
     M: vm.runInContext("TitleFx", ctx),
-    html, written, wired, ids, overlay, document, timers, frames, buzz, observers,
+    html, written, wired, ids, overlay, document, timers, frames, buzz, observers, store: sb.GameStore.store,
     runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
     runFrames: () => { const f = frames.splice(0); for (const fn of f) fn(); },
   };
@@ -145,6 +145,23 @@ test("defaults: motion AUTO (effective ON), intro FULL, wash FULL, title art ON 
   assert.equal(html.dataset.titleIntro, undefined);
   assert.equal(html.dataset.menuWash, undefined);
   assert.equal(html.dataset.titleArt, undefined);
+});
+
+test("race motion reads reuse the stored choice until a settings revision changes", () => {
+  const stored = { motion: "off" };
+  const { M, store } = load({ stored, osReduce: true });
+  store.rev = store.rawRev = 0;
+  let reads = 0;
+  const get = store.get;
+  store.get = (key, d) => { reads++; return get(key, d); };
+  for (let i = 0; i < 180; i++) assert.equal(M.mode(), "on");
+  assert.equal(reads, 1);
+  stored.motion = "reduce"; store.rev++;
+  assert.equal(M.choice(), "reduce");
+  delete stored.motion; store.rawRev++;
+  assert.equal(M.choice(), "auto");
+  assert.equal(M.mode(), "reduce");
+  assert.equal(reads, 3);
 });
 
 test("AUTO follows OS; OFF overrides OS; legacy ON reads as AUTO", () => {

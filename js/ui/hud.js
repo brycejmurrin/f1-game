@@ -1969,18 +1969,17 @@ function updateHud(force, dtMs) {
   // that lap. The chip reads the allowance in MJ, the rule's own unit.
   const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
-  const caution = G.cautionInfo ? G.cautionInfo() : null;
-  const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const pitHeld = G.pits?.held?.(player);
-  const otOff = G.state === "race" && (!gateOpen || pitHeld) && !(player.otT > 0);
+  const pitHeld = G.state === "race" && !(player.otT > 0) && G.pits?.held?.(player);
+  const otOff = G.state === "race" && !(player.otT > 0) && (pitHeld || (typeof G.otEnabled === "function" && !G.otEnabled()));
   // The class follows the GATE like the text does: a held lap-0 grant (or one
   // under a safety car) used to pulse the yellow "ready" plate while the text
   // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
   const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  const leader = G.ranked && G.ranked[0];
   let otReason = "";
   if (otOff) {
+    const caution = spokenFlag ? spokenFlag.cn : G.cautionInfo?.();
+    const leader = G.ranked && G.ranked[0];
     // RaceControl has independent gates. Keep the reason in the HUD so a
     // player knows whether to wait for green, a dry track or the opening lap
     // to pass; the input path still checks c.otArmed in game.js. Only the
@@ -2021,9 +2020,9 @@ function updateHud(force, dtMs) {
     : otReady ? "ready" : player.otEarned ? "earned" : "pending");
   hToggle(els.btnOT, "dead", otOff);
   const xOpen = (player.aeroX || 0) > 0.05;
-  const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
   const noZones = !(G.aeroZones && G.aeroZones.length);
   const autoAero = G.raceAeroMode === "auto";
+  const dz = !autoAero && !noZones && !xOpen && G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
   hToggle(els.btnAero, "dead", noZones);

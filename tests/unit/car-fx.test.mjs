@@ -383,9 +383,9 @@ test("haze source guards: visual only, wired once, the post shaders' opts.haze u
   assert.doesNotMatch(hz, /\bc\.[A-Za-z_]+\s*(=(?!=)|\+=|-=|\+\+|--)/, "the haze writes no car field (nothing may feed physics)");
   assert.doesNotMatch(hz, /exhaustPop/, "the after-fire pulse no longer drives the haze");
   const game = read("js/game.js");
-  const pick = game.indexOf("if (haze) haze.pick(cars, player, onboard, ");
+  const pick = game.indexOf("const hazeAnchor = haze && haze.pick(cars, player, onboard, ");
   const loop = game.indexOf("for (const c of cars) {", pick);
-  const mark = game.indexOf("if (haze) haze.mark(c, tmpMat);");
+  const mark = game.indexOf("if (c === hazeAnchor) haze.mark(c, tmpMat);");
   const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
   assert.ok(pick > 0 && loop > pick && mark > loop && mark < cockpit, "pick before the car loop, mark in it before the cockpit continue");
   assert.match(game, /const haze = gfx\.mobileTier \? null : carFx\.haze;/);

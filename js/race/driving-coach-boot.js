@@ -85,6 +85,7 @@ const DrivingCoach = (function () {
       advice: call("advice", ""),
       beginSetupTrial: call("beginSetupTrial", false),
       mark: call("mark", false), retry: call("retry", false), rewind: call("rewind", false),
+      releasePracticeWorlds: () => { if (mine) mine.releasePracticeWorlds(); },
       reset: () => { if (body()) mine.reset(); },
       toggle, paint,
       armPractice: call("armPractice", false), canArm: call("canArm", false),

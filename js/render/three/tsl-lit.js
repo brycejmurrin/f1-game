@@ -464,21 +464,27 @@
         U.shadowTexel.value = 1 / (SHD.sunSize || 2048);
         const _sc = frame.shadowCtr || frame.eye;
         if (_sc) U.shadowCtr.value.set(_sc[0], _sc[1], _sc[2]);
-        U.lightVP.value.fromArray(SHD.S.lightVP);
+        // These matrices feed gated shadow samples. Copy the current producer matrix on
+        // every active pass, including the first pass after the map becomes usable.
+        const sunVisible = U.shadowStr.value > 0;
+        if (sunVisible) U.lightVP.value.fromArray(SHD.S.lightVP);
         if (CSMX) {
           const C = SHD.S.csm;
-          U.csmVP0.value.fromArray(C.vp[0]); U.csmVP1.value.fromArray(C.vp[1]);
+          if (sunVisible && C.on) {
+            if (C.valid[0]) U.csmVP0.value.fromArray(C.vp[0]);
+            if (C.valid[1]) U.csmVP1.value.fromArray(C.vp[1]);
+          }
           U.csmP.value.set(C.half[0], C.half[1], C.biasK[0], C.biasK[1]);
           U.csmOn.value.set(C.on && C.valid[0] ? 1 : 0, C.on && C.valid[1] ? 1 : 0);
         }
         if (carShadowOn) {
-          U.carLightVP.value.fromArray(SHD.S.carLightVP);
+          if (sunVisible && SHD.S.carArmed) U.carLightVP.value.fromArray(SHD.S.carLightVP);
           U.carShadowOn.value = SHD.S.carArmed ? 1 : 0;
           U.carBiasScale.value = SHD.S.carBoxScale || 1;
         }
         if (lampShadowOn) {
-          U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
           const _lampOn = SHD.S.lampArmed && !mirror;
+          if (_lampOn) U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
           U.lampShadowOn.value = _lampOn ? 1 : 0;
           U.lampShadowIdx.value = SHD.S.lampIdx;
           const _sc = typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, _lampOn ? SHD.S.lampIdx : -1, _bakeShScr) : _bakeShScr;
@@ -486,7 +492,8 @@
           if (LAMPXX) {
             const X = SHD.S.lampX, a = X.slots[0], b = X.slots[1];
             const on0 = !!(X.on && a.armed && !mirror), on1 = !!(X.on && b.armed && !mirror);
-            U.lampXVP0.value.fromArray(a.lightVP); U.lampXVP1.value.fromArray(b.lightVP);
+            if (on0) U.lampXVP0.value.fromArray(a.lightVP);
+            if (on1) U.lampXVP1.value.fromArray(b.lightVP);
             U.lampXP.value.set(a.idx, b.idx, on0 ? 1 : 0, on1 ? 1 : 0);
             const hasLB = typeof LampBake !== "undefined";
             let c = hasLB ? LampBake.shadowCol(frame, on0 ? a.idx : -1, _bakeShScr) : _bakeShScr;
@@ -2942,8 +2949,8 @@
             fogCol.addAssign(lampFogC);
             color.assign(mix(color, fogCol, f));
           });
-          // low-lying ground mist: drifting 2-oct cloudFBM band
-          If(U.groundMist.greaterThan(0.001), () => {
+          // The mist ramp is zero through 8 m: the cockpit and near road need no band or noise.
+          If(U.groundMist.greaterThan(0.001).and(vd.greaterThan(8.0)), () => {
             const lowH = max(wp.y.sub(cameraPosition.y.sub(5.0)), 0.0);
             const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
             const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));

@@ -540,6 +540,27 @@ test("WGX builds SSR only on the full tier and keeps the phone post chain", asyn
   }
 });
 
+test("WGX phone uploads the raster and inverse depth transforms to the lit, SSAO and godray passes", async () => {
+  const h = makeGpuHarness({ ua: "iPhone AppleWebKit/605.1.15 Version/26.0 Safari/604.1" });
+  const gfx = await h.create();
+  const post = h.vm.window.WGSLPost;
+  gfx.resize();
+  const viewProj = Float32Array.from({ length: 16 }, (_, i) => i - 7.5);
+  const invProj = Float32Array.from({ length: 16 }, (_, i) => i * 0.25 + 1);
+  const invViewProj = Float32Array.from({ length: 16 }, (_, i) => 4 - i * 0.125);
+  const start = h.writes.length;
+  assert.equal(gfx.begin({ viewProj, invProj, invViewProj }), true);
+  gfx.present({ ssao: 1, lampVol: 1, mist: 1 });
+  const writes = h.writes.slice(start);
+  const raster = Array.from(viewProj, (v, i) => i % 4 === 2 ? (v + viewProj[i + 1]) / 2 : v);
+  const inverse = (m) => [...m.slice(0, 8), ...m.slice(8, 12).map(v => 2 * v),
+    ...m.slice(12).map((v, i) => v - m[i + 8])];
+  const matrixUploaded = (length) => writes.find(w => w.values.length === length)?.values.slice(0, 16);
+  assert.deepEqual(matrixUploaded(168), raster);
+  assert.deepEqual(matrixUploaded(post.SSAO_UNIFORM_BYTES / 4), inverse(invProj));
+  assert.deepEqual(matrixUploaded(post.GODRAY_UNIFORM_BYTES / 4), inverse(invViewProj));
+});
+
 test("WGX post construction omits the unused lite SSR uniform buffer", () => {
   for (const lite of [false, true]) {
     const h = makeGpuHarness();

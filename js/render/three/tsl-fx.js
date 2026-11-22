@@ -154,6 +154,7 @@
     // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS
     // PERIOD / SWEEP / THICK): pattern space is (along, across), so no
     // derivatives — WebKit-safe.
+    // RGB and opacity use the same per-fragment chevron coverage. Share one shader temporary.
     const lineAlpha = Fn(() => {
       const across = float(attribute("lineAcross", "float")).toVar();   // anchor
       const zone = float(attribute("lineZone", "float")).toVar();       // anchor
@@ -167,7 +168,7 @@
       const rim = smoothstep(float(0.85), float(1.0), abs(across)).oneMinus();
       const z = mix(float(1.0), smoothstep(float(0.05), float(0.75), zone), lineCorners);
       return arrow.mul(rim).mul(z);
-    });
+    })().toVar();
     lineMat.colorNode = Fn(() => {
       const spd = float(attribute("lineSpeed", "float")).toVar();       // anchor
       const over = lineSpeed.div(max(spd, float(1.0)));
@@ -175,11 +176,11 @@
       // maths as GLX LINE_FS and WGSL LINE (the table and why it has a
       // colour-blind entry live in driving-line.js PALETTES).
       const col = mix(mix(lineOnPace, lineLift, smoothstep(float(0.98), float(1.06), over)), lineBrake, smoothstep(float(1.06), float(1.16), over));
-      return col.mul(lineStr).mul(lineAlpha()).mul(lineOpacity);
+      return col.mul(lineStr).mul(lineAlpha).mul(lineOpacity);
     })();
     // min(), not a bare multiply: SOLID takes the 0.85 base past 1 and a source
     // alpha over 1 over-blends (GLX LINE_FS, WGX LINE carry the same clamp).
-    lineMat.opacityNode = Fn(() => min(lineAlpha().mul(0.85).mul(lineOpacity), float(1.0)))();
+    lineMat.opacityNode = Fn(() => min(lineAlpha.mul(0.85).mul(lineOpacity), float(1.0)))();
 
     // Billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math). The
     // particles use per-vertex position centres; glow supplies fxCenter from

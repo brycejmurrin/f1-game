@@ -133,6 +133,25 @@ test("offset dot tracks horizontal drag and clamps at full lock", () => {
   assert.equal(Input.debugState().touchSteer, 1);
 });
 
+test("a held drag only repaints the indicator when its visible offset changes", () => {
+  const { Input, onCanvas, dragEl } = boot();
+  Input.setSteerMode("touch");
+  const touch = (type, x) => onCanvas(type, { changedTouches: [{ identifier: 1, clientX: x, clientY: 200 }] });
+  touch("touchstart", 100);
+  let writes = 0;
+  const count = { set(style, k, v) { writes++; style[k] = v; return true; } };
+  dragEl.style = new Proxy(dragEl.style, count);
+  const dot = dragEl.children[0];
+  dot.style = new Proxy(dot.style, count);
+  for (const x of [101, 102, 103, 400, 410, 420]) touch("touchmove", x);
+  assert.equal(writes, 1, "dead-band and clamped positions share one transform change");
+  assert.equal(Input.debugState().touchSteer, 1);
+  touch("touchend", 420);
+  touch("touchstart", 180);
+  assert.equal(dragEl.style.left, "180px");
+  assert.equal(dragOff(dragEl), "0px");
+});
+
 test("the drag range reads the viewport on resize, not on every touch (B·H11)", () => {
   // innerWidth/innerHeight force a synchronous layout when the tree is dirty; touchRangePx ran on
   // every touchmove. The long edge is cached until a resize (rotation fires one too).

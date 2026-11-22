@@ -760,8 +760,8 @@
     // on the block's box: one cell inside the mirror's draw-distance cap drew the whole block (monaco, phone tier:
     // 96,079 mirror triangles into 138x39, 24,510 when each cell is culled on its own box). fineCells(mesh) is the
     // same record as its cells: a list cull() and mergeVisible() take in place of mesh.chunks, built on first use.
-    // Each cell's index is a VIEW of its block's index (no copy) on a geometry that is never drawn itself: only
-    // mergeVisible reads it, so it holds no GPU buffer and no RenderObject, and needs no dispose. A record whose
+    // Each cell needs only its block index subarray and count for mergeVisible. The merged draw owns the
+    // THREE geometry and attributes, so the individual cell records can stay plain JS objects. A record whose
     // blocks carry no cells (merge factor 1, a prepared build from before this field) returns null.
     function fineCells(mesh) {
       if (!mesh || !mesh.chunks) return null;
@@ -774,8 +774,8 @@
         if (!cs || !ix || !ix.array || ix.array.length < ch.count) { list.push({ geo: ch.geo, count: ch.count, min: ch.min, max: ch.max }); continue; }
         any = true;
         for (let k = 0; k < cs.length; k++) {
-          const c = cs[k], geo = new THREE.BufferGeometry();
-          geo.setIndex(new THREE.BufferAttribute(ix.array.subarray(c.o, c.o + c.n), 1));
+          const c = cs[k];
+          const geo = { index: { array: ix.array.subarray(c.o, c.o + c.n), count: c.n } };
           list.push({ geo, count: c.n, min: c.min, max: c.max });
         }
       }
