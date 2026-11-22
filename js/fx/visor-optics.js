@@ -43,8 +43,8 @@ const VisorOptics = (function () {
   const BEND = { light: 14, medium: 32, strong: 56 };                // feDisplacementMap scale per level (rim only)
   // Lens colours: css/tokens.css --visor-{neutral,amber,ice,rose}, selected into --visor-lens by css/helmet-visor.css from
   // body[data-helmet-visor-color] and read here at port-build time; this table is the fallback for a stub DOM.
-  const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60] };
-  const TINT_ALPHA = { light: 0.12, medium: 0.18, strong: 0.24 };
+  const TINT = { neutral: [12, 12, 20], amber: [80, 61, 32], ice: [35, 59, 80], rose: [76, 45, 60], green: [36, 76, 56], violet: [73, 54, 88], copper: [100, 59, 41] };
+  const TINT_ALPHA = { trace: 0.06, light: 0.12, medium: 0.18, strong: 0.24, deep: 0.32 };
 
   const BLEND_RECHECK_MS = 1000;     // the live backend is re-read this often (it settles once after boot or a fallback)
 

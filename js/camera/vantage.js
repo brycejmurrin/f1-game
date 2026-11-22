@@ -136,14 +136,16 @@ function headOffset(mode, extra, out) {
   if (mode === "helmet") {
     const pose = typeof CockpitOpts !== "undefined" && CockpitOpts.helmetEye ? CockpitOpts.helmetEye() : "standard";
     const shift = pose === "tucked" ? 0.025 : pose === "upright" ? -0.025 : 0;
-    out[1] = -shift;
-    out[2] = HELMET_EYE_FWD + (pose === "forward" ? 0.04 : shift);
+    const mount = typeof CockpitOpts !== "undefined" && CockpitOpts.helmetMount ? CockpitOpts.helmetMount() : "center";
+    out[0] = mount === "left" ? -0.032 : mount === "right" ? 0.032 : 0;
+    out[1] = pose === "high" ? 0.035 : pose === "low" ? -0.035 : -shift;
+    out[2] = HELMET_EYE_FWD + (pose === "forward" ? 0.04 : pose === "back" ? -0.04 : shift);
   }
   const a = extra.att;
   if (!a || extra.reduceMotion) return out;
   const k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
   const roll = clamp(a.baRoll || 0, -HEAD_ROLL_MAX, HEAD_ROLL_MAX), dive = clamp(a.baPitch || 0, 0, HEAD_DIVE_MAX);
-  out[0] = -roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
+  out[0] -= roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
   out[1] -= dive * HEAD_NOD_DOWN * k;
   out[2] += dive * HEAD_NOD_FWD * k;
   out[3] = dive * HEAD_NOD_AIM * k;

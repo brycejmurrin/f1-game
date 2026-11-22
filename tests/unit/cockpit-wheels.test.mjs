@@ -88,8 +88,8 @@ test("visor colors and strengths persist independently and preserve legacy smoke
   assert.equal(opts.visor(), "smoke");
   assert.equal(opts.visorColor(), "amber");
   assert.equal(opts.visorIntensity(), "medium");
-  for (const color of ["neutral", "amber", "ice", "rose"]) {
-    for (const intensity of ["light", "medium", "strong"]) {
+  for (const color of ["neutral", "amber", "ice", "rose", "green", "violet", "copper"]) {
+    for (const intensity of ["trace", "light", "medium", "strong", "deep"]) {
       opts.setVisorColor(color); opts.setVisorIntensity(intensity);
       const restored = loadOpts(Object.fromEntries(store)).opts;
       assert.equal(restored.visorColor(), color);
@@ -97,8 +97,8 @@ test("visor colors and strengths persist independently and preserve legacy smoke
     }
   }
   opts.setVisor("clear"); opts.setVisor("smoke");
-  assert.equal(opts.visorColor(), "rose");
-  assert.equal(opts.visorIntensity(), "strong");
+  assert.equal(opts.visorColor(), "copper");
+  assert.equal(opts.visorIntensity(), "deep");
   opts.setVisorColor("invalid"); opts.setVisorIntensity("invalid");
   assert.equal(opts.visorColor(), "amber");
   assert.equal(opts.visorIntensity(), "medium");
