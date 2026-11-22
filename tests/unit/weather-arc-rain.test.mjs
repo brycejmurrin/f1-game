@@ -107,7 +107,7 @@ test("a field nobody updates is not drawn: the frozen box a drying race left beh
 });
 
 test("real game: road thresholds, drizzle seeding and rendered rain retain separate weather owners", async (t) => {
-  const g = await createGame({ track: "monza", carMeshes: false });
+  const g = await createGame({ track: "monaco", carMeshes: false });
   const A = g.apex, G = g.G, P = vm.runInContext("Particles", g.ctx);
   // The physics harness's inert renderer returns [] here; real rendering
   // consumes six planes. Use the same shared math as all shipped backends.
@@ -204,6 +204,21 @@ test("real game: road thresholds, drizzle seeding and rendered rain retain separ
       assert.ok(G.trackWetness() > 0.72, "grip still sees standing water");
       assert.equal(G.viewRainfall(), 0);
       assert.equal(paint(), 0, "render must not feed wet-road predicates to falling rain");
+    });
+    await t.test("a wet Monaco tunnel shelters the camera until it clears the roof", () => {
+      A.weatherArc(null); A.weather("rain");
+      G.initRainDrops(); P.rainShow(true);
+      A.camera("helmet"); A.jump(0.44, 0, 0);
+      assert.ok(paint() > 0, "rain still falls in front of the entry portal");
+      A.jump(0.48, 0, 0);
+      assert.equal(paint(), 0, "no falling rain inside the bore");
+      assert.equal(G.viewRainfall(), 1, "the tunnel does not change the weather");
+      A.camera("heli");
+      assert.ok(paint() > 0, "the airborne camera still sees rain above the same road");
+      A.camera("helmet"); A.jump(0.54, 0, 0);
+      assert.ok(paint() > 0, "rain resumes beyond the exit portal");
+      A.weather("dry");
+      assert.equal(paint(), 0, "clearing weather stops the exposed field");
     });
     assert.deepEqual(g.record.scripts.filter((s) => s.error), [], "no script failure may masquerade as absent rain");
     assert.deepEqual(g.record.rejections, [], "no asynchronous boot failure");

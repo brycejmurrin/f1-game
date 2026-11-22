@@ -704,12 +704,14 @@ test("phone pedals use the selected response independently, and carry it across 
     PedalTravel.setButtonProfile("gas", { press: "progressive", travel: 40 });
     assert.equal(dom.gas.attrs["data-touch-response"], undefined, "progressive Gas leaves the idle face clear");
     assert.equal(dom.brake.attrs["data-touch-response"], undefined);
-    PedalTravel.setButtonProfile("gas", { feedback: false });
+    PedalTravel.setButtonProfile("gas", { feedback: false, slideCurve: "fine" });
     assert.equal(dom.gas.attrs["data-touch-response"], undefined);
     PedalTravel.setButtonProfile("brake", { slide: "ease" });
     gas("pointerdown", 120, 100);
     assert.equal(ctl.state().thr, PedalTravel.MIN);
     assert.ok(dom.gas.classes.has("feedback-off"));
+    gas("pointermove", 132, 116);
+    assert.ok(Math.abs(ctl.state().thr - 0.34) < 1e-10, "half of the slide distance builds a quarter of the remaining throttle");
     gas("pointermove", 144, 132);
     assert.equal(ctl.state().thr, 1, "40 pixels diagonally gives full throttle");
     gas("pointermove", 120, 100);

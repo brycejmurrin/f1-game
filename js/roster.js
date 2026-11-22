@@ -837,6 +837,7 @@
     ]
   ],
     LAZY_UI_PRESETS: [
+    "js/ui/desktop-graphics.js",
     "js/ui/screen-regions.js",
     "js/ui/screen-placement.js",
     "js/ui/screen-arranger.js",

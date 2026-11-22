@@ -840,6 +840,7 @@ const PhonePadPage = (function () {
   // off its slot and sized. place[id] = { x, y } offset in % of the screen's
   // width / height, and s, the size in %. The grid stays the base, so a preset
   // or RESET puts every control back.
+  const BUTTON_SHAPES = ["square", "capsule", "arch", "shield", "paddle-left", "paddle-right", "leaf"];
   const ARRANGE_MIN_PX = 44;   // the touch floor: no control sizes below it
   const clampN = (v, lo, hi, d) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
   function normalisePlace(raw) {
@@ -850,7 +851,8 @@ const PhonePadPage = (function () {
       if (!/^[\w-]{1,24}$/.test(id) || !p || typeof p !== "object") continue;
       const r1 = (v) => Math.round(v * 10) / 10;
       const q = { x: r1(clampN(p.x, -90, 90, 0)), y: r1(clampN(p.y, -90, 90, 0)), s: Math.round(clampN(p.s, 40, 250, 100)) };
-      if (q.x || q.y || q.s !== 100) out[id] = q;
+      if (BUTTON_SHAPES.includes(p.shape) && id !== "screen" && id !== "steering") q.shape = p.shape;
+      if (q.x || q.y || q.s !== 100 || q.shape) out[id] = q;
     }
     return out;
   }
@@ -858,6 +860,8 @@ const PhonePadPage = (function () {
     classic: preset(zonesWith("C", [])),
     right: preset(zonesWith("R", TRIO)),   // OT/BOOST/AERO above the pedals
     left: preset(zonesWith("L", TRIO)),    // ... above the paddles
+    split: preset({ ...zonesWith("L", ["overtake", "aero"]), boost: "R" }, { pedals: "side" }),
+    views: preset({ ...zonesWith("L", ["look", "camera"]), radio: "R" }),
     mirror: preset(zonesWith("C", []), { swap: true }),
     phone: preset(zonesWith("R", TRIO), { pedals: "side", strip: "column" }),   // tall BRAKE | GAS, OT/BOOST/AERO in a column beside them
   });
@@ -887,9 +891,11 @@ const PhonePadPage = (function () {
   }
   function placeEl(el, p) {
     if (!el || !el.style) return;
-    el.style.translate = p ? p.x + "vw " + p.y + "vh" : "";
+    el.style.translate = p && (p.x || p.y) ? p.x + "vw " + p.y + "vh" : "";
     el.style.scale = p && p.s !== 100 ? String(p.s / 100) : "";
-    if (el.classList) el.classList.toggle("placed", !!p);
+    if (p?.shape) el.setAttribute("data-wheel-shape", p.shape);
+    else el.removeAttribute?.("data-wheel-shape");
+    if (el.classList) el.classList.toggle("placed", !!p && !!(p.x || p.y || p.s !== 100));
   }
   /** The smallest size (%) that keeps an element's shorter side at the touch floor. */
   function minScale(w, h, s) {
@@ -967,6 +973,10 @@ const PhonePadPage = (function () {
       if (dom.picker && id) dom.picker.value = id;
       if (dom.undo) dom.undo.disabled = !history.length;
       const p = placeOf(id);
+      if (dom.shape) {
+        dom.shape.disabled = !id || id === "screen" || id === "steering";
+        dom.shape.value = p.shape || "default";
+      }
       if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "%" : "Select a control";
       markClashes();
     }
@@ -977,7 +987,7 @@ const PhonePadPage = (function () {
     }
     function sizeBy(id, factor, save) {
       const el = A[id], p = placeOf(id), r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
-      put(id, { x: p.x, y: p.y, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
+      put(id, { ...p, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
     }
     const arranging = () => !!(dom.body && dom.body.classList && dom.body.classList.contains("arranging"));
     function restore(snapshot) { cur = applyLayout(dom, snapshot); paint(); pick(picked); }
@@ -1055,7 +1065,7 @@ const PhonePadPage = (function () {
           const [a, b] = [...pts.values()], f = Math.hypot(a.x - b.x, a.y - b.y) / drag.pinch.d0;
           drag.next = { ...placeOf(drag.id), s: Math.max(drag.pinch.floor, drag.pinch.s0 * f) };
         } else if (!drag.pinch) {
-          drag.next = { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s };
+          drag.next = { ...drag.p, x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s };
         }
         if (!frame && typeof requestAnimationFrame === "function") frame = requestAnimationFrame(paintDrag);
         else if (!frame) paintDrag();
@@ -1087,6 +1097,9 @@ const PhonePadPage = (function () {
       coarse = !coarse; dom.step.textContent = coarse ? "Coarse" : "Fine"; dom.step.setAttribute("aria-pressed", String(coarse));
     });
     const edit = fn => { stopDrag(true); remember(); fn(); };
+    dom.shape?.addEventListener("change", () => {
+      if (picked && !dom.shape.disabled) edit(() => put(picked, { ...placeOf(picked), shape: dom.shape.value }, false));
+    });
     const dirs = {left:[-1,0], right:[1,0], up:[0,-1], down:[0,1]};
     for (const button of dom.nudges || []) button.addEventListener("click", () => {
       if (!picked) return;

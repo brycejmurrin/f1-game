@@ -292,6 +292,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `touch-button-settings.js` | `TouchButtonSettings` | LAZY_NET | Shared response editor for in-game touch buttons and the phone controller. |
+| `desktop-graphics.js` | `DesktopGraphics` | LAZY_UI_PRESETS | Per-effect graphics preferences. |
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |

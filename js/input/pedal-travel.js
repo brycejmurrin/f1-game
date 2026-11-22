@@ -48,15 +48,30 @@ const PedalTravel = (function () {
     }
   }
 
+  // Shape only the first slide distance. Preserve the sign and any overtravel
+  // so a directional slide can still unwind a timed hold at its normal limit.
+  function slideFraction(distance, profile) {
+    const fraction = distance / profile.travel;
+    const t = Math.abs(fraction);
+    if (!profile.slideCurve || t >= 1) return fraction;
+    const sign = Math.sign(fraction);
+    switch (profile.slideCurve) {
+      case "fine": return sign * t * t;
+      case "quick": return sign * t * (2 - t);
+      case "smooth": return sign * t * t * (3 - 2 * t);
+      default: return fraction;
+    }
+  }
+
   function level(profile, advancePx, holdFraction = 0) {
     const start = startPercent(profile) / 100;
     const resting = start + (1 - start) * (holdFraction ** (profile.buildPower || 1));
     if (profile.press === "progressive") {
       if (!profile.direction) advancePx = Math.max(0, advancePx);
       const span = advancePx < 0 ? start : 1 - start;
-      return Math.max(0, Math.min(1, resting + span * advancePx / profile.travel));
+      return Math.max(0, Math.min(1, resting + span * slideFraction(advancePx, profile)));
     }
-    return Math.max(Math.min(start, MIN), resting - Math.max(0, advancePx - DEAD_PX) / profile.travel);
+    return Math.max(Math.min(start, MIN), resting - slideFraction(Math.max(0, advancePx - DEAD_PX), profile));
   }
 
   // Only a configured direct hold needs frames. Identity checks also handle
@@ -87,6 +102,7 @@ const PedalTravel = (function () {
       return out;
     }
     if (value.press === "progressive") out.press = value.press;
+    if (["fine", "quick", "smooth"].includes(value.slideCurve)) out.slideCurve = value.slideCurve;
     if (Number.isFinite(value.travel)) {
       const travel = Math.max(40, Math.min(160, Math.round(value.travel)));
       if (travel !== TRAVEL_PX) out.travel = travel;

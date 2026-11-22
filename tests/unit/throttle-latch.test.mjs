@@ -714,6 +714,12 @@ test("customized left and right travel reaches the wheel with adaptive steering 
   assert.equal(wheel(), -1);
   left.fire("pointermove", other);
   assert.equal(wheel(), 1, "instant arrow takes full travel at crossover");
+  lift("btn-steer-right");
+  sb.PedalTravel.resetButtonProfile("right");
+  sb.PedalTravel.setButtonProfile("right", { slideCurve: "fine" });
+  right.fire("pointerdown", other);
+  right.fire("pointermove", { ...other, clientX: other.clientX - 57 });
+  assert.equal(wheel(), 0.75, "an instant arrow with only a custom slide curve reaches the wheel");
   Input.reset();
   assert.equal(wheel(), 0);
 });

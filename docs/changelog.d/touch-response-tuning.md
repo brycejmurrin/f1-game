@@ -2,3 +2,4 @@ New: customize touch-button slide direction, starting pressure, timed hold build
 New: choose idle borders and pressed colors per touch control, plus tap, hold-and-release or double-tap activation for race actions on the HUD and paired phone.
 New: shape a timed hold with Gentle Start or Fast Start and assign Quick Tap or Long Hold to a race action.
 New: pick a full-pressure edge for Gas, Brake or steering, and show input as a percentage or rising fill.
+New: choose paddle, arch, shield and leaf button shapes, reverse the race pedal order, group race actions in a compact grid, or use the Split Actions and Race Views phone layouts. Fine Start, Quick Start and S-Curve tune how pressure changes over a slide.

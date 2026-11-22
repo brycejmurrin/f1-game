@@ -4911,6 +4911,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/desktop-graphics.js",
+      "global": "DesktopGraphics",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/dock-layout.js",
       "global": "DockLayout",
       "roster": "tag"

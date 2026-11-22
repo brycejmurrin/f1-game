@@ -44,6 +44,10 @@ const TouchButtonSettings = (() => {
     const travelHelp = node("p", "Choose 40–160 screen pixels of thumb movement. A shorter slide changes input faster. A longer slide gives finer control.");
     travelHelp.className = "adv-help"; travelHelp.id = host.id + "-travel-help";
     travel.setAttribute("aria-describedby", travelHelp.id); section.appendChild(travelHelp);
+    const slideCurve = choice("slideCurve", "SLIDE RESPONSE", [["linear", "LINEAR"], ["fine", "FINE START"], ["quick", "QUICK START"], ["smooth", "S-CURVE"]]);
+    const slideCurveHelp = node("p", "Linear changes pressure evenly as you slide. Fine Start makes small slides gentler. Quick Start makes them stronger. S-Curve gives fine control near each end and changes pressure fastest in the middle.");
+    slideCurveHelp.className = "adv-help"; slideCurveHelp.id = host.id + "-slide-curve-help";
+    slideCurve.setAttribute("aria-describedby", slideCurveHelp.id); section.appendChild(slideCurveHelp);
     const direction = choice("direction", "SLIDE DIRECTION", [["default", "MODE DEFAULT"], ...["up", "down", "left", "right"].map(d => [d, d.toUpperCase()])]);
     const edge = choice("fullEdge", "START FROM TOUCH POSITION", [["fixed", "OFF · FIXED START"], ...["top", "bottom", "left", "right"].map(k => [k, "FULL AT " + k.toUpperCase()])]);
     const start = choice("start", "STARTING INPUT", [["default", "MODE DEFAULT"], ...Array.from({ length: 21 }, (_, i) => [String(i * 5), i * 5 + "%"])]);
@@ -94,6 +98,7 @@ const TouchButtonSettings = (() => {
       adaptive.parentElement.parentElement.hidden = pedal; adaptiveHelp.hidden = pedal;
       adaptive.value = String(overrides.adaptive || "inherit");
       feedback.value = profile.feedback ? "on" : "off";
+      slideCurve.value = profile.slideCurve || "linear";
       direction.value = profile.direction || "default";
       start.value = profile.start == null ? "default" : String(profile.start);
       curve.value = String(profile.buildPower || 1); curve.disabled = !profile.buildMs;
@@ -123,6 +128,7 @@ const TouchButtonSettings = (() => {
     press.onchange = () => change({ press: press.value });
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
+    slideCurve.onchange = () => change({ slideCurve: slideCurve.value });
     direction.onchange = () => change({ direction: direction.value });
     edge.onchange = () => change({ fullEdge: edge.value });
     indicator.onchange = () => change({ indicator: indicator.value });

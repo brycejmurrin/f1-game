@@ -1362,6 +1362,7 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 // look-avail / layout-presets stay first so an APPEARANCE-only visit still gets
 // them without waiting on the studio painters.
 const LAZY_UI_PRESETS = [
+  "js/ui/desktop-graphics.js",   // Graphics loads individual effect controls on entry.
   "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
   "js/ui/hud-layout-editor.js",  // HUD settings controls and saved color policy
   "js/ui/dock-toolbar.js",         // Reposition Touch Controls loads its toolbar on first use.

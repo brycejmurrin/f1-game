@@ -54,7 +54,11 @@ const TouchButtonActions = (() => {
   }
 
   if (typeof document !== "undefined" && document.getElementById?.("btn-throttle")) {
-    for (const [id, element] of Object.entries(PedalTravel.raceButtons)) bindControl(document.getElementById(element), id);
+    const byId = new Map(Object.entries(PedalTravel.raceButtons).map(([profile, id]) => [id, profile]));
+    for (const button of document.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-restore")) {
+      const profile = byId.get(button.id);
+      if (profile) bindControl(button, profile);
+    }
   }
   return Object.freeze({ bindControl });
 })();

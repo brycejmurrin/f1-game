@@ -242,3 +242,22 @@ test("no two curated turns resolve to the same apex", () => {
   assert.ok(circuits > 40, "precondition: the curated circuits were found, got " + circuits);
   assert.deepEqual(doubled, []);
 });
+
+test("cold 2-D map uses the same corner and elevation data without baking banking", () => {
+  const { Tracks, TrackMaps } = loadTrackMaps();
+  const def = Tracks.LIST.find(t => t.id === "zandvoort");
+  const build = Tracks.buildCenterline;
+  let observed;
+  Tracks.buildCenterline = (d, opts) => (observed = build(d, opts));
+  const snapshot = () => [
+    TrackMaps.outline(def), TrackMaps.corners(def), TrackMaps.direction(def),
+    TrackMaps.elevRange(def), TrackMaps.drsZones(def)
+  ];
+  const map = snapshot();
+  assert.ok(map[0].length > 2);
+  assert.equal(observed.bankP, undefined);
+  TrackMaps.invalidate(def.id);
+  Tracks.buildCenterline = (d, opts) => (observed = build(d, { ...opts, banking: true }));
+  assert.deepEqual(snapshot(), map);
+  assert.ok(observed.bankP);
+});

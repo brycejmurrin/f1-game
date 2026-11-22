@@ -1189,7 +1189,9 @@ test("a race-settings prewarm keys the exterior exactly as the RACE! drive-out w
   h.run("driveOut = { t: 0 }");
   const out = h.run("exteriorPick(ctx)");
   assert.equal(out, warm, "the same selection object: no re-key, no rebuild at RACE!");
-  assert.deepEqual([out.trackId, out.weather, out.tod, out.night], ["bahrain", "rain", "dusk", false]);
+  assert.deepEqual([out.trackId, out.weather, out.tod, out.night], ["bahrain", "rain", "dusk", true]);
+  h.run('G.raceTimeOfDay = "dawn"');
+  assert.equal(h.run("exteriorPick(ctx).night"), true);
 });
 
 test("the cover lifts on the first frame the session's exterior is ready, and that frame shows it", async () => {

@@ -9,6 +9,10 @@ import {
   classify, collect, render, TARGET, RUNNER, agentCommandFor, npmAgentCommand, resolveToolPolicy, catalogCounts,
 } from "../../tools/gen/gen-output-surface.mjs";
 
+import { ensureOnDemand } from "../../tools/gen/ensure-built.mjs";
+
+ensureOnDemand(TARGET);
+
 test("static inventory distinguishes commands from libraries, data and ambiguous modules", () => {
   assert.equal(classify("lib/math.mjs", "export const x = 1;").classification, "library");
   assert.equal(classify("mcp/helper.mjs", "export const x = 1;").classification, "ambiguous");

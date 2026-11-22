@@ -344,11 +344,11 @@ test("independent Gas and Brake edits retain the other settings when a button is
   docL.click({ target: gas, detail: 0, preventDefault() {}, stopImmediatePropagation() { blocked = true; } });
   assert.equal(blocked, true, "keyboard activation selects without driving");
   assert.equal(control("bigger").hidden, false);
-  control("bigger").onclick(); control("shape").onclick();
+  control("bigger").onclick(); choose("shape", "paddle-left");
   docL.pointerdown(event(300)); docL.pointermove(event(260)); docL.pointerup(event(260));
   let config = api.bag().buttons;
   assert.equal(config.controls["btn-throttle"].size, 110);
-  assert.equal(config.controls["btn-throttle"].shape, "round");
+  assert.equal(config.controls["btn-throttle"].shape, "paddle-left");
   assert.equal(config.controls["btn-throttle"].x, 0.1);
   assert.equal(config.R.x, 0, "the group stays at home");
   assert.equal(config.controls["btn-brake"], undefined);
@@ -371,6 +371,27 @@ test("independent Gas and Brake edits retain the other settings when a button is
   assert.equal(api.bag().tilt.controls, undefined);
 });
 
+test("driving layouts survive saving and reset independently of the other steering schemes", () => {
+  const { api, made, sets, setMode } = bootCreate();
+  api.setEditing(true);
+  const field = key => made[0].querySelector("[data-k=" + key + "]");
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("target", "drive");
+  for (const [scheme, layout] of [["buttons", "gas-left"], ["tilt", "gas-above"], ["touch", "action-grid"]]) {
+    setMode(scheme);
+    choose("layout", layout);
+  }
+  const restored = () => DL.load(memStore({ dockLayout: sets.at(-1)[1] }));
+  assert.equal(restored().buttons.layout, "gas-left");
+  assert.equal(restored().tilt.layout, "gas-above");
+  assert.equal(restored().touch.layout, "action-grid");
+  field("reset").onclick();
+  assert.equal(restored().touch.layout, undefined);
+  assert.equal(restored().buttons.layout, "gas-left");
+  choose("layout", "action-grid"); choose("layout", "");
+  assert.equal(restored().touch.layout, undefined);
+});
+
 test("Gas + Brake and Race actions move, resize and reset as independent subsets", () => {
   const { api, made, els, docL } = bootCreate();
   const controls = ["btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero"];
@@ -385,14 +406,14 @@ test("Gas + Brake and Race actions move, resize and reset as independent subsets
   const drag = (id, from, to, end) => {
     docL.pointerdown(pointer(id, from)); docL.pointermove(pointer(id, to)); docL[end](pointer(id, to));
   };
-  choose("pedals"); field("bigger").onclick(); field("shape").onclick();
+  choose("pedals"); field("bigger").onclick(); field("shape").value = "shield"; field("shape").onchange();
   drag("btn-brake", 260, 220, "pointerup");
   choose("actions"); field("smaller").onclick();
   drag("btn-ot", 240, 160, "pointercancel");
   let prefs = api.bag().buttons.controls;
   for (const id of controls.slice(0, 2)) {
     assert.equal(prefs[id].size, 110);
-    assert.equal(prefs[id].shape, "round");
+    assert.equal(prefs[id].shape, "shield");
     assert.equal(prefs[id].x, 0.1);
   }
   for (const id of controls.slice(2)) assert.deepEqual({ ...prefs[id] }, { size: 90 });
@@ -555,7 +576,7 @@ test("apply divides the translate by the dock's effective CSS zoom", () => {
 });
 
 test("BUTTON SHAPE: unknown or missing values are AUTO, and AUTO clears the root attribute", () => {
-  assert.equal(DL.SHAPES.map((s) => s[0]).join(), "auto,round,squircle,square");
+  assert.equal(DL.SHAPES.map((s) => s[0]).join(), "auto,round,squircle,square,arch,shield,paddle-left,paddle-right,leaf");
   for (const v of [null, undefined, "", "oval", 3]) assert.equal(DL.shapeOf(v), "auto");
   for (const [v] of DL.SHAPES) assert.equal(DL.shapeOf(v), v);
   const attrs = {};

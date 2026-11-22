@@ -120,8 +120,7 @@ name: CI
 #
 # Deliberately NOT here: the whole Playwright suite (~3 h of llvmpipe serial,
 # tests/data/spec-timings.json). Agents never run a browser test locally
-# (AGENTS.md rule 5): the `selected` job runs the change-aware specs on every
-# PR push (one 5-min shard on a draft, the 10-min budget once ready), the
+# (AGENTS.md rule 5): ready PRs run the selected change-aware specs, the
 # nightly runs the day's union, and browser-group.yml (`remote-group.mjs
 # <group>`) runs a whole group on demand. This gate is for what breaks
 # silently, not for everything. (The renderer group is the exception, and it
@@ -155,14 +154,9 @@ on:
   # <merge sha>` lists that run, or `= ci superseded` when a newer push
   # replaced its pending train.
   pull_request:
-    # EVERY PUSH TO A PR RUNS (2026-11-03, docs/plans/2026-11-03-agent-surface-reset.md
-    # §4.2). A DRAFT push is the FAST tier — guards, lints, the selection plan,
-    # parts census, driving-model — plus ONE `selected` browser shard budgeted
-    # at 5 min (the `select` step's BUDGET_MIN), so a work-in-progress push
-    # gets a browser verdict ~12 min after it lands without anyone running
-    # Chromium locally. node-suites, smoke, staged-boot, sweeps, renderer-macos
-    # and xr still wait for `ready_for_review`, which starts the FULL tier
-    # (10-min selected budget) on the same head; the train gates the tip again.
+    # Draft pushes run guards, lints, the selection plan and the parts census.
+    # Browser groups are available on demand through remote-group.mjs.
+    # The ready_for_review event runs the full tier on the same head.
     # `ready_for_review` is not a default type; the other three are.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
     #
@@ -1343,7 +1337,7 @@ jobs:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
     # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
-    if: ${{ (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
+    if: ${{ needs.select.outputs.browser_exempt != 'true' && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like
@@ -1688,7 +1682,7 @@ jobs:
     # (ci-verdict treats that skip as a pass). Not on the Pages call
     # (`concurrency_key` set; decision D2 in the CI selection plan,
     # PR #2560 §6): 0 train catches in 40 h; PRs and the nightly keep it.
-    if: ${{ (inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
+    if: ${{ needs.select.outputs.browser_exempt != 'true' && (inputs.concurrency_key == '' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && needs.select.outputs.driving == 'true') }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1697,24 +1691,12 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      actions: read
-      checks: read     # the reuse step reads the draft run's guards record (an annotation)
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The same reuse question as guards-a (2026-10-15): a step, not a job hop.
-      - name: Was this head already green as a draft?
-        id: reuse
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_EVENT_ACTION: ${{ github.event.action }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: steps.reuse.outputs.reuse != 'true'
       - name: Playwright Chromium (cached)
-        if: steps.reuse.outputs.reuse != 'true'
         uses: ./.github/actions/playwright-chromium
       # THE DRIVING MODEL'S OWN GATE, which nothing was running.
       #
@@ -1747,14 +1729,10 @@ jobs:
       # No `needs:` — this is orthogonal to whether the page boots. It answers
       # one question, in its own name: did the driving model's numbers move?
       - name: Characterization traces
-        if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_WORKERS: 1
           APEX_FAIL_ON_FLAKY: 1
         run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
-      - name: Reused draft
-        if: steps.reuse.outputs.reuse == 'true'
-        run: echo "SKIPPED driving-model — draft fast-tier already green on this head SHA"
       # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
       # Every per-test duration this job measures is written to junit.xml by
       # playwright.config.js, and the only step that uploaded it ran
@@ -1819,7 +1797,7 @@ jobs:
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
+    if: ${{ needs.select.outputs.browser_exempt != 'true' && (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1909,7 +1887,7 @@ jobs:
   xr:
     name: Emulated VR (IWER / xr-emulated)
     needs: select
-    if: ${{ (!inputs.concurrency_key && needs.select.outputs.xr == 'true') }}
+    if: ${{ needs.select.outputs.browser_exempt != 'true' && (!inputs.concurrency_key && needs.select.outputs.xr == 'true') }}
     runs-on: ubuntu-latest
     # Unmeasured on CI; local IWER suite is minutes. Cap generously.
     timeout-minutes: 25
@@ -2028,6 +2006,7 @@ jobs:
       checks: read     # the ready flip's reuse step reads the draft run's plan and guards records (annotations)
     timeout-minutes: 10
     outputs:
+      browser_exempt: ${{ steps.sel.outputs.browser_exempt }}
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
       # `true` only on a ready flip whose same-sha draft verdict is sound to reuse (tools/ci/reuse-draft-selected.mjs):
@@ -2284,22 +2263,17 @@ jobs:
           EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (inputs.concurrency_key == '' && github.event.before) || '' }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
+          READY_PR: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && !github.event.pull_request.draft && !startsWith(github.head_ref, 'train/') }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
           # routes ~70 specs, so 60-minute shards and 12 overflow shards, stale
           # first. Simulated on 2026-09-29's 85 merges: 19 shards, 606 tests,
           # no routed spec left skipped (menu-traversal, ui-redesign and
           # time-trial — the day's latent reds — all run). Once a night.
-          # A DRAFT PR (2026-11-03): ONE ~5-min shard, so every push gets a
-          # browser verdict; the 10-min default (select-specs DEFAULT_BUDGET_MIN)
-          # stays for ready PRs and the train; the nightly keeps 60.
+          # Drafts publish a 5-minute preview plan; ready PRs and the train use the default.
           BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '5' || '' }}
-          # A DRAFT gets no OVERFLOW legs (plan §4.2: one small browser verdict per push). This caps only the
-          # overflow pool: select-specs never drops a routed spec, so what overflow would have taken goes to the
-          # bounded `spill` legs (MAX_SPILL_SHARDS) and a spec bigger than the 5-min budget still runs as an
-          # `oversize` leg. A typical worker diff routes a handful of specs and gets one leg; #4515's 660-file
-          # diff (2026-11-03) routed ~70 and ran 26 legs (1 selected, 6 spill, 19 oversize) with this at 0,
-          # 24 with the default 11. A draft mode that names the rest as not-run instead is a follow-up.
+          # Overflow is disabled for the draft preview. Ready runs plan their full matrix.
           OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || (github.event_name == 'pull_request' && github.event.pull_request.draft) && '0' || '' }}
           # THE NIGHTLY'S OVER-BUDGET POOL (2026-11-20): 12 jobs' worth on `schedule` only (select-specs
           # NIGHTLY_OVER_BUDGET_SHARDS; at the default 9 the day's union diff dropped 2 routed specs and the verdict
@@ -2646,12 +2620,9 @@ jobs:
     # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
     # — "If a job fails or is skipped, all jobs that need it are skipped".)
     needs: [select]
-    # A DRAFT runs it too (2026-11-03): its plan is the 5-min budget the select
-    # step sets, so a work-in-progress push gets one browser shard instead of
-    # none; selected-verdict warns (never reds) a draft on dropped specs.
-    # A READY FLIP whose same-sha draft verdict is reused (#5426) runs no leg: select's reuse step proved the
-    # draft's legs ran this exact plan green on this base, and the deploy tip has not moved since.
-    if: ${{ needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}
+    # Drafts publish their selection plan. Request a browser group with remote-group.mjs
+    # or mark the PR ready to run its change-aware matrix.
+    if: ${{ !(inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft) && needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}
     # THE RUNNER IS A REPO VARIABLE (D-RUNNER, 2026-11-20), separate from browser-group.yml's so a trial can start there
     # alone. Unset or empty, every leg runs on `ubuntu-latest` exactly as before. Only this repo's own code may run
     # on it, and only where a managed runner's outage cannot block a deploy: this repo's own pull_request and ci.yml's
@@ -3173,8 +3144,9 @@ jobs:
   # env as smoke; pages.yml's gate calls this workflow, so the train runs it too.
   staged-boot:
     name: Staged build boots (minified _site, as Pages ships it)
+    needs: [select]
     runs-on: ubuntu-latest
-    if: ${{ (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
+    if: ${{ needs.select.outputs.browser_exempt != 'true' && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     timeout-minutes: 20
     steps:
       # fetch-depth: 0 because the stamp's build is 2000 + the commit count
@@ -3289,9 +3261,10 @@ jobs:
       - name: Aggregate job results
         env:
           NEEDS: ${{ toJSON(needs) }}
+          DEFER_DRAFT_BROWSER: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft }}
           # Full-tier PR runs: these must have run AND passed (a job skipped by `if:` reports success, so a hollow
-          # run would otherwise read green). Measured on recent full-tier runs: they never skip there, unlike
-          # driving-model / sweeps / the macOS leg, which the change-aware selection skips legitimately.
+          # run would otherwise read green). ci-verdict accepts an explicit smoke/staged-boot skip only when
+          # the successful select job marked this ready PR browser-exempt.
           # selected-verdict is required too (#5403 part 1): a ready flip may reuse its draft's legs (#5426), and the
           # verdict job is what reports that reuse, so a skipped verdict must red `CI`.
           REQUIRE_SUCCESS: ${{ (github.event_name == 'pull_request' && !github.event.pull_request.draft) && 'guards-a,guards-b,guards-c,guards-d,guards,select,selected-verdict,smoke,staged-boot' || '' }}

@@ -233,6 +233,7 @@ const WGX = (function () {
     let _p = localStorage.getItem("apex26.gfxPreset");
     try { _p = JSON.parse(_p); } catch (_) { /* raw string */ }
     _wgxMsaa4 = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+    if (typeof GfxQuality !== "undefined" && GfxQuality.option) _wgxMsaa4 = GfxQuality.option("msaa", _wgxMsaa4);
   } catch (_) { /* blocked storage: the cheaper of the two */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 

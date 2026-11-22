@@ -209,3 +209,29 @@ test("touch position maps each edge and clamps to the actual resized button", ()
   choose("fullEdge", "fixed");
   assert.equal(at(50, 40), 30);
 });
+
+test("slide responses shape direct touch travel independently of timed buildup and other buttons", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const control = key => dom.byId("touch-test-" + key);
+  const select = (key, value) => { control(key).value = value; control(key).onchange(); };
+  select("button", "brake"); select("press", "progressive"); select("start", "50"); select("direction", "down");
+  for (const [curve, quarter] of [["fine", 0.0625], ["quick", 0.4375], ["smooth", 0.15625], ["linear", 0.25]]) {
+    select("slideCurve", curve);
+    const profile = model.buttonProfile("brake");
+    assert.equal(model.level(profile, profile.travel / 4), 0.5 + quarter / 2);
+    assert.equal(model.level(profile, -profile.travel / 4), 0.5 - quarter / 2);
+    assert.equal(model.level(profile, 0, 0.5), 0.75);
+    assert.equal(model.level(profile, profile.travel), 1);
+    assert.equal(model.level(profile, -profile.travel), 0);
+  }
+  assert.equal(model.buttonOverrides("brake").slideCurve, undefined);
+  select("button", "gas"); select("slideCurve", "fine");
+  const gas = model.buttonProfile("gas");
+  assert.equal(model.level(gas, model.DEAD_PX), 1);
+  assert.equal(model.level(gas, model.DEAD_PX + gas.travel / 2), 0.75);
+  assert.equal(model.level(gas, model.DEAD_PX + gas.travel), model.MIN);
+  select("button", "left"); assert.equal(control("slideCurve").value, "linear");
+  select("button", "gas"); assert.equal(control("slideCurve").value, "fine");
+  host.querySelector("button").onclick(); assert.equal(control("slideCurve").value, "linear");
+});

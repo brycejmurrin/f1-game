@@ -28,7 +28,7 @@ function boot() {
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     RTCPeerConnection: class { constructor() { this.connectionState = 'new'; } close() {} },
   });
-  for (const f of ['js/net/bytes.js', 'js/net/ice.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/pedal-travel.js', 'js/input/phone-pad-codec.js', 'js/input/phone-pad-page.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of ['js/net/bytes.js', 'js/net/ice.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/pedal-travel.js', 'js/input/touch-button-actions.js', 'js/input/phone-pad-codec.js', 'js/input/phone-pad-page.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const { P, T } = vm.runInContext('({P:PhonePad,T:NetTransport})', ctx);
   return { ctx, P, T, clock, document, window, beat: () => { for (const fn of intervals.values()) fn(); } };
 }
@@ -205,6 +205,15 @@ test('WHEEL LAYOUT (#5801): presets and per-key picks move the face keys between
   const box = () => { const e = element(); e.appendChild = (c) => { if (c.parent) c.parent.children.splice(c.parent.children.indexOf(c), 1); e.children.push(c); c.parent = e; }; return e; };
   assert.deepEqual(plain(L.normaliseLayout({ zone: { overtake: 'R', boost: 'X' }, swap: 'yes' })).zone.boost, 'C', 'an unknown zone is the face');
   assert.equal(L.layoutPreset({ zone: { overtake: 'R', boost: 'R', aero: 'R' } }), 'right');
+  for (const [id, left, right, pedals] of [
+    ["split", ["overtake", "aero"], ["boost"], "side"],
+    ["views", ["camera", "look"], ["radio"], "stack"],
+  ]) {
+    const preset = L.LAYOUT_PRESETS[id];
+    assert.equal(L.layoutPreset(plain(preset)), id);
+    const onGrip = side => plain(L.LAYOUT_KEYS.filter(k => preset.zone[k] === side));
+    assert.deepEqual([onGrip("L"), onGrip("R"), preset.pedals], [left, right, pedals]);
+  }
   assert.equal(L.layoutPreset({ zone: { radio: 'L' } }), 'custom');
   const saved = {}, store = { getItem: (k) => saved[k] ?? null, setItem: (k, v) => { saved[k] = v; } };
   const mk = () => {
@@ -255,7 +264,7 @@ test("phone wheel edits Gas in each preset, cancels interrupted drags and writes
     const ui = makeDom(), stage = ui.byId("ctl"), gas = ui.makeElement("div", "gas");
     gas.textContent = "Gas"; gas.getClientRects = () => [{}];
     stage.appendChild(gas);
-    const parts = Object.fromEntries(["bar","picker","adjust","edge","tools","step","undo","arrangeDone","cancel","resetAll","open"].map(id => [id, ui.byId(id)]));
+    const parts = Object.fromEntries(["bar","picker","adjust","edge","tools","step","undo","shape","arrangeDone","cancel","resetAll","open"].map(id => [id, ui.byId(id)]));
     const right = ui.makeElement("button"); right.dataset.nudge = "right";
     const options = { ...parts, doc:ui.document, body:ui.body, stage, arrange:{gas}, nudges:[right] };
     const saved = [];
@@ -277,10 +286,17 @@ test("phone wheel edits Gas in each preset, cancels interrupted drags and writes
     assert.equal(api.get().place.gas.x, 15);
     parts.undo.click(); assert.equal(api.get().place.gas.x, 10);
     parts.cancel.click(); assert.equal(saved.length, 0); assert.deepEqual(plain(api.get()), plain(layout));
-    api.arrange(true); send("pointerdown", 100); send("pointermove", 180); send("pointerup", 180);
+    api.arrange(true);
+    parts.shape.value = "shield"; ui.dispatch(parts.shape, {type:"change"});
+    assert.equal(gas.getAttribute("data-wheel-shape"), "shield");
+    parts.undo.click(); assert.equal(gas.hasAttribute("data-wheel-shape"), false);
+    parts.shape.value = "arch"; ui.dispatch(parts.shape, {type:"change"});
+    send("pointerdown", 100); send("pointermove", 180); send("pointerup", 180);
     parts.arrangeDone.click(); assert.equal(saved.length, 1);
-    assert.deepEqual(saved[0], {...plain(layout), place:{gas:{x:10,y:0,s:100}}});
+    assert.deepEqual(saved[0], {...plain(layout), place:{gas:{x:10,y:0,s:100,shape:"arch"}}});
+    assert.equal(L.normaliseLayout(saved[0]).place.gas.shape, "arch");
     api.arrange(true); parts.resetAll.click(); parts.arrangeDone.click();
+    assert.equal(gas.hasAttribute("data-wheel-shape"), false);
     assert.deepEqual(saved[1], plain(L.LAYOUT_PRESETS.classic));
   }
 });
