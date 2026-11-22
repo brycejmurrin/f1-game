@@ -483,7 +483,7 @@ const TrackBuildClient = (function () {
         resolve(null);
       }, Math.min(ANSWER_MS, 8000));
       _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def, live: null });
-      try { worker.postMessage({ type: "preview", seq, idx, id: def.id }); }
+      try { worker.postMessage({ type: "preview", seq, idx, id: def.id, banking: false }); }
       catch (e) {
         _pending.delete(seq);
         if (timer != null) clearTimeout(timer);

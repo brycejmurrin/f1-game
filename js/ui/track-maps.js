@@ -179,7 +179,8 @@ const TrackMaps = (function () {
       // on the picker's UI thread. It warmed nothing the race uses either: the
       // menu builds the SELECTED world at once (loadTrackStepped), which bakes
       // and memoises its own line, and RACE! adopts that world.
-      const tr = Tracks.buildCenterline(def, { line: false });
+      // A 2-D map needs elevation and curvature, but no cross-track banking.
+      const tr = Tracks.buildCenterline(def, { line: false, banking: false });
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map((p) => [p[0], p[1]]);
         let crns;

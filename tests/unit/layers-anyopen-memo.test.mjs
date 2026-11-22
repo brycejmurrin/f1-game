@@ -17,6 +17,7 @@ function boot() {
     getBoundingClientRect() { reads.rect++; return this.shown ? { width: 800, height: 600 } : { width: 0, height: 0 }; },
   });
   const els = new Map();
+  const lookups = new Map();
   for (const id of ["overlay", "rotate-device", "pausemenu", "pmsettings"]) els.set(id, mk(id, false));
   els.get("pausemenu").hidden = true;
   els.get("pmsettings").hidden = true;
@@ -33,7 +34,10 @@ function boot() {
     document: {
       documentElement: { id: "html" }, body: { id: "body" },
       querySelectorAll: () => [],
-      getElementById: (id) => els.get(id) || null,
+      getElementById(id) {
+        lookups.set(id, (lookups.get(id) || 0) + 1);
+        return els.get(id) || null;
+      },
       addEventListener() {},
     },
     MutationObserver: MO,
@@ -45,7 +49,7 @@ function boot() {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/layers.js"), "utf8"), ctx, { filename: absSrc("js/ui/layers.js") });
   return {
-    U: ctx.window.UiLayers, els, reads, observed,
+    U: ctx.window.UiLayers, els, reads, observed, lookups, mk,
     mutate(el) { pending.push({ target: el }); },
     advance(ms) { now += ms; },
   };
@@ -90,4 +94,44 @@ test("a record pending at recompute never turns the fresh answer into undefined/
   const overlay = t.els.get("overlay");
   overlay.hidden = false; overlay.shown = true; t.advance(1000); t.mutate(overlay);
   assert.strictEqual(t.U.navOpen(), true, "navOpen returns the fresh answer, not the memo the drain dropped");
+});
+
+test("absent editors do not cause repeated lookups for mounted input gates", () => {
+  const t = boot();
+  assert.equal(t.U.anyOpen(), false);
+  const first = t.lookups.get("pausemenu");
+  assert.ok(first > 0);
+  for (let i = 0; i < 100; i++) assert.equal(t.U.anyOpen(), false);
+  assert.equal(t.lookups.get("pausemenu"), first);
+});
+
+test("inserting, replacing and removing a toolbar updates every gate memo in the same task", () => {
+  const t = boot();
+  t.els.get("overlay").hidden = true;
+  t.els.get("rotate-device").hidden = true;
+  assert.equal(t.U.anyOpen(), false);
+  assert.equal(t.U.navOpen(), false);
+  assert.equal(t.U.top(), null);
+
+  const id = "hud-arrange-bar";
+  const toolbar = t.mk(id, true);
+  t.els.set(id, toolbar);
+  assert.equal(t.U.navOpen(), true);
+  assert.equal(t.U.anyOpen(), true);
+  assert.equal(t.U.top(), toolbar);
+  assert.ok(t.observed.has(toolbar));
+
+  toolbar.isConnected = false;
+  const replacement = t.mk(id, true);
+  t.els.set(id, replacement);
+  assert.equal(t.U.top(), replacement);
+  assert.ok(t.observed.has(replacement));
+  assert.equal(t.U.anyOpen(), true);
+  assert.equal(t.U.navOpen(), true);
+
+  replacement.isConnected = false;
+  t.els.delete(id);
+  assert.equal(t.U.anyOpen(), false);
+  assert.equal(t.U.navOpen(), false);
+  assert.equal(t.U.top(), null);
 });

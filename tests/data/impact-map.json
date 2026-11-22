@@ -12254,7 +12254,8 @@
         "tests/specs/aero-zones.spec.js",
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/aero-zones-turns.test.mjs",
-        "tests/unit/aero-zones-vm.test.mjs"
+        "tests/unit/aero-zones-vm.test.mjs",
+        "tests/unit/track-maps-corners.test.mjs"
       ],
       "create": [
         "tests/unit/aero-zones-turns.test.mjs"
@@ -16164,6 +16165,7 @@
     },
     "js/render/shared/canvas-css-size.js": {
       "create": [
+        "tests/unit/droplets-spray.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/webgpu-lifecycle.test.mjs",
@@ -16173,6 +16175,7 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ],
       "read": [
+        "tests/unit/droplets-spray.test.mjs",
         "tests/unit/init-owner-resize-observer.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs"
       ]
@@ -21631,6 +21634,9 @@
       "corners": [
         "tests/unit/track-maps-corners.test.mjs"
       ],
+      "direction": [
+        "tests/unit/track-maps-corners.test.mjs"
+      ],
       "draw": [
         "tests/unit/select-preview-defer.test.mjs",
         "tests/unit/track-maps-corners.test.mjs"
@@ -21638,7 +21644,13 @@
       "drsZones": [
         "tests/unit/track-maps-corners.test.mjs"
       ],
+      "elevRange": [
+        "tests/unit/track-maps-corners.test.mjs"
+      ],
       "fitCanvas": [
+        "tests/unit/track-maps-corners.test.mjs"
+      ],
+      "invalidate": [
         "tests/unit/track-maps-corners.test.mjs"
       ],
       "outline": [
