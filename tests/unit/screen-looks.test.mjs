@@ -834,3 +834,21 @@ test("diameter fits the touch disc at UI zoom and keeps the other stick and orie
   assert.equal(dpad.decls.get("height"), "max(44px,2.5vmin) !important");
   assert.equal(dpad.decls.get("width"), dpad.decls.get("height"));
 });
+
+test("Data Hub standings, trace selection and nested telemetry playback retain independent arrangements", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+  const hub = { drivers: { width: 38 }, constructors: { textSize: 1.2 }, loadTraces: { buttonHeight: 54 }, timingSort: { x: 5 } };
+  const popup = { window: { width: 70 }, charts: { width: 40 }, sidebar: { width: 25 }, rates: { buttonWidth: 28 }, summary: { y: 4 } };
+  model.save("datahub", "landscape", hub);
+  model.save("telemetry-detail", "landscape", popup);
+  assert.deepEqual(plain(model.read("telemetry-detail", "landscape")), popup);
+  const popupSheet = [...sheets].find(sheet => sheet.textContent.includes(".dh-telem-main"));
+  const trace = cssRules(popupSheet.textContent).find(rule => rule.selector.includes(".dh-telem-main"));
+  assert.equal(trace.decls.get("width"), "20vw !important");
+  assert.equal(trace.decls.get("--dh-trace-flex"), "0 1 auto !important");
+  assert.deepEqual(plain(model.read("telemetry-detail", "portrait")), {});
+  model.save("telemetry-detail", "landscape", {});
+  assert.deepEqual(plain(model.read("datahub", "landscape")), hub);
+});

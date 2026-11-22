@@ -280,3 +280,25 @@ for (const v of [HEAD_WINDOWS[2], HEAD_WINDOWS[0]]) {
     }
   });
 }
+
+test("arranging the wide telemetry trace resizes the rendered column and Apply keeps the preview width", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openTrace(page, { sat: 0, sar: 0, sab: 0, sal: 0 }, ["VER", "STR"]);
+  const detail = page.locator("dialog.dh-tpopup");
+  const column = detail.locator(".dh-telem-main");
+  await expect(page.locator("body")).toHaveAttribute("data-width", "wide");
+  const width = () => column.evaluate(node => node.getBoundingClientRect().width);
+  const initial = await width();
+  await detail.getByRole("button", { name: "Arrange", exact: true }).click();
+  const editor = page.locator("#screen-arranger[open]");
+  await editor.getByLabel("Region", { exact: true }).selectOption("charts");
+  await editor.getByRole("button", { name: "Controls", exact: true }).click();
+  await editor.getByRole("button", { name: "Width −", exact: true }).click();
+  await expect(column).toHaveCSS("flex-grow", "0");
+  const adjusted = await width();
+  expect(adjusted).toBeLessThan(initial - 5);
+  await editor.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(await width()).toBeCloseTo(adjusted, 0);
+  await expect(detail.locator("#dh-tpopup-close")).toBeVisible();
+});

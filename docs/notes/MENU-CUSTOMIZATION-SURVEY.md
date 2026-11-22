@@ -4,7 +4,7 @@ Kind: design
 
 ## Implemented follow-up
 
-The shared registry now defines **54 screen targets and 553 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 15 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
+The shared registry now defines **54 screen targets and 589 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 28, Telemetry detail 18, Saves & Data 19 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
 
 ### Adjust a menu
 
@@ -13,6 +13,10 @@ The shared registry now defines **54 screen targets and 553 region bindings**. T
 3. For a Race Settings preset such as **Quick race**, change **Button width** to reflow it, **Button height** to set its minimum height, or **Text size** to enlarge its label. **Scale** resizes the selected unit. Under **Advanced style**, adjust text alignment or corners, form width where a region contains a supported input, or row and column gaps on flex and grid containers. A blank numeric field restores automatic styling.
 4. Changes preview immediately. Rotate to edit the other orientation or use **Copy from** to replace the current orientation’s draft with the other one. **Apply** saves. **Cancel** returns to the page. **Reset region** clears just the selected region in the current orientation. **Reset screen** followed by **Apply** restores that screen in both orientations.
 5. In Appearance, **This screen** uses the selected arrangement target for profile apply and reset. A placement-only target disables colour presets in this scope. The phone wheel has its own size, shape and layout-file controls on the controller. Export there to move that layout to another phone. [Shared editor](../../js/ui/screen-arranger.js) · [Profile scope](../../js/ui/appearance-studio-ui.js) · [Controller wheel](../../js/input/phone-pad-page.js)
+
+### Arrange data screens
+
+Open **Data Hub**, choose a tab, then use **Arrange** in the header. Driver and constructor standings, classification and session tools have their own regions when visible. Open a driver’s telemetry comparison to arrange its trace and map columns in the detail window. In **Settings → Saves & Data**, **Browse section** switches between the backup, restore and sharing controls while editing. Select an action button to adjust its placement. Cancel returns to the previously selected tab.
 
 ### Adjust race readouts and touch buttons
 

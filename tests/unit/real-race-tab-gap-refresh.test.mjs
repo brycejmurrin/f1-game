@@ -120,7 +120,7 @@ test("explicit refresh replaces a stale interior gap and keeps pit and red-flag 
 function dom() {
   function el(tag, cls, text) {
     const node = {
-      tag, cls: cls || null, text: text == null ? null : String(text), children: [], type: null, value: "", hidden: false, disabled: false, listeners: {},
+      tag, cls: cls || null, text: text == null ? null : String(text), children: [], dataset: {}, type: null, value: "", hidden: false, disabled: false, listeners: {},
       appendChild(c) { node.children.push(c); c.parent = node; return c; },
       setAttribute(k, v) { node[k] = v; },
       addEventListener(ev, fn) { (node.listeners[ev] = node.listeners[ev] || []).push(fn); },

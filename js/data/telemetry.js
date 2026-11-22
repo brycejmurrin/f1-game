@@ -110,6 +110,7 @@ const DataTelemetry = (function () {
           }
           const badges = trayNeedsBadges();
           const summary = el("div", "dh-livecard");
+          summary.dataset.hubPart = "lanes";
           summary.appendChild(el("h3", "dh-section", tray.length === 1 ? "SELECTED DRIVER" : "COMPARE DRIVERS (" + tray.length + ")"));
           const laneCols = laneColors(tray);
           tray.forEach(function (e, i) {
@@ -139,6 +140,7 @@ const DataTelemetry = (function () {
               "The first two lanes draw full traces; additional lanes add speed markers."));
           }
           const loadBtn = el("button", "dh-livebtn");
+          loadBtn.dataset.hubPart = "traces";
           loadBtn.textContent = tray.length === 1 ? "LOAD FASTEST LAP" : "COMPARE " + tray.length + " LAPS";
           loadBtn.dataset.block = "full";   // css/data.css .dh-livebtn[data-block]
           loadBtn.type = "button";
@@ -328,6 +330,7 @@ const DataTelemetry = (function () {
         if (sub) titleEl.appendChild(el("span", "dh-tpopup-sub", sub + " · cross-session"));
       }
       hdr.appendChild(titleEl);
+      if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(overlay, hdr, "telemetry-detail", "Arrange");
       const closeBtn = el("button", "dh-close", "✕");
       closeBtn.type = "button";
       closeBtn.id = "dh-tpopup-close";

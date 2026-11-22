@@ -131,6 +131,8 @@ window.ScreenPlacement = (function () {
       if (fields.width) {
         const width = fields.width / z + 'vw';
         declarations.push('width:' + width);
+        // Wide telemetry uses spare row space until the player gives the trace a width.
+        if (id === "telemetry-detail" && region === "charts") declarations.push('--dh-trace-flex:0 1 auto');
         if (region === "window" && config.tuner) {
           rules.push('body:has(> ' + config.root + ':not([hidden])){--dock-w:' + width + ' !important}');
         }
