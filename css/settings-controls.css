@@ -378,6 +378,7 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner:not([data-density="compact"]) .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-graphics > details,
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance > details { grid-column: 1 / -1; }
 #pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
@@ -525,6 +526,7 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   min-width: 0;
 }
 #pm-display-adv-body,
+#pm-graphics-details-body,
 #pm-visual-tuners-body {
   display: flex;
   flex-direction: column;

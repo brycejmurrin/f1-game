@@ -3,6 +3,7 @@
   "use strict";
   const panel = document.getElementById("pm-panel-graphics");
   if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
+  const values = [["", "Use preset"], ["on", "On"], ["off", "Off"]];
   const groups = {
     "Image quality": {
       msaa: "Multisample anti-aliasing", traa: "Temporal anti-aliasing", superSample: "1.5× supersampling",
@@ -44,9 +45,12 @@
     const choices = { ...store.get(key, {}) };
     const help = GLX.isMobile ? "Use preset follows Graphics. Higher detail can reduce frame rate. Texture filtering and atmospheric sky use the three.js renderer."
       : "Use preset follows Graphics. Some effects require three.js WebGPU or a compatible display.";
-    add(fold, "p", help + " Changes take effect after reloading.").className = "adv-help";
-    const selects = [];
+    const body = add(fold, "div");
+    body.id = "pm-graphics-details-body";
+    add(body, "p", help + " Changes take effect after reloading.").className = "adv-help";
+    const rows = [];
     const status = document.createElement("p");
+    status.className = "adv-help";
     status.setAttribute("role", "status");
     function save() {
       const ok = store.set(key, { ...choices });
@@ -55,39 +59,35 @@
     for (const [title, options] of Object.entries(groups)) {
       const available = Object.entries(options).filter(([name]) => GfxQuality.supportsOption(name));
       if (!available.length) continue;
-      const section = add(fold, "fieldset");
-      add(section, "legend", title);
+      add(body, "h3", title).className = "pm-group-h";
       for (const [key, name] of available) {
-        const row = add(section, "div");
-        row.className = "set-row";
-        const label = add(row, "label", name);
-        label.className = "tune-label";
-        const select = add(add(row, "div"), "select");
-        label.htmlFor = select.id = "desktop-detail-" + key;
-        select.dataset.effect = key;
-        for (const [value, text] of [["", "Use preset"], ["on", "On"], ["off", "Off"]]) add(select, "option", text).value = value;
-        select.value = typeof choices[key] === "boolean" ? (choices[key] ? "on" : "off") : "";
-        select.onchange = () => {
-          if (select.value) choices[key] = select.value === "on";
-          else delete choices[key];
-          save();
-        };
-        selects.push(select);
+        const { row, sel } = SettingRow.build("desktop-detail-" + key, name, values);
+        sel.dataset.effect = key;
+        body.appendChild(row);
+        SettingRow.wire(row, {
+          read: () => typeof choices[key] === "boolean" ? (choices[key] ? "on" : "off") : "",
+          write(value) {
+            if (value) choices[key] = value === "on";
+            else delete choices[key];
+            save();
+          },
+        });
+        rows.push(row);
       }
     }
-    const reset = add(fold, "button", "Use preset for all");
+    const reset = add(body, "button", "Use preset for all");
     reset.type = "button";
     reset.onclick = () => {
       for (const key of Object.keys(choices)) delete choices[key];
-      for (const select of selects) select.value = "";
+      for (const row of rows) SettingRow.paint(row, "");
       save();
     };
-    const reload = add(fold, "button", "Reload to apply");
+    const reload = add(body, "button", "Reload to apply");
     reload.type = "button";
     reload.onclick = () => {
       if (document.body.dataset.race === "1") status.textContent = "Return to the title screen before reloading.";
       else location.reload();
     };
-    fold.appendChild(status);
+    body.appendChild(status);
   });
 })();
