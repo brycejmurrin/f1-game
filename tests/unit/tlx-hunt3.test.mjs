@@ -424,7 +424,7 @@ test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune
     ${TLX.slice(pruneAt, TLX.indexOf("\n", pruneAt))}
     ${fnSource(TLX, "function prunePool(now) {")}
     ${fnSource(TLX, "function acquireMesh(geo, matrixArr, material, rec) {")}
-    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m]) => acquireMesh(g, null, m, null)); },
+    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m, model]) => acquireMesh(g, model, m, null)); },
       acquireMesh, prunePool, dropped };`);
   const P = mk(THREE);
   const geos = [0, 1, 2].map(() => new THREE.BufferGeometry());
@@ -445,6 +445,25 @@ test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune
   assert.equal(P.dropped.length, 3);
   P.frame(LAST + IDLE + 1416, draws);
   assert.equal((P.acquireMesh.n | 0), 8, "drawn again after a prune: re-minted, and counted");
+  const model = new Float32Array(new THREE.Matrix4().makeTranslation(6, 7, 8).elements);
+  const entry = [[geos[0], mats[0], model]];
+  const [moving] = P.frame(LAST + IDLE + 1432, entry);
+  const copyWorld = moving.matrixWorld.copy.bind(moving.matrixWorld);
+  let writes = 0;
+  moving.matrixWorld.copy = (matrix) => { writes++; return copyWorld(matrix); };
+  const checkModel = (time, expectedWrites) => {
+    assert.equal(P.frame(time, entry)[0], moving);
+    assert.deepEqual(moving.matrixWorld.elements, Array.from(entry[0][2] || new THREE.Matrix4().elements));
+    assert.deepEqual(moving.matrix.elements, moving.matrixWorld.elements);
+    assert.equal(writes, expectedWrites);
+  };
+  checkModel(LAST + IDLE + 1448, 0);
+  model[13] = -2;   // caller reuses its input array for a moving car
+  checkModel(LAST + IDLE + 1464, 1);
+  entry[0][2] = null;
+  checkModel(LAST + IDLE + 1480, 1);
+  entry[0][2] = model;
+  checkModel(LAST + IDLE + 1496, 2);
 });
 // R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
 // present() / mirrorEnd() drive them, rendered by three r186 over the fake GL: three draws exactly the

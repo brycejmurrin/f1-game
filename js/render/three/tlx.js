@@ -4528,6 +4528,7 @@ const TLX = (function () {
           m.matrixAutoUpdate = false;
           m.matrixWorldAutoUpdate = false;
           m.frustumCulled = false;
+          m.__tlxIdent = true;   // Three initializes both matrices to identity.
           list[k] = m;
           meshPool.push(m); acquireMesh.n = (acquireMesh.n | 0) + 1;   // memState().churn: a new three RenderObject
         }
@@ -4561,14 +4562,14 @@ const TLX = (function () {
             m.__tlxIdent = true;
           }
         } else {
-          const prev = m.__tlxMat;
-          let same = !m.__tlxIdent && !!prev;
+          // The pool owns the local matrix and disables automatic transforms. Its elements
+          // are already the last submitted model, including on a reused occurrence.
+          const prev = m.matrix.elements;
+          let same = !m.__tlxIdent;
           if (same) {
             for (let i = 0; i < 16; i++) if (prev[i] !== matrixArr[i]) { same = false; break; }
           }
           if (!same) {
-            if (!prev) m.__tlxMat = new Float32Array(16);
-            m.__tlxMat.set(matrixArr);
             m.matrix.fromArray(matrixArr);
             m.matrixWorld.copy(m.matrix);
             m.__tlxIdent = false;
