@@ -441,7 +441,8 @@
       // Give the T13 approach barrier clearance over the sloping verge.
       guardrail(0.77, 0.79, 1, 11, [0.80, 0.81, 0.83]);
       guardrail(0.30, 0.50, -1, 7.5, [0.80, 0.81, 0.83]);
-      guardrail(0.30, 0.50,  1, 7.5, [0.80, 0.81, 0.83]);
+      // The right verge rises across Turn 4.
+      guardrail(0.30, 0.50,  1, 8.0, [0.80, 0.81, 0.83]);
       guardrail(0.94, 0.06, -1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.06, 1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.12, 0.18, 0.36, 0.46, 0.64, 0.74, 0.88]) {

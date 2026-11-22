@@ -176,7 +176,10 @@ test("startFrac and reverse transform source control points and authored fractio
       if (!raw[key]) continue;
       assert.ok(built[key], `${raw.id}: built def lost ${key}`);
       raw[key].forEach((entry, i) => {
-        assert.ok(Math.abs(built[key][i].s - mapDressing(entry.s)) <= 1e-12, `${raw.id} ${key}[${i}]`);
+        const actual = built[key][i].s;
+        const delta = Math.abs(actual - mapDressing(entry.s));
+        // Modulo rounding can place the same station on either side of the start line.
+        assert.ok(actual >= 0 && actual < 1 && Math.min(delta, 1 - delta) <= 1e-12, `${raw.id} ${key}[${i}]`);
       });
     }
     if (raw.hwZones && built.hwZones) raw.hwZones.forEach((zone, i) => {

@@ -130,7 +130,8 @@
       // Right verge: park lawns from Senna S through the Casino complex
       for (let i = 0; i < 14; i++) {
         if ([4, 9, 11, 12].includes(i)) continue; // nearby foldbacks own this ground
-        groundPatch(K(0.08 + i * 0.058), 1, 9, [42, 0.35, 40], GRASS,
+        // The hairpin return comes within 19 m of this verge at the southern end.
+        groundPatch(K(0.08 + i * 0.058), 1, 9, [i === 10 ? 9 : 42, 0.35, 40], GRASS,
           { id: `montreal-park-lawn-r-${i}`, samples: 6 });
       }
       // Left verge: island interior from basin entry to back straight

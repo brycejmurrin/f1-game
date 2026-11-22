@@ -37,7 +37,9 @@
     sceneryCoordinates: "racing",
     terrainOuter: 110,
     // IGN transverse sections through the Courbe de Pouas.
-    bankZones: [{ frac: 0.853, angleDeg: -5.4, widthM: 185 }],
+    bankZones: [
+      { frac: 0.853, angleDeg: -5.4, widthM: 185 }, // T12, Courbe de Pouas
+    ],
     pal: {
       zenith:        [0.38, 0.48, 0.60],
       horizon:       [0.66, 0.70, 0.72],
@@ -60,7 +62,9 @@
     // fall back to thirds.
     sectors: [0.329, 0.612],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     // T5 snapped to built curvature peak (#5316; was 27 m before the peak).
-    turns: [0.2087, 0.2273, 0.2422, 0.4178, 0.4392, 0.5252, 0.5477, 0.6342, 0.6502, 0.7163, 0.7342, 0.7482],
+    // T12 is the closing Pouas right (mapped at 0.775–0.900), at the local
+    // curvature peak nearest the IGN transverse sections, past Virage de la Combe.
+    turns: [0.2087, 0.2273, 0.2422, 0.4178, 0.4392, 0.5252, 0.5477, 0.6342, 0.6502, 0.7163, 0.7342, 0.8495],
     furniture: { tree: "broad", fol: [0.22, 0.38, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["sandstone", "concrete", "steel"],  // "stone" was not a STAND_LIVERIES key: it fell through to the steel default, so the trio rendered as a two-way rotation with double-weight grey

@@ -43,9 +43,14 @@ test("corner-frames: the baseline only shrinks (a fixed row is deleted)", () => 
 test("Attwood banking peaks at the surveyed exit station", () => {
   const row = rows.find(r => r.stable === "okayama|bank:frac0.895");
   assert.ok(row && !row.bad && row.offsetM <= 2, row?.detail);
-  assert.match(row.detail, /T11 exit \+100 m/);
   const tracks = CF.context();
-  const zone = tracks.LIST.find(d => d.id === "okayama").bankZones[0];
+  const def = tracks.LIST.find(d => d.id === "okayama");
+  const tr = tracks.buildCenterline(def, { line: false });
+  const lift = tr.bankP.lift;
+  const peak = lift.indexOf(Math.max(...lift));
+  const exitM = (peak / tr.n - def.turns[10]) * tr.total;
+  assert.ok(Math.abs(exitM - 100) <= tr.total / tr.n / 2, `Attwood peak is ${exitM} m beyond T11`);
+  const zone = def.bankZones[0];
   const measuredRow = () => CF.measure(tracks, "okayama").find(r => r.kind === "bank");
   zone.widthM = 80;
   assert.equal(measuredRow().bad, true, "an exit zone must still cover the apex");
