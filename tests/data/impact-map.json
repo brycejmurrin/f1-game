@@ -19499,7 +19499,8 @@
         "tests/unit/editor-workspace.test.mjs"
       ],
       "init": [
-        "tests/unit/editor-workspace.test.mjs"
+        "tests/unit/editor-workspace.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "setPreview": [
         "tests/unit/editor-workspace.test.mjs"

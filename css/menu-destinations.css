@@ -355,6 +355,7 @@ body #overlay #menu-buttons #menu-secondary > .bigbtn {
   :root:not([data-title-layout]) #overlay #menu-buttons :is(#menu-secondary, #menu-create) > .bigbtn {
     font-size: max(var(--fs-micro), calc(var(--home-label) * .84)); min-height: var(--hrow);
   }
+  :root:not([data-title-layout]) #overlay #menu-buttons #menu-secondary > .bigbtn { min-width: min-content; overflow-wrap: normal; }
   :root:not([data-title-layout]) #overlay #menu-buttons #mb-career { min-height: var(--hrow); }
   :root:not([data-title-layout]) [data-shape="wide"] > #overlay #title {
     font-size: calc(6.5 * var(--vwz));
@@ -461,8 +462,7 @@ body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) {
   zoom: calc(var(--home-b) * max(1, var(--tl-btns-size, 1)) * var(--tf, 1));
 }
 body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) .bigbtn {
-  /* The doors' text rung, held at its 70 % size (#5452): --fs-micro grows as 12px / --ui-scale to undo a menu zoom the
-     floor does not apply, so under 70 % the labels outgrew their doors and no row count fit (USE AS CONTROLLER 108/104). */
+  /* Cap the text rung at 70%: --fs-micro compensates for a menu zoom the paint floor doesn't apply (#5452). */
   --home-fs: min(var(--fs-micro), calc(12px / .7 * var(--arrange-text-size, 1)));
   min-height: calc(44.2px / var(--home-b));
 }

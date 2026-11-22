@@ -3559,6 +3559,12 @@ test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", (
 // The entry shares the body's cell (no fourth row) at its end. An absolute bottom anchored it to the visible box, so
 // a dialog that scrolls at UI SIZE 150 % put it over SHARE & FILES (CI run 44853962507, 852x344@150).
 test("the tucked designer seats the arrange entry in the body's cell instead of adding a grid row", async () => {
+  const b = bootScreen();
+  b.root.ownerDocument = b.dom.document;
+  vm.runInContext(read("js/ui/editor-workspace.js"), b.ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const button = b.root.querySelector(":scope > .screen-arrange-entry");
+  assert.equal(button?.getAttribute("data-arrange-screen"), "trackdesigner", "the live action occupies the designer's reserved cell");
   const { cssRules, decl } = await import("../helpers/css-rules.mjs");
   const rules = cssRules(read("css/screen-arranger.css"));
   const entry = '#trackdesigner[data-foot="in"] > .screen-arrange-entry';
