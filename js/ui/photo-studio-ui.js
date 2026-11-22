@@ -610,7 +610,9 @@ function create(G, deps) {
     // Observe the display blit immediately. Its result matters only if the
     // capture needs to copy the software canvas.
     const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
-    if (deps.renderFrame) deps.renderFrame();
+    if (gfx && gfx.renderCaptureFrame && deps.renderFrame) {
+      if (!gfx.renderCaptureFrame(deps.renderFrame)) throw new Error("The scene is still getting ready");
+    } else if (deps.renderFrame) deps.renderFrame();
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
     if (gfx && gfx.capturePixels) {

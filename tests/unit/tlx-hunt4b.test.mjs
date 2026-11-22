@@ -492,6 +492,36 @@ test("post warm-up does not spend the live target idle grace period", async (t) 
   assert.equal(post.state().held.bloom, false, "the eighth live frame sheds the block");
 });
 
+test("a WebGPU garage photo draws once into a readable target after a race", async () => {
+  const src = read("js/render/three/tlx.js");
+  const paint = src.slice(src.indexOf("const paintCanvas ="), src.indexOf("const dropTo ="));
+  const race = {}, garage = {};
+  for (const soft of [false, true]) {
+    const draws = []; let target, blits = 0;
+    const sandbox = {
+      _captureSource: "post", _captureDraw: false, _softBlit: soft, _blitRT: garage, post: { captureTarget: () => race },
+      ownGL: null, renderer: { backend: {}, setRenderTarget(rt) { target = rt; }, readRenderTargetPixelsAsync() {} },
+      _readLdr: async rt => { assert.equal(rt, garage); return {w: 1, h: 1, data: [41, 52, 63, 255]}; },
+      isWebGPU: () => true, pinSkyMaterial() {}, _gpuLastOperation: "", _ensureBlitRT: () => garage,
+      _queueSoftBlit() { blits++; }, _renderTimed() { draws.push(target); }, scene: {}, camera: {}, W: 1, H: 1,
+    };
+    const api = vm.runInNewContext(paint + fnSource(src, "function _captureRT() {")
+      + "\n({ draw: () => paintCanvas({}), current: _captureRT, " + fnSource(src, "renderCaptureFrame(draw) {")
+      + ", " + fnSource(src, "capturePixels() {") + "})", sandbox);
+    assert.equal(api.current(), race);
+    assert.equal(api.renderCaptureFrame(api.draw), true);
+    assert.deepEqual(Array.from((await api.capturePixels()).data), [41, 52, 63, 255]);
+    assert.deepEqual(draws, [garage]);
+    assert.equal(blits, Number(soft));
+    assert.equal(api.renderCaptureFrame(() => {}), false, "warm-up cannot save the previous frame");
+    api.draw(); assert.equal(draws.at(-1), soft ? garage : null);
+    sandbox.isWebGPU = () => false;
+    assert.equal(api.renderCaptureFrame(() => {}), false);
+    assert.equal(api.renderCaptureFrame(api.draw), true);
+    assert.equal(draws.at(-1), soft ? garage : null);
+  }
+});
+
 for (const fold of [true, false]) test(`FXAA capture replays the final full-size draw and the ${fold ? "folded" : "separate"} mirror (#6065)`, async (t) => {
   let soft = null;
   const { renderer, post, graph } = await postRig(t, { ls: { "apex26.tlxMirFold": fold ? "1" : "0" }, softDest: () => soft });
@@ -524,7 +554,7 @@ for (const fold of [true, false]) test(`FXAA capture replays the final full-size
   let readRT;
   const api = vm.runInNewContext(`${fnSource(src, "function _captureRT() {")}
     ({ ${fnSource(src, "capturePixels() {")} })`, {
-    ownGL: null, renderer: { backend: {}, readRenderTargetPixelsAsync() {} }, post, Uint8ClampedArray,
+    ownGL: null, renderer: { backend: {}, readRenderTargetPixelsAsync() {} }, post, _captureSource: "post", Uint8ClampedArray,
     _readLdr: async (rt) => { readRT = rt; return { w: rt.width, h: rt.height, data: new Uint8ClampedArray(4) }; },
   }, { filename: absSrc("js/render/three/tlx.js") });
   const shot = await api.capturePixels();

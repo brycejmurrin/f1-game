@@ -106,6 +106,18 @@ function boot(options = {}) {
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
+test("a garage still waits for a fresh capture draw even when a previous photo exists", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  assert.equal(await b.api.capture(), true);
+  b.G.gfx.renderCaptureFrame = () => false;
+  assert.equal(await b.api.capture(), false);
+  assert.match(b.dom.byId("ps-message").textContent, /still getting ready/);
+  assert.equal(b.order.filter(action => action === "read").length, 1);
+  b.G.gfx.renderCaptureFrame = draw => { draw(); return true; };
+  assert.equal(await b.api.capture(), true);
+});
+
 test("the Studio offers the shared stick editor exactly when the real camera sticks are present", () => {
   const opened = [];
   const {api, dom} = boot({arrangeScreen:(id, invoker) => opened.push([id, invoker])});
