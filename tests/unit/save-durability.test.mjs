@@ -189,6 +189,24 @@ test("confirmed restore saves a replacement checkpoint and the selected progress
   assert.equal(h.store.get("career.driver.0").season.round, 1);
   assert.ok((await p.list("driver", 0)).items.some((x) => x.summary.round === 5 && x.reason === "before-restore")); await h.store.mirrorFlush();
 });
+test("round capture validates history only until the retained slots are full", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  const p = points(h);
+  const capture = (round) => p.capture("driver", 0, save(round), { reason: "round" });
+  for (const round of [1, 2, 3]) assert.ok((await capture(round)).durable);
+  const history = () => h.idb.dbs.get("apex26-restore-points").get("slots").get("driver.0").items;
+  const oldest = history()[2].json;
+  let oldestReads = 0;
+  h.c.JSON = { stringify: JSON.stringify, parse(raw) {
+    if (raw === oldest) oldestReads++;
+    return JSON.parse(raw);
+  } };
+  assert.ok((await capture(4)).durable);
+  assert.equal(oldestReads, 0, "the evicted snapshot never needs to be parsed or migrated");
+  history()[1].json = "{invalid";
+  assert.ok((await capture(5)).durable);
+  assert.deepEqual(Array.from((await p.list("driver", 0)).items, (x) => x.summary.round), [5, 4, 2]);
+});
 test("history transaction abort leaves prior points intact and reports unavailable history", async () => {
   const h = boot(); await h.store.mirror.ready; const p = points(h);
   await p.capture("driver", 0, save(1), { reason: "round" }); h.idb.failNext();

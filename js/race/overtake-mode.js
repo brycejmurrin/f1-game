@@ -74,12 +74,16 @@ const OvertakeMode = (function () {
     c._otHold = false;               // grace: keep a fresh grant across one Activation
   }
 
+  function detectionCrossed(c, track) {
+    return !!track && c._otLap != null && crossed(c._otS, c.s, detectS(track), track.total);
+  }
+
   // Once per car per tick, BEFORE arming: the two lines. `gapAhead` is seconds
   // to the car ahead on the road; `open` is RaceControl.otDetectOpen() — no
   // earning under the Safety Car or in low grip.
-  function lines(c, track, gapAhead, open) {
+  function lines(c, track, gapAhead, open, detected = detectionCrossed(c, track)) {
     if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
-    if (track && crossed(c._otS, c.s, detectS(track), track.total)) {
+    if (detected) {
       // Number.isFinite: `null < 1` is true in JS (null → 0), so a missing gap
       // would earn Overtake with nobody ahead. game.js passes Infinity; keep the
       // pure rule honest for every caller.
@@ -158,6 +162,6 @@ const OvertakeMode = (function () {
     return started;
   }
 
-  return { DETECT_FRAC, energy, mj, detectFrac, detectS, crossed, reset, lines, arm, prepare, consume, spend };
+  return { DETECT_FRAC, energy, mj, detectFrac, detectS, crossed, detectionCrossed, reset, lines, arm, prepare, consume, spend };
 })();
 Object.freeze(OvertakeMode);

@@ -59,6 +59,22 @@ test('real Input wheel→pad→wheel restores both axes/buttons, and reset chang
   assert.equal(I.resetControllerProfile(), true); assert.equal(I.getPadAxisMap().steer, 0);
   drive(pad('Standard pad')); assert.equal(I.getPadMap().camera[0], 18);
 });
+test('default axis state follows the sanitized map, profile switches and resets', () => {
+  const { Input: I, drive } = boot();
+  const wheel = pad('Wheel', ''), standard = pad('Pad');
+  drive(wheel);
+  assert.equal(I.padAxesAreDefault(), true);
+  I.setPadAxisMap({ steer: -0, throttle: Infinity, pedalInvert: 2 });
+  assert.equal(I.padAxesAreDefault(), true);
+  I.setPadAxisMap({ brakeFar: 0 });
+  assert.equal(I.padAxesAreDefault(), false);
+  drive(standard);
+  assert.equal(I.padAxesAreDefault(), true);
+  drive(wheel);
+  assert.equal(I.padAxesAreDefault(), false);
+  assert.equal(I.resetControllerProfile(), true);
+  assert.equal(I.padAxesAreDefault(), true);
+});
 test('profile map survives fresh manager/boot and preserves unclaimed legacy for only first physical device', () => {
   const { Profiles: P } = boot(), data = new Map(); let current = { axes: { steer: 3 }, buttons: { camera: [19, null] } };
   const opts = { store: { get: (k, d) => data.get(k) || d, set(k, v) { data.set(k, plain(v)); } }, snapshot: () => current, apply: (v) => { current = plain(v); }, defaults: () => ({ axes: { steer: 0 }, buttons: { camera: [8, null] } }) };

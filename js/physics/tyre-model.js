@@ -1045,10 +1045,19 @@ const TyreModel = (function () {
       return Math.max(0, (tempOpt - T_WINDOW) - tempS);
     }
 
+    // The race HUD only needs the three display-temperature fields.
+    function temperatureInfo(c, out = {}) {
+      if (!c) return null;
+      out.tempS = c.tyreTs != null ? +c.tyreTs.toFixed(1) : null;
+      out.tempOpt = c.tyre ? +optTemp(c.tyre.life).toFixed(1) : null;
+      out.tempWindow = T_WINDOW;
+      return out;
+    }
+
     function info(c) {
       if (!c) return null;
       const t = c.tyre || null;
-      return {
+      return temperatureInfo(c, {
         level, on: on(),
         compound: t ? t.id : null,
         code: t ? t.code : null,
@@ -1062,10 +1071,7 @@ const TyreModel = (function () {
         load: +(c._tyreLoad || 0).toFixed(3),
         severity: +severity().toFixed(3),
         // Temperature and the two surface defects (see the TEMPERATURE block).
-        tempS: c.tyreTs != null ? +c.tyreTs.toFixed(1) : null,
         tempB: c.tyreTb != null ? +c.tyreTb.toFixed(1) : null,
-        tempOpt: t ? +optTemp(t.life).toFixed(1) : null,
-        tempWindow: T_WINDOW,
         ambient: ambient(),
         trackTemp: +trackTemp().toFixed(1),
         grain: +(c.tyreGrain || 0).toFixed(4),
@@ -1077,7 +1083,7 @@ const TyreModel = (function () {
         axleF: +axleSplit(c).f.toFixed(4),
         axleR: +axleSplit(c).r.toFixed(4),
         fuel: +fuelOf(c).toFixed(3),
-      };
+      });
     }
 
     // A WET ROAD AT THE LIGHTS FITS THE WEATHER'S TREAD to a car that carries its
@@ -1096,7 +1102,7 @@ const TyreModel = (function () {
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
-      lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
+      lapsOn, spent, lapsLeft, belowWindow, temperatureInfo, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
       classRecord, optionRecord, applyCompound: (c, record) => applyCompound(c, record, on()), startRecord: sessionStartRecord,
     };

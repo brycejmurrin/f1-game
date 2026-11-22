@@ -62,7 +62,6 @@ const ApexLobby = (function () {
     return [1 / 60, steps];
   }
   // One step()/act() tick: render anchors first (the rAF loop snapshots them before each step), then update().
-  // The results-state finished-car loop (W25 row 8) waits on its game.js seam (#5100).
   function tick(G, d) {
     AgentView.syncRenderAnchors(G.cars);
     // Detached call: as a method the frame reads "Object.update", and stack walks over game.js's update()

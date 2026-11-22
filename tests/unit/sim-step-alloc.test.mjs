@@ -52,7 +52,7 @@ test("AiBand catch-up: factor(ctx) + applyVmax(…, out) on a reused ctx allocat
   assert.equal(r.bytesPerCall, 0, `catch-up band allocates ${r.bytes} B over 20000 calls`);
   // The per-step caller must take the out path: no ctx literal, the shared out object.
   const src = gameSource();
-  const site = src.slice(src.indexOf('AiBand.mode() === "catchup"'), src.indexOf("} else c._bandNow = 0;"));
+  const site = src.slice(src.indexOf("if (!c.human && _leadHuman)"), src.indexOf("} else c._bandNow = 0;"));
   assert.ok(site.includes("AiBand.factor(_bandCtx") || site.includes("AiBand.factor(bc)"), "game.js must pass the reused _bandCtx to AiBand.factor");
   assert.ok(site.includes("BAND_CEIL, _bandOut)"), "game.js must pass the reused _bandOut to AiBand.applyVmax");
 });
