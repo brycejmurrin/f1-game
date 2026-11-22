@@ -24,18 +24,22 @@ const GhostShare = (function () {
   // THE SAMPLES ARE BOUNDED TOO. `h` is an unkeyed hash the sender computes, so a
   // crafted link carried any finite x or s, and the guest is drawn at
   // `smp.p + r * g.x`. The bounds are what a recorded lap can hold (ghost.js:
-  // 600 s at 20 Hz): lateral |x| within half-width + run-off, s within three
-  // laps of the circuit (60 km where the circuit declares no length).
+  // 600 s at 20 Hz). Allow 4% between declared and built circuit lengths,
+  // and a generous average of 120 m/s across the lap, including thinned traces.
   const MAX_X = 60, MAX_T = 600, MAX_SAMPLES = 600 * 20, MAX_S = 60000;
-  function validGhost(g, maxS) {
+  const MAX_AVG_SPEED = 120;
+  function validGhost(g, def) {
     if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
-    const t = g.t, s = g.s, x = g.x;
+    const { t, s, x } = g;
     if (!Array.isArray(t) || !Array.isArray(s) || !Array.isArray(x) ||
         s.length < MIN_SAMPLES || t.length !== s.length || x.length !== s.length) return false;
-    if (s.length > MAX_SAMPLES || !(Math.abs(g.time - t[t.length - 1]) <= TIME_SLACK)) return false;
-    const sMax = maxS > 0 ? maxS : MAX_S;
+    if (s.length > MAX_SAMPLES || !(Math.abs(g.time - t.at(-1)) <= TIME_SLACK)) return false;
+    const end = s.at(-1);
+    if (end > MAX_S || end > MAX_AVG_SPEED * g.time) return false;
+    const lapMeters = def?.lengthKm * 1000;
+    if (lapMeters > 0 && (end - s[0] < lapMeters * 0.96 || end > lapMeters * 1.04)) return false;
     return t.every((v, i) => Number.isFinite(v) && Number.isFinite(s[i]) && Number.isFinite(x[i]) &&
-      v >= 0 && v <= MAX_T && s[i] >= 0 && s[i] <= sMax && Math.abs(x[i]) <= MAX_X &&
+      v >= 0 && v <= MAX_T && s[i] >= 0 && Math.abs(x[i]) <= MAX_X &&
       (i === 0 || (v >= t[i - 1] && s[i] >= s[i - 1])));
   }
   // Only the keys session-records writes (medal, pole, context, pace, difficulty,
@@ -59,9 +63,9 @@ const GhostShare = (function () {
   }
 
   function envelope(ghost, opts) {
-    if (!validGhost(ghost)) return null;
     const o = opts || {};
     const track = typeof o.track === "string" && o.track ? o.track : null;
+    if (!validGhost(ghost, trackDef(track))) return null;
     return {
       v: 1,
       kind: "ghost",
@@ -191,16 +195,8 @@ const GhostShare = (function () {
     return input.replace(/\s+/g, "");
   }
 
-  function knownTrack(id) {
-    return typeof id === "string" && typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST) &&
-      Tracks.LIST.some((track) => track && track.id === id);
-  }
-
-  // Three laps of the circuit's declared length, or 0 (= the generic ceiling).
-  function maxArc(id) {
-    const def = typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST)
-      ? Tracks.LIST.find((track) => track && track.id === id) : null;
-    return def && def.lengthKm > 0 ? Math.min(MAX_S, def.lengthKm * 3000) : 0;
+  function trackDef(id) {
+    return typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST) && Tracks.LIST.find(track => track?.id === id);
   }
 
   async function decode(value) {
@@ -224,11 +220,12 @@ const GhostShare = (function () {
     } catch (_) { return CORRUPT; }
   }
   function fromBody(body) {
-    if (!body || body.v !== 1 || body.kind !== "ghost" || typeof body.track !== "string" || !body.track ||
-        !validGhost(body, maxArc(body.track))) return CORRUPT;
+    if (!body || body.v !== 1 || body.kind !== "ghost" || typeof body.track !== "string" || !body.track) return CORRUPT;
+    const def = trackDef(body.track);
+    if (!validGhost(body, def)) return CORRUPT;
     if (body.h !== undefined && body.h !== traceHash(body, body.track) &&
         body.h !== traceHash(body)) return CORRUPT;   // track-aware; legacy ok
-    if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
+    if (!def) return { ok: false, reason: "unknown-track" };
     const meta = cleanMeta(body.meta);
     return {
       ok: true,
@@ -241,7 +238,7 @@ const GhostShare = (function () {
   }
 
   function installGuest(decoded) {
-    if (!decoded || decoded.ok === false || !validGhost(decoded.ghost) ||
+    if (!decoded || decoded.ok === false || !validGhost(decoded.ghost, trackDef(decoded.track)) ||
         typeof decoded.track !== "string") return false;
     guestSlot = {
       ghost: decoded.ghost,

@@ -32,7 +32,7 @@ export const ADVISORY = new Set();
 
 /**
  * @param {Record<string, { result?: string }>} needs
- * @param {{ advisory?: Iterable<string> }} [opts]
+ * @param {{ advisory?: Iterable<string>, require?: string[], fullTier?: boolean, deferDraftBrowser?: boolean }} [opts]
  * @returns {{ ok: boolean, bad: string[], skipped: string[], passed: string[] }}
  */
 export function verdict(needs, opts = {}) {
@@ -81,10 +81,10 @@ export function verdict(needs, opts = {}) {
   const sel = needs.select && typeof needs.select === "object" ? needs.select : null;
   if (sel) {
     const out = sel.outputs && typeof sel.outputs === "object" ? sel.outputs : {};
-    // The one sanctioned skip (#5426): a ready flip whose select job proved the same-sha draft verdict reusable.
+    // Ready reuse (#5426): a ready flip whose select job proved the same-sha draft verdict reusable.
     // The verdict job still has to pass (and is in the full tier's REQUIRE_SUCCESS); it re-checks the claim.
     const reused = out.selected_reused === "true" && /^\d+$/.test(String(out.selected_reused_run || ""));
-    if (out.any === "true" && "selected" in needs && res("selected") === "skipped" && !reused)
+    if (out.any === "true" && "selected" in needs && res("selected") === "skipped" && !reused && !(opts.deferDraftBrowser && !opts.fullTier))
       bad.push("selected: skipped, but the plan has browser legs (select.outputs.any=true) — the selected specs did not run");
     if (sel.result === "success" && "selected-verdict" in needs && res("selected-verdict") === "skipped")
       bad.push("selected-verdict: skipped after a successful selection — nothing judged the selected specs");
@@ -156,8 +156,11 @@ function main(argv = process.argv.slice(2)) {
     console.error("::error::ci-verdict: NEEDS holds no job results");
     process.exit(2);
   }
-  const require = String(process.env.REQUIRE_SUCCESS || "").split(",").map((x) => x.trim()).filter(Boolean);
-  const v = verdict(needs, { require, fullTier: require.length > 0 });
+  const configured = String(process.env.REQUIRE_SUCCESS || "").split(",").map((x) => x.trim()).filter(Boolean);
+  const exempt = needs.select?.result === "success" && needs.select.outputs?.browser_exempt === "true";
+  // Only a deliberate skip of these two jobs is exempt. A missing job, failed job or missing selector output stays red.
+  const require = configured.filter((job) => !(exempt && (job === "smoke" || job === "staged-boot") && needs[job]?.result === "skipped"));
+  const v = verdict(needs, { require, fullTier: require.length > 0, deferDraftBrowser: process.env.DEFER_DRAFT_BROWSER === "true" });
   // This job cannot read attempt N-1 (no token here); it can say that it is one. The binding check is merge-gate's
   // ciRetryVerdict (the `ci` row): it reads every earlier attempt's jobs and refuses after any failed one, whatever
   // the body says (#5404: a `re-run:` body line does not lift it there, so this warning does not promise that).

@@ -300,9 +300,9 @@ function judgeSpecs(input) {
     }
     reason = `selected specs reused from run ${run} (same head, same base, deploy tip unmoved, same plan; green on attempt 1)`;
   } else if (selected === "skipped") {
-    // A draft runs the selected legs too since 2026-11-03 (one 5-min shard), so
-    // a skipped matrix means the same thing on every PR: the plan had no jobs.
-    reason = "the plan had no jobs";
+    reason = draft === "true" && called !== "true"
+      ? "browser execution deferred until ready for review; use tools/ci/remote-group.mjs for a draft run"
+      : "no selected job ran: an empty plan is a pass for paths exempted by the selector";
   } else if (selected === "cancelled" || selected === "failure") {
     if (failedSpecs.length > 0) {
       return {
@@ -389,9 +389,6 @@ function judgeSpecs(input) {
       infraRetry: false,
       failedSpecs,
     };
-  }
-  if (selected === "skipped" && String(input.reused ?? "") !== "true") {
-    reason = "no selected job ran: an empty plan is a pass only for a docs-only diff (the select step fails closed on an empty plan for a code diff, and select-specs puts the boot floor in every other plan)";
   }
   return { ok: true, reason, infraRetry, failedSpecs };
 }

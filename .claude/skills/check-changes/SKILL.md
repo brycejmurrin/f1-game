@@ -40,7 +40,7 @@ node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fas
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # the same floor, plain; a red run ends with `failing files:` and `log:` lines
 ```
 
-The PR's tiers run the rest of the ladder (every draft push gets the fast tier plus a selected browser shard); name
+The PR's tiers run the rest of the ladder (drafts get the fast tier and ready PRs get browser checks when their diff needs them); name
 the groups `pick-tests` lists as not-run in the PR; a whole group (`remote-group.mjs`) is Bryce's opt-in
 (`docs/VERIFICATION.md` §By change). No local browser test runs (AGENTS.md rule 5): a Bryce-attended session
 may run ONE named spec on his explicit grant, recorded in the PR body, as a background task.

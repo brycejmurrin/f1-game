@@ -111,7 +111,7 @@ var RivalAudio = (() => {
     return buf;
   }
   const slots = Array.from({ length: SLOTS },
-    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null }));
+    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null, net: false, key: -1 }));
   const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
   // Reused [x, z] — callers copy the numbers before the next collect()/emitFieldSfx.
   const _xzOut = [0, 0];
@@ -283,8 +283,6 @@ var RivalAudio = (() => {
       if (!player || !track || !cars || player.s == null) { applyPassBy(out); return out; }
       const lapLen = track.total, half = lapLen * 0.5;
       let n = 0;
-      // Net ownership is read once per call, not per car (collect runs every frame).
-      const np = G.netPlay, npLive = !!(np && np.active && np.active() && np.owns);
       for (let ci = 0; ci < cars.length; ci++) {
         const c = cars[ci];
         const retired = typeof ReplayBuf !== "undefined" && ReplayBuf.audioRetired ? ReplayBuf.audioRetired(c) : c.retired;
@@ -299,13 +297,18 @@ var RivalAudio = (() => {
         let at = n < SLOTS ? n++ : SLOTS - 1;
         while (at > 0 && slots[at - 1].dist > dist) {
           const prev = slots[at - 1], cur = slots[at];
-          cur.lat = prev.lat; cur.arc = prev.arc; cur.wx = prev.wx; cur.wz = prev.wz; cur.rev = prev.rev;
-          cur.relativeSpeed = prev.relativeSpeed; cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
-          cur.net = prev.net; cur.key = prev.key;
+          cur.lat = prev.lat; cur.arc = prev.arc; cur.dist = prev.dist; cur.key = prev.key;
           at--;
         }
         const slot = slots[at];
-        slot.lat = lat; slot.arc = arc; slot.dist = dist; slot.car = c;
+        slot.lat = lat; slot.arc = arc; slot.dist = dist; slot.key = ci;
+      }
+      // Only the nearest four need world coordinates, engine data and ownership.
+      // Net ownership is read once per call, not per car (collect runs every frame).
+      const np = G.netPlay, npLive = !!(np && np.active && np.active() && np.owns);
+      for (let i = 0; i < n; i++) {
+        const slot = slots[i], c = cars[slot.key];
+        slot.car = c;
         if (c.px != null && c.pz != null) { slot.wx = c.px; slot.wz = c.pz; }
         else {
           const w = worldXZ(track, c.s, c.x);
@@ -322,12 +325,9 @@ var RivalAudio = (() => {
         // arc 0 stepped the pitch by ~300 cents across 0.2 m of arc as a car
         // came past. Lateral speed is not tracked (track-frame x is a position).
         slot.relativeSpeed = Math.abs((c.speed || 0) - (player.speed || 0));
-        slot.approach = -(arc / Math.max(dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
+        slot.approach = -(slot.arc / Math.max(slot.dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
         // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
         slot.net = npLive && !!np.owns(c);
-        // Index in G.cars (`cars` is G.cars) — read-only. Do not call G.wireId here: it caches c._wireId and
-        // episode-transients.test.mjs expects that field absent after reset().
-        slot.key = ci;
       }
       // Bind voices for the ENGINE note count only. Pass-by still aims all SLOTS;
       // cars past the engine cap keep a high slot index so setRivals ignores them
@@ -370,6 +370,7 @@ var RivalAudio = (() => {
       if (!player || typeof GameAudio === "undefined" || !GameAudio.fieldContact) return;
       const track = G.track, cars = G.cars;
       if (!track || !cars) return;
+      let top;
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i];
         if (!c || c === player || c.isPlayer || c.retired) continue;
@@ -377,8 +378,9 @@ var RivalAudio = (() => {
         const skid = +c.skidIntensity || 0;
         const inten = Math.max(lock, skid > 0.45 ? skid : 0);
         // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
-        const top = (G.vTop && G.vTop()) || 1;
-        if (!(inten > 0.35) || Math.abs(+c.speed || 0) / top < 0.08) continue;
+        if (!(inten > 0.35)) continue;
+        if (top === undefined) top = (G.vTop && G.vTop()) || 1;
+        if (Math.abs(+c.speed || 0) / top < 0.08) continue;
         let wx = c.px, wz = c.pz;
         if (wx == null || wz == null) {
           const w = worldXZ(track, c.s, c.x);

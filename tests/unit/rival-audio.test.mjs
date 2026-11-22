@@ -20,8 +20,8 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const LAP = 1000;
 
-function load() {
-  const sb = { Math, Array, Object, Number, console };
+function load(globals = {}) {
+  const sb = { Math, Array, Object, Number, console, ...globals };
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
@@ -313,6 +313,34 @@ test("net-owned rivals are flagged for heavier engine pitch smoothing", () => {
   assert.equal(byArc[10].net, true, "net-owned rival");
   assert.equal(byArc[15].net, false, "local AI rival");
   assert.equal(byArc[10].key, 1);
+});
+
+test("field audio only resolves the audible four and samples pace when a tyre squeal is possible", () => {
+  const me = car({ s: 500 });
+  const rivals = Array.from({ length: 21 }, (_, i) => car({ s: 605 - i * 5 }));
+  let projections = 0, owners = 0, paceReads = 0, top = 100;
+  const squeals = [];
+  const audio = load({
+    Tracks: { sample(_track, s, out) { projections++; out.p[0] = s; } },
+    GameAudio: { fieldContact(...args) { squeals.push(args); } },
+  }).create({
+    track: { total: LAP }, cars: [me, ...rivals],
+    vTop() { paceReads++; return top; },
+    netPlay: { active: () => true, owns(c) { owners++; return c === rivals[20]; } },
+  });
+  const rows = Array.from(audio.collect(me), r => [r.key, r.wx, r.net]);
+  assert.deepEqual(rows, [[21, 505, true], [20, 510, false], [19, 515, false], [18, 520, false]]);
+  assert.deepEqual([projections, owners], [4, 4]);
+  audio.emitFieldSfx(me);
+  assert.equal(paceReads, 0);
+  for (const c of rivals.slice(0, 2)) { c.wheelLock = 0.8; c.speed = 10; }
+  audio.emitFieldSfx(me);
+  assert.deepEqual(squeals.map(args => args[4]), [1, 2]);
+  assert.equal(paceReads, 1);
+  top = 200;
+  audio.emitFieldSfx(me);
+  assert.equal(paceReads, 2);
+  assert.equal(squeals.length, 2, "pace is read afresh on the next call");
 });
 
 test("sprayAhead is rivals-ahead within 40 m only (Radio r9 wet wake)", () => {

@@ -69,6 +69,28 @@ test("the detection line defaults to 90 % of the lap and a circuit's otDetectFra
   assert.ok(Math.abs(OM.detectFrac({ otDetectFrac: 0.95, _sceneryShift: 0.1 }) - 0.05) < 1e-12, "and wraps");
 });
 
+test("the traffic search and the allowance share one detection-line lookup", () => {
+  let lookups = 0;
+  class CountedWeakMap extends WeakMap {
+    get(key) { lookups++; return super.get(key); }
+  }
+  const { OM } = load({ WeakMap: CountedWeakMap });
+  const t = track(), c = car({ s: 4510, _otS: 4490 });
+  assert.equal(OM.detectionCrossed(c, t), false, "a missing lap marker must seed both trackers");
+  OM.lines(c, t, 0.5, true);
+  assert.equal(c._otS, c.s);
+  c._otS = 4490;
+  for (const [s, expected] of [[4510, true], [4490, false]]) {
+    c.s = s;
+    lookups = 0;
+    const detected = OM.detectionCrossed(c, t);
+    assert.equal(detected, expected);
+    OM.lines(c, t, 0.5, true, detected);
+    assert.equal(lookups, 1);
+    assert.equal(c.otEarned, true, "the backwards recross preserves the existing grant");
+  }
+});
+
 test("under 1 s at the detection line EARNS it; the timing line GRANTS it for one lap; unused, it expires", () => {
   const { OM } = load();
   const t = track(), c = car({ s: 4400 });

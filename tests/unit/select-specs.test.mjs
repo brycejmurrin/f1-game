@@ -28,7 +28,7 @@ import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync, spawn } from "node:child_process";
+import { spawnSync, execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -692,6 +692,16 @@ test("select(): a docs-only diff selects nothing and says docs", () => {
   const r = selectFor({ "docs/README.md": "fixture edit\n" });
   assert.equal(r.reason, "docs");
   assert.deepEqual(r.selected, []);
+});
+
+test("only the ready PR planner can exempt Node reporting changes from the browser floor", () => {
+  const files = ["tools/ci/ci-watch.mjs", "tests/unit/ci-watch.test.mjs", "docs/TESTING.md"];
+  const exempt = select(null, 10, { files, readyPr: true, failed: ["tests/specs/smoke.spec.js"] });
+  assert.equal(exempt.reason, "browser-exempt");
+  assert.deepEqual(exempt.shards, []);
+  assert.ok(select(null, 10, { files }).shards.length, "train and nightly retain their plan");
+  assert.ok(select(null, 10, { readyPr: true, files: [...files, "js/ui/hud.js"] }).shards.length);
+  assert.ok(select(null, 10, { readyPr: true, files: ["docs/archive/manual-probes/skid-probe.spec.js"] }).shards.length);
 });
 
 test("select(): an edited spec runs first, alone in rank 0", () => {
@@ -1940,6 +1950,37 @@ test("the CI select step leaves the tree it diffs untouched (a chmod there made 
     assert.ok(ran, "the step got past base resolution to the selector (absent in this fixture)");
     assert.equal(git("diff", "--name-only", before), "x.txt", "the step's own diff lists only what the commit changed");
     assert.equal(git("status", "--porcelain", "--untracked-files=no"), "", "no tracked file was modified by the step");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("ready PR selection certifies both parents of the checked-out merge", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-select-base-"));
+  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "base"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
+    fs.mkdirSync(path.join(dir, "tools/ci"), { recursive: true });
+    for (const f of ["ci-select-specs-step.sh", "ci-resolve-before.sh", "ci-pr-base.sh"]) {
+      fs.copyFileSync(path.join(ROOT, "tools/ci", f), path.join(dir, "tools/ci", f));
+    }
+    fs.writeFileSync(path.join(dir, "tools/ci/select-specs.mjs"),
+      'import fs from "node:fs"; fs.writeFileSync("args.json", JSON.stringify(process.argv.slice(2))); process.exit(1);');
+    git("add", "."); git("commit", "-qm", "base");
+    const base = git("rev-parse", "HEAD");
+    git("switch", "-qc", "topic"); git("commit", "-qm", "change", "--allow-empty");
+    const head = git("rev-parse", "HEAD");
+    const argsPath = path.join(dir, "args.json");
+    const run = (prHead) => spawnSync("bash", ["tools/ci/ci-select-specs-step.sh"], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, EVENT: "pull_request", CALLED: "false", READY_PR: "true", PR_HEAD: prHead, PR_BASE: base },
+    });
+    assert.equal(run(head).status, 1);
+    assert.equal(fs.existsSync(argsPath), false, "a plain branch never reaches the selector");
+    git("switch", "-q", "base"); git("merge", "-q", "--no-ff", "-m", "test merge", "topic");
+    assert.equal(run(base).status, 1);
+    assert.equal(fs.existsSync(argsPath), false, "a stale event never reaches the selector");
+    run(head);
+    const args = JSON.parse(fs.readFileSync(argsPath));
+    assert.deepEqual(args.slice(0, 3), ["--since", base, "--ready-pr"]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

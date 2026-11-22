@@ -1,8 +1,8 @@
 {
  "_doc": "pass-census --park exact baselines (#4783 row 1): per pass the [min, max] draw calls and triangles per render on a parked, frozen frame, and three's memory counters. Built by `node tools/gfx/pass-census-lib.mjs --collect`; never hand-edited. No tolerance: a diff is a change in what the frame draws.",
  "source": {
-  "run": "44287589134",
-  "sha": "d14e301e6ca3e02a60666a5755b91f30dffe4025",
+  "run": "44991005492",
+  "sha": "136b458100b5e9af59758b1da1c6c30f5a7c1fe1",
   "adapter": "perf-census-webgpu.yml on ubuntu-latest; adapterInfo vendor google, architecture swiftshader (software WebGPU)"
  },
  "cells": {
@@ -24,8 +24,8 @@
       29
      ],
      "tris": [
-      158177,
-      158177
+      158251,
+      158251
      ]
     },
     "rt 160x90": {
@@ -121,8 +121,8 @@
       29
      ],
      "tris": [
-      147439,
-      147439
+      147513,
+      147513
      ]
     },
     "rt 160x90": {
@@ -182,7 +182,7 @@
       1
      ]
     },
-    "output 230x66": {
+    "output 233x67": {
      "calls": [
       10,
       10
@@ -198,8 +198,8 @@
       31
      ],
      "tris": [
-      152943,
-      152943
+      153041,
+      153041
      ]
     },
     "rt 160x90": {
@@ -289,7 +289,7 @@
       1
      ]
     },
-    "output 138x39": {
+    "output 140x40": {
      "calls": [
       10,
       10
@@ -305,8 +305,8 @@
       31
      ],
      "tris": [
-      142205,
-      142205
+      142303,
+      142303
      ]
     },
     "rt 160x90": {
@@ -372,8 +372,8 @@
       30
      ],
      "tris": [
-      119279,
-      119279
+      119347,
+      119347
      ]
     },
     "rt 160x90": {
@@ -469,8 +469,8 @@
       30
      ],
      "tris": [
-      118583,
-      118583
+      118651,
+      118651
      ]
     },
     "rt 160x90": {
@@ -530,7 +530,7 @@
       1
      ]
     },
-    "output 230x66": {
+    "output 233x67": {
      "calls": [
       10,
       10
@@ -546,8 +546,8 @@
       32
      ],
      "tris": [
-      113240,
-      113240
+      113332,
+      113332
      ]
     },
     "rt 160x90": {
@@ -637,7 +637,7 @@
       1
      ]
     },
-    "output 138x39": {
+    "output 140x40": {
      "calls": [
       10,
       10
@@ -653,8 +653,8 @@
       32
      ],
      "tris": [
-      112544,
-      112544
+      112636,
+      112636
      ]
     },
     "rt 160x90": {

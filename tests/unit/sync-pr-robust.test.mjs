@@ -145,13 +145,14 @@ test("stop kills a real registered process tree and nothing else", async () => {
   const pidFile = path.join(dir, "grandchild.pid");
   // the registered process spawns a grandchild of its own, as tooling-fast's workers do
   const child = spawn(process.execPath, ["-e",
-    `const {spawn}=require("node:child_process");const g=spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:"ignore"});require("node:fs").writeFileSync(${JSON.stringify(pidFile)},String(g.pid));setInterval(()=>{},1000) // tooling-fast.mjs`], { stdio: "ignore" });
+    `const {spawn}=require("node:child_process");const g=spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:"ignore"});const fs=require("node:fs"),file=${JSON.stringify(pidFile)};fs.writeFileSync(file+".tmp",String(g.pid));fs.renameSync(file+".tmp",file);setInterval(()=>{},1000) // tooling-fast.mjs`], { stdio: "ignore" });
   const bystander = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], { stdio: "ignore" });
+  let grandchild;
   try {
     // cmd basename must appear in the child's cmdline, as a real tooling-fast's would
     for (let i = 0; i < 100 && !fs.existsSync(pidFile); i++) await new Promise((r) => setTimeout(r, 50));
-    const grandchild = +fs.readFileSync(pidFile, "utf8");
-    assert.ok(grandchild > 0, "the grandchild was spawned");
+    grandchild = +fs.readFileSync(pidFile, "utf8");
+    assert.ok(Number.isSafeInteger(grandchild) && grandchild > 1, "the grandchild was spawned");
     assert.equal(register("rt", { dir, pid: child.pid, cmd: "tooling-fast.mjs" }).ok, true);
     const r = await stop("rt", { dir, graceMs: 2000 });
     assert.equal(r.state, "stopped");
@@ -162,7 +163,12 @@ test("stop kills a real registered process tree and nothing else", async () => {
     const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
     assert.equal(alive(grandchild), false, "the registered process's descendant died with it (no orphan)");
   } finally {
-    try { process.kill(+fs.readFileSync(pidFile, "utf8"), "SIGKILL"); } catch { /* already gone */ } child.kill("SIGKILL"); bystander.kill("SIGKILL"); }
+    if (Number.isSafeInteger(grandchild) && grandchild > 1) {
+      try { process.kill(grandchild, "SIGKILL"); } catch { /* already gone */ }
+    }
+    child.kill("SIGKILL");
+    bystander.kill("SIGKILL");
+  }
 });
 
 

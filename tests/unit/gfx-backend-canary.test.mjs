@@ -7559,6 +7559,24 @@ test("GLX decals: premultiplied upload, premultiplied blend restored after, shad
   h.reset();
   h.GLX.drawDecal(mesh, model, tex, {});
   assert.equal(named("uniform4fv", "uShadowP").length, 0, "frame-constant: once per frame token");
+  assert.equal(h.count("uniform1i"), 0, "another decal uses the same sampler units");
+  assert.deepEqual(named("uniform1f", "uGlow"), [], "unchanged glow stays on the decal program");
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, { glow: 0.35 });
+  assert.equal(h.count("uniform1i"), 0, "sampler assignments survive a pass and program switch");
+  assert.deepEqual(named("uniform1f", "uGlow"), [[0.35]]);
+  assert.equal(named("uniform4fv", "uShadowP").length, 1, "new frame still refreshes its lighting");
+
+  assert.ok(h.GLX.init(h.canvas));
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, { glow: 0.35 });
+  assert.deepEqual(named("uniform1i", "uTex"), [[5]], "a fresh decal program receives the atlas unit");
+  assert.deepEqual(named("uniform1i", "uShadowMap"), [[0]]);
+  assert.deepEqual(named("uniform1i", "uLampBake"), [[12]]);
+  assert.deepEqual(named("uniform1i", "uLampBakeIdx"), [[13]]);
+  assert.deepEqual(named("uniform1f", "uGlow"), [[0.35]], "the fresh program needs its glow too");
 });
 
 test("decal shaders: sun-map PCF + lamp pools in GLSL, TSL and WGSL; TLX premultiplied", () => {

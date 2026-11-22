@@ -259,23 +259,20 @@ function snapshot() {
       out.logConsole = lv.console || "";
       out.logBuffer = lv.buffer || "";
       if (wantLog) {
-        // One ring walk (Log.records is a single pass). Filter in place for the
-        // page tail instead of a second records() that re-walked all 500 slots.
+        // Records are oldest first. Only the newest 12 matches appear on the page.
         const all = Log.records();
         out.logN = all.length;
         const ns = logNs();
         const min = (Log.LEVELS && Log.LEVELS[logLvl()]) || 2;
         const levels = Log.LEVELS || { warn: 2, info: 3, debug: 4, error: 1 };
-        const matched = [];
-        for (let i = 0; i < all.length; i++) {
+        for (let i = all.length - 1; i >= 0 && out.logs.length < 12; i--) {
           const r = all[i];
           if (ns && ns !== "*" && r.ns !== ns) continue;
           if (!((levels[r.level] || 0) <= min)) continue;
-          matched.push(r);
+          out.logs.push(r.level[0] + " " + r.ns + " " + r.msg);
         }
-        const tail = matched.length > 12 ? matched.slice(-12) : matched;
-        out.logShown = tail.length;
-        out.logs = tail.map((r) => r.level[0] + " " + r.ns + " " + r.msg);
+        out.logs.reverse();
+        out.logShown = out.logs.length;
       }
       if (wantGov && out.track) {
         const tr = Log.records({ ns: "track", level: "info" });

@@ -10,10 +10,8 @@ import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 
 const ctx = vm.createContext({ Math, Set, Object, Array });
 ctx.window = ctx;
-let liveHandler = null;
-ctx.addEventListener = (name, fn) => { if (name === "apex-gfx-live") liveHandler = fn; };
 vm.runInContext(fs.readFileSync(new URL("../../js/render/three/tlx-mem.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-mem.js") });
-const { memCensus, memInstall } = ctx.TLXShaders;
+const { memCensus } = ctx.TLXShaders;
 
 /** A fake __tlx whose renderer tracks `objs` the way r187's Textures does (WeakRefs; targets and textures). */
 function tlx(objs, { backend = null, memory = {}, depthOf = new Map(), canvas = null, lost = false } = {}) {
@@ -194,17 +192,14 @@ test("a lost device returns zero resident bytes even with stale textures, buffer
   assert.equal("contextLost" in memCensus(tlx([])), false);
 });
 
-test("install fills an ABSENT façade slot on a three backend only, once the backend is live", () => {
-  const rt = new THREE.RenderTarget(8, 8, { depthBuffer: false });
-  const G = { __tlx: tlx([rt]), texCensus: undefined };
-  assert.equal(memInstall(G), true);
-  assert.equal(G.texCensus().bytes, 256);
-  const own = () => "glx"; const glx = { texCensus: own };
-  assert.equal(memInstall(glx), false, "a backend with its own census keeps it");
-  assert.equal(glx.texCensus, own);
-  assert.equal(memInstall({ texCensus: undefined }), false, "no __tlx: not a three backend");
-  ctx.GLX = { __tlx: tlx([rt]), texCensus: undefined };
-  assert.equal(typeof liveHandler, "function", "the module listens for apex-gfx-live");
-  liveHandler();
-  assert.equal(ctx.GLX.texCensus().count, 1);
+test("the TLX backend exposes the census immediately when copied onto the renderer facade", () => {
+  const source = fs.readFileSync(absSrc("js/render/three/tlx.js"), "utf8");
+  const start = source.indexOf("        texCensus:");
+  const end = source.indexOf("        // Baked material arrays", start);
+  assert.ok(start >= 0 && end > start);
+  const backend = vm.runInContext("({" + source.slice(start, end) + "})", ctx, { filename: absSrc("js/render/three/tlx.js") });
+  backend.__tlx = tlx([new THREE.RenderTarget(8, 8, { depthBuffer: false })]);
+  const facade = { texCensus() { throw new Error("old GLX backend"); } };
+  Object.defineProperties(facade, Object.getOwnPropertyDescriptors(backend));
+  assert.equal(facade.texCensus().bytes, 256);
 });
