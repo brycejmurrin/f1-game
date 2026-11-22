@@ -580,24 +580,10 @@
       }
 
       {
-        // KOLD, not K and not KR. This block was authored against the RAW
-        // racing arrays as they were when startFrac was 0.28 — pre-7a17351,
-        // when array index == authored frac. That commit moved the origin to
-        // 0.2516 and renumbered the control points by (offNew - offOld); raw
-        // index users like this block never got the same renumbering, so the
-        // walls slid ~0.028 laps off the geometric tunnel (and off their own
-        // roof, whose overheadSpan path DID get shifted). Same formula the
-        // engine uses at tracks.js (`j = offNew - iOld`), same result: the
-        // measured hairpin sits at racing 0.383 and the corner sequence puts
-        // the tunnel at ~0.48-0.56, which is exactly KOLD(0.51..0.585).
-        // 0.478..0.553 (old-racing) => racing 0.449..0.524: entry ~50 m after
-        // Portier (measured apex 0.434), a 247 m bore, exit with a run down to
-        // the chicane (0.641). Real Monaco: the tunnel starts immediately after
-        // Portier and exits 188 m before the Nouvelle Chicane — entry-after-
-        // Portier is the constraint worth matching; the game's Portier->chicane
-        // gap is 170 m longer than the real one, so the exit run stretches.
-        const TUN0 = 0.478, TUN1 = 0.553;
-        const tunS = KOLD(TUN0), tunE = KOLD(TUN1);
+        // Portals are authored in racing space, from the measured positions of
+        // the old KOLD(0.478..0.553) bore. Rain uses these same roof dimensions.
+        const bore = def.rainShelter;
+        const tunS = K(bore.start), tunE = K(bore.end);
         const tunLen = ((tunE - tunS) + n) % n;
         const step = Math.max(2, Math.round(8.0 / ds));
         const dz = ds * step;                    // station pitch (~8 m)
@@ -627,7 +613,7 @@
           const u = upOf(track, k);
           const b = [r, u, t];
           const base = [px[k], py[k], pz[k]];
-          const cw = hw[k] * 2 + 5;
+          const cw = (hw[k] + bore.shoulderWidth) * 2;
           const lat = (o, h) => vadd([px[k] + r[0] * o, py[k], pz[k] + r[2] * o], u, h);
 
           // ── VAULT ────────────────────────────────────────────────────────
@@ -637,7 +623,7 @@
           // — same-facing coplanar pairs are exactly what the z-fighting ratchet
           // in tests/unit/coplanar-faces.test.mjs exists to catch.
           overheadSpan({
-            id: `monaco-tunnel-roof-${k}`, frac: k / n, rawFrac: true, clearance: 6.45,
+            id: `monaco-tunnel-roof-${k}`, frac: k / n, rawFrac: true, clearance: bore.clearance,
             thickness: 1.35, depth: dz * 1.06, span: cw * 0.34,
             color: VAULT3, supports: false, required: true,
           });
@@ -729,13 +715,12 @@
           }
         }
 
-        const tunnelPortal = (frac, tag) => {
-          const k = KOLD(frac);  // raw-array reader — same KOLD rule as tunS/tunE
+        const tunnelPortal = (k, tag) => {
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const b = [r, u, t];
-          const cw = hw[k] * 2 + 5;
+          const cw = (hw[k] + bore.shoulderWidth) * 2;
           out._mat = MAT.STONE;
           for (const sd of [-1, 1]) {
             const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
@@ -788,8 +773,8 @@
             });
           }
         };
-        tunnelPortal(TUN0, "entry");
-        tunnelPortal(TUN1, "exit");
+        tunnelPortal(tunS, "entry");
+        tunnelPortal(tunE, "exit");
       }
 
       pastelStreetRow(0.595, 0.655, 1, 4, {

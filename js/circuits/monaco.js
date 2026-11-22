@@ -23,6 +23,8 @@
     // lane in F1. Racing-space side, like every def.pit.
     pit: { mode: "street", side: 1, limitKph: 60 },
     terrainOuter: 28,
+    // Racing-space portals and inner bore dimensions, shared by the roof mesh and falling rain.
+    rainShelter: { start: 0.449, end: 0.524, shoulderWidth: 2.5, clearance: 6.45 },
     sceneryCoordinates: "source",
     barrierGap: 2.0,
     // SOURCE-trace fractions + source sides, like every range call in this
