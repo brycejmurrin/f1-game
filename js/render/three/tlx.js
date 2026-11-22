@@ -2302,7 +2302,7 @@ const TLX = (function () {
       // material, each a drawRange) instead of the whole lap. Main pass: frustum only (cd 0), so the picture is
       // the one the full mesh drew. The mirror passes its own radial cap. One use per batch: a second record of the
       // same road in one pass draws whole rather than overwrite the slots' ranges before render().
-      const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
+      const SPLIT_TRIS = 1024, MIRROR_SECTION_TRIS = 128, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
       // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
       let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
       // Visible chunks of one record share attributes and one material. One
@@ -2356,18 +2356,25 @@ const TLX = (function () {
         for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = order;
         return n;
       }
-      function _drawSplit(rec, i, vp, eye, cd, fog) {
+      let mirrorRoadRefine = true, mirrorRearView = false;
+      const mirrorRoadStats = { totalTriangles: 0, submittedTriangles: 0, drawCalls: 0 };
+      function resetMirrorRoadStats() {
+        mirrorRoadStats.totalTriangles = mirrorRoadStats.submittedTriangles = mirrorRoadStats.drawCalls = 0;
+      }
+      function _drawSplit(rec, i, vp, eye, cd, fog, rearView) {
         const sp = rec.split;
         if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
         sp.batch = _poolBatch;
-        const n = chunkedSys.cull(sp, vp, eye, cd, fog);
+        const n = chunkedSys.cull(sp, vp, eye, cd, fog, rearView && mirrorRoadRefine);
         const r = TLXShaders.mergeRuns(chunkedSys.visList, n, SPLIT_SLOTS, sp.runs);
         for (let k = 0; k < r; k++) {
           const g = sp.slots[k];
           g.setDrawRange(sp.runs[2 * k], sp.runs[2 * k + 1]);
+          if (rearView) mirrorRoadStats.submittedTriangles += sp.runs[2 * k + 1] / 3;
           acquireMesh(g, rec.m, rec.mat, rec).renderOrder = i;
         }
-        rec.geo.__tlxDrawnBatch = _poolBatch;   // the shared buffers upload with the slots; releaseGeoMirrors keys on the parent
+        if (rearView) mirrorRoadStats.drawCalls += r;
+        if (r) rec.geo.__tlxDrawnBatch = _poolBatch;   // the shared buffers upload with the slots; releaseGeoMirrors keys on the parent
         return true;
       }
       function makeSplit(geo, data) {
@@ -2380,7 +2387,7 @@ const TLX = (function () {
           g.boundingSphere = geo.boundingSphere.clone(); g.boundingBox = geo.boundingBox.clone();
           slots.push(g);
         }
-        return { chunks: TLXShaders.splitRanges(data.pos, data.idx, SPLIT_TRIS), slots, runs: new Array(SPLIT_SLOTS * 2).fill(0), batch: -1 };
+        return { chunks: TLXShaders.roadRanges(data.pos, data.idx, SPLIT_TRIS, MIRROR_SECTION_TRIS), slots, runs: new Array(SPLIT_SLOTS * 2).fill(0), batch: -1 };
       }
       // Every drawList reset goes through here: drop the records' references, so a
       // pooled slot never pins an evicted material or a freed geometry.
@@ -4499,7 +4506,11 @@ const TLX = (function () {
 
       function disposeGeometry(geo) {
         if (!geo) return;
-        if (geo.__tlxSplit) { for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); } geo.__tlxSplit = null; }
+        if (geo.__tlxSplit) {
+          if (chunkedSys) chunkedSys.visList.length = 0;   // drop any road bounds retained in culling scratch
+          for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); }
+          geo.__tlxSplit = null;
+        }
         releaseGeometry(geo);
         geo.dispose();
       }
@@ -5494,7 +5505,7 @@ const TLX = (function () {
           _meshMade.mesh++;
           const kind = data._releaseCpuMirror ? "carSh" : "mesh";
           const geo = _regGeo(buildGeometry(data), kind);
-          if (TLXShaders.splitRanges && data.trk && data.trk.length === data.pos.length && data.idx && data.idx.length >= SPLIT_MIN_IDX) geo.__tlxSplit = makeSplit(geo, data);
+          if (TLXShaders.roadRanges && data.trk && data.trk.length === data.pos.length && data.idx && data.idx.length >= SPLIT_MIN_IDX) geo.__tlxSplit = makeSplit(geo, data);
           return { __tlx: true, geo, count: (data.idx && data.idx.length) || 0 };
         },
         createTexMesh(data) {
@@ -6055,7 +6066,7 @@ const TLX = (function () {
           }
           _restoreEnvFrame();
         },
-        mirrorBegin(frame, w, h) {
+        mirrorBegin(frame, w, h, rearView) {
           // The second world pass shares the soft-present queue. Submitting it
           // while a read waits defeats present()'s backpressure and starves it.
           if (_softBlit && _softReadPending) return false;
@@ -6091,6 +6102,8 @@ const TLX = (function () {
           // A real pass can claim the target after warm-up clears but before
           // a previous session's queued quit callback runs. Warm draws cannot claim it.
           _mirReleaseWait = null;
+          mirrorRearView = rearView === true;
+          if (mirrorRearView) resetMirrorRoadStats();
           _mirActive = true;
           _mirUsed = true;
           return true;
@@ -6105,7 +6118,13 @@ const TLX = (function () {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
               if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
-              if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
+              const road = mirrorRearView && rec.geo && rec.geo.__tlxSplit;
+              if (road) mirrorRoadStats.totalTriangles += rec.geo.index.count / 3;
+              if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, mirrorRearView)) continue;
+              if (road) {
+                mirrorRoadStats.submittedTriangles += rec.geo.index.count / 3;
+                mirrorRoadStats.drawCalls++;
+              }
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
             _poolShow();
@@ -6133,6 +6152,10 @@ const TLX = (function () {
           resetRecs();   // the main pass re-issues its own draws
           _dMatUsed = 0; _fxMatUsed = 0;
           _poolBatch++;
+        },
+        mirrorRoadCull(enabled) {
+          if (typeof enabled === "boolean") mirrorRoadRefine = enabled;
+          return { supported: true, enabled: mirrorRoadRefine, ...mirrorRoadStats };
         },
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
@@ -6166,6 +6189,7 @@ const TLX = (function () {
           try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
           try { mirRT.dispose(); } catch (_) { /* already gone */ }
           mirRT = null; mirCam = null; _mirReady = false; _mirRenders = 0;
+          resetMirrorRoadStats();
           return true;
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
