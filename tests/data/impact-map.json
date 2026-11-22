@@ -8629,6 +8629,9 @@
       ]
     },
     "js/garage/exterior.js": {
+      "appendLights": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
       "cancel": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
@@ -10388,6 +10391,7 @@
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/generated-docs.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lamp-density.test.mjs",
@@ -10520,6 +10524,9 @@
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "garageLamps": [
+        "tests/unit/light-store-cond-layer.test.mjs"
+      ],
       "liveEffects": [
         "tests/unit/lighting-rebuild.test.mjs"
       ],
@@ -10565,6 +10572,7 @@
       ],
       "*": [
         "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/perf-try.test.mjs"
       ]
@@ -14645,6 +14653,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/radio-voice.test.mjs",
+        "tests/unit/settings-export.test.mjs",
         "tests/unit/ui-experience.test.mjs"
       ],
       "debrief": [
@@ -14686,6 +14695,7 @@
         "tests/unit/radio-voice.test.mjs"
       ],
       "*": [
+        "tests/unit/progress-backup.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ]
     },
@@ -15904,6 +15914,9 @@
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "castShadowInstanced": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "drawShadow": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "init": [
@@ -20384,6 +20397,7 @@
       "*": [
         "tests/specs/menu-keyboard.spec.js",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/source-integrity.test.mjs"

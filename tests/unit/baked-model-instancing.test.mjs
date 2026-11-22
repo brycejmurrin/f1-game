@@ -153,7 +153,7 @@ test("the record and the batch order are deterministic; the pack's arrays are un
 
 // THE MODEL SET IS READ FROM TEXT. The per-circuit loader (Assets.modelIds / modelsReady) fetches only the pack ids it
 // finds QUOTED in the text it is handed, so an id an ENGINE helper stamps was never fetched: Spa asks for baked pines
-// (furniture.bakedPines) through nature.js, its closure names no pine, and Spa shipped procedural pines.
+// (furniture.bakedPines) through nature.js; its closure names no pine. #6037 ships Spa with bakedPines on again.
 // TrackDef.scenerySource is the one place the page and the build worker get that text, engine-implied ids included.
 // The guard is behavioural: every id a build actually asks Assets for must be quoted in that circuit's text.
 const quotedIn = (src, id) => src.includes('"' + id + '"') || src.includes("'" + id + "'") || src.includes("`" + id + "`");
@@ -162,15 +162,15 @@ function buildRecording(id, furniture) {
   const TrackDef = vm.runInContext("TrackDef", env.sandbox);
   const registry = vm.runInContext("typeof TrackScenery !== 'undefined' ? TrackScenery : {}", env.sandbox);
   const base = env.Tracks.LIST.find((d) => d.id === id), asked = new Set(), real = env.sandbox.Assets.modelSync;
-  // furniture: a flag turned on for this build only (Spa's bakedPines is off until pine_lod0 has a crown, #6035).
+  // Optional furniture override for circuits that do not ship the flag (Monza in the pair below).
   const def = furniture ? { ...base, furniture: { ...base.furniture, ...furniture } } : base;
   env.sandbox.Assets.modelSync = (m) => { const got = real(m); if (got) asked.add(m); return got; };
   const track = env.Tracks.build(def);
   return { def, track, asked: [...asked], src: TrackDef.scenerySource(def, registry), closure: String(def.scenery || registry[id]), TrackDef };
 }
 test("Spa's model text names the baked pine its def asks for, and the build stamps it", () => {
-  const spa = buildRecording("spa", { bakedPines: true });
-  assert.equal(!!(spa.def.furniture && spa.def.furniture.bakedPines), true, "Spa with bakedPines is the build this test stands on");
+  const spa = buildRecording("spa");
+  assert.equal(!!(spa.def.furniture && spa.def.furniture.bakedPines), true, "Spa ships bakedPines after the #6037 crown rebake");
   assert.equal(quotedIn(spa.closure, "pine_lod0"), false, "the closure itself still names no pine: the engine helper does");
   assert.equal(quotedIn(spa.src, "pine_lod0"), true, "the text the loader scans quotes the pine");
   assert.equal(spa.src.startsWith(spa.closure), true, "and still carries the whole closure, so every id it names");
@@ -178,17 +178,18 @@ test("Spa's model text names the baked pine its def asks for, and the build stam
   assert.equal(Object.values(spa.TrackDef.ENGINE_MODELS).includes("pine_lod0"), true);
 });
 for (const id of ["spa", ID]) test(`every pack model the ${id} build asks for is quoted in the text its loader scans`, () => {
-  const r = buildRecording(id, id === "spa" ? { bakedPines: true } : null);
+  const r = buildRecording(id);
   assert.ok(r.asked.length > 0, "the build placed pack models");
   assert.deepEqual(r.asked.filter((m) => !quotedIn(r.src, m)), [],
     "a model id spelled only in an engine helper is never fetched on a player's page: add its def flag to TrackDef.ENGINE_MODELS");
   if (id === ID) assert.equal(quotedIn(r.src, "pine_lod0"), false, "a circuit without the flag does not fetch the pine");
 });
 
-// A BAKED TREE MUST HAVE A CROWN (#6035). #5782 made the page fetch pine_lod0 at Spa, and the pack's pine turned out to
-// be a 0.64 m square trunk (8.2 m^2 of WOOD) with six leaf slivers (1.8 m^2 of FOLIAGE): every Spa pine became a
-// brown post. Any tree model an ENGINE_MODELS flag stamps must carry at least as much foliage surface as bark before
-// a shipped circuit may set that flag; geometry, not pixels, so it holds on every backend.
+// A BAKED TREE MUST HAVE A CROWN (#6035 / #6037). #5782 made the page fetch pine_lod0 at Spa, and the old pack pine
+// was a 0.64 m square trunk (8.2 m^2 of WOOD) with six leaf slivers (1.8 m^2 of FOLIAGE): every Spa pine became a
+// brown post. #6037 rebaked pine/tree with a real crown (foliage ≥ wood, crown width ≥ ~30 % of height). Any tree
+// model an ENGINE_MODELS flag stamps must still carry at least as much foliage surface as bark before a shipped
+// circuit may set that flag; geometry, not pixels, so it holds on every backend.
 const { parseModel } = require(path.join(ROOT, "tools", "lib", "pack-assets.cjs"));
 function surfaceByMat(id) {
   const b = fs.readFileSync(path.join(ROOT, "assets", "pack", "models", id + ".bin"));
@@ -204,11 +205,33 @@ function surfaceByMat(id) {
   }
   return area;
 }
+function crownExtents(id) {
+  const b = fs.readFileSync(path.join(ROOT, "assets", "pack", "models", id + ".bin"));
+  const { pos: P } = parseModel(b.buffer.slice(b.byteOffset, b.byteOffset + b.length));
+  let yMin = 1e9, yMax = -1e9, xMin = 1e9, xMax = -1e9, zMin = 1e9, zMax = -1e9;
+  for (let i = 0; i < P.length; i += 3) {
+    xMin = Math.min(xMin, P[i]); xMax = Math.max(xMax, P[i]);
+    yMin = Math.min(yMin, P[i + 1]); yMax = Math.max(yMax, P[i + 1]);
+    zMin = Math.min(zMin, P[i + 2]); zMax = Math.max(zMax, P[i + 2]);
+  }
+  const height = yMax - yMin, width = Math.max(xMax - xMin, zMax - zMin);
+  return { height, width, ratio: width / height };
+}
 const hasCrown = (id) => { const a = surfaceByMat(id); return a.foliage >= a.wood; };
-test("pine_lod0 has no crown (#6035): the reading this gate stands on", () => {
+test("pine_lod0 has a real crown (#6037): foliage ≥ wood and width ≥ 30% height", () => {
   const a = surfaceByMat("pine_lod0");
-  assert.ok(a.wood > 4 * a.foliage, `pine_lod0 is mostly trunk: ${JSON.stringify(a)}`);
-  assert.equal(hasCrown("pine_lod0"), false);
+  const e = crownExtents("pine_lod0");
+  assert.ok(a.foliage >= a.wood, `pine_lod0 needs a canopy: ${JSON.stringify(a)}`);
+  assert.equal(hasCrown("pine_lod0"), true);
+  assert.ok(e.ratio >= 0.3, `crown too skinny: ${JSON.stringify(e)}`);
+});
+test("baked pine/tree LODs keep a crown under the triangle caps (#6037)", () => {
+  for (const id of ["pine_lod0", "pine_lod1", "tree_lod0", "tree_lod1"]) {
+    const a = surfaceByMat(id);
+    const e = crownExtents(id);
+    assert.ok(a.foliage >= a.wood, `${id} foliage < wood: ${JSON.stringify(a)}`);
+    assert.ok(e.ratio >= 0.3, `${id} crown width < 30% height: ${JSON.stringify(e)}`);
+  }
 });
 test("no circuit sets an ENGINE_MODELS flag whose baked tree has no crown", () => {
   const env = buildContext(), vm = require("node:vm");

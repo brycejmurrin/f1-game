@@ -1,9 +1,7 @@
 // EXTREME garage detail (GfxQuality features garageHi / crewHi). Off — no
 // GfxQuality global (node default), or the features answering false — must
-// upload byte-for-byte the buffers HEAD dce9a300 uploaded (the pinned sha256s
-// in tests/data/garage-hi-detail.json were taken from that tree with
-// tests/helpers/garage-hi-harness.mjs). On, every build succeeds, every vertex
-// is finite, no triangle is degenerate or wound against its normals, and the
+// upload the room and crew buffers pinned in tests/data/garage-hi-detail.json.
+// On, every build succeeds, every vertex is finite, no triangle is degenerate or wound against its normals, and the
 // triangle totals are the pinned ones (a change here is a deliberate re-pin).
 // No GPU here: this proves the buffers, not how the room looks.
 import { test } from "node:test";
@@ -31,7 +29,7 @@ function backWound(list) {
   return n;
 }
 
-test("feature off: the room and every crew look are HEAD's buffers, hash for hash", () => {
+test("feature off: the room and every crew look match the pinned buffers, hash for hash", () => {
   assert.deepEqual(buildAll(read).summary, PIN.off, "no GfxQuality (node default)");
   assert.deepEqual(buildAll(read, { features: { garageHi: false, crewHi: false }, hi: true }).summary, PIN.off,
     "GfxQuality answering false with the lazy dense primitives resident");

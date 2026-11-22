@@ -204,7 +204,7 @@ function applyLampDensity(posts, track, height, onlyAlways) {
 // `onlyAlways` builds ONLY the fixtures a circuit marked always-on (see
 // lampPost() in js/track/tracks.js) — the set game.js uploads in a BRIGHT
 // session, where the ordinary lamps stay off.
-function buildTrackLights(track, onlyAlways) {
+function buildTrackLights(track, onlyAlways, poolEnergy = LT.poolEnergy) {
   const lights = [];
   const n = track.n, total = track.total;
   // Guard against a not-yet-complete track (centreline arrays missing): return
@@ -302,7 +302,7 @@ function buildTrackLights(track, onlyAlways) {
       const wz0 = track.pz[k] + track.rz[k] * (track.hw[k] + 2.5) * side;
       let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
       const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
-      const we = intensity * 0.30 * (4.5 * 4.5) * LT.poolEnergy;
+      const we = intensity * 0.30 * (4.5 * 4.5) * poolEnergy;
       // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
       // to these washer lights too (their help text promises "each/every lamp")
       // — same maths as the mast lamps below. (The energy factor was a 0.55
@@ -402,7 +402,7 @@ function buildTrackLights(track, onlyAlways) {
     // The incidence divisor is CLAMPED so a mast beside banked/elevated road
     // (lens barely above the aim point) can't blow the energy up.
     const hAim = Math.max(ly - (aimAt ? aimAt[1] : track.py[k]), 1);
-    const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35)
+    const ePhys = intensity * bri * eMul * (al * al) * poolEnergy / Math.max(hAim / al, 0.35)
                 * (post && post.energy != null ? post.energy : 1);
     lights.push(
       lx, ly, lz,
@@ -424,7 +424,7 @@ function buildTrackLights(track, onlyAlways) {
     // top of the flood_bank pit-straight lamps — the start line was the hottest
     // spot on every night circuit, blowing the road out exactly where every race
     // (and the player's first impression of the night lighting) begins.
-    const ge = intensity * 0.55 * (8 * 8) * LT.poolEnergy;
+    const ge = intensity * 0.55 * (8 * 8) * poolEnergy;
     // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
     // here too, as the help text promises ("every floodlight").
     // volW 0 / glareW 0: this bar is NOT parented to the scenery gantry (see the
