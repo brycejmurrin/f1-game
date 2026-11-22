@@ -162,6 +162,7 @@ const DataRealRace = (function () {
      *  where it really was. Until they load, the WATCH buttons load them first. */
     function replayRow(script, slot) {
       const row = el("div", "dh-rounds");
+      row.dataset.hubPart = "replay";
       const have = traceFits(traces, script);
       const canReplay = !!script.t0 && typeof RealRace !== "undefined" && !!RealRace.replay;
       if (!canReplay) { row.appendChild(el("span", "dh-lr-meta", "Real positions need a script with timestamps — reopen the tab to refetch it.")); return row; }
@@ -316,6 +317,7 @@ const DataRealRace = (function () {
     function lapList(script) {
       const book = raceBook(script);
       const wrap = el("div");
+      wrap.dataset.hubPart = "lap-list";
       wrap.appendChild(el("div", "dh-lr-name", "LAP BY LAP"));
       wrap.appendChild(el("div", "dh-lr-meta", "Every pass, stop, flag and retirement as it happened. Open a lap for the order and the gaps; JUMP IN drops you into the race as it stood at the start of that lap. JUMP IN and WATCH run at dawn, unless the race ran at night."));
       const table = el("table", "dh-table");

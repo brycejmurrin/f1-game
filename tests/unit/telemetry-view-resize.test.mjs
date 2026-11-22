@@ -31,6 +31,7 @@ async function openPopup(drs = 12) {
   const makeElement = dom.document.createElement;
   dom.document.createElement = (tag) => {
     const node = makeElement(tag);
+    node.ownerDocument = dom.document;
     if (tag === "canvas") {
       const drawing = new Proxy({}, { get: (target, key) => target[key] || (() => {}) });
       node.getContext = () => drawing;
@@ -71,9 +72,10 @@ async function openPopup(drs = 12) {
     cancelAnimationFrame(id) { frames.delete(id); },
     ResizeObserver: class {
       constructor(cb) { this.cb = cb; this.disconnected = false; observers.push(this); }
-      observe() {}
+      observe(node) { (this.targets ||= new Set()).add(node); }
       disconnect() { this.disconnected = true; }
     },
+    SettingsNav: { arrangeScreen(id, opener, ready) { if (ready()) context.arranged = { id, opener }; } },
     F1API: {
       sessionDrivers: async () => drivers,
       fastestLap: async () => ({ dateStart: new Date(1e12).toISOString(), lapDuration: 80, lapNumber: 3, s1: 25, s2: 25, s3: 30 }),
@@ -84,7 +86,7 @@ async function openPopup(drs = 12) {
   });
   seedDom(context);
   for (const file of [
-    "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+    "js/ui/editor-workspace.js", "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
     "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
@@ -140,4 +142,25 @@ test("a lap with no DRS values gets no DRS gauge or legend toggle; a lap with th
   const some = (await openPopup(12)).popup;
   assert.ok(some.querySelector(".dh-gdrscell"), "a 2025 lap keeps the pill");
   assert.equal(labels(some).filter((t) => t === "DRS").length, 1);
+});
+
+test("the telemetry popup opens its own arranger and column-only resizing refits the map", async () => {
+  const { popup, observers, context, frames } = await openPopup();
+  const door = popup.querySelector('[data-arrange-screen="telemetry-detail"]');
+  assert.ok(door && popup.open);
+  door.getClientRects = () => [{}];
+  door.click();
+  assert.equal(context.arranged.id, "telemetry-detail");
+  assert.equal(context.arranged.opener, door);
+  const main = popup.querySelector(".dh-telem-main"), side = popup.querySelector(".dh-telem-side");
+  const observer = observers.find(item => item.targets.has(side));
+  assert.ok(observer && observer.targets.has(main));
+  const map = popup.querySelector(".dh-map");
+  main._rect = { width: 392, height: 400, left: 0, top: 0 };
+  side._rect = { width: 180, height: 400, left: 0, top: 0 };
+  observer.cb([{ target: side }]);
+  for (const [id, fn] of frames) { frames.delete(id); fn(); }
+  assert.equal(map.width, (180 - 24) * 2);
+  assert.equal(map.height, map.width);
+  assert.equal(popup.open, true, "arranging playback leaves its native dialog open");
 });

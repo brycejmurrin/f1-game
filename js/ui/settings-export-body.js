@@ -771,25 +771,44 @@ function create(G) {
 
     const nav = document.createElement("div");
     nav.id = "pm-files-nav";
-    nav.setAttribute("role", "group");
+    nav.setAttribute("role", "tablist");
+    nav.setAttribute("aria-orientation", "horizontal");
     nav.setAttribute("aria-label", "Backup actions");
     const sections = [], choices = [];
     const selectSection = (index) => {
+      if (choices[index].getAttribute("aria-selected") === "true") return;
       disarm();
+      ++pickVersion; // A chooser or read from the previous pane may still complete.
       sections.forEach((section, i) => { section.hidden = i !== index; });
-      choices.forEach((button, i) => button.setAttribute("aria-pressed", String(i === index)));
+      choices.forEach((button, i) => {
+        button.setAttribute("aria-selected", String(i === index));
+        button.tabIndex = i === index ? 0 : -1;
+      });
     };
     for (const [id, label] of [["save", "Save"], ["restore", "Restore"], ["share", "Import share code"]]) {
       const section = document.createElement("section");
       section.id = "pm-files-" + id;
+      section.setAttribute("role", "tabpanel");
       const button = document.createElement("button");
       button.id = "pm-files-show-" + id;
       button.type = "button";
       button.textContent = label;
+      button.setAttribute("role", "tab");
       button.setAttribute("aria-controls", section.id);
       section.setAttribute("aria-labelledby", button.id);
       const index = sections.length;
       button.onclick = () => selectSection(index);
+      button.onkeydown = (event) => {
+        let next;
+        if (event.key === "ArrowRight") next = (index + 1) % choices.length;
+        else if (event.key === "ArrowLeft") next = (index - 1 + choices.length) % choices.length;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = choices.length - 1;
+        else return;
+        event.preventDefault();
+        selectSection(next);
+        choices[next].focus();
+      };
       sections.push(section); choices.push(button); nav.append(button);
     }
     // Settings, garage and career stay separate files: each action page keeps

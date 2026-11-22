@@ -160,6 +160,7 @@ const DataTelemetryView = (function () {
 
       // Transport bar → main
       const textSummary = el("details");
+      textSummary.dataset.hubPart = "summary";
       textSummary.appendChild(el("summary", "adv-more-btn", "TEXT SUMMARY"));
       const textSummaryBody = el("p", "dh-live-sub");
       textSummaryBody.id = "dh-telem-summary";
@@ -397,7 +398,10 @@ const DataTelemetryView = (function () {
             }
           });   // requestAnimationFrame
         });
+        // Either editable column may reflow while the outer dialog keeps its size.
         ro.observe(detail);
+        ro.observe(mainArea);
+        ro.observe(sideArea);
         view._ro = ro;
       }
     }
@@ -425,6 +429,7 @@ const DataTelemetryView = (function () {
       const myStints = (b.stints || []).filter(function (s) { return s.num === d.num; });
       if (myStints.length) {
         const sec = el("div", "dh-livecard");
+        sec.dataset.hubPart = "stints";
         sec.appendChild(el("h3", "dh-section", "TYRE STINTS"));
         myStints.sort(function (a, c) { return (a.stint || 0) - (c.stint || 0); });
         myStints.forEach(function (s) {
@@ -446,6 +451,7 @@ const DataTelemetryView = (function () {
       const myPits = (b.pits || []).filter(function (p) { return p.num === d.num || p.num === null; });
       if (myPits.length) {
         const sec = el("div", "dh-livecard");
+        sec.dataset.hubPart = "pits";
         sec.appendChild(el("h3", "dh-section", "PIT STOPS"));
         myPits.forEach(function (p) {
           const row = el("div", "dh-row");

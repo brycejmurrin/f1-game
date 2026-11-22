@@ -1335,7 +1335,7 @@ body[data-width="narrow"] .dh-telem-side { padding: 0 var(--gap) 10px; gap: calc
 body[data-width="wide"] {
   .dh-tpopup-body { flex-direction: row; overflow: hidden; }
   .dh-telem-main {
-    flex: 1; min-width: 0;
+    flex: var(--dh-trace-flex, 1); min-width: 0;
     overflow-y: auto; overflow-x: hidden;
     overscroll-behavior-y: contain; touch-action: pan-y;
   }
