@@ -106,12 +106,16 @@ const SettingsNav = (function () {
     if (presetsLoad) return presetsLoad;
     if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
-    const files = R.LAZY_UI_PRESETS.filter(file => file !== "js/ui/screen-arranger.js" && file !== "js/ui/hud-arrange.js");
+    const files = R.LAZY_UI_PRESETS.filter(file => file !== "js/ui/screen-arranger.js" && file !== "js/ui/hud-arrange.js" && file !== "js/ui/desktop-graphics.js");
     presetsLoad = ScriptLoader.create().load(files, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
       .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
     return presetsLoad;
   }
-  enterFns.push((id) => { if (id === "appearance") presets(); });
+  enterFns.push((id) => {
+    if (id === "appearance") presets();
+    if (id === "graphics" && typeof GLX !== "undefined" && !GLX.isMobile && typeof ScriptLoader !== "undefined")
+      ScriptLoader.create().load(["js/ui/desktop-graphics.js"], [], { strict: true, loaded: presetsLoaded });
+  });
   if (typeof document !== "undefined" && document.addEventListener) {
     // Contextual editors become available on first navigation. A customized
     // installation restores its regions before the first navigation instead.

@@ -150,3 +150,33 @@ test("every live Settings row left off its value comes back after a reload (pers
   const nowPersist = Object.keys(TRANSIENT).filter((id) => id in set && set[id] !== before[id] && after[id] === set[id]);
   expect(nowPersist, "TRANSIENT rows that now persist (drop them from the list)").toEqual([]);
 });
+
+test.describe("individual desktop graphics", () => {
+  test.use({ viewport: { width: 1366, height: 768 }, hasTouch: false, isMobile: false });
+  test("saves independent effects across a reload and restores preset choices", async ({ page }) => {
+    async function openDetail() {
+      await page.locator("#mb-settings").click();
+      await page.locator("#pm-open-graphics").click();
+      await page.getByText("Desktop detail", { exact: true }).click();
+    }
+    await page.goto("/");
+    await boot(page);
+    await openDetail();
+    await expect(page.locator('script[src*="js/ui/desktop-graphics.js"]')).toHaveCount(1);
+    expect(await page.evaluate(() => Object.keys(GfxQuality.FEATURES).filter(key =>
+      !document.querySelector(`[data-desktop-graphics] select[data-effect="${key}"]`)))).toEqual([]);
+    const trees = page.getByLabel("High-detail trees", { exact: true });
+    const mirrors = page.getByLabel("High-resolution rear-view mirror", { exact: true });
+    await trees.selectOption("on");
+    await mirrors.selectOption("off");
+    await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Reload to apply" }).click()]);
+    await boot(page);
+    expect(await page.evaluate(() => [GfxQuality.feature("treesHi"), GfxQuality.feature("mirrorHi")])).toEqual([true, false]);
+    await openDetail();
+    await expect(trees).toHaveValue("on");
+    await expect(mirrors).toHaveValue("off");
+    await page.getByRole("button", { name: "Use preset for all" }).click();
+    await expect(trees).toHaveValue("");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.gfxFeatureOverrides")))).toEqual({});
+  });
+});

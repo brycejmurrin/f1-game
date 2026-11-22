@@ -495,8 +495,9 @@
     // it; the next chain build reads it). The tone-map knob stays numeric and shared with GLX; ACES is the default.
     let agx = false;
     try {
-      agx = webgpu && !ctx.isMobile && !phys && typeof GfxQuality !== "undefined" && GfxQuality.detail() >= 2
-        && typeof TSL.agxToneMapping === "function" && localStorage.getItem("apex26.tlxAgx") === "1";
+      agx = webgpu && !ctx.isMobile && !phys && typeof GfxQuality !== "undefined" && typeof TSL.agxToneMapping === "function";
+      const preset = agx && GfxQuality.detail() >= 2 && localStorage.getItem("apex26.tlxAgx") === "1";
+      agx = agx && (GfxQuality.option ? GfxQuality.option("agx", preset) : preset);
     } catch (_) { agx = false; }
     // SSGI temporal accumulation (tsl-gi.js giAccPass): wherever SSGI is built on native WebGPU.
     const giTemporal = !!(HI && HI.ssgi && webgpu);

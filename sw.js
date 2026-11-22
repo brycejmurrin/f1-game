@@ -685,6 +685,7 @@ async function precacheAssetLists() {
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     // LAZY_UI_PRESETS — APPEARANCE LAYOUT PRESET row behind the first APPEARANCE enter
+    "js/ui/desktop-graphics.js",
     "js/ui/screen-regions.js",
     "js/ui/screen-placement.js",
     "js/ui/screen-arranger.js",

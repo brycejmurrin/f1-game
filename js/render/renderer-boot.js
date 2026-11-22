@@ -202,7 +202,7 @@ if (typeof RendererPicker !== "undefined" && RendererPicker.setUnavailableDefaul
 // it is resident before the first car build; GfxQuality.detail() is 0 on every phone, which never fetches it.
 async function start() {
   let hi = 0;
-  try { if (GfxQuality.detail() > 1) hi = loadBackendScripts(ApexRoster.LAZY_GFX_HI); } catch (_) { /* no GfxQuality (a harness): ULTRA */ }
+  try { if (GfxQuality.needsBundle()) hi = loadBackendScripts(ApexRoster.LAZY_GFX_HI); } catch (_) { /* no GfxQuality (a harness): ULTRA */ }
   const made = await start0();
   if (hi && (await hi.catch(() => false)) === false) Log.warn("gfx", "EXTREME detail bundle did not load: ULTRA detail this boot");
   return made;

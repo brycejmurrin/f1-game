@@ -11929,6 +11929,7 @@
         "tests/unit/quality-preset-phone.test.mjs"
       ],
       "setCinema": [
+        "tests/unit/gfx-hi-lazy.test.mjs",
         "tests/unit/perf-governor-upper.test.mjs",
         "tests/unit/quality-preset-phone.test.mjs",
         "tests/unit/tier-record.test.mjs",
@@ -19333,6 +19334,11 @@
       ],
       "parse": [
         "tests/unit/deep-link.test.mjs"
+      ]
+    },
+    "js/ui/desktop-graphics.js": {
+      "*": [
+        "tests/specs/settings-reload.spec.js"
       ]
     },
     "js/ui/dock-layout.js": {
