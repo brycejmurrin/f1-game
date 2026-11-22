@@ -681,6 +681,7 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
   region.getClientRects = () => [rect];
   region.getBoundingClientRect = () => { rectReads++; return rect; };
   const invoker = root.appendChild(dom.makeElement("button"));
+  invoker.getClientRects = () => [rect];
   const events = dom.makeElement("div");
   const stored = {landscape:{}, portrait:{}};
   let side = "landscape", live, frame;
@@ -770,6 +771,28 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
   button("Apply").click();
   assert.deepEqual(legacy.slice(-2), ["preview", "save"]);
   assert.deepEqual(stored, {portrait:{}, landscape:{}});
+
+  // Garage category and all-category controls can name the same real panel.
+  // Start from an unrelated selected region and tap the shared surface.
+  const adjacent = root.appendChild(dom.makeElement("div", "other"));
+  adjacent.getClientRects = () => [rect];
+  adjacent.getBoundingClientRect = () => ({...rect, left:400, right:600});
+  win.ScreenRegions.career.regions = {
+    other: {selector:"#other", label:"Other"},
+    general: {selector:"#calendar", label:"All option panels"},
+    specific: {selector:"#calendar", label:"Team options"}
+  };
+  dialog = open();
+  const selection = dialog.querySelector("select");
+  pointer("pointerdown", 50);
+  assert.equal(selection.value, "specific");
+  pointer("pointerup", 50);
+  selection.value = "general";
+  dom.dispatch(selection, {type:"change"});
+  pointer("pointerdown", 50);
+  assert.equal(selection.value, "general");
+  pointer("pointercancel", 50);
+  button("Cancel").click();
 });
 
 // title-menu-rotation:470 (iPhone 14 portrait, UI SIZE 200): the phone's PHONE_TALL
@@ -942,6 +965,7 @@ test("photo joystick Diameter measures the real disc and preserves its label and
     window:win, document:dom.document, innerWidth:1000, innerHeight:500,
     MutationObserver: class { observe(){} disconnect(){} }, requestAnimationFrame: () => 1, cancelAnimationFrame(){}
   }, { filename: absSrc("js/ui/screen-arranger.js") });
+  button.getClientRects = () => [{width:44, height:44}];
   assert.ok(win.ScreenArranger.open("photo-controls", button));
   const dialog = dom.document.querySelector("#screen-arranger");
   const control = label => dialog.querySelectorAll("button").find(el => el.textContent === label);

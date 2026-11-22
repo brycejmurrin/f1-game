@@ -532,6 +532,28 @@ test("restoring the camera after INSPECT puts the AERO button back with the flap
   assert.deepEqual(spots, ["side"]);
 });
 
+test("the Garage camera disclosure survives pointerdown on preparation and arrangement tools", () => {
+  const dom = makeDom();
+  let open = true, pointerdown;
+  const c = vm.createContext({
+    G: { setupPreviewOn: true }, setupCamPanelOpen: () => open, setSetupCamPanel: value => { open = value; },
+    document: { addEventListener(type, fn, capture) {
+      assert.equal(type, "pointerdown"); assert.equal(capture, true); pointerdown = fn;
+    } },
+  });
+  const source = slice(cam, 'document.addEventListener("pointerdown", (e) => {', "}, true);") + "}, true);";
+  vm.runInContext(source, c, at(CAM));
+  const preparation = dom.makeElement("div");
+  preparation.id = "arrange-prepare";
+  for (const owner of [preparation, dom.byId("screen-arranger"), dom.byId("cs-stack")]) {
+    const button = dom.makeElement("button"); owner.appendChild(button);
+    pointerdown({ target: button });
+    assert.equal(open, true);
+  }
+  pointerdown({ target: dom.byId("game") });
+  assert.equal(open, false, "starting an orbit still dismisses the panel");
+});
+
 test("one Escape with the CAMERA panel open over the paint editor closes the panel only (#5045)", () => {
   const game = read(GAME_REL);
   const sheetFirst = game.indexOf("SetupUI.create(G, customLiv)") < game.indexOf("SetupCamera.create(G");

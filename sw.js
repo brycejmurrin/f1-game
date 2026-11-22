@@ -384,6 +384,8 @@ async function precacheAssetLists() {
     // @gen-shell:sw-optional
     // ROOT PAGES — answered offline under their own URL, never by the game shell
     "controller.html",
+    // Shared companion scripts outside the game shell
+    "js/ui/companion-return.js",
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
     "js/render/glx/shaders/glsl-chunks.js",
     "js/render/glx/shaders/glsl-lit.js",
@@ -695,9 +697,11 @@ async function precacheAssetLists() {
     "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
+    "js/ui/appearance-arrangement-picker.js",
     "js/ui/appearance-studio-ui.js",
     "js/ui/photo-studio-ui.js",
     // LAZY_SAVES_DATA — SAVES & DATA body (collect / apply / files UI) behind the SettingsExport façade
+    "js/ui/save-health.js",
     "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js",
     // LAZY_RESULTS_SHEET — results / TT / standings DOM behind startRace
@@ -1045,7 +1049,7 @@ self.addEventListener("install", (event) => {
     // manifest or relying on the first online boot loses the pack after an update.
     const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-studio-ui|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|settings-export-body|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/presets\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.

@@ -548,20 +548,28 @@ test("Daily history populates the Saves and Data blueprint, keeps classes separa
 
 // #5010 second item: nothing repainted the DAILY door when an installed app resumed on the
 // title after the day rolled over, so it named yesterday's circuit while a tap opened today's.
-test("the DAILY door repaints when the page becomes visible on a new day, and only then", () => {
+test("the DAILY door repaints across a foreground midnight and after a hidden day change", () => {
   const nodes = {};
   const el = (id) => (nodes[id] = { id, textContent: "", hidden: false, attrs: {},
     setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k] ?? null; }, querySelector: () => null });
   el("mb-daily"); el("mb-daily-sub");
   const listeners = {};
   const doc = { visibilityState: "visible", documentElement: { dataset: {} }, addEventListener: (t, fn) => { listeners[t] = fn; }, getElementById: () => null };
-  let day = "2026-11-05", plans = 0;
-  const ctx = vm.createContext({ document: doc, Log: { info() {} }, Career: { data: () => null }, Tracks: { SEASON: [] } });
+  let pending = null, plans = 0, selected = null;
+  let time = new Date(2026, 10, 5, 23, 59, 59, 750).getTime();
+  class ClockDate extends Date { constructor(...args) { super(...(args.length ? args : [time])); } }
+  const dayKey = () => new ClockDate().getDate();
+  const track = () => ({5:"Monza", 6:"Suzuka", 7:"Spa"})[dayKey()];
+  doc.defaultView = {
+    setTimeout(fn, delay) { assert.equal(pending, null); pending = {fn, delay}; return 1; },
+    clearTimeout() { pending = null; },
+  };
+  const ctx = vm.createContext({ document: doc, Date: ClockDate, Log: { info() {} }, Career: { data: () => null }, Tracks: { SEASON: [] } });
   vm.runInContext(read("js/ui/title-menu.js"), ctx, { filename: absSrc("js/ui/title-menu.js") });
   const api = vm.runInContext("TitleMenu.create", ctx)({
     $: (id) => nodes[id] || null, store: { raw: () => null },
-    daily: { dayKey: () => day, plan: () => (plans++, { trackName: day === "2026-11-05" ? "Monza" : "Suzuka", weather: "dry" }), liveStreak: () => 0 },
-    openCareerSlots() {}, openCareer() {}, openTimeTrialPicker() {},
+    daily: { dayKey, plan: () => (plans++, { trackName: track(), weather: "dry" }), liveStreak: () => 0 },
+    openCareerSlots() {}, openCareer() {}, openTimeTrialPicker() { selected = track(); },
   });
   api["refresh"]();
   assert.equal(nodes["mb-daily-sub"].textContent, "Monza · DRY");
@@ -569,9 +577,17 @@ test("the DAILY door repaints when the page becomes visible on a new day, and on
   const before = plans;
   listeners.visibilitychange();
   assert.equal(plans, before, "same day: no repaint");
-  day = "2026-11-06";
+  assert.equal(pending.delay, 250);
+  time += pending.delay;
+  pending.fn();
+  nodes["mb-daily"].onclick();
+  assert.equal(nodes["mb-daily-sub"].textContent, selected + " · DRY");
+  assert.equal(selected, "Suzuka", "both the visible label and activation use the new day");
+  assert.ok(pending.delay > 0, "schedules the next midnight");
+  time = new Date(2026, 10, 7, 8).getTime();
   doc.visibilityState = "hidden"; listeners.visibilitychange();
-  assert.equal(nodes["mb-daily-sub"].textContent, "Monza · DRY", "a hidden page does not repaint");
+  assert.equal(pending, null);
+  assert.equal(nodes["mb-daily-sub"].textContent, "Suzuka · DRY", "a hidden page does not repaint");
   doc.visibilityState = "visible"; listeners.visibilitychange();
-  assert.equal(nodes["mb-daily-sub"].textContent, "Suzuka · DRY", "the new day's plan is on the door");
+  assert.equal(nodes["mb-daily-sub"].textContent, "Spa · DRY", "the new day's plan is on the door");
 });

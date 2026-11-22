@@ -38,7 +38,8 @@ const AppearanceStudioBody = (function () {
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleButtonStyle", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
-    hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnShape", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    hud: ["hudLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    "touch-controls": ["dockLayout", "hudBtnScale", "hudBtnShape", "hudBtnOpacity"],
     popups: ["lookPopups"] });
   const regionalLooks = { carsetup: "garage", "race-settings": "race", pausemenu: "pause" };
   let arrangementTarget = null;
@@ -121,8 +122,10 @@ const AppearanceStudioBody = (function () {
     if (!arrangementTarget) return SCREEN_KEYS[previewPage];
     const id = arrangementTarget.id;
     if (id === "trackdesigner") return ["lookDesigner"];
-    if (id === "touch-controls") return ["dockLayout"];
     return SCREEN_KEYS[regionalLooks[id] || id] || [];
+  }
+  function layoutOnly(chosenScope) {
+    return chosenScope === "screen" && keysFor(chosenScope).every(key => PRESET_PRESERVE.includes(key));
   }
   function placementTarget() {
     if (arrangementTarget) return arrangementTarget.id === "home" ? "home-style" : arrangementTarget.id;
@@ -156,7 +159,7 @@ const AppearanceStudioBody = (function () {
     return { ok: true, durable };
   }
   function applyPreset(id, chosenScope = scope) {
-    const p = PRESETS.find((v) => v.id === id); if (!p || (p.paletteOnly && chosenScope === "screen")) return false;
+    const p = PRESETS.find((v) => v.id === id); if (!p || layoutOnly(chosenScope) || (p.paletteOnly && chosenScope === "screen")) return false;
     const current = snapshot(), next = Object.assign({}, p.paletteOnly ? current : DEFAULTS, p.values);
     for (const key of PRESET_PRESERVE) next[key] = current[key];
     for (const key in LOOKS) next[key] = p.values[key] ? Object.assign({}, current[key], p.values[key]) : current[key];
@@ -243,7 +246,7 @@ const AppearanceStudioBody = (function () {
   function renderScope() {
     const regional = scope === "screen";
     const wheel = regional && arrangementTarget?.id === "wheel";
-    const placementOnly = regional && !keysFor(scope).length;
+    const placementOnly = layoutOnly(scope);
     ui.scopeGlobal.setAttribute("aria-pressed", String(!regional));
     ui.scopeScreen.setAttribute("aria-pressed", String(regional));
     ui.reset.disabled = wheel;
@@ -368,7 +371,7 @@ const AppearanceStudioBody = (function () {
       arrangementTarget = event.detail;
       renderScope();
     });
-    if (typeof CustomEvent === "function") previewSide.dispatchEvent(new CustomEvent("apex:appearance-picker", { bubbles: true }));
+    window.AppearanceArrangementPicker?.attach(previewSide);
     ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
     const advanced = node("details", "as-advanced"), sum = node("summary", "", "ADVANCED · GLOBAL & PER-SCREEN CUSTOMISATION"), body = node("div"); advanced.append(sum, body); panel.appendChild(advanced);
     for (const child of [...panel.children]) if (child !== studio && child !== advanced) body.appendChild(child);

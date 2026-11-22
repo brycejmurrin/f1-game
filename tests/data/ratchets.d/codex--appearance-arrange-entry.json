@@ -1,5 +1,7 @@
 {
   "tree": {
-    "eagerCodeBytes": -2132
+    "assertPinsAll": 1,
+    "eagerCodeBytes": -9969,
+    "eagerScripts": -1
   }
 }

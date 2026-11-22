@@ -228,7 +228,7 @@
   }
   #utility-options button:nth-child(2) { align-self: flex-start; }
   #utility-options [data-aimed] { outline: 3px solid var(--team-c); }
-  #layout-sheet { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  #layout-sheet { position: fixed; inset: 0; margin: 0; width: 100%; height: 100%; max-width: none; max-height: none; color: inherit; border: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
                   display: flex; flex-direction: column; gap: 10px; background: var(--bg);
                   padding: calc(10px + var(--sat)) calc(14px + var(--sar)) calc(12px + var(--sab)) calc(14px + var(--sal)); }
   #layout-sheet[hidden] { display: none; }
@@ -521,6 +521,7 @@
 <link rel="stylesheet" href="css/screen-arranger.css?v=dev">
 </head>
 <body>
+<a id="companion-appearance-return" href="./?settings=appearance" hidden>Back to Appearance</a>
 <section id="pair" class="grain">
   <div id="pair-copy">
   <h1>APEX 26 <span>·</span> PHONE CONTROLLER</h1>
@@ -629,7 +630,7 @@
   </div>
   <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
 </section>
-<div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
+<dialog id="layout-sheet" aria-labelledby="lay-title" hidden>
   <div id="lay-head"><h2 id="lay-title">WHEEL LAYOUT</h2><button id="lay-done" class="bigbtn" type="button">DONE</button></div>
   <details id="pedal-responses"><summary>Pedal response</summary><div id="pedal-response-fields"></div></details>
   <div id="lay-presets" role="group" aria-label="Layout presets">
@@ -656,7 +657,7 @@
     <button id="lay-flick-shifts" type="button">FLICK TO SHIFT</button>
     <button id="lay-arrange" type="button">MOVE &amp; SIZE BUTTONS</button>
   </div>
-</div>
+</dialog>
 <div id="arrange-bar" role="toolbar" aria-label="Move and size buttons" hidden>
   <select id="arr-select" aria-label="Wheel region"></select>
   <button id="arr-adjust" type="button" aria-expanded="false" aria-controls="arr-tools">Controls</button>
@@ -682,6 +683,7 @@
   </div>
 </div>
 <!-- @gen-shell:controller -->
+<script defer crossorigin="anonymous" src="js/ui/companion-return.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dev-flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>

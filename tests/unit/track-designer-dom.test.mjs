@@ -3488,6 +3488,13 @@ test("saving a shared copy of a circuit you already have asks first: KEEP MINE /
   assert.equal(dlg.querySelector(".sheet-body").children[0].textContent, "You already have this circuit as MY RING.");
   const keep = dlg.querySelector("#td-label-keep"), theirs = dlg.querySelector("#td-label-theirs");
   assert.equal(keep.textContent, "KEEP MINE"); assert.equal(theirs.textContent, "USE THEIRS");
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const target = window.ScreenRegions["td-label-ask"];
+  const modal = ask();
+  assert.equal(target.root, "#" + modal.id);
+  for (const region of Object.values(target.regions)) assert.ok(modal.querySelector(region.selector), region.label);
+
   const floor = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
   for (const d of [keep, theirs]) assert.deepEqual([d.style.minHeight, d.style.minWidth], [floor, floor], "a 44 px painted tap floor");
   assert.equal(b.dom.document.activeElement, keep, "focus lands on the safe answer");

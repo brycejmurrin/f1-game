@@ -102,8 +102,8 @@ const SettingsNav = (function () {
   const presetsLoaded = new Set();
   function presets() {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
-    if (typeof LayoutPresets !== "undefined") return Promise.resolve(true);
     if (presetsLoad) return presetsLoad;
+    if (typeof LayoutPresets !== "undefined" && window.AppearanceArrangementPicker) return Promise.resolve(true);
     if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
     const files = R.LAZY_UI_PRESETS.filter(file => !["js/ui/screen-arranger.js", "js/ui/hud-arrange.js", "js/ui/hud-layout-editor.js", "js/ui/desktop-graphics.js"].includes(file));
@@ -118,12 +118,22 @@ const SettingsNav = (function () {
         .then(ok => { if (ok && typeof DesktopGraphics !== "undefined") DesktopGraphics.mount(); });
   });
   if (typeof document !== "undefined" && document.addEventListener) {
-    // Contextual editors become available on first navigation. A customized
-    // installation restores its regions before the first navigation instead.
-    document.addEventListener("pointerdown", presets, { once: true, capture: true });
-    document.addEventListener("keydown", presets, { once: true, capture: true });
-    document.addEventListener("click", presets, { once: true, capture: true });
-    if (typeof GameStore !== "undefined" && GameStore.store.get("screenPlacement", null)) presets();
+    const owners = ["js/ui/screen-regions.js", "js/ui/screen-placement.js"];
+    const loadPlacement = (files) => ScriptLoader.create().load(files, [[owners[0], owners[1]]], { strict: true, loaded: presetsLoaded });
+    if (typeof GameStore !== "undefined" && GameStore.store.get("screenPlacement", null) && typeof ScriptLoader !== "undefined") {
+      loadPlacement(owners).catch(error => Log.warn("ui", "Saved layout could not load: " + error.message));
+    }
+    document.addEventListener("apex:spotify-arrange-return", async () => {
+      try {
+        if (!await loadPlacement([...owners, "js/ui/screen-arranger.js"])) return;
+        const player = document.getElementById("spotifypanel");
+        if (!player || player.hidden) return;
+        const navigation = window.ScreenRegions[Symbol.for("apex.arrangementRoute")];
+        navigation.prepare = false;
+        navigation.pending = "spotifypanel";
+        navigation.reveal("spotifypanel");
+      } catch (error) { Log.warn("ui", "Player arrangement could not load: " + error.message); }
+    });
   }
 
   function panels() {
@@ -250,9 +260,11 @@ const SettingsNav = (function () {
       // A cold search can arrive before the Studio mounts its picker.
       const loadStudio = id === "appearance" && typeof after === "function" && typeof AppearanceStudio !== "undefined"
         && !document.querySelector("#appearance-arrange-screen");
-      if (!bundleTried && (loadAudio || loadTouch || loadStudio)) {
+      const loadFiles = id === "files" && typeof after === "function" && typeof SettingsExport !== "undefined"
+        && SettingsExport.ready && !SettingsExport.loaded();
+      if (!bundleTried && (loadAudio || loadTouch || loadStudio || loadFiles)) {
         let asked;
-        try { asked = Promise.resolve(loadStudio ? AppearanceStudio.initUI() : loadAudio ? AudioPanel._ensure()
+        try { asked = Promise.resolve(loadFiles ? SettingsExport.ready() : loadStudio ? Promise.all([presets(), AppearanceStudio.initUI()]).then(([ok]) => ok) : loadAudio ? AudioPanel._ensure()
           : ScriptLoader.create().load(["js/ui/touch-button-settings.js"], [], { strict: true })); }
         catch (_) { asked = Promise.resolve(false); }
         asked.then((ok) => ok, () => false).then((ok) => {

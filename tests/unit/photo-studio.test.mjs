@@ -101,6 +101,51 @@ function boot(options = {}) {
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
+test("preparation survives only an owned Photo subject swap and restores usable focus on cancel", async () => {
+  const dom = makeDom(), root = dom.document.createElement("div");
+  root.id = "photo-studio"; dom.body.appendChild(root);
+  const button = title => {
+    const el = dom.document.createElement("button");
+    el.textContent = title; el.getClientRects = () => [{}]; root.appendChild(el);
+    return el;
+  };
+  const invoker = button("Choose subject");
+  const current = button("Capture");
+  root.getClientRects = () => root.hidden ? [] : [{}];
+  const win = { ScreenRegions: { "photo-studio": { label:"Photo Studio", root:"#photo-studio" } } };
+  let notify;
+  class MutationObserver {
+    constructor(update) { notify = () => queueMicrotask(update); }
+    observe() {}
+    disconnect() { notify = null; }
+  }
+  vm.runInNewContext(fs.readFileSync(absSrc("js/ui/screen-arranger.js"), "utf8"),
+    { window:win, document:dom.document, MutationObserver }, { filename:absSrc("js/ui/screen-arranger.js") });
+  const api = win.ScreenArranger;
+  const buttons = () => [...root.querySelectorAll("button")];
+  const start = () => buttons().find(el => el.textContent === "Start arranging");
+  assert.equal(api.suspendPreparation("photo-studio"), null);
+  assert.ok(api.prepare("photo-studio", invoker));
+  const resume = api.suspendPreparation("photo-studio");
+  invoker.remove();
+  root.hidden = true;
+  notify(); await Promise.resolve();
+  assert.ok(start(), "one hidden observer tick during a scene swap retains the existing preparation");
+  root.hidden = false; resume(true);
+  assert.equal(dom.document.activeElement, start());
+  buttons().find(el => el.textContent === "Cancel").click();
+  assert.equal(dom.document.activeElement, current);
+  resume(true);
+  assert.equal(start(), undefined, "a stale completion cannot recreate a cancelled preparation");
+  assert.ok(api.prepare("photo-studio", current));
+  const failed = api.suspendPreparation("photo-studio");
+  failed(false);
+  assert.equal(start(), undefined);
+  assert.ok(api.prepare("photo-studio", current));
+  root.hidden = true; notify(); await Promise.resolve();
+  assert.equal(start(), undefined, "a normal close still dismisses preparation");
+});
+
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
   const prior = { px: 88 }, subject = {};
   let released = 0;

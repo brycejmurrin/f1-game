@@ -90,3 +90,19 @@ test.describe("stream overlay — live same-browser feed", () => {
     await overlay.close();
   });
 });
+
+test("broadcast tower Width reflows a painted timing row", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/overlay.html?arrange=broadcast");
+  const editor = page.locator("#screen-arranger");
+  await editor.getByRole("button", { name: "Controls", exact: true }).click();
+  await editor.getByLabel("Region", { exact: true }).selectOption("tower");
+  const width = () => page.locator(".ov-row:visible").first().evaluate(row => row.getBoundingClientRect().width);
+  const shipped = await width();
+  await editor.getByRole("button", { name: "Width +", exact: true }).click();
+  await expect.poll(width).toBeGreaterThan(shipped);
+  await editor.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Back to Appearance" })).toBeVisible();
+  await page.reload();
+  await expect.poll(width).toBeGreaterThan(shipped);
+});

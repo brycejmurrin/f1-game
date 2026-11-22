@@ -3016,3 +3016,20 @@ test("Appearance waits for the landscape wheel or menu pad before opening its ed
     assert.equal(opened, 1);
   }
 });
+
+test("companion previews return to the opening game or use the Appearance link when closing is unavailable", () => {
+  const rel = "js/ui/companion-return.js";
+  const script = new vm.Script(read(rel), { filename: absSrc(rel) });
+  for (const [search, canClose] of [["?arrange=pair", true], ["?arrange=broadcast", false], ["?demo=wheel", false]]) {
+    const link = Object.assign(new EventTarget(), { hidden: true, href: "https://game.test/?settings=appearance" });
+    const assigned = [];
+    const window = { closed: false, close() { this.closed = canClose; } };
+    const location = { search, assign: url => assigned.push(url) };
+    script.runInNewContext({ document: { getElementById: () => link }, location, window, URLSearchParams, setTimeout: fn => fn() });
+    const preview = new URLSearchParams(search).has("arrange");
+    assert.equal(link.hidden, !preview);
+    link.dispatchEvent(new Event("click", { cancelable:true }));
+    assert.equal(window.closed, preview && canClose);
+    assert.deepEqual(assigned, preview && !canClose ? [link.href] : []);
+  }
+});

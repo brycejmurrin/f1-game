@@ -726,6 +726,16 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   const watchButton = find(lapRows[30], (n) => n.tag === "button" && n.text === "WATCH")[0];
   for (const key of ["Enter", " "]) lapRows[30].fire("keydown", { key, target: watchButton, preventDefault() { assert.fail("descendant keyboard defaults must remain available"); } });
   assert.equal(lapRows[30]["aria-expanded"], "true");
+  const lap31 = board.parent.parent;
+  assert.equal(lap31.dataset.hubPart, "selected-lap");
+  lapRows[1].fire("click");
+  const lap2 = nested().map(table => table.parent.parent).find(row => row !== lap31);
+  assert.equal(lap31.dataset.hubPart, undefined);
+  assert.equal(lap2.dataset.hubPart, "selected-lap");
+  lapRows[1].fire("click");
+  assert.equal(lap2.hidden, true);
+  assert.equal(lap2.dataset.hubPart, undefined);
+  assert.equal(lap31.dataset.hubPart, "selected-lap");
   const boardRows = find(board, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
   assert.equal(boardRows.length, 22);
   assert.equal(boardRows[0].children[0].text, "P1"); assert.equal(boardRows[0].children[1].text, "RUS"); assert.equal(boardRows[0].children[2].text, "");

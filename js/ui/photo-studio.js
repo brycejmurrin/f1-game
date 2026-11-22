@@ -33,12 +33,8 @@ const PhotoStudio = (function () {
   function ensureBody() {
     if (typeof PhotoStudioBody !== "undefined") return Promise.resolve(true);
     if (_load) return _load;
-    const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS) || [];
-    const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_UI_PRESETS_EDGES) || [];
-    // No ScriptLoader / Log on bare Playwright pages — stay silent and resolve false.
-    if (!files.length || typeof ScriptLoader === "undefined") return Promise.resolve(false);
-    const presets = typeof SettingsNav !== "undefined" && SettingsNav.presets ? SettingsNav.presets() : null;
-    _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), presets]).then(() => {
+    if (typeof ScriptLoader === "undefined") return Promise.resolve(false);
+    _load = ScriptLoader.create().load(["js/ui/photo-studio-ui.js"], [], { strict: true }).then(() => {
       if (typeof PhotoStudioBody === "undefined") { _load = null; logWarn("photo studio body did not load"); return false; }
       if (newest) newest();
       return true;

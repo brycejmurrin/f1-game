@@ -375,6 +375,7 @@ const HudArrange = (() => {
       return pairs.map((p) => p.map((id) => (id[0] === "#" ? id.slice(1).toUpperCase() : id)));
     }
     function after(message) {
+      if (typeof RetiredCard !== "undefined") RetiredCard.preview(editing && selected === "finish");
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
       const rects = rectsNow();
       paintBar(markClashes(rects), message, rects);
@@ -607,7 +608,7 @@ const HudArrange = (() => {
         colorElement = undefined;
         picker.textContent = "";
         for (const [id, label] of rows) {
-          if (!visible(elOf(id)) && !HudLayout.visibility(id)) continue;
+          if (id !== "finish" && !visible(elOf(id)) && !HudLayout.visibility(id)) continue;
           const option = document.createElement("option"); option.value = id; option.textContent = label;
           picker.appendChild(option);
         }
@@ -616,6 +617,7 @@ const HudArrange = (() => {
         after();
       }
       if (!editing && was) {
+        if (typeof RetiredCard !== "undefined") RetiredCard.preview(false);
         flush();
         HudLayout.colors?.finish(accept);
         HudLayout.endArrangeDraft(accept, context.set, context.profile, initial);

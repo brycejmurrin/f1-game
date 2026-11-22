@@ -322,7 +322,6 @@ const FULL = [
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
-  "js/ui/save-health.js",
   "js/ui/select-screen.js",
   "js/ui/loading-card.js",   // LoadingCard: pure fly budget, card geometry, grid graphic
   "js/ui/loading-screen.js",
@@ -668,10 +667,7 @@ const HARD_EDGES = [
   ["js/input/controller-profiles.js", "js/input/input.js"],
   ["js/core/store.js", "js/career/restore-points.js"],
   ["js/career/save-migrate.js", "js/career/restore-points.js"],
-  ["js/core/store.js", "js/ui/save-health.js"],
-  ["js/career/restore-points.js", "js/ui/save-health.js"],
   ["js/ui/loading-card.js", "js/ui/loading-screen.js"], // LoadingScreen destructures LoadingCard at eval
-  ["js/ui/save-health.js", "js/ui/select-screen.js"],
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/garage/prebuild.js"],
@@ -1105,6 +1101,7 @@ const LAZY_REAL_RACE_EDGES = [
 // shell never reads them (#4978 row 1). Listed so FULL ∪ DEFERRED ∪ LAZY_* ∪
 // page rosters still covers js/** (load-order.test.mjs).
 const OVERLAY_PAGE = [
+  "js/ui/companion-return.js",
   "js/overlay/render.js",  // OverlayRender: transform-only overlay.html painter
 ];
 
@@ -1369,11 +1366,14 @@ const LAZY_UI_PRESETS = [
   "js/ui/hud-arrange.js",          // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it on the first pause-card tap
   "js/ui/look-avail.js",           // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js",       // LayoutPresets
+  "js/ui/appearance-arrangement-picker.js",
   "js/ui/appearance-studio-ui.js", // AppearanceStudioBody: presets / profiles / preview DOM (#4978 row 5)
   "js/ui/photo-studio-ui.js",      // PhotoStudioBody: capture UI + photo library (#4978 row 5)
 ];
 const LAZY_UI_PRESETS_EDGES = [
   ["js/ui/screen-regions.js", "js/ui/screen-placement.js"],
+  ["js/ui/screen-regions.js", "js/ui/appearance-arrangement-picker.js"],
+  ["js/ui/appearance-arrangement-picker.js", "js/ui/appearance-studio-ui.js"],
   ["js/ui/appearance-studio-ui.js", "js/ui/photo-studio-ui.js"], // AppearanceStudioBody.refreshPhotos reads PhotoStudio.album
 ];
 
@@ -1383,10 +1383,11 @@ const LAZY_UI_PRESETS_EDGES = [
 // garage gates, and fronts the body with the same public API; LazyBundles.ensureSavesData loads
 // it at idle, at the garage door, with the agent surface and with the career screen.
 const LAZY_SAVES_DATA = [
+  "js/ui/save-health.js",         // Files and the storage failure banner share the same disclosure.
   "js/ui/progress-backup.js",      // ProgressBackup (#5992): the settings file's `progress` section; read at call time
   "js/ui/settings-export-body.js", // SettingsExportBody: destructures SettingsExport._core (FULL) at eval
 ];
-const LAZY_SAVES_DATA_EDGES = [];
+const LAZY_SAVES_DATA_EDGES = [["js/ui/save-health.js", "js/ui/settings-export-body.js"]];
 
 // RESULTS / TT / STANDINGS / CHAMPION DOM builders + the share-card stack (~92 KB). endRace and the
 // pause STANDINGS door call GameResults on game.js; startRace awaits
@@ -1533,6 +1534,7 @@ const TRACK_WORKER_EXTRA = [
 // <script> subset, in order: the signalling + transport half of js/net, the
 // shared roll math, the pad module, and persistent screen arrangement.
 const CONTROLLER = [
+  "js/ui/companion-return.js",
   "js/core/log.js",
   "js/core/dev-flags.js",
   "js/core/hash32.js",      // NetHandshake.offerId: the answer names the offer it answers

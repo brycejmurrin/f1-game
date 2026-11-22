@@ -216,3 +216,81 @@ test("an owner-greyed control reports the reason it is described by, not 'unavai
   assert.equal(h.dom.document.activeElement, why, "focus lands on the reason");
   assert.equal(h.dom.document.querySelector("#pm-panel-controls").children.length, 0, "no generic note is left on the page");
 });
+
+test("session search explains the requirement at Home and opens the destination in a race", () => {
+  const h = boot();
+  let active = false;
+  h.ctx.window.UiLayers = { inRace: () => active };
+  const strategy = h.el("section", "pm-panel-strategy", h.body);
+  const target = h.el("select", "pm-pit-choice-sel", strategy);
+  const result = h.result("next pit-stop tyres");
+  result.focus(); result.onclick();
+  assert.equal(h.nav.current(), "home");
+  assert.equal(h.dom.document.activeElement, result);
+  assert.match(h.index.querySelector('[role="status"]').textContent, /Pause during a session/);
+  active = true;
+  result.onclick();
+  assert.equal(h.nav.current(), "strategy");
+  assert.equal(h.dom.document.activeElement, target);
+});
+
+test("backup search waits for the files owner and selects only the requested tab", async () => {
+  const h = boot(), files = h.dom.document.querySelector("#pm-panel-files");
+  let loaded = false, finish, selected;
+  h.ctx.SettingsExport = {
+    ready: () => new Promise(resolve => { finish = () => { loaded = true; resolve(true); }; }),
+    loaded: () => loaded,
+    ensureMounted() {
+      if (files.querySelector("button")) return;
+      for (const action of ["save", "restore", "share"]) {
+        const tab = h.el("button", "pm-files-show-" + action, files);
+        tab.setAttribute("role", "tab"); tab.onclick = () => { selected = action; };
+      }
+    },
+  };
+  for (const [query, action] of [["export settings", "save"], ["restore backup", "restore"], ["import share code", "share"]]) {
+    const result = h.result(query);
+    result.focus(); result.onclick();
+    if (!loaded) { assert.equal(h.nav.current(), "home"); finish(); await tick(); }
+    assert.equal(selected, action);
+    assert.equal(h.dom.document.activeElement.id, "pm-files-show-" + action);
+    h.nav.back(); assert.equal(h.dom.document.activeElement, result);
+  }
+});
+
+test("the named audio controls resolve to their own input", () => {
+  const h = boot();
+  for (const [term, id] of [["engine pitch", "as-t-pitch"], ["engineer chatter", "as-chat-sel"], ["battle tones", "as-battle-sel"]]) {
+    const target = h.el("input", id, h.dom.document.querySelector("#audioset"));
+    assert.equal(h.ctx.Search.find(term)[0].target, id);
+    h.result(term).onclick();
+    assert.equal(h.dom.document.activeElement, target);
+    h.nav.back();
+  }
+});
+
+test("cold Storage health search waits for Files and focuses the actual disclosure", async () => {
+  const h = boot(), host = h.dom.document.querySelector("#pm-panel-files");
+  let release, loaded = false;
+  h.ctx.SettingsExport = {
+    loaded: () => loaded,
+    ready: () => new Promise(resolve => { release = () => {
+      vm.runInContext(read("js/ui/save-health.js") + ";this.health=SaveHealth", h.ctx, {filename: absSrc("js/ui/save-health.js")});
+      loaded = true;
+      resolve(true);
+    }; }),
+    ensureMounted() { h.ctx.health.mount(host); },
+  };
+  const result = h.result("storage health");
+  result.focus();
+  result.onclick();
+  assert.equal(h.nav.current(), "home");
+  release();
+  await tick();
+  assert.equal(h.nav.current(), "files");
+  const summary = host.querySelector("summary");
+  assert.equal(h.dom.document.activeElement, summary);
+  assert.equal(summary.parentElement.open, true);
+  h.nav.back();
+  assert.equal(h.dom.document.activeElement, result);
+});

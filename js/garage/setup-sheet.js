@@ -320,14 +320,21 @@ function framePreset(name) {
 function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
     csActiveCat = id;
-    store.set("garageTab", id);
-    if (G.soundOn) GameAudio.uiTick();
+    // Browse section previews this category, then restores the original tab.
+    // A preview must not persist a tab choice or move the player's camera.
+    const preview = $("screen-arranger")?.open;
+    if (!preview) {
+      store.set("garageTab", id);
+      if (G.soundOn) GameAudio.uiTick();
+    }
     buildSetup();
     const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
     // LIVERY is about the wall crest as much as the paint chips: frame FRONT
     // on the category change only, never again while the tab stays open.
-    if (id === "livery") framePreset("front");
-    else if (CAT_VIEW[id]) framePreset(CAT_VIEW[id]);
+    if (!preview) {
+      if (id === "livery") framePreset("front");
+      else if (CAT_VIEW[id]) framePreset(CAT_VIEW[id]);
+    }
   }
   if (focus) {
     const tab = document.getElementById(csTabId(id));

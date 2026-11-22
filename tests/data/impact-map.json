@@ -8375,7 +8375,6 @@
         "tests/unit/select-specs.test.mjs",
         "tests/unit/session-status.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/shell-ids.test.mjs",
         "tests/unit/skill-progressive.test.mjs",
         "tests/unit/steer-lock-taper.test.mjs",
@@ -9101,7 +9100,8 @@
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/photo-studio.test.mjs"
       ],
       "prepared": [
         "tests/unit/garage-prebuild.test.mjs",
@@ -13765,7 +13765,8 @@
         "tests/unit/daily-challenge.test.mjs"
       ],
       "dayKey": [
-        "tests/unit/daily-challenge.test.mjs"
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/title-menu-even.test.mjs"
       ],
       "isActive": [
         "tests/unit/daily-challenge.test.mjs"
@@ -15224,6 +15225,9 @@
       ]
     },
     "js/race/retired-card.js": {
+      "preview": [
+        "tests/unit/retired-card.test.mjs"
+      ],
       "tick": [
         "tests/unit/retired-card.test.mjs"
       ],
@@ -15232,6 +15236,9 @@
       ],
       "wanted": [
         "tests/unit/retired-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-arrange-door.test.mjs"
       ]
     },
     "js/race/session-entry.js": {
@@ -18439,6 +18446,7 @@
         "tests/unit/load-order.test.mjs",
         "tests/unit/prepush-floor.test.mjs",
         "tests/unit/select-specs.test.mjs",
+        "tests/unit/settings-lazy-gate.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ]
     },
@@ -19189,6 +19197,15 @@
         "tests/unit/settings-tabs.test.mjs"
       ]
     },
+    "js/ui/appearance-arrangement-picker.js": {
+      "refresh": [
+        "tests/unit/appearance-studio.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
+      ]
+    },
     "js/ui/appearance-opts.js": {
       "restore": [
         "tests/unit/appearance-opts.test.mjs"
@@ -19410,6 +19427,12 @@
       ],
       "setSpeakerInk": [
         "tests/unit/captions.test.mjs"
+      ]
+    },
+    "js/ui/companion-return.js": {
+      "*": [
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/shell-ids.test.mjs"
       ]
     },
     "js/ui/condition-cue-controls.js": {
@@ -20921,11 +20944,6 @@
       ]
     },
     "js/ui/save-health.js": {
-      "boot": [
-        "tests/unit/save-durability.test.mjs",
-        "tests/unit/settings-export.test.mjs",
-        "tests/unit/settings-lazy-gate.test.mjs"
-      ],
       "cleanup": [
         "tests/unit/save-durability.test.mjs"
       ],
@@ -20934,7 +20952,11 @@
       ],
       "mount": [
         "tests/unit/save-durability.test.mjs",
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/settings-search.test.mjs"
+      ],
+      "*": [
+        "tests/unit/settings-lazy-gate.test.mjs"
       ]
     },
     "js/ui/scale.js": {
@@ -20984,13 +21006,34 @@
     },
     "js/ui/screen-arranger.js": {
       "button": [
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/title-layout.test.mjs"
+      ],
+      "change": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/photo-studio.test.mjs"
       ],
       "flush": [
         "tests/unit/layout-presets.test.mjs"
       ],
+      "move": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
       "open": [
+        "tests/unit/photo-studio.test.mjs",
         "tests/unit/title-layout.test.mjs"
+      ],
+      "prepare": [
+        "tests/unit/photo-studio.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
+      ],
+      "resize": [
+        "tests/unit/settings-tabs.test.mjs"
+      ],
+      "suspendPreparation": [
+        "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
         "tests/unit/css-has-scope.test.mjs",
@@ -21073,15 +21116,14 @@
         "tests/unit/screen-looks.test.mjs"
       ],
       "*": [
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/settings-tabs.test.mjs"
       ]
     },
     "js/ui/screen-regions.js": {
       "bind": [
-        "tests/unit/settings-tabs.test.mjs"
-      ],
-      "refresh": [
-        "tests/unit/appearance-studio.test.mjs"
+        "tests/unit/settings-tabs.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "screen": [
         "tests/unit/appearance-studio.test.mjs"
@@ -21092,6 +21134,7 @@
         "tests/unit/pause-hud-layout.test.mjs",
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-studio.test.mjs",
+        "tests/unit/race-arrangement-routes.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/settings-export.test.mjs",
         "tests/unit/title-layout.test.mjs"
@@ -21736,7 +21779,8 @@
       ],
       "*": [
         "tests/specs/boot-guard.spec.js",
-        "tests/unit/share-code.test.mjs"
+        "tests/unit/share-code.test.mjs",
+        "tests/unit/shell-ids.test.mjs"
       ]
     },
     "js/ui/touch-button-settings.js": {
