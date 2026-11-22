@@ -33,11 +33,12 @@ function ctx2d(calls) {
   };
 }
 
-function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", dropSize = 1, recordDraws = false, recordAtlas = false, seed = 0xd809 } = {}) {
+function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet = false, rainAmount = "normal", runoff = "normal", dropSize = 1, recordDraws = false, recordAtlas = false, viewport = null, seed = 0xd809 } = {}) {
   const calls = { clear: 0, draw: 0, rotate: 0, ...(recordDraws ? { frameDraws: [] } : {}), ...(recordAtlas ? { atlasStops: [], atlasBuilds: 0 } : {}) };
   const el = { id: "fx-droplets", hidden: true, width: 0, height: 0, getContext: () => ctx2d(calls), setAttribute() {} };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } } };
   const document = {
+    documentElement: viewport?.root,
     body: { hasAttribute: () => helmet },
     getElementById: (id) => (id === "fx-droplets" ? (staticEl ? el : null) : id === "game" ? game : null),
     createElement: () => {
@@ -48,11 +49,12 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet
   const rng = makeRng(seed);
   const ctx = vm.createContext({
     Math: Object.assign(Object.create(Math), { random: () => rng.unit() }), Float32Array, Object,
-    document, window: { innerWidth: 844, innerHeight: 390, devicePixelRatio: 3 },
+    document, window: viewport?.win || { innerWidth: 844, innerHeight: 390, devicePixelRatio: 3 },
     CockpitOpts: { visor: () => "clear", visorRain: () => rainAmount, visorRunoff: () => runoff, visorDropSize: () => dropSize, visorRefraction: () => "off", visorReflections: () => "light" },
     GLX: { isMobile: mobile }, GfxQuality: { current: () => preset },
   });
   seedLog(ctx);
+  vm.runInContext(read("js/render/shared/canvas-css-size.js"), ctx, { filename: absSrc("js/render/shared/canvas-css-size.js") });
   const D = vm.runInContext(read("js/fx/droplets.js") + ";Droplets", ctx, { filename: absSrc("js/fx/droplets.js") });
   return { D, el, calls, setHelmet: v => { helmet = v; }, setDropSize: v => { dropSize = v; } };
 }
@@ -61,6 +63,39 @@ function makeDroplets({ mobile = false, preset = "high", staticEl = true, helmet
 function run(D, s, on, rain, storm, vs, reduced) {
   for (let i = 0; i < s * 60; i++) D.tick(1 / 60, on, rain, storm, vs, reduced);
 }
+
+test("wet lens caches the layout viewport and follows late rotation and DPR changes", () => {
+  let width = 852, height = 393, reads = 0;
+  const listeners = {};
+  const root = {
+    get clientWidth() { reads++; return width; },
+    get clientHeight() { reads++; return height; },
+  };
+  // Stale portrait inner* at launch, while the layout viewport is landscape.
+  const win = { innerWidth: 393, innerHeight: 852, devicePixelRatio: 1,
+    addEventListener(type, fn) { listeners[type] = fn; } };
+  const { D, el } = makeDroplets({ viewport: { root, win } });
+  const tick = () => D.tick(1 / 60, true, 1, false, 55, false);
+  run(D, 10, true, 1, false, 55, false);
+  assert.deepEqual([el.width, el.height, reads], [852, 393, 2]);
+
+  win.innerWidth = 852; win.innerHeight = 393;
+  listeners.resize();
+  tick();
+  width = 393; height = 852; // box updates one frame after the viewport signal
+  tick();
+  assert.deepEqual([el.width, el.height], [393, 852]);
+  run(D, 1, true, 1, false, 55, false);
+  const settled = reads;
+  win.devicePixelRatio = 1.5;
+  tick();
+  assert.deepEqual([el.width, el.height, reads], [590, 1278, settled]);
+
+  width = 410;
+  listeners.resize(); // layout-only change; window.innerWidth remains stale
+  tick();
+  assert.equal(el.width, 615);
+});
 
 test("droplets: spawn rate follows rain — none below falling rain, storm heavier", () => {
   const { D } = makeDroplets();
@@ -91,6 +126,20 @@ test("droplets: onboard-only — any other camera hides the overlay and drops ev
   assert.equal(el.hidden, true, "overlay hidden off-board");
   D.tick(1 / 60, true, 0, false, 10, false);     // onboard but dry
   assert.equal(el.hidden, true, "dry onboard stays hidden");
+});
+
+test("water drains on its own lens and never transfers across onboard camera cuts", () => {
+  const { D, setHelmet } = makeDroplets({ helmet: true });
+  for (let i = 0; i < 120; i++) D.tick(1 / 60, true, 1, true, 0, false, "helmet");
+  D.tick(1 / 60, true, 0, false, 0, false, "helmet");
+  assert.ok(D.stats().n > 0, "the same visor retains water under cover");
+  setHelmet(false);
+  D.tick(1 / 60, true, 0, false, 0, false, "tcam");
+  assert.equal(D.stats().n, 0, "the T-cam lens is separate from the visor");
+  for (let i = 0; i < 120; i++) D.tick(1 / 60, true, 1, true, 0, false, "tcam");
+  assert.ok(D.stats().n > 0);
+  D.tick(1 / 60, true, 0, false, 0, false, "hood");
+  assert.equal(D.stats().n, 0, "two non-helmet camera mounts have separate lenses too");
 });
 
 test("droplets: capped — ≤ 40 on phones, ≤ 90 desktop, half under reduced motion", () => {
@@ -307,6 +356,8 @@ test("helmet rain: atlas follows helmet camera changes even paused, and stays ca
   const hit = D.stats().first.hitAge;
   for (let i=0;i<3;i++) D.tick(0.01,true,1,false,0,false);
   assert.equal(calls.atlasBuilds,initialBuilds,"ordinary helmet ticks reuse the atlas");
+  D.tick(0,true,1,false,0,false);
+  assert.ok(Math.abs(D.stats().first.hitAge-hit-0.03)<1e-6,"pausing the same lens freezes the impact clock");
   setHelmet(false);
   D.tick(0,true,1,false,0,false);
   const classicStops = structuredClone(calls.atlasStops);
@@ -318,7 +369,7 @@ test("helmet rain: atlas follows helmet camera changes even paused, and stays ca
   D.tick(0,true,1,false,0,false);
   assert.deepEqual(calls.atlasStops,helmetStops,"helmet re-entry restores stronger helmet shading");
   assert.equal(calls.atlasBuilds,initialBuilds+2,"paused helmet re-entry rebuilds once");
-  assert.ok(Math.abs(D.stats().first.hitAge-hit-0.03)<1e-6,"paused atlas swaps never advance the impact clock");
+  assert.equal(D.stats().n,0,"camera swaps while paused leave the new glass clear");
   D.tick(0.01,true,1,false,0,false);
   assert.equal(calls.atlasBuilds,initialBuilds+2,"resumed helmet rendering remains cached");
 });
@@ -390,5 +441,5 @@ test("game.js wires the nearest-N gate, sprayStr/sprayRate and the Droplets tick
   const g = gameSource();
   assert.match(g, /Particles\.sprayAdmit\(_sdx \* _sdx \+ _sdz \* _sdz\)/);
   assert.match(g, /Particles\.sprayStr\(vStd\(c\.speed\), Storm\.sprayK\(raceWeather\), frame\.wetness\)/);
-  assert.match(g, /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
+  assert.match(g, /Droplets\.tick\(paused \? 0 : dt, onboard && !photoMode, underCover \? 0 : frame\.rain \|\| 0, Storm\.is\(raceWeather\)/);
 });

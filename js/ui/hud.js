@@ -459,9 +459,7 @@ let _fitStamped = false, _fitClashRun = 0;
 // The post-write clash probe's skip key (#2240): what decides a clash, read without layout.
 let _stampKey = "", _stampWait = 0;
 const FIT_CLASH_TRIES = 5;
-// Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
-// width is part of what HudLayout.fit clamps, and the AERO chip's words change
-// all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
+// Track visibility and width changes of moved pieces. AERO counts down and changes mode all lap:
 // keyed on `hidden` alone it widened past the screen edge after the fit and
 // stayed there until the 3 s same-key re-measure (hud-survey 1280x720 cockpit:
 // aero right edge 1297 of 1280). textContent costs no layout; a length that
@@ -472,13 +470,14 @@ const FIT_CLASH_TRIES = 5;
 const _HL_CSS_HID = new Set(["hud-energy", "hud-tyre", "hud-ot", "hud-aero", "hud-bb"]);
 let _blueHeld = null;
 function hlKey() {
-  const b = typeof document !== "undefined" ? document.body : null;
-  const strip = !!b && !!b.dataset && b.dataset.hlSet === "cockpit" && !(b.classList && b.classList.contains("desktop"));
+  const strip = typeof document !== "undefined" && document.body?.dataset?.hlSet === "cockpit" && !document.body.classList?.contains("desktop");
   let k = "";
   for (let i = 0; i < _hlEls.length; i++) {
     const el = _hlEls[i];
-    const cssHid = strip && _HL_CSS_HID.has(el.id) && !(el.hasAttribute && el.hasAttribute("data-hl-user"));
-    k += el.hidden || cssHid ? "h" : "v" + (el.textContent || "").length + ",";
+    if (el.hidden || (strip && _HL_CSS_HID.has(el.id) && !el.hasAttribute?.("data-hl-user"))) k += "h";
+    // #hud-speed-n reserves three tabular digits for the whole 0–999 range. Only the unit can resize the plate.
+    else if (el.id === "hud-speed" && el.lastElementChild) k += "s" + el.lastElementChild.textContent + ",";
+    else k += "v" + (el.textContent || "").length + ",";
   }
   return k;
 }
@@ -1972,7 +1971,8 @@ function updateHud(force, dtMs) {
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
   const caution = G.cautionInfo ? G.cautionInfo() : null;
   const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const otOff = G.state === "race" && !gateOpen && !(player.otT > 0);
+  const pitHeld = G.pits?.held?.(player);
+  const otOff = G.state === "race" && (!gateOpen || pitHeld) && !(player.otT > 0);
   // The class follows the GATE like the text does: a held lap-0 grant (or one
   // under a safety car) used to pulse the yellow "ready" plate while the text
   // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
@@ -1986,7 +1986,8 @@ function updateHud(force, dtMs) {
     // to pass; the input path still checks c.otArmed in game.js. Only the
     // Safety Car / red flag (B7.2.2c) and LOW GRIP (B7.2.2d) close it; a
     // yellow or VSC flying on lap 1 must not be named as the reason.
-    otReason = caution && caution.level >= 3 ? "caution"
+    otReason = pitHeld ? "pit-lane"
+      : caution && caution.level >= 3 ? "caution"
       : caution && caution.lowGrip ? "low-grip"
       : leader && leader.lap > 1 ? "race-control"
       : leader ? "opening-lap" : "waiting-for-leader";
@@ -1996,7 +1997,8 @@ function updateHud(force, dtMs) {
   const otReady = !!player.otArmed || otHeld;
   const otUnavailable = (!(player.otT > 0) && !otReady) || otOff;
   const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
-                : otOff ? (otReason === "caution" ? "OT · CAUTION"
+                : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
+                  : otReason === "caution" ? "OT · CAUTION"
                   : otReason === "low-grip" ? "OT · LOW GRIP"
                   : otReason === "opening-lap" ? "OT · LAP 1"
                   : otReason === "waiting-for-leader" ? "OT · GRID"
@@ -2005,7 +2007,8 @@ function updateHud(force, dtMs) {
                 : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
   hText(els.ot, otText);
   hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
-    : otOff ? (otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+    : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
+      : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
       : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
       : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
       : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")

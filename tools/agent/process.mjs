@@ -1,5 +1,6 @@
 // @doc Owns subprocess lifecycles: forwards cancellation and bounds cleanup of descendants after exits and explicit timeouts.
 import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 import { createProcFdPool } from '../lib/proc-stat-reader.mjs';
 const procPool = createProcFdPool();
@@ -30,10 +31,31 @@ function info(pid) {
     try { process.kill(pid, 0); return { state: '?', start: null }; } catch { return null; }
   }
 }
+// Linux exposes children per thread, including children spawned by non-leader
+// threads. If that interface is missing or changes during a walk, use the
+// process-table snapshot below. Some managed proc mounts omit children entirely.
+const hasTaskChildren = process.platform === 'linux' && fs.existsSync('/proc/thread-self/children');
+export function taskDescendants(root, io = fs) {
+  const seen = new Set([root]);
+  try {
+    for (const pid of seen) {
+      const task = `/proc/${pid}/task`;
+      for (const tid of io.readdirSync(task)) {
+        const children = io.readFileSync(`${task}/${tid}/children`, 'utf8').trim();
+        if (children) for (const id of children.split(/\s+/)) seen.add(Number(id));
+      }
+    }
+    return [...seen];
+  } catch { return null; }
+}
 function descendants(pid) {
   if (!pid) return [];
   const pids = [pid];
   if (process.platform === 'linux') {
+    if (hasTaskChildren) {
+      const tree = taskDescendants(pid);
+      if (tree) return tree;
+    }
     // Some managed /proc mounts omit task/*/children. Derive the same scoped
     // tree from numeric /proc entries, without launching a ps process per scan.
     const children = new Map();
@@ -61,6 +83,27 @@ function descendants(pid) {
   }
   return pids;
 }
+// Linux can reparent a detached grandchild before the first tree sample. A
+// cleanup-on-exit run passes a unique marker through exec, then checks for it
+// once during cleanup. A nested run retains its parent's marker. Commands that
+// explicitly clear their environment still use the normal ancestry sampler.
+function collectMarked(marker, owned, rootStart) {
+  let entries;
+  try { entries = fs.readdirSync('/proc'); } catch { return; }
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    const pid = Number(entry);
+    if (owned.has(pid)) continue;
+    try {
+      const before = info(pid);
+      if (!before?.start || before.state === 'Z' || Number(before.start) < Number(rootStart)) continue;
+      const environment = fs.readFileSync(`/proc/${pid}/environ`);
+      const offset = environment.indexOf(marker);
+      if (offset < 0 || (offset > 0 && environment[offset - 1] !== 0)) continue;
+      if (info(pid)?.start === before.start) owned.set(pid, before.start);
+    } catch { /* A process may be gone or inaccessible. */ }
+  }
+}
 /** No command timeout by default. Every child gets its own POSIX process group.
  * Descendant identities are sampled while it runs, including children that
  * start their own groups. Linux start times prevent signaling reused PIDs.
@@ -72,25 +115,39 @@ function descendants(pid) {
 export function spawnAgentProcess(command, args = [], { cwd, stdio = 'pipe', env, timeoutMs, killGraceMs = 500, forwardSignals = false, cleanupOnExit = false } = {}) {
   if (!Number.isSafeInteger(killGraceMs) || killGraceMs < 1) throw new Error('killGraceMs must be a positive integer');
   if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)) throw new Error('timeoutMs must be a positive integer');
+  const marker = cleanupOnExit && process.platform === 'linux' ? `APEX_CLEANUP_${randomUUID().replaceAll('-', '')}` : null;
+  if (marker) env = { ...(env ?? process.env), [marker]: '1' };
   const child = spawn(command, args, { cwd, stdio, env, shell: false, detached: process.platform !== 'win32' });
   const owned = new Map();
+  const rootStart = marker && child.pid ? info(child.pid)?.start : null;
   const releaseProcPool = procPool.acquire();
   let exited = false, closed = false, exitCode = null, signal = null, error, timedOut = false, cancelSignal = null;
   let shutdown, timer, doneResolve, exitResolve, closeResolve;
   const rootExited = new Promise((resolve) => { exitResolve = resolve; });
   const streamsClosed = new Promise((resolve) => { closeResolve = resolve; });
   const done = new Promise((resolve) => { doneResolve = resolve; });
-  function collect() { for (const pid of descendants(child.pid)) { const stamp = info(pid); if (stamp && !owned.has(pid)) owned.set(pid, stamp.start); } }
+  function collect() {
+    // Once the root has exited its children have been reparented. Retain the
+    // sampled identities for cleanup without walking a potentially reused PID.
+    if (exited) return;
+    for (const pid of descendants(child.pid)) {
+      if (owned.has(pid)) continue;
+      const stamp = info(pid);
+      if (stamp) owned.set(pid, stamp.start);
+    }
+  }
   function alive(pid) { const stamp = info(pid); return stamp && stamp.state !== 'Z' && stamp.state !== 'X' && (owned.get(pid) === null || owned.get(pid) === stamp.start); }
   function groupAlive() {
     if (!child.pid || process.platform === 'win32') return false;
+    const leader = exited && info(child.pid);
+    if (leader && owned.get(child.pid) !== leader.start) return false;
     try { process.kill(-child.pid, 0); return true; } catch { return false; }
   }
   function send(sig) {
     collect();
     // Signal children before parents, retaining identities before reparenting.
     for (const pid of [...owned.keys()].reverse()) if (alive(pid) && (process.platform === 'win32' || info(pid)?.group !== child.pid)) { try { process.kill(pid, sig); } catch { /* Exited. */ } }
-    if (child.pid && process.platform !== 'win32') { try { process.kill(-child.pid, sig); } catch { /* Group exited. */ } }
+    if (groupAlive()) { try { process.kill(-child.pid, sig); } catch { /* Group exited. */ } }
     if (process.platform === 'win32' && child.pid) spawnSync('taskkill', ['/pid', String(child.pid), '/T', ...(sig === 'SIGKILL' ? ['/F'] : [])], { stdio: 'ignore', timeout: 1000 });
   }
   async function waitGone(ms) {
@@ -99,6 +156,7 @@ export function spawnAgentProcess(command, args = [], { cwd, stdio = 'pipe', env
   }
   async function clean() {
     collect();
+    if (marker && child.pid) collectMarked(Buffer.from(`${marker}=1\0`), owned, rootStart);
     if (groupAlive() || [...owned.keys()].some(alive)) {
       send('SIGTERM'); await waitGone(killGraceMs);
       send('SIGKILL'); await waitGone(500);

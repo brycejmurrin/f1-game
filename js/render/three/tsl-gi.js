@@ -148,7 +148,7 @@
     for (const n of NAMES) {
       let need = 0, f = false;
       try { need = e.need ? e.need(n) | 0 : 0; f = !!(e.feature && e.feature(n)); } catch (_) { need = 0; f = false; }
-      if (!need) continue;
+      if (!need || (e.allowed && !e.allowed(n))) continue;
       const natural = d >= Math.min(need, 2);
       let b = need >= 3 ? natural || f : f;
       if (b && natural && need >= 2 && !e.webgpu) b = false;
@@ -176,7 +176,8 @@
       if (typeof GfxQuality === "undefined" || !GfxQuality.feature) return env;
       env.detail = GfxQuality.detail() | 0;
       env.need = (n) => (GfxQuality.FEATURES && GfxQuality.FEATURES[n]) | 0;
-      env.feature = (n) => !!GfxQuality.feature(n);
+      env.feature = (n) => !!GfxQuality.feature(n, true);
+      if (GfxQuality.option) env.allowed = n => GfxQuality.option(n, true) && (env.webgpu || env.need(n) < 2 || !GfxQuality.option(n, false));
     } catch (_) { env.detail = 0; env.need = () => 0; env.feature = () => false; }
     return env;
   }

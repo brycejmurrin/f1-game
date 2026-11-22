@@ -34,6 +34,18 @@ export function changeKind(files) {
   return "code";
 }
 
+// These Node entry points report PR/CI state and have no browser, build or test-runner
+// consumers. Keep this list exact: tools/ci also owns Playwright setup and selection.
+const REPORT_NAMES = ["ci-watch", "pr-board", "queue-depth", "session-status"];
+const REPORT_PATHS = new Set(REPORT_NAMES.flatMap((name) =>
+  [`tools/ci/${name}.mjs`, `tests/unit/${name}.test.mjs`]));
+
+export function readyBrowserExempt(files) {
+  return files.length > 0 && files.every((f) => REPORT_PATHS.has(f)
+    || /^(?:README|AGENTS|CLAUDE|CHANGELOG)\.md$/.test(f)
+    || /^docs\/.*\.md$/u.test(f));
+}
+
 /** Parse `git diff --name-status -z` into unique paths, rename/copy sources
  *  included (ledger M36). Local twin of tools/lib/changed-files.mjs
  *  parseNameStatusZ — kept here so this module does not import that helper

@@ -24,8 +24,7 @@
 //     moved (BASE = --since's ref, else the merge-base); bump-cache --check.
 //   2 groups: pick-tests' selection, ONE group per batch, REPORTED AS NOT RUN
 //     with where they do run. Agents never run a browser test locally (AGENTS.md
-//     rule 5, 2026-11-03): every PR push gets ci.yml's change-aware `selected`
-//     legs (one 5-min shard on a draft, the 10-min budget once ready) and
+//     rule 5): ready PRs run ci.yml's change-aware selected legs and
 //     `node tools/ci/remote-group.mjs <group>` runs a whole group on the pushed
 //     branch. Until then this phase drove test-bg.mjs's group chain here.
 //
@@ -300,6 +299,6 @@ if (flag("--wait") || flag("--keep-going")) {
 }
 finish("partial", {
   notRun: batches.flat(),
-  ci: "these groups run on the PR, not locally: ci.yml's selected legs on every push (a draft gets one 5-min shard, ready the 10-min budget); "
+  ci: "CI runs selected browser specs for browser-relevant changes once the PR is ready for review; "
     + "a whole group: node tools/ci/remote-group.mjs <group> on the pushed branch",
 });

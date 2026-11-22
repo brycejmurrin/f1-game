@@ -305,7 +305,7 @@
       return _jit;
     }
     // live = a real present (not a compile / draw warm): only then does the history advance.
-    function resolve(F, w, h, dest, live) {
+    function resolve(F, w, h, dest, live, color = ctx.ldrTex) {
       ensure(w, h);
       const src = hist[cur], dst = hist[1 - cur];
       let cut = !havePrev || reset || !lastOk;
@@ -315,6 +315,7 @@
       U.prevVP.value.fromArray(havePrev ? prevVP : F.viewProj);
       U.jit.value.set(_jit[0], _jit[1]);
       U.reset.value = cut ? 1 : 0;
+      curT.value = color;
       histT.value = src.texture;
       ctx.runPass(resolveMat, dst);
       outT.value = dst.texture;
@@ -331,8 +332,13 @@
     }
     return {
       jitter, resolve,
+      copyLast(dest) {
+        // Warm draws can rebind outT, but only a live resolve advances cur.
+        outT.value = hist[cur].texture;
+        ctx.runPass(outMat, dest);
+      },
       // A frame presented without the TAA (viz, upscale, warm): the next TAA frame starts fresh.
-      skipped() { lastOk = false; },
+      skipped() { curT.value = ctx.ldrTex; lastOk = false; },
       reset() { reset = true; },
       state: () => ({ frames, resets, size: [W, H], jitter: [_jit[0], _jit[1]], held: !!hist, velocity: !!velT }),
       dispose() { try { histInit.dispose(); outInit.dispose(); } catch (_) { /* device dying */ } },

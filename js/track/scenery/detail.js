@@ -30,10 +30,9 @@ const TrackDetail = (function () {
     try {
       if (typeof GfxQuality === "undefined" || !GfxQuality || typeof GfxQuality.detail !== "function") return NONE;
       const lv = GfxQuality.detail();
-      if (!(lv >= 1)) return NONE;
       const feats = {};
       for (const n of NAMES) feats[n] = typeof GfxQuality.feature === "function" && GfxQuality.feature(n) === true;
-      return normalize(lv, feats);
+      return normalize(lv || (NAMES.some(n => feats[n]) ? 2 : 0), feats);
     } catch (_) { return NONE; }
   }
 
