@@ -318,23 +318,4 @@ button[role="tab"][aria-selected="true"] {
   font-style: normal;
   letter-spacing: .08em;
 }
-
-/* Opt-in driver colors take precedence over the race and controller themes.
-   The idle rim leaves status and energy fills visible. */
-[data-custom-idle] { border-color: var(--touch-custom-idle) !important; }
-[data-custom-pressed]:is(:active, [data-slid="on"], [aria-pressed="true"]) {
-  border-color: var(--touch-custom-pressed) !important;
-  --touch-fill: var(--touch-custom-pressed) !important;
-}
-[data-custom-pressed]:is(:active, [data-slid="on"], [aria-pressed="true"]):not(:focus-visible) {
-  outline: 3px solid var(--touch-custom-pressed);
-}
-[data-custom-pressed]:is(:active, [aria-pressed="true"]):not([data-touch-feedback], [role="button"]) {
-  background-image: linear-gradient(color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent), color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent)) !important;
-}
-/* A double line identifies the high-pressure edge before the thumb lands. */
-[data-touch-edge="top"] { border-top: 4px double currentColor !important; }
-[data-touch-edge="bottom"] { border-bottom: 4px double currentColor !important; }
-[data-touch-edge="left"] { border-left: 4px double currentColor !important; }
-[data-touch-edge="right"] { border-right: 4px double currentColor !important; }
 }

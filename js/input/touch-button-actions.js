@@ -9,7 +9,7 @@ const TouchButtonActions = (() => {
         const color = profile[field], name = "--touch-custom-" + attribute;
         if (color) {
           el.style?.setProperty?.(name, "var(" + PedalTravel.colors[color] + ")");
-          el.setAttribute("data-custom-" + attribute, "");
+          el.setAttribute("data-custom-" + attribute, id);
         } else {
           el.style?.removeProperty?.(name);
           el.removeAttribute?.("data-custom-" + attribute);
