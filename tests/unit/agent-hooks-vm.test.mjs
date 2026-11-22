@@ -50,6 +50,27 @@ test("rollout stops at the flag instead of averaging frozen frames", async () =>
   assert.equal(again.error, "RaceOverError");
 });
 
+test("agent steps move the cooldown field until player control ends", async () => {
+  await load();
+  const { player, cars } = g.G;
+  const rival = cars.find(c => c !== player);
+  rival.speed = 40;
+  g.apex.finishRace({ ceremony: true });
+  assert.equal(g.apex.ceremony().inputOwner, "player");
+  const pos = player.finPos, time = player.finishT;
+  const start = player.s, rivalStart = rival.s;
+  g.apex.step(1 / 60, 3);
+  assert.notEqual(player.s, start);
+  assert.notEqual(rival.s, rivalStart);
+  assert.equal(player.finPos, pos);
+  assert.equal(player.finishT, time);
+
+  g.apex.ceremony("results");
+  const parked = cars.map(c => c.s);
+  g.apex.step(1 / 60, 3);
+  assert.deepEqual(cars.map(c => c.s), parked);
+});
+
 test("rollout refuses a policyHz that is not positive", async () => {
   await load("monza", 0.05, 50);
   for (const policyHz of [0, -5]) {

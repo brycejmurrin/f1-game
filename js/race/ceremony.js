@@ -102,12 +102,20 @@ var RaceCeremony = (function () {
     function showSheet() {
       if (G.els && G.els.results) G.els.results.hidden = false;
     }
+    const playerDrives = () => phase === "cooldown" && cool?.driveAllowed();
+    function stepResultsField(cars, dt, updateCar) {
+      if (!playerDrives()) return;
+      for (let i = 0; i < cars.length; i++) {
+        const car = cars[i];
+        if (car.finished || car.retired) updateCar(car, dt, cars);
+      }
+    }
     function status() {
       const elig = phase === "idle" ? eligible(G, liveMeta()) : sessionEligible;
       const cooling = phase === "cooldown";
       return {
         phase, age, eligible: elig, skipped, live: phase !== "idle" && phase !== "results",
-        inputOwner: cooling && cool && cool.driveAllowed() ? "player" : "none",
+        inputOwner: playerDrives() ? "player" : "none",
         cameraOwner: cooling ? "chase" : (phase === "parcFerme" || phase === "podium" ? "ceremony" : "none"),
       };
     }
@@ -210,7 +218,7 @@ var RaceCeremony = (function () {
     }
     function live() { return status().live; }
 
-    _api = { start, status, seek, skip, tick, reset, live, eligible: () => eligible(G, liveMeta()) };
+    _api = { start, status, playerDrives, stepResultsField, seek, skip, tick, reset, live, eligible: () => eligible(G, liveMeta()) };
     return _api;
   }
 
