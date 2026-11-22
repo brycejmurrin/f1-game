@@ -2185,9 +2185,15 @@ test("menu stick survives WebKit capture transfer but releases when hidden", () 
   const timers = fakeTimers();
   let ctl;
   try {
+    // Arrange Scale 200%: visual width 100px, local width 50px.
+    dom.stick.offsetWidth = 50;
     ctl = PhonePad.pad(dom, { timers });
     dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
     assert.equal(timers.pending(), 1);
+    assert.equal(dom.nub.style.transform, "translate(13.8px,0.0px)", "the nub paints at 55% of the visual radius");
+    for (const fn of winListeners.resize || []) fn();
+    assert.equal(timers.pending(), 0, "rotation invalidates the cached stick box and stops held navigation");
+    dom.stick.dispatch("pointerdown", { pointerId: 21, pointerType: "touch", clientX: 95, clientY: 200 });
     dom.gas.dispatch("pointerdown", { pointerId: 22, pointerType: "touch", clientY: 200 });
     dom.stick.dispatch("lostpointercapture", { pointerId: 21 });
     assert.equal(timers.pending(), 1, "another finger stealing capture does not end the held direction");

@@ -2,16 +2,16 @@
 const EditorWorkspace = (function () {
   "use strict";
   const mounted = new WeakMap();
-  function arrangeDoor(root, host, id = root?.id) {
+  function arrangeDoor(root, host, id = root?.id, label = "Arrange this screen") {
     if (!root || !host || !id) return;
     const existing = host.querySelector('[data-arrange-screen="' + id + '"]');
     if (existing) return existing;
     const doc = root.ownerDocument, button = doc.createElement("button");
     button.type = "button";
     button.setAttribute("data-arrange-screen", id);
-    button.textContent = "Arrange this screen";
+    button.textContent = label;
     button.onclick = () => SettingsNav.arrangeScreen(id, button,
-      () => !root.hidden && button.isConnected && button.getClientRects().length);
+      () => !root.hidden && button.isConnected && button.getClientRects().length, label);
     host.appendChild(button);
     return button;
   }
@@ -164,7 +164,7 @@ const EditorWorkspace = (function () {
     return api;
   }
   function init(doc = document) {
-    arrangeDoor(doc.getElementById("photo-controls"), doc.getElementById("pc-bar"));
+    arrangeDoor(doc.getElementById("photo-controls"), doc.getElementById("pc-bar"), "photo-controls", "Arrange camera sticks");
     return [
       ["lighting", "lt-rail", "Lighting", "Auto-saved · displayed circuit, time and weather"],
       ["camtune", "ct-rail", "Camera", "Auto-saved · selected camera scope"],

@@ -248,7 +248,7 @@ test("store.subscribe on steerMode reloads that scheme's offsets", () => {
 // create() itself, in a context that records its window/document listeners
 // and the settings MutationObserver, so the two lifecycle edges are testable.
 function bootCreate(opts = {}) {
-  const winL = {}, docL = {}, observers = [];
+  const winL = {}, docL = {}, observers = new Map();
   const settings = { hidden: false };
   const pause = { hidden: true };
   const els = { "dock-left": dockEl(), "dock-right": dockEl(), pmsettings: settings, pausemenu: pause };
@@ -268,7 +268,7 @@ function bootCreate(opts = {}) {
       },
       addEventListener(t, fn) { docL[t] = fn; },
     },
-    MutationObserver: function (cb) { observers.push(cb); this.observe = () => {}; },
+    MutationObserver: function (cb) { this.observe = target => observers.set(target, cb); },
     getComputedStyle() { ctx.gcsCalls = (ctx.gcsCalls || 0) + 1; return { getPropertyValue() { return "0"; } }; },
   };
   if (!opts.lazyToolbar) installToolbar(ctx);
@@ -563,10 +563,10 @@ test("a REPOSITION drag that starts on GAS never reaches the button: the throttl
 test("an external open of SETTINGS or PAUSED ends REPOSITION without stacking dialogs", () => {
   const { api, observers, settings, pause, bodyAttrs } = bootCreate();
   api.setEditing(true);
-  observers[0]();   // our own hide settled: nothing visible, still editing
+  observers.get(settings)();   // our own hide settled: nothing visible, still editing
   assert.equal(api.editing(), true);
   pause.hidden = false;   // the pause button
-  observers[0]();
+  observers.get(pause)();
   assert.equal(api.editing(), false);
   assert.equal(bodyAttrs["data-dock-edit"], undefined);
   assert.equal(settings.hidden, true, "settings is not re-shown over the pause card");

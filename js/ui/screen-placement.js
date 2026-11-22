@@ -6,7 +6,7 @@ window.ScreenPlacement = (function () {
 
   const KEY = "screenPlacement";
   const SHAPES = ["portrait", "landscape"];
-  const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [0.5, 2],
+  const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], diameter: [5, 100], scale: [0.5, 2],
     textSize: [0.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104],
     formWidth: [10, 100], cornerRadius: [0, 40], rowGap: [0, 48], columnGap: [0, 48] };
   const fontSteps = ["micro", "1", "2", "3", "4", "5", "6"];
@@ -37,10 +37,11 @@ window.ScreenPlacement = (function () {
       const fields = {};
       for (const key of Object.keys(limits)) {
         const value = raw[region][key];
-        if (!Number.isFinite(value) || config[key] === false) continue;
+        if (!Number.isFinite(value) || config[key] === false || key === "diameter" && !config.diameter) continue;
         if ((key === "x" || key === "y") && !value || (key === "scale" || key === "textSize") && value === 1) continue;
         fields[key] = fieldValue(key, value, config);
       }
+      if (fields.diameter) { delete fields.width; delete fields.height; }
       const align = raw[region].textAlign;
       if (config.textAlign !== false && ["start", "center", "end"].includes(align)) fields.textAlign = align;
       if (Object.keys(fields).length) out[region] = fields;
@@ -111,6 +112,22 @@ window.ScreenPlacement = (function () {
       }
       const declarations = [];
       if (fields.x || fields.y) declarations.push('translate:' + ((fields.x || 0) / z) + 'vw ' + ((fields.y || 0) / z) + 'vh');
+      if (fields.diameter) {
+        const stick = config.regions[region].diameter;
+        const disc = stick === ":scope" ? target : ':is(' + target + ') ' + stick;
+        // Studio and free flight can change the wrapper's zoom without rotating.
+        const photo = id === "photo-controls";
+        const requested = photo ? 'calc(' + fields.diameter + 'vmin / var(--pc-control-z,1))' : fields.diameter / z + 'vmin';
+        const floor = photo ? 'calc(44px / var(--pc-control-z,1) / ' + (fields.scale || 1) + ')' : 44 / (z * (fields.scale || 1)) + 'px';
+        const fit = photo ? 'min(' + requested + ',var(--pc-max-diameter,' + requested + '))' : requested;
+        const size = 'max(' + floor + ',' + fit + ')';
+        rules.push(disc + '{width:' + size + ' !important;height:' + size + ' !important;box-sizing:border-box !important}');
+        if (photo) {
+          rules.push(config.root + '{--pc-' + region + '-diameter:' + fields.diameter + 'vmin}');
+          if (fields.x || fields.y) declarations.push('--pc-max-diameter:' + requested);
+          rules.push(disc + ' .pc-nub{width:39%;height:39%;margin:0;translate:-50% -50%}');
+        }
+      }
       if (fields.width) {
         const width = fields.width / z + 'vw';
         declarations.push('width:' + width);

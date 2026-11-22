@@ -195,13 +195,21 @@ window.ScreenArranger = (function () {
     const arrows = row();
     for (const name of Object.keys(directions)) button(arrows, name, () => move(name, Number(step.value)));
     const sizes = row(), sizing = [];
-    for (const prop of ["width", "height", "scale"]) {
+    for (const prop of ["width", "height", "diameter", "scale"]) {
       for (const sign of [-1, 1]) {
         const title = prop[0].toUpperCase() + prop.slice(1) + (sign < 0 ? " −" : " +");
         const btn = button(sizes, title, () => change(() => {
           const r = region(), n = Number(step.value) * sign;
           if (prop === "scale") r.scale = fieldValue(prop, (r.scale || 1) + n * 0.05);
-          else {
+          else if (prop === "diameter") {
+            const selector = screen.regions[key].diameter;
+            const part = element(key), disc = selector === ":scope" ? part : part.querySelector(selector);
+            if (!disc) return;
+            const { w, h } = viewport();
+            const diameter = r.diameter ?? rectOf(disc).width * 100 / (Math.min(w, h) * (r.scale || 1));
+            delete r.width; delete r.height;
+            r.diameter = fieldValue(prop, diameter + n);
+          } else {
             const rect = rectOf(element(key));
             const {w, h} = viewport();
             const measured = rect[prop] / ((prop === "width" ? w : h) * (r.scale || 1)) * 100;
@@ -248,6 +256,7 @@ window.ScreenArranger = (function () {
     node("summary", advanced, "Advanced style");
     const advancedInputs = new Map();
     for (const [prop, name, min, max] of [
+      ["diameter", "Diameter (% of shorter screen side)", 5, 100],
       ["formWidth", "Form control width (%)", 10, 100],
       ["textAlign", "Text alignment"], ["cornerRadius", "Corner radius (px)", 0, 40],
       ["rowGap", "Row gap (px)", 0, 48], ["columnGap", "Column gap (px)", 0, 48],
@@ -267,12 +276,17 @@ window.ScreenArranger = (function () {
       }
       input.addEventListener("change", () => change(() => {
         if (input.value === "") delete region()[prop];
-        else region()[prop] = prop === "textAlign" ? input.value : fieldValue(prop, Number(input.value));
+        else {
+          const r = region();
+          if (prop === "diameter") { delete r.width; delete r.height; }
+          r[prop] = prop === "textAlign" ? input.value : fieldValue(prop, Number(input.value));
+        }
       }));
       advancedInputs.set(prop, { label, input });
     }
     function refreshStyleFields() {
       const part = element(key);
+      advancedInputs.get("diameter").label.hidden = !screen.regions[key].diameter;
       const form = placement.formControls;
       advancedInputs.get("formWidth").label.hidden = !part || !form || !(part.matches(form) || part.querySelector(form));
       const display = part && window.getComputedStyle?.(part).display;
@@ -312,7 +326,11 @@ window.ScreenArranger = (function () {
       heading.textContent = screen.label + " · " + side;
       copy.textContent = "Copy from " + (side === "portrait" ? "landscape" : "portrait");
       undo.disabled = !history.length;
-      for (const {btn, prop} of sizing) btn.disabled = screen.regions[key][prop] === false;
+      for (const {btn, prop} of sizing) {
+        const config = screen.regions[key];
+        btn.hidden = prop === "diameter" ? !config.diameter : !!config.diameter && (prop === "width" || prop === "height");
+        btn.disabled = btn.hidden || config[prop] === false;
+      }
       arrows.hidden = screen.regions[key].x === false && screen.regions[key].y === false;
       sizes.hidden = sizing.every(({btn}) => btn.disabled);
       if (checkedKey !== key) {
@@ -329,12 +347,15 @@ window.ScreenArranger = (function () {
       updateStatus(r);
     }
     function updateStatus(r) {
-      status.textContent = "X " + (r.x || 0) + "% · Y " + (r.y || 0) + "% · Width " +
-        (r.width ? r.width + "%" : "auto") + " · Height " + (r.height ? r.height + "%" : "auto") +
+      const dimensions = screen.regions[key].diameter
+        ? "Diameter " + (r.diameter ? r.diameter + "% of shorter screen side" : "auto")
+        : "Width " + (r.width ? r.width + "%" : "auto") + " · Height " + (r.height ? r.height + "%" : "auto");
+      status.textContent = "X " + (r.x || 0) + "% · Y " + (r.y || 0) + "% · " + dimensions +
         " · Scale " + Math.round((r.scale || 1) * 100) + "%" +
         " · Text " + Math.round((r.textSize || 1) * 100) + "%" +
         (!appearanceButtons[0].hidden ? " · Button width " + (r.buttonWidth ? r.buttonWidth + "%" : "auto") +
           " · Minimum button height " + (r.buttonHeight ? r.buttonHeight + " px" : "auto") : "") +
+        (id === "photo-controls" && screen.regions[key].diameter && r.diameter && !r.x && !r.y ? " · Auto position fits available space" : "") +
         (screen.regions[key].constraint ? " · " + screen.regions[key].constraint : "") +
         (resetLegacy ? " · Reset covers both orientations" : "");
     }

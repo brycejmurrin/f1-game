@@ -145,7 +145,7 @@ window.ScreenRegions = (function () {
   screen("cockpit-preview", "Cockpit preview", { picture: part("#ckpreview-frame", "3D cockpit"),
     angles: part("#ckpreview-angles", "Preview angles"), status: part("#ckpreview-view [aria-live]", "Preview description") }, "#ckpreview-view");
   screen("campicker", "Camera view picker", { views: part("#campicker", "Camera buttons") });
-  screen("photo-controls", "Photo controls", { move: part(".pc-move-wrap", "Movement stick"), look: part(".pc-look-wrap", "Look stick"), altitude: part(".pc-altcol", "Height controls"),
+  screen("photo-controls", "Photo controls", { move: { ...part(".pc-move-wrap", "Movement stick"), diameter: ".pc-stick" }, look: { ...part(".pc-look-wrap", "Look stick"), diameter: ".pc-stick" }, altitude: part(".pc-altcol", "Height controls"),
     actions: part("#pc-bar", "Camera controls"), lens: part(".pc-fovlab", "Field of view") });
   const replayPart = (key, label) => part('[data-wt="' + key + '"]', label);
   screen("watch", "WATCH replay", { controls: part('[data-wt="controls"]', "Transport"), timeline: part('[data-wt="timeline"]', "Timeline"), chapters: part('[data-wt="chapters"]', "Chapters"),
@@ -227,7 +227,7 @@ window.ScreenRegions = (function () {
     steerphone: "Phone controller", help: "How to play", saves: "Saves and data",
   })) screens["home-style"].regions[id] = homePart("#mb-" + id, label);
   screen("pair", "Pair phone", { heading: part("#pair-copy h1", "Heading"), scanner: part("#scan-box", "Scanner view"), status: part("#status", "Pairing status"), instructions: part("#pair-copy p", "Instructions"), scan: part("#scan", "Scan QR code"), code: part("#code", "Room code"), connect: part("#connect", "Connect") });
-  screen("menupad", "Phone menu pad", { pad: part("#dpad", "Direction pad"), status: part("#mp-mid", "Status and pause"), actions: part("#ab", "Back and select"), back: part("#b-navBack", "Back"), select: part("#b-navSelect", "Select"), pause: part("#b-pause-menu", "Pause or resume") });
+  screen("menupad", "Phone menu pad", { pad: { ...part("#dpad", "Direction pad"), diameter: ":scope" }, status: part("#mp-mid", "Status and pause"), actions: part("#ab", "Back and select"), back: part("#b-navBack", "Back"), select: part("#b-navSelect", "Select"), pause: part("#b-pause-menu", "Pause or resume") });
   screen("broadcast", "Broadcast overlay", { tower: part(".ov-tower", "Timing tower"), sectors: part(".ov-sectors", "Sector times"),
     battle: part(".ov-battle", "Battle"), caption: part(".ov-caption", "Caption") }, "main#overlay");
 

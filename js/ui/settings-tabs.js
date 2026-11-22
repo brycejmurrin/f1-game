@@ -100,14 +100,14 @@ const SettingsNav = (function () {
   // a failed load logs and the next call retries. presets() resolves true once LayoutPresets exists.
   let presetsLoad = null;
   const presetsLoaded = new Set();
-  async function arrangeScreen(id, button, stillOpen) {
+  async function arrangeScreen(id, button, stillOpen, label = "Arrange this screen") {
     button.disabled = true;
     try {
       if (!window.ScreenArranger) {
         await presets();
         if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
       }
-      if (stillOpen()) button.textContent = window.ScreenArranger?.open(id, button) ? "Arrange this screen" : "Retry layout editor";
+      if (stillOpen()) button.textContent = window.ScreenArranger?.open(id, button) ? label : "Retry layout editor";
     } catch (error) {
       Log.warn("ui", "Layout editor unavailable: " + error);
       if (stillOpen()) button.textContent = "Retry layout editor";

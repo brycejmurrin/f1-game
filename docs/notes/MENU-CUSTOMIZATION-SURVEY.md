@@ -40,6 +40,12 @@ Garage Enter & Leave works from Home. Lighting, Camera and Flyby use an active t
 
 In Chromium phone emulation at 852 × 393 CSS px, a first visit through Visual Studio opened all four primary tuners. On each tuner, Whole window width changed from 266 to 257.47 CSS px. The width after Apply matched the preview. Reset region restored 266 px. The track-only runs used a deterministic Monza race with rendering paused to measure the interface. On the same emulated screen, both Free Camera and its separate Photo Controls opened their own editors from Flyby and dismissed on Cancel. A second Lighting capture at DPR 3 held a rendered Monza cockpit frame behind the panel. Two Left taps moved the narrowed window from x = 527.53 to 510.49 CSS px. Apply retained that position and Reset returned it to x = 519.
 
+### Size the camera joysticks
+
+In Free Camera, tap **Arrange camera sticks** on the camera controls bar. The same button appears inside Photo Studio when photographing a circuit or a race. Garage photos use drag-to-orbit. Choose **Movement stick** or **Look stick**, open **Controls**, and adjust **Diameter**. Under **Advanced style**, enter an exact percentage of the shorter viewport side. The diameter resizes the circular touch pad and its thumb indicator. Scale resizes the whole group, including its label.
+
+Apply saves each stick independently for the current orientation. Reset region restores only the selected stick. Free Camera and Photo Studio share these settings. A larger stick gives your thumb more travel before reaching full movement or turn input. The panel and phone safe area can limit its visible diameter.
+
 ### Interaction references
 
 - The region picker, live selection, and explicit Apply follow the select–adjust–save sequence in Final Fantasy XIV’s HUD Layout. The Settings footer gives normal menus the same direct edit entry that World of Warcraft provides through its game menu. [Final Fantasy XIV HUD Layout](https://na.finalfantasyxiv.com/uiguide/know/know-hud/hud-layout.html) · [World of Warcraft Edit Mode](https://worldofwarcraft.blizzard.com/en-us/news/23837944)

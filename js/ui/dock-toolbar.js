@@ -1,7 +1,7 @@
 /* Live touch layout toolbar, loaded on the first edit. */
 const DockToolbar = (() => {
   "use strict";
-  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, boundedXY, paintDrag, fitNow, repaintDock, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
+  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
     const { $ } = G;
     const { sizeStep, SHAPES } = DockLayout;
     const labels = {
@@ -229,6 +229,18 @@ const DockToolbar = (() => {
       if (was.settings && settings) settings.hidden = false;
       if (was.pause && pause) pause.hidden = false;
     }
+    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
+    let fitRaf = 0;
+    function fitNow() {
+      fitRaf = 0;
+      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
+    }
+    function paintDrag(pad) {
+      repaintDock({ pad, fit: false });
+      if (fitRaf) return;
+      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
+      else fitNow();
+    }
     let drag = null;
     function onPointerDown(e) {
       if (!visible) return;
@@ -289,6 +301,19 @@ const DockToolbar = (() => {
       else restoreDialogs();
       if (editBar) { editBar.hidden = !on; paintBar(); }
       if (on) toolsButton?.focus?.({ preventScroll: true });
+      const btn = $("pm-dock-reposition");
+      if (btn) {
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.textContent = on ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
+        if (!on && restore !== false && btn.focus) btn.focus();
+      }
+      if (!on) {
+        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
+        if (fitRaf) {
+          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
+          fitRaf = 0;
+        }
+      }
     }
     function pick(id, expand) {
       if (!labels[id]) return;
@@ -335,6 +360,20 @@ const DockToolbar = (() => {
         // Keyboard / assistive activation selects; a pointer's tap or drag was handled on release.
         if (e.detail === 0) pick(id, true);
       }, true);
+      // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
+      // What still ends it: ANY of them being opened by someone else (the pause
+      // button, a key, QUIT), because a capture-phase drag left live would slide
+      // the dock under the thumb on every throttle/steer press in the race.
+      const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
+      if (watched.length && typeof MutationObserver !== "undefined") {
+        const mo = new MutationObserver(() => {
+          // Async: by the time this runs our own hide has settled (both hidden), so
+          // "something is visible" can only mean someone else opened it.
+          if (visible && watched.some((e) => !e.hidden)) close(false, false);
+        });
+        for (const e of watched) mo.observe(e, { attributes: true, attributeFilter: ["hidden"] });
+      }
+
       document.addEventListener("keydown", (e) => {
         if (!visible) return;
         if (e.key === "Escape") {

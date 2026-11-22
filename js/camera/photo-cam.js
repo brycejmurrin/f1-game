@@ -35,11 +35,16 @@ function initPhotoCam() {
 // flew off in that direction until the player pressed the same control again.
 // Split out of initPhotoCam so blur can release the input WITHOUT also
 // re-deriving the pose from the game camera, which would teleport the shot.
+const stickReleases = [];
+function releasePhotoSticks() {
+  for (const release of stickReleases) release();
+}
 const altitudeHeld = { up: false, down: false };
 // Physical aliases own their holds independently: releasing Space cannot
 // cancel a still-held R, nor can one Shift release cancel the other.
 const aliasHeld = { KeyR: false, Space: false, ShiftLeft: false, ShiftRight: false };
 function releasePhotoInput() {
+  releasePhotoSticks();
   altitudeHeld.up = altitudeHeld.down = false;
   for (const code in aliasHeld) aliasHeld[code] = false;
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
@@ -102,11 +107,14 @@ function enterPhotoMode() {
   window.addEventListener("keyup", photoKeyHandler, true);
   window.addEventListener("blur", releasePhotoInput);
   window.addEventListener("focusin", photoEditorFocus);
+  window.addEventListener("resize", releasePhotoSticks);
+  window.visualViewport?.addEventListener("resize", releasePhotoSticks);
 }
 function exitPhotoMode() {
   if (!G.photoMode) return;
   Log.info("game", "Photomode.exit");
   G.photoMode = false;
+  releasePhotoInput();
   if (freeCam) freeCam.onPhotoExit();       // resume / quit / the tuner closing take the free-cam panel with them
   G.dbgCam = null;                          // hand the game camera back
   G.snapGameCam();                          // …AT the car: the damped rig otherwise swoops back from wherever the free camera was parked
@@ -121,11 +129,14 @@ function exitPhotoMode() {
   window.removeEventListener("keyup", photoKeyHandler, true);
   window.removeEventListener("blur", releasePhotoInput);
   window.removeEventListener("focusin", photoEditorFocus);
+  window.removeEventListener("resize", releasePhotoSticks);
+  window.visualViewport?.removeEventListener("resize", releasePhotoSticks);
   if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
   applyResMode();
 }
 function togglePhotoPanel() {
   const p = freeCam && freeCam.isOpen() ? freeCam.panel() : $("lighting-inner"); if (!p) return;
+  releasePhotoSticks();
   const hide = !p.hidden;
   p.hidden = hide;
   document.body.classList.toggle("pc-nopanel", hide);
@@ -144,6 +155,7 @@ function togglePhotoLine() {
   if (G.soundOn) GameAudio.uiTick();
 }
 function setPhotoUiHidden(hide) {
+  if (hide) releasePhotoInput();
   document.body.classList.toggle("pc-uihidden", hide);
   if (G.soundOn) GameAudio.uiTick();
 }
@@ -192,42 +204,41 @@ function photoKeyHandler(e) {
 function wirePhotoStick(id, vec) {
   const el = $(id); if (!el) return;
   const nub = el.querySelector(".pc-nub");
-  let pid = null;
-  // The box and zoom are measured ONCE per drag (pointerdown) — the stick
-  // only moves on resize/zoom-cap changes, never mid-hold, and gBCR +
-  // currentCSSZoom per pointermove is a style-system query at up to 240 Hz.
-  let _r = null, _zoom = 1;
+  let pid = null, box = null, travelX = 0, travelY = 0;
   const set = (cx, cy) => {
-    const r = _r || el.getBoundingClientRect();
-    const rad = r.width / 2;
-    let dx = (cx - (r.left + rad)) / rad, dy = (cy - (r.top + rad)) / rad;
-    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    let dx = (cx - box.left) / box.width * 2 - 1;
+    let dy = (cy - box.top) / box.height * 2 - 1;
+    const magnitude = Math.hypot(dx, dy);
+    if (magnitude > 1) { dx /= magnitude; dy /= magnitude; }
     vec.x = dx; vec.y = dy;
-    /* Two coordinate spaces meet here. The VECTOR is a ratio of visual px
-       over visual px, so zoom cancels and the drive is correct. The nub's
-       translate() resolves in the element's LOCAL space, while `rad` is
-       VISUAL px (the stick sits inside .pc-stickwrap's zoom) — so the nub
-       travelled 40% of its throw at UI SIZE 40% and flew outside the ring
-       at 200%. Divide the throw back into local px. */
-    const localRad = rad / _zoom;
-    if (nub) nub.style.transform = "translate(" + (dx * localRad * 0.6) + "px," + (dy * localRad * 0.6) + "px)";
+    if (nub) nub.style.transform = "translate(" + dx * travelX + "px," + dy * travelY + "px)";
   };
-  const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
-  const endIf = (e) => { if (pid === null || e.pointerId === pid) end(); };
-  el.addEventListener("pointerdown", (e) => {
+  const end = () => {
+    if (pid === null) return;
+    const previous = pid;
+    pid = null; box = null;
+    vec.x = vec.y = 0;
+    if (nub) nub.style.transform = "translate(0,0)";
+    window.removeEventListener("pointerup", endIf, true);
+    window.removeEventListener("pointercancel", endIf, true);
+    if (el.hasPointerCapture?.(previous)) el.releasePointerCapture(previous);
+  };
+  stickReleases.push(end);
+  const endIf = e => { if (e.pointerId === pid) end(); };
+  el.addEventListener("pointerdown", e => {
+    if (pid !== null || !G.photoMode) return;
+    // Pointer coordinates and the ring must be in the same viewport space,
+    // including CSS scale and old Safari's zoom. Nub travel is local CSS px.
+    box = window.CssZoom ? window.CssZoom.viewportRect(el) : el.getBoundingClientRect();
+    if (!(box.width > 0 && box.height > 0)) return;
+    if (nub) {
+      travelX = Math.max(0, el.clientWidth - nub.offsetWidth) / 2;
+      travelY = Math.max(0, el.clientHeight - nub.offsetHeight) / 2;
+    }
     pid = e.pointerId;
-    /* THE THROW IS SPEC'D, NOT A BROWSER QUIRK. Pointer Events requires
-       setPointerCapture to throw NotFoundError when the pointerId "does not
-       match any of the active pointers", and the pointer can already be gone by
-       the time this line runs — a touch cancelled between pointerdown and the
-       handler (a rapid tap, a gesture the system claimed) is the documented
-       trigger, and it is not platform-specific. An unguarded throw aborts the
-       handler before set() AND before preventDefault(), so the stick reads zero
-       and the page keeps the gesture. Every other capture in this repo is
-       wrapped (js/input/input.js, js/game.js); this was the one that was not. */
-    try { el.setPointerCapture(pid); } catch (_) { /* the spec'd throw above — the stick still works uncaptured */ }
-    _r = el.getBoundingClientRect();
-    _zoom = el.currentCSSZoom || 1;
+    try { el.setPointerCapture(pid); } catch (_) { /* the window release net still catches an outside lift */ }
+    window.addEventListener("pointerup", endIf, true);
+    window.addEventListener("pointercancel", endIf, true);
     set(e.clientX, e.clientY);
     e.preventDefault();
   });

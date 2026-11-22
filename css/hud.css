@@ -1874,13 +1874,26 @@ body[data-hud-arrange] [data-hl-arr][data-hl-off] { opacity: 0.35; outline-style
    type setting — while the plain px terms are left to scale, because they
    encode a margin or a neighbour's size and should grow with what they
    separate. Identical rule to the HUD group at the top of this file. */
+/* Local stick slots reserve the altitude rail and safe-area margins.
+   The menu zoom also scales a custom diameter expressed in viewport units,
+   so convert the requested physical length back to the cluster's units. */
+#photo-controls {
+  --pc-control-z: var(--ui-scale);
+  --pc-label-space: max(32px, calc(1.5 * var(--fs-micro) + var(--gap)));
+  --pc-max-diameter: calc(((100vw - var(--sal) - var(--sar)) / var(--pc-control-z) - 84px - var(--steer)) / 2);
+  --pc-move-space: max(calc(44px / var(--pc-control-z)), min(var(--pc-max-diameter), calc(var(--pc-move-diameter, 118px * var(--pc-control-z)) / var(--pc-control-z))));
+  --pc-look-space: max(calc(44px / var(--pc-control-z)), min(var(--pc-max-diameter), calc(var(--pc-look-diameter, 118px * var(--pc-control-z)) / var(--pc-control-z))));
+}
+body.lt-open:not(.pc-nopanel) #photo-controls {
+  --pc-max-diameter: calc(((100vw - var(--dock-px) - var(--sal)) / var(--pc-control-z) - 40px - var(--steer)) / 2);
+}
 .pc-stickwrap {
   position: fixed; bottom: calc(20px + var(--sab) / var(--ui-scale));
   zoom: var(--ui-scale);
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) * 0.5);
 }
 .pc-move-wrap { left: calc(20px + var(--sal) / var(--ui-scale)); }
-.pc-look-wrap { left: calc(168px + var(--sal) / var(--ui-scale)); }
+.pc-look-wrap { left: calc(50px + var(--pc-move-space) + var(--sal) / var(--ui-scale)); }
 /* ---------- clear of the docked panel ----------
    MOVE stays under the left thumb; LOOK and the up/down column are anchored to
    the RIGHT of the free strip instead of at fixed left offsets, so they sit
@@ -1889,10 +1902,8 @@ body[data-hud-arrange] [data-hl-arr][data-hl-off] { opacity: 0.35; outline-style
    `min(88vw, 380px)` formula here, which stopped being true the moment the
    panel grew to 560px in its wide-and-short rail layout, and everything laid
    out to clear 380px landed on top of it.
-   Sticks stay the full 118px pad (same as HIDE PANEL) and climb/dive uses
-   `--steer` (84px — the steering-arrow diameter in css/overlays.css). The
-   old 84/46 shrink was sized against a 560px rail panel; flying `--dock-w`
-   is now 300px, so the free strip on 852×393 holds the driving-sized pads. */
+   The default stick diameter is 118px when the free strip allows it.
+   Climb/dive follows the steering-arrow diameter via --steer. */
 body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal) / var(--ui-scale)); }
 /* --dock-px, not --dock-w: the PANEL is zoomed — it is a `.sheet`, and
    css/components.css puts `zoom: var(--ui-scale)` on every sheet — so it paints
@@ -1921,16 +1932,20 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
    side by side against its edge put LOOK 20px off the left of the screen and
    over MOVE (136px off at UI SIZE 150%; survey-ui-matrix, 2026-09-24). The
    strip is tall, so they stack up the left edge instead: MOVE at the foot,
-   LOOK on it, the climb/dive pair as a row on top. 150px is one stick wrap
-   (label + gap + 118px pad) plus air, in the controls' own zoomed units. */
+   LOOK above it, the climb/dive pair as a row on top. Each stacked offset
+   includes the actual diameter beneath it and space for its label. */
 @media (orientation: portrait) {
+  body.lt-open:not(.pc-nopanel) #photo-controls {
+    --pc-max-diameter: min(calc((100vw - var(--dock-px) - var(--sal)) / var(--pc-control-z) - 20px),
+      calc(((100svh - var(--safe-t) - var(--safe-b)) / var(--pc-control-z) - 20px - 56px) / 2 - var(--pc-label-space)));
+  }
   body.lt-open:not(.pc-nopanel) .pc-look-wrap {
     left: calc(10px + var(--sal) / var(--ui-scale)); right: auto;
-    bottom: calc(20px + var(--sab) / var(--ui-scale) + 150px);
+    bottom: calc(20px + var(--sab) / var(--ui-scale) + var(--pc-move-space) + var(--pc-label-space));
   }
   body.lt-open:not(.pc-nopanel) .pc-altcol {
     left: calc(10px + var(--sal) / var(--ui-scale)); right: auto;
-    bottom: calc(20px + var(--sab) / var(--ui-scale) + 300px);
+    bottom: calc(20px + var(--sab) / var(--ui-scale) + var(--pc-move-space) + var(--pc-look-space) + 2 * var(--pc-label-space));
     flex-direction: row;
   }
   /* The pair as a ROW has to fit the strip at UI SIZE 150% too: two --steer
@@ -1940,7 +1955,8 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
 }
 .pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
-  position: relative; width: 118px; height: 118px; border-radius: 50%;
+  --pc-default-diameter: max(calc(44px / var(--pc-control-z)), min(118px, var(--pc-max-diameter)));
+  position: relative; width: var(--pc-default-diameter); height: var(--pc-default-diameter); border-radius: 50%;
   background: rgba(18,18,26,0.42); border: 1px solid rgba(255,255,255,0.28);
   box-shadow: inset 0 0 24px rgba(0,0,0,0.4);
   touch-action: none; cursor: grab;
@@ -1951,7 +1967,7 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   will-change: transform;
 }
 .pc-altcol {
-  position: fixed; bottom: calc(20px + var(--sab) / var(--ui-scale)); left: calc(300px + var(--sal) / var(--ui-scale));
+  position: fixed; bottom: calc(20px + var(--sab) / var(--ui-scale)); left: calc(64px + var(--pc-move-space) + var(--pc-look-space) + var(--sal) / var(--ui-scale));
   zoom: var(--ui-scale);
   display: flex; flex-direction: column; gap: 10px;
 }
@@ -2049,7 +2065,7 @@ body.lt-open:not(.pc-nopanel) #pc-line {
    free, so switch to a classic dual-stick layout: LOOK stick under the right
    thumb in the bottom-right corner, up/down column just inboard of it. */
 body.pc-nopanel .pc-look-wrap { left: auto; right: calc(20px + var(--sar) / var(--ui-scale)); }
-body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(--ui-scale)); }
+body.pc-nopanel .pc-altcol   { left: auto; right: calc(34px + var(--pc-look-space) + var(--sar) / var(--ui-scale)); }
 /* Photo-mode HIDE HUD (body.pc-uihidden): clean unobstructed frame — every
    photo control (bar, sticks, buttons) and the docked tuner panel disappear;
    only the restore eye stays. On a desktop the keys keep flying the camera, so

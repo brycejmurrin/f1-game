@@ -288,3 +288,25 @@ test("a first visit offers arrangement in the live tuner and preserves its camer
   assert.equal(h.sheet.dataset.editorView, "edit");
   assert.equal(h.doc.getElementById("pc-toggle").parentNode, toolbar);
 });
+
+test("Photo Mode and Free Camera's shared toolbar opens the stick layout editor", () => {
+  const h = boot(), controls = h.doc.getElementById("photo-controls"), bar = h.doc.getElementById("pc-bar");
+  controls.ownerDocument = h.doc;
+  controls.appendChild(bar);
+  h.workspace.init(h.doc);
+  h.workspace.init(h.doc);
+  const buttons = bar.querySelectorAll('[data-arrange-screen="photo-controls"]');
+  assert.equal(buttons.length, 1);
+  const door = buttons[0];
+  assert.equal(door.textContent, "Arrange camera sticks");
+  door.getClientRects = () => [{}];
+  let eligible;
+  h.nav.arrangeScreen = (id, invoker, visible) => {
+    assert.equal(id, "photo-controls"); assert.equal(invoker, door);
+    eligible = visible;
+  };
+  door.onclick();
+  assert.ok(eligible());
+  controls.hidden = true;
+  assert.equal(eligible(), false, "exit while loading cannot reopen the sticks editor");
+});

@@ -925,3 +925,49 @@ test("the closed shared arranger leaves live race controls and telemetry outside
   assert.equal(frames, 0);
   assert.equal(win.ScreenArranger, undefined);
 });
+
+test("photo joystick Diameter measures the real disc and preserves its label and sibling", () => {
+  const dom = makeDom(), root = dom.byId("photo-controls"), events = dom.makeElement("div");
+  root.matches = selector => selector === "#photo-controls";
+  const rect = width => ({ left: 0, top: 0, right: width, bottom: width, width, height: width });
+  for (const id of ["move", "look"]) {
+    const wrap = root.appendChild(dom.makeElement("div", id));
+    wrap.getClientRects = () => [rect(180)];
+    wrap.getBoundingClientRect = () => rect(180);
+    const ring = wrap.appendChild(dom.makeElement("div"));
+    ring.className = "pc-stick";
+    ring.getBoundingClientRect = () => rect(id === "move" ? 100 : 120);
+  }
+  const button = root.appendChild(dom.makeElement("button"));
+  const saved = { move: { x: 4, width: 20 }, look: { scale: 1.2 } };
+  let preview;
+  const regions = Object.fromEntries(["move", "look"].map(id => [id, { label: id, selector: "#" + id, diameter: ".pc-stick" }]));
+  const win = {
+    addEventListener: events.addEventListener, removeEventListener: events.removeEventListener,
+    ScreenRegions: { "photo-controls": { label: "Photo controls", root: "#photo-controls", regions } },
+    ScreenPlacement: { fieldValue: (_, val) => val, orientation: () => "landscape",
+      read: () => saved, apply: (_, value) => { preview = plain(value); } }
+  };
+  dom.document.createElement = tag => {
+    const el = dom.makeElement(tag);
+    if (tag === "dialog") Object.assign(el, { showModal(){}, close(){} });
+    return el;
+  };
+  vm.runInNewContext(read("js/ui/screen-arranger.js"), {
+    window:win, document:dom.document, innerWidth:1000, innerHeight:500,
+    MutationObserver: class { observe(){} disconnect(){} }, requestAnimationFrame: () => 1, cancelAnimationFrame(){}
+  }, { filename: absSrc("js/ui/screen-arranger.js") });
+  assert.ok(win.ScreenArranger.open("photo-controls", button));
+  const dialog = dom.document.querySelector("#screen-arranger");
+  const control = label => dialog.querySelectorAll("button").find(el => el.textContent === label);
+  const step = dialog.querySelectorAll("select").find(el => el.querySelectorAll("option").some(o => o.textContent === "Fine"));
+  step.value = "1";
+  assert.equal(control("Width +").hidden, true);
+  assert.equal(control("Height +").hidden, true);
+  assert.equal(control("Diameter +").hidden, false);
+  control("Diameter +").click();
+  assert.deepEqual(preview, { move: { x: 4, diameter: 21 }, look: { scale: 1.2 } });
+  control("Undo").click();
+  assert.deepEqual(preview, saved);
+  control("Cancel").click();
+});

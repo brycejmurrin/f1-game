@@ -806,3 +806,31 @@ test("tuner windows reflow at zoom and reserve the same width for adjacent camer
     assert.equal(rules.find(({ selector }) => selector === "body:has(> #" + id + ":not([hidden]))").decls.get("--dock-w"), "20vw !important");
   }
 });
+
+test("diameter fits the touch disc at UI zoom and keeps the other stick and orientation independent", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+  const id = "photo-controls";
+  const old = { move: { x: 3, width: 28, height: 39 }, look: { width: 30, scale: 1.2 } };
+  model.save(id, "portrait", old);
+  assert.deepEqual(plain(model.read(id, "portrait")), old, "previous group geometry survives until diameter is set");
+  model.save(id, "landscape", { move: { ...old.move, diameter: 20 }, look: { ...old.look, diameter: 50 }, altitude: { diameter: 7 } });
+  assert.deepEqual(plain(model.read(id, "landscape")), { move: { x: 3, diameter: 20 }, look: { scale: 1.2, diameter: 50 } });
+  assert.deepEqual(plain(model.read(id, "portrait")), old);
+  const rules = cssRules([...sheets][0].textContent);
+  for (const [wrap, size] of [["move", "20vmin"], ["look", "50vmin"]]) {
+    const disc = rules.find(rule => rule.selector.includes(".pc-" + wrap + "-wrap") && rule.selector.endsWith(" .pc-stick"));
+    assert.equal(disc.decls.get("width"), disc.decls.get("height"));
+    assert.ok(disc.decls.get("width").includes(size + " / var(--pc-control-z,1)"));
+  }
+  const nub = rules.find(rule => rule.selector.endsWith(" .pc-nub"));
+  assert.equal(nub.decls.get("width"), nub.decls.get("height"));
+  assert.equal(nub.decls.get("translate"), "-50% -50%");
+  model.save("menupad", "landscape", { pad: { diameter: -9, scale: 0.5 }, actions: { diameter: 60 } });
+  assert.deepEqual(plain(model.read("menupad", "landscape")), { pad: { diameter: 5, scale: 0.5 } });
+  const padSheet = [...sheets].find(sheet => sheet.textContent.includes("#dpad"));
+  const dpad = cssRules(padSheet.textContent).find(rule => rule.decls.has("width"));
+  assert.equal(dpad.decls.get("height"), "max(44px,2.5vmin) !important");
+  assert.equal(dpad.decls.get("width"), dpad.decls.get("height"));
+});

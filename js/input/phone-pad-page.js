@@ -408,7 +408,7 @@ const PhonePadPage = (function () {
     // a thumb on the diagonal does not flicker between two arrows.
     function menuStick(base, nub, arrows) {
       if (!base) return;
-      let id = null, dir = null, cx = 0, cy = 0, rad = 1;
+      let id = null, dir = null, cx = 0, cy = 0, rad = 1, localPerViewport = 1;
       const reps = {};
       const lit = (k, on) => { const a = arrows && arrows[k]; if (a && a.classList) a.classList.toggle("on", on); };
       const aim = (k) => {
@@ -423,7 +423,7 @@ const PhonePadPage = (function () {
       };
       const place = (e) => {
         const dx = e.clientX - cx, dy = e.clientY - cy, d = Math.hypot(dx, dy);
-        const m = d ? Math.min(d, rad * 0.55) / d : 0;
+        const m = d ? Math.min(d, rad * 0.55) / d * localPerViewport : 0;
         if (nub && nub.style) nub.style.transform = "translate(" + (dx * m).toFixed(1) + "px," + (dy * m).toFixed(1) + "px)";
         if (d < rad * 0.28) { aim(null); return; }
         const ax = Math.abs(dx), ay = Math.abs(dy);
@@ -435,6 +435,9 @@ const PhonePadPage = (function () {
         id = e.pointerId;
         try { base.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         const b = base.getBoundingClientRect();
+        // The nub's translate is local to the painted D-pad. An arranged
+        // scale changes viewport travel without changing its local diameter.
+        localPerViewport = b.width && base.offsetWidth ? base.offsetWidth / b.width : 1;
         cx = b.left + b.width / 2; cy = b.top + b.height / 2; rad = Math.max(1, b.width / 2);
         base.classList.add("on");
         place(e);
@@ -450,7 +453,12 @@ const PhonePadPage = (function () {
       };
       // In the release nets too: a lost lift otherwise repeats forever and
       // `id` stays set, so the stick refuses every later press.
-      releases.push(() => { if (id !== null) up({ pointerId: id }); });
+      const release = () => { if (id !== null) up({ pointerId: id }); };
+      releases.push(release);
+      if (typeof window !== "undefined") window.addEventListener?.("resize", release);
+      if (typeof document !== "undefined") document.addEventListener("focusin", e => {
+        if (e.target?.closest?.("#screen-arranger")) release();
+      });
       pointerReleases.push(up);   // an outside lift must work even when capture was refused
       base.addEventListener("pointerup", up);
       base.addEventListener("pointercancel", up);

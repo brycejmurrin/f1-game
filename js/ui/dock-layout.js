@@ -229,19 +229,7 @@ const DockLayout = (function () {
     function docks() {
       return { L: $("dock-left"), R: $("dock-right") };
     }
-    function paint() { apply(schemeOf(), bag, docks()); }
-    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
-    let fitRaf = 0;
-    function fitNow() {
-      fitRaf = 0;
-      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
-    }
-    function paintDrag(pad) {
-      apply(schemeOf(), bag, docks(), { pad, fit: false });
-      if (fitRaf) return;
-      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
-      else fitNow();
-    }
+    function paint(options) { apply(schemeOf(), bag, docks(), options); }
     let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
     function setShape(v) {
       shape = applyShape(v);
@@ -269,10 +257,10 @@ const DockLayout = (function () {
       if (on && !toolbar) {
         if (typeof DockToolbar !== "undefined") {
           toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
-            docks, measurePad, inboard, boundedControlXY, boundedXY, paintDrag, fitNow, repaintDock: paint, getShape: () => shape, setShape, record,
+            docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock: paint, getShape: () => shape, setShape, record,
             refreshScale: () => { uiScale?.applyHudScale(); uiScale?.applyBtnScale(); },
             readLayout: () => normalize(bag), restoreLayout: value => { bag = normalize(value); paint(); },
-            close: accept => setEditing(false, true, accept) });
+            close: (accept, restore = true) => setEditing(false, restore, accept) });
         } else {
           if (pending || typeof ScriptLoader === "undefined") return;
           const door = $("pm-dock-reposition"), origin = [$("pmsettings"), $("pausemenu")].find(el => el && !el.hidden);
@@ -305,19 +293,6 @@ const DockLayout = (function () {
         else document.body.removeAttribute("data-dock-edit");
       }
       if (editing !== was) toolbar?.show(editing, restore);
-      const btn = $("pm-dock-reposition");
-      if (btn) {
-        btn.setAttribute("aria-pressed", editing ? "true" : "false");
-        btn.textContent = editing ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
-        if (was && !editing && restore !== false && btn.focus) btn.focus();
-      }
-      if (!editing) {
-        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
-        if (fitRaf) {
-          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
-          fitRaf = 0;
-        }
-      }
       paint();
     }
 
@@ -396,19 +371,6 @@ const DockLayout = (function () {
       document.addEventListener("pointerup", e => toolbar?.onPointerUp(e), true);
       document.addEventListener("pointercancel", e => toolbar?.cancelDrag(e), true);
       document.addEventListener("lostpointercapture", e => toolbar?.cancelDrag(e), true);
-      // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
-      // What still ends it: ANY of them being opened by someone else (the pause
-      // button, a key, QUIT), because a capture-phase drag left live would slide
-      // the dock under the thumb on every throttle/steer press in the race.
-      const watched = [$("pmsettings"), $("pausemenu")].filter(Boolean);
-      if (watched.length && typeof MutationObserver !== "undefined") {
-        const mo = new MutationObserver(() => {
-          // Async: by the time this runs our own hide has settled (both hidden), so
-          // "something is visible" can only mean someone else opened it.
-          if (editing && watched.some((e) => !e.hidden)) setEditing(false, false);
-        });
-        for (const e of watched) mo.observe(e, { attributes: true, attributeFilter: ["hidden"] });
-      }
 
     }
     // apply() bakes the fractions into PIXELS of the pad at paint time, so a
