@@ -589,7 +589,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     G.camMode = camMode; G.state = state; casts.length = 0;
     sp.reset();   // drop the lamp map's content key: every call here rebuilds
     sp.livePlayerMat.set(ground);
-    sp.resolvePlayer(smp, yv);
+    sp.resolvePlayer(smp, yv, 0.1);
     if (which === "car") sp.sunPass(f, 0, true); else sp.lampPass(f, 0, true);
     const mine = casts.filter((k) => k.pass === which);
     assert.equal(mine.length, 1, `${which} map: one caster, the player (no rivals pooled)`);
@@ -599,7 +599,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
   const drawnMat = (seat) => {
     const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
-    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat));
+    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat), 0.1);
     // Stored as game.js stores _cockMat (a Float32Array): the cast must match it bit for bit.
     return Array.from(Float32Array.from([R[0], R[1], R[2], 0, U[0], U[1], U[2], 0, F[0], F[1], F[2], 0, P[0], P[1], P[2], 1]));
   };
@@ -925,6 +925,36 @@ function sharedRivalLifecycleRig() {
   v.ctx.GLTF = { toMesh() { return {}; } };
   return { ...v, idle, made, freed, decimated, nextRevision() { revision++; } };
 }
+
+test("distant rival liveries share a silhouette, preserve both inks across LODs, and release palette uploads", () => {
+  const r = sharedRivalLifecycleRig();
+  vm.runInContext(read("js/car/car-hero.js"), r.ctx);
+  r.ctx.GfxQuality = { feature: key => key === "rivalLiveryLod" };
+  const pos = [0, 0, 0, 1, 1, 1, 0, 1, 0];
+  let builds = 0;
+  r.ctx.Car3D.build = (primary, secondary) => {
+    builds++;
+    return { pos, col: [...primary, ...secondary, 0.25, 0.25, 0.25] };
+  };
+  const car = { team: r.ctx.Teams.LIST[0] };
+  const other = { team: car.team, netPaint: { tag: "peer", livery: { c1: [0, 1, 0], c2: [1, 0, 0] } } };
+  const mesh = r.carDraw.sharedRivalBodyMesh(true, car);
+  const inputs = [1, 0, 0, 0, 0, 1, 0.25, 0.25, 0.25];
+  assert.deepEqual(Array.from(mesh.geo.col), inputs);
+  assert.equal(r.carDraw.sharedRivalBodyMesh(true, { ...car }), mesh, "same palette reuses the upload");
+  const peer = r.carDraw.sharedRivalBodyMesh(false, other);
+  assert.equal(peer.geo.pos, mesh.geo.pos);
+  assert.deepEqual(Array.from(peer.geo.col), [0, 1, 0, 1, 0, 0, 0.25, 0.25, 0.25]);
+  r.idle.shift()();
+  const far = r.carDraw.sharedRivalBodyMesh(true, car);
+  assert.equal(far.geo.far, true);
+  assert.deepEqual(Array.from(far.geo.col), inputs);
+  assert.equal(builds, 1);
+  assert.equal(r.decimated.length, 1);
+  r.carDraw.invalidateFactoryMeshCaches();
+  assert.equal(r.freed.length, r.made.length);
+  for (const handle of [mesh, peer, far]) assert.ok(r.freed.includes(handle));
+});
 
 test("shared rival cache: invalidation releases both LODs and rebuilds the far body", () => {
   const r = sharedRivalLifecycleRig(), cd = r.carDraw;

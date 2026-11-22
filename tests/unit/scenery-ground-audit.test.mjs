@@ -310,7 +310,14 @@ test("partial footprint: captured Monaco city slab reports the missed nine-metre
     (x, z) => env.Tracks.terrainY(track, x, z));
   assert.equal(result.findings.length, 1);
   const f = result.findings[0];
-  assert.ok(f.maxGap > 9 && f.maxGap < 10, `captured corner gap: ${f.maxGap}`);
+  // This captured downhill corner still hangs nine metres above the terrain.
+  // On the surveyed profile the deepest gap is at the midpoint of another edge.
+  const corner = f.samples.find(({ at }) => Math.hypot(at[0] + 278.49814, at[2] - 499.58709) < 0.001);
+  assert.ok(corner && corner.support === "none", "the captured downhill corner is unsupported");
+  assert.ok(corner.gap > 9 && corner.gap < 10, `captured corner gap: ${corner.gap}`);
+  const edgeGround = env.Tracks.terrainY(track, -280.7112541, 481.1168192);
+  assert.ok(Number.isFinite(edgeGround), "known terrain under the downhill edge");
+  assert.ok(Math.abs(f.maxGap - (anchor[1] - edgeGround)) < 0.001, `deepest footprint gap: ${f.maxGap}`);
   assert.ok(f.samples.some((s) => s.support === "ground"), "uphill corner touches terrain");
   const report = FP.diagnostic(track, "monaco", f);
   // Monaco's folded road is closer at Mirabeau than at the emitting hairpin

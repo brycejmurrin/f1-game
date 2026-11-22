@@ -23,6 +23,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mosport",
+    revision: 2,
     // Keep the short pit exit's wall outside Turn 1's widened road envelope.
     pit: { side: 1, bands: { verge: 4 } },
     classic: true,

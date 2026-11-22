@@ -64,7 +64,8 @@ const CarWheels = (function () {
       if (meshes && gfx.freeMesh) for (const mesh of meshes) gfx.freeMesh(mesh);
       meshes = null; key = ""; matRef = null;
     }
-    function prepare(next, liv, tiers) {
+    function prepare(next, liv, tiers, worn = false) {
+      if (worn) next += "|worn";
       if (meshes && key === next) return;
       release();
       const v = tiers._visual || {}, t = v.tyres, b = v.brakes, w = v.wheels, tint = tints(liv);
@@ -73,8 +74,8 @@ const CarWheels = (function () {
       const rim = tint.rim || w?.rim || b?.rim;
       // The garage turntable's wheels at the player's desktop level (EXTREME tyres there; 0 on every phone).
       const gd = Car3D.garageDetail ? Car3D.garageDetail().detail : 0;
-      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd);
-      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd);
+      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd, worn ? 1 : 0);
+      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd, worn ? 1 : 0);
       const pending = [];
       try {
         for (const data of [f.rotating, f.fixed, r.rotating, r.fixed]) pending.push(gfx.createMesh(data));
@@ -130,7 +131,7 @@ const CarWheels = (function () {
     const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor, rimSurf) {
+                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor, rimSurf, wear = 0) {
       // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
       // DIED here: RC was computed and never read once, so the nine catalog
       // options that set a rim colour painted nothing. The clamp scan
@@ -190,7 +191,8 @@ const CarWheels = (function () {
         // measured it flat over its whole range. Registry, merge default and all
         // 27 recipes dropped it together.
         ? tyreStyle.grooves : grooved ? 3 : 0;
-      const grooveDepth = tyreStyle && tyreStyle.grooveDepth || 0.045;
+      const worn = wear & 1, flat = wear & 2;
+      const grooveDepth = (tyreStyle && tyreStyle.grooveDepth || 0.045) * (worn ? 0.45 : 1);
       const PROFILE = [];
       if (tyreShoulder === 1) {
         PROFILE.push([0, SH1], [SH1_W, 1]);
@@ -216,9 +218,14 @@ const CarWheels = (function () {
         for (let i = 0; i < SEG; i++) {
           const a = (i / SEG) * Math.PI * 2;
           const c = Math.cos(a), s = Math.sin(a);
-          out.pos.push(x, cy + rr * c, cz + rr * s);
+          // Buffed shoulders and rubber pickup are baked into the rotating tread.
+          // The front lock scar passes the ground at phase zero, matching the suspension thump.
+          const scar = flat && c < -0.86 && xf > 0 && xf < 1;
+          const scuff = worn && xf > 0 && xf < 1 ? 0.035 + 0.025 * Math.sin(5 * a + 13 * xf) : 0;
+          const lift = scar ? 0.12 : scuff;
+          out.pos.push(x, cy + (scar ? Math.max(-0.965 * r, rr * c) : rr * c), cz + rr * s);
           out.nrm.push(0, c, s);
-          out.col.push(TYRE[0], TYRE[1], TYRE[2]);
+          out.col.push(TYRE[0] + lift, TYRE[1] + lift, TYRE[2] + lift);
           out.mat.push(SURFACES.rubber);
         }
       }
@@ -826,12 +833,12 @@ const CarWheels = (function () {
       }
       return CarGeometry.weld(out);
     }
-    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
+    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf, detail, wear = 0) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const width = w || 0.34;
       addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor, rimSurf);
+        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor, rimSurf, wear);
       // Upright and hub carrier give the wishbones/caliper a visible termination.
       // The hub carrier the wishbones and caliper terminate in. It was a cube
       // sitting inside the rim, visible through the spokes from every angle.

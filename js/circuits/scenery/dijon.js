@@ -135,9 +135,9 @@
       // spans the rows it carries (it began half a parcel out).
       // Earth residue 0.03 → 0.11 so it cannot nearly-plane with row tops at
       // 0.06 (coplanar-audit vineyard earth×row, #3348).
-      const vineyard = (s, side, gap, rows, len, step) => {
+      const vineyard = (s, side, gap, rows, len, step, onEarthBed = true) => {
         if (!spotClear(s, side, gap + (rows * step) / 2, len * 0.5 + 10)) return;
-        drapeRun(s, side, gap - 3, [rows * step + 6, 0.12, len + 8], VINE_E, 0.11);
+        if (onEarthBed) drapeRun(s, side, gap - 3, [rows * step + 6, 0.12, len + 8], VINE_E, 0.11);
         for (let i = 0; i < rows; i++)
           drapeRun(s, side, gap + i * step, [2.6, 0.3, len], VINE, 0.06, len + 8, { h: 0.9 });
       };
@@ -189,7 +189,7 @@
             [0.38, 0.26, 0.20], b);
           stage._mat = 0;
         }, req ? { required: true } : undefined);
-        treeAt(s - 0.005, side, dist - 4, 8.4 + h * 3.0, FOLS[Math.floor(h * 4) & 3]);
+        treeAt(s - 0.005, side, dist - 15, 8.4 + h * 3.0, FOLS[Math.floor(h * 4) & 3]);
         treeAt(s + 0.009, side, dist + 3, 7.2 + h2 * 3.4, FOLS[(Math.floor(h2 * 4) + 1) & 3]);
         bushAt(s + 0.002, side, dist - 8, FOL_D);
       };
@@ -327,7 +327,7 @@
       // Field pushed past the farmstead yard so the crop drape cannot share
       // a plane with the seated gravel pad (was flatCoplanar farmstead×field).
       field(0.150, -1, 138, 40, 54, WHEAT);
-      vineyard(0.196, -1, 96, 5, 46, 7);
+      vineyard(0.196, -1, 84, 5, 46, 7);
 
       // 7. COURBE DE POUAS (s 0.210, +1, 10) — the fast right closing the
       //    straight, taken over a crest. The inside stays LOW so the corner
@@ -381,7 +381,8 @@
           stage._mat = MAT.STONE;
           // Three staggered limestone benches with air gaps — flush joins
           // read as flatCoplanar (134 m²). Each on its own footing height.
-          seat.box(stage, foot, [14, 4.6, 36], LIME, b);
+          const benchHeight = 4.6;
+          seat.box(stage, foot, [14, benchHeight, 36], LIME, b);
           const b2 = vadd(vadd(foot, a.t, 32), a.r, 8);
           const g2 = terrainYAt(b2[0], b2[2]);
           if (g2 != null) b2[1] = g2 + 0.08;
@@ -390,8 +391,8 @@
           const g3 = terrainYAt(b3[0], b3[2]);
           if (g3 != null) b3[1] = g3 + 0.08;
           seat.box(stage, b3, [11, 3.2, 24], LIME, b);
-          // Spoil ledge inset so it is not coplanar with the main cut top.
-          seat.box(stage, vadd(vadd(foot, a.r, 2.5), a.u, 4.9),
+          // Bed the spoil ledge into the main bench by 5 cm.
+          seat.box(stage, vadd(vadd(foot, a.r, 2.5), a.u, benchHeight - 0.05),
             [10, 0.55, 28], LIME2, b);
           stage._mat = 0;
         }, { required: true });
@@ -420,7 +421,7 @@
       // Valley tree clumps — wide spacing so crowns do not share a plane.
       for (const [s, d, h] of [[0.340, 54, 8.8], [0.352, 70, 6.9],
                                [0.370, 82, 9.4], [0.386, 98, 7.2],
-                               [0.402, 68, 8.1], [0.418, 88, 6.4]]) {
+                               [0.402, 68, 8.1], [0.418, 76, 6.4]]) {
         tree(K(s), -1, d, h, FOL);
       }
       bush(K(0.358), -1, 50, FOL_D);
@@ -480,7 +481,7 @@
               [0.38, 0.26, 0.20], b);
             stage._mat = 0;
           }, { required: true });
-          treeAt(s - 0.005, side, dist - 4, 8.4 + h * 3.0, FOL_D);
+          treeAt(s - 0.005, side, dist - 15, 8.4 + h * 3.0, FOL_D);
           treeAt(s + 0.009, side, dist + 3, 7.2 + h2 * 3.4, FOL);
           bushAt(s + 0.002, side, dist - 8, FOL_D);
         }
@@ -533,7 +534,7 @@
       groundPatch(K(0.576), 1, 18, [16, 0.14, 58], LIME2);
       groundPatch(K(0.532), -1, 18, [18, 0.15, 74], GRAVEL);
       marshalPost(K(0.520), -1, 15);
-      fenceRun(0.498, 0.604, 1, 26, 1.6, WOOD);
+      fenceRun(0.498, 0.604, 1, 18, 1.6, WOOD);
       bushAt(0.508, 1, 30, FOL_D);
       bushAt(0.566, 1, 28, FOL);
       treeAt(0.540, 1, 58, 9.0, FOL_L);
@@ -606,7 +607,7 @@
       treeAt(0.704, -1, 56, 9.2, FOL);
       treeAt(0.752, -1, 60, 10.0, FOL_L);
       treeAt(0.874, -1, 54, 7.8, FOL_D);
-      field(0.722, -1, 92, 44, 62, WHEAT);
+      field(0.722, -1, 84, 44, 62, WHEAT);
       field(0.768, -1, 86, 38, 54, MEADOW);
       hedgeRun(0.700, 0.760, -1, 74, 1.8, HEDGE);
       marshalPost(K(0.730), -1, 20);
@@ -712,9 +713,9 @@
         [0.264, 0.312,  1, 104],
         [0.436, 0.480,  1, 112],
         [0.500, 0.546, -1, 86], [0.576, 0.622,  1, 104],
-        [0.640, 0.686, -1, 122], [0.788, 0.832,  1, 92],
+        [0.640, 0.686, -1, 80], [0.788, 0.832,  1, 92],
         [0.842, 0.886, -1, 98], [0.108, 0.150,  1, 124],
-        [0.386, 0.428, -1, 134], [0.728, 0.772,  1, 116],
+        [0.386, 0.428, -1, 134], [0.728, 0.772,  1, 72],
         [0.876, 0.918,  1, 108],
       ]) {
         const h = 1.6 + hash(Math.round(s1 * 1000)) * 0.5;
@@ -727,7 +728,7 @@
       // 0.466@1 near the 0.41-0.45 left's drapes (#3348 flatCoplanar).
       for (const [s, side, gap, w, d, c] of [
         [0.058,  1,  86, 40, 56, WHEAT], [0.092,  1, 110, 44, 58, STUB],
-        [0.130,  1,  92, 38, 52, PLOUGH], [0.188,  1,  78, 36, 50, MEADOW],
+        [0.130,  1,  86, 38, 52, PLOUGH], [0.188,  1,  78, 36, 50, MEADOW],
         [0.246,  1, 102, 42, 58, WHEAT], [0.292, -1, 108, 44, 60, STUB],
         [0.318,  1,  96, 40, 54, MEADOW],
         [0.586, -1,  92, 40, 56, PLOUGH], [0.620,  1,  88, 38, 52, WHEAT],
@@ -739,12 +740,12 @@
 
       // Vine parcels on the open slope — Burgundy, so the planted blocks are
       // part of the skyline read, but they are low and never continuous.
-      for (const [s, side, gap, rows, len] of [
-        [0.086,  1,  68, 5, 44], [0.268,  1,  76, 6, 50],
-        [0.494,  1,  60, 5, 46], [0.606, -1,  72, 6, 48],
+      for (const [s, side, gap, rows, len, onEarthBed] of [
+        [0.086,  1,  68, 5, 44, false], [0.268,  1,  76, 6, 50],
+        [0.494,  1,  60, 5, 46], [0.606, -1,  72, 6, 48, false],
         [0.744,  1,  78, 5, 44], [0.836, -1,  70, 6, 50],
         [0.156,  1, 110, 5, 42], [0.680, -1,  90, 5, 46],
-      ]) vineyard(s, side, gap, rows, len, 7);
+      ]) vineyard(s, side, gap, rows, len, 7, onEarthBed);
 
       // Scattered farmsteads: house, barn, yard and shelter trees. These are
       // the distinct silhouettes that hold the middle distance together.

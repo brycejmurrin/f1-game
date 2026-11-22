@@ -55,6 +55,20 @@ function loadMesh(extra = {}, gfxExtra = {}) {
   return { CarMesh: ctx.CarMesh, made, freed, draws };
 }
 
+test("helmet camera preferences survive reload and only scale helmet vibration", () => {
+  const { opts, store } = loadOpts();
+  opts.setHelmetEye("upright");
+  opts.setHelmetShake("soft");
+  opts.setVisorShape("panoramic");
+  const saved = loadOpts(Object.fromEntries(store)).opts;
+  assert.deepEqual([saved.helmetEye(), saved.shakeScale("helmet"), saved.visorShape()], ["upright", 0.4, "panoramic"]);
+  saved.setHelmetShake("medium");
+  assert.equal(saved.shakeScale("helmet"), 0.7);
+  saved.setHelmetShake("off");
+  assert.equal(saved.shakeScale("helmet"), 0);
+  assert.equal(saved.shakeScale("cockpit"), 1);
+});
+
 test("helmet visor is opt-in, survives reload and validates stored and shot choices", () => {
   const { opts, store } = loadOpts({});
   assert.equal(opts.visor(), "off");
@@ -74,8 +88,8 @@ test("visor colors and strengths persist independently and preserve legacy smoke
   assert.equal(opts.visor(), "smoke");
   assert.equal(opts.visorColor(), "amber");
   assert.equal(opts.visorIntensity(), "medium");
-  for (const color of ["neutral", "amber", "ice", "rose"]) {
-    for (const intensity of ["light", "medium", "strong"]) {
+  for (const color of ["neutral", "amber", "ice", "rose", "green", "violet", "copper"]) {
+    for (const intensity of ["trace", "light", "medium", "strong", "deep"]) {
       opts.setVisorColor(color); opts.setVisorIntensity(intensity);
       const restored = loadOpts(Object.fromEntries(store)).opts;
       assert.equal(restored.visorColor(), color);
@@ -83,8 +97,8 @@ test("visor colors and strengths persist independently and preserve legacy smoke
     }
   }
   opts.setVisor("clear"); opts.setVisor("smoke");
-  assert.equal(opts.visorColor(), "rose");
-  assert.equal(opts.visorIntensity(), "strong");
+  assert.equal(opts.visorColor(), "copper");
+  assert.equal(opts.visorIntensity(), "deep");
   opts.setVisorColor("invalid"); opts.setVisorIntensity("invalid");
   assert.equal(opts.visorColor(), "amber");
   assert.equal(opts.visorIntensity(), "medium");

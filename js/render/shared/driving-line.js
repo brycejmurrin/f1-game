@@ -123,13 +123,6 @@ window.DrivingLine = (function () {
      LERPED with Tracks.sample()'s fi maths — the road mesh is piecewise-linear
      between nodes ~4 m apart, so a nearest-node lift let the tarmac rise above
      the ribbon's LIFT where the banking changes fast (7.8 cm at Zandvoort). */
-  function nodeBank(bp, hw, k, o) {
-    const lift = bp.lift[k];
-    if (!(lift > 0)) return 0;
-    const w = hw[k];
-    const frac = clamp((bp.bsign[k] * o + w) / (2 * w), 0, 1);
-    return lift * (frac - 0.5);
-  }
   function bankOffset(track, s, o) {
     const bp = track && track.bankP;
     if (!bp) return 0;
@@ -137,7 +130,7 @@ window.DrivingLine = (function () {
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
-    const a = nodeBank(bp, track.hw, i, o), b = nodeBank(bp, track.hw, j, o);
+    const a = TrackMesh.bankOffsetAt(track, i, o), b = TrackMesh.bankOffsetAt(track, j, o);
     return a + (b - a) * f;
   }
 

@@ -18,6 +18,9 @@ function load() {
   const sandbox = { window: {}, Math, Float32Array, console, M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
+  for (const file of ["js/track/core/geom.js", "js/track/core/spline.js", "js/track/core/mesh.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
+  }
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,
     { filename: absSrc("js/render/shared/driving-line.js") });
   return vm.runInContext("DrivingLine", ctx);

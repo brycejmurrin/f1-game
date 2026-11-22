@@ -21,8 +21,9 @@ function make(uploads, wind, opts = {}) {
   const ctx = vm.createContext({
     Float32Array, Uint8Array, Array, Math: seededMath, Object,
     LightTune: { LT: lt },
-    PerfGov: { autoShed: () => 0 },
+    PerfGov: { autoShed: () => opts.shed || 0 },
     Wind: { state: () => wind },
+    Tracks: opts.tracks,
   });
   seedLog(ctx);
   const P = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/fx/particles.js"), "utf8") + ";Particles", ctx, { filename: absSrc("js/fx/particles.js") });
@@ -438,4 +439,57 @@ test("clear disarms a pending armPrime so the next draw is not a stale idle prim
   P.clear();
   P.draw();
   assert.equal(uploads.length, 0, "clear dropped the pending prime");
+});
+
+test("distant rain follows the moving cell in world space and clears after the shower", () => {
+  const uploads = [], samples = [];
+  const track = { total: 2000 };
+  const weather = { arc: { t: 0, cell: { c0: 0.95, h: 0.15, total: 2000, life: 30, v: 10 } }, rainfallAt: () => 1 };
+  const P = make(uploads, null, { tracks: { sample(track, s, out) {
+    samples.push(s);
+    out.p[0] = (s % track.total + track.total) % track.total;
+    out.p[1] = 5; out.p[2] = 0;
+  } } });
+  const eye = [0, 0, 1000], fog = [1, 1, 1];
+  P.rainCurtain(track, weather, eye, fog); P.draw();
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].floats, 9 * 60);
+  assert.equal(samples[4], 1900);
+  const anchor = (data, k) => (data[60 * k + 2] + data[60 * k + 12]) / 2;
+  assert.ok(Math.abs(anchor(uploads[0].data, 4) - 1900) < 0.01);
+  weather.arc.t = 20;
+  P.rainCurtain(track, weather, eye, fog); P.draw();
+  assert.ok(Math.abs(anchor(uploads[1].data, 4) - 100) < 0.01, "crosses the start line");
+  weather.arc.t = weather.arc.cell.life;
+  P.rainCurtain(track, weather, eye, fog); P.draw();
+  assert.equal(uploads.length, 2);
+  P.rainSeed(false); P.rainShow(true);
+  P.rainUpdate(0.016, eye, 1); P.draw();
+  assert.equal(uploads.at(-1).floats, 8 * 60, "local rain alone after the curtain expires");
+});
+
+test("gravel stones rebound, expire, and give way to reduced effects and primary particles", () => {
+  const tint = [0.55, 0.41, 0.29];
+  const emit = (pool, count) => pool.gravel(0, 10, 0, 0, -10, tint, count);
+  const uploads = [], P = make(uploads);
+  emit(P, 1);
+  let previousY = 10, falling = false, bounced = false;
+  for (let i = 0; i < 100 && P.count(); i++) {
+    P.update(0.02); P.draw();
+    if (!P.count()) break;
+    const y = uploads.at(-1).data[3];
+    assert.ok(y >= 10.029);
+    if (y < previousY - 0.001) falling = true;
+    if (falling && y > previousY + 0.001) bounced = true;
+    previousY = y;
+  }
+  assert.ok(bounced);
+  assert.equal(P.count(), 0);
+  for (const opts of [{ mobile: true }, { shed: 1 }, { lt: { particleMul: 0 } }]) {
+    const limited = make([], null, opts);
+    emit(limited, 24);
+    assert.equal(limited.count(), 0);
+  }
+  for (let i = 0; i < 10; i++) emit(P, 24);
+  assert.ok(P.count() <= Math.ceil(P.capacity() * 0.4));
 });

@@ -513,7 +513,7 @@
       for (const [s, side, gap] of [
         [0.030, -1, 28], [0.075, -1, 36], [0.470, 1, 42], [0.622, -1, 32], [0.882, -1, 28],
       ]) {
-        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false });
+        floodMast(K(s), side, gap, { h: 30, cool: false, arms: 2, light: false, pool: false });
       }
       cameraTower(K(0.205), -1, 24, { h: 15 });
       // Back-half dressing (JAC-M3 keeps it furniture, not planting): the

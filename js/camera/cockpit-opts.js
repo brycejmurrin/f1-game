@@ -22,12 +22,20 @@ const LEAD_MAX = 1;
 //   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
 //   HALO      OFF / SLIM / STANDARD / THICK / FAIRED: the hoop's tube (car3d.js, halo size).
 const CHOICES = {
+  helmetEye: { key: "apex26.helmetEye", url: "helmeteye", values: ["standard", "tucked", "upright", "forward", "back", "high", "low"],
+              labels: { standard: "STANDARD", tucked: "TUCKED", upright: "UPRIGHT", forward: "FORWARD", back: "BACK", high: "HIGH", low: "LOW" } },
+  helmetMount: { key: "apex26.helmetMount", url: "helmetmount", values: ["center", "left", "right"],
+                labels: { center: "CENTER", left: "LEFT EYE", right: "RIGHT EYE" } },
+  helmetShake: { key: "apex26.helmetShake", url: "helmetshake", values: ["normal", "medium", "soft", "off"],
+              labels: { normal: "NORMAL", medium: "MEDIUM", soft: "SOFT", off: "OFF" } },
+  visorShape: { key: "apex26.helmetVisorShape", url: "visorshape", values: ["standard", "panoramic", "slit", "rounded", "square"],
+              labels: { standard: "STANDARD", panoramic: "PANORAMIC", slit: "NARROW", rounded: "ROUNDED", square: "SQUARE" } },
   visor:    { key: "apex26.helmetVisor", url: "helmetvisor", values: ["off", "clear", "smoke"],
               labels: { off: "OFF", clear: "CLEAR", smoke: "TINTED" } },
-  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", def: "amber", values: ["neutral", "amber", "ice", "rose"],
-              labels: { neutral: "NEUTRAL", amber: "AMBER", ice: "ICE BLUE", rose: "ROSE" } },
-  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", def: "medium", values: ["light", "medium", "strong"],
-              labels: { light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
+  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", def: "amber", values: ["neutral", "amber", "ice", "rose", "green", "violet", "copper"],
+              labels: { neutral: "NEUTRAL", amber: "AMBER", ice: "ICE BLUE", rose: "ROSE", green: "RACING GREEN", violet: "VIOLET", copper: "COPPER" } },
+  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", def: "medium", values: ["trace", "light", "medium", "strong", "deep"],
+              labels: { trace: "TRACE", light: "LIGHT", medium: "MEDIUM", strong: "STRONG", deep: "DEEP" } },
   visorRefraction: { key: "apex26.helmetVisorRefraction", url: "visorrefraction", values: ["off", "light", "medium", "strong"],
               labels: { off: "OFF", light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
   visorReflections: { key: "apex26.helmetVisorReflections", url: "visorreflections", values: ["light", "off", "medium", "strong"],
@@ -45,6 +53,7 @@ const CHOICES = {
   interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "suede", "ribbed", "classic"],
               labels: { carbon: "CARBON", team: "TEAM", suede: "SUEDE", ribbed: "RIBBED", classic: "CLASSIC" } },
 };
+const SHAKE_SCALE = { normal: 1, medium: 0.7, soft: 0.4, off: 0 };
 const KEY_WHEEL = CHOICES.wheel.key, WHEELS = CHOICES.wheel.values;
 const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true, yoke: true, endurance: true, retro: true };
 // STANDARD's eye is vantage.js COCKPIT_EYE_FWD / COCKPIT_EYE_UP; a seat moves it.
@@ -213,6 +222,13 @@ function interior() { return choice("interior"); }
 function setInterior(v) { return setChoice("interior", v); }
 function visor() { return choice("visor"); }
 function setVisor(v) { return setChoice("visor", v); }
+function visorShape() { return choice("visorShape"); }
+function setVisorShape(v) { return setChoice("visorShape", v); }
+function helmetMount() { return choice("helmetMount"); }
+function helmetEye() { return choice("helmetEye"); }
+function setHelmetEye(v) { return setChoice("helmetEye", v); }
+function helmetShake() { return choice("helmetShake"); }
+function setHelmetShake(v) { return setChoice("helmetShake", v); }
 function visorColor() { return choice("visorColor"); }
 function setVisorColor(v) { return setChoice("visorColor", v); }
 function visorIntensity() { return choice("visorIntensity"); }
@@ -347,10 +363,18 @@ function initUI() {
   const C = CHOICES;
   row("pm-helmet-visor", "HELMET VISOR", C.visor.values, C.visor.labels,
     "Optional see-through shield in HELMET camera only. CLEAR adds a curved rim and faint reflections; TINTED adds your chosen lens color and intensity. OFF removes the visor and its frame: a plain, unframed helmet view.", visor, setVisor);
+  row("pm-helmeteye", "HELMET EYE POSITION", C.helmetEye.values, C.helmetEye.labels,
+    "Tucked moves your eyes down and forward. Upright moves them up and back. Forward keeps your usual eye height. Fine-tune the field of view in Camera Tuner.", helmetEye, setHelmetEye);
+  row("pm-helmetmount", "CAMERA MOUNT", C.helmetMount.values, C.helmetMount.labels,
+    "Center the helmet camera or mount it over either eye. Works with every eye position.", helmetMount, v => setChoice("helmetMount", v));
+  row("pm-helmetshake", "HELMET SHAKE", C.helmetShake.values, C.helmetShake.labels,
+    "Adjust impact shake, kerb rumble and speed vibration in helmet view.", helmetShake, setHelmetShake);
+  row("pm-visorshape", "VISOR OPENING", C.visorShape.values, C.visorShape.labels,
+    "Choose how much of the road is visible through a clear or tinted visor.", visorShape, setVisorShape);
   row("pm-visor-color", "TINT COLOR", C.visorColor.values, C.visorColor.labels,
-    "Lens color for TINTED visor: neutral, warm amber, ice blue or rose. CLEAR keeps an untinted centre.", visorColor, setVisorColor);
+    "Choose the lens color for a tinted visor.", visorColor, setVisorColor);
   row("pm-visor-intensity", "TINT INTENSITY", C.visorIntensity.values, C.visorIntensity.labels,
-    "Tint strength for TINTED visor. LIGHT is subtle; MEDIUM and STRONG deepen the lens color. CLEAR keeps an untinted centre.", visorIntensity, setVisorIntensity);
+    "Choose how much lens color covers the road, from a trace to a deep tint.", visorIntensity, setVisorIntensity);
   row("pm-visor-refraction", "VISOR REFRACTION", C.visorRefraction.values, C.visorRefraction.labels,
     "Distortion through the shield in HELMET camera with CLEAR or TINTED visor. OFF keeps the road undistorted.", visorRefraction, setVisorRefraction);
   row("pm-visor-reflections", "VISOR REFLECTIONS", C.visorReflections.values, C.visorReflections.labels,
@@ -422,6 +446,8 @@ return {
   KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, BEAMS_KEY, BEAMS_DEFAULT, BEAMS_MAX, WHEELS, CHOICES, HALO_VALUES,
   PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity,
   visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorDropSize, setVisorDropSize, visorRunoff, setVisorRunoff,
+  helmetMount, helmetEye, setHelmetEye, helmetShake, setHelmetShake, visorShape, setVisorShape,
+  shakeScale: mode => mode === "helmet" ? SHAKE_SCALE[helmetShake()] : 1,
   wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();

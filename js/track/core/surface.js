@@ -50,6 +50,9 @@ const TrackSurface = (function () {
     const pitRails = pit ? [pit.off.outer + 0.3, pit.off.outer + 8.3,
                             pit.off.outer + 0.3 + pit.bay.depth + 3, pit.off.outer + 8.3 + pit.bay.depth + 3] : null;
     const rails = monotonicRails(def, outerW, street, flat, pitRails);
+    // The inner 22% of terrain rail indices carries the gravel material. The
+    // road mesh covers the first 2.2 m beside the asphalt with its own verge.
+    const gravelRails = Math.ceil(0.22 * (rails.length - 1));
     const n = track.n;
     // pyMin must be the lowest point of the ROAD SURFACE, not of the centreline.
     // Banking pivots about the centre, so a banked node's low edge sits lift/2
@@ -105,7 +108,12 @@ const TrackSurface = (function () {
     };
 
     const p = {
-      outerW, rails, street, flat, pyMin, floorY, ground,
+      outerW, rails, gravelRails, street, flat, pyMin, floorY, ground,
+      gravelAt(k, x) {
+        if (street || def.terrainMat === "CONCRETE" || (pit && Math.sign(x) === pit.side && pit.w[k] > 0.01)) return false;
+        const distance = Math.abs(x) - track.hw[k];
+        return distance > 2.2 && distance <= rails[gravelRails - 1];
+      },
       heightAt(k, lateralDistance, side) {
         const i = ((Math.round(k) % n) + n) % n;
         const dist = Math.max(0, Math.abs(Number(lateralDistance) || 0));

@@ -17,5 +17,5 @@ let previous={pairs:[]};try{previous=JSON.parse(await readFile(path.join(target,
 if(!Array.isArray(previous.pairs))throw new Error('Invalid destination comparison index');
 const pairs=new Map(previous.pairs.map(pair=>[pair.id,pair]));for(const pair of incoming.pairs)pairs.set(pair.id,pair);
 await writeFile(path.join(target,'comparisons.json'),JSON.stringify({...incoming,pairs:[...pairs.values()]},null,2)+'\n');
-for(const [from,to] of [['js/fx/droplets.js','visor-droplets.js'],['js/camera/cockpit-opts.js','visor-options.js'],['css/helmet-visor.css','visor-optics.css']])await cp(path.join(root,from),path.join(target,to));
+for(const [from,to] of [['js/fx/visor-optics.js','visor-optics.js'],['js/fx/droplets.js','visor-droplets.js'],['js/camera/cockpit-opts.js','visor-options.js'],['css/helmet-visor.css','visor-optics.css']])await cp(path.join(root,from),path.join(target,to));
 console.log('Exported Visor Lab authoring files, '+(await readdir(path.join(source,'images'))).length+' original captures and the current visor runtime to '+target);
