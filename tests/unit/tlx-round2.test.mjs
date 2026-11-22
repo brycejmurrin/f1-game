@@ -191,7 +191,7 @@ test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1",
 
 // The real tsl-lit factory over the permissive stand-in, with uniform()/uniformArray() kept as plain
 // { value } holders so updateFrame's uploads can be read back. The shadow subsystem is a lamp-armed stub.
-function bootLit({ lampIdx = 2 } = {}) {
+function bootLit({ lampIdx = 2, extras = false } = {}) {
   const ctx = vm.createContext({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number });
   vm.runInContext(read("js/render/three/tsl-lit.js"), ctx, { filename: absSrc("js/render/three/tsl-lit.js") });
   const holder = (value) => ({ value, setGroup() { return this; } });
@@ -199,6 +199,13 @@ function bootLit({ lampIdx = 2 } = {}) {
   const S = { enabled: true, carEnabled: false, lampEnabled: true, lampArmed: true, lampIdx, pcssEnabled: false,
     lightVP: new Float32Array(16), carLightVP: new Float32Array(16), lampLightVP: new Float32Array(16) };
   const shadow = { S, sunTex: {}, lampTex: {}, sunSize: 2048, lampSize: 512 };
+  if (extras) {
+    S.carEnabled = true;
+    shadow.carTex = {};
+    S.csm = { on: false, valid: [false, false], half: [240, 600], biasK: [1, 1], vp: [new Float32Array(16), new Float32Array(16)] };
+    S.lampX = { on: false, slots: [0, 1].map(idx => ({ idx, armed: false, lightVP: new Float32Array(16) })) };
+    shadow.x = { csmN: 2, csmTex: [{}, {}], lampN: 2, lampTex: [{}, {}] };
+  }
   const lit = ctx.window.TLXShaders.lit(THREE, TSL, { chunks: { hash21: mk(), vnoise: mk(), ignoise: mk() }, shadow, maxLights: 16 });
   return { lit, U: lit.uniforms, S };
 }
@@ -215,6 +222,39 @@ test("1b-F3: the TLX mirror pass uploads the lamp shadow OFF; the main pass afte
   assert.equal(U.lampShadowIdx.value, 2);
   const mb = TLX.slice(TLX.indexOf("mirrorBegin(frame, w, h) {"), TLX.indexOf("mirrorEnd() {"));
   assert.match(mb, /lit\.updateFrame\(frame, true\)/, "mirrorBegin passes the mirror flag");
+});
+
+test("shadow uniforms copy only matrices sampled by the pass and refresh immediately on reactivation", () => {
+  const { lit, U, S } = bootLit({ extras: true });
+  const frame = litFrame(), slots = S.lampX.slots;
+  const matrices = {
+    lightVP: S.lightVP, carLightVP: S.carLightVP, csmVP0: S.csm.vp[0], csmVP1: S.csm.vp[1],
+    lampShadowVP: S.lampLightVP, lampXVP0: slots[0].lightVP, lampXVP1: slots[1].lightVP,
+  };
+  const copied = [];
+  for (const [key, src] of Object.entries(matrices)) {
+    const m = U[key].value, copy = m.fromArray.bind(m);
+    m.fromArray = (a) => { copied.push(key); assert.equal(a, src); return copy(a); };
+  }
+  function pass(expected, mirror = false) {
+    copied.length = 0;
+    for (const m of Object.values(matrices)) m[12] += 7;
+    lit.updateFrame(frame, mirror);
+    assert.deepEqual(copied.sort(), expected.sort());
+    for (const key of copied) assert.deepEqual(U[key].value.elements, Array.from(matrices[key]));
+  }
+  S.enabled = false;
+  pass([], true);
+  pass(["lampShadowVP"]);
+  S.enabled = S.carArmed = S.csm.on = S.lampX.on = true;
+  S.csm.valid[1] = slots[0].armed = true;
+  pass(["lightVP", "carLightVP", "csmVP1", "lampShadowVP", "lampXVP0"]);
+  S.csm.valid[0] = slots[1].armed = true;
+  pass(["lightVP", "carLightVP", "csmVP0", "csmVP1"], true);
+  frame.sunColor = [0, 0, 0];
+  pass(["lampShadowVP", "lampXVP0", "lampXVP1"]);
+  frame.sunColor = [1, 1, 1];
+  pass(Object.keys(matrices));
 });
 
 // 5-F5 (hunt 3): game.js calls gfx.resize() every rendered frame and begin()'s resizeNow() then cancels the
