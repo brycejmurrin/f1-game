@@ -17896,7 +17896,11 @@
       "update": [
         "tests/unit/extreme-lights-sky.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
+      "updateClock": [
+        "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "viewDepth": [
         "tests/unit/extreme-lights-sky.test.mjs"

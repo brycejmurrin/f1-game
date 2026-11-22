@@ -4,12 +4,15 @@
       "codeLines": 6,
       "lines": 7
     },
+    "js/render/glx/glx.js": {
+      "lines": 7
+    },
     "js/ui/hud.js": {
       "codeLines": -1,
       "lines": -1
     }
   },
   "tree": {
-    "eagerCodeBytes": 1482
+    "eagerCodeBytes": 1568
   }
 }
