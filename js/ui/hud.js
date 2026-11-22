@@ -49,20 +49,8 @@ function vpSync() {
 const vpW = () => { vpSync(); return _vp.w; };
 const vpH = () => { vpSync(); return _vp.h; };
 
-// ONE BLINK CLOCK. Each HUD `pulse` (css/hud.css: OT armed, ERS, VSC, pit cue,
-// limits, the 0.4 s redline) began its own phase when its class landed, so two
-// warnings on screen together blinked out of step (DEFECT-LEDGER item H). Pinning
-// every pulse's startTime to the document timeline's zero puts them on one
-// clock: the 0.8 s pulses share a phase and the redline is their harmonic.
-function syncPulse(e) {
-  const el = e.target;
-  if (e.animationName !== "pulse" || !el || typeof el.getAnimations !== "function") return;
-  for (const a of el.getAnimations()) if (a.animationName === "pulse" && a.startTime !== 0) a.startTime = 0;
-}
-if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
-
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
-let _invalidateFit = null, _syncPhoneFit = null;
+let _invalidateFit = null, _syncPhoneFit = null, _secFlashRead = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -119,7 +107,7 @@ const teamCss = (c) => {
 // The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
 const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
 let _secRows = null;
-const _secFlash = [0, 0, 0];
+const _secFlash = [0, 0, 0], _secFlashLog = { last: -1, raceT: null, calls: 0, painted: 0 };
 // THE GAIN, not only the split: each sector row shows the split's delta to the
 // best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
 // _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
@@ -230,7 +218,7 @@ function syncHudCamClasses() {
 // A first-ever split has nothing to beat and keeps the absolute time.
 function flashSector(i) {
   if (!(i >= 0 && i < 3)) return;
-  _secFlash[i] = 0.35;
+  _secFlash[i] = 0.35; _secFlashLog.last = i; _secFlashLog.raceT = G.raceT ?? null; _secFlashLog.calls++;
   const t = G.sectorLast && G.sectorLast[i];
   const ok = t != null && isFinite(_secPrevBest[i]);
   _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
@@ -315,41 +303,16 @@ function buildSecRows() {
   if (els.hudLimits) _limitsDots = els.hudLimits.querySelector("span");
 }
 
-// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT.
-//
-// `.hud-gaps` sits between the minimap and the CENTRED POS/LAP row, and that slot
-// CLOSES as HUD SIZE grows — the map pushes the widget right while `.hud-top`
-// grows left. Measured at 1000px wide: 266px of slot at 100%, 151 at 150%, 33 at
-// 200%, against a 117px readout in the full spelling.
-//
-// `innerWidth / scale` is the slot's proxy: halving the window and doubling the
-// HUD are the same squeeze, and the whole left cluster is in one `zoom` group so
-// the relationship is linear. Two responses, in order of what they cost:
-//
-//   1. SHORTEN. Drop the driver code and the "s" — the ARROW already says which
-//      side and the number is what a driver reads mid-corner. Full spelling is
-//      ~111px, short is ~70px.
-//   2. DROP. Below `.hud-top`'s bottom edge, still beside the map, where the
-//      strip runs clear to the far side of the screen. Costs the widget its
-//      alignment with the top of the minimap and nothing else.
-//
-// The thresholds are per BREAKPOINT because the >=1200px ladder makes both walls
-// of the slot worse at once: a 140px minimap (vs 96) starts the widget further
-// right, and fatter `.hud-box` padding starts `.hud-top` further left. MEASURED
-// slack, full spelling: 1000@150% (ratio 667) +27, 1000@175% (571) -38 but short
-// fits at +13, 1000@200% (500) short still -50; 1280@150% (853) +25, 1280@175%
-// (731) -64 and short would be -16 too, 1280@200% (640) -105. So narrow gets a
-// shorten band between 550 and 640 and drops below it; wide has no useful
-// shorten band at all and drops straight away at 800.
-//
-// Every read here is cheap. Both custom properties are
-// INLINE declarations this file's own passes write (applyScale writes
-// --hud-scale; the fit pass writes --hud-z-top when its cap binds) — string
-// reads, not getComputedStyle, so they force no style or layout pass — and
-// the width is the cached vpW() (innerWidth itself lays out on Android). The
-// gaps strip PAINTS at the capped --hud-z-top, so that is the divisor when present; the raw slider is only the fallback
-// before the first fit. Nothing here asks the layout engine anything, so it
-// can simply run every tick and follow a window resize for free.
+// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT. `.hud-gaps` sits
+// between the minimap and the centred POS/LAP row, a slot that closes as HUD SIZE
+// grows (1000px wide: 266px at 100%, 151 at 150%, 33 at 200%; full spelling ~111px,
+// short ~70px). `innerWidth / scale` is its proxy. Responses: SHORTEN (drop the
+// code and "s"), then DROP below `.hud-top`. Thresholds are per breakpoint: the
+// >=1200px ladder's 140px minimap and fatter padding squeeze both walls, so wide
+// has no useful shorten band (measured slack: 1000@150% +27, @175% short +13,
+// @200% short -50; 1280@150% +25, @175% -64). Every read is cheap: inline custom
+// properties this file writes (--hud-scale, --hud-z-top, the painted cap when
+// present) and the cached vpW(), never layout, so it runs every tick.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
 const GAP_DROP_AT  = { narrow: 550, wide: 800 };
 // Set by fitHud() from the real measured fit; null until it has run against a
@@ -1979,7 +1942,7 @@ function updateHud(force, dtMs) {
     // anyone the hue does not reach — and the chip's aria-label (role="img")
     // says compound, heat, laps left and the plan in words.
     if (typeof HudTyres !== "undefined") {
-      HudTyres.paint(els.tyre, tyres.info ? tyres.info(player) : null,
+      HudTyres.paint(els.tyre, tyres.temperatureInfo?.(player),
         { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
     }
   } else {
@@ -2005,7 +1968,8 @@ function updateHud(force, dtMs) {
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
   const caution = G.cautionInfo ? G.cautionInfo() : null;
   const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const otOff = G.state === "race" && !gateOpen && !(player.otT > 0);
+  const pitHeld = G.pits?.held?.(player);
+  const otOff = G.state === "race" && (!gateOpen || pitHeld) && !(player.otT > 0);
   // The class follows the GATE like the text does: a held lap-0 grant (or one
   // under a safety car) used to pulse the yellow "ready" plate while the text
   // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
@@ -2019,16 +1983,19 @@ function updateHud(force, dtMs) {
     // to pass; the input path still checks c.otArmed in game.js. Only the
     // Safety Car / red flag (B7.2.2c) and LOW GRIP (B7.2.2d) close it; a
     // yellow or VSC flying on lap 1 must not be named as the reason.
-    otReason = caution && caution.level >= 3 ? "caution"
+    otReason = pitHeld ? "pit-lane"
+      : caution && caution.level >= 3 ? "caution"
       : caution && caution.lowGrip ? "low-grip"
       : leader && leader.lap > 1 ? "race-control"
       : leader ? "opening-lap" : "waiting-for-leader";
   }
+  hData(els.ot, "gate", otReason || null);
   const mjTxt = otMJ.toFixed(2) + " MJ";
   const otReady = !!player.otArmed || otHeld;
   const otUnavailable = (!(player.otT > 0) && !otReady) || otOff;
   const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
-                : otOff ? (otReason === "caution" ? "OT · CAUTION"
+                : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
+                  : otReason === "caution" ? "OT · CAUTION"
                   : otReason === "low-grip" ? "OT · LOW GRIP"
                   : otReason === "opening-lap" ? "OT · LAP 1"
                   : otReason === "waiting-for-leader" ? "OT · GRID"
@@ -2037,7 +2004,8 @@ function updateHud(force, dtMs) {
                 : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
   hText(els.ot, otText);
   hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
-    : otOff ? (otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+    : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
+      : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
       : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
       : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
       : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
@@ -2072,9 +2040,11 @@ function updateHud(force, dtMs) {
     : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "CORNER MODE";
+  hData(els.aero, "zone", autoAero ? (xOpen ? "straight" : "auto") : (xOpen || noZones) ? null : dz === 0 ? "in" : dz < 900 ? "near" : null);
   hText(els.aero, aeroText);
   hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
     : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
+  let ghostSign = null;
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the
@@ -2088,6 +2058,7 @@ function updateHud(force, dtMs) {
       const ghostT = (player.lap | 0) >= 1 ? ghost.timeAt(player.s) : null;   // S4: not off the run-up clock
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
+        ghostSign = delta <= 0 ? "fast" : "slow";
         hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + signedFixed(delta) + "s");
         hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower-ink)");
       } else {
@@ -2128,6 +2099,7 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  hData(els.gapA, "ghost", ghostSign);
   gapsEmptySync();
   // THE LANE IS STALE UNTIL THE STRINGS LAND. fitHud (above) clips #announce
   // from the gaps box as it was at the start of this tick — empty, or the
@@ -2178,6 +2150,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      hData(_secRows[i].parentElement, "split", t == null ? null : sb ? "session" : pb ? "personal" : "slow");
       if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
       paintSectorFlash(i, pb, t != null);
@@ -2263,6 +2236,7 @@ function invalidateMap() { _minimap.invalidate(); }
 let _pitSideTrack = null, _pitSide = 1;
 function paintSectorFlash(i, personalBest, hasSplit) {
   const row = _secRows[i].parentElement, active = _secFlash[i] > 0;
+  if (active) _secFlashLog.painted++;
   hToggle(row, "sec-flash", active);
   hToggle(row, "sec-flash-pb", active && personalBest);
   hToggle(row, "sec-flash-slow", active && !personalBest && hasSplit);
@@ -2330,15 +2304,15 @@ function syncPhoneFit() {
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }
-_syncPhoneFit = syncPhoneFit;
+_syncPhoneFit = syncPhoneFit; _secFlashRead = () => ({ flash: _secFlash.slice(), ..._secFlashLog });
 return {
   updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
-  laneRectMisses, resetLaneRectMisses,   // PERF probe (js/ui/hud-radio-lane.js)
+  laneRectMisses, resetLaneRectMisses, secFlash: _secFlashRead,   // PERF probe (hud-radio-lane.js)
 };
 }
 
 return {
-  create,
+  create, secFlash: () => (_secFlashRead ? _secFlashRead() : null),   // __apex.hudSecFlash
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
   vp: () => [vpW(), vpH()],   // the layout viewport (ICB) every HUD rect is measured in; never inner* (#5201)

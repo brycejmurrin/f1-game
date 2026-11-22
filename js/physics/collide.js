@@ -719,7 +719,6 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
-      _colTouched = true;
       if (ct.oriented) {
         const corr = Math.max(0, ct.depth - SLOP);
         shiftLong(a, ct.nx * corr * ct.sA); shiftLong(b, -ct.nx * corr * ct.sB);
@@ -835,15 +834,18 @@ const Collide = (() => {
       // overlap. A small slop is kept to avoid a hard per-frame snap (the proactive
       // steering separation now keeps cars spaced, so collisions rarely fire and a
       // tighter boundary does not vibrate).
-      if (useBuckets) {
-        if (_colShifted) nB = _colFillBuckets(ranked);
-        _colForBucketPairs(nB, _colSepCB);
-      } else {
-        for (let i = 0; i < ranked.length; i++) {
-          const a = ranked[i];
-          if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
-          for (let j = i + 1; j < ranked.length; j++) {
-            _colSepPair(a, ranked[j], COL_SLOP);
+      // With no contacts in the last relaxation pass, the same pairs and poses cannot need separation.
+      if (_colTouched) {
+        if (useBuckets) {
+          if (_colShifted) nB = _colFillBuckets(ranked);
+          _colForBucketPairs(nB, _colSepCB);
+        } else {
+          for (let i = 0; i < ranked.length; i++) {
+            const a = ranked[i];
+            if (incidentSim.owns(a)) continue;   // Rapier owns this car's separation
+            for (let j = i + 1; j < ranked.length; j++) {
+              _colSepPair(a, ranked[j], COL_SLOP);
+            }
           }
         }
       }

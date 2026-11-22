@@ -206,7 +206,7 @@
         }, { required: true });
       }
 
-      // Südtribüne — largest permanent stand: T15 / Südkurve up the main
+      // Südtribüne — largest permanent stand: T17 / Südkurve up the main
       // straight toward Haupttribüne. Official data-facts lists South Grandstand;
       // thef1spectator details A–H + Oberrang mid section. Positive rake (rows
       // rise away from the track). Side -1 meets Main at start/finish.

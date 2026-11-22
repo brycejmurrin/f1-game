@@ -108,30 +108,28 @@ test.describe("Season — standings panel", () => {
 
     // Skip to after the race using finishRace
     await page.evaluate(() => window.__apex.park(0));
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: 10000 });
     await page.evaluate(() => window.__apex.finishRace());
-    await page.waitForTimeout(500);
 
     // Results screen should be visible
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
 
     // Return to menu (res-next starts next race; res-menu calls quitToMenu() which shows standings btn)
     await page.locator("#res-menu").click();
-    await page.waitForTimeout(300);
 
-    // The STANDINGS button should now be visible on the main menu
+    // The STANDINGS button should now be visible on the main menu (auto-waits
+    // for quitToMenu's title swap)
     await expect(page.locator("#mb-standings")).toBeVisible();
   });
 
   test("standings panel opens and shows drivers table", async ({ page }) => {
     await startSeasonRace(page);
     await page.evaluate(() => window.__apex.park(0));
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: 10000 });
     await page.evaluate(() => window.__apex.finishRace());
-    await page.waitForTimeout(500);
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
     await page.locator("#res-menu").click();
-    await page.waitForTimeout(300);
+    await expect(page.locator("#mb-standings")).toBeVisible();   // quitToMenu's title swap landed
 
     // Open standings
     await page.locator("#mb-standings").click();

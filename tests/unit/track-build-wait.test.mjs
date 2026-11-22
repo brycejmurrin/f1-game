@@ -10,6 +10,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { awaitTrackBuild, awaitApexBoot, BOOT_STALL_MS, TRACK_STALL_MS, TRACK_HARD_MS } from "../helpers/await-track-build.js";
 
+// The pause between polls is opts.delay (a Node timer by default): POLL is a
+// 1 ms real wait for the wall-clock stall/hard-cap tests, TICK one setImmediate
+// for the live-window fakes.
+const POLL = { delay: () => new Promise((r) => setTimeout(r, 1)) };
+const TICK = { delay: () => new Promise((r) => setImmediate(r)) };
+
 /** A page whose evaluate() returns whatever the script asks for, on a script.
  *
  * BOUNDED on purpose. A fake that answers forever turns "the wait never ends"
@@ -25,14 +31,13 @@ function fakePage(steps, maxCalls = 5000) {
       if (i >= maxCalls) throw new Error("fake page exhausted: the wait never ended");
       return steps[Math.min(i++, steps.length - 1)];
     },
-    async waitForTimeout(ms) { await new Promise((r) => setTimeout(r, Math.min(ms, 1))); },
     get calls() { return i; },
   };
 }
 
 test("resolves as soon as the track is there", async () => {
   const page = fakePage([{ ready: false, n: 1 }, { ready: false, n: 2 }, { ready: true, n: 3 }]);
-  await awaitTrackBuild(page, 50);
+  await awaitTrackBuild(page, 50, undefined, POLL);
   assert.ok(page.calls >= 3, "returned before it saw the track");
 });
 
@@ -43,7 +48,7 @@ test("keeps waiting while the build is still LOGGING, however slow", { timeout: 
   for (let k = 0; k < 400; k++) steps.push({ ready: false, n: k });
   steps.push({ ready: true, n: 400 });
   const page = fakePage(steps);
-  await awaitTrackBuild(page, 30);          // 30 ms stall budget, 400 growing polls
+  await awaitTrackBuild(page, 30, undefined, POLL);   // 30 ms stall budget, 400 growing polls
   assert.ok(page.calls > 200, "gave up on a build that was visibly progressing");
 });
 
@@ -51,7 +56,7 @@ test("FAILS on a stall, and says which of the two happened", { timeout: 5000 }, 
   // Ready never comes AND the log count never moves: genuinely wedged.
   const page = fakePage([{ ready: false, n: 7 }]);
   await assert.rejects(
-    () => awaitTrackBuild(page, 30, 4000),
+    () => awaitTrackBuild(page, 30, 4000, POLL),
     (e) => {
       assert.match(e.message, /STALLED/, "the stall error must name the stall");
       assert.match(e.message, /wedged build, not a slow box/, "the message must distinguish the two");
@@ -69,7 +74,7 @@ test("the hard cap ends the wait even if the stall check is broken", { timeout: 
   // The fake is exhausted well before the test's own timeout, so removing the
   // hard cap surfaces as a WRONG-MESSAGE failure rather than a slow hang.
   await assert.rejects(
-    () => awaitTrackBuild(fakePage(steps, 400), 10_000, 60),
+    () => awaitTrackBuild(fakePage(steps, 400), 10_000, 60, POLL),
     /hard cap/,
     "the wait can loop forever — a broken stall check would hang the worker, not fail it");
 });
@@ -127,7 +132,6 @@ function livePage(win, onPoll) {
       globalThis.window = win;
       try { return fn(arg); } finally { globalThis.window = prev; }
     },
-    async waitForTimeout() { await new Promise((r) => setImmediate(r)); },
     get calls() { return i; },
   };
 }
@@ -136,20 +140,20 @@ const reusedWin = (flag) => ({ __apexLoadTrack: flag, __apex: { info: () => ({ t
 test("raceFlag: a reused page's old world is not ready until this start settles", { timeout: 5000 }, async () => {
   const win = reusedWin("pending");
   const page = livePage(win, (i) => { win.__apex.logs = () => new Array(i); if (i === 5) win.__apexLoadTrack = "ok"; });
-  await awaitTrackBuild(page, 1000, 4000, { raceFlag: "__apexLoadTrack" });
+  await awaitTrackBuild(page, 1000, 4000, { raceFlag: "__apexLoadTrack", ...TICK });
   assert.equal(page.calls, 5, "returned before the race() thenable settled, or long after");
 });
 
 test("raceFlag: a start that rejects fails with its reason", { timeout: 5000 }, async () => {
   const win = reusedWin("pending");
   const page = livePage(win, (i) => { if (i === 3) win.__apexLoadTrack = "err:Race start settings changed"; });
-  await assert.rejects(() => awaitTrackBuild(page, 1000, 4000, { raceFlag: "__apexLoadTrack" }),
+  await assert.rejects(() => awaitTrackBuild(page, 1000, 4000, { raceFlag: "__apexLoadTrack", ...TICK }),
     /race start failed before the grid: Race start settings changed/);
 });
 
 test("no raceFlag: the old predicate, unchanged", { timeout: 5000 }, async () => {
   const page = livePage(reusedWin(undefined), () => {});
-  await awaitTrackBuild(page, 1000, 4000);
+  await awaitTrackBuild(page, 1000, 4000, TICK);
   assert.equal(page.calls, 1);
 });
 
@@ -213,7 +217,7 @@ test("track progress survives a full fixed-length log ring", async () => {
     if (i === 8) win.__apex.info = () => ({ track: "monza" });
   });
   Date.now = () => now;
-  try { await awaitTrackBuild(page, 10, 200); }
+  try { await awaitTrackBuild(page, 10, 200, TICK); }
   finally { Date.now = realNow; }
   assert.equal(page.calls, 8);
 });

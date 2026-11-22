@@ -6,8 +6,9 @@
 // Tip-green without tooling-fast is how #1111 burned a Structural guards red that a local suite would have caught
 // first. docs/plans/2026-10-27-orchestration-redesign.md §4.2: the worker runs it, flips ready, adds `land`; the
 // landing gate is merge-gate.mjs, run by CI as the `gate` check. A `--pr` run still writes the ready receipt
-// (artifacts/ready-gate/<pr>.json, tools/lib/gate-receipt.mjs): the hooks (.claude/hooks/merge_policy.py via
-// github-mcp-guard.sh and bash-guard.sh) require a fresh ok one before a draft→ready flip.
+// (artifacts/ready-gate/<pr>.json, tools/lib/gate-receipt.mjs) as a local record of the verdict, but NO hook reads
+// it: merge_policy.py left with the hook reset of 2026-11-03 and github-mcp-guard.sh allows the draft→ready flip
+// (tests/unit/agent-scope-hooks.test.mjs). Running this gate before the flip is the worker's discipline, not a hook.
 //
 //   node tools/ci/ready-gate.mjs                 # HEAD
 //   node tools/ci/ready-gate.mjs --sha <sha>
@@ -220,7 +221,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
       state: one.json?.state || "open", draft: one.json?.draft !== false, merged: !!one.json?.merged,
       mergeableState: one.json?.mergeable_state ?? null,
       branch: one.json?.head?.ref || "", body: one.json?.body || "", title: one.json?.title || "",
-      labels, files: filesError ? null : files, filesError,
+      labels, files: filesError ? null : files, filesError, author: one.json?.user?.login || "",
     };
   }
   const r = git("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
@@ -302,8 +303,9 @@ export function nowHint(open) {
     : "";
 }
 
-/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan passes with a `planWarning`. */
-export function withPlan(v, body) {
+/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan refuses too, as merge-gate.mjs planRow
+ *  does (a fold bot's PR, `author` a `*[bot]` login, is exempt there and here). Pure. */
+export function withPlan(v, body, author = "") {
   if (!v || v.code !== 0 || body == null) return v;
   const p = planVerdict(body);
   if (p.state === "open") {
@@ -311,7 +313,11 @@ export function withPlan(v, body) {
     return { ...v, state: "plan-open", code: 1, plan: p,
       evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)${nowHint(p.open)}` };
   }
-  if (p.state === "none") return { ...v, plan: p, planWarning: "PR body has no ## Plan checklist (AGENTS.md rule 12)" };
+  if (p.state === "none") {
+    if (/\[bot\]$/.test(String(author || ""))) return { ...v, plan: p };
+    return { ...v, state: "plan-missing", code: 1, plan: p,
+      evidence: "PR body has no ## Plan checklist (skill steward §Open) — add the template's Plan and close it; the merge gate refuses it too" };
+  }
   return { ...v, plan: p };
 }
 
@@ -360,7 +366,7 @@ const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] 
   and .claude/memory/ edits carry \`memory-change: <reason>\` in the body or the \`memory-change\` label.
   A failed PR-files fetch fails closed. --wait polls a pending Structural guards every 30 s (default 30 min; a new
   head aborts). --local uses artifacts/logs/tooling-fast-ready.sha + tooling-fast-suite.log only (no GitHub API).
-  A --pr run writes artifacts/ready-gate/<n>.json (pass or refuse), which the hooks require before the flip.
+  A --pr run writes artifacts/ready-gate/<n>.json (pass or refuse): a local record; no hook gates the flip on it.
   On exit 0 (draft + green) prints \`next:\` flip ready then add \`land\`; on \`not-draft\` prints \`next:\` add \`land\` only.
   --max-behind is gone (distance row retired): sync only when needs-sync.mjs says conflict|stale-red|retest-refused.
   Exit 1 refused, 3 no token / API error.`;
@@ -368,7 +374,7 @@ const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] 
 /** sha256 of the PR body's `## Plan` section, the half of the ready receipt's key that is not the head (the receipt
  *  stays valid while head and this hash are unchanged). Normalised so a CRLF body, trailing blanks or an edit outside
  *  the Plan hash alike: LF line ends, trailing spaces/tabs and blank lines dropped. No Plan section hashes "".
- *  Python twin: merge_policy.plan_hash (tests/unit/merge-gate.test.mjs keeps them equal). */
+ *  (Its Python twin merge_policy.plan_hash left with the hook reset of 2026-11-03.) */
 export function planHash(body) {
   const text = planBodySource(String(body || "").replace(/\r\n?/g, "\n")).replace(/\r\n?/g, "\n");
   const head = /^##[ \t]+Plan\b.*$/m.exec(text);
@@ -387,8 +393,8 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   exitIfHelp(argv, USAGE);
   const say = (...a) => log("[ready-gate]", ...a);
   if (argv.includes("--max-behind")) { say(MAX_BEHIND_GONE); return 1; }
-  // The receipt github-mcp-guard.sh / bash-guard.sh require before a draft→ready flip: written for a --pr run only,
-  // pass or refuse, so the hook can say WHY the last gate run refused.
+  // The ready receipt: written for a --pr run only, pass or refuse, as the local record of WHY the last run passed or
+  // refused. No hook reads it (the flip is not hook-gated since 2026-11-03).
   const record = (pr, head, ok, evidence) => { try { receipt({ pr, head, ok, evidence, planHash: planHash(resolved.body) }); } catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); } };
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const localOnly = argv.includes("--local");
@@ -445,12 +451,11 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
       judged = judge({ sha: resolved.sha, localOnly, request });
     }
   }
-  const v = withMemory(withPlan(judged, resolved.body), resolved.files,
+  const v = withMemory(withPlan(judged, resolved.body, resolved.author), resolved.files,
     { body: resolved.body || "", labels: resolved.labels || [], filesError: resolved.filesError || null });
   if (resolved.pr) record(resolved.pr, v.sha, v.code === 0, v.code === 0 ? "" : `${v.state}: ${v.evidence}`);
   if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null, next: resolved.pr ? nextAction(v.code === 0 ? "passed" : v.state, resolved.pr) : null }, null, 2));
   else {
-    if (v.planWarning) say(`warning: ${v.planWarning}`);
     if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip ready and add `land` in one step (next: lines); if it ages out, re-run ready-gate");
     // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs). The CLI
     // passes it in: merge-gate imports this module, and preflip-probe (with pick-tests) stays out of the gate's

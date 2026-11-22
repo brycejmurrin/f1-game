@@ -42,6 +42,10 @@ const SECTOR_DASH = [[6, 3], [2, 3], [6, 2, 2, 2]];
 // --you before the bg has resolved it: CvdPalette's row for the current mode (#1595).
 const mmYou = () => _mmYou || (typeof CvdPalette !== "undefined" && CvdPalette.hex("you")) || "#fff";
 
+function markerColor(id, fallback) {
+  return (typeof HudLayout !== "undefined" && HudLayout.colors?.value(id)) || fallback;
+}
+
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
   if (!player || !track || !track.map) return;
@@ -275,9 +279,9 @@ function drawMinimap() {
       // player's own white marker (drawn below) down with it for the session.
       if (gp) {
         if (cbCues) {
-          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, "rgba(120, 220, 255, 0.95)", "G", true);
+          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, markerColor("map-ghost", "rgba(120, 220, 255, 0.95)"), "G", true);
         } else {
-          mm.fillStyle = "rgba(120, 220, 255, 0.95)";
+          mm.fillStyle = markerColor("map-ghost", "rgba(120, 220, 255, 0.95)");
           mm.beginPath();
           mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
           mm.fill();
@@ -295,17 +299,18 @@ function drawMinimap() {
   // cue's metres do. The lane and the box turn the player's own disc --you.
   const pits = G.pits, inPit = !!player.pitState && player.pitState !== "none";
   if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
+    const pitColor = markerColor(player.pitArmed ? "map-armed" : "map-approaching", mmYou());
     const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
     if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
-      mm.strokeStyle = mmYou(); mm.lineWidth = 2;
+      mm.strokeStyle = pitColor; mm.lineWidth = 2;
       mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
       mm.stroke();
     }
     if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
-    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, mmYou());
+    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, pitColor);
     mm.globalAlpha = 1;
   }
-  mm.fillStyle = inPit ? mmYou() : "#fff";
+  mm.fillStyle = inPit ? markerColor("map-lane", mmYou()) : "#fff";
   mm.beginPath();
   mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
   mm.fill();

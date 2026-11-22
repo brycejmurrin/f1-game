@@ -750,8 +750,7 @@ function buildSetup() {
     row.dataset.csCat = activeCat.id;
     row.addEventListener("focus", () => showComparison(opt));
     row.addEventListener("pointerenter", (ev) => {
-      if (ev.pointerType === "touch") return;
-      if (typeof matchMedia === "function" && matchMedia("(hover: none)").matches) return;
+      if (ev.pointerType === "touch" || !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
       showComparison(opt);
     });
 

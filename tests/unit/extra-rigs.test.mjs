@@ -223,12 +223,12 @@ test("ExtraRigs.localBattles reuses its fight bags across calls", () => {
 });
 
 // #4745 D — the pit-entry shot: a short, drivable tracking cut on the entry road of a called stop.
-function pitEntryRig({ motion = null, now = { t: 0 } } = {}) {
+function pitEntryRig({ motion = null, now = { t: 0 }, initialMode = 0 } = {}) {
   const { ExtraRigs, ctx } = loadExtraRigs();
   ctx.performance = { now: () => now.t };
   ctx.PitGeom = { inSpan: (a, b, s) => s >= a && s <= b };
   const calls = [];
-  let mode = 0;
+  let mode = initialMode;
   const G = {
     state: "race", paused: false,
     track: { total: 1000, pit: { sA: 100, sIn: 300, side: 1 } },
@@ -240,6 +240,17 @@ function pitEntryRig({ motion = null, now = { t: 0 } } = {}) {
   return { ExtraRigs, G, calls, now, mode: () => mode };
 }
 const PITWALL = CAM_MODE_IDS.indexOf("pitwall");
+
+test("helmet stays selected throughout a called pit entry", () => {
+  const helmet = CAM_MODE_IDS.indexOf("helmet");
+  const r = pitEntryRig({ initialMode: helmet });
+  for (const s of [50, 110, 160, 280, 310]) {
+    r.G.player.s = s;
+    r.ExtraRigs.tickPitAuto(r.G);
+    assert.equal(r.mode(), helmet);
+  }
+  assert.deepEqual(r.calls, []);
+});
 
 test("pit-entry shot: cuts on the entry road of a called stop, frames the car from a fixed eye, hands back after 2.2 s", () => {
   const r = pitEntryRig();

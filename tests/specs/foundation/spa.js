@@ -135,8 +135,12 @@ export default function register() {
           cells.get(key).push(sample);
         }
 
+        // pairs[name] counts the triangle/sample hits each scan measured: a
+        // missing mesh returns 0, which is a clean pass over nothing.
+        const pairs = {};
         const scan = (name, bandOnly) => {
           const mesh = caps[name];
+          pairs[name] = 0;
           if (!mesh?.pos || !mesh?.idx) return 0;
           let max = 0;
           const { pos, idx } = mesh;
@@ -161,6 +165,7 @@ export default function register() {
                   const u = (d11 * d20 - d01 * d21) / denominator;
                   const v = (d00 * d21 - d01 * d20) / denominator;
                   if (u < -0.02 || v < -0.02 || u + v > 1.02) continue;
+                  pairs[name]++;
                   const surfaceY = ay + u * (cy - ay) + v * (by - ay);
                   const over = surfaceY - sample.y;
                   if (bandOnly ? over > 0.2 && over < 5 : over > 0.1)
@@ -176,9 +181,23 @@ export default function register() {
           road: scan("road", false),
           terrain: scan("terrain", false),
           props: Math.max(scan("props", true), scan("glass", true)),
+          pairs,
         };
       });
 
+      // A missing mesh scans as 0, a clean pass over nothing: each scan must hit
+      // samples. Measured road 9000, terrain 510, props+glass 25 (headless VM,
+      // 2026-11-10); the floor is > 0.
+      const pd = "scan hits " + JSON.stringify(overlaps.pairs);
+      expect(overlaps.pairs.road, pd).toBeGreaterThan(0);
+      expect(overlaps.pairs.terrain, pd).toBeGreaterThan(0);
+      // NOT ASSERTED (W32 row 9, listed in PR #5302): props+glass scan hits. The
+      // VM measures 25; the browser measured 0 (CI run 42792631991, job
+      // 129750769553, 38e8a8d: {"road":9000,"terrain":510,"props":0,"glass":0}),
+      // so in the browser the props clause below has been checking nothing. Cause
+      // unproven (whether the browser's corridor overheads are captured by
+      // trackGeometry() at all); recorded on every run until it is.
+      test.info().annotations.push({ type: "spa-props-scan-hits", description: pd });
       expect(overlaps.road).toBeLessThanOrEqual(0.18);
       expect(overlaps.terrain).toBeLessThanOrEqual(0.18);
       expect(overlaps.props).toBeLessThanOrEqual(0.20);

@@ -18,6 +18,8 @@
 // the expr (g.step(n), g.flushTimers()). What the VM cannot answer: anything
 // drawn (render/frame/car rasters, numLights — it reports bakedLights /
 // lampPosts), and a backend question (--backend is refused with --vm).
+// The expr runs in the game's VM context (not this module's realm) and its
+// result returns as JSON; --vm is NOT a security boundary (see vmEvalSource).
 //
 // --backend three|webgl2|webgpu pins apex26.gfxBackend (default: three, the
 // shipped default). ALWAYS pass it when the expr names a backend global:
@@ -113,6 +115,28 @@ if (vmRoute && backendPinned) {
   process.exit(2);
 }
 
+// The expr is compiled by the GAME context's own Function (vm.runInContext on
+// g.ctx), not by this module's realm: `process`, `require`, `import.meta` and
+// this module's bindings are not in its scope, and the result is serialized
+// to JSON inside the context so only a string crosses back. NOT a security
+// boundary: game-vm.cjs builds that context from host-realm globals
+// (performance, timers, URL, ...) and `g` is the host handle on purpose, so a
+// constructor chain from either still reaches the host. Pinned by
+// tests/unit/free-design-tools.test.mjs.
+const HANDLE_SLOT = "__apexEvalHandle";
+async function vmEvalSource(g, expression, rawOut) {
+  const { default: vm } = await import("node:vm");
+  Object.defineProperty(g.ctx, HANDLE_SLOT, { value: g, configurable: true });
+  const source = `(async () => {
+    const g = globalThis.${HANDLE_SLOT}; delete globalThis.${HANDLE_SLOT};
+    const shapeOf = (${shapeOf.toString()});
+    const v = await (async (a, g, __apex) => (${expression}
+    ))(globalThis.__apex, g, globalThis.__apex);
+    return JSON.stringify(${rawOut ? "v" : "shapeOf(v)"}, null, 2);
+  })()`;
+  return await vm.runInContext(source, g.ctx, { filename: "apex-eval:expr" });
+}
+
 // THE VM ROUTE. The same expr, `a` the VM's __apex, `g` the handle; the track
 // is built by createGame({ track }) before the expr runs, as race() does in
 // the browser route. Measured: ~1.5 s to __apex, ~2.5 s more to a built monza.
@@ -122,9 +146,7 @@ async function evalInVm() {
   console.error(`apex-eval: vm route track=${track} (no renderer: rasters and numLights are browser-only)`);
   const g = await createGame({ track });
   try {
-    // eslint-disable-next-line no-new-func
-    const v = await new Function("a", "g", "__apex", "return (async()=>(" + expr + "))()")(g.apex, g, g.apex);
-    console.log(JSON.stringify(raw ? v : shapeOf(v), null, 2));
+    console.log(await vmEvalSource(g, expr, raw));
   } catch (e) {
     console.log(JSON.stringify({ err: String((e && e.message) || e) }, null, 2));
     process.exitCode = 1;

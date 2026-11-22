@@ -676,7 +676,7 @@ test("retro telemetry draws live speed, gear, battery and shift lamps without un
   const mat=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
   const c={gear:5,energy:.6,rpm:10000};
   CarMesh.drawRetroTelemetry(mat,c,200,0);
-  assert.equal(draws.length,8,"speed, gear, battery, shift row, pedal/units and aero state");
+  assert.equal(draws.length,7,"speed, gear, battery, shift row and combined status plate");
   assert.ok(draws.slice(0,3).every(d=>d.mat[12]<0)&&draws[3].mat[12]>0,"speed occupies the left LCD cell, gear the right");
   const initial=draws[0].mesh, count=made.length;
   CarMesh.drawRetroTelemetry(mat,c,200,0);assert.equal(made.length,count,"same state reuses all digit meshes");
@@ -686,7 +686,7 @@ test("retro telemetry draws live speed, gear, battery and shift lamps without un
   assert.ok(draws.every(d=>d.mat.every(Number.isFinite)),"all telemetry transforms remain finite");
   const dark=draws.length;
   CarMesh.drawRetroTelemetry(mat,{...c,aeroX:.8,otT:1,deploying:true,throttleDemand:1},200,.2);
-  assert.equal(draws.length-dark,12,"throttle fill, active aero travel and overtake lamp remain available on retro");
+  assert.equal(draws.length-dark,11,"throttle fill, active aero travel and overtake lamp remain available on retro");
   assert.ok(draws.at(-1).mesh.col.some(c=>c>1),"overtake emits a functioning indicator");
 });
 
@@ -696,7 +696,7 @@ test("pedal indicators and speed-unit legends follow live state, with a bounded 
   function paint(throttleDemand, brakeDemand) {
     draws.length = 0;
     CarMesh.drawWheelExtras(mat, { throttleDemand, brakeDemand }, 0);
-    return draws.slice(1, -1); // between the status plate and the aero lamp
+    return draws.slice(1); // continuous fills follow the combined status plate
   }
   assert.equal(paint(0, 0).length, 0, "both empty slots remain visible on the plate");
   const count = made.length;

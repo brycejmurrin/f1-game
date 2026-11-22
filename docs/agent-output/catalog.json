@@ -2722,6 +2722,7 @@
         "--json",
         "--limit",
         "--out",
+        "--quiet",
         "--summary"
       ]
     },
@@ -2974,6 +2975,7 @@
       "outputPolicy": "artifact-first",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
+        "--format",
         "--json"
       ]
     },
@@ -3252,6 +3254,12 @@
       "nativeOutputFlagMentions": [
         "--json"
       ]
+    },
+    {
+      "path": "tools/serve.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
     },
     {
       "path": "tools/shot/ab-gallery.mjs",

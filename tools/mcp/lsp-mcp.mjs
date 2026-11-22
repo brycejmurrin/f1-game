@@ -805,7 +805,7 @@ export class Lsp {
     const sig = n => { const t = (lines[n.selectionRange.start.line] || "").trim(); return t.length > 90 ? t.slice(0, 89) + "…" : t; };
     const row = (n, tag) => `  ${tag.padEnd(8)} ${n.name}  ${KIND[n.kind] || n.kind}  :${n.selectionRange.start.line + 1}${concise ? "" : `  ${sig(n)}`}`;
     // Functions first (the interface), then values; members declared on one line share a row.
-    const isFn = m => FN_KINDS.has(m.kind) || /^\s*[:=]\s*(async\s*)?(function\b|\([^)]*\)\s*=>|[\w$]+\s*=>)/.test((lines[m.selectionRange.start.line] || "").slice(m.selectionRange.end.character));
+    const isFn = m => m.assignedFunction ?? (FN_KINDS.has(m.kind) || /^\s*[:=]\s*(async\s*)?(function\b|\([^)]*\)\s*=>|[\w$]+\s*=>)/.test((lines[m.selectionRange.start.line] || "").slice(m.selectionRange.end.character)));
     const rowsOf = (ms, tag) => {
       const byLine = new Map();
       for (const m of [...ms].sort((a, b) => (isFn(b) - isFn(a)) || a.selectionRange.start.line - b.selectionRange.start.line)) {
@@ -814,12 +814,12 @@ export class Lsp {
       }
       return [...byLine.values()].map(({ m, names }) => row({ ...m, name: names.join(", "), kind: isFn(m) && !FN_KINDS.has(m.kind) ? 12 : m.kind }, tag));
     };
-    const out = [], group = (title, members, exported, showRest) => {
+    const out = [], group = (title, members, exported, showRest, assigned) => {
       const descendants = [];
       const collect = nodes => { for (const node of nodes) { descendants.push(node); collect(node.children || []); } };
       collect(members);
       const positionKey = n => `${n.selectionRange.start.line}:${n.selectionRange.start.character}`;
-      const ex = exported.properties ? [...new Map(exported.properties.map(property => {
+      let ex = exported.properties ? [...new Map(exported.properties.map(property => {
         const target = this.propertyTarget(f, property), name = String(property.key.name ?? property.key.value);
         const start = { line: target.loc.start.line - 1, character: target.loc.start.column };
         const original = descendants.find(n => n.selectionRange.start.line === start.line && n.selectionRange.start.character === start.character);
@@ -831,6 +831,7 @@ export class Lsp {
           kind: functionValue ? 12 : original?.kind || (property.value.type === "Identifier" ? 13 : 7) }];
       })).values()] : members.filter(m => exported.has(m.name));
       const publicPositions = new Set(ex.map(positionKey));
+      if (assigned?.size) ex = [...ex.filter(m => !assigned.has(m.name)), ...assigned.values()];
       const rest = members.filter(m => !publicPositions.has(positionKey(m)));
       out.push(`${title}: ${ex.length} exported, ${rest.length} internal${exported.uncertain ? " (export shape includes unresolved or spread sources)" : ""}`);
       out.push(...rowsOf(ex, "[export]"));
@@ -839,12 +840,31 @@ export class Lsp {
       if (listed.length < rest.length) out.push(`  … ${rest.length - listed.length} internal (all: true lists them)`);
     };
     // `window.X = { … }` objects: tsgo lists their keys as top-level symbols; regroup them under X.
-    const wins = [...lines.entries()].map(([i, t]) => [i, /^\s*window\.([\w$]+)\s*=/.exec(t)?.[1]]).filter(([, n]) => n);
-    const owner = n => { let o = null; for (const [i, name] of wins) if (i <= n.range.start.line) o = { i, name }; return o; };
-    const byWin = new Map();
+    const byWin = new Map(), assignments = [];
+    for (const stmt of this.astOf(f)?.body || []) {
+      const expr = stmt.expression;
+      if (expr?.type !== "AssignmentExpression" || expr.operator !== "=") continue;
+      const parts = objectName(expr.left).split(".");
+      if (parts[0] !== "window" || !parts[1] || parts.length > 3) continue;
+      const [, name, member] = parts, i = stmt.loc.start.line - 1;
+      if (!byWin.has(name)) byWin.set(name, { i, members: [], assigned: new Map() });
+      const entry = byWin.get(name);
+      if (member) {
+        const key = expr.left.property.loc;
+        const range = { start: { line: key.start.line - 1, character: key.start.column }, end: { line: key.end.line - 1, character: key.end.column } };
+        const assignedFunction = ["FunctionExpression", "ArrowFunctionExpression"].includes(expr.right.type);
+        entry.assigned.set(member, { name: member, kind: assignedFunction ? 12 : 7, selectionRange: range, range, assignedFunction });
+      }
+      assignments.push({ range: stmt.range, entry, member });
+    }
+    const starts = this.textOf(f).starts;
     for (const r of roots) {
-      const w = wins.length && !r.children?.some(c => c.name === "<function>") && r.kind !== 13 ? owner(r) : null;
-      if (w) { if (!byWin.has(w.name)) byWin.set(w.name, { i: w.i, members: [] }); byWin.get(w.name).members.push(r); continue; }
+      const pos = r.selectionRange.start, offset = starts[pos.line] + pos.character;
+      const owner = assignments.find(({ range }) => range[0] <= offset && offset < range[1]);
+      if (owner) {
+        if (!owner.member) owner.entry.members.push(r);
+        continue;
+      }
       if (only) continue;
       const fn = r.name === "<function>" ? r : r.children?.find(c => c.name === "<function>");
       const members = fn ? (fn.children || []) : FN_KINDS.has(r.kind) ? [] : (r.children || []);
@@ -858,11 +878,11 @@ export class Lsp {
       }
       group(`${r.name}  :${r.selectionRange.start.line + 1}  ${fn ? "IIFE module" : "object"}`, members, fn ? this.exportsIn(f, fn.range) : new Set(members.map(m => m.name)), false);
     }
-    for (const [name, { i, members }] of byWin) {
-      if (only && only !== name) continue;
+    for (const [name, { i, members, assigned }] of byWin) {
+      if (symbol && symbol !== name) continue;
       const fn = members.length === 1 && members[0].name === "<function>" ? members[0] : null;   // window.X = (function () { … })()
-      if (fn) group(`window.${name}  :${i + 1}  IIFE module`, fn.children || [], this.exportsIn(f, fn.range), false);
-      else group(`window.${name}  :${i + 1}  object`, members, new Set(members.map(m => m.name)), false);
+      if (fn) group(`window.${name}  :${i + 1}  IIFE module`, fn.children || [], this.exportsIn(f, fn.range), false, assigned);
+      else group(`window.${name}  :${i + 1}  object`, members, new Set(members.map(m => m.name)), false, assigned);
     }
     const pageRows = out.slice(offset, offset + limit);
     return `${f}\n${pageRows.join("\n")}${out.length > offset + limit ? `\n… ${out.length - offset - limit} more rows (offset: ${offset + limit})` : ""}`;

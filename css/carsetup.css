@@ -122,6 +122,11 @@
 #carsetup:has(.cs-liv-editor) #cs-inner #cs-tabs,
 #carsetup:has(.cs-liv-editor) #cs-inner #cs-budget-wrap,
 #carsetup:has(.cs-liv-editor) #cs-inner #cs-stats-inner { display: none; }
+/* Painting hides the category rail, so its grid column belongs to the editor. */
+#carsetup:has(.cs-liv-editor) #cs-inner #cs-options {
+  grid-column: 1 / -1;
+  padding-inline: var(--pad);
+}
 #cs-inner {
   pointer-events: auto;
   /* Never wider than the safe box; the formula above decides the rest. */
@@ -1458,7 +1463,6 @@ body:not(.desktop) #cs-photo {
     scroll-snap-type: y proximity; overscroll-behavior-y: contain; touch-action: pan-y; padding-inline: 0;
   }
   #carsetup #cs-inner #cs-options { grid-column: 2; grid-row: 1; }
-  #carsetup:has(.cs-liv-editor) #cs-inner #cs-options { grid-column: 1 / -1; }
   #carsetup #cs-stack {
     display: flex; grid-row: 2; position: relative;
     inset: auto; width: 100%; max-width: none; z-index: 4;

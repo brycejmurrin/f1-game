@@ -293,6 +293,19 @@ test("landscape radio prefers a readable outer lane and preserves a crowded fall
     hStyle: (el, key, value) => el.style.setProperty(key, value), hUnstyle: (el, key) => el.style.removeProperty(key), hToggle() {} });
   lane.announceLane(root);
   const x = () => parseFloat(root.style.getPropertyValue("--announce-lane-x")), w = () => parseFloat(root.style.getPropertyValue("--announce-lane-w"));
+  els.announce._rect = R(350, 160, 160, 55);
+  let controlReads = 0;
+  const groupRect = group.getBoundingClientRect.bind(group);
+  group.getBoundingClientRect = () => { controlReads++; return groupRect(); };
+  lane.radioPaintedCollapseTick(root, false);
+  assert.equal(controlReads, 1, "a clear control is measured once");
+  els.announce.hidden = true;
+  lane.radioPaintedCollapseTick(root, true);
+  assert.equal(controlReads, 1, "hidden card needs no painted collision walk");
+  els.announce.hidden = false;
+  lane.radioPaintedCollapseTick(root, false);
+  assert.equal(controlReads, 2, "showing the same card must recheck its placement");
+
   assert.ok(w() >= 160, "outer lane remains readable");
   assert.ok(x() + w() <= 844 * 0.4 + 0.1 || x() >= 844 * 0.6, "outer lane clears the centre 20% driving corridor");
   els.minimap.hidden = false; els.minimap._rect = R(47, 70, 253, 96);

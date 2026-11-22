@@ -106,7 +106,7 @@ const HudArrange = (() => {
     }
     function remember() {
       if (history.length >= 64) history.shift();
-      history.push({ layout: HudLayout.arrangeSnapshot(context.set, context.profile), choices: {...visibilityDraft} });
+      history.push({ layout: HudLayout.arrangeSnapshot(context.set, context.profile), choices: {...visibilityDraft}, colors: HudLayout.colors?.snapshot() });
     }
     function undoEdit() {
       if (!history.length) return;
@@ -114,8 +114,29 @@ const HudArrange = (() => {
       const previous = history.pop();
       HudLayout.restoreSnapshot(context.set, context.profile, previous.layout);
       visibilityDraft = previous.choices;
+      HudLayout.colors?.preview(previous.colors);
+      if (colorPart) paintColor();
       ghosts(); after();
     }
+    let colorElement, colorPart, colorInput, colorReset;
+    function paintColor() {
+      const value = HudLayout.colors.read()[colorPart.value];
+      colorInput.value = value || "#ffffff";
+      colorReset.disabled = !value;
+    }
+    function selectColors() {
+      if (!colorPart || selected === colorElement) return;
+      colorElement = selected;
+      colorPart.textContent = "";
+      for (const part of HudLayout.colors.options(selected)) {
+        const option = document.createElement("option");
+        option.value = part.id;
+        option.textContent = part.label;
+        colorPart.appendChild(option);
+      }
+      paintColor();
+    }
+
     const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
 
     const elOf = (id) => { const row = ELEMENTS.find((e) => e[0] === id); return row ? document.querySelector(row[2]) : null; };
@@ -223,6 +244,26 @@ const HudArrange = (() => {
         ghosts(); after();
       } });
       bar.appendChild(visibilityRow);
+      if (HudLayout.colors) {
+        colorPart = document.createElement("select");
+        colorPart.setAttribute("aria-label", "Color to edit for selected HUD element");
+        colorPart.style.cssText = "max-width:100%;min-height:44px;font:inherit";
+        colorPart.onchange = paintColor;
+        colorInput = document.createElement("input");
+        colorInput.type = "color";
+        colorInput.setAttribute("aria-label", "Selected HUD color");
+        colorInput.style.cssText = "width:44px;height:44px";
+        colorInput.onchange = () => { remember(); HudLayout.colors.save(colorPart.value, colorInput.value); paintColor(); };
+        colorReset = mk("DEFAULT COLOR", "Restore this color", () => {
+          remember();
+          HudLayout.colors.save(colorPart.value, null);
+          paintColor();
+        }, "hud-arrange-color-reset");
+        bar.appendChild(colorPart);
+        bar.appendChild(colorInput);
+        bar.appendChild(colorReset);
+        sizeControls.push(colorPart, colorInput, colorReset);
+      }
       undo = mk("Undo", "Undo last HUD edit", undoEdit, "hud-arrange-undo");
       bar.appendChild(undo);
       bar.appendChild(mk("Cancel", "Discard HUD edits", () => setEditing(false, true, false), "hud-arrange-cancel"));
@@ -253,6 +294,7 @@ const HudArrange = (() => {
     }
     function paintBar(clash, message, rects) {
       if (!bar) return;
+      selectColors();
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
       nameEl.textContent = cur ? sizeLabel(selected, cur.s) : "";
@@ -515,6 +557,7 @@ const HudArrange = (() => {
         opener = document.activeElement;
         context = { set: HudLayout.shown(), profile: HudLayout.profile() };
         history.length = 0; visibilityDraft = {};
+        HudLayout.colors?.preview({});
         initial = HudLayout.arrangeSnapshot(context.set, context.profile);
         HudLayout.holdArrangePreview(true);
         hideDialogs();
@@ -526,6 +569,7 @@ const HudArrange = (() => {
         const touch = !!document.body.classList && !document.body.classList.contains("desktop");
         const rows = ELEMENTS.filter(([id]) => !(touch && TOUCH_CARRIED.includes(id)));
         selected = (rows.find(([id]) => visible(elOf(id))) || rows.find(([id]) => HudLayout.visibility(id)))?.[0] || null;
+        colorElement = undefined;
         picker.textContent = "";
         for (const [id, label] of rows) {
           if (!visible(elOf(id)) && !HudLayout.visibility(id)) continue;
@@ -538,6 +582,7 @@ const HudArrange = (() => {
       }
       if (!editing && was) {
         flush();
+        HudLayout.colors?.finish(accept);
         HudLayout.endArrangeDraft(accept, context.set, context.profile, initial);
         if (accept) for (const [id, value] of Object.entries(visibilityDraft)) HudLayout.setVisibility(id, value);
         history.length = 0; visibilityDraft = {};

@@ -132,17 +132,5 @@
     return out;
   }
 
-  // TEMPORARY install (2026-11-18): tlx.js declares `texCensus: undefined` and is in another open PR's diff, so
-  // until its own member calls memCensus this fills the façade slot once the backend is bound (renderer-boot.js
-  // fires apex-gfx-live after the descriptor copy). __apex.texCensus() and the phone bridge then read it as is.
-  function install(G) {
-    if (!G || !G.__tlx || typeof G.texCensus === "function") return false;
-    G.texCensus = () => memCensus(G.__tlx);
-    return true;
-  }
-  try {
-    window.addEventListener("apex-gfx-live", () => { try { install(window.GLX); } catch (_) { /* a census is never a boot failure */ } });
-  } catch (_) { /* no event surface (node harness) */ }
-
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { memCensus, memInstall: install });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { memCensus });
 })();

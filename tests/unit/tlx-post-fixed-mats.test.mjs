@@ -111,15 +111,16 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
   // Exercise both direct hardware presentation and the present-sized soft RT.
   for (const soft of [false, true]) {
     const draws = [], P = { composite: pass("composite"), fxaa: pass("fxaa"), sgsr: pass("sgsr") };
+    P.fxaa.bendTex = {};
     const presentW = 1266, presentH = 585;
     const dest = soft ? { width: presentW, height: presentH } : null;
     const aaRT = { texture: {} }, ldrRT = { texture: {} };
     const context = vm.createContext({ P, presentW, presentH, phonePost: true,
-      phys: true, fixed: true, fixedActive: () => true, spatialUpscale: false,
+      phys: true, _scissorWarm: false, compileJobs: null, _mirTex: null, fixed: true, fixedActive: () => true, spatialUpscale: false,
       dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0, _warmFlipUp: false,
       AA: null, taaLive: () => false,   // traa off: the FXAA / SGSR branches below are today's
-      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false,
-      cinemaPost: (rt) => rt, F: {}, o: {},   // the desktop-tier CINEMA hook: off below EXTREME (tsl-gi.js)
+      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false, bindLens(field) { P.fxaa.bendTex.field = field; },
+      cinemaPost: (rt) => rt, F: {}, o: { visorLens: { bend: { x: .03, y: .05 }, light: {} } },   // the desktop-tier CINEMA hook: off below EXTREME (tsl-gi.js)
       vset(p, w, h) { p.V.set(w, h); },
       runPass(mat, target) { draws.push({ mat, target, view: P[mat].V.values.slice() }); },
       enabled: true, screenCoordinate: { xy: [presentW / 2, presentH / 2] },
@@ -131,8 +132,11 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
       Object.assign(context, { W, H, renderScale: scale });
       vm.runInContext("pW = postSize(W); pH = postSize(H);", context);
       draws.length = 0;
+      context.o.visorFolded = false;
       vm.runInContext("{\n" + resolve + "\n}", context);
       const { pW, pH } = context;
+      assert.equal(context.o.visorFolded, !soft && scale === 1 ? 2 : false);
+      assert.equal(P.fxaa.bendTex.field, context.o.visorFolded ? context.o.visorLens : null);
       assert.deepEqual(draws[0].view, [pW, pH], "composite keeps its reduced target");
       assert.deepEqual(P.fxaa.U.texel.value.values, [1 / pW, 1 / pH], "FXAA texels follow its input");
       const final = draws.at(-1);

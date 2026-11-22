@@ -478,7 +478,7 @@ async function waitFile(file) {
 }
 function treeCode(file, { ignore = true, naturalExit = false } = {}) {
   const grandchild = `${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}setInterval(()=>{},1000)`;
-  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file + '.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file + '.tmp')},${JSON.stringify(file)});${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
+  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)},${JSON.stringify(file)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file + '.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file + '.tmp')},${JSON.stringify(file)});${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
 }
 test('Linux proc stat parser preserves process identity with spaces and parentheses in comm', () => {
   const fields = ['S', '123', '456', ...Array(16).fill('ignored'), '18446744073709551615', ...Array(32).fill('tail')];
@@ -514,9 +514,51 @@ test('explicit timeout escalates ignored signals and removes detached descendant
   assert.equal(outcome.exitCode, null);
   assert.deepEqual(pids.filter(pidAlive), []);
 });
+// A marker argument unique to this fixture lets teardown find its detached process
+// even when the test times out before the ready file exists.
+async function reapFixtureProcess(marker) {
+  const until = Date.now() + 1000;
+  for (;;) {
+    let found = false;
+    for (const entry of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(entry)) continue;
+      try {
+        const status = () => parseProcStat(fs.readFileSync(`/proc/${entry}/stat`, 'utf8'));
+        const before = status();
+        const argv = fs.readFileSync(`/proc/${entry}/cmdline`, 'utf8').split('\0');
+        if (argv.includes(marker) && before.start && before.start === status().start) {
+          found = true;
+          process.kill(Number(entry), 'SIGKILL');
+        }
+      } catch { /* The fixture may have already exited. */ }
+    }
+    if (!found) return;
+    assert.ok(Date.now() < until, 'fixture descendants exited before teardown deadline');
+    await wait(20);
+  }
+}
+const needsLinuxProcfs = process.platform !== 'linux' && 'Fixture teardown identifies its process through Linux procfs';
+test('fixture cleanup before PID publication targets only its own process', { skip: needsLinuxProcfs }, async (t) => {
+  const marker = path.join(fixture(t), 'unpublished.json');
+  const script = 'setInterval(()=>{},1000)';
+  const child = spawn(process.execPath, ['-e', script, marker], { stdio: 'ignore' });
+  const other = spawn(process.execPath, ['-e', script, marker + '.other'], { stdio: 'ignore' });
+  t.after(() => { child.kill('SIGKILL'); other.kill('SIGKILL'); });
+  await reapFixtureProcess(marker);
+  assert.equal(pidAlive(child.pid), false);
+  assert.equal(pidAlive(other.pid), true);
+});
 test('natural nonzero root exit cleans detached descendants and retains exit code', async (t) => {
   const root = fixture(t), ready = path.join(root, 'pids.json');
-  const run = spawnAgentProcess(process.execPath, ['-e', treeCode(ready, { naturalExit: true })], { cwd: root, stdio: 'ignore', killGraceMs: 100, cleanupOnExit: true });
+  const run = spawnAgentProcess(process.execPath, ['-e', treeCode(ready, { naturalExit: true }), ready], { cwd: root, stdio: 'ignore', killGraceMs: 100, cleanupOnExit: true });
+  if (process.platform === 'linux') {
+    t.after(() => reapFixtureProcess(ready));
+    // Model the supervisor being descheduled until after reparenting. No sampler
+    // can observe this branch of the process tree, regardless of polling interval.
+    const until = Date.now() + 3000;
+    const sleeper = new Int32Array(new SharedArrayBuffer(4));
+    while (pidAlive(run.child.pid) && Date.now() < until) Atomics.wait(sleeper, 0, 0, 10);
+  }
   const pids = await waitFile(ready);
   const outcome = await run.done;
   assert.equal(outcome.exitCode, 7);

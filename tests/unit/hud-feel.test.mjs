@@ -246,6 +246,24 @@ test("the OVERTAKE chip spells every state differently and reads the 2026 allowa
   assert.equal(els.btnOT.getAttribute("data-state"), "caution");
 });
 
+test("the pit limiter holds an Overtake grant until the driver leaves the exit road", () => {
+  const { els, player, G, tick } = boot();
+  player.otE = 0.125;
+  player.pitState = "out";
+  let limiterHeld = true;
+  G.pits = { held: car => car === player && limiterHeld };
+  tick();
+  assert.equal(els.ot.className, "ot-off");
+  assert.equal(els.ot.textContent, "OT · PIT LANE");
+  assert.equal(els.ot.getAttribute("aria-label"), "Overtake unavailable in the pit lane");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
+  assert.equal(els.btnOT.getAttribute("data-state"), "pit-lane");
+  limiterHeld = false;
+  tick();
+  assert.equal(els.ot.textContent, "OT READY 0.50 MJ");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");
+});
+
 test("automatic active aero identifies its mode while the manual control stays unavailable", () => {
   const { els, player, G, tick } = boot();
   G.raceAeroMode = "auto";
@@ -351,6 +369,28 @@ test("a sector split shows its GAIN on the previous best for 3 s, then the split
   G.sectorBests[0] = Infinity; G.sectorLast[0] = null; tick();
   cross(29.5);
   assert.equal(vals[0].textContent, "▼29.500");
+});
+
+// W32's Time Trial spec saw no .sec-flash* after a crossing; GameHud.secFlash() is the read-only seam
+// (__apex.hudSecFlash, W25) that tells "flashSector never called" from "called, never painted".
+test("secFlash(): the sector flash is recorded at the crossing and painted on the next HUD tick", () => {
+  const { els, G, hud, sb, tick } = boot();
+  tick();
+  const rows = els.hudSectors.children;
+  assert.deepEqual(JSON.parse(JSON.stringify(hud.secFlash())), { flash: [0, 0, 0], last: -1, raceT: null, calls: 0, painted: 0 });
+  G.raceT = 12.5; G.sectorLast[0] = 28.4;
+  hud.flashSector(0);
+  let f = hud.secFlash();
+  assert.deepEqual([f.last, f.raceT, f.calls, f.painted, f.flash[0]], [0, 12.5, 1, 0, 0.35], "recorded, not yet painted");
+  tick();
+  f = hud.secFlash();
+  assert.equal(f.painted, 1, "the first tick after the crossing paints it");
+  assert.equal(rows[0].classList.contains("sec-flash"), true, ".sec-flash lands on the S1 .sec-row inside #hud-sectors");
+  tick(); tick(); tick();
+  assert.equal(rows[0].classList.contains("sec-flash"), false, "a ~0.35 s pulse: off after its fourth tick");
+  assert.equal(hud.secFlash().flash[0], 0);
+  // js/agent cannot reach the instance (a game.js closure value): __apex.hudSecFlash reads the module API.
+  assert.deepEqual(JSON.parse(JSON.stringify(sb.GameHud.secFlash())), JSON.parse(JSON.stringify(hud.secFlash())), "GameHud.secFlash() reads the live instance");
 });
 
 test("in a race the lap clock holds the lap just driven for 3 s — green on a personal best", () => {
