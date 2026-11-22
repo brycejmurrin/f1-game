@@ -28,7 +28,7 @@ import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
 import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync, spawn } from "node:child_process";
+import { spawnSync, execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1968,17 +1968,18 @@ test("ready PR selection certifies both parents of the checked-out merge", () =>
     const base = git("rev-parse", "HEAD");
     git("switch", "-qc", "topic"); git("commit", "-qm", "change", "--allow-empty");
     const head = git("rev-parse", "HEAD");
-    const run = (prHead) => {
-      try {
-        execFileSync("bash", ["tools/ci/ci-select-specs-step.sh"], { cwd: dir, encoding: "utf8", stdio: "pipe",
-          env: { ...process.env, EVENT: "pull_request", CALLED: "false", READY_PR: "true", PR_HEAD: prHead, PR_BASE: base } });
-      } catch (e) { return e.stdout; }
-    };
-    assert.match(run(head), /checkout does not match/, "the branch tip is not the PR merge ref");
+    const argsPath = path.join(dir, "args.json");
+    const run = (prHead) => spawnSync("bash", ["tools/ci/ci-select-specs-step.sh"], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, EVENT: "pull_request", CALLED: "false", READY_PR: "true", PR_HEAD: prHead, PR_BASE: base },
+    });
+    assert.equal(run(head).status, 1);
+    assert.equal(fs.existsSync(argsPath), false, "a plain branch never reaches the selector");
     git("switch", "-q", "base"); git("merge", "-q", "--no-ff", "-m", "test merge", "topic");
-    assert.match(run(base), /checkout does not match/, "event head is stale");
-    assert.match(run(head), /selector failed/, "the fixture selector gets the real merge diff");
-    const args = JSON.parse(fs.readFileSync(path.join(dir, "args.json")));
+    assert.equal(run(base).status, 1);
+    assert.equal(fs.existsSync(argsPath), false, "a stale event never reaches the selector");
+    run(head);
+    const args = JSON.parse(fs.readFileSync(argsPath));
     assert.deepEqual(args.slice(0, 3), ["--since", base, "--ready-pr"]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
