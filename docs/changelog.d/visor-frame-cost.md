@@ -1,0 +1,1 @@
+Fixed: Reduced the pixel cost of helmet reflections and combined two cockpit wheel draws. On the direct Three FXAA path, the visor shares the final scene pass for refraction and dry-glass reflections.

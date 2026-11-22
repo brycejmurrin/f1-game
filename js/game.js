@@ -8451,8 +8451,11 @@ function render(dt) {
   }
   // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
   po.haze = gfx.mobileTier ? null : carFx.haze.at(_mVP);
+  po.visorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens() : null;
+  po.visorFolded = false;
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);
+  if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
   // Boot canary disarmed once the backend has presented a RUN of world frames,

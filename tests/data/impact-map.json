@@ -7589,6 +7589,12 @@
       "clear": [
         "tests/unit/visor-optics.test.mjs"
       ],
+      "folded": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "frameLens": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "lampAdapt": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -16654,6 +16660,9 @@
       ]
     },
     "js/render/three/tlx-post.js": {
+      "bindLens": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "captureTarget": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
