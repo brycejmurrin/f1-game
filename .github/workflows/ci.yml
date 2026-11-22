@@ -2663,6 +2663,9 @@ jobs:
     runs-on: ${{ inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && vars.APEX_CI_BROWSER_RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
+      # Bound one draft's simultaneous legs (#5536, #5848). Keep every selected spec;
+      # ready runs and Pages can use the whole matrix (GitHub's limit is 256 jobs).
+      max-parallel: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.draft && 20 || 256 }}
       matrix:
         include: ${{ fromJSON(needs.select.outputs.shards) }}
     # The budget maths is tools/ci/select-budget.mjs (each spec at its own measured

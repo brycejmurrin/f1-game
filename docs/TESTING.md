@@ -858,6 +858,9 @@ Each value is an integer in [1, 128]; anything else falls back to the default. A
 lanes than the GitHub-hosted pool was budgeted for (`tests/unit/ci-runner-variable.test.mjs` pins the condition).
 Lanes are assigned when a run is planned, so only runs planned after a change use it; runs already queued keep their
 lanes. Bryce's values with Ubicloud (2026-11-20): `APEX_CI_LANES` 64, `APEX_GROUP_LANES` 24.
+Each draft PR can run up to 20 selected browser jobs concurrently. Additional shards wait within
+that run. The existing shared lanes still govern concurrency across PRs.
+
 **Cost:** more lanes means more legs billed at once on the provider. The lane cap no longer throttles spend, so
 the Ubicloud bill scales with the legs that would otherwise have queued. Watch the provider console after raising them.
 **Rollback:** delete the variable (or unset the env). The next planned run is back at 28 / 8, with no commit.

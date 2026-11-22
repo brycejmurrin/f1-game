@@ -41,6 +41,7 @@ function resolve(expr, ctx) {
     .replace(/\bvars\.(\w+)/g, (_, n) => JSON.stringify(ctx.vars[n] ?? ""))
     .replace(/\bgithub\.event\.pull_request\.head\.repo\.full_name\b/g, JSON.stringify(ctx.headRepo ?? ""))
     .replace(/\binputs\.concurrency_key\b/g, JSON.stringify(ctx.inputs?.concurrency_key ?? ""))
+    .replace(/\bgithub\.event\.pull_request\.draft\b/g, JSON.stringify(ctx.draft ?? false))
     .replace(/\bgithub\.event_name\b/g, JSON.stringify(ctx.event))
     .replace(/\bgithub\.repository\b/g, JSON.stringify("brycejmurrin/f1-game"))
     .replace(/[!=]=/g, (op) => (op === "!=" ? "!==" : "==="));
@@ -193,4 +194,13 @@ test("the Pages train calls ci.yml with a concurrency_key, and every train event
     assert.equal(resolve(EXPR["ci.yml:selected"], ctx), "ubuntu-latest", `pages.yml ${event}: selected legs stay GitHub-hosted`);
     assert.equal(resolve(sel.env.APEX_CI_LANES, ctx), "", `pages.yml ${event}: no raised lane count`);
   }
+});
+
+test("wide draft matrices limit concurrent browser jobs while ready and train plans keep full matrix capacity", () => {
+  const strategy = jobs().find((entry) => entry.key === "ci.yml:selected").job.strategy;
+  const limit = (event, draft, inputs = {}) => resolve(strategy["max-parallel"], { event, draft, inputs, vars: {} });
+  assert.equal(limit("pull_request", true), 20);
+  assert.equal(limit("pull_request", false), 256);
+  assert.equal(limit("pull_request", true, { concurrency_key: "pages" }), 256);
+  for (const event of ["push", "schedule", "workflow_dispatch"]) assert.equal(limit(event, false), 256);
 });
