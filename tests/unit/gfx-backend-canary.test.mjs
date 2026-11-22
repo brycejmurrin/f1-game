@@ -4936,6 +4936,10 @@ test("GLX still diagnoses and releases a failed shader after linking", () => {
     assert.ok(calls.some(([name]) => name === "getShaderInfoLog"));
     const deleted = calls.filter(([name, args]) => name === "deleteProgram" && args[0].shaders.some((sh) => sh.id === 1));
     assert.equal(deleted.length, 1, "the failed program is released exactly once");
+    const linked = calls.filter(([name]) => name === "linkProgram").map(([, [program]]) => program);
+    const released = calls.filter(([name]) => name === "deleteProgram").map(([, [program]]) => program);
+    assert.equal(released.length, linked.length, "every link has exactly one release");
+    assert.deepEqual(new Set(released), new Set(linked), "failed boot frees successful sibling programs");
   }
 });
 
