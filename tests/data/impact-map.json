@@ -16650,6 +16650,9 @@
       ]
     },
     "js/render/three/tlx-post.js": {
+      "captureTarget": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "depthBegin": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -16771,6 +16774,7 @@
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "setMirror": [
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-mirror-inset.test.mjs"
       ],
       "syncAaRT": [
@@ -16961,6 +16965,9 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
+      ],
+      "_captureRT": [
+        "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "_captureRec": [
         "tests/unit/tlx-rig-warm.test.mjs"

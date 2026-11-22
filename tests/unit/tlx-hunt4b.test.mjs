@@ -436,7 +436,7 @@ function withStore(ls, fn) {
   }
 }
 // The REAL post chain (tlx-post + tsl-post) on three r186 over the fake WebGL2, plus one lit mesh to draw.
-async function postRig(t, { ls = {}, samples = 0, ssrTag = false, wantSpatialUpscale = () => false } = {}) {
+async function postRig(t, { ls = {}, samples = 0, ssrTag = false, softDest = () => null, wantSpatialUpscale = () => false } = {}) {
   const fg = makeFakeGL(320, 180);
   const inv = [];
   fg.gl.invalidateFramebuffer = (target, list) => { inv.push([target, list.slice()]); };
@@ -447,7 +447,7 @@ async function postRig(t, { ls = {}, samples = 0, ssrTag = false, wantSpatialUps
   try {
     shaders.post = (...args) => (graph = makeGraph(...args));
     post = withStore(ls, () => shaders.postChain(THREE, TSL, { renderer, isMobile: true,
-      chunks: shaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
+      chunks: shaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest,
       wantSpatialUpscale, getPresentSize: () => [320, 180], sceneSamples: samples }));
   } finally {
     shaders.post = makeGraph;
@@ -485,6 +485,63 @@ test("post warm-up does not spend the live target idle grace period", async (t) 
   assert.equal(post.state().held.bloom, false, "the eighth live frame sheds the block");
 });
 
+for (const fold of [true, false]) test(`FXAA capture replays the final full-size draw and the ${fold ? "folded" : "separate"} mirror (#6065)`, async (t) => {
+  let soft = null;
+  const { renderer, post, graph } = await postRig(t, { ls: { "apex26.tlxMirFold": fold ? "1" : "0" }, softDest: () => soft });
+  const mirror = new THREE.DataTexture(new Uint8Array([90, 80, 70, 255]), 1, 1);
+  mirror.needsUpdate = true;
+  t.after(() => mirror.dispose());
+  post.setMirror(mirror, [20, 10, 80, 48], false, true);
+  const draws = [];
+  const render = renderer.render.bind(renderer);
+  renderer.render = (object, camera) => {
+    const mat = object.material, rt = renderer.getRenderTarget();
+    draws.push({ mat, rt, source: mat === graph.fxaa.mat ? graph.fxaa.tex.value : null,
+      mirror: mat === graph.mirror.mat ? graph.mirror.tex.value : graph.fxaa.mirTex.value,
+      rect: mat === graph.mirror.mat ? (rt ? rt.viewport : renderer.getViewport(new THREE.Vector4())).toArray() : null });
+    return render(object, camera);
+  };
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present(opts, NIGHT);
+  const canvasDraws = draws.filter((d) => !d.rt);
+  assert.deepEqual(canvasDraws.map((d) => d.mat), fold ? [graph.fxaa.mat] : [graph.fxaa.mat, graph.mirror.mat]);
+  assert.equal(canvasDraws[0].source, post.ldrTarget().texture);
+  assert.equal(canvasDraws.at(-1).mirror, mirror);
+  assert.ok(draws.every((d) => d.rt?.texture.name !== "TLXPostFXAACapture"));
+  draws.length = 0;
+  const count = post.mirrorComposites();
+  renderer.setRenderTarget(post.sceneTarget(), 2, 1);
+  renderer.autoClear = false;
+  // The real capture entry point must submit its asynchronous read of the replay destination.
+  const src = read("js/render/three/tlx.js");
+  let readRT;
+  const api = vm.runInNewContext(`${fnSource(src, "function _captureRT() {")}
+    ({ ${fnSource(src, "capturePixels() {")} })`, {
+    ownGL: null, renderer: { backend: {}, readRenderTargetPixelsAsync() {} }, post, Uint8ClampedArray,
+    _readLdr: async (rt) => { readRT = rt; return { w: rt.width, h: rt.height, data: new Uint8ClampedArray(4) }; },
+  }, { filename: absSrc("js/render/three/tlx.js") });
+  const shot = await api.capturePixels();
+  assert.equal(readRT.texture.name, "TLXPostFXAACapture");
+  assert.deepEqual([shot.width, shot.height], [renderer.domElement.width, renderer.domElement.height]);
+  assert.deepEqual(draws.map((d) => d.mat), canvasDraws.map((d) => d.mat));
+  assert.ok(draws.every((d) => d.rt === readRT));
+  assert.equal(draws[0].source, canvasDraws[0].source);
+  assert.equal(draws.at(-1).mirror, mirror);
+  if (!fold) assert.deepEqual(draws.at(-1).rect, canvasDraws.at(-1).rect);
+  assert.equal(renderer.getRenderTarget(), post.sceneTarget());
+  assert.equal(renderer.getActiveCubeFace(), 2);
+  assert.equal(renderer.getActiveMipmapLevel(), 1);
+  assert.equal(renderer.autoClear, false);
+  assert.equal(post.mirrorComposites(), count);
+
+  soft = new THREE.RenderTarget(320, 180);
+  t.after(() => soft.dispose());
+  post.present(opts, NIGHT);
+  draws.length = 0;
+  assert.equal(post.captureTarget(), soft);
+  assert.equal(draws.length, 0, "soft presentation already has its final draw");
+});
+
 test("disabling spatial upscale releases its input texture before disposing the AA target", async (t) => {
   let upscale = true;
   const { post, graph } = await postRig(t, { wantSpatialUpscale: () => upscale });
@@ -492,6 +549,7 @@ test("disabling spatial upscale releases its input texture before disposing the 
   post.present(opts, NIGHT);
   const aa = post.presentedTarget();
   assert.equal(aa.texture.name, "TLXPostAA");
+  assert.equal(post.captureTarget(), aa, "SGSR keeps its existing capture path");
   let sampledAA = false;
   const readsAA = () => graph.sgsr.tex.value === aa.texture;
   assert.equal(readsAA(), true);
