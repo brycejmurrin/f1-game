@@ -27,7 +27,7 @@ function ctx2d(calls) {
       calls.draw++;
       if (calls.frameDraws) calls.frameDraws.push({ dest: args.slice(-4), alpha: this.globalAlpha });
     },
-    save() {}, restore() {}, translate() {}, rotate: () => { calls.rotate++; },
+    save() {}, restore() {}, resetTransform() {}, translate() {}, rotate: () => { calls.rotate++; },
     beginPath() {}, arc() {}, fill() {}, moveTo() {}, bezierCurveTo() {}, closePath() {}, stroke() {},
     createRadialGradient: () => grad, createLinearGradient: () => grad,
   };

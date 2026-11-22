@@ -195,6 +195,11 @@ const Droplets = (function () {
     }
   }
 
+  const SATELLITE_DIRECTIONS = Array.from({ length: 9 }, (_, i) => {
+    const angle = Math.floor(i / 3) * 1.7 + (i % 3) * 2.1;
+    return [Math.cos(angle), Math.sin(angle)];
+  });
+
   function _draw(reduced, helmet) {
     const g = _ctx;
     if (!_n) { if (_painted) { g.clearRect(0, 0, _w, _h); _painted = false; } return; }
@@ -211,9 +216,7 @@ const Droplets = (function () {
       const impact = helmet && !reduced ? Math.max(0, 1 - _hit[i] / 0.18) : 0;
       const swell = impact > 0 ? 1 + 0.65 * Math.sin(Math.PI * (1 - impact)) : 1;
       const rad = _r[i] * m * (helmet ? _dropScale : 1) * swell, cx = _x[i] * _w, cy = _y[i] * _h;
-      const sp = Math.hypot(_vx[i], _vy[i]);
-      const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + sp * 11);
-      const narrow = rad / Math.sqrt(st);
+      const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + Math.hypot(_vx[i], _vy[i]) * 11);
       g.globalAlpha = a;
       if (_sprite) {
         // Short asymmetric satellite beads mark a strike ON the shield, not a white ring in the world.
@@ -221,16 +224,17 @@ const Droplets = (function () {
           const spread = rad * (1.2 + (1 - impact) * 2), bead = rad * 0.32;
           g.globalAlpha = a * impact * 0.65;
           for (let s = 0; s < 3; s++) {
-            const angle = _variant[i] * 1.7 + s * 2.1;
+            const dir = SATELLITE_DIRECTIONS[_variant[i] * 3 + s];
             g.drawImage(_sprite, ((s + _variant[i]) % 3) * 64, 0, 64, 64,
-              cx + Math.cos(angle) * spread - bead, cy + Math.sin(angle) * spread * 0.65 - bead, bead * 2, bead * 2);
+              cx + dir[0] * spread - bead, cy + dir[1] * spread * 0.65 - bead, bead * 2, bead * 2);
           }
           g.globalAlpha = a;
         }
         if (st > 1.05) {
-          g.save(); g.translate(cx, cy); g.rotate(Math.atan2(_vy[i] * _h, _vx[i] * _w) - Math.PI / 2);
+          const narrow = rad / Math.sqrt(st);
+          g.translate(cx, cy); g.rotate(Math.atan2(_vy[i] * _h, _vx[i] * _w) - Math.PI / 2);
           g.drawImage(_sprite, _variant[i] * 64, 0, 64, 64, -narrow, -rad * st, narrow * 2, rad * 2 * st);
-          g.restore();
+          g.resetTransform();
         } else g.drawImage(_sprite, _variant[i] * 64, 0, 64, 64, cx - rad, cy - rad, rad * 2, rad * 2);
       } else {
         g.fillStyle = "rgba(160,178,194,0.09)";

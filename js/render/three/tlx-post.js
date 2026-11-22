@@ -1495,7 +1495,8 @@
           // scale 1, where SGSR is bypassed; pW/pH here would crop the image.
           if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
-          const lens = !dest && !compileJobs && !_scissorWarm && (!_mirTex || mirIn) ? o.visorLens : null;
+          const canFoldLens = P.fxaa.bendTex && !dest && !compileJobs && !_scissorWarm && (!_mirTex || mirIn);
+          const lens = canFoldLens ? (o.readVisorLens ? o.readVisorLens() : o.visorLens) : null;
           bindLens(lens);
           runPass(P.fxaa.mat, dest);
           if (lens && P.fxaa.bendTex) o.visorFolded = lens.light ? 2 : 1;

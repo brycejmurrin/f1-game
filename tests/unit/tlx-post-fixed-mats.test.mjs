@@ -128,14 +128,18 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
     });
     vm.runInContext(gate + sizing + uv, context);
     context.ctx = { wantSpatialUpscale: context.wantSpatialUpscale, userSpatialUpscale: () => false };
-    for (const [W, H, scale] of [[1266, 585, 1], [950, 439, .75], [633, 293, .5], [1266, 585, 1]]) {
+    for (const [W, H, scale, lazyLens] of [[1266, 585, 1, false], [950, 439, .75, true], [633, 293, .5, true], [1266, 585, 1, true]]) {
       Object.assign(context, { W, H, renderScale: scale });
       vm.runInContext("pW = postSize(W); pH = postSize(H);", context);
+      let lensReads = 0;
+      // Exercise both the established frame payload and the lazy game accessor.
+      if (lazyLens) context.o.readVisorLens = () => { lensReads++; return context.o.visorLens; };
       draws.length = 0;
       context.o.visorFolded = false;
       vm.runInContext("{\n" + resolve + "\n}", context);
       const { pW, pH } = context;
       assert.equal(context.o.visorFolded, !soft && scale === 1 ? 2 : false);
+      assert.equal(lensReads, lazyLens && !soft && scale === 1 ? 1 : 0);
       assert.equal(P.fxaa.bendTex.field, context.o.visorFolded ? context.o.visorLens : null);
       assert.deepEqual(draws[0].view, [pW, pH], "composite keeps its reduced target");
       assert.deepEqual(P.fxaa.U.texel.value.values, [1 / pW, 1 / pH], "FXAA texels follow its input");
