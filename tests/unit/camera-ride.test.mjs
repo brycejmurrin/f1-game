@@ -96,6 +96,9 @@ test("helmet eye position survives reduced motion and leaves the cockpit seat al
   const high = eye("helmet");
   assert.ok(low[1] < stock[1] && low[2] > stock[2]);
   assert.ok(high[1] > stock[1] && high[2] < stock[2]);
+  pose = "forward";
+  assert.equal(eye("helmet")[1], stock[1]);
+  assert.ok(eye("helmet")[2] > low[2]);
   assert.deepEqual(eye("cockpit"), cockpit);
 });
 

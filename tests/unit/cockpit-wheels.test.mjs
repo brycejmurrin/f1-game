@@ -62,6 +62,8 @@ test("helmet camera preferences survive reload and only scale helmet vibration",
   opts.setVisorShape("panoramic");
   const saved = loadOpts(Object.fromEntries(store)).opts;
   assert.deepEqual([saved.helmetEye(), saved.shakeScale("helmet"), saved.visorShape()], ["upright", 0.4, "panoramic"]);
+  saved.setHelmetShake("medium");
+  assert.equal(saved.shakeScale("helmet"), 0.7);
   saved.setHelmetShake("off");
   assert.equal(saved.shakeScale("helmet"), 0);
   assert.equal(saved.shakeScale("cockpit"), 1);

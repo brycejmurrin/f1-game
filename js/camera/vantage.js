@@ -137,7 +137,7 @@ function headOffset(mode, extra, out) {
     const pose = typeof CockpitOpts !== "undefined" && CockpitOpts.helmetEye ? CockpitOpts.helmetEye() : "standard";
     const shift = pose === "tucked" ? 0.025 : pose === "upright" ? -0.025 : 0;
     out[1] = -shift;
-    out[2] = HELMET_EYE_FWD + shift;
+    out[2] = HELMET_EYE_FWD + (pose === "forward" ? 0.04 : shift);
   }
   const a = extra.att;
   if (!a || extra.reduceMotion) return out;

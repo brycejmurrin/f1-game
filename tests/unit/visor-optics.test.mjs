@@ -21,7 +21,7 @@ function ctx2d(calls) {
   return {
     globalAlpha: 1, globalCompositeOperation: "source-over", fillStyle: "", strokeStyle: "", lineWidth: 1,
     clearRect: () => { calls.clear++; }, fillRect() {}, fill() {}, stroke: () => { calls.stroke++; },
-    setTransform(...args) { calls.transform = args; }, save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: () => { calls.arc++; },
+    setTransform(...args) { calls.transforms++; calls.transform = args; }, save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: () => { calls.arc++; },
     moveTo() {}, lineTo() {}, closePath() {},
     createRadialGradient: () => { calls.gradients++; return grad; }, createLinearGradient: () => { calls.gradients++; return grad; },
     createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
@@ -30,14 +30,14 @@ function ctx2d(calls) {
 }
 
 function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "", G = undefined } = {}) {
-  const calls = { clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
+  const calls = { transforms: 0, portWrites: 0, clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
   const live = { visor, helmet, shape: "standard" };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
     hasAttribute: (k) => k === "data-helmet-cam" && live.helmet,
     setAttribute: (k, v) => { calls.attrs[k] = v; },
     removeAttribute: (k) => { delete calls.attrs[k]; },
-    style: { setProperty: (k, v) => { calls.props[k] = v; }, removeProperty: (k) => { delete calls.props[k]; } },
+    style: { setProperty: (k, v) => { if (k === "--visor-port") calls.portWrites++; calls.props[k] = v; }, removeProperty: (k) => { delete calls.props[k]; } },
     appendChild() {},
   };
   const document = {
@@ -106,13 +106,29 @@ test("changing the opening updates the bezel and refraction together while pause
     assert.ok(V.portBox(w, h, "slit").ph < V.portBox(w, h).ph);
     assert.ok(V.portBox(w, h).ph < V.portBox(w, h, "panoramic").ph);
   }
-  for (const [i, shape] of ["standard", "slit", "panoramic", "standard"].entries()) {
+  for (const [i, shape] of ["standard", "slit", "panoramic", "rounded", "square", "standard"].entries()) {
     live.shape = shape;
     V.tick(0, true, 0, false);
     assert.equal(calls.props["--visor-port"], V.portImage(844, 390, { shape }));
     V.tick(0, true, 0, false);
     assert.equal(calls.bendMaps, i + 1);
   }
+});
+
+test("visor presets keep the reflection canvas and reuse the bezel and bend map while driving", () => {
+  const { V, calls, live, listeners } = load({ apex: { visorScene: () => DAY }, refraction: "medium" });
+  const outlines = new Set();
+  for (const [i, shape] of ["standard", "rounded", "square"].entries()) {
+    live.shape = shape;
+    outlines.add(V.portPath(852, 393, 0, shape));
+    V.tick(1 / 60, true, 0, false);
+    for (const fn of listeners) fn("visorRain", "heavy");
+    for (let frame = 0; frame < 120; frame++) V.tick(1 / 60, true, 0, false);
+    assert.equal(calls.transforms, 1);
+    assert.equal(calls.portWrites, i + 1);
+    assert.equal(calls.bendMaps, i + 1);
+  }
+  assert.equal(outlines.size, 3);
 });
 
 test("visor mapping: nothing is added in the dark, and every term scales with the reflections level", () => {

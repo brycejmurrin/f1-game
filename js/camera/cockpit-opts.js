@@ -22,12 +22,12 @@ const LEAD_MAX = 1;
 //   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
 //   HALO      OFF / SLIM / STANDARD / THICK / FAIRED: the hoop's tube (car3d.js, halo size).
 const CHOICES = {
-  helmetEye: { key: "apex26.helmetEye", url: "helmeteye", values: ["standard", "tucked", "upright"],
-              labels: { standard: "STANDARD", tucked: "TUCKED", upright: "UPRIGHT" } },
-  helmetShake: { key: "apex26.helmetShake", url: "helmetshake", values: ["normal", "soft", "off"],
-              labels: { normal: "NORMAL", soft: "SOFT", off: "OFF" } },
-  visorShape: { key: "apex26.helmetVisorShape", url: "visorshape", values: ["standard", "panoramic", "slit"],
-              labels: { standard: "STANDARD", panoramic: "PANORAMIC", slit: "NARROW" } },
+  helmetEye: { key: "apex26.helmetEye", url: "helmeteye", values: ["standard", "tucked", "upright", "forward"],
+              labels: { standard: "STANDARD", tucked: "TUCKED", upright: "UPRIGHT", forward: "FORWARD" } },
+  helmetShake: { key: "apex26.helmetShake", url: "helmetshake", values: ["normal", "medium", "soft", "off"],
+              labels: { normal: "NORMAL", medium: "MEDIUM", soft: "SOFT", off: "OFF" } },
+  visorShape: { key: "apex26.helmetVisorShape", url: "visorshape", values: ["standard", "panoramic", "slit", "rounded", "square"],
+              labels: { standard: "STANDARD", panoramic: "PANORAMIC", slit: "NARROW", rounded: "ROUNDED", square: "SQUARE" } },
   visor:    { key: "apex26.helmetVisor", url: "helmetvisor", values: ["off", "clear", "smoke"],
               labels: { off: "OFF", clear: "CLEAR", smoke: "TINTED" } },
   visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", def: "amber", values: ["neutral", "amber", "ice", "rose"],
@@ -51,7 +51,7 @@ const CHOICES = {
   interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "suede", "ribbed", "classic"],
               labels: { carbon: "CARBON", team: "TEAM", suede: "SUEDE", ribbed: "RIBBED", classic: "CLASSIC" } },
 };
-const SHAKE_SCALE = { normal: 1, soft: 0.4, off: 0 };
+const SHAKE_SCALE = { normal: 1, medium: 0.7, soft: 0.4, off: 0 };
 const KEY_WHEEL = CHOICES.wheel.key, WHEELS = CHOICES.wheel.values;
 const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true, yoke: true, endurance: true, retro: true };
 // STANDARD's eye is vantage.js COCKPIT_EYE_FWD / COCKPIT_EYE_UP; a seat moves it.
@@ -361,7 +361,7 @@ function initUI() {
   row("pm-helmet-visor", "HELMET VISOR", C.visor.values, C.visor.labels,
     "Optional see-through shield in HELMET camera only. CLEAR adds a curved rim and faint reflections; TINTED adds your chosen lens color and intensity. OFF removes the visor and its frame: a plain, unframed helmet view.", visor, setVisor);
   row("pm-helmeteye", "HELMET EYE POSITION", C.helmetEye.values, C.helmetEye.labels,
-    "Tucked moves your eyes down and forward. Upright moves them up and back. Fine-tune the field of view in Camera Tuner.", helmetEye, setHelmetEye);
+    "Tucked moves your eyes down and forward. Upright moves them up and back. Forward keeps your usual eye height. Fine-tune the field of view in Camera Tuner.", helmetEye, setHelmetEye);
   row("pm-helmetshake", "HELMET SHAKE", C.helmetShake.values, C.helmetShake.labels,
     "Adjust impact shake, kerb rumble and speed vibration in helmet view.", helmetShake, setHelmetShake);
   row("pm-visorshape", "VISOR OPENING", C.visorShape.values, C.visorShape.labels,

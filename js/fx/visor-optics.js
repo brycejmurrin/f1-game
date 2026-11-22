@@ -85,7 +85,8 @@ const VisorOptics = (function () {
     const b = portBox(w, h, shape);
     const x0 = b.x0 + inset, x1 = b.x1 - inset, y0 = b.y0 + inset, y1 = b.y1 - inset;
     const pw = x1 - x0, ph = y1 - y0;
-    const rt = ph * (shape === "slit" ? 0.16 : 0.30), rb = ph * 0.42, arch = ph * 0.06;   // top corner radius, bottom corner radius, brow apex rise
+    const rt = ph * (shape === "slit" ? 0.16 : shape === "square" ? 0.10 : shape === "rounded" ? 0.42 : 0.30);
+    const rb = ph * (shape === "square" ? 0.14 : 0.42), arch = ph * (shape === "rounded" ? 0.12 : 0.06);   // top corner radius, bottom corner radius, brow apex rise
     const K = 0.55;                                            // Bézier circle constant
     const P = (x, y) => r2(x) + "," + r2(y);
     return "M" + P(x0 + rt, y0 + arch)
@@ -421,7 +422,7 @@ const VisorOptics = (function () {
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
     // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
-    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name !== "visorBeams") _portKey = ""; _acc = 1; } });
+    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name === "visorColor") _portKey = ""; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
     return _cv;
   }
@@ -441,22 +442,25 @@ const VisorOptics = (function () {
     const w = Math.max(1, box ? bw : window.innerWidth | 0), h = Math.max(1, box ? bh : window.innerHeight | 0);
     const lightW = Math.ceil(w / 2), lightH = Math.ceil(h / 2);
     const shape = _opt("visorShape", "standard");
+    const resized = w !== _w || h !== _h;
+    const geometryChanged = shape !== _shape || resized;
     if (shape !== _shape) {
       _shape = shape;
       _portKey = "";
       _bendW = 0;
-      newCanvas = true;
     }
-    if (!newCanvas && w === _w && h === _h && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
+    if (!geometryChanged && !newCanvas && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
     _w = w; _h = h;
-    if (_cv) {
+    if (_cv && (newCanvas || resized || _cv.width !== lightW || _cv.height !== lightH)) {
       // The broad reflected light is low-frequency. Keep projection, stroke widths
       // and paths in CSS pixels, and leave the bezel and scene at full resolution.
-      _cv.width = lightW; _cv.height = lightH;
+      if (_cv.width !== lightW) _cv.width = lightW;
+      if (_cv.height !== lightH) _cv.height = lightH;
       _ctx.setTransform(lightW / w, 0, 0, lightH / h, 0, 0);
     }
     // The sheen and the fringe are stroked INSIDE the port edge (inset paths), where the glass is clear; on the
     // edge itself the bezel's falloff would swallow them.
+    if (!geometryChanged && _paths) return true;
     const base = Math.min(w, h);
     _paths = typeof Path2D === "function" ? { edge: new Path2D(portPath(w, h, 0, _shape)), rim: new Path2D(portPath(w, h, base * 0.03, _shape)), out: new Path2D(portPath(w, h, base * 0.006, _shape)), inn: new Path2D(portPath(w, h, base * 0.014, _shape)) } : null;
     return true;
