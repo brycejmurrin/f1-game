@@ -21,6 +21,13 @@ test("success and skipped needed jobs pass", () => {
   assert.ok(v.skipped.includes("node-suites"));
 });
 
+test("a deferred draft may publish a nonempty browser plan without running it", () => {
+  const needs = { select: { result: "success", outputs: { any: "true" } }, selected: { result: "skipped" }, "selected-verdict": { result: "success" } };
+  assert.equal(verdict(needs, { deferDraftBrowser: true }).ok, true);
+  assert.equal(verdict(needs, { fullTier: true, deferDraftBrowser: true }).ok, false);
+  assert.equal(verdict(needs).ok, false);
+});
+
 test("a failed or cancelled needed job fails the aggregator", () => {
   assert.equal(verdict({ guards: { result: "failure" } }).ok, false);
   assert.equal(verdict({ smoke: { result: "cancelled" } }).ok, false);
@@ -129,6 +136,23 @@ test("the CLI reads REQUIRE_SUCCESS: the same needs JSON passes bare and fails s
   };
   assert.equal(run({}), 0);
   assert.equal(run({ REQUIRE_SUCCESS: "guards-a,guards-b,guards-c,guards,select,smoke" }), 1);
+});
+
+test("only an explicit ready browser exemption permits skipped smoke and staged boot", () => {
+  const passed = { result: "success" }, skipped = { result: "skipped" };
+  const base = { select: { ...passed, outputs: { browser_exempt: "true" } }, guards: passed, smoke: skipped, "staged-boot": skipped };
+  const run = (needs) => {
+    const env = { ...process.env, NEEDS: JSON.stringify(needs), REQUIRE_SUCCESS: "select,guards,smoke,staged-boot" };
+    try { execFileSync("node", ["tools/ci/ci-verdict.mjs"], { cwd: ROOT, env, stdio: "pipe" }); return 0; }
+    catch (e) { return e.status; }
+  };
+  assert.equal(run(base), 0);
+  for (const browser_exempt of [undefined, "false", "unknown"])
+    assert.equal(run({ ...base, select: { ...passed, outputs: { browser_exempt } } }), 1);
+  assert.equal(run({ ...base, guards: skipped }), 1);
+  assert.equal(run({ ...base, smoke: undefined }), 1);
+  assert.equal(run({ ...base, "staged-boot": { result: "cancelled" } }), 1);
+  assert.equal(run({ ...base, select: { ...base.select, result: "failure" } }), 1);
 });
 
 test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming jobs ci-verdict needs; the draft fast tier is not named `CI`", async () => {

@@ -44,7 +44,7 @@
 // ran a step, or the PR merged / moved to a new head; re-arm on the `--sha` it
 // names), 124 --timeout (default 120 min). (Exit 5, the hollow draft whose only
 // job was the `run-ci` skip notice, went with that label on 2026-11-03: every
-// draft push runs the fast tier plus one selected shard now.)
+// draft push runs the fast tier.)
 //
 // FRICTION FIXES (#2384, agent friction plan WS2):
 //   --failures-only   a Monitor event only for a failed/cancelled job and the final `= ci …` line
@@ -485,7 +485,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
         announced.add("indexing");
         note(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
       }
-      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (not pushed yet, or a branch with no PR — ci.yml runs on every PR push, a draft included: fast tier plus one selected shard; the deploy branch's push starts pages.yml)`); return 0; }
+      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (not pushed yet, or a branch with no PR — ci.yml runs on every PR push, including the fast tier on drafts; the deploy branch's push starts pages.yml)`); return 0; }
       if (nv === "blocked") { report(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
       if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min (mergeable_state ${pr.mergeable_state || "unknown"}: "unknown" is GitHub still computing, "dirty" starts no run); re-arm, or check the Actions tab`); return 124; }
     }

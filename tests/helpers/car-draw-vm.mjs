@@ -149,7 +149,7 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
     drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still, viewLivery) => {
-      const record = { team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still };
+      const record = { team: team.id, blend, m: m[12] + "," + m[14], y: m[13], only: only || null, still: !!still };
       if (viewLivery !== undefined) record.viewLivery = viewLivery;
       rec.flaps.push(record);
     },

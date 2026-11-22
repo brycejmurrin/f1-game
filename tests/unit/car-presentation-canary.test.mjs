@@ -101,7 +101,7 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   const draw = game.slice(start, end);
   // Which body each car gets (shared / team / player / model) runs as
   // behaviour in field-lod.test.mjs; this pins only what is drawn with it.
-  assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, dt, _wheelOpts\);/,
+  assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, wheelDt, _wheelOpts\);/,
     "only shared bodies coalesce paint (others keep it, all keep chassis attitude), then wheels plant on the ground matrix");
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   const cd = read("js/car/car-draw.js");

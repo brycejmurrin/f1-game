@@ -29,6 +29,7 @@ const Droplets = (function () {
   // True while the canvas may hold paint: with rain on and no drop alive, a
   // full-DPR clearRect every frame cleared an already-clear canvas (#4532 note).
   let _painted = false;
+  let _lens;
   let _n = 0, _acc = 0, _spriteReflection = 1, _spriteHelmet = false, _dropScale = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
@@ -241,10 +242,12 @@ const Droplets = (function () {
   /** Once per rendered frame. on: an onboard camera, racing, not photo mode. rain: frame.rain (0..1).
    *  storm: the heavier tier. vs: the viewed car's vStd speed (m/s). reduced: prefers-reduced-motion.
    *  dt 0 (paused) freezes the drops in place. */
-  function tick(dt, on, rain, storm, vs, reduced) {
+  function tick(dt, on, rain, storm, vs, reduced, lens) {
     // The shield's own optics ride this heartbeat: the eye-port, the added light and the rim bend (js/fx/visor-optics.js).
     if (typeof VisorOptics !== "undefined") VisorOptics.tick(dt, on, vs, reduced);
     const helmet = _helmet();
+    if (lens !== _lens || helmet !== _spriteHelmet) _show(false);
+    _lens = lens;
     const amount = helmet ? CockpitOpts.visorRain() : "normal";
     const runoff = helmet ? (CockpitOpts.visorRunoff() === "slow" ? 0.45 : CockpitOpts.visorRunoff() === "fast" ? 2.1 : 1) : 1;
     // Spawn only at RAIN_MIN+ (drizzle 0.35 wets the road, not the lens). Keep the
