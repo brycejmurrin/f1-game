@@ -76,7 +76,9 @@ The full tiers run on the PR: every draft push gets the fast tier plus the
 diff; a wide diff still fans out, because `select-specs` never drops a routed
 spec (its `Structural guards` A–D run `tooling-fast`, the check `ready-gate`
 reads: the whole floor, except on a PR whose diff touches none of `tools/`,
-`tests/`, `.github/` or `package.json`, where they run `--changed`; guardsScope
+`tests/`, `.github/` or `package.json`, where they run `--changed`. Ratchet delta JSON files, the generated impact map,
+and listed unit tests that share a basename with and directly reference a changed game source also qualify
+for changed-file selection. See guardsScope
 in `tools/ci/tooling-fast.mjs`, ci.yml "Guards scope"), the full tier runs once the PR is ready (a ready flip
 skips the `selected` legs when the newest run on the same head passed them on
 its first attempt with the same plan, on a base that is still the deploy tip:

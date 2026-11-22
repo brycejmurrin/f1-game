@@ -376,7 +376,8 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
       # GUARDS SCOPE (#3951): a pull request whose diff touches none of tools/,
       # tests/, .github/ or package.json runs `tooling-fast --changed` (still
-      # sharded here); every other PR and every other event runs the whole
+      # sharded here). Ratchet deltas, the generated impact map and already-pinned
+      # same-named game unit tests qualify too. Other tooling PRs and other events run the whole
       # floor (guardsScope in tools/ci/tooling-fast.mjs). The JOB always runs:
       # a path-filtered required workflow stays "Pending" and blocks the merge
       # (https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks).
