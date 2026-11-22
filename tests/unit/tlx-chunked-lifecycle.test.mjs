@@ -662,7 +662,7 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
 
 test("chunk culls share planes across meshes and refresh on an in-place projection change", () => {
   const source = fs.readFileSync(new URL("../../js/render/shared/frustum.js", import.meta.url), "utf8");
-  const frustum = vm.runInNewContext(source + "\nFrustum");
+  const frustum = vm.runInNewContext(source + "\nFrustum", {}, { filename: absSrc("js/render/shared/frustum.js") });
   let extractions = 0;
   const sys = factory([], { ...frustum, extractPlanes(vp, out) {
     extractions++; frustum.extractPlanes(vp, out);
