@@ -213,7 +213,7 @@
       }
 
       grandstandEx(sl(0.077), -1, 8, 70, null, null,
-        { livery: "sandstone", tiers: 1, roof: "flat", endWalls: true });
+        { livery: "sandstone", tiers: 1, roof: "flat" });
       ledFascia(sl(0.077), -1, 8, 70, 1);
       billboard(R(0.077), -1, 10, 18, 11, LED_TEAL);
 
@@ -266,11 +266,6 @@
         const side = (i % 2) ? 1 : -1;
         const tk = K(0.34 + i * 0.006);
         tower(tk, side, 16, 4, 34, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-        // Primary light pool — bright oval disc on the ground under the mast
-        const pa = anchor(tk, side, 16);
-        addCyl(out, vadd(pa.c, pa.u, 0.1), 9, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
-        // Softer halo ring around the pool
-        addCyl(out, vadd(pa.c, pa.u, 0.05), 16, 0.12, POOL_SOFT, 10, [pa.r, pa.u, pa.t]);
       }
       // Floodlights ringing the pit straight on the grandstand side (the pits
       // are +1). Shared floodMast: it REGISTERS its lens, so these light the
@@ -387,13 +382,6 @@
         addBox(out, vadd(a.c, a.u, 5.5), [1.4, 1.2, 1.4], WARM, [a.r, a.u, a.t]);
         // Pool raised to 0.14 (was 0.08): new gap-24 verge buried the old disc.
         addCyl(out, vadd(a.c, a.u, 0.14), 3.5, 0.28, [0.96, 0.82, 0.44], 8, [a.r, a.u, a.t]);
-      }
-
-      // Water reflection streaks — fewer, seated just under the water surface
-      // (was 8×2 buried boxes; cut to 4 to drop buried below baseline).
-      for (let i = 0; i < 4; i++) {
-        const ak = anchor(K(0.54 + i * 0.045), 1, 26 + (i % 2) * 8);
-        addBox(out, vadd(ak.c, ak.u, -0.12), [48, 0.28, 2.2], [1.0, 0.86, 0.44], [ak.r, ak.u, ak.t]);
       }
 
       grandstandEx(0.78, -1, 8, 100, null, null, { livery: "sandstone", roof: "truss", endWalls: true });
@@ -680,8 +668,8 @@
       ledFascia(0.22, -1, 8, 80, 1);
       grandstandEx(0.36, 1, 8, 60, null, null, { livery: "teal", roof: "cantilever" });           // NORTH
       ledFascia(0.36, 1, 8, 60, 1);
-      grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss" });          // SOUTH
-      ledFascia(0.48, -1, 8, 60, 1);
+      // Use the stand’s attached fascia so its trim follows the truss roof.
+      grandstandEx(0.48, -1, 8, 60, null, null, { livery: "darkSteel", roof: "truss", fasciaCol: LED_TEAL });
       // f58 survey: gap-8 bleacher sat in the paved run-off. Seat it further
       // back (gap 22) so the apron stays clear.
       if (typeof bleacher === "function") {
@@ -702,8 +690,8 @@
         });
       } else {
         grandstandEx(0.828, -1, 16, 60, null, null, { livery: "sandstone", roof: "flat" });
+        ledFascia(0.828, -1, 16, 60, 1);
       }
-      ledFascia(0.828, -1, 16, 60, 1);
       grandstandEx(sl(0.92), -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
       ledFascia(sl(0.92), -1, 8, 60, 1);
 
@@ -861,13 +849,10 @@
           // Gap 23.2 / deeper 0.25: separates from the gap-12 pit fascia (flatCoplanar).
           place(R(0.006 + i * 0.011), 1, 23.2, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.25);
         }
-        // Paddock floodlight masts — taller, with large light pools below
+        // Paddock floodlight masts
         for (let i = 0; i < 7; i++) {
           const tk = R(0.010 + i * 0.010 + (i >= 4 ? 0.010 : 0));
           tower(tk, 1, 50, 5, 32, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-          const pa = anchor(tk, 1, 50);
-          addCyl(out, vadd(pa.c, pa.u, 0.1), 12, 0.30, POOL, 12, [pa.r, pa.u, pa.t]);
-          addCyl(out, vadd(pa.c, pa.u, 0.04), 22, 0.18, POOL_SOFT, 12, [pa.r, pa.u, pa.t]);   // 0.12 lay 2 cm under grade
         }
       }
 
@@ -903,9 +888,10 @@
       }
 
       hedge(0.10, 0.18, -1, 12, 2.2, [0.16, 0.22, 0.14]);
-      // Marina hedge pulled off the jetty band (was gap 13 overlapping jetty
-      // decks → flatCoplanar).
-      hedge(0.64, 0.72, 1, 20, 2.0, [0.16, 0.22, 0.14]);
+      // Leave breaks in the marina hedge at the two tight inside bends,
+      // where a continuous row of 20 m-offset hedge segments folds onto itself.
+      for (const [start, end] of [[0.64, 0.647], [0.655, 0.670], [0.679, 0.72]])
+        hedge(start, end, 1, 20, 2.0, [0.16, 0.22, 0.14]);
       // low shrub clusters at safe distances
       for (let i = 0; i < 16; i++) {
         const s = i / 16;

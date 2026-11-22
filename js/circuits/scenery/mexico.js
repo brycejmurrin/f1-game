@@ -808,8 +808,9 @@
         });
       }
       // Taller floodlights flanking the Peraltada
-      lightMast(K(0.90), 1, 32, 44);
-      lightMast(K(0.94), 1, 32, 44);
+      // The outer stand ends at 44 m and the terrace at 63 m. Keep each 10 m pad clear.
+      lightMast(K(0.90), 1, 72, 44);
+      lightMast(K(0.94), 1, 72, 44);
       if (typeof floodMast === "function") {
         floodMast(K(0.905), 1, 36, { h: 42, cool: true, pool: false, arms: 3 });
         floodMast(K(0.945), 1, 36, { h: 42, cool: true, pool: false, arms: 3 });

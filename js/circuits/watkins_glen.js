@@ -7,7 +7,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "watkins_glen",
-    revision: 2,
+    revision: 3,
     classic: true,
     // Upstream us-1956 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -61,7 +61,9 @@
     bankZones: [
       { turn: 3, angleDeg: 4.5, widthM: 150 },    // the Esses, middle left-hander (was frac 0.182, 639 m off; turns[] had no Esses apex)
       { turn: 7, angleDeg: 3.5, widthM: 130 },    // Toe of the Boot (was frac 0.620, on the exit)
-      { turn: 11, angleDeg: 4.0, widthM: 130 },   // the Anvil, the final right (turn 10 before the 2026-11-18 re-key)
+      // Final right, banked in the 1971 report. Estimate the magnitude from nine
+      // 8 m transverse sections of USGS 1 m terrain (2020), within 24 m of the apex.
+      { turn: 11, angleDeg: 5.8, widthM: 130 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

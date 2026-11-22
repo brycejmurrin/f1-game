@@ -40,6 +40,20 @@ test("corner-frames: the baseline only shrinks (a fixed row is deleted)", () => 
   assert.deepEqual(stale, [], "rows that no longer offend: delete them from tests/data/corner-frames-baseline.json");
 });
 
+test("Attwood banking peaks at the surveyed exit station", () => {
+  const row = rows.find(r => r.stable === "okayama|bank:frac0.895");
+  assert.ok(row && !row.bad && row.offsetM <= 2, row?.detail);
+  assert.match(row.detail, /T11 exit \+100 m/);
+  const tracks = CF.context();
+  const zone = tracks.LIST.find(d => d.id === "okayama").bankZones[0];
+  const measuredRow = () => CF.measure(tracks, "okayama").find(r => r.kind === "bank");
+  zone.widthM = 80;
+  assert.equal(measuredRow().bad, true, "an exit zone must still cover the apex");
+  zone.widthM = 570;
+  zone.frac = 0.89;
+  assert.equal(measuredRow().bad, true, "a measured peak moving several road nodes fails");
+});
+
 test("corner-frames: label parsing names the corners a comment means", () => {
   const def = { turns: new Array(20).fill(0) };
   assert.deepEqual(CF.cornersIn("// T2/3 apron", def, {}), [2, 3]);

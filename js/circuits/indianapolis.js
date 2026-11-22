@@ -4,7 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "indianapolis",
-    revision: 2,
+    revision: 3,
     // The pit complex (TrackPit) stands on the INFIELD side of the front
     // stretch, as at the real IMS (pit road, Pagoda and Gasoline Alley are all
     // inside the oval; F1 2000-07 ran the lap clockwise, so the infield is on
@@ -67,9 +67,12 @@
     // F1 Turn 13 uses oval Turn 1 in reverse. The 2007 IMS media guide lists
     // 9 degrees 12 minutes in the turn. The traced quarter-turn runs from
     // ~0.81 to ~0.91; its midpoint sets the Turn 13 marker.
-    // The cosine shoulders approximate the transitions to both level straights.
+    // USGS 1 m terrain transects across the oval show that the banking
+    // persists on exit: at lap 0.905 the outside is 1.48 m above the inside
+    // across 10 m of asphalt. The second zone carries this onto the straight.
     bankZones: [
-      { frac: 0.8644, angleDeg: 9.2, widthM: 740 },
+      { frac: 0.8644, angleDeg: 9.2, widthM: 665 },
+      { frac: 0.899, angleDeg: 8.4, widthM: 615 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

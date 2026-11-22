@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "abudhabi",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.2 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -42,11 +43,15 @@
       { frac: 0.8446, angleDeg: 3.0, widthM: 100 },   // [racing 0.946] T16 right (reads -2.1 deg: right-hander)
       { frac: 0.9500, angleDeg: 2.5, widthM: 90 },    // [racing 1.052 = 0.052] T1 left (2.4 deg measured)
     ],
-    elevations: [
-      { s: 0.230, halfM: 460, rise: 3.5 },
-      { s: 0.635, halfM: 700, rise: 7.5 },
-      { s: 0.945, halfM: 300, rise: -1.5 },
-    ],
+    // OpenF1 session 9658, Norris lap 15, checked against Piastri lap 15.
+    // XY-registered car positions fit 48 overlapping raised cosines (220 m
+    // half-width); these are additive coefficients in metres, not station heights.
+    // The summit at racing fraction 0.138 is the real Turn 3 sweep.
+    elevations: [-0.16, 0.54, 0.32, 0.98, 4.42, 5.84, 5.74, 3.62, 1.57, 1.05, 1.88, 2.27,
+      0.09, 1.01, 1.74, 1.1, 1.5, 1.26, 1.69, 0.7, 0.22, 0.09, 0.48, 2.28,
+      1.15, 0.36, 0.77, 0.56, 0.68, 0.42, 0.74, 0.19, 0.47, 1.36, 0.44, 0.31,
+      0.55, 0.33, 0.39, 0.76, 0.38, 0.13, 1.26, 0.96, 1.07, 0.78, -0.32, 0.21]
+      .map((rise, i) => ({ s: i / 48, halfM: 220, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP

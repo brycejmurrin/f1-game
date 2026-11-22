@@ -617,6 +617,8 @@
         opts = opts || {};
         const rows = opts.rows || 6, pitch = 6.8, len = bays * pitch;
         const a = anchor(k(s), side, gap + 4), b = [a.r, a.u, a.t];
+        // The turf at the stand centre can sit above the road station's shoulder.
+        a.c[1] = api.terrainYAt(a.c[0], a.c[2]) ?? a.c[1];
         const IN = -side;                        // +1 along a.r points at the track
         const topH = 0.9 + rows * 1.3;
         const half = (len / 2) / track.total;

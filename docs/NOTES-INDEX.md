@@ -36,6 +36,7 @@ rather than rewriting the record.
 | Doc | Topic | Cited from |
 |---|---|---|
 | [research/TRACK-ELEVATION-AND-BANKING-2026-11-21.md](research/TRACK-ELEVATION-AND-BANKING-2026-11-21.md) | Built road relief, grade, camber, terrain API samples and verification across all 52 circuits. |
+| [research/TRACK-SURFACE-VALIDATION-2026-11-22.md](research/TRACK-SURFACE-VALIDATION-2026-11-22.md) | Second-pass circuit validation against measured local climbs, banks and shoulder behavior. |
 | [research/TRACK-SOURCE-AUDIT-2026-10-19.md](research/TRACK-SOURCE-AUDIT-2026-10-19.md) | Source-backed audit of all 52 circuits: actual construction measurements, layout-era conflicts, width/banking/elevation gaps and ranked correction batches. | `js/circuits/`, `js/track/` |
 | [research/AGENT-JS-DEBUGGER-MCP.md](research/AGENT-JS-DEBUGGER-MCP.md) | JS debugger MCP setup, routing, lifecycle and cleanup contracts. | `.claude/skills/js-debugger` |
 | [research/AGENT-CONTRACTS.md](research/AGENT-CONTRACTS.md) | Current API references and reproducible agent tool contracts: diagnostics, smoke recipes, lifecycle/capture/replay evidence and hosted provider boundaries. | `tools/check/doctor.mjs`, `tools/lib/session-contracts.mjs` |

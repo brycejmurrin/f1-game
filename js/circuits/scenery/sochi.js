@@ -216,6 +216,7 @@
           const frac = k / n;
           if (side === 1 && (Math.abs(frac - 0.09) < 0.025 || Math.abs(frac - 0.23) < 0.022)) return;
           if (side === -1 && Math.abs(frac - 0.03) < 0.016) return;
+          if (side === 1 && Math.abs(frac - 0.30) < 0.005) return;  // approach planting bed
           // Draped, not a road-frame box: 46 m wide, the box's centre was
           // flush with the terrain and its ends 0.7-1.1 m under it (#5088).
           groundPatch(k, side, 7, [46, 0.10, 2.2], PLAZA_D, { id: `sochi-plaza-strip-${k}-${side}`, samples: 6 });
@@ -433,10 +434,12 @@
 
       // Skip cambered park rails that bury jersey tops (guardrail jersey rail
       // instance in structures.js). Right side at 8 m: 6 m buried 3 posts 0.43 m on camber (D6).
-      for (const [s0, s1] of [[0.58, 0.79], [0.84, 0.92]]) {
-        guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
+      for (const [s0, leftEnd, rightEnd] of [[0.58, 0.79, 0.77], [0.84, 0.92, 0.92]]) {
+        guardrail(s0, leftEnd, -1, 6, [0.80, 0.81, 0.83]);
+        guardrail(s0, rightEnd, 1, 8, [0.80, 0.81, 0.83]);
       }
+      // Give the T13 approach barrier clearance over the sloping verge.
+      guardrail(0.77, 0.79, 1, 11, [0.80, 0.81, 0.83]);
       guardrail(0.30, 0.50, -1, 7.5, [0.80, 0.81, 0.83]);
       guardrail(0.30, 0.50,  1, 7.5, [0.80, 0.81, 0.83]);
       guardrail(0.94, 0.06, -1, 4.0, [0.85, 0.85, 0.88]);
@@ -589,6 +592,6 @@
         // The approach parterre's outer hedge (gap 17.5) starts clear of the
         // Turn 5 arcStand (0.225-0.285, gap 18): from 0.282 it ran into the
         // stand's last station's deck rows (clip-audit frac 0.283, 0.90 m).
-        hedge(id === "approach" ? 0.288 : s - 0.018, s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
+        hedge(id === "approach" ? 0.288 : s - 0.018, id === "approach" ? 0.313 : s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
       }
     };

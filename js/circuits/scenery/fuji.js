@@ -122,7 +122,7 @@
       //    whole straight, with an open bank behind it for mass, then
       //    hospitality, back-of-house and car parks behind THAT.
       run(0.968, 1360, 152, (s, i) => {
-        grandstandEx(s, -1, 20, 150, null, null,
+        grandstandEx(s, -1, 20, 140, null, null,
           { tiers: 2, h: i % 3 === 1 ? 17.5 : 15, roof: "cantilever",
             roofCol: i % 3 === 1 ? ROOF_D : ROOF,
             fasciaCol: [CLAD, CLAD_L, CLAD_W][i % 3] });
@@ -253,15 +253,12 @@
       }
 
       // 5. PADDOCK, THEN THE HOTEL AND MOTORSPORTS MUSEUM  [0.150 +1 40]
-      //    Team transporters: sparse near-apron only (a dense double row here
-      //    buried 23 prims into the infield rise; leave the hotel mass clear).
-      // Gap 62 / skip 0.048: hospitality at gap 28 shared a roof plane
-      // (flatCoplanar), and gap 48 landed on the race-control annex at 0.048
-      // (coplanar 22 m² motorhome × neonTower). Transporters sit clear of both.
-      for (const [s, accent] of [
-        [0.068, [0.72, 0.16, 0.16]], [0.098, CLAD_L], [0.128, [0.20, 0.26, 0.52]],
+      // Park the team transporters on the level part of the service yard
+      // behind the final corner; the straight-side apron buries their lower decks.
+      for (const [s, gap, accent] of [
+        [0.947, 68, [0.72, 0.16, 0.16]], [0.950, 80, [0.20, 0.26, 0.52]],
       ]) {
-        motorhome(K(s), 1, 62, 6.5, 3.6, 11, { accent, roof: true });
+        motorhome(K(s), 1, gap, 6.5, 3.6, 11, { accent, roof: true });
       }
       broadcastCompound(K(0.088), 1, 62, { vans: 6, dishes: 3, spacing: 9 });
       // Fuji Speedway Hotel (Hyatt Unbound Collection) + Fuji Motorsports
@@ -381,7 +378,7 @@
       forestEdge(0.276, 0.300, 1, 44, { hMin: 15, hMax: 26, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.2 });
       hedge(0.272, 0.318, 1, 12, 1.5, SCRUB);
       marshalPost(K(0.262), -1, 13);
-      marshalPost(K(0.292), 1, 13);
+      marshalPost(K(0.292), 1, 18);
 
       // 7. COCA-COLA CORNER (80R) AND TOYOPET (100R)
       //    [0.372 -1 20 · 0.412 +1 24]

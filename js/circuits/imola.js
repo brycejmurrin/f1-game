@@ -7,6 +7,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "imola",
+    revision: 2,
     classic: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 6.3 m off centreline; = trace vertex 0 (timing line).
@@ -37,22 +38,21 @@
       { kinds: ["lighting"], s0: 0.7906, s1: 0.1706 },
     ],
     pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
-    // Keys are AUTHORED-frame (fmap'd to racing by def.js, ≈ +0.014 here); the racing-lap
-    // targets are in the comments (docs/tracks/imola.md §3: first third near-flat, Piratella
-    // crest, Acque Minerali hollow, Variante Alta crest, Rivazza descent). The old keys
-    // put +16 m at Tamburello and +14 m at Rivazza and left 0.40–0.75 flat. No bump goes below
-    // the start line: water sits at the lap's lowest road Y (build-props waterSurface), so a
-    // deep trough buried the Santerno ribbon under the start straight's terrain.
-    elevations: [
-      { s: 0.456, halfM: 320, rise: 12 },     // racing ≈0.47: Piratella blind crest
-      { s: 0.546, halfM: 240, rise: -7 },    // racing ≈0.56: Acque Minerali hollow
-      { s: 0.661, halfM: 520, rise: 21 },    // racing ≈0.675: Variante Alta crest, falling away towards Rivazza
-      { s: 0.786, halfM: 200, rise: 5 },     // racing ≈0.80: Rivazza shoulder, then the plunge to the line
-    ],
+    // Measured from Verstappen's 2025 qualifying lap (OpenF1 9983) and checked against
+    // Piastri's pole lap. Add the authored origin so the factory maps sample 0 back to the line.
+    elevations: [14.942, 12.58, 8.327, 7.267, 4.761, 4.754, 7.953, 12.482,
+      11.575, 14.077, 14.529, 14.47, 15.682, 14.691, 13.436, 13.741,
+      11.766, 11.838, 10.599, 8.252, 5.825, 2.762, 0.173, -0.172,
+      -0.137, -0.932, -0.607, -0.589, -0.479, -0.394, -0.177, -0.062,
+      0.085, 0.278, 0.51, 0.969, 1.128, 1.363, 1.249, 1.434,
+      1.274, 1.351, 1.206, 1.584, 1.76, 1.749, 2.062, 1.92,
+      2.211, 2.18, 2.428, 2.876, 3.0, 4.127, 5.56, 6.747,
+      9.476, 9.92, 11.744, 13.665, 17.656, 15.744, 16.65, 15.499]
+      .map((rise, i) => ({ s: (i / 64 + 0.495) % 1, halfM: 152.21, rise })),
     // Soft banks: terrain fade (1−t) at the 10 m foundation shoulder left
     // centreline `gap` at 0.22–0.40 under 3–4° (foundation assert ≤ 0.18).
     // 1.5° keeps a readable cross-slope without knife-edge verge steps; hills
-    // stay on `elevations` (unchanged). Measured 2026-09-29 headless probe.
+    // stay on `elevations`. Measured 2026-09-29 headless probe.
     bankZones: [
       { frac: 0.1905, angleDeg: 1.5, widthM: 60 },    // Villeneuve/Tosa link
       { frac: 0.3440, angleDeg: 1.5, widthM: 90 },    // Piratella

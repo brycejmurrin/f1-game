@@ -6,7 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "paul_ricard",
-    revision: 2,
+    revision: 3,
     classic: true,
     reverse: true,
     // The trace's first vertex opens the pit straight and IS the start line; the
@@ -61,10 +61,12 @@
       { s0: 0.2710, s1: 0.3405, hw: 6.6, ease: 0.003 },  // Le Beausset (racing 0.729-0.760)
       { s0: 0.0135, s1: 0.0980, hw: 6.6, ease: 0.003 },  // Pont / Le Village / Tour (racing 0.883-0.927)
     ],
+    // IGN RGE ALTI cross-sections at ±5 m from the racing centreline, sampled
+    // through each apex. Values fit the local net transverse slope.
     bankZones: [
-      { turn: 1, angleDeg: 3.0, widthM: 130 },   // Verrerie; re-seated frac 0.07 (was 101 m off any apex)
-      { frac: 0.713, angleDeg: 4.0, widthM: 170 },   // Signes (0.560 sat on the Mistral and was re-seated onto the chicane)
-      { frac: 0.745, angleDeg: 3.5, widthM: 160 },   // Le Beausset (was "Bosch curve" 0.640, re-seated here)
+      { turn: 1, angleDeg: 0.4, widthM: 130 },       // Verrerie
+      { frac: 0.713, angleDeg: 1.4, widthM: 170 },   // Signes
+      { frac: 0.745, angleDeg: 0.8, widthM: 160 },   // Le Beausset
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

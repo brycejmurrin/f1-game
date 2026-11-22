@@ -6,7 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "sochi",
-    revision: 2,
+    revision: 3,
     classic: true,
     // Upstream ru-2014 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -45,12 +45,16 @@
       grass:         [0.22, 0.42, 0.20],
       sunDir:        [0.44, 0.66, 0.32],
     },
-    // 2019 Russian GP media kit: altitude 21.4–23.3 m. Preserve the authored
-    // crest and trough positions while matching the published 1.9 m range.
+    // F1's Sochi topography chart, registered at the numbered corner apexes.
+    // Relative heights in metres; FIA gives 21.4–23.3 m across the lap.
     elevations: [
-      { s: 0.34, halfM: 420, rise: 1.02 },
-      { s: 0.68, halfM: 400, rise: -0.88 },
-    ],
+      0.58, 0.4, 0.07, 0.11, 0.07, 0.07, 0.0, -0.07, -0.07, -0.22, -0.97, -1.02,
+      -1.06, -1.17, -0.95, -0.38, -0.22, -0.58, -0.58, -0.29, -0.07, -0.07, -0.07, -0.07,
+      -0.07, -0.11, -0.11, -0.15, -0.33, -0.33, -0.37, -0.77, -0.88, -0.55, -0.51, -0.51,
+      -0.58, -0.51, -0.4, -0.29, -0.18, -0.26, -0.51, -0.66, -0.35, -0.66, -0.73, -0.88,
+      -0.8, -0.86, -0.88, -0.95, -0.95, -0.95, -0.95, -1.02, -1.02, -1.02, -1.1, -0.8,
+      -0.71, -0.95, -1.24, -1.32, -1.32, -1.26, 0.18, -0.29, -0.69, -0.69, -0.53, 0.0,
+    ].map((rise, i) => ({ s: (0.922 + i / 72) % 1, halfM: 80.50, rise })),
     hwZones: [
       { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },  // Turn 5-6
       { s0: 0.4409, s1: 0.5014, hw: 6.2, ease: 0.012 },  // Turn 13-14 (index; arc 0.520-0.565)

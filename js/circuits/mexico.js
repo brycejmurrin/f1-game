@@ -4,7 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mexico",
-    revision: 2,
+    revision: 3,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.6 m off centreline; = trace vertex 0.
     // 0.6350 also measures straight (mean |k| 0.00211 over 120 m) but
@@ -60,14 +60,16 @@
       { frac: 0.6928, angleDeg: 6.0, widthM: 120 },   // T11
       { frac: 0.7311, angleDeg: 5.0, widthM: 140 },   // T11-T12 link
     ],
-    // Formula 1 reports 2.8 m of lap elevation change on the modern layout:
-    // https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc
-    // Scale the existing undulations together. Their locations are approximations.
+    // Smooth centerline fit to Sainz's 2024 qualifying lap 20, checked against
+    // Verstappen's lap 17. Heights are relative metres. Both laps span 2.8 m.
+    // https://api.openf1.org/v1/location?session_key=9621&driver_number=55&date%3E2024-10-26T22:03:53.895&date%3C2024-10-26T22:05:09.841
     elevations: [
-      { s: 0.94364, halfM: 420, rise: 2.12 },
-      { s: 0.33364, halfM: 380, rise: 1.27 },
-      { s: 0.60864, halfM: 280, rise: -0.68 },
-    ],
+      0.08, -0.69, -0.03, -0.56, -0.31, -0.40, -0.45, -0.54,
+      -0.43, -0.65, -0.41, -0.82, -0.32, -0.63, -0.40, -0.21,
+      -0.52, 0.10, -0.08, 0.92, 0.72, 0.47, 0.09, -0.55,
+      0.13, -0.61, -0.18, -0.52, -0.20, -0.47, -0.21, -0.47,
+      -0.29, -0.29, -1.03, 0.48, -1.21, -0.09, -0.99, -0.51,
+    ].map((rise, i) => ({ s: i / 40, halfM: 214.34, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP

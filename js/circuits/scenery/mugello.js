@@ -45,53 +45,38 @@
           [0.455,  1, 126, 6, 58, -0.05],
           [0.585,  1,  96, 8, 66,  0.08],
           [0.720, -1, 118, 7, 60, -0.06],
-          [0.865, -1, 100, 6, 32,  0.07],
+          [0.865, -1, 100, 6, 24,  0.07],
         ]) {
           const kk = K(sf), a0 = anchor(kk, side, gap);
           if (onTrack(a0.c[0], a0.c[2], 30)) continue;
           for (let r = 0; r < rows; r++) {
             const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
             if (onTrack(a.c[0], a.c[2], 24)) continue;
-            const b = [a.r, a.u, a.t];
             const hv = hash(kk * 19 + r * 31);
             const rowLen = len * (0.85 + hv * 0.24);
-            // Seat each row on the hillside under its centre — reusing
-            // anchor()'s road-edge Y buried the tilled strip up to 1.8 m into
-            // the Tuscan slope (ground-audit line 53). World-up basis so a
-            // banked a.u does not tip the strip into grade.
-            const gy = groundUnder(a.c[0], a.c[2]);
-            const ty = terrainYAt(a.c[0], a.c[2]);
-            const baseY = Math.max(
-              gy != null ? gy : -Infinity,
-              ty != null ? ty : -Infinity,
-              a.c[1]
-            );
-            if (!Number.isFinite(baseY)) continue;
-            const foot = [a.c[0], baseY + 0.06, a.c[2]];
             const bw = flatBasis(a);
-            seat.box(out, foot, [4.6, 0.12, rowLen], SOIL, bw);
-            out._mat = MAT.FOLIAGE;
-            // A trellised row, not a hedge wall: ~7 m runs of a 0.55 m canopy on
-            // its wire with a clear gap at every run (survey defect 1).
+            // Sample each run separately. Long rigid strips crossed both sides
+            // of the hillside and extended beyond the rendered terrain.
             const nSeg = Math.max(2, Math.round(rowLen / 8)), segL = rowLen / nSeg;
             for (let q = 0; q < nSeg; q++) {
               const off = -rowLen / 2 + (q + 0.5) * segL;
-              const sx = foot[0] + bw[2][0] * off, sz = foot[2] + bw[2][2] * off;
-              const sy = Math.max(groundUnder(sx, sz) ?? -Infinity, terrainYAt(sx, sz) ?? -Infinity);
+              const sx = a.c[0] + bw[2][0] * off, sz = a.c[2] + bw[2][2] * off;
+              const sy = terrainYAt(sx, sz);
+              if (sy == null) continue;
+              const ends = [-1, 1].map(sign => terrainYAt(
+                sx + sign * bw[2][0] * segL / 2, sz + sign * bw[2][2] * segL / 2));
+              if (ends.some(y => y == null || Math.abs(y - sy) > 0.6)) continue;
+              out._mat = 0;
+              seat.box(out, [sx, sy + 0.02, sz], [2.5, 0.12, segL * 0.84], SOIL, bw);
               out._mat = MAT.FOLIAGE;
-              seat.box(out, [sx, (Number.isFinite(sy) ? sy : baseY) + 0.18, sz], [0.55, 1.25, segL * 0.74],
+              seat.box(out, [sx, sy + 0.18, sz], [0.55, 1.25, segL * 0.74],
                        (hv + q * 0.13) % 1 < 0.5 ? VINE : VINE_DRY, bw);
             }
-            out._mat = 0;
             out._mat = MAT.WOOD;
             for (const e of [-rowLen / 2, rowLen / 2]) {
               const pc = vadd(a.c, a.t, e);
-              const py = Math.max(
-                groundUnder(pc[0], pc[2]) ?? -Infinity,
-                terrainYAt(pc[0], pc[2]) ?? -Infinity,
-                foot[1]
-              );
-              seat.cyl(out, [pc[0], py, pc[2]], 0.10, 2.0, POST, 4, bw);
+              const py = terrainYAt(pc[0], pc[2]);
+              if (py != null) seat.cyl(out, [pc[0], py, pc[2]], 0.10, 2.0, POST, 4, bw);
             }
             out._mat = 0;
           }
@@ -437,7 +422,10 @@
           addBox(out, vadd(a.c, a.u, 0.85), [0.7, 1.7, seg],
             (Math.round(k / 4) & 1) ? ROSSO : [0.93, 0.93, 0.90], b);
           for (let r = 0; r < rows; r++) {
-            const back = 0.9 + r * depth, up = 0.9 + r * rise;
+            const back = 0.9 + r * depth;
+            const tread = vadd(a.c, a.r, side * back);
+            const terrain = terrainYAt(tread[0], tread[2]) ?? tread[1];
+            const up = Math.max(0.9 + r * rise, terrain - tread[1] + rise / 2);
             addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.25, seg], r & 1 ? [0.74, 0.72, 0.68] : [0.68, 0.66, 0.63], b);
             const h = hash(k * 23 + r * 3);
@@ -512,7 +500,7 @@
         const IN = -side;
         stage._mat = MAT.CONCRETE;
         // Raise plinth slightly so seat.box does not sink into the hillside.
-        const plinth = [a.c[0], a.c[1] + 0.15, a.c[2]];
+        const plinth = [a.c[0], (terrainYAt(a.c[0], a.c[2]) ?? a.c[1]) + 0.15, a.c[2]];
         seat.box(stage, plinth, [10, 0.4, len0], [0.70, 0.70, 0.68], b);
         for (let tier = 0; tier < tiers; tier++) {
           const lat = side * (1.2 + tier * 2.0);

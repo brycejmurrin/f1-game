@@ -13,6 +13,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "dijon",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -35,6 +36,8 @@
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
+    // IGN transverse sections through the Courbe de Pouas.
+    bankZones: [{ frac: 0.853, angleDeg: -5.4, widthM: 185 }],
     pal: {
       zenith:        [0.38, 0.48, 0.60],
       horizon:       [0.66, 0.70, 0.72],
