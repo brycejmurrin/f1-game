@@ -4842,7 +4842,7 @@ function updateCar(c, dt, ranked) {
   const S = _ucS;
   // This scratch snapshot never supplies controls to physics. Native Input is
   // read once at its existing sites; only the TT recorder receives this copy.
-  if (isTimeTrial() && c.isPlayer && !c.retired && !c.finished) {   // one reused record: InputGhost.record copies the primitives, keeps only initialState (fresh below)
+  if (c.isPlayer && isTimeTrial() && !c.retired && !c.finished) {   // one reused record: InputGhost.record copies the primitives, keeps only initialState (fresh below)
     const r = _ttRec; r.native = !inputOf(c); r.initialState = r.boost = r.overtake = r.aeroToggle = r.shiftUp = r.shiftDown = r.steer = r.throttle = r.brake = r.throttleLevel = r.brakeLevel = r.aero = undefined;
     S.recordInput = r;
   } else S.recordInput = null;
@@ -4905,7 +4905,8 @@ function updateCar(c, dt, ranked) {
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
   const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
-  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, surfaceWet);
+  const speedStd = vStd(Math.abs(c.speed));
+  const aq = TyreModel.aquaInto(c, speedStd, raceWeather, surfaceWet);
   const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
   const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.weatherGrip(0, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
@@ -4916,7 +4917,7 @@ function updateCar(c, dt, ranked) {
   // --- speed targets ---
   let vmax = VMAX * driveTune.PACE * (c.human ? mods.speed : Math.min(BAND_CEIL, c.tierV * c.skill * dd.ai * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)));   // #5330 scripted trim
   // WIND (js/race/wind.js) off the car's OWN heading (an AI's: tangent less its aiHead): head/tail wind moves top speed.
-  vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), vStd(Math.abs(c.speed))).vmaxMul;
+  vmax *= Wind.carInto(_windStep.st || (_windStep.st = Wind.sync(simSeed(), raceWeather, track.def && track.def.id, raceT)), c.human ? (c.head || 0) : Math.atan2(smp.t[0], smp.t[2]) - (c.aiHead || 0), speedStd).vmaxMul;
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
