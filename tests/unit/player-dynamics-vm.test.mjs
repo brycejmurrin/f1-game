@@ -256,9 +256,7 @@ test("a stopped car with residual lateral velocity comes to rest laterally (Coul
 // Brake-to-reverse on a DESCENT: offtrack-vm's reverse test is flat. On a
 // descent, slope gravity's a·dt re-took the `speed > 0` braking branch every
 // step and fought the reverse crawl. A car the BRAKES hold takes no gravity
-// feed, so the crawl builds at REVERSE_ACCEL exactly as on the flat. Measured on
-// spa's steepest descent (-16.8 %): -5.00 m/s after 1 s with the fix, -3.63
-// without (on this tree the crawl still engages without the fix, only slower).
+// feed, so the crawl builds at REVERSE_ACCEL exactly as on the flat.
 test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", async () => {
   await g.race("spa", "day", "dry");
   const a = g.apex, physicsBefore = { ...a.tuning() }, L = g.G.track.total, N = 400;
@@ -271,7 +269,11 @@ test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", 
       const gr = (ys[(i + 1) % N] - ys[i]) / (L / N);
       if (gr < grade) { grade = gr; f = i / N; }
     }
-    assert.ok(grade < -0.1, `anti-vacuity: spa's steepest descent is only ${(grade * 100).toFixed(1)} %`);
+    // Check that gravity actually pulls the unbraked car forward at this station.
+    a.jump(f, 0, 0);
+    a.setInput({ steer: 0, throttle: false, brake: false });
+    a.step(1 / 60, 1);
+    assert.ok(a.physState().speed > 0, `car should roll downhill at f=${f} (grade ${grade})`);
     const { REVERSE_ACCEL, REVERSE_MAX } = g.sandbox.PhysicsConsts;
     a.jump(f, 0, 0);
     let atHalf = 0;

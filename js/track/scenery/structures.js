@@ -108,7 +108,7 @@ const SceneryStructures = (function () {
       // tyre-pair note in tracks.js) — and promotes a genuinely sub-node
       // authored span to a surprise full lap of geometry.
       const span = wrapped === 0 && Math.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
-      const step = Math.max(1, Math.round(stepM / ds));
+      const step = Math.max(1, Math.round(stepM / (ctx.sceneryStepM || ds)));
       let seen = null, i0 = 0;
       if (tag) {
         seen = walked.get(tag);

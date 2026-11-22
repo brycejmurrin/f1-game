@@ -127,8 +127,13 @@ for (const action of ["retry", "rewind"]) {
     field[0] = before;
     const firstSector = G.track.def.sectors[0];
     const approach = firstSector - 8 / G.track.total;
+    // Start S1 with a forward timing-line crossing. A jump directly from the
+    // grid to a stop in S1 can register an invalid entry on a sloping road.
+    apex.jump(1 - 2 / G.track.total, 60, 0);
+    for (let i = 0; i < 12 && G.player.lap === 0; i++) g.step(1);
+    assert.equal(G.player.lap, 1);
+    assert.equal(G.sectorIdx, 0);
     apex.jump(approach, 0, 0);
-    G.player.lap = 1;
     g.step(180);  // more than the field timing minimum and the rewind sampling interval
     const personal = G.sectorBests[0];
     if (action === "retry") assert.equal(G.coach.mark(), true);

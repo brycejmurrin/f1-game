@@ -746,8 +746,9 @@
       lotBleacher("vegas-lot-bleacher-harmon", sl(0.90), -1, 30, 9, { rows: 8, ribbon: CYAN });
       grandstandEx(sl(0.945), 1, 20, 40, null, null,
         { livery: "alu", tiers: 1, roof: "none" });
-      building(K(sl(0.93)), 1, 22, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
-      building(K(sl(0.97)), -1, 20, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
+      // Both Harmon hotel foundations stand beyond the raised terrain shelf.
+      building(K(sl(0.93)), 1, 34, 28, 52, 26, { wall: [0.22, 0.18, 0.24], window: VIOLET, floor: 7, lit: true });
+      building(K(sl(0.97)), -1, 34, 26, 46, 24, { wall: [0.20, 0.18, 0.22], window: ROSE, floor: 7, lit: true });
       billboard(K(sl(0.94)), -1, 18, 18, 11, CYAN);
       billboard(K(sl(0.96)), 1, 17, 16, 10, MAGENTA);
 

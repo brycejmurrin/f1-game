@@ -17,7 +17,8 @@ async function imolaDayDiag(racePage) {
     for (let i = 0; i < 240; i++) {
       const frac = i / 240;
       for (const lat of [-10, 10]) {
-        const gap = window.__apex.groundY(frac, lat).gap;
+        // Measure protrusion above the banked road edge at this shoulder.
+        const gap = window.__apex.groundY(frac, lat).overRoad;
         if (gap != null) shoulderGaps.push({ frac, lat, gap });
       }
     }

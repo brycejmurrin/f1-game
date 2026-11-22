@@ -13,6 +13,7 @@
 //
 // Pure Node: tools/lib/track-build-vm.cjs runs the real track build, no browser.
 
+import { trisOf, surfaceY } from "../helpers/mesh-surface.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -866,38 +867,6 @@ test("the entry hatch is paint inside the road edge, from the road's start to wh
 // drawn single-sided, and four of the five box quads were wound down —
 // culled on all three backends, so only the team's front bar ever showed.
 const MIN_PAINT_GAP = 0.010;
-function trisOf(out, from = 0, to = out.idx.length) {
-  const V = (i) => [out.pos[i * 3], out.pos[i * 3 + 1], out.pos[i * 3 + 2]], T = [];
-  for (let i = from; i + 2 < to; i += 3) T.push([V(out.idx[i]), V(out.idx[i + 1]), V(out.idx[i + 2])]);
-  return T;
-}
-/** The highest surface triangle over (x, z), or null — a 2 m XZ grid over `tris`. */
-function surfaceY(tris) {
-  const CELL = 2, grid = new Map(), cellOf = (x, z) => Math.floor(x / CELL) + "," + Math.floor(z / CELL);
-  tris.forEach((T, i) => {
-    const xs = T.map((p) => p[0]), zs = T.map((p) => p[2]);
-    for (let cx = Math.floor(Math.min(...xs) / CELL); cx <= Math.floor(Math.max(...xs) / CELL); cx++)
-      for (let cz = Math.floor(Math.min(...zs) / CELL); cz <= Math.floor(Math.max(...zs) / CELL); cz++) {
-        const key = cx + "," + cz;
-        if (!grid.has(key)) grid.set(key, []);
-        grid.get(key).push(i);
-      }
-  });
-  return (x, z) => {
-    let best = null;
-    for (const i of grid.get(cellOf(x, z)) || []) {
-      const [a, b, c] = tris[i];
-      const d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
-      if (Math.abs(d) < 1e-12) continue;
-      const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d;
-      const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d, l3 = 1 - l1 - l2;
-      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
-      const y = l1 * a[1] + l2 * b[1] + l3 * c[1];
-      if (best === null || y > best) best = y;
-    }
-    return best;
-  };
-}
 function clearance(paint, under, N = 6) {
   let min = Infinity, n = 0, missed = 0, down = 0;
   for (const [a, b, c] of paint) {

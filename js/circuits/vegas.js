@@ -23,6 +23,8 @@
     // the purpose-built Paddock Building and this def's paddock kits stand.
     pit: { mode: "street", side: -1 },
     sceneryCoordinates: "racing",
+    // The Strip's street furniture follows fixed blocks in plan view.
+    planarScenerySpacing: true,
     terrainOuter: 26,
     barrierGap: 1.0,
     dressingExclusions: [
@@ -33,6 +35,10 @@
       { kinds: ["city", "foliage"], s0: 0.642, s1: 0.972 },
       // Sphere / Koval, RACING 0.22-0.34 -> authored 0.377-0.497 (overlaps the 0.36-0.47 row):
       { kinds: ["city", "foliage"], s0: 0.377, s1: 0.497 },
+      // Leave the paddock compound, Sands storefront and Harmon hotel frontage clear.
+      { kind: "city", s0: 0.176, s1: 0.185, side: -1 },
+      { kind: "city", s0: 0.549, s1: 0.558, side: -1 },
+      { kind: "city", s0: 0.084, s1: 0.091, side: 1 },
       { kind: "lamps", s0: 0.27, s1: 0.36, side: -1 },
       { kind: "lamps", s0: 0.65, s1: 0.71, side: 1 },
     ],

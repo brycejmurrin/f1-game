@@ -18,6 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { trisOf, surfaceY } from "../helpers/mesh-surface.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -1115,18 +1116,29 @@ test('circuit exterior surface retains actual Bahrain and Monaco departure wheel
   const ctx = vm.createContext(h.sandbox);
   for (const f of ['js/garage/exterior-geometry.js', 'js/garage/exterior.js', 'js/data/garage-departure-motion.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Builder = vm.runInContext('GarageExteriorGeometry', ctx), Motion = vm.runInContext('GarageDepartureMotion', ctx), Exterior = vm.runInContext('GarageExterior', ctx);
-  for (const [id, expected] of [['bahrain', [.1229, .1484, .1229, .1484]], ['monaco', [-.0121, .0012, -.0120, .0014]]]) {
-    const it = Builder.buildSteps(h.Tracks.LIST.find(d => d.id === id), { teamId: 'ferrari' });
+  for (const id of ['bahrain', 'monaco']) {
+    const def = h.Tracks.LIST.find(d => d.id === id);
+    const it = Builder.buildSteps(def, { teamId: 'ferrari' });
     let next; do { next = it.next(); } while (!next.done);
     const data = next.value; assert.equal(data.supported, true);
     const pose = { side: 1, eye: [], aim: [] }; Motion.sample(1, 1, pose); Exterior.fitPose(pose, data.anchor, true);
-    let wheel = 0;
+    // Compare the clipped garage index to the race generator's unpainted ribbon
+    // in world coordinates, including the current circuit elevation and bank.
+    const track = { ...h.Tracks.buildCenterline(def, { line: false }), def };
+    track.pit = h.TrackPit.build(track, def, vm.runInContext('TrackSpline.curvature', ctx));
+    const fresh = () => ({ pos: [], nrm: [], col: [], idx: [] });
+    const lane = h.TrackMesh.buildPitLane(track, fresh()), marks = h.TrackMesh.buildPitMarks(track, fresh());
+    const ribbonHeight = surfaceY(trisOf(lane, 0, lane.idx.length - marks.idx.length));
+    const { position, yaw } = data.anchor;
+    const cos = Math.cos(yaw), sin = Math.sin(yaw);
     for (const x of [-.79, .79]) for (const z of [-1.6, 1.7]) {
       const wx = pose.x + x * Math.cos(pose.yaw) + z * Math.sin(pose.yaw);
       const wz = pose.z - x * Math.sin(pose.yaw) + z * Math.cos(pose.yaw);
       const y = Builder.sampleHeight(data.surface, wx, wz);
       assert.ok(Number.isFinite(y), id + ' tyre has a supported surface');
-      assert.ok(Math.abs(y - expected[wheel++]) < .003, id + ' exact generated ribbon height survives indexing');
+      const expected = ribbonHeight(position[0] + wx * cos + wz * sin, position[2] - wx * sin + wz * cos);
+      assert.ok(Number.isFinite(expected), id + ' tyre is on the race pit ribbon');
+      assert.ok(Math.abs(position[1] + y - expected) < 1e-6, id + ' exact generated ribbon height survives indexing');
     }
     if (id === 'bahrain') {
       assert.ok(data.stats.sceneryVertices > 10000, 'actual authored venue scenery is present beyond the pit structures');
