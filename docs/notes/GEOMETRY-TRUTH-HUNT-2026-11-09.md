@@ -6,6 +6,16 @@ Bryce: "I really worry our ui aspect resolution pixel density and sizes is inacc
 This is the geometry half (the pixel / canvas / DPR half is the sibling hunt). Tree `e808230`. Rule of the hunt: no
 comment, doc, test name or note counts as evidence; only a number read off a running page does.
 
+### Follow-up on the owner profile (#5218)
+
+The owner preset now seeds the November 10 Home Screen settings export (UI SIZE 70 %, BUTTON SIZE 143.25 %). The landscape Safari tab measured 852 × 368 CSS px on the phone at DPR 3. In that same reading, `screen.width` and `screen.height` reported 393 × 852. The portrait tab reported an inner viewport of 393 × 695 at connection time. [Profile update](https://github.com/brycejmurrin/f1-game/pull/5755) · [Portrait reading](https://github.com/brycejmurrin/f1-game/issues/5168#issuecomment-6757375112) · [Landscape reading](https://github.com/brycejmurrin/f1-game/issues/5168#issuecomment-6757395861)
+
+The November 21 Home Screen reading on build 28106 confirmed both standalone flags and DPR 3. The layout and visual viewports were both 852 × 393 CSS px with zero visual offsets; `visualViewport.scale` reported 2.16794. The landscape safe-area insets were 59 left, 0 top, 59 right and 20 bottom. The installed app read UI SIZE 70 % and BUTTON SIZE 143.25 %. [Standalone reading](https://github.com/brycejmurrin/f1-game/issues/6049#issuecomment-7057268700) · [Phone window fixture](../../tests/data/phone-windows.json)
+
+A separate November 21 Safari tab reading reported 852 × 283 at DPR 3 and visual scale 1, both standalone flags false, and measured insets of 59 left, 0 top, 59 right and 20 bottom. In that state, 100svh and 100dvh measured 283 CSS px, while 100vh and 100lvh measured 393. Neither Safari reading identified the toolbar position, and the earlier 368 px state still has no inset reading. Use `--window safari-short` for the newer state or `--window safari` for the earlier acceptance baseline. [Safari reading](https://github.com/brycejmurrin/f1-game/issues/6049#issuecomment-7057302258)
+
+For F5, the device reported `currentCSSZoom = 2`, a 200 px bounding rect and a 100 px offset width for the 100 px test box at zoom 2. The measured inset ratio was 2. The original probe returned 0.61 for the viewport-width ratio: the game's border-box rule already included the 59 px of left padding in the child’s declared width, and the probe subtracted the painted padding. The updated probe explicitly uses content-box so that subtraction isolates the width of 10vw. [Raw zoom readings](https://github.com/brycejmurrin/f1-game/issues/6049#issuecomment-7057268700)
+
 ## How it was measured, and what was NOT
 
 - **Emulation (everything below unless marked):** Chromium through the Playwright MCP with CDP
