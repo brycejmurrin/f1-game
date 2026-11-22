@@ -1,1 +1,1 @@
-New: Settings → Graphics now offers individual Desktop detail and Mobile detail controls. Phones can tune car and circuit geometry, garage and crew detail, texture filtering and atmospheric sky. Each choice can follow the preset or override it after a reload.
+New: Settings → Graphics → Graphics details automatically shows the effects available for your device. Each effect can follow the preset or use an individual override after a reload.

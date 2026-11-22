@@ -36,7 +36,7 @@
   const fold = add(panel, "details");
   fold.dataset.desktopGraphics = "";
   fold.className = "pm-renderer-sub";
-  add(fold, "summary", GLX.isMobile ? "Mobile detail" : "Desktop detail").className = "adv-more-btn";
+  add(fold, "summary", "Graphics details").className = "adv-more-btn";
   fold.addEventListener("toggle", () => {
     if (!fold.open || fold.children.length > 1) return;
     const store = GameStore.store;

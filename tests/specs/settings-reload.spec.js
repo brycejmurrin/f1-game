@@ -158,7 +158,7 @@ test.describe("individual desktop graphics", () => {
     async function openDetail() {
       await page.locator("#mb-settings").click();
       await page.locator("#pm-open-graphics").click();
-      await page.getByText("Desktop detail", { exact: true }).click();
+      await page.getByText("Graphics details", { exact: true }).click();
     }
     await page.goto("/");
     await boot(page);
@@ -189,7 +189,7 @@ test.describe("phone detail", () => {
     async function openDetail() {
       await page.locator("#mb-settings").tap();
       await page.locator("#pm-open-graphics").tap();
-      await page.getByText("Mobile detail", { exact: true }).tap();
+      await page.getByText("Graphics details", { exact: true }).tap();
     }
     await page.goto("/");
     await boot(page);
