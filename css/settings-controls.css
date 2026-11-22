@@ -520,6 +520,7 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
 /* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
    + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
    after RESOLUTION / RENDERER / GRAPHICS — do not add a named "adv" area. */
+#pm-graphics-details-body .set-row > details { flex: 1 1 12rem; min-width: 0; }
 #pm-display-adv,
 #pm-visual-tuners {
   margin: 0;

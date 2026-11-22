@@ -166,8 +166,8 @@ test.describe("individual desktop graphics", () => {
     await expect(page.locator('script[src*="js/ui/desktop-graphics.js"]')).toHaveCount(1);
     await expect.poll(() => page.evaluate(() => Object.keys(GfxQuality.FEATURES).filter(key =>
       !document.querySelector(`[data-desktop-graphics] select[data-effect="${key}"]`)))).toEqual([]);
-    const trees = page.getByLabel("High-detail trees", { exact: true });
-    const mirrors = page.getByLabel("High-resolution rear-view mirror", { exact: true });
+    const trees = page.getByRole("combobox", { name: "High-detail trees", exact: true });
+    const mirrors = page.getByRole("combobox", { name: "High-resolution rear-view mirror", exact: true });
     await trees.selectOption("on");
     await mirrors.selectOption("off");
     await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Reload to apply" }).click()]);
@@ -194,8 +194,16 @@ test.describe("phone detail", () => {
     await page.goto("/");
     await boot(page);
     await openDetail();
-    const kerbs = page.getByLabel("Modelled kerbs", { exact: true });
-    await expect(page.getByLabel("HDR output", { exact: true })).toHaveCount(0);
+    const kerbs = page.getByRole("combobox", { name: "Modelled kerbs", exact: true });
+    await expect(page.getByRole("combobox", { name: "HDR output", exact: true })).toHaveCount(0);
+    const kerbHelp = page.locator("#desktop-detail-kerbProfile details");
+    await expect(kerbHelp.locator("p")).toBeHidden();
+    await kerbHelp.locator("summary").tap();
+    await expect(kerbHelp.locator("p")).toContainText("raised");
+    await expect(kerbHelp.locator("p")).toBeVisible();
+    await expect(kerbs).toHaveValue("");
+    await kerbHelp.locator("summary").tap();
+    await expect(kerbHelp.locator("p")).toBeHidden();
     await kerbs.selectOption("on");
     await Promise.all([page.waitForEvent("load"), page.getByRole("button", { name: "Reload to apply" }).tap()]);
     await boot(page);
