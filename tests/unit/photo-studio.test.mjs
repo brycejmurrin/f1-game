@@ -524,15 +524,15 @@ test("a captured or saved photo selects its own Home scene after the image is st
   }
 });
 
-test("4K capture requests real render pixels and releases the override before PNG export", async () => {
+for (const [resolution, width, height] of [["normal", 1920, 1080], ["4k", 3840, 2160]]) test(`${resolution} garage capture renders at the selected size and releases it before export`, async () => {
   const b = boot(), sizes = [];
   Object.assign(b.G.gfx, {width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
     capturePixels() { const size = sizes.at(-1); return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) }; }});
   b.api.open({source: "garage"});
-  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, {type:"change"});
+  const select = b.dom.byId("ps-resolution"); select.value = resolution; b.dom.dispatch(select, {type:"change"});
   assert.equal(await b.api.capture(), true);
-  assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [3840,2160,null]);
-  assert.deepEqual([b.api.state().width,b.api.state().height], [3840,2160]);
+  assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [width,height,null]);
+  assert.deepEqual([b.api.state().width,b.api.state().height], [width,height]);
   await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
 });
 

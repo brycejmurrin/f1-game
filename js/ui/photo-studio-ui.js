@@ -17,10 +17,10 @@ function crop(width, height, aspect) {
   return { x: (w - cw) / 2, y: (h - ch) / 2, width: cw, height: ch };
 }
 function background() {
-  try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 240000 ? v : ""; } catch (_) { return ""; }
+  try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; }
 }
 function setBackground(value) {
-  if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 240000)) return false;
+  if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 1.5e6)) return false;
   try {
     const S = GameStore.store;   // raw lane: setRoomy's quota sweep, failedKeys (#5023)
     if (!(value ? S.rawSet(KEY, value) : S.rawDel(KEY))) return false;
@@ -411,7 +411,7 @@ function create(G, deps) {
         select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
       group("photo", "YOUR PHOTO", [
-        select("Capture resolution", [["normal", "Standard"], ["4k", "Up to 4K"]], () => st.highRes ? "4k" : "normal",
+        select("Capture resolution", [["normal", "Standard HD"], ["4k", "Up to 4K"]], () => st.highRes ? "4k" : "normal",
           v => {
             if (st.busy) return;
             st.highRes = v === "4k";
@@ -703,23 +703,35 @@ function create(G, deps) {
     }
     return out;
   }
-  function thumbnail(canvas) {
-    const thumb = mk("canvas"), scale = Math.min(1, 640 / canvas.width, 360 / canvas.height);
+  function thumbnail(canvas, maxWidth = 640, maxHeight = 360, quality = 0.7) {
+    const thumb = mk("canvas"), scale = Math.min(1, maxWidth / canvas.width, maxHeight / canvas.height);
     thumb.width = Math.max(1, Math.round(canvas.width * scale)); thumb.height = Math.max(1, Math.round(canvas.height * scale));
     thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
-    return thumb.toDataURL("image/jpeg", 0.7);
+    return thumb.toDataURL("image/jpeg", quality);
+  }
+  function homeImage(canvas) {
+    // One selected image lives in localStorage. Bound the encoded size as well as the dimensions.
+    let edge = Math.min(3840, Math.max(canvas.width, canvas.height));
+    while (edge > 640) {
+      const image = thumbnail(canvas, edge, edge, 0.9);
+      if (image.length < 1.5e6) return image;
+      edge = Math.floor(edge * 0.75);
+    }
+    return thumbnail(canvas);
   }
   // #3656: the live view may run below native resolution (the governor, a
   // phone's title scene), and the photo copied that backing store: 217 x 122 px
   // on an iPhone 14. The shot renders at renderScale 1 (the native backing
-  // size). The optional 4K draw requests a larger backing size for this shot.
+  // size). Small garage views target Full HD. The optional 4K draw applies in any scene.
   async function fullRes(run, highRes) {
     const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
     let size = null;
-    if (highRes) {
-      if (!gfx?.setPhotoCaptureSize || !(gfx.width > 0 && gfx.height > 0)) throw new Error("High-resolution capture is unavailable");
-      const factor = Math.min(3840 / Math.max(gfx.width, gfx.height), Math.sqrt(8294400 / (gfx.width * gfx.height)));
-      size = { width: Math.max(1, Math.round(gfx.width * factor)), height: Math.max(1, Math.round(gfx.height * factor)) };
+    const canSize = gfx?.setPhotoCaptureSize && gfx.width > 0 && gfx.height > 0;
+    if (highRes || (isGarage() && canSize && Math.max(gfx.width, gfx.height) < 1920)) {
+      if (!canSize) throw new Error("High-resolution capture is unavailable");
+      const edge = highRes ? 3840 : 1920;
+      const factor = Math.min(edge / Math.max(gfx.width, gfx.height), Math.sqrt((edge * edge * 9 / 16) / (gfx.width * gfx.height)));
+      if (highRes || factor > 1) size = { width: Math.max(1, Math.round(gfx.width * factor)), height: Math.max(1, Math.round(gfx.height * factor)) };
     }
     if (!size && prev >= 1) return run();
     const release = () => {
@@ -760,7 +772,7 @@ function create(G, deps) {
     try {
       const blob = await blobOf(canvas, "image/jpeg", 0.88);
       if (blob.size > 3 * 1024 * 1024) throw new Error("This photo is too large. Download the PNG instead");
-      const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, thumb: thumbnail(canvas) };
+      const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, background: homeImage(canvas), thumb: thumbnail(canvas) };
       try {
         await library("save", entry, session);
         if (gen === st.generation) say("Saved to My Photos on this device.");
@@ -778,7 +790,7 @@ function create(G, deps) {
     const result = AppearanceStudio.setScene("photo");
     say(result?.durable === false ? "Menu background selected for this visit." : "Personal photo set as menu background.");
   }
-  function useBackground() { if (last) chooseBackground(thumbnail(last)); }
+  function useBackground() { if (last) chooseBackground(homeImage(last)); }
   async function paintLibrary() {
     const gen = st.generation, paint = ++libraryPaint;
     let photos; try { photos = await library("list", null, session); } catch (_) { photos = []; }
@@ -793,7 +805,7 @@ function create(G, deps) {
     photos = photos.concat(session).sort(newestPhotoFirst).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     for (const p of photos) {
-      const bg = button("MENU BACKGROUND", () => chooseBackground(p.thumb));
+      const bg = button("MENU BACKGROUND", () => chooseBackground(p.background || p.thumb));
       const row = mk("div", { className: "pane" }, [mk("img", { src: p.thumb, alt: p.title || "Saved photo" }), mk("span", { textContent: p.title || "Photo" }),
         button("DOWNLOAD", async () => {
           if (downloading) return;
@@ -843,7 +855,7 @@ function create(G, deps) {
     const seen = new Set();
     return photos.concat(session).sort(newestPhotoFirst)
       .filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return /^data:image\/(jpeg|png);base64,/.test(p.thumb || "") && p.thumb.length < 240000; })
-      .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, at: +p.at || 0 }));
+      .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, ...(p.background && { background: p.background }), at: +p.at || 0 }));
   }
   async function contactSheet(times, seek, cancelled) {
     const out = mk("canvas"); out.width = 1536; out.height = 342;
