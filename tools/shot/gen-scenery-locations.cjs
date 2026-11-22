@@ -25,6 +25,8 @@ const root = path.resolve(__dirname, "../..");
 const dir = path.join(root, "tests/data/landmarks");
 const outFile = path.join(__dirname, "scenery-locations.json");
 const round = (v, digits) => Number(v.toFixed(digits));
+// Rounding a station just before the timing line can produce 1, which is lap zero.
+const catalogFrac = (frac) => round(frac, 6) % 1;
 // A model can sit nearer a different road segment from the one it was authored
 // to be seen from. These viewpoints are explicit in the current scenery source
 // or circuit brief; "authored" values pass through the BUILT TrackSpace shift.
@@ -130,9 +132,9 @@ function generate() {
       rows.push({ id: `${trackId}/${slug}`, modelId: id, track: trackId,
         name: DISPLAY_NAMES[id] || slug.split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" "),
         nameSource: "authored model ID; real-world identity unverified",
-        frac: round(frac, 6), target: center.map(v => round(v, 2)),
+        frac: catalogFrac(frac), target: center.map(v => round(v, 2)),
         stationMethod: viewpoint ? "source-viewpoint" : "nearest-road-projection",
-        ...(viewpoint ? { viewpointSource: viewpoint.source, projectedFrac: round(projected.s / track.total, 6) } : {}),
+        ...(viewpoint ? { viewpointSource: viewpoint.source, projectedFrac: catalogFrac(projected.s / track.total) } : {}),
         nearestRoadDistanceM: round(projected.dist, 1),
         viewDistanceM: round(Math.hypot(center[0] - track.px[k], center[2] - track.pz[k]), 1),
         source: `tests/data/landmarks/${trackId}.json; js/circuits/scenery/${trackId}.js`,

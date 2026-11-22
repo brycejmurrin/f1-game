@@ -22,8 +22,7 @@ sparse and salt-bleached over reclaimed fill.
 
 ## 3. Elevation
 
-Essentially flat. Reclaimed land — resist the urge to add relief. (SRTM
-measures ~0 m of relief; `undulate:false` on the def.)
+The playable road uses a flat fallback. SRTM surveyed the tidal flats in 2000, ten years before the circuit opened. Modern 90 m terrain cells range from 3 to 5 m on the approach to Turn 3. The circuit still needs a longitudinal pavement profile and transverse measurements for banking. [SRTM acquisition](https://data.nasa.gov/dataset/shuttle-radar-topography-mission-1-arc-second-global) · [Turn 3 terrain samples](https://api.open-meteo.com/v1/elevation?latitude=34.736903,34.737622,34.738372&longitude=126.413084,126.412153,126.411317)
 
 ## 4. Landmarks & surroundings by lap position
 

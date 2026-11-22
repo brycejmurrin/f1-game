@@ -7,6 +7,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "istanbul",
+    revision: 2,
     reverse: false,
     // Start/finish line: trace vertex 0, on the pit straight ahead of the Turn 1
     // plunge (v0 convention; T1 measured LEFT, matches the real T1).
@@ -45,12 +46,14 @@
       runoff:        [0.64, 0.58, 0.44],
       sunDir:        [0.46, 0.66, 0.30],
     },
-    elevations: [
-      { s: 0.055, halfM: 300, rise: -12.0 },  // the Turn 1 downhill plunge
-      { s: 0.28, halfM: 380, rise: -7.0 },    // valley floor before Turn 8
-      { s: 0.48, halfM: 340, rise: 8.0 },     // climb out of Turn 8
-      { s: 0.72, halfM: 400, rise: 9.0 },     // long rise back toward the pits
-    ],
+    // METU thesis 12608091, §1.3, Fig. 1.1 and accompanying station deltas.
+    // The 40 raised-cosine coefficients blend the measured climbs and T9
+    // descent with 48 Open-Meteo terrain samples along the OSM racing loop.
+    elevations: [-0.53, -0.49, -8.35, -11.6, -7.88, -1.52, 1.26, 8.56, 10.4, 3.2,
+      1.85, -0.94, -4.76, -4.82, -8.73, -2.74, -3.07, 5.16, -0.95, 8.69,
+      3.4, 3.63, -5.74, -6.45, -14.87, -16.53, -7.88, -4.86, -0.88, -12.38,
+      -3.69, -7.11, -1.24, -8.41, -3.66, -6.01, -1.53, -3.31, -0.64, 0.45]
+      .map((rise, i) => ({ s: i / 40, halfM: 262.54, rise })),
     hwZones: [
       { s0: 0.135, s1: 0.180, hw: 6.4, ease: 0.012 },  // Turn 3-4 complex
       { s0: 0.7125, s1: 0.7742, hw: 6.4, ease: 0.012 },  // post-T10 climb (index; racing ≈0.663-0.721)
@@ -58,7 +61,7 @@
     ],
     // Turn 8 is the famous one: a long, banked, quadruple-apex left taken flat.
     bankZones: [
-      { frac: 0.050, angleDeg: 4.0, widthM: 130 },   // Turn 1
+      { frac: 0.050, angleDeg: -4.0, widthM: 130 },  // T1 tilts outward (METU §1.3); magnitude estimated
       // Turn 8: the long left sweeper, curvature peaks 0.438-0.476 (turns[6..7], both LEFT).
       // `turn: 6` resolved to turns[5] = 0.3659, a RIGHT-hander (survey 2026-10-15).
       // Real Turn 8 (def T7 0.4384 .. T8 0.4764, one four-apex left): ONE zone over

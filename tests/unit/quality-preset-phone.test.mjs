@@ -235,3 +235,45 @@ test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and t
   assert.equal(held.feature("dof"), false, "holding the extras does not turn CINEMA on");
   assert.equal(boot("extreme", false, { "apex26.gfxx.csm": "0" }).feature("csm"), false);
 });
+
+test("desktop scene effects are independent opt-ins, including in cinema mode", () => {
+  const names = ["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"];
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  for (const mobile of [true, false]) {
+    for (const selected of names) {
+      const store = { get: (key) => key === "gfxPreset" ? "extreme" : { [selected]: true }, raw: () => null };
+      const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
+      q.setCinema(true);
+      for (const name of names) {
+        assert.equal(q.supportsOption(name), !mobile);
+        assert.equal(q.feature(name), !mobile && name === selected);
+      }
+    }
+  }
+});
+
+test("enabling distant team colours on High loads the palette builder on desktop", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  const store = { get: (k, fallback) => k === "gfxFeatureOverrides" ? { rivalLiveryLod: true } : fallback, raw: () => null };
+  for (const mobile of [true, false]) {
+    const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
+    assert.equal(q.needsBundle(), !mobile);
+  }
+});
+
+test("automatic desktop effects follow the saved preset and independent overrides", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  const effects = ["adaptiveModels", "brakeLightSpill", "gravelDebris"];
+  for (const preset of ["low", "medium", "high", "ultra", "extreme"]) {
+    for (const mobile of [false, true]) {
+      const prefs = { gfxPreset: preset, gfxFeatureOverrides: { brakeLightSpill: false, gravelDebris: true },
+        gfxPhoneFeatureOverrides: { gravelDebris: true } };
+      const store = { get: (k, fallback) => prefs[k] ?? fallback };
+      const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
+      assert.deepEqual(effects.map(k => q.feature(k)), [
+        !mobile && ["high", "ultra", "extreme"].includes(preset), false, !mobile,
+      ]);
+      assert.ok(effects.every(k => q.supportsOption(k) === !mobile));
+    }
+  }
+});

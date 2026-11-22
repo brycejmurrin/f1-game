@@ -327,6 +327,13 @@
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
+    if (ctx.circuitSurfaces) U.silverstoneSurface = uniform(0.0);
+    if (ctx.brakeSpill) U.brakeSpillCount = uniform(0.0);
+    if (envCubeNode && ctx.garageProbeRequested) {
+      U.garageBoxOn = uniform(0.0);
+      U.garageBox = uniform(new THREE.Vector3(1, 1, 1));
+      U.garageCentre = uniform(new THREE.Vector3());
+    }
     if (ENV_ALL) U.envWorld = uniform(0.0);   // envAll: 1 while the live probe is sampleable (setEnvStr's 2nd arg)
     // SHARED FRAME BLOCK. Every member of U is written once per frame/pass
     // (updateFrame, setLampGrid, setEnvStr, setMaterialMaps) and never per
@@ -399,6 +406,7 @@
         U.pitBox.value.set(pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
       }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
+      if (U.silverstoneSurface) U.silverstoneSurface.value = frame.trackId === "silverstone" ? 1 : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
@@ -498,6 +506,8 @@
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      const brakeCount = U.brakeSpillCount && L && nL === L.length / 15 ? frame.brakeSpillCount || 0 : 0;
+      if (U.brakeSpillCount) U.brakeSpillCount.value = mirror ? 0 : brakeCount;
       // E9: the mirror's per-chunk cap (frame.mirrorLampCap, mirror-pass.js); every other pass runs uncapped.
       // lightsHi: frame.chunkLampCap trims the 48-lamp cells to the live cap (24 once shed) without a
       // recompile; absent or 0 (every detail-0 frame) the cap stays MAX_LIGHTS exactly as before.
@@ -508,7 +518,7 @@
         const o = i * 15;
         lampPos[i].set(L[o], L[o + 1], L[o + 2]);
         lampCol[i].set(L[o + 3], L[o + 4], L[o + 5]);
-        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], hasLB ? LampBake.liveOnlyAt(L, o) : 0);
+        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], i >= nL - brakeCount ? 1 : hasLB ? LampBake.liveOnlyAt(L, o) : 0);
         lampGeo[i].set(L[o + 6], L[o + 10], L[o + 11], L[o + 12]);
       }
     }
@@ -2049,6 +2059,41 @@
           rough.assign(packedTex.w);
         }
 
+        // Silverstone pilot. Work in metres along/across the road so the repair seams
+        // follow the bends. Footprints precede the material branch for WebGPU derivatives.
+        const filmRough = U.silverstoneSurface && trkA && !instanced ? float(0.30).toVar() : null;
+        if (filmRough) {
+          const pixel = fwidth(trkA.xy).toVar();
+          If(U.silverstoneSurface.greaterThan(0.5), () => {
+            const s = trkA.x, x = trkA.y;
+            // Use the track vertex material before the car finish remaps.
+            const terrainMaterial = floor(matA.add(0.5));
+            If(terrainMaterial.equal(16.0).and(trkA.z.greaterThan(0.5)).and(abs(x).lessThan(trkA.z)), () => {
+              // Three stretches of newer binder in the older, pale aggregate. A skewed
+              // end joint and a lateral joint describe each pass of the paving machine.
+              const edge = max(float(0.14), max(pixel.x, pixel.y)).toVar();
+              const slab = (centre, halfLength, lane, halfWidth) => {
+                const end = abs(s.sub(centre).add(x.mul(0.34))).sub(halfLength);
+                const side = abs(x.sub(lane)).sub(halfWidth);
+                return smoothstep(edge.negate(), edge, max(end, side)).oneMinus();
+              };
+              const repair = max(slab(170, 38, 2.4, 3.8), max(slab(2480, 68, -2.7, 3.4), slab(4520, 54, 0, 10))).toVar();
+              const wear = vnoise(vec2(s.mul(0.09), x.mul(0.7))).toVar();
+              albedo.mulAssign(mix(wear.mul(0.16).add(1.06), float(0.74), repair));
+              rough.assign(mix(rough.mul(0.9).add(wear.mul(0.10)), float(0.65), repair));
+              filmRough.assign(mix(float(0.36), float(0.22), repair));
+            }).ElseIf(terrainMaterial.equal(0.0).and(trkA.z.equal(0)).and(abs(x).greaterThan(2.0)), () => {
+              // The flat, track-addressed paint includes the striped kerbs and pit hatching.
+              // Leave the stripe boundaries intact; fade the paint scuffs as they minify.
+              const fade = smoothstep(0.15, 0.65, max(pixel.x, pixel.y)).oneMinus();
+              const scuff = smoothstep(0.55, 0.86, vnoise(vec2(s.mul(2), x.mul(4)))).mul(fade);
+              albedo.assign(mix(albedo, vec3(0.32, 0.31, 0.29), scuff.mul(0.44)));
+              rough.assign(mix(float(0.46), float(0.72), scuff));
+              filmRough.assign(mix(float(0.16), float(0.28), scuff));
+            });
+          });
+        }
+
         // painted road markings (js/render/glx/shaders/glsl-lit.js)
         // AFTER the material grain and the baked texture, exactly as GLX
         // orders it, so the paint sits ON the tarmac rather than under it.
@@ -2146,7 +2191,7 @@
           albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.40), puddle));   // standing water: darker than the sheet
           wetSheen.assign(wet.mul(porous.oneMinus()));
-          rough.assign(mix(rough, 0.30, wetSheen));
+          rough.assign(mix(rough, filmRough || 0.30, wetSheen));
           rough.assign(mix(rough, 0.02, puddle));   // near-mirror inside the pool
           a.assign(rough.mul(rough));
           f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
@@ -2280,24 +2325,27 @@
         // the CHUNK'S slice; the index texture maps it to the track-lamp id.
         // The idx fetch sits INSIDE the select (an if/else in r186): off the per-chunk
         // path no iteration pays it. No .toVar() inside, or it would emit unconditionally.
-        const lampRow = PC ? (i) => {
+        const lampRow = PC ? (i, grid) => {
           const k = PC.base.add(float(i)), r = floor(k.div(U.lgIdxW));
-          return select(PC.use, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
+          return select(grid, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
         } : null;
         const _fetch = (row, col) => textureLoad(LG_TEX.lamp, ivec2(float(col), row));
-        const LGeo = PC ? ((i, r) => select(PC.use, _fetch(r, 3), U.lampGeo.element(i)))
+        const LGeo = PC ? ((i, r, grid) => select(grid, _fetch(r, 3), U.lampGeo.element(i)))
                         : ((i) => U.lampGeo.element(i));
-        const LPos = PC ? ((i, r) => select(PC.use, _fetch(r, 0).xyz, U.lampPos.element(i)))
+        const LPos = PC ? ((i, r, grid) => select(grid, _fetch(r, 0).xyz, U.lampPos.element(i)))
                         : ((i) => U.lampPos.element(i));
-        const LCol = PC ? ((i, r) => select(PC.use, _fetch(r, 1).xyz, U.lampCol.element(i)))
+        const LCol = PC ? ((i, r, grid) => select(grid, _fetch(r, 1).xyz, U.lampCol.element(i)))
                         : ((i) => U.lampCol.element(i));
         // xyz = beam aim; w = LIVE-ONLY: the bake leaves this lamp out, so no step-aside.
-        const LDirW = PC ? ((i, r) => select(PC.use, _fetch(r, 2), U.lampDir.element(i)))
+        const LDirW = PC ? ((i, r, grid) => select(grid, _fetch(r, 2), U.lampDir.element(i)))
                          : ((i) => U.lampDir.element(i));
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
         // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
-        const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
+        const cellCount = PC ? min(PC.n, U.brakeSpillCount ? max(U.lampCap.sub(U.brakeSpillCount), 0.0) : U.lampCap) : null;
+        const cellSpill = PC && U.brakeSpillCount;
+        const cellTotal = cellSpill ? min(U.lampCap, cellCount.add(U.brakeSpillCount)) : cellCount;
+        const lampN = PC ? select(PC.use, cellTotal, U.numLights) : U.numLights;
         // NoV and final wet roughness stay fixed across lamps. Negative sentinels
         // defer each positive root until its first accepted specular contribution;
         // zero lamps, rejected lamps and inactive clearcoat do no extra root work.
@@ -2306,9 +2354,14 @@
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
-          const row = lampRow ? lampRow(i) : null;
-          const geo = LGeo(i, row);
-          const LP = LPos(i, row).sub(wp).toVar();
+          // A cell stores static lamps only. Use its spare slots for the
+          // hot-disc suffix of the global set, through the same BRDF and falloff.
+          const spill = cellSpill ? PC.use.and(float(i).greaterThanEqual(cellCount)) : null;
+          const grid = PC ? (spill ? PC.use.and(spill.not()) : PC.use) : null;
+          const slot = spill ? select(spill, int(U.numLights.sub(U.brakeSpillCount).add(float(i).sub(cellCount))), i) : i;
+          const row = lampRow ? lampRow(i, grid) : null;
+          const geo = LGeo(slot, row, grid);
+          const LP = LPos(slot, row, grid).sub(wp).toVar();
           const rad = geo.x;
           // Range-reject on the SQUARED distance before the root (GLX glsl-lit.js):
           // the tests differ only within an ulp of rad, where att == 0 anyway.
@@ -2321,7 +2374,7 @@
             const att = win.mul(win).div(distC.mul(distC).add(1.0)).toVar();
             If(att.greaterThanEqual(1e-6), () => {
               // ONE colour + ONE aim read per lit lamp: each accessor call is its own fetch.
-              const lCol = LCol(i, row).toVar(), lDir = LDirW(i, row).toVar();
+              const lCol = LCol(slot, row, grid).toVar(), lDir = LDirW(slot, row, grid).toVar();
               const cd = dot(Ld.negate(), lDir.xyz);
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
@@ -2479,6 +2532,25 @@
           });
         });
 
+        // A bay cube is photographed at its centre. Intersect the world
+        // reflection ray with its walls, then look up the hit from that centre.
+        // Only the local room uses this direction; sky/sun and race probes keep R.
+        const roomPos = U.garageBox ? wp.sub(U.garageCentre).toVar() : null;
+        const localProbeStrength = U.garageBox ? U.envStr.mul(mix(float(1.0),
+          smoothstep(0.0, 1.5, U.garageBox.z.sub(abs(roomPos.z))).mul(
+            smoothstep(0.0, 0.5, U.garageBox.x.sub(abs(roomPos.x)))), U.garageBoxOn)) : U.envStr;
+        function probeDirection(ray) {
+          if (!U.garageBox) return ray;
+          const direction = ray.toVar();
+          If(U.garageBoxOn.greaterThan(0.5), () => {
+            const signedPos = mix(roomPos.negate(), roomPos, step(vec3(0), ray));
+            const axis = abs(ray);
+            const distance = mix(vec3(1e6), U.garageBox.sub(signedPos).div(max(axis, vec3(0.00001))), step(vec3(0.00001), axis));
+            const travel = max(0.0, min(distance.x, min(distance.y, distance.z)));
+            direction.assign(roomPos.add(ray.mul(travel)));
+          });
+          return direction;
+        }
         // clearcoat ENV mirror (the analytic-clearcoat-ENV block in glsl-lit.js).
         //    uEnvStr = 0 -> analytic
         //    sky-gradient path only; > 0 blends in the M9 live cube fetch
@@ -2491,7 +2563,7 @@
           const NoVc = max(dot(Ngeo, V), 1e-4);
           const ccFb = NoVc.oneMinus();
           const ccF = ccFb.mul(ccFb);                          // fresnel² (mul not pow: pow(0,2) NaNs on mobile)
-          const probeLive = clamp(U.envStr, 0.0, 1.0);
+          const probeLive = clamp(localProbeStrength, 0.0, 1.0);
           // A TINTED VISOR IS A DIELECTRIC, NOT CHROME — mirrors the GLX split.
           // baseRefl is the ANGLE-INDEPENDENT mirror term; cutting it for the
           // visor keeps the 0.28*ccF grazing rim, so the visor holds an edge
@@ -2513,7 +2585,7 @@
             // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
             // clones with referenceNode = this base (mrdoob/three.js
             // CubeTextureNode.js). Do not call .uv() on a cube node.
-            const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
+            const cubeRefl = cubeTexture(envCubeNode, probeDirection(Rg), rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
           // sun disc in the mirror: pow-400 lobe widened by the AA variance. A finite
@@ -2580,14 +2652,15 @@
           if (envCubeNode) {
             // envAll: a world pixel takes the probe at full strength (envWorld, not the CAR knob), out to 240 m,
             // and a roughness-aware mip; a car pixel keeps today's weight and LOD.
-            const envOn = ENV_ALL ? max(U.envStr, U.envWorld) : U.envStr;
+            const envOn = ENV_ALL ? max(localProbeStrength, U.envWorld) : localProbeStrength;
             If(envOn.greaterThan(0.001), () => {
-              const probeW = clamp(U.envStr, 0.0, 1.0)
+              const probeW = clamp(localProbeStrength, 0.0, 1.0)
                 .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
               if (ENV_ALL) probeW.assign(select(classifiedCar, probeW, U.envWorld.mul(clamp(vd.sub(90.0).div(150.0).oneMinus(), 0.0, 1.0))));
               If(probeW.greaterThan(0.001), () => {
-                const tapAll = ENV_ALL ? cubeTexture(envCubeNode, R, select(classifiedCar, rough.mul(2.5), sqrt(rough).mul(ENV_LODS))) : null;
-                envCubeTap.assign(vec4(tapAll ? tapAll.rgb : cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+                const direction = probeDirection(R);
+                const tapAll = ENV_ALL ? cubeTexture(envCubeNode, direction, select(classifiedCar, rough.mul(2.5), sqrt(rough).mul(ENV_LODS))) : null;
+                envCubeTap.assign(vec4(tapAll ? tapAll.rgb : cubeTexture(envCubeNode, direction, rough.mul(2.5)).rgb, probeW));
                 envColor.assign(mix(envColor, envCubeTap.rgb, envCubeTap.w));
               });
             });
@@ -2618,9 +2691,9 @@
           const skyM = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rm.y, 0.0)));
           const envMet = mix(vec3(U.ambGround).mul(0.6), skyM, smoothstep(-0.12, 0.30, Rm.y)).toVar();
           if (envCubeNode) {
-            If(U.envStr.greaterThan(0.001), () => {
-              const cubeM = select(envCubeTap.w.greaterThan(0.0), envCubeTap.rgb, cubeTexture(envCubeNode, Rm, rough.mul(2.5)).rgb);
-              envMet.assign(mix(envMet, cubeM, clamp(U.envStr, 0.0, 1.0)));
+            If(localProbeStrength.greaterThan(0.001), () => {
+              const cubeM = select(envCubeTap.w.greaterThan(0.0), envCubeTap.rgb, cubeTexture(envCubeNode, probeDirection(Rm), rough.mul(2.5)).rgb);
+              envMet.assign(mix(envMet, cubeM, clamp(localProbeStrength, 0.0, 1.0)));
             });
           }
           const metAdd = envMet.mul(F_Schlick(NoV, albedo, rough.mul(0.5).oneMinus()))

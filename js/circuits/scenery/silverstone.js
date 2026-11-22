@@ -171,8 +171,9 @@
       hedge(0.86, 0.94, -1, 32, 2.4, COPSE);   // Woodcote infield
       // Maggotts outer enclosure, split around the bend apex: 38 m out on the
       // inside of that turn the anchors bunch to 0.2 m apart (0.105-0.111) and
-      // the hedge folded back through itself; a field gate there is honest.
-      hedge(0.08, 0.104,  1, 38, 2.4, COPSE);
+      // the hedge folded back through itself. End the approach at 0.101,
+      // before the last two hedge boxes overlap on the corrected road profile.
+      hedge(0.08, 0.101,  1, 38, 2.4, COPSE);
       hedge(0.112, 0.12,  1, 38, 2.4, COPSE);
       hedge(0.34, 0.38,  1, 36, 2.4, COPSE);   // Vale/Club outer
       hedge(0.70, 0.76,  1, 30, 2.4, COPSE);   // Aintree / Wellington
@@ -1390,7 +1391,7 @@
         bakedModel("k_tentlong", k(0.47), 1, 90, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.96), -1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.905), -1, 90, { scale: 2.4 });
-        bakedModel("k_tentlong", k(0.49), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), 1, 78, { scale: 2.4 });  // paddock tent behind the pit garages
         bakedModel("k_tentlong", k(0.62), 1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.1), 1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.49), -1, 60, { scale: 2.4 });

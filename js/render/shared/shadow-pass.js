@@ -222,7 +222,7 @@ const ShadowPass = (function () {
     // the cockpit body with; null = an exterior view, the silhouette as before.
     // Only the car and lamp passes cast the player (_castPlayer). With neither map
     // (phones), resolving would build a first-person caster nothing ever draws.
-    function resolvePlayer(smp, yv) {
+    function resolvePlayer(smp, yv, bankRoll) {
       _playerCockpit = null;
       if (!deps.cockpitCaster || !G.player || G.state === "menu") return;
       const tier = PerfGov.tier();
@@ -231,7 +231,7 @@ const ShadowPass = (function () {
       // Lighting-dependent gates stay in the passes, after lighting is ready.
       const mapped = (G.gfx.carShadowEnabled !== false && G.gfx.carShadowBegin && LT.carShadow && !(LT.shadowStr <= 0) && tier < 3) ||
         (G.gfx.lampShadowEnabled !== false && G.gfx.lampShadowBegin && LT.lampShadow && tier < 2 && !G._studioRig);
-      if (mapped) _playerCockpit = deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat);
+      if (mapped) _playerCockpit = deps.cockpitCaster(G.player, smp, yv, _cockpitShadowMat, bankRoll);
     }
     function _playerMat() { return _playerCockpit ? _cockpitShadowMat : _livePlayerShadowMat; }
     function _castPlayer() {

@@ -543,8 +543,8 @@
         const compass = (deg, dist) => {
           const th = deg * Math.PI / 180, ux = -Math.sin(th), uz = Math.cos(th);
           const x = lb.cx + ux * dist, z = lb.cz + uz * dist;
-          const gy = (typeof terrainYAt === "function" && terrainYAt(x, z));
-          const y = (gy != null && Number.isFinite(gy)) ? gy - 0.3 : pyMin;
+          // Beyond the terrain ribbon these landmarks stand on the rendered floor.
+          const y = (terrainYAt(x, z) ?? api.track.surface.floorY) - 0.3;
           const t = [-uz, 0, ux];                 // across the sightline
           return { c: [x, y, z], t, u: [0, 1, 0], r: [-ux, 0, -uz] };
         };

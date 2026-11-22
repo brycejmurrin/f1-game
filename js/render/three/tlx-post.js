@@ -525,7 +525,7 @@
     }
     if (!EX) agx = false;
     ownTexture(P.composite && P.composite.giOffTex);
-    let _hiLive = null, _hiAge = 0;
+    let _hiLive = null, _hiAge = 0, _hiLatched = false;
     // feature() reads storage; a 15-present cadence keeps it off the hot path (a shed or the cinema flag lands <0.25 s late).
     function hiLive() {
       if (!HI) return null;
@@ -566,6 +566,7 @@
     }
     function releaseAO() {
       if (!ssaoRT && !ssaoBlurRT) return;
+      if (P.gi && P.gi.gtaoH) { unbind(P.gi.gtaoH.tex, whiteTex); unbind(P.gi.gtaoV.tex, whiteTex); }
       if (P.blurAOH) unbind(P.blurAOH.tex, whiteTex);
       if (P.blurAOV) unbind(P.blurAOV.tex, whiteTex);
       if (P.blurAO) unbind(P.blurAO.tex, whiteTex);
@@ -924,7 +925,7 @@
       const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, THREE.UnsignedByteType);
+          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, ldrRT.texture.type);
           aaRT.texture.name = "TLXPostAA";
         }
         const aaPW = fixed ? postSize(PW) : (orientCover ? PW : pW);
@@ -1090,7 +1091,8 @@
       // warm (compileJobs) still queues the standalone pair: AO without god-rays
       // (no sun shadow, GOD-RAY knob 0) keeps the program set it had.
       // Desktop tiers: 2 = GTAO + bilateral denoise, 1 = the 16-tap SSAO, both at full post size and never folded.
-      const HV = hiLive();
+      const HV = _hiLatched ? _hiLive : hiLive();
+      _hiLatched = false;
       const aoHi = !HV || viz ? 0 : HV.gtao && P.gi && P.gi.gtao ? 2 : HV.ssaoHi && P.ssaoHi ? 1 : 0;
       if (wantAO) setAoFull(aoHi > 0);
       const aoFold = _aoFold && wantAO && wantGR && viz !== "ssao" && !aoHi;
@@ -1455,7 +1457,10 @@
         _vizDest = dest;   // the blit must read what this pass wrote, not ldrRT
         _last.taa = false;
         if (AA) AA.skipped();
-        if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
+        if (phys) {
+          const output = dest || renderer.domElement;
+          vset(B, output.width, output.height);
+        }
         runPass(B.mat, dest);
       } else {
         vset(P.composite, pW, pH); vset(P.fxaa, pW, pH);
@@ -1614,6 +1619,8 @@
     }
     // Before the scene pass (tlx.js present): decide, and tell an MSAA target whether to resolve depth.
     function depthBegin(opts, F) {
+      // Decide which desktop passes will read these attachments before the scene sets its store ops.
+      if (HI) { hiLive(); _hiLatched = true; }
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
       _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2

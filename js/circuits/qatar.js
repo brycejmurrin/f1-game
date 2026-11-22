@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "qatar",
+    revision: 2,
     // The pit complex (TrackPit) on the driver's RIGHT of the main straight: the
     // FIA 2025 Qatar GP pit-lane drawing (doc 4, 27 Nov 2025, p.3) branches the
     // lane off the inside of T16 with the F1 garages beyond it — the infield of
@@ -51,11 +52,15 @@
       { frac: 0.7404, angleDeg: 4.0, widthM: 180 },
       { frac: 0.8487, angleDeg: 3.5, widthM: 150 },
     ],
+    // OpenF1 2024 qualifying, session 9646: Verstappen lap 21, checked
+    // against Russell lap 23. Additive cosine coefficients in metres.
+    // Offset converts racing-lap stations to this circuit's authoring origin.
     elevations: [
-      { s: 0.05, halfM: 550, rise: 3.5 },
-      { s: 0.42, halfM: 700, rise: 5.5 },
-      { s: 0.68, halfM: 350, rise: -1.0 },
-    ],
+      0.86, -0.42, 0.56, -0.92, 1.12, -1.58, 1.49, -1.2,
+      0.57, -1.28, 0.61, 0.04, 0.37, 0.94, 0.64, 0.55,
+      0.08, 0.48, -0.01, 1.28, 0.43, 1.59, -0.51, 1.95,
+      0.87, 2.1, -0.02, 1.56, 0.53, 2.73, 0.7, 0.45,
+    ].map((rise, i) => ({ s: (i / 32 + 0.104663) % 1, halfM: 336.88, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns as RACING-LAP fractions (post startFrac/reverse), never

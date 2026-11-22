@@ -224,7 +224,14 @@ const GarageArrival = (function () {
     if (!memo[key]) memo[key] = GarageCrewChoreo.pick(dir === "out" ? "out" : "in", nextVisit());
     return playable(memo[key]);
   }
-  function settings(value) {
+  const SWITCHES = ["enabled", "raceStart", "pitIn", "pitOut", "afterRace"];
+  const EDIT_MOMENT = Object.freeze({ out: "raceStart", in: "pitIn", pitExit: "pitOut", home: "afterRace" });
+  function settings(value, moment) {
+    if (moment && value && value.profiles && value.profiles[moment]) {
+      const profile = Object.assign({}, value, value.profiles[moment]);
+      for (const key of SWITCHES) profile[key] = value[key];
+      value = profile;
+    }
     const v = value && typeof value === "object" ? value : {};
     const number = (key, lo, hi) => typeof v[key] === "number" && Number.isFinite(v[key])
       ? Math.max(lo, Math.min(hi, v[key])) : DEFAULT[key];
@@ -265,9 +272,9 @@ const GarageArrival = (function () {
    * the preset is a picture rather than a word. Pure: the inner SVG for an angle
    * (and CUSTOM's shots). Bay x maps to 10..110, z (back -6.4 .. door 6.4) to
    * 8..92, the lane below the door. */
-  function angleMap(angle, shots) {
+  function angleMap(angle, shots, dir = "in") {
     const X = (x) => (60 + x * 100 / 10.8).toFixed(1), Z = (z) => (50 + z * 84 / 12.8).toFixed(1);
-    const used = shotsFor({ angle, shots: Array.isArray(shots) ? shots : DEFAULT.shots }, "in");
+    const used = shotsFor({ angle, shots: Array.isArray(shots) ? shots : DEFAULT.shots }, dir);
     const cuts = new Set(used).size > 1;
     const eye = (id) => {
       const e = CAMS[id], lit = used.includes(id), x = X(e[0]), z = Z(e[2]);
@@ -283,7 +290,7 @@ const GarageArrival = (function () {
     // A BLENDER RIG is a path, not a place: its eye's track over the arrival, start to finish.
     if (rigData(angle)) {
       const pts = [];
-      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, "in", i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
+      for (let i = 0; i <= 16; i++) { const e = rigSample(angle, dir, i / 16).eye; pts.push(X(e[0]) + " " + Z(e[2])); }
       const a = pts[0].split(" "), b = pts[16].split(" ");
       return room + `<polyline points="${pts.join(" ")}" fill="none" stroke="#e10600" stroke-width="2" stroke-dasharray="4 3"/>`
         + `<circle cx="${a[0]}" cy="${a[1]}" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/>`
@@ -295,7 +302,14 @@ const GarageArrival = (function () {
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
     const changed = typeof opts.changed === "function" ? opts.changed : null;   // a running preview re-poses
-    const read = () => settings(store.get("garageArrival", null));
+    let moment = "raceStart";
+    const read = (key = moment) => settings(store.get("garageArrival", null), key);
+    const scope = $("ga-edit-moment");
+    if (scope) scope.onchange = () => {
+      if (preview) preview(null);
+      moment = scope.value;
+      refresh();
+    };
     // The extra rows are LAZY (js/garage/arrival-rows.js): built now if loaded, else on the open tap below.
     const rowsReady = () => { const a = $("ga-angle"); return !!(a && a.children && Array.from(a.children).some((o) => o.value === "custom")); };   // the build's own once-mark
     const buildRows = () => { if (!rowsReady() && typeof GarageArrivalRows !== "undefined") GarageArrivalRows.build($, { CAM_IDS, STYLES, RIG_IDS, RIG_LABEL, moodIds, cueIds }); };
@@ -329,12 +343,13 @@ const GarageArrival = (function () {
         save(value);
       };
       shotEls.forEach((el, i) => { if (el) el.onchange = () => { const value = read(); value.shots[i] = el.value; save(value); }; });
-      for (const [b, dir] of [[$("ga-preview-in"), "in"], [$("ga-preview-out"), "out"], [$("ga-preview-home"), "home"]]) {
-        if (b) b.onclick = () => { if (preview) preview(dir, b); };
+      for (const [b, dir] of [[$("ga-preview-in"), "in"], [$("ga-preview-out"), "out"], [$("ga-preview-pit-exit"), "pitExit"], [$("ga-preview-home"), "home"]]) {
+        if (b) b.onclick = () => { moment = EDIT_MOMENT[dir]; refresh(); if (preview) preview(dir, b); };
       }
     };
     bindFields();
     function refresh() {
+      if (scope) scope.value = moment;
       const value = read();
       for (const key of Object.keys(fields)) {
         const el = fields[key];
@@ -357,16 +372,28 @@ const GarageArrival = (function () {
         map = $("ga-angle-map");
       }
       if (map) {
-        map.innerHTML = angleMap(value.angle, value.shots);
-        const used = shotsFor(value, "in");
-        if (map.setAttribute) map.setAttribute("aria-label", RIGS[value.angle] ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the eye's path through the arrival"
-          : value.angle === "cut" ? "Two camera cut: left of the bay, then right"
+        const dir = moment === "raceStart" || moment === "pitOut" ? "out" : "in";
+        map.innerHTML = angleMap(value.angle, value.shots, dir);
+        const used = shotsFor(value, dir);
+        if (map.setAttribute) map.setAttribute("aria-label", RIGS[value.angle] ? "Blender camera rig, " + RIG_LABEL[value.angle].toLowerCase() + ": the camera path"
           : new Set(used).size === 1 ? "One camera, " + CAM_NAMES[used[0]] + ", looking out of the door"
           : "Three shots: " + used.map((c) => CAM_NAMES[c]).join(", then "));
       }
     }
-    const save = (value) => { store.set("garageArrival", settings(value)); refresh(); if (changed) changed(); };
-    $("ga-reset").onclick = () => { store.set("garageArrival", null); refresh(); if (changed) changed(); };
+    const save = (value) => {
+      const previous = store.get("garageArrival", null) || {};
+      const next = Object.assign({}, previous);
+      const profile = settings(value);
+      for (const key of SWITCHES) { next[key] = value[key]; delete profile[key]; }
+      next.profiles = Object.assign({}, previous.profiles, { [moment]: profile });
+      store.set("garageArrival", next);
+      refresh(); if (changed) changed();
+    };
+    $("ga-reset").onclick = () => {
+      const value = settings(null), current = read();
+      for (const key of SWITCHES) value[key] = current[key];
+      save(value);
+    };
     // An ADVANCED VISUALS tool (#garrival), docked right like the three tuners:
     // it takes the settings page's place while open and gives it back on DONE.
     const page = (on) => {
@@ -571,9 +598,24 @@ const GarageArrival = (function () {
     for (let i = 0; i < 6; i++) TITLE[TITLE_IN[i]] = config[TITLE_IN[i]];
     return (TITLE.text = homeTitle(config, r));
   }
+  // Sample the outgoing framing at the cut itself so seeking and low frame rates
+  // produce the same camera as uninterrupted playback. Only the camera blends.
+  const PREVIOUS_SHOT = {};
+  function blendShot(o, dir, config, t, boundary, window) {
+    if (boundary <= 0 || t < boundary || t >= boundary + window) return;
+    const before = boundary - 1e-6;
+    if (dir === "out") poseOut(before, config, false, PREVIOUS_SHOT);
+    else poseIn(before, config, false, dir, PREVIOUS_SHOT);
+    const w = ease((t - boundary) / window);
+    for (let i = 0; i < 3; i++) {
+      o.eye[i] = PREVIOUS_SHOT.eye[i] + (o.eye[i] - PREVIOUS_SHOT.eye[i]) * w;
+      o.aim[i] = PREVIOUS_SHOT.aim[i] + (o.aim[i] - PREVIOUS_SHOT.aim[i]) * w;
+    }
+    o.fov = PREVIOUS_SHOT.fov + (o.fov - PREVIOUS_SHOT.fov) * w;
+  }
   function poseIn(seconds, config, calm, dir, o) {
     const pair = o ? posePair(o) : null;
-    if (o) clearKeys(o, CONSUMER_KEYS); else o = {};
+    if (!o) o = {}; else if (o !== PREVIOUS_SHOT) clearKeys(o, CONSUMER_KEYS);
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = scratchT(T_POSE, config, dir), end = T.base + crewExtra(config, dir), r = T.result;
     const rig = rigFor(config);
     const cams = shotsFor(config, "in"), side = rig ? 1 : sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
@@ -598,6 +640,10 @@ const GarageArrival = (function () {
     const aim = cam === "left" || cam === "right"
       ? set3(AIM, Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)) : aimAt(cam, p, t < T.door, AIM);
     const rs = rig ? rigOn(rig, dir, t, end, T.door, p, config, side) : null;
+    if (o === PREVIOUS_SHOT) {
+      o.fov = config.fov;
+      return shot(o, rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look, pair);
+    }
     o.active = t < end; o.serviceTime = t - T.park; o.seconds = t; o.direction = "in"; o.sequence = dir; o.result = r ? config.result : null;
     o.engine = !(r && r.pushed); o.side = side; o.calm = calm; o.camera = rig || cam; o.shot = n + 1; lookOf(o, config, dir);
     o.crewClear = 1 - ease((t - (T.park - .3)) / .3); carOf(o, config, dir, rs, t, T, p); o.label = label;
@@ -610,6 +656,7 @@ const GarageArrival = (function () {
     // Interior versions of garage-angles' bay/rear three-quarter framings.
     // A cut after the shutter opens keeps both eyes behind the threshold.
     shot(o, rs ? rs.eye : CAMS[cam], rs ? rs.aim : aim, t, calm, config.height || 0, look, pair);
+    if (!calm && !rs && n) blendShot(o, dir, config, t, n === 1 ? T.door : s2, Math.min(1, s2 - T.door));
     look.config = null;
     return o;
   }
@@ -713,7 +760,7 @@ const GarageArrival = (function () {
   const P_OUT = {};
   function poseOut(seconds, config = DEFAULT, calm = false, o = null) {
     const pair = o ? posePair(o) : null;
-    if (o) clearKeys(o, CONSUMER_KEYS); else o = {};
+    if (!o) o = {}; else if (o !== PREVIOUS_SHOT) clearKeys(o, CONSUMER_KEYS);
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = scratchT(T_POSE, config, "out"), end = T.base + crewExtra(config, "out");
     const delay = end - T.base, settle = T.settle + delay, go = T.door + T.hold + delay;
     const rig = rigFor(config);
@@ -737,11 +784,20 @@ const GarageArrival = (function () {
       e = set3(EYE, eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, Math.min(5.9, eye[2] + HOLD_PUSH * k));
       aim[0] -= cs * 2.2 * k;
     }
+    if (o === PREVIOUS_SHOT) {
+      o.fov = config.fov;
+      return shot(o, e, aim, t, calm, config.height || 0, look, pair);
+    }
     o.active = t < end; o.serviceTime = t; o.seconds = t; o.direction = "out"; o.sequence = "out"; o.engine = true; o.side = side; o.calm = calm; o.camera = rig || cam;
     o.shot = n + 1; lookOf(o, config, "out");
     o.crewClear = ease((t - (go - .3)) / .3); carOf(o, config, "out", rs, t, T, p);
     o.label = delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE";
     shot(o, e, aim, t, calm, config.height || 0, look, pair);
+    if (!calm && !rs && !opening) {
+      const boundary = n === 2 ? atDoor : n === 1 ? go : T.door;
+      const window = n === 2 ? 1 : Math.min(1, (n === 1 ? atDoor : go) - boundary);
+      blendShot(o, "out", config, t, boundary, window);
+    }
     look.config = null;
     return o;
   }
@@ -773,7 +829,7 @@ const GarageArrival = (function () {
     function start(opts) {
       const home = opts && opts.home;
       dir = home ? "home" : opts && opts.out ? "out" : "in"; posed = poseFor(dir);
-      config = settings(readSettings());
+      config = settings(readSettings(MOMENT[dir]), MOMENT[dir]);
       if (opts && opts.rate > 0) config.speed = Math.min(4, config.speed * opts.rate);
       // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
       config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
@@ -854,6 +910,6 @@ const GarageArrival = (function () {
     if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
     return m === "auto" && !!wet;
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
+  return Object.freeze({ PIT_EXIT_RATE: 1.6, EDIT_MOMENT, create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, carryPlayback, lightFor, cueFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
     CAMS, CAM_IDS, ANGLES: ALL_ANGLES, RIG_IDS, RIG_LABEL, rigSample, rigU, RESULTS, RACES, STYLES, applyStyle, styleOf, homeTitle, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, plays, bindSettings });
 })();

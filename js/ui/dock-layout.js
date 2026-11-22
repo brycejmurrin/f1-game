@@ -9,6 +9,11 @@ const DockLayout = (function () {
   // on the painted control sizes, home positions, safe insets and handedness.
   const MAX = 1;
   const CONTROL_IDS = ["btn-steer-left", "btn-steer-right", "btn-throttle", "btn-brake", "btn-boost", "btn-ot", "btn-aero", "shift-up", "shift-down"];
+  const DRIVE_LAYOUTS = Object.freeze([
+    ["", "Layout: Auto"], ["pedal-row", "Pedals side by side"], ["gas-left", "Gas left of Brake"],
+    ["gas-above", "Gas above Brake"], ["tap-row", "Actions side by side"],
+    ["action-grid", "Compact action grid"], ["stack", "Two rows"],
+  ]);
   const ZERO = Object.freeze({ x: 0, y: 0 });
 
   function clamp01(n, lo, hi) {
@@ -26,7 +31,10 @@ const DockLayout = (function () {
 
   // Auto follows the shipped corner style and is stored as null.
   const SHAPE_KEY = "hudBtnShape";
-  const SHAPES = Object.freeze([["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"]]);
+  const SHAPES = Object.freeze([
+    ["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"],
+    ["arch", "ARCH"], ["shield", "SHIELD"], ["paddle-left", "LEFT PADDLE"], ["paddle-right", "RIGHT PADDLE"], ["leaf", "LEAF"],
+  ]);
   function shapeOf(v) { return SHAPES.some((s) => s[0] === v) ? v : "auto"; }
   function applyShape(v) {
     const s = shapeOf(v);
@@ -50,7 +58,7 @@ const DockLayout = (function () {
       out[s] = emptyScheme();
       if (!src || typeof src !== "object") continue;
       if (Number.isFinite(src.gap)) out[s].gap = clamp01(src.gap, 0, 80);
-      if (["pedal-row", "tap-row", "stack"].includes(src.layout)) out[s].layout = src.layout;
+      if (src.layout && DRIVE_LAYOUTS.some(([id]) => id === src.layout)) out[s].layout = src.layout;
       for (const id of CONTROL_IDS) {
         const values = src.controls?.[id];
         if (!values || typeof values !== "object") continue;
@@ -219,7 +227,6 @@ const DockLayout = (function () {
     let toolbar = null, pending = null;
     let bag = load(store);
     let editing = false;
-    let drag = null;   // { side, startX, startY, orig }
 
     function schemeOf() {
       const m = (G.getSteerMode && G.getSteerMode()) || "buttons";
@@ -229,18 +236,6 @@ const DockLayout = (function () {
       return { L: $("dock-left"), R: $("dock-right") };
     }
     function paint() { apply(schemeOf(), bag, docks()); }
-    // During a drag: pad cached at pointerdown, fit invalidated once per frame.
-    let fitRaf = 0;
-    function fitNow() {
-      fitRaf = 0;
-      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
-    }
-    function paintDrag(pad) {
-      apply(schemeOf(), bag, docks(), { pad, fit: false });
-      if (fitRaf) return;
-      if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
-      else fitNow();
-    }
     let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
     function setShape(v) {
       shape = applyShape(v);
@@ -266,7 +261,8 @@ const DockLayout = (function () {
     function setEditing(on, restore) {
       if (on && !toolbar) {
         if (typeof DockToolbar !== "undefined") {
-          toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
+          toolbar = DockToolbar.create(G, { schemeOf, getScheme: (name = schemeOf()) => bag[name], commitLayout,
+            applyDrag: pad => apply(schemeOf(), bag, docks(), { pad, fit: false }), repaint: paint, saveLayout: () => save(store, bag), boundedXY,
             docks, measurePad, inboard, boundedControlXY, getShape: () => shape, setShape, record, close: () => setEditing(false) });
         } else {
           if (pending || typeof ScriptLoader === "undefined") return;
@@ -299,15 +295,6 @@ const DockLayout = (function () {
         btn.setAttribute("aria-pressed", editing ? "true" : "false");
         btn.textContent = editing ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
         if (was && !editing && restore !== false && btn.focus) btn.focus();
-      }
-      if (!editing) {
-        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
-        if (fitRaf) {
-          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
-          fitRaf = 0;
-        }
-        if (drag) save(store, bag); // a drag cut short by DONE/Escape keeps its move
-        drag = null;
       }
       paint();
     }
@@ -380,64 +367,8 @@ const DockLayout = (function () {
       if (G.announce) G.announce("Dock layout reset for " + s.toUpperCase(), 2, "coach");
     };
 
-    function onPointerDown(e) {
-      if (!editing) return;
-      const t = e.target;
-      if (!t || !t.closest) return;
-      const left = $("dock-left"), right = $("dock-right");
-      const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
-      if (!side) return;
-      // The press is the drag's, not the button's: preventDefault alone let
-      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
-      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
-      // before the target, so stopping here means the button never sees it.
-      e.preventDefault();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-      if (drag || e.isPrimary === false) return;
-      const s = schemeOf();
-      const hit = t.closest(".touchbtn")?.id;
-      const pad = measurePad(docks()), before = bag[s][side];
-      drag = {
-        side, hit, buttons: toolbar.buttonDrag(hit, side, pad), before, moved: false,
-        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
-        scheme: s, pid: e.pointerId, pad,
-      };
-      try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
-    }
-    function onPointerMove(e) {
-      if (!drag || e.pointerId !== drag.pid) return;
-      const pad = drag.pad;
-      const sx = inboard(drag.side);
-      const dx = ((e.clientX - drag.startX) / pad.w) * sx;
-      const dy = -((e.clientY - drag.startY) / pad.h);
-      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
-      drag.moved = true;
-      if (drag.buttons) drag.buttons.move(dx, dy);
-      else bag[drag.scheme][drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
-      paintDrag(pad);
-    }
-    function onPointerUp(e) {
-      if (!drag || e.pointerId !== drag.pid) return;
-      const finished = drag;
-      drag = null;
-      if (finished.moved) save(store, bag);
-      else toolbar.pick(finished.hit, true);
-      fitNow();
-    }
-    function cancelDrag(e) {
-      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
-      if (drag.buttons) drag.buttons.cancel();
-      else bag[drag.scheme][drag.side] = drag.before;
-      drag = null;
-      paint();
-    }
-    function viewportChanged() { if (drag) cancelDrag(); else paint(); }
+    function viewportChanged() { if (toolbar?.dragging()) toolbar.cancelDrag(); else paint(); }
     if (typeof document !== "undefined") {
-      document.addEventListener("pointerdown", onPointerDown, true);
-      document.addEventListener("pointermove", onPointerMove, true);
-      document.addEventListener("pointerup", onPointerUp, true);
-      document.addEventListener("pointercancel", cancelDrag, true);
-      document.addEventListener("lostpointercapture", cancelDrag, true);
       // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
       // What still ends it: ANY of them being opened by someone else (the pause
       // button, a key, QUIT), because a capture-phase drag left live would slide
@@ -457,7 +388,6 @@ const DockLayout = (function () {
     // rotation must repaint: a portrait offset kept its pixels in landscape and
     // pushed the dock off the top (the header promises relative placement).
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("blur", cancelDrag);
       window.addEventListener("resize", viewportChanged, { passive: true });
       window.addEventListener("orientationchange", viewportChanged, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
@@ -473,7 +403,7 @@ const DockLayout = (function () {
     }
     // The offset divides by the dock's zoom, which changes at race start with no resize.
     if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => { if (!drag) paint(); });
+      const ro = new ResizeObserver(() => { if (!toolbar?.dragging()) paint(); });
       const d = docks();
       for (const side of SIDES) if (d[side]) ro.observe(d[side]);
     }
@@ -489,7 +419,7 @@ const DockLayout = (function () {
         }
         const hit = (k) => k === "steerMode" || k === KEY;
         if (hit(change.key) || change.keys?.some(hit)) {
-          cancelDrag();
+          toolbar?.cancelDrag();
           bag = load(store);
           paint();
           toolbar?.paint();
@@ -582,7 +512,7 @@ const DockLayout = (function () {
   }
 
   return Object.freeze({
-    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, arrangeDoor,
+    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, DRIVE_LAYOUTS, arrangeDoor,
     clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create, shapeOf, applyShape, sizeStep,
   });
 })();

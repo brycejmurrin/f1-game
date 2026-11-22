@@ -302,3 +302,49 @@ test("a rotation zeroes the touch ramp at once, not over KEY_RAMP_OUT", () => {
   clock.t += 1;   // one sample, nowhere near a KEY_RAMP_OUT unwind
   assert.equal(Input.steer(), 0, "rotation snaps the wheel to centre");
 });
+
+test("the saved floating wheel centers on contact and shows the signed steering command", () => {
+  const { Input, onCanvas, dragEl, classOn, sb, listeners } = boot();
+  let selected = "wheel", notify;
+  sb.GameStore = { store: {
+    get: (key, fallback) => key === "touchSteeringGuide" ? selected : fallback,
+    subscribe: fn => { notify = fn; },
+  } };
+  const guideModule = "js/input/touch-button-actions.js";
+  vm.runInContext(read(guideModule), sb, { filename: absSrc(guideModule) });
+  assert.equal(dragEl.dataset.steeringGuide, "wheel");
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  const touch = (event, x, y) => onCanvas(event, {
+    changedTouches: [{ identifier: 7, clientX: x, clientY: y }],
+  });
+  const angle = () => parseFloat(dragEl.style.getPropertyValue("--drag-turn"));
+  touch("touchstart", 300, 150);
+  assert.equal(dragEl.style.left, "300px");
+  assert.equal(dragEl.style.top, "150px");
+  assert.ok(classOn.has("on"));
+  touch("touchmove", 302, 150);
+  assert.equal(angle(), 0);
+  touch("touchmove", 250, 120);
+  assert.ok(angle() < 0 && angle() > -120);
+  assert.ok(Math.abs(angle() - Input.steer() * 120) < 0.001);
+  touch("touchmove", 700, 120);
+  assert.equal(angle(), 120);
+  touch("touchend", 700, 120);
+  assert.ok(!classOn.has("on"));
+  touch("touchstart", 30, 60);
+  assert.equal(dragEl.style.left, "30px");
+  assert.equal(angle(), 0);
+  for (const f of listeners.blur) f({});
+  assert.ok(!classOn.has("on"));
+  touch("touchstart", 400, 100);
+  Input.setSteerMode("buttons");
+  assert.ok(!classOn.has("on"));
+  selected = "ring";
+  notify({ key: "touchSteeringGuide" });
+  assert.equal(dragEl.dataset.steeringGuide, undefined);
+  Input.setSteerMode("touch");
+  touch("touchstart", 300, 150);
+  touch("touchmove", 320, 150);
+  assert.equal(dragOff(dragEl), "15px");
+});

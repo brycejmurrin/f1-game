@@ -74,16 +74,16 @@ const SCENARIOS = (Choreo) => {
   };
 };
 const POSE_STREAM = {
-  "in-current": "55cf2f7d246f1cee",
-  "in-service": "e345137ded7e49c4",
-  "in-director-push": "11851e056417b084",
-  "in-drift-custom": "0a683975c72aaf31",
+  "in-current": "8ac647e1c6ec37d7",
+  "in-service": "956e541b2c270a45",
+  "in-director-push": "48ffc6fe136bdc79",
+  "in-drift-custom": "b3612fe19e8f647d",
   "in-crane-choreo": "9e79e2a5a1e3568a",
   "in-orbit-slowmo": "4159dc459c28ad85",
-  "in-procedural": "4483dcf22b71e166",
-  "home-win": "f4a91dfd76e28eb1",
-  "home-sprint-podium": "31440dcc28aa9735",
-  "home-dnf": "ebcdf6f0989288af",
+  "in-procedural": "4462eb11af1c3f65",
+  "home-win": "d77986aa114bf485",
+  "home-sprint-podium": "87b56667bb276f83",
+  "home-dnf": "052896f9b2817224",
 };
 const UPDATE = !!process.env.UPDATE_POSE_STREAM;
 
@@ -103,7 +103,7 @@ it("WORK ON CAR / AFTER THE RACE: the stepped pose stream is the shipped one, bi
 // THE DRIVE-OUT (every RACE!): the pure poseOut stream, 60 fps past its end into the empty-lane hold.
 const OUT_SCENARIOS = { "out-cut": {}, "out-service": { leaveCrew: "service" }, "out-director-push": { angle: "director", move: "push", zoom: 6, height: -0.3 },
   "out-crane": { angle: "crane", fov: 50 }, "out-slowmo-drift": { angle: "low", move: "drift", slowmo: 0.25, carSpeed: 1.4, hold: 0.5 } };
-const OUT_STREAM = "1e9b44fb04c6f2cb";   // recorded on the deploy tip (79bfd4b) before #5462
+const OUT_STREAM = "8a4fcb1f54227b6a";   // includes eased shot boundaries
 it("THE DRIVE-OUT: the pure poseOut stream is the shipped one, bit for bit (eased and calm)", () => {
   const { Arrival } = load();
   const parts = [];
@@ -169,7 +169,7 @@ function choreoDraws(Arrival, Crew, Choreo) {
 }
 // Recorded on the deploy tip (79bfd4b) before #5462: the crew's lengths moved from Math.hypot to
 // Math.sqrt of the squares (within an ulp in double); the Float32 matrices come out identical.
-const SERVICE_STREAM = "c8084924247b8774", CHOREO_STREAM = "d42e864c72d95f25";
+const SERVICE_STREAM = "c8084924247b8774", CHOREO_STREAM = "a8447b8e1f2a18a7";
 
 it("the SERVICE crew's and a Blender crew's draw streams (mesh, matrix) are the shipped ones, bit for bit", () => {
   const got = {};

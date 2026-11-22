@@ -1064,7 +1064,12 @@
 
       // Sparse, deliberate furniture keeps the dry Castilian venue readable.
       hedge(0.12, 0.24, -1, 8, 1.3, OLIVE);
-      hedge(0.84, 0.94, 1, 9, 1.3, OLIVE);
+      // Leave breaks at the inside of the three closing-sector bends.
+      // The tighter verge radius makes adjacent rectangular hedge sections overlap.
+      hedge(0.84, 0.848, 1, 9, 1.3, OLIVE);
+      hedge(0.856, 0.866, 1, 9, 1.3, OLIVE);
+      hedge(0.881, 0.922, 1, 9, 1.3, OLIVE);
+      hedge(0.934, 0.94, 1, 9, 1.3, OLIVE);
       // Castilian scrub fields: sparse olive shrub scatter over the straw
       // plains (brief s≈0.20 L and s≈0.96 L) — clustered, never near the edge.
       for (let i = 0; i < 22; i++) {

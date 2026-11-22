@@ -1294,8 +1294,9 @@
       // flat harbour shelf and skip any site where terrain rises >2 m above
       // the road.
       {
+        // The first awning needs another 4 m of setback to clear the bank.
         const MH = [
-          [0.625, 1, 28, 10, 5.2, 14, [0.92, 0.92, 0.94], [0.75, 0.12, 0.14]],
+          [0.625, 1, 32, 10, 5.2, 14, [0.92, 0.92, 0.94], [0.75, 0.12, 0.14]],
           [0.645, 1, 30, 11, 5.4, 15, [0.88, 0.90, 0.93], [0.10, 0.28, 0.62]],
           [0.665, 1, 32, 10, 5.0, 13, [0.94, 0.90, 0.82], [0.10, 0.55, 0.40]],
           [0.685, 1, 30, 11, 5.2, 14, [0.90, 0.88, 0.84], [0.85, 0.55, 0.10]],
@@ -1333,6 +1334,9 @@
       // and its exit road; the complex's wall stands there now.)
       guardrail(0.62, 0.68, -1, 0.4, ARMCO);
 
+      // Beau Rivage: keep the crown up on the shelf, clear of the retaining slope.
+      palm(KRACE(0.149), racingSide(-1), 14, 9.3, [0.25, 0.45, 0.22]);
+
       const harbourStations = [0.365, 0.545, 0.59]; // AUTHORED (source-frame) fracs, passed to K(); the basin they land on was measured in the Node build (x -400..-80, z 160..430), not by racing frac
       for (let station = 0; station < harbourStations.length; station++) {
         waterField(K(harbourStations[station]), 1, 16, 300, 72, 12, SEA,
@@ -1348,9 +1352,15 @@
       // stations.
 
       const megaYacht = (a, sc, hullCol) => {
-        const mc = moor([a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]], a.t, a.r, 22 * sc, 5 * sc, 4.2 * sc);
+        // The berth follows the quay heading, but the hull floats level.
+        // Check land against the waterline so the low hull stripe clears
+        // the quay too, even when the deck is already above the bank.
+        const len = Math.hypot(a.t[0], a.t[2]);
+        const t = [a.t[0] / len, 0, a.t[2] / len];
+        const r = [-t[2], 0, t[0]];
+        const mc = moor([a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]], t, r, 22 * sc, 5 * sc, 0.2 * sc);
         if (!mc) return;
-        a = Object.assign({}, a, { c: mc });
+        a = { c: mc, t, r, u: [0, 1, 0] };
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];

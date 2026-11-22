@@ -1291,7 +1291,7 @@ const Input = (function () {
   /* Drag-anchor ring + offset dot: optional DOM (#drag-anchor), cached lookups
      only, transform/left/top updates on the touch path — must never throw. */
   let dragMark = undefined;
-  let dragDotEl = null, paintedDrag = null, paintedOffset = NaN;
+  let dragDotEl = null, paintedDrag = null, paintedOffset = NaN, paintedTurn = NaN;
   const DRAG_DOT_CSS = "position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,0.65);box-shadow:0 0 0 2px rgba(0,0,0,0.5)";
   function dragMarkEl() {
     if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
@@ -1331,6 +1331,14 @@ const Input = (function () {
       mark.style.top = rec.anchorY + "px";
       mark.classList.add("on");
       paintedDrag = rec;
+    }
+    if (mark.dataset?.steeringGuide === "wheel") {
+      const turn = touchSteer * 120;
+      if (paintedTurn !== turn) {
+        mark.style.setProperty("--drag-turn", turn + "deg");
+        paintedTurn = turn;
+      }
+      return;
     }
     const dx = rec.x - rec.anchorX;
     const adx = Math.abs(dx);
@@ -1417,7 +1425,7 @@ const Input = (function () {
   // Explicit touch response must reach the wheel even with ADAPTIVE BUTTONS off.
   const arrowSpeedMix = profile => profile?.adaptive == null ? undefined : (profile.adaptive - 1) / 9;
   function steerButtonCommand(travel, profile) {
-    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX) return travel;
+    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX || profile.direction || profile.slideCurve || profile.start != null) return travel;
     return 1 + (travel - 1) * adaptiveMix;
   }
   const holdButtons = InputHoldButtons.create({
@@ -2061,6 +2069,7 @@ const Input = (function () {
       btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     }
     if (steerMode !== "touch") {
+      if (touchActive) hideDragAnchor();
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
       dragFilterClear();

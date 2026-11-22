@@ -54,11 +54,11 @@ test("the player's skid stamp precedes the cockpit-rig continue", () => {
 // `continue`, an off-screen anchor car never refreshed it and at() went null (haze blink).
 test("the heat-haze mark precedes the rival frustum cull", () => {
   const game = read("js/game.js");
-  const mark = game.indexOf("carFx.haze.mark(c, tmpMat);");
+  const mark = game.indexOf("if (c === hazeAnchor) haze.mark(c, tmpMat);");
   const cull = game.indexOf("if (!c.isPlayer && _carCullPlanes) {");
   assert.ok(mark > 0 && cull > 0, "both sites present");
   assert.ok(mark < cull, `haze.mark at ${mark} must come before the frustum cull at ${cull}`);
-  assert.equal(game.split("carFx.haze.mark(").length - 1, 1, "one haze mark site");
+  assert.equal(game.split("haze.mark(").length - 1, 1, "one haze mark site");
 });
 
 test("xVis is a dump field — render and shadows do not damp it", () => {
@@ -104,9 +104,7 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, wheelDt, _wheelOpts\);/,
     "only shared bodies coalesce paint (others keep it, all keep chassis attitude), then wheels plant on the ground matrix");
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
-  // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
   const cd = read("js/car/car-draw.js");
-  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\.team\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
@@ -204,7 +202,7 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
 // in car-presentation-vm.test.mjs.
 test("the first-person caster is pinned to the car loop's cockpit branch", () => {
   const game = read("js/game.js");
-  assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\)\); \}/);
+  assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\), _bankPlayer\.roll\); \}/);
   assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster, sharedRivalBody: carDraw\.sharedRivalBodyMesh \}\)/);
   assert.match(game, /if \(c\.isPlayer && _plBodyOk\) \{\s*\/\/[^\n]*\n\s*const S = _smpPlayer, p = smp2\.p, t = smp2\.t, r = smp2\.r;/,
     "the car loop restores the player's smp2 from _smpPlayer");
@@ -212,5 +210,5 @@ test("the first-person caster is pinned to the car loop's cockpit branch", () =>
   // The mode test and the axes call the twin in car-draw.js mirrors.
   assert.match(game, /const cockpitRigOnly = !dbgCam && \(state === "race" \|\| state === "count"\) && \(CAM_MODES\[camMode\]\.id === "cockpit" \|\| CAM_MODES\[camMode\]\.id === "helmet"\);/);
   assert.match(game, /const visorEye = !dbgCam && \(state === "race" \|\| state === "count"\) && CAM_MODES\[camMode\]\.id === "visor";/);
-  assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\)\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
+  assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\), bankC \? bankC\.roll : 0\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
 });

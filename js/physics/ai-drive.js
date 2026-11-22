@@ -81,7 +81,7 @@ const AiDrive = (function () {
   let _lookSorted = true, _lookLastD = -Infinity;
   function beginLook() { _look.length = 0; _lookSorted = true; _lookLastD = -Infinity; }
   // `mu` is bankGrip(bank), passed in by a caller that caches it per node (game.js c._lk); omitted, it is
-  // computed here. brakeTarget reads `mu` and never re-takes the sine (PERF-HUNT-4 B-F4).
+  // computed here. brakeTarget reuses the normal-load projection (PERF-HUNT-4 B-F4).
   function pushLook(d, k, bank, mu) {
     let s = _lookPool[_look.length];
     if (!s) s = _lookPool[_look.length] = { d: 0, k: 0, bank: 0, mu: 1 };
@@ -90,15 +90,14 @@ const AiDrive = (function () {
     _lookLastD = d;
     _look.push(s);
   }
-  // The bank's lateral-grip factor for the brake planner: a banked node holds 1 + sin(bank)·0.8 of the flat grip.
-  // Number.isFinite: bank || 0 keeps Infinity (truthy), and sin(Infinity) is NaN,
-  // which then multiplies into latMax in brakeTarget / the look-ahead (hunt-physics).
-  function bankGrip(bank) { return 1 + Math.sin(Number.isFinite(bank) ? bank : 0) * 0.8; }
+  // Gravity normal to the road scales tyre capacity. Its signed in-plane component is additive.
+  function bankGrip(bank) { return Number.isFinite(bank) ? Math.cos(bank) : 1; }
   function endLook() { return _look; }
   // The game's node window already owns typed samples. Keep only its arrays here,
   // never the per-car cache (which carries the track), and preserve d += step.
-  const _lookWindow = { v: null, mu: null, n: 0, d: 0, step: 0 };
-  function lookWindow(v, mu, n, d, step) {
+  const _lookWindow = { v: null, mu: null, bank: null, n: 0, d: 0, step: 0 };
+  function lookWindow(v, mu, n, d, step, bank) {
+    _lookWindow.bank = bank;
     _lookWindow.v = v; _lookWindow.mu = mu; _lookWindow.n = n; _lookWindow.d = d; _lookWindow.step = step;
     return _lookWindow;
   }
@@ -564,20 +563,20 @@ const AiDrive = (function () {
   // Solve k*v² = lat*(1 + D*(v/V)²) analytically: v² = lat / (k - lat*D/V²)
   // below the top speed V, and the flat (1 + D) envelope past it.
   // No iterative solver in the per-car, per-node brake lookahead.
-  function cornerSpeed(k, lat, pace = 1, vmax = 72) {
-      // Math.max(0, NaN) is NaN in IEEE754 — coerce first so a bad lat cannot
-      // poison the envelope (and any caller that skips brakeTarget's finite gate).
-      const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5);
-      const L = Number.isFinite(lat) ? Math.max(0, lat) : 0;
-      return cornerSpeedEnvelope(kk, L, V, V * V);
-    }
-  function cornerSpeedEnvelope(kk, L, V, vSq) {
+  function cornerSpeed(k, lat, pace = 1, vmax = 72, support = 0) {
+    const V = Math.max(0.05, pace) * Math.max(1, vmax), kk = Math.max(k, 1e-5);
+    const L = Number.isFinite(lat) ? Math.max(0, lat) : 0;
+    return cornerSpeedEnvelope(kk, L, V, V * V, Number.isFinite(support) ? support : 0);
+  }
+  function cornerSpeedEnvelope(kk, L, V, vSq, support) {
+    // Gravity supplies lateral acceleration independently of tyre grip and aerodynamic load.
+    const base = Math.max(0, L + support);
     const den = kk - L * AI_DF / vSq;
     if (den > 0) {
-      const v = Math.sqrt(L / den);
+      const v = Math.sqrt(base / den);
       if (v <= V) return v;
     }
-    return Math.sqrt(L * (1 + AI_DF) / kk);
+    return Math.sqrt(Math.max(0, L * (1 + AI_DF) + support) / kk);
   }
 
   function brakeTarget(ctx) {
@@ -588,6 +587,7 @@ const AiDrive = (function () {
     let windowD = window ? window.d : 0;
     const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
     const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * AERO_GRIP_K);
+    const gravity = ctx.gravity ?? 9;   // live caller supplies PhysicsConsts.GRAVITY_SLOPE
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
@@ -612,7 +612,9 @@ const AiDrive = (function () {
       if (dSq >= vLimSq) { if (ascending) break; continue; }
       const k = Math.max(Math.abs((window ? window.v[i] : s.k) || 0), 1e-5);
       const bankMu = window ? window.mu[i] : s.mu !== undefined ? s.mu : bankGrip(s.bank);   // indexed/pooled samples carry it; hand-built ones may not
-      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq) * skill * (ctx.diffCorner || 1);
+      const bank = window ? window.bank && window.bank[i] : s.bank;
+      const support = bank && Number.isFinite(bank) ? gravity * Math.sin(bank) : 0;
+      const vC = cornerSpeedEnvelope(k, Math.max(0, latMax * bankMu * grip), V, vSq, support) * skill * (ctx.diffCorner || 1);
       const entrySq = vC * vC + dSq;
       if (entrySq >= 0 && entrySq < vLimSq) { vLimSq = entrySq; bVC = vC; bD = d; }
     }

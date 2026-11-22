@@ -172,7 +172,7 @@ const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSetting
 // never falls back to the turntable framing on the held last frame.
 let driveOut = null;
 function startDriveOut() {
-  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null), "raceStart");
   endHome();
   driveOutEngine(false);   // repeated launch releases its previous audio graph
   if (typeof clearSetupGestures === "function") clearSetupGestures();
@@ -283,14 +283,19 @@ function driveOutSound(pose, gap) {
 // Safari draws no <datalist> ticks on a range, hence the drawn ones.
 const FRAME_S = 1 / 24;
 let preview = null;
-const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
+function previewCfg(sequence) {
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null), GarageArrival.EDIT_MOMENT[sequence]);
+  cfg.enabled = true;
+  if (sequence === "pitExit") cfg.speed = Math.min(4, cfg.speed * GarageArrival.PIT_EXIT_RATE);
+  return cfg;
+}
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
 function previewPose(p) {
   const t = Math.min(p.t, previewLen(p));
   const pose = GarageArrival.poseFor(p.dir)(t, p.cfg, reducedMotion());
   // PREVIEW OUT must apply the same CUT sampler as Start Race, including distance
   // for the split wheel layers — otherwise the body rolls and the spokes stay put.
-  if (p.dir === "out" || p.dir === "home") {
+  if (p.sequence === "out") {
     if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.samplePose) {
       const motion = GarageDepartureWheels.samplePose(pose, t, p.cfg, p.motion || (p.motion = { eye: [0, 0, 0], aim: [0, 0, 0] }), { calm: reducedMotion() });
       if (motion) p.motion = motion;
@@ -348,7 +353,7 @@ function transport() {
 }
 // The bar's readout: the play state, the scrub position, the time and the caption,
 // and the phase marks (rebuilt only when the sequence's beats move).
-function previewSync() {
+function previewSync(pose) {
   const p = preview;
   if (!p) return;
   const len = previewLen(p), t = Math.min(p.t, len), set = (el, k, v) => { if (el && el[k] !== v) el[k] = v; };
@@ -357,7 +362,7 @@ function previewSync() {
   set(play, "textContent", p.paused ? "PLAY" : "PAUSE"); press(play, p.paused);
   press($("ga-loop"), p.loop); press($("ga-edit"), p.editing);
   set($("ga-scrub"), "value", String(Math.round(t / (len || 1) * 1000)));
-  set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + previewPose(p).label);
+  set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + (pose || previewPose(p)).label);
   const marks = previewPhases(p), on = phaseAt(marks, t), key = p.dir + marks.map((m) => m.id + m.t.toFixed(3)).join();
   if (p.marked !== key) {
     p.marked = key;
@@ -402,16 +407,16 @@ function previewEdit(on) {
 /** bindSettings' `changed`: a setting edited mid-preview re-poses the held frame. */
 function refreshPreview() {
   if (!preview) return;
-  preview.cfg = previewCfg();
+  preview.cfg = GarageArrival.carryPlayback(preview.cfg, previewCfg(preview.sequence));
   preview.t = Math.min(preview.t, previewLen(preview));
   previewSync();
 }
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
-  const d = dir === "out" || dir === "home" ? dir : "in";
+  const d = dir === "pitExit" || dir === "out" ? "out" : dir === "home" ? "home" : "in";
   // From EDIT, PREVIEW IN / OUT switch the running preview's direction.
   if (preview && preview.editing) {
-    Object.assign(preview, { dir: d, t: 0, btn: btn || preview.btn });
+    Object.assign(preview, { dir: d, sequence: dir, cfg: previewCfg(dir), motion: null, travel: null, t: 0, btn: btn || preview.btn });
     previewEdit(false); previewPause(false);
     return true;
   }
@@ -419,7 +424,7 @@ function startArrivalPreview(dir, btn) {
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   transport();
-  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
+  preview = { t: 0, cfg: previewCfg(dir), sequence: dir, dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
@@ -440,7 +445,7 @@ function stepPreview(dt) {
     else if (p.travel) p.travel.primed = false;
   }
   const pose = previewPose(p);
-  previewSync();
+  previewSync(pose);
   if (pose.active) return pose;
   if (!p.paused) stopPreview();   // a paused or scrubbed show holds its last frame
   // This frame still holds the last pose, not the turntable's; when the show closed, its mood and bars
@@ -521,7 +526,7 @@ function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
 function startPitOut(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitOut") || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); homeScene = null; arrival.start({ out: true, rate: 1.6 });
+  endHome(); homeScene = null; arrival.start({ out: true, rate: GarageArrival.PIT_EXIT_RATE });
   return true;
 }
 function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
@@ -529,7 +534,7 @@ function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandof
 function startPitIn(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitIn") || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO RESULTS" });
+  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO GARAGE" });
   return true;
 }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
@@ -779,6 +784,7 @@ function resetSetupCam() {
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
 let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
+let previewWorn = false, appliedWorn = false;
 let _spWheelDistance = 0, _spWheelSteer = 0;
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
@@ -839,7 +845,8 @@ function getSetupPreviewMesh() {
     || (typeof CarWheels !== "undefined" && CarWheels.createGarage);
   const split = typeof createWheels === "function";
   const key = previewKey() + (split ? "|wheels" : "");
-  if (key !== _spMeshKey) {
+  const worn = previewWorn && GfxQuality.feature("tyreWearVisual");
+  if (key !== _spMeshKey || worn !== appliedWorn) {
     const liv = resolveLivery(team);
     const parts = Parts.getVisualTiers(getTeamParts(team.id), team);
     const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|wheels" : "");
@@ -861,8 +868,9 @@ function getSetupPreviewMesh() {
       }) }).data));
     if (split) {
       if (!departureWheels) departureWheels = createWheels(gfx);
-      departureWheels.prepare(key, liv, Car3D.appearanceParts(parts, liv));
+      departureWheels.prepare(key, liv, Car3D.appearanceParts(parts, liv), worn);
     }
+    appliedWorn = worn;
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
@@ -1315,7 +1323,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     ambientSky: outside ? outside.ambientSky : GarageScene.AMB_SKY, ambientGround: outside ? outside.ambientGround : GarageScene.AMB_GROUND,
     fogColor: outside ? outside.fogColor : GarageScene.BACKDROP, fogDensity: outside ? outside.fogDensity : 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
-    noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
+    noEnv: true,   // keep the garage post path and exclude the race cube
+    garageProbe: gfx.garageProbeEnabled === true ? GarageScene.reflectionProbe(Teams.LIST[G.teamIdx], liv, getTeamParts, G.driverIdx, context) : null,
   }) === false) return false;
   if (context.realExterior) exteriorDrawn = exterior.draw(context.showLaneBays);
   const spMat = carPaintMat(PAINT_DRY_DAY);
@@ -1386,6 +1395,25 @@ function renderSetupPreview(dt, holdDriveOut = false) {
 function setSetupCamPanel(open) {
   const b = $("cs-cam"), p = $("cs-cam-panel");
   if (!b || !p) return;
+  if (open) {
+    const enabled = typeof GfxQuality !== "undefined" && GfxQuality.feature("tyreWearVisual");
+    let wear = $("cs-preview-worn");
+    if (enabled && !wear) {
+      wear = document.createElement("button");
+      wear.type = "button";
+      wear.id = "cs-preview-worn";
+      wear.className = "cs-view-btn";
+      wear.textContent = "Preview worn tyres";
+      wear.setAttribute("aria-pressed", String(previewWorn));
+      wear.onclick = () => {
+        previewWorn = !previewWorn;
+        wear.classList.toggle("active", previewWorn);
+        wear.setAttribute("aria-pressed", String(previewWorn));
+      };
+      p.firstElementChild.after(wear);
+    }
+    if (wear) wear.hidden = !enabled;
+  }
   p.hidden = !open;
   b.setAttribute("aria-expanded", open ? "true" : "false");
 }

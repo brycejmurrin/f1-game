@@ -682,3 +682,50 @@ test("GRAPHICS: ULTRA on a desktop doubles the rival LOD reach; HIGH and a phone
   assert.equal(hi.mirrorCap(), 6);
   assert.equal(ul.mirrorCap(), 12);
 });
+
+test("adaptive models reward sustained headroom and projected size while keeping the existing draw budgets", () => {
+  const { FieldLod, GfxQuality } = adaptiveLod();
+  const gov = { fpsEMA: () => 16.7, floorMs: () => 16.67, gpuMs: () => 8, tier: () => 4, autoTier: () => 0, extrasShed: () => 0 };
+  const feed = (ms, h = 1080) => { for (let t = 0; t < ms; t += 20) FieldLod.updateModelBudget(20, h, gov); };
+  const lens = Math.PI / 3;
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  feed(3500);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  feed(500);
+  assert.equal(FieldLod.tier(at(145), lens), 1);
+  assert.equal(FieldLod.tier(at(145), Math.PI / 2), 2, "a wide lens makes the same car smaller");
+  assert.equal(FieldLod.farBody(at(300), lens), false);
+  assert.equal(FieldLod.wheelsLite(at(60), lens), false);
+  assert.equal(FieldLod.castsShadow(at(60), lens), false);
+  assert.equal(FieldLod.mirrorCap(), FieldLod.T.MIRROR_CARS);
+  gov.gpuMs = () => 13; // the dead band: do not oscillate at the promotion boundary
+  feed(1000); assert.equal(FieldLod.tier(at(145), lens), 1);
+  gov.gpuMs = () => 16; feed(500);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  gov.gpuMs = () => -1; feed(4000, 720);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  feed(4000); assert.equal(FieldLod.tier(at(145), lens), 1, "frame cadence can trial higher detail without GPU timestamps");
+  gov.extrasShed = () => 1; feed(500);
+  assert.equal(FieldLod.tier(at(145), lens), 2);
+  assert.equal(GfxQuality.detail(), 0);
+  gov.extrasShed = () => 0; gov.autoTier = () => 1;
+  feed(5000); assert.equal(FieldLod.tier(at(145), lens), 2, "the measured governor floor prevents promotion");
+});
+
+function adaptiveLod({ mobile = false, allowed = true, enabled = true } = {}) {
+  const ctx = loadLod();
+  ctx.GLX = { isMobile: mobile };
+  ctx.GfxQuality = { detail: () => 0, feature: name => name === "adaptiveModels" && enabled,
+    option: (_, fallback) => allowed ? fallback : false };
+  ctx.FieldLod.init();
+  return ctx;
+}
+
+test("adaptive models leave mobile, disabled preferences, and the master LOD override alone", () => {
+  for (const opts of [{ mobile: true }, { allowed: false }, { enabled: false }, { masterOff: true }]) {
+    const { FieldLod } = adaptiveLod(opts);
+    if (opts.masterOff) FieldLod.setEnabled(false);
+    for (let i = 0; i < 250; i++) FieldLod.updateModelBudget(20, 2160, null);
+    assert.equal(FieldLod.tier(at(145)), opts.masterOff ? 0 : 2);
+  }
+});

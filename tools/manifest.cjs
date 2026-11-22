@@ -480,7 +480,7 @@ const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
   "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
-  "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
+  "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-button-colors.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/a11y-loading.css", "css/responsive.css", "css/menu-destinations.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
@@ -505,7 +505,7 @@ const CSS_PRELOAD = [
 // first paint — defer it. Keep every deferred file as rel=stylesheet (sw.js
 // essential-set). fonts-hud.css is Barlow + unused Titillium @font-face.
 const CSS_DEFERRED = [
-  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
+  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-button-colors.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css", "css/a11y-loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/screen-arranger.css", "css/watch-transport.css",
@@ -1138,6 +1138,7 @@ const LAZY_RACE = [
 // Optional selected-circuit pit slice for every garage view. Never gates a race.
 const LAZY_GARAGE_EXTERIOR = ["js/garage/exterior-geometry.js", "js/garage/exterior.js"];
 const LAZY_RACE_SESSION = [
+  "js/input/touch-button-actions.js",
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
   "js/race/reliability.js",
@@ -1545,6 +1546,7 @@ const CONTROLLER = [
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
   "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/input/touch-button-actions.js",
   "js/ui/touch-button-settings.js",
   "js/input/phone-pad-codec.js",
   "js/input/phone-pad-page.js",

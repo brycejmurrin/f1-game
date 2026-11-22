@@ -40,6 +40,25 @@ test("corner-frames: the baseline only shrinks (a fixed row is deleted)", () => 
   assert.deepEqual(stale, [], "rows that no longer offend: delete them from tests/data/corner-frames-baseline.json");
 });
 
+test("Attwood banking peaks at the surveyed exit station", () => {
+  const row = rows.find(r => r.stable === "okayama|bank:frac0.895");
+  assert.ok(row && !row.bad && row.offsetM <= 2, row?.detail);
+  const tracks = CF.context();
+  const def = tracks.LIST.find(d => d.id === "okayama");
+  const tr = tracks.buildCenterline(def, { line: false });
+  const lift = tr.bankP.lift;
+  const peak = lift.indexOf(Math.max(...lift));
+  const exitM = (peak / tr.n - def.turns[10]) * tr.total;
+  assert.ok(Math.abs(exitM - 100) <= tr.total / tr.n / 2, `Attwood peak is ${exitM} m beyond T11`);
+  const zone = def.bankZones[0];
+  const measuredRow = () => CF.measure(tracks, "okayama").find(r => r.kind === "bank");
+  zone.widthM = 80;
+  assert.equal(measuredRow().bad, true, "an exit zone must still cover the apex");
+  zone.widthM = 570;
+  zone.frac = 0.89;
+  assert.equal(measuredRow().bad, true, "a measured peak moving several road nodes fails");
+});
+
 test("corner-frames: label parsing names the corners a comment means", () => {
   const def = { turns: new Array(20).fill(0) };
   assert.deepEqual(CF.cornersIn("// T2/3 apron", def, {}), [2, 3]);
@@ -99,4 +118,13 @@ test("corner-frames: a strong corner 15 m off its |k| peak still fails on the si
   const flick = fakeTrack(N, LAP, (i) => 9e-3 - 1.8e-2 * Math.exp(-((((i - 500) * 4) / 12) ** 2)));
   const f = CF.kinkAt(flick, 500 / N, flick.curv);
   assert.equal(f && f.m, 0);
+});
+
+test("broad turn-anchored banks measure their own peak beside taller neighbours", () => {
+  // The combined Spa profile also contains the Les Combes and Fagnes banks.
+  // Searching it for the greatest lift attributed those peaks to T8/T10/T11.
+  for (const turn of [8, 10, 11]) {
+    const row = rows.find(r => r.stable === `spa|bank:turn${turn}`);
+    assert.ok(row && row.offsetM <= 2, `T${turn}: ${row?.detail}`);
+  }
 });
