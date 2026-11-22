@@ -812,6 +812,27 @@ const CarWheels = (function () {
         grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor, rimSurf);
       return CarGeometry.weld(out);   // exact repeat corners merged (car3d.js build)
     }
+    // Distant rivals: preserve the tyre diameter, axle width and dark rim opening.
+    // At the far-body threshold the entire wheel is under two pixels at 720p/60°.
+    function buildFarWheel(width) {
+      const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+      const sides = 12, halfWidth = width / 2;
+      const point = (x, r, a) => [x, r * Math.cos(a), r * Math.sin(a)];
+      for (let i = 0; i < sides; i++) {
+        const angle = TWO_PI * i / sides, next = TWO_PI * ((i + 1) % sides) / sides;
+        const l0 = point(-halfWidth, WHEEL_R, angle), l1 = point(-halfWidth, WHEEL_R, next);
+        const r0 = point(halfWidth, WHEEL_R, angle), r1 = point(halfWidth, WHEEL_R, next);
+        addQuad(out, l0, l1, r1, r0, TYRE, SURFACES.rubber);
+        for (const sign of [-1, 1]) {
+          const x = sign * halfWidth, rimR = WHEEL_R * 0.68;
+          const a = sign > 0 ? angle : next, b = sign > 0 ? next : angle;
+          const innerA = point(x, rimR, a), innerB = point(x, rimR, b);
+          addQuad(out, point(x, WHEEL_R, a), point(x, WHEEL_R, b), innerB, innerA, TYRE, SURFACES.rubber);
+          addTri(out, [x, 0, 0], innerA, innerB, COVER_IN, SURFACES.metal);
+        }
+      }
+      return CarGeometry.weld(out);
+    }
     function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf, detail, wear = 0) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
@@ -827,7 +848,7 @@ const CarWheels = (function () {
       return { rotating: CarGeometry.weld(rotating), fixed: CarGeometry.weld(fixed) };
     }
 
-    return { addWheel, buildWheel: atD(buildWheel), buildWheelLayers: atD(buildWheelLayers) };
+    return { addWheel, buildFarWheel, buildWheel: atD(buildWheel), buildWheelLayers: atD(buildWheelLayers) };
   }
 
   return { create, tints, createGarage, phaseStep, wrapPhase, WHEEL_R };

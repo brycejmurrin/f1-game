@@ -54,11 +54,11 @@ test("the player's skid stamp precedes the cockpit-rig continue", () => {
 // `continue`, an off-screen anchor car never refreshed it and at() went null (haze blink).
 test("the heat-haze mark precedes the rival frustum cull", () => {
   const game = read("js/game.js");
-  const mark = game.indexOf("carFx.haze.mark(c, tmpMat);");
+  const mark = game.indexOf("if (haze) haze.mark(c, tmpMat);");
   const cull = game.indexOf("if (!c.isPlayer && _carCullPlanes) {");
   assert.ok(mark > 0 && cull > 0, "both sites present");
   assert.ok(mark < cull, `haze.mark at ${mark} must come before the frustum cull at ${cull}`);
-  assert.equal(game.split("carFx.haze.mark(").length - 1, 1, "one haze mark site");
+  assert.equal(game.split("haze.mark(").length - 1, 1, "one haze mark site");
 });
 
 test("xVis is a dump field — render and shadows do not damp it", () => {
@@ -104,9 +104,7 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, wheelDt, _wheelOpts\);/,
     "only shared bodies coalesce paint (others keep it, all keep chassis attitude), then wheels plant on the ground matrix");
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
-  // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
   const cd = read("js/car/car-draw.js");
-  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,

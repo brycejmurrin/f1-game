@@ -230,7 +230,12 @@ test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube 
   assert.deepEqual(decide(false, true, true, true, false), [false, true, false]);
   assert.deepEqual(decide(false, true, false, false, false), [false, true, false]);
   assert.deepEqual(decide(false, true, false, true, true), [false, true, false]);
-  assert.match(TLX, /envProbeOptOut:\s*raceProbeOff/);
+  const optOutBody = TLX.match(/get envProbeOptOut\(\) \{([^}]+)\}/)[1];
+  const optedOut = new Function("raceProbeOff", "envRT", "_envGaveUp", optOutBody);
+  assert.equal(optedOut(true, {}, false), true, "garage-only cube leaves racing opted out");
+  assert.equal(optedOut(false, null, false), true, "missing target disables capture");
+  assert.equal(optedOut(false, {}, true), true, "failed backend disables capture");
+  assert.equal(optedOut(false, {}, false), false, "healthy race cube remains available");
   // envFaceBegin stays the producer-side early return (an opted-in session still probes).
   assert.match(TLX, /envFaceBegin\(face, eye, frame\) \{\s*if \(_envOptOut\) return null;/);
 });

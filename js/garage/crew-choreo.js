@@ -74,8 +74,11 @@ const GarageCrewChoreo = (function () {
   // PROPS, member-local (+z forward). The jack's handle is a unit span drawn
   // from the hands to its pivot, so a pump is the hands moving, not a mesh.
   function createProps(gfx, stripe) {
+    return GarageCrewDraw.uploadMeshes(gfx, upload => buildProps(upload, stripe));
+  }
+  function buildProps(upload, stripe) {
     const GUN = [0.10, 0.10, 0.11], ALLOY = [0.62, 0.63, 0.66], RED = [0.72, 0.12, 0.08], RUBBER = [0.035, 0.035, 0.04];
-    const mesh = (build) => { const a = acc(); build(a); return gfx.createMesh(a); };
+    const mesh = (build) => { const a = acc(); build(a); return upload(a); };
     const gun = mesh((a) => {
       block(a, 0, 0, .02, .055, .07, .10, GUN);                        // body
       block(a, 0, -.09, -.03, .028, .055, .03, GUN);                   // grip

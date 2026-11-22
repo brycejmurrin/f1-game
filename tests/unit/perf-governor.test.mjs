@@ -1802,16 +1802,17 @@ test("software garage preview sheds render scale on SwiftShader and restores", (
   // Drive the real begin/end pair (no race scale chosen yet, so the garage
   // intro bay is the one place that sheds) and watch the renderer's scale.
   const { governor, gfx, sets, scale } = raceScaleGov({ softwareGL: true, scale0: 1 });
-  gfx.envProbeOptOut = false;
+  gfx.envProbeOptOut = true;
   governor.init(gfx);
   governor.softwareGaragePreviewBegin(gfx);
   assert.equal(scale(), 0.55, "SwiftShader garage preview sheds fill rate to 0.55");
-  assert.equal(gfx.envProbeOptOut, true, "and opts the env probe out while the bay is up");
+  assert.equal(governor.softwareGaragePreviewActive, true, "the bay pauses probe capture");
   governor.softwareGaragePreviewBegin(gfx);
   assert.deepEqual(sets, [0.55], "a second begin does not overwrite the saved scale");
   governor.softwareGaragePreviewEnd(gfx);
   assert.equal(scale(), 1, "end restores the scale the player had before the preview");
-  assert.equal(gfx.envProbeOptOut, false, "and gives the env probe back");
+  assert.equal(governor.softwareGaragePreviewActive, false, "the bay releases its pause");
+  assert.equal(gfx.envProbeOptOut, true, "the backend retains its own opt-out");
   assert.deepEqual(sets, [0.55, 1]);
   for (const s of sets) assert.ok(s >= 0.55 && s <= 1, `every scale written stays in [0.55, 1], got ${s}`);
   governor.softwareGaragePreviewEnd(gfx);
