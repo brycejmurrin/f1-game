@@ -198,7 +198,7 @@ test('live atlas retries same-key failures with bounded backoff and skips unsupp
   const source = read('js/garage/scene.js'), start = source.indexOf('function reuploadTex('), end = source.indexOf('// Squeegeed resin:', start);
   let attempts = 0, now = 0;
   const c = vm.createContext({ roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', key: 'k' }), performance: { now: () => now },
-    cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} },
+    cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} }, liveMeshesReady: true,
     liveFail: 0, liveRetryAt: 0, dressTex: {}, dressFail: 0, dressRetryAt: 0, dressIdKey: 'd', dressFullKey: 'd|b',
     boardKey: () => 'b', paintLive() {}, paintTrace() {}, traceFail: 0, lastTrace: -1e9, GarageExperience: { paintCareer() {} }, LiveryTex: {},
     _gfx: { createTexMesh() {}, createTexture() { attempts++; if (attempts === 1) throw Error('injected'); return {}; } },
@@ -214,6 +214,34 @@ test('live atlas retries same-key failures with bounded backoff and skips unsupp
   assert.equal(attempts, 5); assert.equal(c.liveFail, 3);
   delete c._gfx.createTexture; c.liveFail = 0;
   c.rebuild({}, {}, {}, {}); assert.equal(attempts, 5);
+});
+test('garage dress retries missing mesh uploads and retires the old texture if repaint throws', () => {
+  const source = read('js/garage/scene.js');
+  const sides = ['nx', 'px', 'back', 'door', 'mid'], calls = [], freed = [];
+  let now = 0, failDoor = true, failPaint = false, board = 'first';
+  const c = vm.createContext({
+    roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', board, key: board }),
+    performance: { now: () => now }, cacheKey: '', geomKey: 'g', shellMesh: {}, liveKey: 'l', liveTex: {},
+    liveFail: 0, liveRetryAt: 0, dressIdKey: 'd', dressFullKey: '', dressCanvas: {}, dressTex: null,
+    dressMesh: {}, dressMeshesReady: false, dressFail: 0, dressRetryAt: 0, SIDES: sides, LiveryTex: {},
+    paintDress: () => ({ canvas: {} }), paintBoards() { if (failPaint) throw Error('paint'); },
+    buildDress: () => Object.fromEntries(sides.map(side => [side, { side, idx: [0] }])),
+    _gfx: { createTexture: () => ({}), freeTexture(t) { freed.push(t); }, createTexMesh({ side }) {
+      calls.push(side);
+      if (side === 'door' && failDoor) { failDoor = false; return null; }
+      return { side };
+    } }, Log: { warn() {} },
+  });
+  vm.runInContext(source.slice(source.indexOf('function reuploadTex('), source.indexOf('// Squeegeed resin:')), c, { filename: absSrc('js/garage/scene.js') });
+  c.rebuild({}, {}, {}, {});
+  assert.equal(c.dressTex, null);
+  now = 1000; c.rebuild({}, {}, {}, {});
+  assert.deepEqual(Object.keys(c.dressMesh), sides);
+  assert.deepEqual(calls, ['nx', 'px', 'back', 'door', 'door', 'mid']);
+  const old = c.dressTex;
+  board = 'changed'; failPaint = true; c.rebuild({}, {}, {}, {});
+  assert.equal(c.dressTex, null);
+  assert.equal(freed.filter(t => t === old).length, 1);
 });
 test('coverage cache remeasures same-sized dock changes and panel identity, but not stable frames', () => {
   const source = read('js/garage/setup-camera.js');

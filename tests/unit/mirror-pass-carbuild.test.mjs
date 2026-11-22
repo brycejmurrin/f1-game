@@ -2,6 +2,7 @@
  * Split from mirror-pass.test.mjs (T3-16); the VM rig is tests/helpers/mirror-pass-rig.mjs. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { symbolSource } from "../helpers/game-source.mjs";
 import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 import { read, boot } from "../helpers/mirror-pass-rig.mjs";
 
@@ -174,6 +175,73 @@ test("wheel phases keep moving in mirror-only and offscreen frames, including lo
   advance(0);
   assert.deepEqual(wheelMatrices(v, mirror), reverse, "a zero-dt frame does not advance");
   assert.deepEqual([c.wheelSpin, c.wheelSpinF], traction, "traction fields retain their physics values");
+});
+
+test("spin blur follows the angle each axle travels, including partial and full front lock", () => {
+  const v = carDrawVm();
+  v.field((c, i) => 1000 - 9 * i);
+  const c = v.G.player;
+  c.speed = 40;
+  function discs(lock, frontsOnly) {
+    c.wheelLock = lock;
+    v.rec.draws.length = 0;
+    v.carDraw.drawPlayerWheels(c, WHEEL_BASE, 1 / 60, {}, frontsOnly);
+    return v.rec.draws.filter(m => m.carMesh === "getSpinDisc").length;
+  }
+  assert.equal(discs(0, false), 4);
+  assert.equal(discs(0.8, true), 0, "the fronts roll below the blur threshold");
+  assert.equal(discs(1, false), 2, "only the rears keep spinning");
+  assert.equal(discs(1, true), 0, "cockpit sees sharp, locked fronts");
+});
+
+test("solo photo redraws hold wheel phase and blur while online and replay views keep moving", () => {
+  // Exercise the render frame's actual clock and its two wheel consumers.
+  const render = symbolSource("function render(dt)");
+  const step = render.match(/const wheelDt = [^;]+;\s*carDraw\.advanceWheelPhases\([^;]+;/)[0];
+  const mainDraw = render.match(/drawPlayerWheels\(c, _groundMat,[^;]+;/)[0];
+  const cockpitDraw = render.match(/drawCockpitRig\(c, _cockMat,[^;]+;/)[0];
+  const drawView = new Function("dt", "paused", "setupPreviewOn", "netPlay", "replayBuf", "carDraw",
+    "c", "_groundMat", "_cockMat", "_wheelOpts", "paint", "visorEye", "cockpit",
+    `const { drawPlayerWheels, drawCockpitRig } = carDraw; ${step} if (cockpit) { ${cockpitDraw} } else { ${mainDraw} }`);
+  for (const cockpit of [false, true]) {
+    const v = carDrawVm();
+    v.field((c, i) => 1000 - 9 * i);
+    const c = v.G.player;
+    c.speed = 40;
+    Object.assign(v.ctx.CockpitOpts, { layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), interior: () => "carbon" });
+    v.ctx.Car3D.cockpitMirrorGlass = () => [];
+    function frame(online, replay) {
+      return wheelMatrices(v, () => drawView(1 / 60, true, false, { active: () => online }, { isScrubbing: () => replay },
+        v.carDraw, c, WHEEL_BASE, WHEEL_BASE, {}, {}, true, cockpit));
+    }
+    const held = frame(false, false);
+    assert.equal(held.length, cockpit ? 2 : 4);
+    assert.deepEqual(frame(false, false), held);
+    assert.ok(!v.rec.draws.some(m => m.carMesh === "getSpinDisc"));
+    const moving = frame(true, false);
+    assert.notDeepEqual(moving, held);
+    assert.ok(v.rec.draws.some(m => m.carMesh === "getSpinDisc"));
+    assert.notDeepEqual(frame(false, true), moving);
+  }
+});
+
+test("second cameras raise the pit-stop body, wings and all four wheels together", () => {
+  const v = carDrawVm();
+  v.field((c, i) => 1000 - 9 * i);
+  const c = v.G.cars[1];
+  const base = Float32Array.of(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 3, 0, 1);
+  v.G.pits = { stopAnim: () => ({ lift: 0.22, off: 0.55 }) };
+  function heights() {
+    v.rec.mats.length = v.rec.draws.length = v.rec.flaps.length = 0;
+    v.carDraw.drawMirrorCar(c, base, {}, false);
+    return [...v.rec.mats.map(m => m[13]), v.rec.flaps[0].y];
+  }
+  const grounded = heights();
+  c.pitState = "box";
+  const lifted = heights();
+  assert.equal(lifted.length, 6);
+  lifted.forEach((y, i) => assert.ok(Math.abs(y - grounded[i] - 0.22) < 1e-6));
+  assert.equal(base[13], 3, "the grounded pose still belongs to the mirror pass");
 });
 
 test("steering uses one sine/cosine pair per car while preserving all four wheel matrices", () => {
