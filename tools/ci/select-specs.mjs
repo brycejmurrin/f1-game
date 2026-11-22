@@ -34,7 +34,7 @@ import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs"
 import { FAT_UI_SPEC } from "./fat-shard.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 import { specsAffectedByImpact } from "../lib/impact-map.mjs";
-import { changeKind } from "./change-kind.mjs";
+import { changeKind, readyBrowserExempt } from "./change-kind.mjs";
 import { expandScript } from "../gen/gen-test-groups.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import { loadQuarantine } from "../../tests/helpers/flaky-policy.mjs";
@@ -1671,7 +1671,7 @@ export const CSS_SMOKE_ONLY = /^css\/(a11y-loading|appearance-studio|career-expe
 
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // opts.files: a hypothetical change ("which specs would an edit to js/ui/hud.js need?") on any tree.
-  const changed = opts.files ?? changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
+  const changed = opts.files ?? changedPaths(opts.readyPr ? [changedRef, "HEAD"] : [changedRef]);   // rename SOURCES too (ledger M36)
   // `routing` is what the group map, the source pins and the extras see. A css
   // file does NOT route as its js owner: CSS_LAYOUT_SPECS keeps a css diff
   // narrow (Bryce, decision on #5304, 2026-11-10: "option 1, tip wins").
@@ -1692,7 +1692,8 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
   const docsOnly = isDocsOnly(changed);
   const kind = changeKind(changed);
-  const lightDiff = docsOnly || kind === "docs";
+  const browserExempt = opts.readyPr && readyBrowserExempt(changed);
+  const lightDiff = opts.readyPr ? browserExempt : docsOnly || kind === "docs";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
   // An edited case module (tests/specs/foundation/<id>.js) is an edit to the spec
@@ -1734,7 +1735,8 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // required checks pending.
   let candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
   const reason = !changed.length ? "none"
-    : lightDiff ? (kind === "css" ? "css" : "docs")
+    : browserExempt ? "browser-exempt"
+    : lightDiff ? "docs"
     : tracked.length ? "infra"
     : unmatched.length === changed.length ? "unmatched"
     : unmatched.length ? "partial"
@@ -1787,7 +1789,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const si = argv.indexOf("--since");
-  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--over-budget-shards N] [--failed-from file] [--stale-first] [--json]";
+  const usage = "usage: node tools/ci/select-specs.mjs (--since <ref> | --files <path,path>) [--budget-min N] [--overflow-shards N] [--over-budget-shards N] [--failed-from file] [--stale-first] [--ready-pr] [--json]";
   if (argv.includes("--help") || argv.includes("-h")) { console.log(usage); process.exit(0); }
   const fl = argv.indexOf("--files");
   const files = fl >= 0 && argv[fl + 1] ? argv[fl + 1].split(",").map((f) => f.trim()).filter(Boolean) : undefined;
@@ -1808,7 +1810,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const overflowShards = oi >= 0 && Number.isInteger(Number(argv[oi + 1])) ? Number(argv[oi + 1]) : undefined;
   const ui = argv.indexOf("--over-budget-shards");
   const overBudgetShards = ui >= 0 && Number.isInteger(Number(argv[ui + 1])) ? Number(argv[ui + 1]) : undefined;
-  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, overBudgetShards, staleFirst: argv.includes("--stale-first"), files });
+  const r = select(si >= 0 ? argv[si + 1] : undefined, bi >= 0 ? Number(argv[bi + 1]) : DEFAULT_BUDGET_MIN, { failed, overflowShards, overBudgetShards, staleFirst: argv.includes("--stale-first"), readyPr: argv.includes("--ready-pr"), files });
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(r.floor ? `FLOOR SPEC (rule 3): ${r.floor}` : `NO FLOOR SPEC: ${r.floorReason}`);
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);

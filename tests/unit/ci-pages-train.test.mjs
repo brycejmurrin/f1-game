@@ -295,6 +295,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     11: gateJobs("ci / "),
     12: gateJobs("ci / ", { "Smoke (page boots, __apex responds) (1)": "cancelled" }),
     13: gateJobs("", { "Selected specs (verdict)": "skipped" }),
+    14: gateJobs("", { "Smoke (page boots, __apex responds) (1)": "skipped" }),
     // T1 (2026-10-14): the run that POKED this train, still in progress — its
     // tree-only jobs are done and green, CI has not run yet.
     20: gateJobs("", { CI: null, "Per-circuit geometry sweeps": "skipped", "Smoke (page boots, __apex responds) (1)": "skipped" })
@@ -322,6 +323,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
   assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "…the ready run beside it is");
+  assert.equal(verdict(M2, { [D]: [run({ id: 14 })] }).reuse, "false",
+    "a ready PR with an explicit browser exemption passed CI but provides no deploy smoke coverage");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected

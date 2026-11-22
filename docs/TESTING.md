@@ -31,11 +31,15 @@ install to seconds; the browsers are already at `/opt/pw-browsers`.
 
 Agents never run a browser test locally (AGENTS.md rule 5; the local-run
 machinery went on 2026-11-03, docs/plans/2026-11-03-agent-surface-reset.md §4.2).
-Every PR push runs `ci.yml`'s change-aware `selected` legs: a draft push gets
-the fast tier plus a selected browser shard (the `select` step's `BUDGET_MIN`),
-a ready PR the full budget (`DEFAULT_BUDGET_MIN` in `tools/ci/select-specs.mjs`).
-A whole group (`node tools/ci/remote-group.mjs <group>`, `browser-group.yml`; the shard plan
-is `shardPlan` in that tool) is Bryce's opt-in: the PR's own CI runs the browser shard. The local loop is Node-only, AGENTS.md §The loop:
+Draft pushes run the fast tier. To test a browser group before marking a PR ready,
+Bryce can opt in with `node tools/ci/remote-group.mjs <group>` (`browser-group.yml`).
+Ready PRs run `ci.yml`'s change-aware selected legs with the full budget
+(`DEFAULT_BUDGET_MIN` in `tools/ci/select-specs.mjs`). CI skips browser work
+when every changed path qualifies under `readyBrowserExempt` in `tools/ci/change-kind.mjs`.
+Eligible changes include Markdown in `docs/`, the listed root Markdown files, and four Node
+reporting tools (`ci-watch`, `pr-board`, `queue-depth` and `session-status`) with their matching unit tests.
+Merge-train PRs, Pages and nightly runs retain their existing coverage.
+The local loop is Node-only, AGENTS.md §The loop:
 `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet` (and
 `verify-track.cjs <id>` for a circuit). The one exception is Bryce's: a session
 he attends may run ONE spec by his explicit grant, detached, under the one-run
@@ -63,7 +67,7 @@ The routing rules live in `RULES` at the top of `tools/ci/pick-tests.mjs` and ar
 deliberately coarse and biased toward running too much — a rule that is too
 narrow is a missed regression, one that is too wide costs 10-40 minutes of
 CI runner time per extra browser group. The groups it names run on the PR, not
-here (AGENTS.md §Verification): the `selected` legs on every push, a whole group
+here (AGENTS.md §Verification): the `selected` legs on ready PRs, a whole group
 only with Bryce's opt-in (`remote-group.mjs`); a group left unverified is named in
 the PR (AGENTS.md rule 9).
 `tests/unit/test-groups.test.mjs` asserts every group they name exists.
@@ -90,8 +94,7 @@ edited spec first, alone; an edited ADAPTED spec schedules the `page` slice
 instead, since that is the only place it runs on a pull request.
 
 A routed spec that loses the budget to smaller ones rides as **overflow** —
-up to `MAX_OVERFLOW_SHARDS` more `TARGET_SHARD_SEC` jobs' worth (`tools/ci/select-specs.mjs`;
-a draft run sets `OVERFLOW_SHARDS` to 0 on the `select` step), packed with everything else —
+up to `MAX_OVERFLOW_SHARDS` more `TARGET_SHARD_SEC` jobs' worth (`tools/ci/select-specs.mjs`), packed with everything else —
 instead of being skipped. A routed spec that declares a per-test timeout at or
 over the gate's `SELECTED_GATE.perTestTimeoutSec` runs in the **over-budget pool** (`overbudget-<k>` jobs,
 up to `MAX_OVER_BUDGET_SHARDS` jobs' worth, each capped from its own declaration). When the
@@ -99,9 +102,8 @@ overflow is full, leftovers ride a bounded **spill** leg (`spill-<k>` jobs,
 up to `MAX_SPILL_SHARDS` jobs' worth, logged as `SPILL`). What is still
 left rides the **no-drop tail** (2026-11-21): its own spill or over-budget jobs past those caps, logged as
 `SPILL TAIL`. The lanes (`LANES` / `APEX_CI_LANES`) bound how many legs run at once, so a wide PR's extra legs
-queue rather than flood the pool. Only the draft plan (`OVERFLOW_SHARDS` 0) keeps the bounded cut, and there a
-dropped spec warns. Anywhere else a spec dropped by name (unreachable, unreadable) turns `Selected specs (verdict)`
-red on a pull request (2026-10-04). The
+queue rather than flood the pool. A spec dropped by name on a ready PR (unreachable, unreadable) turns
+`Selected specs (verdict)` red unless a qualifying browser-group run covers it. The
 **nightly** runs the same selector over the last day of deploy-branch merges
 (`ci-resolve-before.sh`'s `schedule` base) with its own `BUDGET_MIN` and
 `OVERFLOW_SHARDS` (the `select` step's env in `ci.yml`) and `--stale-first` ordering — so a routed spec no
@@ -181,7 +183,7 @@ serializes the agent behind SwiftShader several times over.
 | generated files in the diff | `--changed` does not widen on generator output (`index.html`/`sw.js` `@gen-shell` blocks, `js/roster.js`, `impact-map.json`, `ratchets.json`, `agent-index.json`, `version.json`, …): it runs `npm run gen:check` plus the tests that pin the file. A HEAD that is a pure deploy-tip merge selects `gen:check` plus docs-integrity. `--quiet` ends a red run with `failing files:` and `log:` lines |
 | before the ready flip | `node tools/ci/preflip-probe.mjs --pr <n>` merges the current deploy tip into the PR head in a temp worktree and runs the ratchets, `fixture-consumer-audit`, the assert-pin ratchet and the diff's unit files: the reds GitHub's merge ref shows and the branch alone cannot (#4108, #4190). `ready-gate --pr` prints its receipt as an `advisory:` line, never a block |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | nothing local: the groups `pick-tests` names run on the PR — a draft push gets the fast tier plus a selected browser shard, a ready PR the full `selected` budget; a whole group (`remote-group.mjs`) is Bryce's opt-in; name any left unrun in the PR (AGENTS.md rule 9). Only Bryce, attending, grants a local single spec (`tools/ci/test-bg.mjs`) |
+| once, when the edits are done | nothing local: the groups `pick-tests` names run on the PR — a draft push gets the fast tier, and a ready PR runs the browser jobs its diff needs; a whole group (`remote-group.mjs`) is Bryce's opt-in; name any left unrun in the PR (AGENTS.md rule 9). Only Bryce, attending, grants a local single spec (`tools/ci/test-bg.mjs`) |
 | a geometry edit ([VERIFICATION.md](VERIFICATION.md) §By change) | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | not local: the PR's `selected` legs run an edited spec first, alone (`select-specs.mjs`); its whole group (`remote-group.mjs`) is Bryce's opt-in |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
@@ -345,7 +347,7 @@ run a spec twice; the spec union was compared file for file before and after; `t
 
 A browser group runs on CI (the PR's tiers; a whole-group dispatch, `remote-group.mjs`
 with llvmpipe shards packed by `shardPlan`, is Bryce's opt-in); `tools/ci/select-specs.mjs` is the finer
-per-spec cut `ci.yml`'s `selected` job makes on every PR push.
+per-spec cut `ci.yml`'s `selected` job makes on ready PRs with browser changes.
 
 **A group is defined once, in `tests/groups.json`.** `package.json`'s `test:*`
 scripts and `tools/ci/tooling-fast.mjs`'s file list are GENERATED from it by
@@ -858,6 +860,8 @@ Each value is an integer in [1, 128]; anything else falls back to the default. A
 lanes than the GitHub-hosted pool was budgeted for (`tests/unit/ci-runner-variable.test.mjs` pins the condition).
 Lanes are assigned when a run is planned, so only runs planned after a change use it; runs already queued keep their
 lanes. Bryce's values with Ubicloud (2026-11-20): `APEX_CI_LANES` 64, `APEX_GROUP_LANES` 24.
+Draft pushes defer the automatic selected browser matrix.
+
 **Cost:** more lanes means more legs billed at once on the provider. The lane cap no longer throttles spend, so
 the Ubicloud bill scales with the legs that would otherwise have queued. Watch the provider console after raising them.
 **Rollback:** delete the variable (or unset the env). The next planned run is back at 28 / 8, with no commit.
@@ -976,7 +980,7 @@ This file used to carry ~200 lines of measurements from running browser groups
 on the 4-core container: the ~1.9× second-worker cost, 80–113 s Playwright
 clicks while the game rendered under SwiftShader, 45 s boots, "re-run a timeout
 alone before you touch a number", "count the navigations first". Browser tests
-run on CI now — `selected` on every PR push, a whole group on Bryce's opt-in, the
+run on CI now — `selected` on ready PRs with browser changes, a whole group on Bryce's opt-in, the
 nightly — on llvmpipe runners whose per-spec timings are measured into
 `tests/data/spec-timings.json` (`spec-timings.yml`), and
 `tools/ci/select-budget.mjs` sizes every shard from that record. A timeout
@@ -1084,14 +1088,12 @@ Two always-judged checks give the PR verdict fixed names:
   2026-10-27 the ruleset requires only `gate` (land.yml), whose ci row requires `CI` green (an owner setting); the twelve-name list before it is in
   `docs/notes/CI-CLOG-SURVEY-2026-10-15.md` §4 C, the settings record in its §8).
 - **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed
-  name for the change-aware gate. `select` must succeed and `selected` must
-  pass or skip; a `cancelled`/`failure` rollup with **clean shard junit** is
-  **infra-retry** (not a hard fail — PR #1109 run 37493213168: job-cap kill
-  after `= run passed`); junit `<failure>`/`<error>` rows still fail
-  (`tools/ci/selected-gate-verdict.mjs`). `ci-verdict` defers `selected` to
-  this job when it is green. **Any dropped routed spec is a red** on a push
-  or PR (2026-10-04; before, `dropped` was read only when `selected` was
-  skipped). A Pages call with dropped specs warns rather than fails. A red
+  name for the change-aware gate. The selector must succeed. On a draft, this
+  verdict reports that browser execution was deferred. On a ready PR with
+  planned browser legs, the gate requires execution evidence for each planned
+  spec. A failed or cancelled matrix fails the gate, even if some shards have
+  green JUnit results. A dropped spec on a ready PR needs a qualifying
+  browser-group run. A Pages call with dropped specs warns. A red
   `Structural guards` is no longer repeated here (2026-10-16, CI jobs review:
   9 of 9 guards reds painted four red rows for one cause): this check judges the
   specs and notes the guards state in its reason; `CI` stays red through
@@ -1103,21 +1105,22 @@ Two always-judged checks give the PR verdict fixed names:
 
 | Lane | When | What |
 |---|---|---|
-| **Draft PR** | `pull_request` + draft (`opened` / `synchronize` / `reopened`) | Fast tier on EVERY push, no opt-in (2026-11-03: the `run-ci` label, the `CI: run` body line, the `labeled`/`edited` triggers, their noise groups and the `Draft push (CI skipped)` notice are retired): Structural guards A–D (ratchets, test:audit, ci-coverage and behind-ship at the end of tooling B) + `Select specs for this change` (node-slice plan, spec selection, ship / renderer / xr path filters in one job since 2026-10-15) + parts census + driving-model (when `select` routes it) + the `selected` browser legs on the draft budget (`BUDGET_MIN` on the select step: ONE budgeted shard plus whatever oversize rows the selector derives, overflow off — `OVERFLOW_SHARDS` 0; `Selected specs (verdict)` WARNS, never reds, on a spec that budget dropped — the ready run's full plan runs it (a whole group, `remote-group.mjs`, is Bryce's opt-in)). NOT the node slices (decision D1, PR #2560 §6: 0 unique catches on drafts in 40 h). Heavy jobs skipped: geometry sweeps, smoke, staged-boot, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. The verdict job is named `CI (draft fast tier)`, so its success can never satisfy the required `CI` while the ready-for-review full tier is still running (#2664); on a non-draft PR run `ci-verdict.mjs` also requires `guards-a`…`guards-d`, `guards`, `select`, `smoke` and `staged-boot` to be `success`, not skipped (`REQUIRE_SUCCESS`). |
-| **Ready PR** | `pull_request` + not draft / `ready_for_review` | Full tier on the same head: smoke + sweeps (ship filter is a step of `select`), every node-slice name when planned, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
+| **Draft PR** | `pull_request` + draft (`opened` / `synchronize` / `reopened`) | Every push runs structural guards A–D, the selector and the parts census. Automatic browser jobs, including the selected legs, driving-model and XR, wait until ready. Bryce can dispatch a whole group for earlier feedback. The verdict is named `CI (draft fast tier)`. |
+| **Ready PR** | `pull_request` + ready, including `ready_for_review` | Marking ready cancels the draft run and starts the full tier on the same head. Selected browser legs, smoke and staged-boot run unless the full diff qualifies for the docs or audited Node-only exemption. Mixed or unknown changes take the normal route. The selector routes Node slices, geometry sweeps, driving-model, renderer-macos and XR. Desktop pack-smoke runs for packaging paths. The chunk-merge timing and WebGPU census workflows also run when a ready PR touches their benchmark paths, or by manual dispatch. |
 
 **Check names (GitHub UI)** — fast tier on a **draft** PR (`ci.yml` has no push trigger; a deploy-branch push is judged by the Pages release train's `ci / …` rows):
 
 - `Structural guards (tooling A)` … `(tooling D)` (jobs `guards-a` … `guards-d`), `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
 - `Pure-node unit suites (<slice>)` (the needed legs on a READY PR only — planned by `Select specs for this change`, which replaced `Plan node unit slices` on 2026-10-15; drafts and the Pages train skip them since 2026-10-16, the nightly and a dispatch run every leg)
-- `Parts option-resolution census` (job `sweeps-parts`), `Driving model (characterization traces)` (job `driving-model`, when planned). Names as of 2026-10-26: `name:` lines in `ci.yml`
-- `Select specs for this change`, `Selected specs (…)` matrix legs when routed, `Selected specs (verdict)`
-- `CI` (aggregator `ci-verdict`; skipped jobs count as pass)
+- `Parts option-resolution census` (job `sweeps-parts`)
+- `Select specs for this change`, `Selected specs (verdict)`
+- `CI (draft fast tier)` (aggregator `ci-verdict`)
 - (`Docs guards (prose-tree unit files)` — `docs-guards.yml` — ran on every PR until 2026-10-15; retired, see the `docs-guards` group row)
 
 **Full tier** adds (ready/non-draft PR, Pages train / `workflow_dispatch` with `concurrency_key`, nightly `schedule` where noted):
 
-- `Smoke (page boots, __apex responds)`, `Per-circuit geometry sweeps` (+ four shard legs and roll-up); the ship / renderer / WebXR path questions are steps of `Select specs for this change` (2026-10-15; they were the `Does this diff …?` jobs)
+- `Selected specs (…)` matrix legs when routed, `Smoke (page boots, __apex responds)`, `Per-circuit geometry sweeps` (+ four shard legs and roll-up); the ship / renderer / WebXR path questions are steps of `Select specs for this change` (2026-10-15; they were the `Does this diff …?` jobs)
+- `Driving model (characterization traces)` when routed
 - `Renderer specs on a real GPU (macos-latest, Metal)` when the diff reaches `js/render/**`
 - `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
 - `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)

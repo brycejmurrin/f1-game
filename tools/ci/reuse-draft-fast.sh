@@ -10,8 +10,7 @@
 # pull_request run for the exact PR head SHA (the draft that just went green),
 # on its FIRST attempt, tested against the SAME base SHA as this run.
 # Callers skip the expensive fast-tier STEPS (names still report) and still
-# run ready-only jobs (smoke, sweeps, renderer) and the selected legs (a draft
-# ran them on a smaller budget; see the note at the bottom).
+# run the browser jobs routed to the ready PR.
 #
 # THE BASE MUST NOT HAVE MOVED (15-F5, 2026-10-10). A pull_request run tests
 # refs/pull/N/merge: the head merged into the base tip AT THAT TIME. Marking
@@ -84,11 +83,9 @@ attempt="${hit#* }"; hit="${hit%% *}"
 # draft that had not opted in, or a label-noise run; still any run cancelled-then-green
 # by a cancelled shard) concludes success while testing nothing. Reuse only a
 # run whose tooling A shard really ran and passed, and whose record names a base.
-# THE `selected` LEGS ARE NOT REUSED HERE: a draft runs selected on a 5-min
-# budget, ready on 10, so their shard layouts differ. Only the tree-only
-# fast-tier STEPS reuse here; tools/ci/reuse-draft-selected.mjs (#5426) reuses
-# the legs when the two plans name the same specs, nothing was dropped and the
-# deploy tip has not moved since this same base.
+# This record covers the tree-only fast tier. Ordinary drafts defer the selected
+# browser legs. Any browser reuse needs separate evidence of executed jobs
+# for the same plan and base (tools/ci/reuse-draft-selected.mjs).
 jobs_json="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null)" || no "jobs API failed"
 job="$(printf '%s' "$jobs_json" | node -e '
   let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
