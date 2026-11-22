@@ -19567,13 +19567,17 @@
     "js/ui/hud-layout-editor.js": {
       "build": [
         "tests/unit/hud-layout-hidden.test.mjs",
-        "tests/unit/hud-layout.test.mjs"
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
       ],
       "finish": [
         "tests/unit/hud-layout.test.mjs"
       ],
       "options": [
         "tests/unit/hud-layout.test.mjs"
+      ],
+      "read": [
+        "tests/unit/layout-presets.test.mjs"
       ],
       "save": [
         "tests/unit/hud-layout.test.mjs"

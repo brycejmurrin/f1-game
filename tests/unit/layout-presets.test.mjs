@@ -243,7 +243,8 @@ test("an unknown preset or knob is skipped with a Log.warn, never thrown", () =>
 test("lazy: LAZY_UI_PRESETS, no <script> tag, loaded by SettingsNav on APPEARANCE; layoutPreset is exported", () => {
   // #4978 row 5: Appearance/Photo studio bodies ride this group with look-avail + layout-presets.
   assert.deepEqual(MANIFEST.LAZY_UI_PRESETS, [
-    "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js", "js/ui/hud-arrange.js",
+    "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+    "js/ui/hud-layout-editor.js", "js/ui/hud-arrange.js",
     "js/ui/look-avail.js", "js/ui/layout-presets.js",
     "js/ui/appearance-studio-ui.js", "js/ui/photo-studio-ui.js",
   ]);
