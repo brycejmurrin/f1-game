@@ -1284,3 +1284,25 @@ test("smoothstepDown equals the descending smoothstep formula exactly where that
       assert.ok(Math.abs(down(hi, lo, x) - ss(hi, lo, x)) < 1e-12, `hi=${hi} lo=${lo} x=${x}`);
     }
 });
+
+test("cloud bank misses skip the procedural four-octave noise above the horizon band", async () => {
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
+  await renderer.init();
+  renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+  try {
+    for (const cache of [false, true]) for (const Builder of [THREE.WGSLNodeBuilder, THREE.GLSLNodeBuilder]) {
+      const sky = globalThis.TLXShaders.sky(THREE, TSL, { cache, cacheSize: 64 });
+      const geo = new THREE.PlaneGeometry(), material = new THREE.MeshBasicNodeMaterial();
+      material.fragmentNode = sky.node;
+      try {
+        const builder = new Builder(new THREE.Mesh(geo, material), renderer);
+        builder.camera = new THREE.PerspectiveCamera(); builder.scene = new THREE.Scene(); builder.build();
+        assertGated("bank coordinate", builder.fragmentShader, /vec2(?:<f32>)?\( 0\.16 \)/, /< 0\.26/, 1);
+        const calls = sitesOf(builder.fragmentShader, /apexSkyFbm\(/);
+        assert.equal(calls.filter((i) => headersAt(builder.fragmentShader, i).some((h) => h.includes("< 0.26"))).length, 1);
+      } finally { geo.dispose(); material.dispose(); sky.dispose(); }
+    }
+  } finally { renderer.dispose(); }
+});

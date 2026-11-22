@@ -836,30 +836,24 @@
         const cloudRich = D.cloudRich;
         If(cloudRich.greaterThan(0.001), () => {
           // Billow: higher-frequency octave carves lumpy cumulus definition.
-          // Cached: billow came with f; the bank tap only where its band is
-          // non-zero (the (1 - smoothstep(0.10, 0.26, up)) factor below is
-          // exactly 0 from up 0.26, so bankN = 0 there is the same product).
-          const bankN = C ? float(0.0).toVar() : null;
-          if (C) {
-            If(useC, () => {
-              If(up.lessThan(0.26), () => { bankN.assign(tap(D.cDb).w); });
-            }).Else(() => {
-              billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3))));
-              bankN.assign(fbm(dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift)));
-            });
-          }
+          if (C) If(useC.not(), () => { billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)))); });
           const billow = C ? billowN : fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)));
           const defined = smoothstep(0.42, 0.80, f.mul(0.6).add(billow.mul(0.45)))
             .mul(smoothstep(0.013, 0.05, up));
           // CLOUD DEFINITION knob (0.85 = as-shipped blend).
           cov.assign(mix(cov, max(cov, defined), D.defMix));
           // Horizon cloud-bank on the compressed *0.16 plane, banded ~1-9°.
-          const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
-          const bankThresh = D.bankThresh;
-          const bankCov = smoothstep(bankThresh, 0.80, C ? bankN : fbm(bp))
-            .mul(smoothstep(0.013, 0.030, up))
-            .mul(smoothstep(0.10, 0.26, up).oneMinus());
-          cov.assign(max(cov, bankCov.mul(D.bankK)));
+          // The upper fade reaches zero at 0.26. Skip the four-octave noise or
+          // the explicit-LOD cache tap above it; coverage is already nonnegative.
+          If(up.lessThan(0.26), () => {
+            const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
+            const bankN = C ? float(0.0).toVar() : fbm(bp);
+            if (C) If(useC, () => { bankN.assign(tap(D.cDb).w); }).Else(() => { bankN.assign(fbm(bp)); });
+            const bankCov = smoothstep(D.bankThresh, 0.80, bankN)
+              .mul(smoothstep(0.013, 0.030, up))
+              .mul(smoothstep(0.10, 0.26, up).oneMinus());
+            cov.assign(max(cov, bankCov.mul(D.bankK)));
+          });
           // Firmer edges so cumulus look solid, not gauzy.
           cov.assign(mix(cov, smoothstep(0.18, 0.82, cov), cloudRich.mul(0.5)));
         });
