@@ -143,7 +143,8 @@ function headOffset(mode, extra, out) {
   }
   const a = extra.att;
   if (!a || extra.reduceMotion) return out;
-  const k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
+  let k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
+  if (mode === "helmet" && typeof CockpitOpts !== "undefined" && CockpitOpts.helmetHeadMotion) k *= CockpitOpts.helmetHeadMotion();
   const roll = clamp(a.baRoll || 0, -HEAD_ROLL_MAX, HEAD_ROLL_MAX), dive = clamp(a.baPitch || 0, 0, HEAD_DIVE_MAX);
   out[0] -= roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
   out[1] -= dive * HEAD_NOD_DOWN * k;
@@ -308,7 +309,7 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
   const heave = a.baHeave || 0, pitch = a.baPitch || 0;
   // REDUCE MOTION drops the rib shiver (a high-frequency oscillation); heave/pitch are the car's own motion.
   const kerb = a.onKerb && !extra.reduceMotion ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
-  eye[1] += heave + kerb * (typeof CockpitOpts !== "undefined" && CockpitOpts.shakeScale ? CockpitOpts.shakeScale(mode) : 1);
+  eye[1] += heave + kerb * (typeof CockpitOpts !== "undefined" && CockpitOpts.shakeScale ? CockpitOpts.shakeScale(mode, "helmetKerb") : 1);
   // baPitch > 0 is brake DIVE (nose down, the chase rig's convention above), so
   // the aim DROPS with it: the view dips into a braking zone and lifts under
   // power. It was `+ pitch * 24` — the cockpit tilted UP as the car dived.
