@@ -2854,7 +2854,7 @@ test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => 
   assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
   assert.match(body, /f\.view\s*&&\s*f\.view\.length\s*>=\s*16/);
   assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
-  assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+  assert.match(body, /_mul4\(frameVPGpu,\s*_projZ01,\s*_viewScratch\)/);
 });
 
 test("setup preview passes explicit view for garage off-axis backends", () => {
