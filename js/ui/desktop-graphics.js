@@ -1,5 +1,5 @@
 /* Per-effect graphics preferences. Renderer and world builders consume one snapshot per boot. */
-(() => {
+const DesktopGraphics = Object.freeze({ mount() {
   "use strict";
   const panel = document.getElementById("pm-panel-graphics");
   if (!panel || typeof GLX === "undefined" || panel.querySelector("[data-desktop-graphics]")) return;
@@ -82,7 +82,8 @@
     status.className = "adv-help";
     status.setAttribute("role", "status");
     function save() {
-      const ok = store.set(key, { ...choices });
+      const saved = { ...choices };
+      const ok = key === "gfxPhoneFeatureOverrides" ? store.set("gfxPhoneFeatureOverrides", saved) : store.set("gfxFeatureOverrides", saved);
       status.textContent = ok === false ? "Could not save graphics settings." : "Saved for the next reload.";
     }
     for (const [title, options] of Object.entries(groups)) {
@@ -127,4 +128,4 @@
     };
     body.appendChild(status);
   });
-})();
+} });

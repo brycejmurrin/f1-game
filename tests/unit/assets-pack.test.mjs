@@ -948,7 +948,7 @@ async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
   // eslint-disable-next-line no-new-func
   const gfx = new Function("THREE", "Assets", "localStorage", "lit", "OffscreenCanvas", `"use strict";
     let matPlaceAlbedo = null, matPlaceNormal = null, matOwnedAlbedo = null, matOwnedNormal = null;
-    let materialArrayDetail = null; const renderer = {}, _ultra = false;   // materialArrayAnisotropy(): no renderer cap here -> 1
+    let materialArrayDetail = null; const renderer = {}, _detailOpt = () => false;   // materialArrayAnisotropy(): no renderer cap here -> 1
     ${TLX.slice(a, b)}
     ${fnSource(TLX, "function materialArrayAnisotropy() {")}
     return { ${fnSource(TLX, "createTextureArray(size, images, layers) {")}, ${fnSource(TLX, "setMaterialMaps(maps) {")} };`)(

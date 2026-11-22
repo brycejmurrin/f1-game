@@ -255,6 +255,7 @@
   #arr-tools { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
   #arr-name { flex: 0 0 100%; text-align: center; font-size: 13px; }
   #arr-select { max-width: 10em; }
+  @media (pointer: coarse), (hover: none) { #arrange-bar #arr-select { font-size: 16px; } }
   body.arranging #ctl > .screen-arrange-entry { visibility: hidden; }
   body.arranging #ctl :is(#gas,#b-aero) { pointer-events: auto; }
   #lay-arrange { border-color: var(--red); }

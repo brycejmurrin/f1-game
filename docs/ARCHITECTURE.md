@@ -292,10 +292,11 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `touch-button-settings.js` | `TouchButtonSettings` | LAZY_NET | Shared response editor for in-game touch buttons and the phone controller. |
-| `desktop-graphics.js` | `—` | LAZY_UI_PRESETS | Per-effect graphics preferences. |
+| `desktop-graphics.js` | `DesktopGraphics` | LAZY_UI_PRESETS | Per-effect graphics preferences. |
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
+| `hud-layout-editor.js` | `HudLayoutEditor` | LAZY_UI_PRESETS | HUD customization controls and color stylesheet, loaded on demand. |
 | `dock-toolbar.js` | `DockToolbar` | LAZY_UI_PRESETS | Live touch layout toolbar, loaded on the first edit. |
 | `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |

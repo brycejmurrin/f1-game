@@ -789,6 +789,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   text-indent: 0;
   overflow-wrap: anywhere;
 }
+#vsfriend .vs-codebox:not([maxlength="64"]) { --touch-field-size: 22px; }
 #vsfriend .vs-codebox {
   text-align: center;
   font-size: 22px;

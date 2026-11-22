@@ -723,6 +723,7 @@ const HARD_EDGES = [
   ["js/ui/setting-row.js", "js/ui/a11y-opts.js"],
   ["js/ui/title-fx.js", "js/ui/a11y-opts.js"],   // wires REDUCE MOTION through TitleFx.choice/setChoice
   ["js/core/store.js", "js/ui/hud-elements.js"],
+  ["js/core/script-loader.js", "js/ui/hud-layout.js"], // saved HUD colors request their policy at eval
   ["js/core/store.js", "js/ui/hud-layout.js"],    // binds GameStore.store and applies the layout at eval
   ["js/ui/setting-row.js", "js/ui/hud-layout.js"], // builds the HUD editor when the document is already ready
   ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
@@ -1362,8 +1363,9 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 const LAZY_UI_PRESETS = [
   "js/ui/desktop-graphics.js",   // Graphics loads individual effect controls on entry.
   "js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js",
+  "js/ui/hud-layout-editor.js",  // HUD settings controls and saved color policy
   "js/ui/dock-toolbar.js",         // Reposition Touch Controls loads its toolbar on first use.
-  "js/ui/hud-arrange.js",          // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it alone on the first pause-card tap
+  "js/ui/hud-arrange.js",          // ARRANGE HUD editor: DockLayout.arrangeDoor (eager) loads it on the first pause-card tap
   "js/ui/look-avail.js",           // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js",       // LayoutPresets
   "js/ui/appearance-studio-ui.js", // AppearanceStudioBody: presets / profiles / preview DOM (#4978 row 5)

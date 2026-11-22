@@ -144,11 +144,11 @@ test('releaseGeometry holds the coalesced run too (the instanced lit program\'s 
   assert.deepEqual(events, ['b', 'b:view', 'a', 'a:view'], 'the held run and its own view go after the render');
 });
 for (const requested of [null, '8', '999']) for (const cap of [1, 2, 4, 8, 16]) test(`material-array detail ${requested} respects cap ${cap}`, () => {
-  const c = ctx({ _ultra: false, materialArrayDetail: null, localStorage: { getItem: () => requested }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
+  const c = ctx({ _detailOpt: () => false, materialArrayDetail: null, localStorage: { getItem: () => requested }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
   assert.equal(c.materialArrayAnisotropy(), Math.min(requested === '8' ? 8 : 4, cap));
 });
 for (const cap of [4, 16]) test(`material-array detail on desktop ULTRA asks for 16 and respects cap ${cap}`, () => {
-  const c = ctx({ _ultra: true, materialArrayDetail: null, localStorage: { getItem: () => '8' }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
+  const c = ctx({ _detailOpt: () => true, materialArrayDetail: null, localStorage: { getItem: () => '8' }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
   assert.equal(c.materialArrayAnisotropy(), cap);
 });
 
@@ -207,7 +207,7 @@ test('expanded renderer details shows post degradation and deliberate retry, cle
 
 
 test('material-array detail stays identical between placeholder and late pack upload',()=>{
-  let requested='8';const c=ctx({_ultra:false,materialArrayDetail:null,localStorage:{getItem:()=>requested},renderer:{getMaxAnisotropy:()=>16}},fn(tlx,'materialArrayAnisotropy'));
+  let requested='8';const c=ctx({_detailOpt:()=>false,materialArrayDetail:null,localStorage:{getItem:()=>requested},renderer:{getMaxAnisotropy:()=>16}},fn(tlx,'materialArrayAnisotropy'));
   assert.equal(c.materialArrayAnisotropy(),8);requested=null;assert.equal(c.materialArrayAnisotropy(),8,'reload applies setting changes to a new renderer only');
 });
 
