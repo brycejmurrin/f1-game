@@ -257,6 +257,33 @@ test("automatic active aero identifies its mode while the manual control stays u
   assert.equal(els.btnAero.getAttribute("data-state"), "automatic");
 });
 
+test("HUD reads the caution snapshot once and only scans aero zones for the manual countdown", () => {
+  const { els, player, G, tick } = boot();
+  let snapshots = 0, scans = 0;
+  G.otEnabled = () => false;
+  G.cautionInfo = () => { snapshots++; return { level: 3 }; };
+  G.aeroZoneAhead = () => { scans++; return 222; };
+  G.raceAeroMode = "manual";
+  tick();
+  assert.equal(els.ot.textContent, "OT · CAUTION");
+  assert.equal(els.aero.textContent, "AERO 222m");
+  assert.equal(snapshots, 1);
+  assert.equal(scans, 1);
+  els.flag = null;
+  player.aeroX = 1;
+  tick();
+  assert.equal(els.ot.textContent, "OT · CAUTION");
+  assert.equal(snapshots, 2, "a HUD without a flag still reads the caution when overtake is off");
+  assert.equal(els.aero.textContent, "STRAIGHT MODE");
+  player.aeroX = 0; G.raceAeroMode = "auto";
+  tick();
+  assert.equal(els.aero.textContent, "AERO AUTO");
+  G.raceAeroMode = "manual"; G.aeroZones = [];
+  tick();
+  assert.equal(els.aero.textContent, "NO AERO ZONE");
+  assert.equal(scans, 1);
+});
+
 test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours", () => {
   // THREE glyphs, not two. Session best and personal best used to share "▼"
   // and separate only as purple vs green — the textbook deuteranopia pair, on
