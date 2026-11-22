@@ -21726,6 +21726,7 @@
     },
     "js/xr/xr-boot.js": {
       "afterTick": [
+        "tests/unit/xr-boot-window-raf.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
       ],
       "applyEyes": [
@@ -21755,6 +21756,9 @@
       ],
       "diag": [
         "tests/unit/xr-phase0.test.mjs"
+      ],
+      "dispatch": [
+        "tests/unit/real-replay-transport.test.mjs"
       ],
       "ensureXr": [
         "tests/unit/xr-phase0.test.mjs"
