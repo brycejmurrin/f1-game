@@ -1477,6 +1477,45 @@ test.describe("Touch dock — REPOSITION per scheme", () => {
     touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
   };
 
+  test("a driver can move the steering group outward and customize Gas separately", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseControls(page);
+    await page.locator("#pm-dock-reposition").click();
+    const bar = page.locator("#dock-edit-bar");
+    const control = key => bar.locator('[data-k="' + key + '"]');
+    await control("tools").click();
+    await control("target").selectOption("steer");
+    const left = page.locator("#btn-steer-left");
+    const origin = await left.boundingBox();
+    const x = origin.x + origin.width / 2, y = origin.y + origin.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x - 28, y, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(async () => (await left.boundingBox()).x).toBeLessThan(origin.x - 1);
+
+    await control("target").selectOption("drive");
+    await control("layout").selectOption("pedal-row");
+    await control("target").selectOption("btn-throttle");
+    await control("bigger").click();
+    await control("bigger").click();
+    await control("shape").click();
+    const gas = await page.locator("#btn-throttle").boundingBox();
+    const brake = await page.locator("#btn-brake").boundingBox();
+    expect(gas.width / brake.width).toBeGreaterThan(1.1);
+    await testInfo.attach("custom-touch-controls", { body: await page.screenshot(), contentType: "image/png" });
+    await control("done").click();
+    const saved = () => page.evaluate(() => GameStore.store.get("dockLayout", null).buttons);
+    const expected = await saved();
+    expect(expected.controls["btn-throttle"].size).toBeGreaterThan(100);
+    expect(expected.controls["btn-brake"]).toBeUndefined();
+    await page.reload();
+    await waitReady(page);
+    expect(await saved()).toEqual(expected);
+  });
+
   test("buttons offset persists across reload; tilt stays identity", async ({ page }) => {
     await page.addInitScript((bag) => {
       localStorage.setItem("apex26.dockLayout", JSON.stringify(bag));
