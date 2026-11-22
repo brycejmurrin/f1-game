@@ -4463,7 +4463,6 @@ function update(dt) {
   // No world: a stepped/worker race switch dropped it (dropTrackWorld) and is still building.
   // tickBody gates on it too; this covers __apex.step() (bug hunt 3 K1/X2).
   if (!track) return;
-  if (state === "results") return RaceCeremony.get()?.stepResultsField(cars, dt, updateCar);
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
@@ -4568,6 +4567,7 @@ function update(dt) {
     _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetRoad(); _gridIdleOpts.step = _audioParamStep;
     GameAudio.setGridIdle(player, _gridIdleOpts); return;
   }
+  if (state === "results") return RaceCeremony.get()?.stepResultsField(cars, dt, updateCar);
   if (state !== "race") return;
   if (!realRace.owns(player)) raceT += dt;   // WATCH's transport owns its clock, including paused seeks
   if (netGreen && !netPlay.active()) netGreen = null;   // the rival left: a solo pause must not add its wall time on resume
