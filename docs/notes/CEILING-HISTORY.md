@@ -4015,3 +4015,8 @@ Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed 
 
 `(tree) eagerCodeBytes` 3956234 → **3957854** (+1620). The fallback garage renders overhead fixtures, the lighting profile store resolves lamp settings for the selected circuit, and the setup camera supplies them to the exterior renderer on arrival and departure. The detached circuit lamp selection and mesh upload remain in the lazy exterior bundle.
 Fragment: `ratchets.d/codex--pitlane-neighbor-garages.json`.
+
+## 2026-11-22 — PR #6159 (codex/desktop-scene-detail): Race scene detail controls
+
+`(tree) eagerCodeBytes` 3962979 → **3972113** (+9134). The race renderer selects rival wheel detail, applies brake lighting, and emits gravel particles as the car moves. The shared renderer and lighting paths also read the desktop graphics controls.
+Fragment: `ratchets.d/codex--desktop-scene-detail.json`.
