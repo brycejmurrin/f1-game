@@ -239,8 +239,7 @@ test("protect-files.py: an unparsable GENERATORS element is named in the refusal
       encoding: "utf8",
     });
     assert.equal(r.status, 2, r.stderr);
-    assert.match(r.stderr, /tools\/gen\/targets\.mjs: GENERATORS: cannot parse element '\/\/ comment that breaks js_strings'/, r.stderr);
-    assert.doesNotMatch(r.stderr, /GENERATORS not found/, "must name the element, not the bare not-found");
+    assert.equal(r.stderr, "BLOCKED: protect-files could not load the generated-file list (ValueError: tools/gen/targets.mjs: GENERATORS: cannot parse element '// comment that breaks js_strings' (string literal or const name only; // and /* */ comments inside the array are not supported)), so it cannot tell whether version.json is generated and refuses the edit (fail closed). Report the hook error.\n");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
