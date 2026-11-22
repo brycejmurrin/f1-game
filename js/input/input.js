@@ -1298,7 +1298,7 @@ const Input = (function () {
   /* Drag-anchor ring + offset dot: optional DOM (#drag-anchor), cached lookups
      only, transform/left/top updates on the touch path — must never throw. */
   let dragMark = undefined;
-  let dragDotEl = null;
+  let dragDotEl = null, paintedDrag = null, paintedOffset = NaN;
   const DRAG_DOT_CSS = "position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,0.65);box-shadow:0 0 0 2px rgba(0,0,0,0.5)";
   function dragMarkEl() {
     if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
@@ -1306,7 +1306,7 @@ const Input = (function () {
   }
   function dragDot(mark) {
     if (dragDotEl && dragDotEl.parentNode === mark) return dragDotEl;
-    dragDotEl = null;
+    dragDotEl = null; paintedOffset = NaN;
     if (typeof mark.appendChild === "function" && typeof document.createElement === "function") {
       dragDotEl = document.createElement("span");
       dragDotEl.setAttribute("aria-hidden", "true");
@@ -1325,21 +1325,29 @@ const Input = (function () {
   function hideDragAnchor() {
     const mark = dragMarkEl();
     if (mark) mark.classList.remove("on");
+    paintedDrag = null;
   }
   function updateDragAnchor(rec) {
     if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
     if (!rec) { hideDragAnchor(); return; }
     const mark = dragMarkEl();
     if (!mark) return;
-    mark.style.left = rec.anchorX + "px";
-    mark.style.top = rec.anchorY + "px";
+    // Only picking a different contact changes the ring's touchdown position.
+    if (paintedDrag !== rec) {
+      mark.style.left = rec.anchorX + "px";
+      mark.style.top = rec.anchorY + "px";
+      mark.classList.add("on");
+      paintedDrag = rec;
+    }
     const dx = rec.x - rec.anchorX;
     const adx = Math.abs(dx);
     const range = touchRangePx();
     const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
     const dot = dragDot(mark);
-    if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
-    mark.classList.add("on");
+    if (dot && dot.style && paintedOffset !== offPx) {
+      dot.style.transform = "translateX(" + offPx + "px)";
+      paintedOffset = offPx;
+    }
   }
 
   function onTouchStart(e) {
