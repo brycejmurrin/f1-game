@@ -213,3 +213,27 @@ test("#5049: paused SETTINGS draws at 20 Hz on a 60 Hz phone, first frame at onc
   R4.force(1 / 60, 1000 / 60);
   assert.equal(R4.settle(1 / 60, 1000 / 60, false), true, "back from a tuner (force), the sheet draws at once");
 });
+
+
+test("desktop race targets respect display capacity and leave other presentation paths alone", () => {
+  for (const hz of [60, 120, 144, 240]) {
+    for (const target of [60, 120]) {
+      const R = load({ store: { "apex26.desktopFpsTarget": String(target) } });
+      assert.equal(R.desktopTarget(), String(target));
+      let draws = 0;
+      for (let i = 0; i < hz * 2; i++) if (R.gate(1 / hz, 1000 / hz, false, true)) draws++;
+      assert.equal(draws, Math.min(target, hz) * 2);
+      assert.equal(R.targetBudgetMs(), 1000 / target);
+      assert.equal(R.gate(1 / hz, 1000 / hz, true, true), true);
+      assert.equal(R.targetBudgetMs(), 0);
+      assert.equal(R.gate(1 / hz, 1000 / hz, false, false), true);
+      assert.equal(R.targetBudgetMs(), 0);
+      assert.equal(R.setDesktopTarget("display"), true);
+      assert.equal(R.active(), false);
+    }
+  }
+  const phone = load({ mobile: true, store: { "apex26.desktopFpsTarget": "120" } });
+  assert.equal(phone.setDesktopTarget("120"), false);
+  assert.equal(phone.desktopTarget(), "display");
+  assert.equal(run(phone, 600, 1000 / 120).drawn < 600, true);
+});

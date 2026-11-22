@@ -1634,17 +1634,24 @@ try {
   if (backend === "three" && extraLs.includes("apex26.measureMirrorRoad=1")) {
     const before = await page.evaluate(() => {
       const A = window.__apex;
-      const previous = { mirror: A.mirror().mode, cull: GLX.mirrorRoadCull?.().enabled };
+      const quality = A.renderScale({ lite: true });
+      const previous = { mirror: A.mirror().mode, cull: GLX.mirrorRoadCull?.().enabled,
+        scale: quality.scale, auto: quality.auto, hold: quality.tierHold };
+      A.govHold(true);
+      A.renderScale(1);
       A.mirror("on");
       return previous;
     });
     try {
       out.mirrorRoadAB = await bounded(abFor("mirrorRoadCull"), 180000, "mirror-road-ab");
     } finally {
-      await page.evaluate(({ mirror, cull }) => {
+      await page.evaluate(({ mirror, cull, scale, auto, hold }) => {
         const A = window.__apex;
         GLX.mirrorRoadCull?.(cull);
         A.mirror(mirror);
+        GLX.setRenderScale(scale);
+        PerfGov.setAutoRes(auto);
+        A.govHold(hold);
       }, before);
     }
   }

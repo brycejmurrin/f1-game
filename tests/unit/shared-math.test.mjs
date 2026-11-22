@@ -43,6 +43,18 @@ const V3 = vm.runInContext("V3", ctx);
 // ---------------------------------------------------------------------------
 // 1. semantics
 
+test("camera roll tilts toward camera right and stays upright for a vertical view", () => {
+  const out = new Float32Array(3), target = [0, 0, 0];
+  assert.equal(V3.rolledUpTo(out, [0, 5, 2], target, Math.PI / 2), out);
+  assert.ok(Math.abs(out[0] - Math.SQRT1_2) < 1e-6);
+  assert.ok(Math.abs(out[1] - Math.SQRT1_2) < 1e-6);
+  V3.rolledUpTo(out, [2, 5, 0], target, -Math.PI / 2);
+  assert.ok(Math.abs(out[2] - Math.SQRT1_2) < 1e-6);
+  V3.rolledUpTo(out, [0, 5, 0], target, Math.PI / 2);
+  assert.equal(Math.abs(out[0]) + Math.abs(out[2]), 0);
+  assert.equal(out[1], 1);
+});
+
 test("clamp pins to the range and passes interior values through untouched", () => {
   assert.equal(M4.clamp(5, 0, 10), 5);
   assert.equal(M4.clamp(-1, 0, 10), 0);

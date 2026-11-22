@@ -7554,21 +7554,9 @@ function render(dt) {
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   if (homeTrack && !dbgCam) { const view = uiExperience.trackCamera(); _mProj[8] = view.shiftX; _mProj[9] = view.shiftY; }
-  // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
-  // module-scope scratch vectors (no per-frame V3 array allocation); same math.
-  {
-    let bx = camEye[0] - camTgt[0], by = camEye[1] - camTgt[1], bz = camEye[2] - camTgt[2];
-    let bl = Math.hypot(bx, by, bz) || 1; bx /= bl; by /= bl; bz /= bl;
-    // right = normalize(worldUp × back), worldUp = (0,1,0)
-    let rx = 1 * bz - 0 * by, ry = 0 * bx - 0 * bz, rz = 0 * by - 1 * bx;
-    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
-    // up = normalize(worldUp + right*sin(roll))
-    const s = Math.sin(feel.camRoll);
-    let ux = rx * s, uy = 1 + ry * s, uz = rz * s;
-    let ul = Math.hypot(ux, uy, uz) || 1;
-    _camUp[0] = ux / ul; _camUp[1] = uy / ul; _camUp[2] = uz / ul;
-  }
+  V3.rolledUpTo(_camUp, camEye, camTgt, feel.camRoll);
   M4.lookAtTo(_mView, camEye, camTgt, _camUp);
+  if (typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling) PhotoStudioBody.sampling.project(_mProj, _mView, gfx.width, gfx.height);
   M4.mulTo(_mVP, _mProj, _mView);
   // inv VP: sky rays always; god-rays when live. inv Proj: post AND TLX's
   // main-view reconstruction, even after tier 4 sheds all view-space post.
@@ -8527,6 +8515,10 @@ function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
+  if (typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling && !netPlay.active()) {
+    if (PhotoStudioBody.sampling.pump) render(0);
+    return;
+  }
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
   if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
   if (typeof GfxQuality !== "undefined") GfxQuality.setCinema(setupPreviewOn || photoMode || replayBuf.isScrubbing());   // CINEMA: garage / photo / replay (EXTREME only)
