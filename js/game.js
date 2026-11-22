@@ -4612,16 +4612,15 @@ function update(dt) {
     }
   }
 
-  // Leading human for AiBand catch-up (scripted mode ignores). Once per step.
+  // Catch-up needs the leading active human. Scripted pace only needs the poses.
+  const catchup = AiBand.mode() === "catchup";
   _leadHuman = null;
-  // !finished: a flagged human coasts on advancing prog — don't band toward it.
-  for (let i = 0; i < cars.length; i++) { const c = cars[i]; if (c.human && !c.retired && !c.finished && (!_leadHuman || c.prog > _leadHuman.prog)) _leadHuman = c; }
-
   // Traffic scans read last step's poses. Writing prog/x/speed inside
   // updateCar and then scanning the next car made a side-by-side look like a
   // pass in array order.
   for (let i = 0; i < cars.length; i++) {
     const s = cars[i];
+    if (catchup && s.human && !s.retired && !s.finished && (!_leadHuman || s.prog > _leadHuman.prog)) _leadHuman = s;
     s._snapProg = s.prog; s._snapX = s.x; s._snapSpeed = s.speed;
   }
   // One wrap-aware fill for the whole field; each updateCar walks adjacent
@@ -4917,7 +4916,7 @@ function updateCar(c, dt, ranked) {
   if (!c.human && aq.safeV < Infinity) vmax = Math.min(vmax, aq.safeV * vT / VMAX);   // an AI driver lifts in standing water
   // Scripted AI pace (default): vmax stays on car/driver/difficulty. Catch-up
   // restores the reverse-only rubber band via AiBand (start + lapping gates).
-  if (!c.human && _leadHuman && AiBand.mode() === "catchup") {   // scripted: factor() is 0 and applyVmax(0) the identity — skip both
+  if (!c.human && _leadHuman) {
     const bc = _bandCtx; bc.leadProg = _leadHuman.prog; bc.carProg = c.prog; bc.trackTotal = track.total; bc.raceT = raceT; bc.launchT0 = launchT0; bc.bandAuth = dd.band;
     const applied = AiBand.applyVmax(vmax, AiBand.factor(bc), c.tierV * c.skill * dd.ai, BAND_CEIL, _bandOut);   // reused: no objects per AI car
     vmax = applied.vmax; c._bandNow = applied.bandNow;

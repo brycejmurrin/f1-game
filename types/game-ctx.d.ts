@@ -342,6 +342,7 @@ interface TyreSession {
   /** Wear as a fraction of the compound's life, 0..2. */
   spent(c: CarState): number;
   info(c: CarState): Record<string, unknown> | null;
+  temperatureInfo(c: CarState | null): { tempS: number | null; tempOpt: number | null; tempWindow: number } | null;
   belowWindow(c: CarState | null): number;
   severity(): number;
   level(): TyreLevel;

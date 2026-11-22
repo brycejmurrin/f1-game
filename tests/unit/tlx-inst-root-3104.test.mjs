@@ -69,13 +69,22 @@ test("F3: hidden instanced batches are not walked; the draws and their order are
   assert.equal(off.scene.children.length, 43, "the before arm (scene.add): members in the scene");
 
   // Passes: main (6 shown, mixed renderOrder and materials), mirror (2), env face (none), main again.
+  // Count registry reads by the production visibility code, independently of three's subsequent scene walk.
+  const registry = on.scene.userData.instRegistry;
+  let registryReads = 0;
+  registry.forEach((im, i) => Object.defineProperty(registry, i, {
+    configurable: true, get() { registryReads++; return im; },
+    set(value) { im = value; },
+  }));
   const passes = [[3, 7, 9, 21, 30, 39], [7, 30], [], [0, 1, 2, 3, 39]];
   for (const shown of passes) {
     const run = (S) => {
       S.R.pass(shown.map((k, j) => ({ instanced: { instances: 4, imesh: S.ims[k] }, mat: mats[k % 2], order: (shown.length - j) * 3 })));
       return S.raw();
     };
+    registryReads = 0;
     const a = run(on), b = run(off);
+    assert.ok(registryReads <= registry.length, `visibility settle read ${registryReads} members for a registry of ${registry.length}`);
     assert.equal(a.draws, b.draws, `pass ${shown}: same draw count`);
     assert.deepEqual(a.order, b.order, `pass ${shown}: same draw order`);
     assert.equal(a.order.length, shown.length);
@@ -95,7 +104,7 @@ test("F3: every registry member is parented through _instAdd and every visibilit
   assert.equal((TLX.match(/_instRegistry\.push\(/g) || []).length, (TLX.match(/_instAdd\((\w+|imesh)\);? ?_instRegistry\.push\(|_instAdd\(\w+\);\n\s+_instRegistry\.push\(/g) || []).length,
     "each push into the registry follows an _instAdd");
   assert.doesNotMatch(TLX, /scene\.add\((im|imesh|m)\); _instRegistry|scene\.add\((im|imesh)\);\n\s+_instRegistry/, "no member goes straight into the scene");
-  assert.match(fnSource(TLX, "function _hideUndrawnInstanced() {"), /_instShow\(\);/);
+  assert.match(fnSource(TLX, "function _hideUndrawnInstanced() {"), /_instShow\(true\);/);
   assert.match(fnSource(TLX, "function _mirWarmSwap() {"), /_instShow\(\);/);
   assert.match(fnSource(TLX, "function _mirWarmUnswap() {"), /_instShow\(\);/);
 });

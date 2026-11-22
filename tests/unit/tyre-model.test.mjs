@@ -1107,6 +1107,24 @@ test("info() reports trackTemp above ambient in the dry", () => {
   assert.ok(info.trackTemp > info.ambient, `${info.trackTemp} vs ambient ${info.ambient}`);
 });
 
+test("HUD temperature read uses only the surface sensor and compound, with diagnostic rounding", () => {
+  const s = ctxFor();
+  assert.equal(s.temperatureInfo(null), null);
+  for (const life of [undefined, 0.74, 1.05]) {
+    for (const ts of [undefined, 65.04, 65.06, NaN]) {
+      const car = { tyre: life == null ? null : { life }, tyreTs: ts };
+      const { tempS, tempOpt, tempWindow } = s.info(car);
+      const display = s.temperatureInfo(new Proxy(car, {
+        get(target, key) {
+          assert.ok(key === "tyre" || key === "tyreTs", "unexpected diagnostic read: " + key);
+          return target[key];
+        },
+      }));
+      assert.deepEqual({ ...display }, { tempS, tempOpt, tempWindow });
+    }
+  }
+});
+
 test("belowWindow preserves info's rounding, missing-state and non-finite behavior", () => {
   const s = ctxFor({ laps: 10 });
   for (const level of ["off", "light", "real"]) {

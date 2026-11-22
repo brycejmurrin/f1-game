@@ -510,6 +510,7 @@
         "tests/unit/results-cam.test.mjs"
       ],
       "fieldContact": [
+        "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
       "fieldContactState": [
@@ -12243,9 +12244,6 @@
         "tests/unit/ai-band.test.mjs",
         "tests/unit/sim-step-alloc.test.mjs"
       ],
-      "mode": [
-        "tests/unit/sim-step-alloc.test.mjs"
-      ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
       ],
@@ -13325,6 +13323,9 @@
         "tests/unit/tyre-model.test.mjs"
       ],
       "tempGrip": [
+        "tests/unit/tyre-model.test.mjs"
+      ],
+      "temperatureInfo": [
         "tests/unit/tyre-model.test.mjs"
       ],
       "trackTemp": [
