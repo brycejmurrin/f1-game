@@ -208,7 +208,6 @@ const NetPlay = (function () {
     let role = null;                      // "host" | "guest" | "spectator"
     let active = false;
     let localCar = null;
-    let raceOpts = null;
     const remotes = new Map();
     // GUEST ONLY: wireId -> remote for an AI car the HOST simulates. Kept apart
     // from `remotes` (the human rivals), which seats, arming and status read.
@@ -810,7 +809,6 @@ const NetPlay = (function () {
 
       role = opts.role === "host" ? "host"
         : opts.role === SpectatePolicy.SPECTATOR ? SpectatePolicy.SPECTATOR : "guest";
-      raceOpts = opts;
       onStop = typeof opts.onStop === "function" ? opts.onStop : null;
       peerProfile = opts.peerProfile || null;
       sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
@@ -1091,7 +1089,10 @@ const NetPlay = (function () {
       handBackToAI(reason && reason !== "local" ? reason : null);
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.
-      for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
+      // Closing a session synchronously runs onClose, which refills sessionList().
+      // A private snapshot keeps that callback from skipping the next transport.
+      for (const s of Array.from(sessions.values())) { try { s.close(); } catch (e) { /* already gone */ } }
+      _pumpBuf.length = 0; _sessBuf.length = 0;
       sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
       aiStrategyPhases.clear();
       peerCar.clear();
