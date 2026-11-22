@@ -16,7 +16,7 @@ const SRC = readFileSync(join(ROOT, "js/race/retired-card.js"), "utf8");
 
 function fakeDom() {
   const nodes = {};
-  const mk = (tag) => ({ tag, id: "", hidden: false, clicks: 0, listeners: {}, attrs: {}, children: [], get firstElementChild() { return this.children[0]; }, textContent: "",
+  const mk = (tag) => ({ tag, id: "", hidden: false, clicks: 0, listeners: {}, attrs: {}, children: [], textContent: "",
     addEventListener(t, f) { this.listeners[t] = f; }, click() { this.clicks++; },
     setAttribute(k, v) { this.attrs[k] = v; }, append(...c) { this.children.push(...c); } });
   const attrs = new Set();
@@ -63,6 +63,19 @@ test("tick shows the card, hides the driving controls, and its button clicks the
   RC.tick(view({ state: "results" }));
   assert.equal(dom.nodes["retired-card"].hidden, true);
   assert.ok(!dom.attrs.has("data-retired-wait"));
+});
+
+test("a finisher sees Skip when the penalty wait clears", () => {
+  const dom = fakeDom();
+  const { RC } = load(dom);
+  const v = view({ player: { finished: true }, pending: true });
+  RC.tick(v);
+  assert.equal(RC.shown, false);
+  v.pending = false;
+  RC.tick(v);
+  assert.equal(dom.nodes["retired-card"].children[0].textContent, "FINISHED");
+  dom.nodes["retired-skip"].listeners.click();
+  assert.equal(dom.nodes["pm-skip-results"].clicks, 1);
 });
 
 test("the card hides itself when race ticks stop (pause, quit) and returns on the next tick", () => {

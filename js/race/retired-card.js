@@ -2,7 +2,7 @@
 var RetiredCard = (function () {
   "use strict";
   const STALE_MS = 400;   // no tick for this long: not in a running race any more
-  let shown = false, lastTick = 0, watch = 0;
+  let shown = false, lastTick = 0, watch = 0, title = null;
 
   // The pure rule. A solo Grand Prix (not a room, not WATCH, not a lone lap)
   // whose player can leave the remaining field to the classification rules.
@@ -21,7 +21,7 @@ var RetiredCard = (function () {
     card = document.createElement("div");
     card.id = "retired-card"; card.hidden = true;
     card.setAttribute("role", "status"); card.setAttribute("aria-live", "polite");
-    const title = document.createElement("b"); title.textContent = "RETIRED";
+    title = document.createElement("b");
     const sub = document.createElement("span"); sub.textContent = "The race runs on to the flag.";
     const btn = document.createElement("button"); btn.id = "retired-skip"; btn.type = "button"; btn.textContent = "SKIP TO RESULTS";
     btn.addEventListener("click", () => {
@@ -37,7 +37,7 @@ var RetiredCard = (function () {
     if (on === shown) return;
     const card = els();
     if (!card) return;
-    if (on) card.firstElementChild.textContent = finished ? "FINISHED" : "RETIRED";
+    if (on && title) title.textContent = finished ? "FINISHED" : "RETIRED";
     shown = on;
     card.hidden = !on;
     document.body.toggleAttribute("data-retired-wait", on);
