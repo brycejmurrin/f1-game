@@ -288,10 +288,10 @@
     // update()'s frameSky readers, hoisted: update runs every frame, so
     // no closure or array is minted per call (#3115 F8/F9).
     let lightingChanged = false;
-    const s3 = (u, a) => {
+    const s3 = (u, a, derived = true) => {
       if (a && (u.value.x !== a[0] || u.value.y !== a[1] || u.value.z !== a[2])) {
         u.value.set(a[0], a[1], a[2]);
-        lightingChanged = true;
+        if (derived) lightingChanged = true;
       }
     };
     const s1 = (u, v, def) => {
@@ -640,26 +640,27 @@
       s1(U.stars, sky.stars ? 1 : 0, 0);
       s1(U.cloud, sky.cloud, 0);
       U.time.value = sky.time !== undefined ? sky.time : 0;
-      s1(U.moon, sky.moon, 0);
-      s3(U.cityGlow, sky.cityGlow || NO_GLOW);
-      s1(U.starBright, sky.starBright, 1);
-      s1(U.cloudSpeed, sky.cloudSpeed, 1);
-      s1(U.skyGrad, sky.skyGrad, 0.35);
+      // Only controls read by derive() invalidate its lighting colors and factors.
+      U.moon.value = sky.moon !== undefined ? sky.moon : 0;
+      s3(U.cityGlow, sky.cityGlow || NO_GLOW, false);
+      U.starBright.value = sky.starBright !== undefined ? sky.starBright : 1;
+      U.cloudSpeed.value = sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1;
+      U.skyGrad.value = sky.skyGrad !== undefined ? sky.skyGrad : 0.35;
       s1(U.starDensity, sky.starDensity, 1);
-      s1(U.daySkyBlue, sky.daySkyBlue, 1);
+      U.daySkyBlue.value = sky.daySkyBlue !== undefined ? sky.daySkyBlue : 1;
       s1(U.mieScatter, sky.mieScatter, 1);
       s1(U.cloudSilver, sky.cloudSilver, 1);
       s1(U.coronaAureole, sky.coronaAureole, 1);
       s1(U.sunDiscSize, sky.sunDiscSize, 1);
-      s1(U.starSize, sky.starSize, 1);
-      s1(U.starTwinkle, sky.starTwinkle, 1);
-      s1(U.moonDiscSize, sky.moonDiscSize, 1);
-      s1(U.moonHalo, sky.moonHalo, 1);
-      s1(U.sunCorona, sky.sunCorona, 1);
+      U.starSize.value = sky.starSize !== undefined ? sky.starSize : 1;
+      U.starTwinkle.value = sky.starTwinkle !== undefined ? sky.starTwinkle : 1;
+      U.moonDiscSize.value = sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1;
+      U.moonHalo.value = sky.moonHalo !== undefined ? sky.moonHalo : 1;
+      U.sunCorona.value = sky.sunCorona !== undefined ? sky.sunCorona : 1;
       s1(U.sunSquash, sky.sunSquash, 1);
-      s1(U.cityGlowReach, sky.cityGlowReach, 1);
+      U.cityGlowReach.value = sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1;
       s1(U.cloudDef, sky.cloudDef, 1);
-      s1(U.lightning, sky.lightning, 0);
+      U.lightning.value = sky.lightning !== undefined ? sky.lightning : 0;
       updateClock();
       if (lightingChanged) { derive(); lightingChanged = false; }
     }

@@ -871,6 +871,33 @@ test("clock-only sky updates advance clouds and dither while reusing lighting", 
   assert.equal(lightingWrites, 3);
 });
 
+test("direct sky controls and storm flashes refresh shader uniforms without rebuilding lighting", () => {
+  const { U, D, update } = skyUniformHarness();
+  const frame = { time: 9, cloud: 0.8 };
+  update(frame);
+  let writes = 0;
+  const zenith = D.zenithO.value, set = zenith.set.bind(zenith);
+  zenith.set = (...args) => { writes++; return set(...args); };
+  for (const field of ["moon", "starBright", "cloudSpeed", "skyGrad", "daySkyBlue", "starSize",
+    "starTwinkle", "moonDiscSize", "moonHalo", "sunCorona", "cityGlowReach", "lightning"]) {
+    const initial = U[field].value;
+    frame[field] = 0.42;
+    update(frame);
+    assert.equal(U[field].value, 0.42);
+    if (field === "cloudSpeed") assert.equal(D.drift1.value.x, frame.time * 0.42 * 0.0028);
+    delete frame[field];
+    update(frame);
+    assert.equal(U[field].value, initial);
+  }
+  frame.cityGlow = [0.6, 0.4, 0.2];
+  update(frame);
+  assert.deepEqual(U.cityGlow.value.toArray(), frame.cityGlow);
+  assert.equal(writes, 0);
+  frame.cloud = 0.1;
+  update(frame);
+  assert.equal(writes, 1);
+});
+
 test("sky derivation suppresses solar scattering for low and high night moon keys", () => {
   const derive = skyDeriveHarness();
   const low = derive(1, 0.214), high = derive(1, 0.8);
