@@ -1114,6 +1114,8 @@ function yawVisInterp(c) {
 // The TV director's subject (js/camera/director.js): the interpolated pose the body is drawn at. Pooled.
 const _dirPos = [0, 0], _dirPose = { s: 0, x: 0, carPos: null, carHead: 0 };
 const _dirSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+const _dirBank = { dy: 0, roll: 0 };
+const _dirUp = [0, 1, 0];
 function camPoseOf(c) {
   const pa = playerAnchor(c), rp = renderPosOf(c);
   _dirPose.s = pa.cS; _dirPose.x = pa.cX; _dirPose.carHead = headInterp(c);
@@ -1121,9 +1123,10 @@ function camPoseOf(c) {
   // human/network/incident owners retain their authoritative world heading.
   if (!c.human && !netPlay.owns(c) && !incidentSim.owns(c)) {
     Tracks.sample(track, pa.cS, _dirSmp);
-    const t = _dirSmp.t, r = _dirSmp.r, yv = yawVisInterp(c);
-    const cy = Math.cos(yv) / (Math.hypot(...t) || 1), sy = Math.sin(yv) / (Math.hypot(...r) || 1);
-    _dirPose.carHead = Math.atan2(t[0] * cy + r[0] * sy, t[2] * cy + r[2] * sy);
+    const bank = Tracks.banking(track, pa.cS, pa.cX, _dirBank);
+    const t = _dirSmp.t, r = _dirSmp.r;
+    M4.roadFrameAxes(r, t, yawVisInterp(c), bank ? bank.roll : 0, r, _dirUp, t);
+    _dirPose.carHead = Math.atan2(t[0], t[2]);
   }
   _dirPose.carPos = rp.world ? (_dirPos[0] = rp.x, _dirPos[1] = rp.z, _dirPos) : null; return _dirPose;
 }
@@ -1868,8 +1871,9 @@ const _vantExtra = { bankDy: 0, deploy: false, slipLat: 0, att: null, carPos: nu
 const _camAP = [0, 0, 0], _camAN = [0, 0, 0];
 
 function cameraBankScale(mode) {
-  return mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead" ? 0.35
-       : mode === "pitwall" || mode === "trackside" ? 0 : 1;
+  if (mode === "rear" || mode === "reverse") return -1;   // screen right reverses when the rig looks back
+  if (mode === "pitwall" || mode === "trackside") return 0;
+  return mode === "heli" || mode === "side" || mode === "cinematic" || mode === "overhead" ? 0.35 : 1;
 }
 
 // Build the grounded transform needed by the pre-scene car-shadow pass. The main
@@ -1901,23 +1905,7 @@ function currentCarGroundMat(c, out) {
   tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
   tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
   tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
-  const yv = yawVisInterp(c);   // same interpolated yaw as the body loop
-  const cy = Math.cos(yv), sy = Math.sin(yv);
-  for (let i = 0; i < 3; i++) {
-    _groundF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
-    _groundR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
-  }
-  _groundU[0] = _groundR[1] * _groundF[2] - _groundR[2] * _groundF[1];
-  _groundU[1] = _groundR[2] * _groundF[0] - _groundR[0] * _groundF[2];
-  _groundU[2] = _groundR[0] * _groundF[1] - _groundR[1] * _groundF[0];
-  if (bankC && bankC.roll) {
-    const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
-    for (let i = 0; i < 3; i++) {
-      const r = _groundR[i], u = _groundU[i];
-      _groundR[i] = r * cr + u * sr;
-      _groundU[i] = u * cr - r * sr;
-    }
-  }
+  M4.roadFrameAxes(smp2.r, smp2.t, yawVisInterp(c), bankC ? bankC.roll : 0, _groundR, _groundU, _groundF);
   return basisMat(_groundR, _groundU, _groundF, tmpP, out);
 }
 
@@ -4780,7 +4768,7 @@ const AI_LOOK_CAP = 64;        // samples the per-car look-ahead cache keeps (16
 // WallClamp.apply's ctx, pooled like _aiBr: a fresh literal + addShake closure per car per tick was ~1,300 objects/s at 22 cars.
 const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromTrack, soundOn: false, incidentSim, vStd, addShake(d) { feel.shake = Math.min(1, feel.shake + d); } };
 const _blueCtx = { total: 0, vRef: 0, caution: 0, race: true };   // blueWatch.tick reads it, never keeps it
-const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1, diffCorner: 0, pace: 0, vmax: 0 }, ["errMul", "diffCorner", "pace", "vmax"]);
+const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, gravity: GRAVITY_SLOPE, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1, diffCorner: 0, pace: 0, vmax: 0 }, ["errMul", "diffCorner", "pace", "vmax"]);
 const _aiLane = CarFields.warmDoubles({ traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 }, ["queueT"]);
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 // PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
@@ -4836,7 +4824,7 @@ function collideFx(a, b, impact) {
 }
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
-const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
+const _ucS = CarFields.warmDoubles({ recordInput: null, tyreGrip: 0.5, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, lateralGrade: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0, pvA: 0, pvB: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl", "pvA", "pvB"]);
 // The step's Wind.sync() answer: every car of a step synced with the same (seed, weather, track, raceT), so the
 // first car to reach it pays and the rest share its object — the same one sync's own cache returned (#3109 row 9).
 const _windStep = { st: null };
@@ -4883,10 +4871,24 @@ function updateCar(c, dt, ranked) {
   if (realRace.owns(c)) { const v = Math.max(0, c.speed || 0) * (c.replayRate || 1); c.rpm = rpmFor(naturalGear(v), v); c._prevS = c.s; return; }
   Tracks.sample(track, c.s, smp);
   const hw = smp.hw;
-  const slopeSin = smp.t[1] || 0;   // road pitch at the car (+uphill / -downhill)
-  // ...signed along the NOSE for a human (c.speed runs along it): spun past 90 deg on a climb it faces DOWNhill. The sign only, so
-  // ordinary driving (nose within 90 deg of the tangent) is bit-identical to the characterization baseline. AI drive the tangent.
-  const slopeNose = c.human && Math.cos(Math.atan2(smp.t[0], smp.t[2]) - (c.head || 0)) < 0 ? -slopeSin : slopeSin;
+  const slopeSin = smp.t[1] || 0;
+  const bankPhys = Tracks.banking(track, c.s, c.x, _bankScratchP);
+  const bankRoll = bankPhys ? bankPhys.roll : 0;
+  const bankMu = Math.cos(bankRoll);   // normal-load component; signed gravity acts separately
+  const crossGrade = Math.sin(bankRoll);
+  // At a fixed lane offset, a changing bank adds longitudinal grade. Copy dy
+  // before the next call overwrites the shared scratch. +/-1 m measures the local gradient along the lane.
+  let laneGrade = slopeSin;
+  if (bankPhys && c.x) {
+    const ahead = Tracks.banking(track, c.s + 1, c.x, _bankScratchP)?.dy || 0;
+    const behind = Tracks.banking(track, c.s - 1, c.x, _bankScratchP)?.dy || 0;
+    laneGrade += (ahead - behind) * 0.5;
+  }
+  const psi = c.human && c.px != null ? Math.atan2(smp.t[0], smp.t[2]) - (c.head || 0) : 0;
+  const cosPsi = Math.cos(psi), sinPsi = Math.sin(psi);
+  const slopeNose = laneGrade * cosPsi + crossGrade * sinPsi;
+  S.lateralGrade = crossGrade * cosPsi - laneGrade * sinPsi;
+  S.bankMu = bankMu;
   const k = Tracks.curvature(track, c.s);
   c.kCur = k;   // cache for the render loop's body-lean (avoids a 2nd curvature calc/car/frame)
   const dd = DIFF[difficulty] || DIFF.normal;   // an imported settings file can carry any string; quali-model.js falls back the same way
@@ -5247,8 +5249,8 @@ function updateCar(c, dt, ranked) {
   const ri = S.recordInput; if (ri) { ri.throttle = onThrottle; ri.brake = !!braking; ri.throttleLevel = throttleLvl; ri.brakeLevel = brakeLvl; ri.aero = !!c.xOn; }
 
   // --- lateral ---
-  let steer, gripScale; let latFac; let kerbGrip; let bankMu; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;
-  updateCarLateral(c, dt, ranked, S); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip, bankMu = S.bankMu;
+  let steer, gripScale; let latFac; let kerbGrip; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;
+  updateCarLateral(c, dt, ranked, S); steer = S.steer, gripScale = S.gripScale, latFac = S.latFac, kerbGrip = S.kerbGrip;
   // Track-frame dynamic bicycle model for the player. c.head = real world
   // heading (rad); c.yawRateCur/c.vLat = yaw rate and body lateral velocity.
   // Per-axle tyre forces (from slip angles, grip-capped) drive yaw and lateral
@@ -5422,14 +5424,15 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
-      // |bank|: the player's bankRoll (below) takes the absolute value, so a
-      // signed/adverse bank must not boost the player while it cuts the AI.
-      const lkV = onLine ? TrackLine.pathK(track, ss) : kk, lkB = Math.abs(Tracks.bankAngle(track, ss));
+      const lkV = onLine ? TrackLine.pathK(track, ss) : kk;
+      const line = onLine ? TrackLine.at(track, ss) : null;
+      // Positive relative bank supports this turn (+k is left, +roll raises the right edge).
+      const lkB = Math.sign(lkV) * Tracks.bankAngle(track, ss, line ? line.x * line.w : 0);
       const lkM = AiDrive.bankGrip(lkB);
       if (!directLook) AiDrive.pushLook(d, lkV, lkB, lkM);
       if (lkI < AI_LOOK_CAP) { lk.v[lkI] = lkV; lk.a[lkI] = ak; lk.b[lkI] = lkB; lk.m[lkI] = lkM; lk.n = lkI + 1; }
     }
-    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1 / c.skill, Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
+    _aiBr.traits = aiT; _aiBr.samples = directLook ? AiDrive.lookWindow(lk.v, lk.m, lkI, ss0 - c.s, dsN, lk.b) : AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1 / c.skill, Math.min(1, dd.corner * (1 + (c._bandNow || 0))) * AiDrive.paceTrim(TIER_V[c.tier] * c.skill)) * (c._trYT ? AiDrive.trailYieldCorner(c._trYT) : 1);   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * trMul * (gmC / gm0); _aiBr.pace = driveTune.PACE; _aiBr.vmax = VMAX;   // the tread's braking credit (docs/PHYSICS.md §Braking): the planner must stop as the executor below does, or it corners on wets and brakes on slicks
     _aiBr.grip = gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
@@ -6032,12 +6035,7 @@ function updateCarLateral(c, dt, ranked, S) {
   if (gripScale === undefined) gripScale = c.human ? 1 : AiDrive.lateralScale(c.speed, c.aeroLoad, S.gmC * S.tyreGrip * dirtyAirMul(c.wake || 0, c.speed), driveTune.PACE, VMAX, aeroDfMult(c));
   // Riding a kerb loses a little grip — kerbGripSm already damped with the speed cut.
   const kerbGrip = c.kerbGripSm ?? 1;
-  // Banking: computed once, shared between player and AI so both get grip boost.
-  // bankAngle === banking().roll (mesh.js); no second lookup.
-  const bankPhys = Tracks.banking(track, c.s, 0, _bankScratchP);
-  const bankRoll = bankPhys ? Math.abs(bankPhys.roll) : 0;
-  const bankMu = 1 + Math.sin(bankRoll) * 0.8;
-  S.steer = steer; S.gripScale = gripScale; S.latFac = latFac; S.kerbGrip = kerbGrip; S.bankMu = bankMu;
+  S.steer = steer; S.gripScale = gripScale; S.latFac = latFac; S.kerbGrip = kerbGrip;
 }
 function updateCarBicycle(c, dt, ranked, S) {
   const hw = S.hw; const slopeSin = S.slopeSin; const k = S.k; const mods = S.mods; const vT = S.vT; const gmC = S.gmC; const perfMul = S.perfMul; const vmax = S.vmax; const unstuckActive = S.unstuckActive; const alongO = S.alongO; const alongDx = S.alongDx; const aiT = S.aiT; const deploy = S.deploy; const braking = S.braking; const throttleLvl = S.throttleLvl; const gearMult = S.gearMult; const surfaceMu = S.surfaceMu; const brakeDecel = S.brakeDecel; const onThrottle = S.onThrottle; let steer = S.steer; const gripScale = S.gripScale; const latFac = S.latFac; const kerbGrip = S.kerbGrip; const bankMu = S.bankMu;
@@ -6166,6 +6164,8 @@ function updateCarBicycle(c, dt, ranked, S) {
     pf.weatherGrip = gmC; pf.aeroDf = aeroDfMult(c); pf.dirtyMul = dirtyAirMul(c.wake || 0, c.speed);
     pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres; pf.damage = typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c) : null;   // #1578: null unless the opt-in is ON
     playerForces.step(c, pf);
+    // Static tyre friction holds a parked car. Fade into dynamic side force with the tyre model.
+    c.vLat -= GRAVITY_SLOPE * S.lateralGrade * sp * dt;
     if (Wind.latA()) c.vLat += Wind.latA() * vT / VMAX * dt;   // crosswind side force (js/race/wind.js; capped)
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
     // world velocity = forward + lateral slip along the car's RIGHT vector (-fz, fx),
@@ -6210,7 +6210,8 @@ function updateCarBicycle(c, dt, ranked, S) {
     // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
     const aiLat = unstuckActive ? Math.max(latFac, AiDrive.unstuckLatFloor(!!track.street)) : latFac;
     const vlOwn = steer * STEER_VMAX * aiLat * gripScale * kerbGrip * bankMu * give * aiSurfMu;   // this car's own lateral velocity (m/s)
-    c.x += vlOwn * dt;
+    // Kinematic AI represents side acceleration as a brief drift, as it does for wind.
+    c.x += (vlOwn - GRAVITY_SLOPE * S.lateralGrade * Wind.AI_TAU * aiLat) * dt;
     if (Wind.latA()) c.x += Wind.latA() * vT / VMAX * Wind.AI_TAU * dt;   // the same crosswind, as a brief drift
     // Debris side-world (A2): AI marbles from the car's OWN state — the body slip of the lateral step it just made (the squeal
     // signal) and a lock under hard braking. Never |k|·v² (DECISIONS #4): settled marbles reach the player's grip (marbleGrip).
@@ -7505,7 +7506,7 @@ function render(dt) {
   // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
   // (the flyby's own roll would otherwise be whatever the last race left behind,
   // decaying over the first half-second of a shot the editor showed level).
-  if (dbgCam || cine || comfort) {
+  if (dbgCam || cine || comfort || fixedEye) {
     feel.camRoll = (dbgCam && dbgCam.roll) || 0;   // level unless the FREE CAMERA's ROLL dial set one; XR: HMD owns roll
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
@@ -7517,7 +7518,11 @@ function render(dt) {
     // LEAN scales via CamTune.rollTarget (camComfort still forces level above).
     const slipRaw = player && player.speed > 1 ? (player.vLat || 0) / player.speed : 0;
     camSlipSm = damp(camSlipSm, clamp(slipRaw, -1, 1), 10, dt);
-    feel.camRoll = damp(feel.camRoll, (typeof CamFeel !== "undefined" && CamFeel.lookingBackNow() ? -1 : 1) * CamTune.rollTarget(roadCamRoll, camSlipSm, (onboard && player ? (player.baRoll || 0) * 0.85 : 0), false), 7, dt);
+    const viewSign = camId === "rear" || camId === "reverse" ? -1 : 1;
+    const bodyLean = onboard && player ? (player.baRoll || 0) * 0.85 : 0;
+    const roll = CamTune.rollTarget(roadCamRoll, camSlipSm * viewSign, bodyLean, false);
+    const lookingBack = typeof CamFeel !== "undefined" && CamFeel.lookingBackNow();
+    feel.camRoll = damp(feel.camRoll, lookingBack ? -roll : roll, 7, dt);
   }
   // Debug free camera (set via __apex.view) overrides the chase cam — instant
   // (no damping), uncapped FOV, far plane and fog pushed out — for inspecting
@@ -7684,7 +7689,7 @@ function render(dt) {
   // the cockpit body where the car loop draws it). AI keeps the pooled matrices
   // from the preceding frame; only the player's shadow makes that latency visible.
   const _hasLivePlayerShadow = !!(player && state !== "menu");
-  if (_hasLivePlayerShadow) { currentCarGroundMat(player, shadowPass.livePlayerMat); shadowPass.resolvePlayer(_smpPlayer, yawVisInterp(player)); }
+  if (_hasLivePlayerShadow) { currentCarGroundMat(player, shadowPass.livePlayerMat); shadowPass.resolvePlayer(_smpPlayer, yawVisInterp(player), _bankPlayer.roll); }
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
   if (!XrBoot.comfort()) shadowPass.sunPass(frame, _frameNo, _hasLivePlayerShadow);   // XR: skip maps
@@ -7909,29 +7914,12 @@ function render(dt) {
       bankC = Tracks.banking(track, cS, renderX, _bankScratch);
       tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
     }
-    // yaw the forward/right around up by yawVis (interpolated, like position)
+    // Wheels and shadows ride the track plane at every heading. Cosmetic pitch
+    // and roll are applied afterwards to a separate copy of the chassis axes.
     const yv = yawVisInterp(c);
-    const cy = Math.cos(yv), sy = Math.sin(yv);
+    M4.roadFrameAxes(smp2.r, smp2.t, yv, bankC ? bankC.roll : 0, _groundR, _groundU, _groundF);
     for (let i = 0; i < 3; i++) {
-      tmpF[i] = smp2.t[i] * cy + smp2.r[i] * sy;
-      tmpR[i] = smp2.r[i] * cy - smp2.t[i] * sy;
-    }
-    tmpU[0] = tmpR[1] * tmpF[2] - tmpR[2] * tmpF[1];
-    tmpU[1] = tmpR[2] * tmpF[0] - tmpR[0] * tmpF[2];
-    tmpU[2] = tmpR[0] * tmpF[1] - tmpR[1] * tmpF[0];
-    // Grounded assembly basis: follows track slope, yaw, and road banking, but
-    // excludes chassis-only brake dive/throttle squat and cornering lean. Those
-    // animations must not lift a wheel centre away from its contact patch.
-    for (let i = 0; i < 3; i++) {
-      _groundR[i] = tmpR[i]; _groundF[i] = tmpF[i]; _groundU[i] = tmpU[i];
-    }
-    if (bankC && bankC.roll) {
-      const cr = Math.cos(bankC.roll), sr = Math.sin(bankC.roll);
-      for (let i = 0; i < 3; i++) {
-        const r = _groundR[i], u = _groundU[i];
-        _groundR[i] = r * cr + u * sr;
-        _groundU[i] = u * cr - r * sr;
-      }
+      tmpR[i] = _groundR[i]; tmpU[i] = _groundU[i]; tmpF[i] = _groundF[i];
     }
     basisMat(_groundR, _groundU, _groundF, tmpP, _groundMat);
     // C2 visual suspension: advance the cosmetic chassis springs from existing
@@ -7955,13 +7943,8 @@ function render(dt) {
         tmpU[i] = u * cp + f * sp;
       }
     }
-    // Cornering lean (render-only) comes from the C2 visual-suspension roll
-    // spring (_baRoll, computed above from lateral g). Combine it with the road
-    // bank, which is geometry (the car must sit ON the banked surface) and stays
-    // even when the cosmetic springs are disabled.
-    const rollTot = (bankC && bankC.roll ? bankC.roll : 0) + (_baRoll || 0);
-    if (rollTot) {
-      const cr = Math.cos(rollTot), sr = Math.sin(rollTot);
+    if (_baRoll) {
+      const cr = Math.cos(_baRoll), sr = Math.sin(_baRoll);
       for (let i = 0; i < 3; i++) {
         const r = tmpR[i], u = tmpU[i];
         tmpR[i] = r * cr + u * sr;
@@ -7993,8 +7976,8 @@ function render(dt) {
     if (FieldLod.on) shadowPass.pushCaster(_groundMat, c.team, c, FieldLod.castsShadow(_lodD2, fovY));   // visible cars only; rivals cast into the maps within 50 m (lens-adjusted, like the detail tier)
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
     // the car's rendered position. Orientation is the same yawVis as the body
-    // (heading vs road tangent) so the nose rotates when the car does. Pitch,
-    // roll and lean stay off this basis — those shoved the eye into the carbon.
+    // (heading vs road tangent) so the nose rotates when the car does. The seat
+    // origin is rebuilt after bank and yaw so the eye stays inside the cockpit.
     // The ORIGIN is still camEye minus the cockpit eye offsets along the
     // YAWed axes, so the eye sits at (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in
     // rig space every frame. A road-locked basis made turn-chasing glance
@@ -8111,7 +8094,7 @@ function render(dt) {
     if (c.isPlayer && (cockpitRigOnly || visorEye)) {
       // The rig stays on the car: its origin is the eye minus THIS mode's eye offsets.
       GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,
-        GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"));
+        GameCams.seatFwd(visorEye ? "visor" : "cockpit"), GameCams.seatUp(visorEye ? "visor" : "cockpit"), bankC ? bankC.roll : 0);
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, wheelDt, paint, visorEye);   // VISOR: no steering wheel
       // THE STOP'S CREW still: cockpit/visor continue before the exterior path,

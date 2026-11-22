@@ -31,13 +31,8 @@ export default function register() {
             return [(def.turns[3] - sectors[0]) * total,
                     (def.turns[7] - sectors[1]) * total];
           })(),
-          // 7a173519 moved the start line (startFrac 0.0125 -> 0.0), rotating
-          // racing fractions by the arc shift (+0.0867); the dip and the crest
-          // did not move physically. Re-pinned onto their measured new locations
-          // (headless VM, extremum scan): the Roggia dip bottoms at frac 0.3869
-          // (y -1.469) and the Lesmo crest peaks at 0.5646 (y +4.492).
-          roggiaY: window.__apex.nodeAt(0.3875).y,
-          lesmoY: window.__apex.nodeAt(0.565).y,
+          // The 2024 qualifying traces descend from Lesmo 2 to the Ascari entry.
+          lesmoToAscari: window.__apex.nodeAt(def.turns[6]).y - window.__apex.nodeAt(def.turns[7]).y,
           minY: Math.min(...profile.map((entry) => entry.y)),
           maxY: Math.max(...profile.map((entry) => entry.y)),
           geometry: window.__apex.geometryDiagnostics(),
@@ -78,9 +73,8 @@ export default function register() {
       // Measure the built racing arc, which differs from raw path metadata.
       expect(result.timingOffsetsM[0]).toBeCloseTo(233, 1);
       expect(result.timingOffsetsM[1]).toBeCloseTo(215, 1);
-      expect(result.roggiaY).toBeLessThan(-1);
-      expect(result.lesmoY).toBeGreaterThan(4);
-      expect(result.maxY - result.minY).toBeLessThan(7);
+      expect(Math.abs(result.lesmoToAscari - 6.1)).toBeLessThan(0.5);
+      expect(Math.abs(result.maxY - result.minY - 12.4)).toBeLessThan(0.5);
       expect(result.geometry.every((entry) => entry.ok)).toBe(true);
       expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
       expect(result.models.invalid).toEqual([]);

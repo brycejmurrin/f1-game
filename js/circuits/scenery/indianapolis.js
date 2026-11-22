@@ -8,7 +8,7 @@
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, hw, tree, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, terrainYAt, modelGroup, waterSurface,
         floodMast, cameraTower, sponsorHoarding, signDigit, indexSolid,
         bleacher, scaffoldStand, seat, recordBarrier,
         addBox, addCyl, addFrustum } = api;
@@ -306,10 +306,11 @@
       billboard(K(0.110), OUT, 16, 12, 4.5, IMS_NAVY);
       billboard(K(0.500), -1, 12, 14, 4.5, IMS_RED);
 
-      groundPatch(K(0.300), 1, 8, [22, 0.18, 28], [0.66, 0.62, 0.50],
+      // Outside of the right-hander, with the tyre barrier beyond the gravel.
+      groundPatch(K(0.300), -1, 10, [22, 0.18, 28], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-a", samples: 6 });
-      tyreWall(0.286, 0.316, 1, 4, [0.86, 0.20, 0.18]);
-      marshalPost(K(0.305), -1, 9);
+      tyreWall(0.286, 0.316, -1, 22, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.305), 1, 9);
 
       groundPatch(K(0.500), -1, 5, [24, 0.18, 32], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-b", samples: 6 });
@@ -487,9 +488,9 @@
             if (h < 0.30) continue;
             const p = vadd(vadd(a.c, a.t, (i % 5 - 2) * 7), a.r, Math.floor(i / 5) * 8 - 2);
             if (onTrack(p[0], p[2], 10)) continue;
-            // Foot at grade (seat.box idiom): centre-anchored addBox would
-            // bury half the car in the asphalt patch.
-            addBox(out, vadd(p, a.u, 0.55), [2.0, 1.1, 4.2],
+            // The asphalt follows the terrain beneath each parking space.
+            p[1] = terrainYAt(p[0], p[2]) ?? p[1];
+            seat.box(out, p, [2.0, 1.1, 4.2],
               h < 0.5 ? [0.15, 0.18, 0.35] : (h < 0.75 ? [0.72, 0.72, 0.74] : IMS_RED), b);
           }
         }
@@ -540,12 +541,8 @@
           { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
       });
 
-      // Infield viewing on the run from T2 into T3: built window 0.190-0.232
-      // is the right-hand curve between the T2 left (0.1684) and the T3 right
-      // (0.2419), side +1 = the infield (the inside of that curve), 40 m
-      // short of the T3 apex. Bleachers, not grandstandEx, so crowdBank/rejBox
-      // cannot suppress the whole stand. (Was labelled "Turn 1 outside", 184 m
-      // past the T1 apex 0.1449 and on its inside; corner-frames 2026-11-18.)
+      // Infield bleachers from T3 toward T4. The first stand spans the T3
+      // apex (0.1925); the second ends 40 m before the T4 apex (0.2419).
       bleacher(0.190, 0.210, 1, 18, {
         rows: 8, step: 9, density: 0.42,
         plankCol: [0.72, 0.72, 0.74], frameCol: [0.58, 0.59, 0.62],
@@ -556,9 +553,7 @@
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });
-      // Infield mid-course bleacher (side +1 matches the gravel apron at 0.300).
-      // Authored rise/setback are positive; world-space "beyond" is contaminated
-      // here by the nearby oval ribbon, so do not flip side from a distance probe.
+      // T7 infield bleacher. Its 0.392–0.408 window straddles the apex at 0.3974.
       bleacher(0.392, 0.408, 1, 24, {
         rows: 7, step: 8, density: 0.40,
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],

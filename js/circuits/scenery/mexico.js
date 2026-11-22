@@ -298,7 +298,9 @@
       billboard(K(0.02), STAND, 8, 16, 5, FLAG_G);
       billboard(K(0.045), STAND, 8, 14, 5, FLAG_R);
 
-      hedge(0.04, 0.14, 1, 13, 3.2, TREEGRN);
+      // Leave the two right-side grandstand footprints and their entrances clear.
+      hedge(0.063, 0.112, 1, 13, 3.2, TREEGRN);
+      hedge(0.128, 0.14, 1, 13, 3.2, TREEGRN);
       hedge(0.04, 0.12, -1, 16, 2.8, PARKGRN);
       forestEdge(0.065, 0.14, 1, 26, { density: 0.30, hMin: 9, hMax: 16, col: TREEGRN, col2: PARKGRN, pineFrac: 0.22 });
       forestEdge(0.04, 0.14, -1, 28, { density: 0.26, hMin: 8, hMax: 15, col: PARKGRN, col2: TREEGRN, pineFrac: 0.18 });
@@ -597,7 +599,11 @@
         shell: BOWL_SHELL, fascia: [0.90, 0.89, 0.84],
         crowd: SEAT_NAVY, density: 0.78, step: 9,
       };
-      tieredBowl(0.728, 0.858, -1, 9, BOWL_OPTS);
+      // Short panels follow the outside of the stadium entry turn: the long
+      // risers and fascia met at an angle and overlapped across their tops.
+      tieredBowl(0.728, 0.823, -1, 9, BOWL_OPTS);
+      tieredBowl(0.8246, 0.8249, -1, 9, { ...BOWL_OPTS, step: 4 });
+      tieredBowl(0.8265, 0.858, -1, 9, BOWL_OPTS);
       tieredBowl(0.728, 0.814,  1, 9, BOWL_OPTS);
       tieredBowl(0.836, 0.858,  1, 9, BOWL_OPTS);
       // Closed back shell behind the lower bowl rake (gap 9 + 4*5.2 ≈ 30)
@@ -606,10 +612,18 @@
           const a = anchor(k, side, gap);
           if (onTrack(a.c[0], a.c[2], 6)) return;
           const b = [a.r, a.u, a.t];
+          // On an inside bend the shell anchors are closer together than the
+          // road stations. Size the panels to the available space on the shell.
+          const stride = Math.round(spacing * n / lapLen);
+          const chord = (other) => {
+            const c = anchor(other, side, gap).c;
+            return Math.hypot(c[0] - a.c[0], c[2] - a.c[2]);
+          };
+          const panel = Math.min(spacing, chord(k - stride), chord(k + stride));
           // Lift 0.15 so the shell base is not buried into the verge slope
-          addBox(out, vadd(a.c, a.u, h * 0.5 + 0.15), [2.0, h, spacing * 0.95], BOWL_SHELL[0], b);
+          addBox(out, vadd(a.c, a.u, h * 0.5 + 0.15), [2.0, h, panel * 0.95], BOWL_SHELL[0], b);
           addBox(out, vadd(vadd(a.c, a.r, side * 1.15), a.u, h * 0.55 + 0.15),
-                 [0.4, h * 0.75, spacing * 0.9],
+                 [0.4, h * 0.75, panel * 0.9],
                  side < 0 ? FLAG_G : FLAG_R, b);
         });
       };
@@ -794,8 +808,9 @@
         });
       }
       // Taller floodlights flanking the Peraltada
-      lightMast(K(0.90), 1, 32, 44);
-      lightMast(K(0.94), 1, 32, 44);
+      // The outer stand ends at 44 m and the terrace at 63 m. Keep each 10 m pad clear.
+      lightMast(K(0.90), 1, 72, 44);
+      lightMast(K(0.94), 1, 72, 44);
       if (typeof floodMast === "function") {
         floodMast(K(0.905), 1, 36, { h: 42, cool: true, pool: false, arms: 3 });
         floodMast(K(0.945), 1, 36, { h: 42, cool: true, pool: false, arms: 3 });

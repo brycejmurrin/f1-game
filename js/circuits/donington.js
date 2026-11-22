@@ -13,6 +13,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "donington",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -80,6 +81,11 @@
     // fall back to thirds.
     sectors: [0.333, 0.645],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0853, 0.0939, 0.2149, 0.2759, 0.3310, 0.4400, 0.5189, 0.5484, 0.7034, 0.8260, 0.9295],
+    // EA 1 m lidar transverse sections across the central 8 m of pavement.
+    bankZones: [
+      { turn: 3, angleDeg: 2.3, widthM: 120 },   // Craner Curves
+      { turn: 6, angleDeg: 2.8, widthM: 120 },   // McLeans
+    ],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],

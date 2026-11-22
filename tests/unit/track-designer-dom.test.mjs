@@ -1745,7 +1745,10 @@ test("BANK °: the SELECTED TURN banks its apex — {frac, angleDeg, widthM: the
   assert.equal(b.D.state().design.bankZones[0].angleDeg, 4);
   assert.ok(!v.issues.some((i) => i.code === "fia-bank"), "4° is within Grade 1");
   stepBy(row, -5);
-  assert.deepEqual(plain(b.D.state().design.bankZones), [], "down past 2° is flat: the zone goes");
+  assert.equal(val.textContent, "-6°");
+  assert.equal(b.D.state().design.bankZones[0].angleDeg, -6);
+  stepBy(row, 3);
+  assert.deepEqual(plain(b.D.state().design.bankZones), [], "zero removes the bank");
   assert.equal(val.textContent, "FLAT");
   assert.equal(b.D.setCornerBank(2, 99), true, "by number; clamps to 30");
   assert.equal(b.D.state().design.bankZones[0].angleDeg, 30);

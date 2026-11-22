@@ -1960,7 +1960,7 @@ const TrackDesigner = (function () {
     box.insertBefore(ui.spanW, box.children[at + 1] || null);
     ui.turnPick = el("div"); ui.turnPick.hidden = true; ui.turnPick.setAttribute("role", "group"); ui.turnPick.setAttribute("aria-label", "Selected turn");
     ui.turnPickLabel = el("div", "td-label", "SELECTED TURN");
-    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v > 0 ? v + "°" : "FLAT"));
+    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v ? v + "°" : "FLAT"));
     ui.turnPick.append(ui.turnPickLabel, ui.bank);
     ui.turns.parentNode.appendChild(ui.turnPick);
   }
@@ -2049,21 +2049,20 @@ const TrackDesigner = (function () {
     const z = c && tr ? bankNear(c, tr.total, (q) => Math.max(q.widthM / 2, c.lenM / 2)) : null;
     return z ? z.angleDeg : 0;
   }
-  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, else 2 … 30). */
+  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, negative = adverse). */
   function setCornerBank(row, deg) {
     if (previewT || !verdict) runPreview();
     const c = typeof row === "number" ? ins.find((x) => x.n === row) : row, tr = verdict && verdict.tr;
     if (!c || !tr || !Number.isFinite(c.sApex)) { message("Select a turn under TURNS first", true); return false; }
     const L = tr.total, LIM = CustomTracks.LIMITS, had = design.bankZones || [];
-    deg = Math.round(Math.min(LIM.angleDeg, Math.max(0, +deg || 0)));
-    if (deg < 2) deg = 0;
+    deg = Math.round(Math.min(LIM.angleDeg, Math.max(-LIM.angleDeg, +deg || 0)));
     const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < c.lenM / 2));
     if (deg && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " banked corners at most — flatten one first", true); return false; }
     const next = deg ? keep.concat([{ frac: TrackZones.wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
     if (JSON.stringify(next) === JSON.stringify(had)) return false;
     commit(Object.assign({}, design, { bankZones: next }), "zone:bank");
     const I = insight(), fiaMax = I && I.THRESH ? I.THRESH.bankDeg : 5.7;
-    message("T" + c.n + (deg ? " banked " + deg + "°" + (deg > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
+    message("T" + c.n + (deg ? " banked " + deg + "°" + (Math.abs(deg) > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
     return true;
   }
   /** Whole-circuit kerb ribbon: flat / sausage / rumble (mesh.js buildKerbs). */
@@ -2093,7 +2092,7 @@ const TrackDesigner = (function () {
   }
   /** "· BANK 6° · 12.6 m WIDE" on a TURNS row whose apex carries a zone. */
   function turnTags(c) {
-    return (c.bankDeg > 0 ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
+    return (c.bankDeg ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
   }
 
   // ── elevation: per-node heights[] + the strip (DesignerProfile) ──

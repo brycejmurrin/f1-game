@@ -165,7 +165,10 @@
       // Clipped park hedge banding through several sweeps for a manicured edge.
       // Near ranks skip curvaGrandeHedge (above) so gap 20/21 stays clear.
       hedge(0.06, 0.18, -1, 20, 6, [0.12, 0.33, 0.16]);
-      hedge(0.06, 0.18,  1, 21, 6, [0.12, 0.33, 0.16]);
+      // Leave an opening at the tight approach to Curva Grande; straight
+      // hedge sections overlap on the inside of the bend.
+      hedge(0.06, 0.125, 1, 21, 6, [0.12, 0.33, 0.16]);
+      hedge(0.131, 0.18, 1, 21, 6, [0.12, 0.33, 0.16]);
       hedge(0.32, 0.46, -1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.66, 0.78,  1, 22, 5, [0.13, 0.34, 0.17]);
       hedge(0.82, 0.94, -1, 24, 5, [0.12, 0.33, 0.16]);
@@ -175,7 +178,8 @@
       hedge(0.19, 0.215, -1, 18, 4.5, [0.13, 0.35, 0.17]);
       hedge(0.245, 0.27, -1, 18, 4.5, [0.13, 0.35, 0.17]);
       hedge(0.36, 0.42,  1, 22, 4.5, [0.13, 0.35, 0.17]);   // Villa lake
-      hedge(0.58, 0.66,  1, 24, 4.5, [0.13, 0.35, 0.17]);   // Villa Reale approach
+      hedge(0.58, 0.638, 1, 24, 4.5, [0.13, 0.35, 0.17]);  // Villa Reale approach
+      hedge(0.647, 0.66, 1, 24, 4.5, [0.13, 0.35, 0.17]);  // resume past the Ascari bend
       every(14, (k) => {
         const s = k / n;
         if (s < 0.43 || s > 0.54) return;
@@ -543,8 +547,10 @@
         const h = hash(k * 71 + 31);
         if (h < 0.5) return;
         const s = k / n;
-        if (s > 0.10 && s < 0.90) return;   // only behind pit/paddock
-        motorhome(k, -1, 55 + h * 10, 10, 4, 6, { wall: [0.6 + h * 0.3, 0.6, 0.62] });
+        if (s > 0.09 && s < 0.90) return;   // end the parking row before the Rettifilo chicane
+        // Park the long axis along the service road. The old 10 m cross-slope
+        // body put the uphill sill under the bank beside the paddock.
+        motorhome(k, -1, 58.5 + h * 10, 3, 4, 10, { wall: [0.6 + h * 0.3, 0.6, 0.62] });
       });
 
       broadcastCompound(K(0.98), -1, 75, { vans: 3, dishes: 2, mastH: 9 });
@@ -836,7 +842,15 @@
           let i = 0;
           along(s0, s1, 3.0, (k) => {
             const a = anchor(k, side, 4.2);
-            addBox(out, vadd(a.c, a.u, 0.22), [0.95, 0.42, 2.6],
+            // Ground each block on its uphill end where the verge crosses a slope.
+            let y = a.c[1] + 0.3;
+            for (const off of [-1.3, 0, 1.3]) {
+              const end = vadd(a.c, a.t, off);
+              const surface = terrainYAt(end[0], end[2]);
+              if (surface != null) y = Math.max(y, surface - a.t[1] * off);
+            }
+            const foot = [a.c[0], y, a.c[2]];
+            addBox(out, vadd(foot, a.u, 0.19), [0.95, 0.42, 2.6],
                    (i++ % 2 === 0) ? kerbR : kerbW, [a.r, a.u, a.t]);
           });
         }

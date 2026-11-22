@@ -441,7 +441,8 @@
       for (let i = 0; i < 3; i++)                     // the spill fades outward
         pad(0.1105 + i * 0.0060, 1, 15.5, [6.0, 0.06, 6.0], i & 1 ? CLAY_L : CLAY, 0.06);
       hut(0.1140, 1, 14, ROOF_BLUE);
-      sponsorHoarding(0.112, 0.130, 1, 13, { h: 1.3 });
+      // Put the boards on the approach before the inside bank rises.
+      sponsorHoarding(0.100, 0.112, 1, 13, { h: 1.3 });
       // Hedge gap pushed out past the apron pads — was flatCoplanar with itself
       // and with the Attwood hedge start at 3.8–5.2 m².
       // Approach only: the Turn 1 inside radius is 22-25 m from 0.113 on, so
@@ -517,7 +518,9 @@
       for (let i = 0; i < 8; i++)                     // club car park
         safeBox(0.2230 + (i >> 1) * 0.0090, 1, (i & 1) ? 35 : 40.5,
           [4.3, 1.4, 1.9], CAR[(i * 3) % CAR.length]);
-      pad(0.2260, 1, 38, [26, 0.07, 22], APRON_L, 0.03);
+      // The main paddock apron ends 39 m from the road edge. Place the
+      // club car-park surface alongside it, with room for the curved verge.
+      pad(0.2260, 1, 46, [12, 0.07, 22], APRON_L, 0.03);
       sponsorHoarding(0.196, 0.222, 1, 14, { h: 1.5 });
       billboard(K(0.2330), 1, 14, 8, 3.0, [0.90, 0.56, 0.16]);
       hedge(0.190, 0.252, 1, 34, 1.7, SCRUB_L);

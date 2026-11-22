@@ -60,7 +60,7 @@ export default function register() {
 
       const low = result.profile.reduce((best, point) => point.y < best.y ? point : best);
       const high = result.profile.reduce((best, point) => point.y > best.y ? point : best);
-      // SRTM bake (~30 m basin). Authored cosines put the low just after SF and
+      // SRTM bake and T2–T4 race-trace fit (36 m published relief). Authored cosines put the low just after SF and
       // a +16 m mid-sector crest; the survey low is mid-S1 and the high is near
       // the end of the lap (relative to SF = 0).
       expect(low.frac).toBeGreaterThan(0.22);
@@ -68,8 +68,8 @@ export default function register() {
       expect(low.y).toBeLessThan(-22);
       expect(high.frac).toBeGreaterThan(0.85);
       expect(high.frac).toBeLessThan(0.96);
-      expect(high.y - low.y).toBeGreaterThan(28);
-      expect(high.y - low.y).toBeLessThan(34);
+      const reliefError = Math.abs((high.y - low.y) - 36);
+      expect(reliefError).toBeLessThan(1);
       expect(result.probes.length).toBe(20);
       for (const probe of result.probes) {
         const label = `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: ${JSON.stringify(probe)}`;

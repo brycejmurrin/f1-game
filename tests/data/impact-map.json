@@ -5196,7 +5196,6 @@
     },
     "js/circuits/imola.js": {
       "*": [
-        "tests/specs/imola-foundation.spec.js",
         "tests/unit/node-plan.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/select-specs.test.mjs"
@@ -5239,11 +5238,6 @@
       "*": [
         "tests/unit/deploy-tool.test.mjs",
         "tests/unit/node-plan.test.mjs"
-      ]
-    },
-    "js/circuits/qatar.js": {
-      "*": [
-        "tests/specs/circuit-foundation.spec.js"
       ]
     },
     "js/circuits/scenery/abudhabi.js": {
@@ -5803,6 +5797,9 @@
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
+        "tests/unit/shared-math.test.mjs"
+      ],
+      "roadFrameAxes": [
         "tests/unit/shared-math.test.mjs"
       ],
       "wrapDelta": [
@@ -8999,6 +8996,9 @@
       ]
     },
     "js/garage/scene.js": {
+      "buildPitLane": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "buildStatic": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
@@ -12370,8 +12370,7 @@
         "tests/unit/ai-drive.test.mjs"
       ],
       "bankGrip": [
-        "tests/unit/ai-drive.test.mjs",
-        "tests/unit/physics-rows-vm.test.mjs"
+        "tests/unit/ai-drive.test.mjs"
       ],
       "beginLook": [
         "tests/unit/ai-drive.test.mjs"
@@ -12782,6 +12781,7 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
+        "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
@@ -16274,9 +16274,6 @@
         "tests/unit/driving-line.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
-      "nodeBank": [
-        "tests/unit/driving-line.test.mjs"
-      ],
       "opacityMul": [
         "tests/unit/driving-line.test.mjs"
       ],
@@ -18639,6 +18636,7 @@
         "tests/specs/material-shimmer.spec.js",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-worker.test.mjs",
+        "tests/unit/driving-line.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-frame-garbage.test.mjs",
@@ -18755,6 +18753,7 @@
         "tests/unit/track-spline-walls.test.mjs"
       ],
       "sample": [
+        "tests/unit/driving-line.test.mjs",
         "tests/unit/lsp-mcp.test.mjs"
       ],
       "wallAt": [
@@ -19015,10 +19014,10 @@
     },
     "js/track/scenery/pits.js": {
       "build": [
-        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/lazy-track-build.test.mjs"
       ],
       "*": [
+        "tests/specs/circuit-foundation.spec.js",
         "tests/specs/imola-foundation.spec.js",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/load-order.test.mjs"
@@ -19083,9 +19082,7 @@
     },
     "js/track/tracks.js": {
       "build": [
-        "tests/specs/circuit-foundation.spec.js",
         "tests/unit/baked-model-road-guard.test.mjs",
-        "tests/unit/baku-migration.test.mjs",
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/build-steps.test.mjs",

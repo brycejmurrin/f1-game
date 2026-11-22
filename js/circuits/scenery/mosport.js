@@ -320,7 +320,7 @@
       }
       marshalPost(K(0.4865), 1, 15);
       fence(0.4620, 0.5150, 1, 20, 3.0, FENCE_C);
-      sponsorHoarding(0.4700, 0.5050, 1, 18);
+      sponsorHoarding(0.4830, 0.5050, 1, 18);
       guardrail(0.4640, 0.5200, -1, 11, ARMCO);
       tyreWall(0.4780, 0.4960, -1, 12.0, TYRE_Y);
       // No near mixedWood at Moss: the hairpin folds -1 trees into the +1 bank
@@ -362,7 +362,6 @@
       hedge(0.6500, 0.7900, 1, 30, 2.1, HEDGE_C);
       hedge(0.7100, 0.7700, 1, 62, 2.0, HEDGE_C);
       slopeRidge(K(0.7400), 1, 88, 88, 24, 5.0, ROUGH);
-      slopeRidge(K(0.6800), 1, 108, 76, 20, 4.0, GRASS);
       for (let i = 0; i < 8; i++) specimen(K(0.6450 + i * 0.0190), 1, 44 + (i % 3) * 18, 300 + i * 11);
       marshalPost(K(0.7400), 1, 20);
 
@@ -512,7 +511,6 @@
       // Drumlin field boundaries on the farmland side.
       hedge(0.1500, 0.2200, 1, 44, 2.0, HEDGE_C);
       hedge(0.5400, 0.6200, 1, 36, 2.0, HEDGE_C);
-      hedge(0.8000, 0.8300, 1, 34, 2.0, HEDGE_C);
 
       // Almost no run-off anywhere (§5): armco IS the edge of the world.
       guardrail(0.0, 1.0, -1, 13.0, ARMCO);
@@ -521,7 +519,7 @@
       // Dry sandy shoulders rather than kerbing everywhere (§2).
       for (let i = 0; i < 9; i++) {
         const s = 0.02 + i * 0.105;
-        if (i === 4) continue;   // 0.44: the Moss run-down's own 12..22 m patch
+        if (i === 4 || i === 5) continue;  // Moss approach and exit have their own verge patches.
         groundPatch(K(s), -1, 12, [6, 0.14, 34], SAND);
       }
 

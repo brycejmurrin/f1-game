@@ -30,16 +30,16 @@ Severe for a circuit this short. Official max slope 14 % through the Parabolique
 | 0.300 | +1 | 34 | Required `dijon-combe-cut` — pale limestone benches on the drop toward Virage de la Combe / Combe de Pouilly (Driver61 sheet; official Combe shoulder works). Hedge and scattered trees above the cut. |
 | 0.365 | -1 | 44 | Open valley. Field hedges, crop colour, distant ridge. Nothing tall — the circuit must read from across the valley. Required `dijon-prenois-ferme` on the far shoulder (generic Burgundy ferme; exact farm names **UNCERTAIN**). |
 | 0.420 | +1 | 12 | The long left (built 0.410-0.454; a left, so not Villeroy). `guardrail`, `tyreWall`, timing `building`. |
-| 0.545 | +1 | 15 | The esses (S des Sablières). Limestone spoil benches, `marshalPost`, `guardrail`. |
-| 0.645 | +1 | 10 | Virage de la Bretelle — left where the extension rejoins. `tyreWall`, `cameraTower` covering Parabolique entry. |
-| 0.725 | -1 | 18 | Outside of the Parabolique. Required `dijon-parabolique-bank` — positive-rake spectator bank (1976–77 extension corner; max slope 14 %). Deep `guardrail`, `tyreWall`, `sponsorHoarding`. |
-| 0.760 | +1 | 24 | Parabolique infield: deliberately empty — marshal + billboard pair only. |
-| 0.880 | +1 | 20 | Parabolique exit / paddock entrance apron. Building + fence. Motorhomes omitted (burial / clip). |
+| 0.545 | +1 | 15 | Parabolique climb. Limestone spoil benches, `marshalPost`, `guardrail`. |
+| 0.645 | +1 | 10 | Virage de la Bretelle — left where the extension rejoins. `tyreWall`, `cameraTower` overlooking the exit of Parabolique. |
+| 0.725 | -1 | 18 | Virage de la Combe. Required `dijon-parabolique-bank` — positive-rake spectator bank. The operator’s 14% road gradient is on Parabolique earlier in the lap. Deep `guardrail`, `tyreWall`, `sponsorHoarding`. |
+| 0.760 | +1 | 24 | Virage de la Combe infield: deliberately empty — marshal + billboard pair only. |
+| 0.880 | +1 | 20 | Pouas exit / paddock entrance apron. Building + fence. Motorhomes omitted (burial / clip). |
 | 0.950 | -1 | 14 | Approach to the line. Second `grandstandEx` (docs row; modern map **UNCERTAIN**), hoarding, `cameraTower`, `marshalPost`. |
 
 ## 5. Track features
 
-- The Parabolique — long fast right closing the lap (added with the 1976 extension to 3.801 km).
+- Parabolique lies at 0.447–0.624 by the mapped raceway names. Courbe de Pouas closes the lap at 0.775–0.900.
 - Blind crests where the track drops out of sight (Combe de Pouilly).
 - Very short lap — cars are rarely out of view.
 

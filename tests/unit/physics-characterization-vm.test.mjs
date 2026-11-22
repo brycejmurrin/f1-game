@@ -54,7 +54,8 @@ const SCENARIOS = [
 const FIELDS = ["s", "x", "speed", "slipDeg", "head", "prog"];
 const WIDE = ["yawRate", "gear", "aeroX", "energy"];
 const fieldsOf = (s) => [...FIELDS, ...(s.wide ? WIDE : []), ...(s.ai != null ? ["ai.s", "ai.x", "ai.speed"] : [])];
-const R = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
+// JSON stores a rounded -0 as 0. Compare the same representation on replay.
+const R = (v) => (typeof v === "number" && isFinite(v) ? (Math.round(v * 1e4) / 1e4 || 0) : v);
 
 // Read only literal recipe data, never evaluate the browser module or import
 // Playwright. Full AST equality catches durations, inputs, offsets and order.

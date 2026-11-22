@@ -570,8 +570,8 @@ test.describe("shared track foundation diagnostics", () => {
     // (0.1502) when 7a17351 moved the start line — the hill itself did not
     // move. Were 0.12/0.55 against the pre-move line. See the shanghai note
     // above before touching the elevation transform.
-    expect(Math.abs(result.peakFrac - 0.265)).toBeLessThan(0.03);
-    expect(Math.abs(result.troughFrac - 0.6975)).toBeLessThan(0.03);
+    expect(Math.abs(result.peakFrac - 0.580)).toBeLessThan(0.03);
+    expect(Math.abs(result.troughFrac - 0.993)).toBeLessThan(0.03);
     expect(result.ground.every(({ lat, sample }) =>
       (lat === 0 || sample.terrainY != null) &&
       (sample.gap == null || sample.gap <= 0.18)
@@ -664,10 +664,8 @@ test.describe("shared track foundation diagnostics", () => {
     expect(spans).toHaveLength(2);
     expect(spans.every((entry) => entry.overhead && entry.clearance >= 4.8)).toBe(true);
     const peak = result.profile.reduce((best, point) => point.y > best.y ? point : best);
-    // Racing fraction, rotated by miami's _sceneryShift (0.2008) when 7a17351
-    // moved the start line. Was 0.66 against the pre-move line; the crest is
-    // physically unmoved. See the shanghai note before touching the transform.
-    expect(Math.abs(peak.frac - 0.8583)).toBeLessThan(0.04);
+    // OpenF1 qualifying positions put the crest between T14 and T15.
+    expect(Math.abs(peak.frac - 0.6152)).toBeLessThan(0.003);
     expect(peak.y).toBeGreaterThan(3);
     expect(result.walls.tightFrac).toBeGreaterThan(0.35);
     // A null gap (inside the road carve) passes the every() below; 3 of the 9
@@ -797,7 +795,10 @@ test.describe("shared track foundation diagnostics", () => {
         models,
         walls: window.__apex.wallStats(),
         props: geometry.find((entry) => entry.name === "props")?.vertices,
-        elevation: { range: high.y - low.y, lowFrac: low.frac, highFrac: high.frac },
+        elevation: {
+          range: high.y - low.y, lowFrac: low.frac, highFrac: high.frac,
+          hairpinRise: profile[Math.round(0.6007 * profile.length)].y - low.y,
+        },
         terrainGaps,
       };
     }, day);
@@ -839,10 +840,12 @@ test.describe("shared track foundation diagnostics", () => {
     // (headless VM, 2026-11-10) (the rest sit in the street carve).
     expect(result.terrainGaps.filter((gap) => gap !== null).length).toBeGreaterThanOrEqual(6);
     expect(result.terrainGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
-    expect(result.elevation.range).toBeGreaterThan(4);
-    expect(result.elevation.range).toBeLessThan(6);
-    expect(result.elevation.lowFrac).toBeCloseTo(0.10, 1);
-    expect(result.elevation.highFrac).toBeCloseTo(0.62, 1);
+    // Two 2024 qualifying traces show 5.4 m of relief and a 5.0–5.1 m rise
+    // from the T4 low to the T13 hairpin. The crest follows the hairpin.
+    expect(Math.abs(result.elevation.range - 5.4)).toBeLessThan(0.4);
+    expect(Math.abs(result.elevation.hairpinRise - 5.05)).toBeLessThan(0.3);
+    expect(Math.abs(result.elevation.lowFrac - 0.122)).toBeLessThan(0.012);
+    expect(Math.abs(result.elevation.highFrac - 0.63)).toBeLessThan(0.035);
   });
 });
 

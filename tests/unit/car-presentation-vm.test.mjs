@@ -589,7 +589,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     G.camMode = camMode; G.state = state; casts.length = 0;
     sp.reset();   // drop the lamp map's content key: every call here rebuilds
     sp.livePlayerMat.set(ground);
-    sp.resolvePlayer(smp, yv);
+    sp.resolvePlayer(smp, yv, 0.1);
     if (which === "car") sp.sunPass(f, 0, true); else sp.lampPass(f, 0, true);
     const mine = casts.filter((k) => k.pass === which);
     assert.equal(mine.length, 1, `${which} map: one caster, the player (no rivals pooled)`);
@@ -599,7 +599,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
   const drawnMat = (seat) => {
     const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
-    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat));
+    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat), 0.1);
     // Stored as game.js stores _cockMat (a Float32Array): the cast must match it bit for bit.
     return Array.from(Float32Array.from([R[0], R[1], R[2], 0, U[0], U[1], U[2], 0, F[0], F[1], F[2], 0, P[0], P[1], P[2], 1]));
   };
