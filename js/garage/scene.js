@@ -995,11 +995,6 @@ function buildPitLane(out, liv, night) {
   const AP = TrackPit.BAY.doorW / 2, DH = TrackPit.BAY.doorH, FZ = Z_DOOR + 0.025;
   for (const side of [-1, 1]) {
     panelGrid(out, [side < 0 ? -HALF_W : AP, 0, FZ], [HALF_W - AP, 0, 0], [0, CEIL_Y, 0], 4, 4, [0, 0, 1], () => WALL, MAT.CONCRETE);
-    for (let bay = 1; bay <= 2; bay++) {
-      const x = side * TrackPit.PITCH * bay;
-      block(out, x, 2.5, Z_DOOR - 0.35, HALF_W - 0.10, 2.5, 0.35, scale(WALL, 0.85), MAT.CONCRETE);
-      block(out, x, 4.65, Z_DOOR + 0.015, HALF_W - 0.16, 0.16, 0.04, c1, MAT.METAL);
-    }
   }
   panelGrid(out, [-AP, DH, FZ], [AP * 2, 0, 0], [0, CEIL_Y - DH, 0], 8, 1, [0, 0, 1], () => c1, MAT.METAL);
   // A wall to stop the eye. Without it the lane runs to the apron rim and
@@ -1131,7 +1126,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // BODY STRIPE, DETAIL or TEAM LOGO edit, while the car repaints
 // (js/garage/setup-sheet.js livePreviewDraft busts the decal atlas and the
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
-let exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
+let fallbackBaysMesh = null, fallbackFixtures = null, exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
@@ -1394,6 +1389,7 @@ function rebuild(team, liv, info, ctx) {
 // real spot lights streak across it. The sheen is emergent from the lamp
 // energies above — it does not appear at a dimmer rig's levels.
 const FLOOR_OPTS = { roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
+const BAY_LIGHT_OPTS = { emissive: 1, roughness: .65 };
 const SHELL_OPTS = { roughness: 0.86, metalness: 0.05, specular: 0.16, clearcoat: 0 };
 
 const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
@@ -1422,7 +1418,20 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   ensureDynamic();
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
-  if (!(ctx && ctx.realExterior)) _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
+  if (!(ctx && ctx.realExterior)) {
+    _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
+    if (ctx && ctx.showLaneBays) {
+      if (!fallbackBaysMesh) {
+        const bays = acc(), fixtures = acc();
+        for (const bay of [-2, -1, 1, 2])
+          GaragePrims.buildLaneBay(bays, bay * TrackPit.PITCH, bay % 2 ? [0.22, 0.34, 0.50] : [0.55, 0.23, 0.14], HALF_W, HALF_W, fixtures);
+        fallbackBaysMesh = _gfx.createMesh(bays);
+        fallbackFixtures = _gfx.createMesh(fixtures);
+      }
+      _gfx.draw(fallbackBaysMesh, MAT_I, SHELL_OPTS);
+      _gfx.draw(fallbackFixtures, MAT_I, BAY_LIGHT_OPTS);
+    }
+  }
   const studio = !!(ctx && ctx.studio);
   // Room first so its depth is in the buffer: the reflection then depth-tests
   // against props/shell (they win) and only needs bias to clear the floor.
@@ -1700,6 +1709,8 @@ function release() {
   let n = typeof GarageCrew !== "undefined" && GarageCrew.free ? GarageCrew.free() : 0;
   const fm = (m) => { if (m) { _gfx.freeMesh(m); n++; } return null; };
   const ft = (t) => { if (t && _gfx.freeTexture) { _gfx.freeTexture(t); n++; } return null; };
+  fallbackBaysMesh = fm(fallbackBaysMesh);
+  fallbackFixtures = fm(fallbackFixtures);
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);

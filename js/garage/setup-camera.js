@@ -870,6 +870,7 @@ function getSetupPreviewMesh() {
   return _spMesh;
 }
 // Optional, detached circuit slice shared by every garage camera/animation.
+const exteriorLamps = { lampLevel: .26, poolEnergy: .55 };
 let /** @type {ReturnType<typeof GarageExterior.create> | null} */ exterior = null, exteriorBoot = null, exteriorBootKey = "", exteriorEpoch = 0, exteriorDrawn = false;
 let exteriorSelection = null, exteriorRequested = null, exteriorHeld = null, exteriorSequence = false, exteriorVisible = false, exteriorLight = null, exteriorAnchor = null;
 const exteriorSkyInv = new Float32Array(16);
@@ -1129,6 +1130,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt, arrivalHeld());
   if (handoff && !driveOut && !preview && !home.active && !(arriving && arriving.active)) fireHandoff();   // the show ended or was skipped
   const context = garageCtx(), sceneTime = context.sceneNow;
+  context.showLaneBays = !!(arriving && arriving.active);
   context.realExterior = typeof prepareExterior === "function" && prepareExterior(context, arriving);
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
     GarageExterior.fitPose(arriving, exteriorAnchor, !!driveOut && driveOut.cfg.angle === "cut");
@@ -1293,6 +1295,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else context.cue = null;
   const liv = _spLiv();
   const lightsRig = GarageScene.live(liv, sceneTime, context);
+  if (context.realExterior && context.showLaneBays) {
+    const tune = typeof LightStore !== "undefined" && exteriorRequested ? LightStore.garageLamps(exteriorRequested, exteriorLamps) : liveTune();
+    exterior.appendLights(lightsRig, _tuneNum(tune, "lampLevel", .26), _tuneNum(tune, "poolEnergy", .55));
+  }
   if (gfx.begin({
     // Sun with NO sideways component. The shark fin is a thin blade whose two
     // flanks carry opposite normals (+X and -X), so any X in the sun direction
@@ -1312,7 +1318,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return false;
-  if (context.realExterior) exteriorDrawn = exterior.draw();
+  if (context.realExterior) exteriorDrawn = exterior.draw(context.showLaneBays);
   const spMat = carPaintMat(PAINT_DRY_DAY);
   spMat.sparkle = 0.12;   // near-kill the metallic-flake glitter so the slow turntable doesn't "twinkle"
   // Paint stays the race dry-day material. The old matte override (clearcoat 0.1,

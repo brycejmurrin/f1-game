@@ -816,6 +816,20 @@ test('exterior owns terrain, scenery, tagged lights, glass and water across draw
   h.ext.release(); assert.equal(h.freed.length, 16);
 });
 
+test("departure lamp levels scale only exterior energy and preserve the room rig", async () => {
+  const mesh = { pos: [0, 0, 0] };
+  const lamp = [1, 2, 3, 20, 40, 60, 30, 0, -1, 0, .9, .8, .1, 0, 0];
+  const h = exteriorHarness({ geometry: () => ({ ground: mesh, road: mesh, props: mesh, lamps: [lamp] }) });
+  assert.equal(await h.ext.request(h.selection("bahrain", "dry", "night")), true);
+  const room = Array(15).fill(1), rig = room.slice();
+  h.ext.appendLights(rig, 0, .55);
+  assert.deepEqual(rig, room);
+  h.ext.appendLights(rig, .5, .25);
+  assert.deepEqual(rig.slice(0, 15), room);
+  assert.deepEqual(rig.slice(18, 21), [2.5, 5, 7.5]);
+  assert.deepEqual(lamp.slice(3, 6), [20, 40, 60]);
+});
+
 test('scenery-authored atmosphere uses its owned palette without changing the selected circuit', async () => {
   const palette = { zenith: [.42,.48,.52], fogDensity: .0032 };
   const geo = () => ({ pos: [0,0,7,1,0,7,0,1,7] });
