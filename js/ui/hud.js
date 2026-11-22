@@ -459,9 +459,7 @@ let _fitStamped = false, _fitClashRun = 0;
 // The post-write clash probe's skip key (#2240): what decides a clash, read without layout.
 let _stampKey = "", _stampWait = 0;
 const FIT_CLASH_TRIES = 5;
-// Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
-// width is part of what HudLayout.fit clamps, and the AERO chip's words change
-// all lap ("AERO 523m" counting down, AERO ZONE, STRAIGHT MODE, CORNER MODE):
+// Track visibility and width changes of moved pieces. AERO counts down and changes mode all lap:
 // keyed on `hidden` alone it widened past the screen edge after the fit and
 // stayed there until the 3 s same-key re-measure (hud-survey 1280x720 cockpit:
 // aero right edge 1297 of 1280). textContent costs no layout; a length that
@@ -472,13 +470,14 @@ const FIT_CLASH_TRIES = 5;
 const _HL_CSS_HID = new Set(["hud-energy", "hud-tyre", "hud-ot", "hud-aero", "hud-bb"]);
 let _blueHeld = null;
 function hlKey() {
-  const b = typeof document !== "undefined" ? document.body : null;
-  const strip = !!b && !!b.dataset && b.dataset.hlSet === "cockpit" && !(b.classList && b.classList.contains("desktop"));
+  const strip = typeof document !== "undefined" && document.body?.dataset?.hlSet === "cockpit" && !document.body.classList?.contains("desktop");
   let k = "";
   for (let i = 0; i < _hlEls.length; i++) {
     const el = _hlEls[i];
-    const cssHid = strip && _HL_CSS_HID.has(el.id) && !(el.hasAttribute && el.hasAttribute("data-hl-user"));
-    k += el.hidden || cssHid ? "h" : "v" + (el.textContent || "").length + ",";
+    if (el.hidden || (strip && _HL_CSS_HID.has(el.id) && !el.hasAttribute?.("data-hl-user"))) k += "h";
+    // #hud-speed-n reserves three tabular digits for the whole 0–999 range. Only the unit can resize the plate.
+    else if (el.id === "hud-speed" && el.lastElementChild) k += "s" + el.lastElementChild.textContent + ",";
+    else k += "v" + (el.textContent || "").length + ",";
   }
   return k;
 }
