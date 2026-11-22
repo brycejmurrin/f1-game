@@ -305,6 +305,7 @@ html[data-home-live] #overlay #menu-brand {
   align-self: end; position: relative; z-index: 1; isolation: isolate; overflow: hidden;
   padding: var(--gap); border-radius: var(--r-md); background: var(--scrim-heavy);
 }
+html[data-home-live] #overlay[data-home-scene="photo"] #menu-brand { background: transparent; }
 html[data-home-live] :where(body[data-shape="wide"]) #overlay {
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   align-content: stretch; align-items: start; gap: var(--gap);

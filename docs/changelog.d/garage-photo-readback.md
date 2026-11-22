@@ -1,1 +1,1 @@
-Fixed: Garage photos on WebGPU capture the displayed garage instead of an empty or stale race frame. Opening Photo Studio from the spinning garage frames the parked car for capture, and Home displays the photo selected in Appearance.
+Fixed: Garage photos on WebGPU capture the displayed garage instead of an empty or stale race frame. Opening Photo Studio from the spinning garage frames the parked car for capture, and Home displays the photo selected in Appearance. The Home title sits directly on the selected photo.
