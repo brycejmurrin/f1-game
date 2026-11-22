@@ -631,7 +631,7 @@
    carries them) and the chip sits top-right beside the caption. */
 @container sel-room (max-height: 120px) {
   #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
-    top: calc(var(--pad) * 0.6); bottom: auto; left: auto; right: var(--pad);
+    top: 0; bottom: 0; left: auto; right: var(--pad);
     padding: 0; background: none; border-radius: 0;
   }
   #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta { display: none; }
