@@ -74,6 +74,11 @@ const FORMAT = "apex26-settings-v1";
 // saved on the other kind of device (file.device.desktop) never writes it (applySettings, #5005).
 // deviceBound = the renderer pins (backend, forced GL, XR backend): only that second half of perDevice.
 // noImport = exported for context, never written back by LOAD SETTINGS (#5032).
+const legacyShakePercent = { off: "0", soft: "40", medium: "70", normal: "100" };
+function motionPercent(value, max = 100) {
+  if (typeof value !== "string" || !/^\d{1,3}$/.test(value) || Number(value) > max) return undefined;
+  return String(Number(value));
+}
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
   { k: "sound", lane: "json", group: "audio", def: false, src: "js/game.js",
@@ -174,8 +179,8 @@ const SPEC = [
   // CAMERA (js/camera/mode-switch.js, offsets.js, cockpit-opts.js)
   { k: "helmetEye", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.helmetEye", oneOf: ["standard", "tucked", "upright", "forward", "back", "high", "low"] },
   { k: "helmetMount", lane: "raw", group: "camera", def: "center", src: "js/camera/cockpit-opts.js CHOICES.helmetMount", oneOf: ["center", "left", "right"] },
-  { k: "helmetShake", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js helmet shake (percent or legacy preset)", oneOf: ["normal", "medium", "soft", "off", ...Array.from({ length: 151 }, (_, i) => String(i))] },
-  ...["helmetImpact", "helmetKerb", "helmetBuzz", "helmetHeadMotion"].map(k => ({ k, lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)" })),
+  { k: "helmetShake", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js helmet shake (percent or legacy preset)", normalize: v => typeof v === "string" && Object.hasOwn(legacyShakePercent, v) ? legacyShakePercent[v] : motionPercent(v, 150) },
+  ...["helmetImpact", "helmetKerb", "helmetBuzz", "helmetHeadMotion"].map(k => ({ k, lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)", normalize: motionPercent })),
   { k: "helmetVisorShape", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.visorShape", oneOf: ["standard", "panoramic", "slit", "rounded", "square"] },
   { k: "helmetVisor", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visor", oneOf: ["off", "clear", "smoke"] },
   { k: "helmetVisorColor", lane: "raw", group: "camera", def: "amber", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose", "green", "violet", "copper"] },

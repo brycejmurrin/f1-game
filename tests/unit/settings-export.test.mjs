@@ -2081,6 +2081,21 @@ test("SAVE/LOAD SETTINGS carries a calibrated stick rest map to a fresh device (
   assert.equal(JSON.parse(legacy.disk.get("apex26.padRest")), 0.08, "a legacy scalar still loads");
 });
 
+test("helmet vibration backups omit restored defaults and import legacy strengths as percentages", () => {
+  for (const value of ["normal", "100"]) {
+    const file = boot({ disk: { "apex26.helmetShake": value } }).collect("changes");
+    assert.ok(!file.changed.includes("camera.helmetShake"));
+  }
+  const dst = boot();
+  for (const [saved, expected] of [["off", "0"], ["soft", "40"], ["medium", "70"], ["normal", "100"], ["125", "125"]]) {
+    dst.loadSettings({ format: "apex26-settings-v1", settings: { camera: { helmetShake: saved } } });
+    assert.equal(dst.disk.get("apex26.helmetShake"), expected);
+  }
+  dst.loadSettings({ format: "apex26-settings-v1", settings: { camera: { helmetShake: "151", helmetBuzz: "loud" } } });
+  assert.equal(dst.disk.get("apex26.helmetShake"), "125");
+  assert.equal(dst.disk.has("apex26.helmetBuzz"), false);
+});
+
 // The value "livery" is a camera preference, not a garage storage key.
 test("cockpit finish choices round-trip as camera preferences without exporting liveries", () => {
   const src = boot({ disk: { "apex26.cockpitWheelFinish": "suede", "apex26.cockpitBodyFinish": "chrome", "apex26.cockpitHaloFinish": "livery", "apex26.livery.custom.ferrari": "SECRET" } });
