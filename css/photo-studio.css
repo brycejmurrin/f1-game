@@ -105,10 +105,18 @@ body.photo-studio-open #pc-bar { display: none; }
 /* Studio owns composition guides; hidden FreeCam effects must not leak in. */
 body.photo-studio-open :is(#fc-comp-grid, #fc-dof) { display: none; }
 body.photo-studio-open { --ps-dock-px: calc(min(340px * var(--ui-scale), 42vw) + var(--safe-r)); --ps-touch-z: min(var(--ui-scale), 1); }
-/* Controls use their own fit cap: the two sticks and altitude column must fit
-   the scene strip even when a larger menu preference is requested. */
+/* Keep the altitude column usable and cap each stick to its own slot. A
+   very large LOOK request must not shrink MOVE or the altitude buttons. */
 @supports (zoom: calc(100vw / 1px)) {
-  body.photo-studio-open { --ps-touch-z: min(var(--ui-scale), max(.4, calc((100vw - var(--ps-dock-px) - var(--safe-l) - var(--gap)) / (236px + var(--steer) + 2 * var(--gap)))), max(.4, calc((100svh - var(--safe-t) - var(--safe-b)) / (2 * var(--steer) + var(--gap))))); }
+  body.photo-studio-open {
+    --ps-touch-z: min(var(--ui-scale), max(.4, calc((100svh - var(--safe-t) - var(--safe-b)) / (2 * var(--steer) + var(--gap)))),
+      max(.4, calc((100vw - var(--ps-dock-px) - var(--safe-l) - var(--gap) - 88px) / (var(--steer) + 2 * var(--gap)))));
+  }
+}
+body.photo-studio-open #photo-controls {
+  --pc-control-z: var(--ps-touch-z);
+  --pc-max-diameter: min(calc(((100vw - var(--ps-dock-px) - var(--safe-l) - var(--gap)) / var(--pc-control-z) - var(--steer) - 2 * var(--gap)) / 2),
+    calc((100svh - var(--safe-t) - var(--safe-b)) / var(--pc-control-z) - var(--pc-label-space)));
 }
 body.photo-mode.photo-studio-open :is(.pc-stickwrap, .pc-altcol) { zoom: var(--ps-touch-z); bottom: calc(var(--safe-b) / var(--ps-touch-z)); }
 body.photo-mode.photo-studio-open .pc-move-wrap { left: calc(var(--safe-l) / var(--ps-touch-z)); }
@@ -141,12 +149,16 @@ body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(-
     overscroll-behavior: contain;
   }
   body.photo-studio-open { --ps-touch-z: min(var(--ui-scale), 1); }
+  body.photo-studio-open #photo-controls {
+    --pc-max-diameter: min(calc((var(--safe-w) / var(--pc-control-z) - max(56px, var(--tap-min))) / 2 - var(--gap)),
+      calc((58svh - var(--safe-t) - var(--safe-b) - var(--gap)) / var(--pc-control-z) - var(--pc-label-space)));
+  }
   /* Put the full touch row above the bottom sheet, with room for both thumbs.
      Cap touch chrome at 100% so the row also fits a larger menu preference. */
   body.photo-mode.photo-studio-open :is(.pc-stickwrap, .pc-altcol) { zoom: var(--ps-touch-z); bottom: calc((42svh + var(--safe-b) + var(--gap)) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-move-wrap { left: calc(var(--safe-l) / var(--ps-touch-z)); }
   body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc(var(--safe-r) / var(--ps-touch-z)); }
-  body.photo-mode.photo-studio-open .pc-altcol { left: calc(50vw / var(--ps-touch-z) - 28px); right: auto; flex-direction: column; }
+  body.photo-mode.photo-studio-open .pc-altcol { left: calc((var(--safe-l) + var(--safe-w) / 2) / var(--ps-touch-z) - max(56px, var(--tap-min)) / 2); right: auto; flex-direction: column; }
   body.photo-mode.photo-studio-open .pc-altcol .pc-btn { width: max(56px, var(--tap-min)); height: max(56px, var(--tap-min)); }
 }
 @media (max-height: 500px) and (min-width: 641px) {

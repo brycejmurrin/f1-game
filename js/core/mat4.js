@@ -11,6 +11,26 @@ const M4 = (function () {
     return d;
   }
 
+  // Build the car frame on the local road plane. A change of heading rotates
+  // around the banked surface normal, including when the car spins across a slope.
+  function roadFrameAxes(right, forward, yaw, roll, outR, outU, outF) {
+    const invF = 1 / (Math.hypot(forward[0], forward[1], forward[2]) || 1);
+    const fx = forward[0] * invF, fy = forward[1] * invF, fz = forward[2] * invF;
+    const nx = right[1] * fz - right[2] * fy;
+    const ny = right[2] * fx - right[0] * fz;
+    const nz = right[0] * fy - right[1] * fx;
+    const invN = 1 / (Math.hypot(nx, ny, nz) || 1);
+    const ux = nx * invN, uy = ny * invN, uz = nz * invN;
+    // Interpolated track axes can lose both unit length and perpendicularity.
+    const rx = fy * uz - fz * uy, ry = fz * ux - fx * uz, rz = fx * uy - fy * ux;
+    const cr = Math.cos(roll), sr = Math.sin(roll);
+    const bx = rx * cr + ux * sr, by = ry * cr + uy * sr, bz = rz * cr + uz * sr;
+    outU[0] = ux * cr - rx * sr; outU[1] = uy * cr - ry * sr; outU[2] = uz * cr - rz * sr;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    outF[0] = fx * cy + bx * sy; outF[1] = fy * cy + by * sy; outF[2] = fz * cy + bz * sy;
+    outR[0] = bx * cy - fx * sy; outR[1] = by * cy - fy * sy; outR[2] = bz * cy - fz * sy;
+  }
+
   function ident() {
     const m = new Float32Array(16);
     m[0] = m[5] = m[10] = m[15] = 1;
@@ -89,7 +109,7 @@ const M4 = (function () {
     return out;
   }
   return { ident, mulTo, perspectiveTo, lookAtTo, orthoTo, invertTo,
-           clamp, lerp, wrapDelta };
+           clamp, lerp, wrapDelta, roadFrameAxes };
 })();
 
 const V3 = (function () {

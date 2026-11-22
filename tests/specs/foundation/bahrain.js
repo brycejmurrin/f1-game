@@ -156,10 +156,7 @@ export default function register() {
         }),
         exclusions: definition.dressingExclusions,
         relief: Math.max(...elevations) - Math.min(...elevations),
-        // Racing fracs re-located +0.2702 by #878's start-line move (same world
-        // points, 0.88 m, same heights): T8 dip 0.42->0.6902, T9 rise 0.50->0.7704.
-        t8: profile[Math.round(0.6902 * profile.length)].y,
-        t9: profile[Math.round(0.7704 * profile.length)].y,
+        t4Climb: profile[Math.round(definition.turns[3] * profile.length)].y - profile[0].y,
         walls: window.__apex.wallStats(),
         ground: [0.6902, 0.7704, 0.0505, 0.0906, 0.1308].flatMap((frac) =>
           [-12, -8, 8, 12].map((lateral) => window.__apex.groundY(frac, lateral).gap)
@@ -188,10 +185,10 @@ export default function register() {
     expect(audit.exclusions).toContainEqual({
       kinds: ["foliage", "lighting"], s0: 0, s1: 1,
     });
-    expect(audit.relief).toBeGreaterThanOrEqual(4.5);
-    expect(audit.relief).toBeLessThanOrEqual(5.5);
-    expect(audit.t8).toBeLessThanOrEqual(-2.5);
-    expect(audit.t9).toBeGreaterThanOrEqual(1.5);
+    // Formula 1 reports 16.9 m of relief and about 15 m of climb from the
+    // start to T4. Allow 1 m for the smoothed OpenF1 racing line and apex sampling.
+    expect(Math.abs(audit.relief - 16.9)).toBeLessThanOrEqual(1);
+    expect(Math.abs(audit.t4Climb - 15)).toBeLessThanOrEqual(1);
     expect(audit.walls.anyNaN).toBe(false);
     expect(audit.walls.minOverHw).toBeGreaterThanOrEqual(0.8);
     expect(audit.walls.maxB).toBeLessThanOrEqual(20);

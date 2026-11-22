@@ -22,6 +22,7 @@ const DataStandings = (function () {
     // `tag` labels a table that is not this year's ("LAST SEASON · 2025 FINAL").
     function driverRows(drivers, tag) {
       const sec = el("div", "dh-standings-col");
+      sec.dataset.hubPart = "drivers";
       sec.appendChild(el("h3", "dh-section", tag ? "DRIVERS — " + tag : "DRIVERS"));
       if (!drivers.length) {
         sec.appendChild(emptyMsg("No driver standings yet — season hasn't started."));
@@ -72,6 +73,7 @@ const DataStandings = (function () {
 
     function constructorRows(cons, drivers, tag) {
       const sec = el("div", "dh-standings-col");
+      sec.dataset.hubPart = "constructors";
       sec.appendChild(el("h3", "dh-section", tag ? "CONSTRUCTORS — " + tag : "CONSTRUCTORS"));
       if (!cons.length) {
         sec.appendChild(emptyMsg("No constructor standings yet."));

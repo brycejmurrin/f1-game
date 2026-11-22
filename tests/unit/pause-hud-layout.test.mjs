@@ -161,7 +161,8 @@ test("RESUME is the first door in the markup of every mode and is never taken ou
     assert.doesNotMatch(src, /pm-resume"\)\.(hidden|disabled|style|remove|setAttribute)|pmResume\.(hidden|disabled|style|remove)/, path.relative(ROOT, f) + " never hides or disables RESUME");
   }
   // A new reader of RESUME is a new way to lose it: name it here after reading what it does with the button.
-  assert.deepEqual(refs.sort(), ["js/camera/replay-buf.js", "js/game.js", "js/perf/bench-run.js"]);
+  // The layout picker checks the Resume click to keep the pending race-camera request.
+  assert.deepEqual(refs.sort(), ["js/camera/replay-buf.js", "js/game.js", "js/perf/bench-run.js", "js/ui/screen-regions.js"]);
   assert.match(fs.readFileSync(path.join(jsDir, "camera/replay-buf.js"), "utf8"), /const resume = document\.getElementById\("pm-resume"\);\s*if \(!resume \|\| !resume\.parentNode\) return;/, "replay-buf only uses RESUME as the anchor for its own tile");
   // No stylesheet positions, hides or collapses it: out of flow under a scroller's mask is how it vanished.
   for (const f of fs.readdirSync(path.join(ROOT, "css")).filter((n) => n.endsWith(".css"))) {

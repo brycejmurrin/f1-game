@@ -20,7 +20,7 @@ Flat Midwestern summer: high hazy sun, humid near-white horizon, no relief anywh
 Essentially none. This is the flattest circuit in the game and that is a design decision, not an omission.
 - s≈0.40: +1.8 m.
 - s≈0.68: −1.5 m.
-- Vary ground-box tops by ≤1 unit; the only vertical interest comes from the 9° banking at Turn 1 and from the grandstand wall itself.
+- Vary ground-box tops by ≤1 unit; the only vertical interest comes from the 9.2° banking at oval Turn 1 and from the grandstand wall itself.
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
@@ -34,21 +34,21 @@ Essentially none. This is the flattest circuit in the game and that is a design 
 | 0.955 | L | near | **Pit stalls**: open-fronted boxes under one long flat roof with closed END walls (`indy-pit-stalls`) |
 | 0.805 | L | far | **IMS Museum** campus (`indy-museum`) + asphalt parking lots; Brickyard Crossing golf fairways/ponds on the back-stretch infield |
 | 0.92–0.98 | L | far | Gasoline Alley garage sheds + paddock motorhomes |
-| 0.115 | — | — | **Oval Turn 1**: 9° banking held over a 320 m width zone, taken flat — the only real banking on the lap |
+| 0.81–0.91 | — | — | **F1 Turn 13** uses oval Turn 1 in reverse. The model peaks at 9.2° around 0.86 and tapers into the short chute and front straight. |
 | 0.86–0.22 | R | near | Continuous white concrete **retaining wall** along the whole oval section — a solid barrier, not armco |
 | 0.84–0.99 | R | far | Tall lattice **light towers** ringing the oval, tallest things for miles |
 | 0.24–0.70 | both | — | The infield: half-width drops to 6.4 m, world changes completely — low, open, grassy |
-| 0.300 | R | near | Infield gravel apron + red tyre wall; scaffold stand opposite on L |
+| 0.300 | L | near | Infield gravel apron, red tyre wall and scaffold stand outside the right-hander |
 | 0.500 | L | near | Infield gravel + blue tyre wall; scaffold stand on R |
 | 0.660 | R | near | Infield gravel apron; aluminium stand on L at 0.680 |
 | 0.30–0.70 | both | mid | Sparse ornamental tree clumps only — the golf course and service roads occupy the middle |
 | — | ring | far | Flat Indiana: a low treeline and the Speedway's own light towers are the whole horizon. No hills at all |
 
 ## 5. Track features
-- The banked oval Turn 1, entered flat off the front straight — the transition from 15 m-wide oval to a 6.4 m infield road course is abrupt and is the circuit's whole rhythm.
+- At the end of the front straight, F1 Turn 1 turns right into the narrower infield.
 - Barriers change character: solid concrete on the oval, ordinary armco in the infield. Show the contrast.
 - Slow, tight, low-grip infield sequence with heavy braking zones and modest kerbs.
-- The final banked sweep (s≈0.88, 6°) rejoins the front straight.
+- After the short chute, the final right sweeps onto the front straight. IMS lists the oval turns at 9°12′ and the straights at 0°. [2007 IMS media guide](https://doctorindy.com/wp-content/uploads/2019/06/2007_indy500_media_guide.pdf)
 
 ## 6. Modelling notes
 - Build the grandstand as ONE continuous wall, not a row of stands. Any daylight between segments and the Speedway stops being a Speedway.

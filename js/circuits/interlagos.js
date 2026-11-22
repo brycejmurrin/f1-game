@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "interlagos",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     sceneryCoordinates: "racing",
     // startFrac defaults to 0 — Already correct per docs/tracks/START-LINES.md
@@ -33,7 +34,7 @@
       { kind: "foliage", s0: 0.0, s1: 0.02 },
     ],
     pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.62, 0.70, 0.68], grass: [0.30, 0.55, 0.26], fog: [0.58, 0.65, 0.64], fogDensity: 0.0045, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
-    // Elevation from SRTM bake in js/track/circuit-elevations.js
+    // Elevation from SRTM, locally fitted to qualifying traces through T4–T5.
     // (`node tools/gen/bake-elevation.mjs interlagos`). One authored cosine
     // bump left ~71% of the lap dead-flat between Senna S and the climb —
     // stair-step hills. hasRealElevation(id) ignores any elevations key here.

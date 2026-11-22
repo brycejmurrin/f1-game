@@ -2,6 +2,19 @@
 const EditorWorkspace = (function () {
   "use strict";
   const mounted = new WeakMap();
+  function arrangeDoor(root, host, id = root?.id, label = "Arrange this screen") {
+    if (!root || !host || !id) return;
+    const existing = host.querySelector('[data-arrange-screen="' + id + '"]');
+    if (existing) return existing;
+    const doc = root.ownerDocument, button = doc.createElement("button");
+    button.type = "button";
+    button.setAttribute("data-arrange-screen", id);
+    button.textContent = label;
+    button.onclick = () => SettingsNav.arrangeScreen(id, button,
+      () => !root.hidden && button.isConnected && button.getClientRects().length, label);
+    host.appendChild(button);
+    return button;
+  }
   function attach(root, options = {}) {
     if (!root || !root.ownerDocument) return null;
     if (mounted.has(root)) return mounted.get(root);
@@ -48,6 +61,7 @@ const EditorWorkspace = (function () {
     // lives in is folded into the tools disclosure, which would hide the only way into it.
     const entry = options.entry && doc.getElementById(options.entry);
     if (entry) bar.append(entry);
+    arrangeDoor(root, bar);
     const note = make("p", options.note || "Changes save automatically on this device.", "ew-note");
     sheet.prepend(note);
     sheet.prepend(bar);
@@ -85,7 +99,9 @@ const EditorWorkspace = (function () {
       // A bare garage editor has no scene. Start its real preview action only
       // when no transport is active; an edited or paused sequence keeps its pose.
       if (on && options.defaultPreview && (!session || session.hidden)) {
-        const button = doc.getElementById(options.defaultPreview);
+        const scope = doc.getElementById("ga-edit-moment");
+        const selected = scope && { raceStart: "ga-preview-out", pitIn: "ga-preview-in", pitOut: "ga-preview-pit-exit", afterRace: "ga-preview-home" }[scope.value];
+        const button = doc.getElementById(selected || options.defaultPreview);
         if (button) {
           // The domain hides its sheet for playback and restores it on Stop.
           // Leave edit furniture ready for that return rather than hiding it twice.
@@ -150,6 +166,7 @@ const EditorWorkspace = (function () {
     return api;
   }
   function init(doc = document) {
+    arrangeDoor(doc.getElementById("photo-controls"), doc.getElementById("pc-bar"), "photo-controls", "Arrange camera sticks");
     return [
       ["lighting", "lt-rail", "Lighting", "Auto-saved · displayed circuit, time and weather"],
       ["camtune", "ct-rail", "Camera", "Auto-saved · selected camera scope"],
@@ -159,11 +176,11 @@ const EditorWorkspace = (function () {
       rail, title, note, done: ({ lighting: "lt-close", camtune: "ct-close", flyby: "fb-close", garrival: "ga-close" })[id],
       previews: id === "camtune" ? "ct-previews" : null,
       entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
-      rows: id === "garrival" ? "ga-rows" : null, first: "ga-angle", reset: "ga-reset",
+      rows: id === "garrival" ? "ga-rows" : null, first: "ga-edit-moment", reset: "ga-reset",
       defaultPreview: id === "garrival" ? "ga-preview-out" : null, previewSession: id === "garrival" ? "ga-transport" : null,
-      sequences: [["ga-preview-in", "Pit stop"], ["ga-preview-out", "Race start"], ["ga-preview-home", "Return"]],
+      sequences: [["ga-preview-out", "Race start"], ["ga-preview-in", "Pit entry"], ["ga-preview-pit-exit", "Pit exit"], ["ga-preview-home", "Race end"]],
       launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
     }));
   }
-  return Object.freeze({ attach, init });
+  return Object.freeze({ attach, init, arrangeDoor });
 })();

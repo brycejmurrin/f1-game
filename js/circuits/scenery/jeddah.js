@@ -768,7 +768,8 @@
           // 0.38 m over the water, so the whole mosque hung (ground-audit).
           addBox(stage, vadd(base, a.u, 1.7), [26, 4.6, 26], [0.90, 0.90, 0.86], b);
           addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
-          addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
+          // The hall rises from the plinth cap at 4.6 m to the dome at 11 m.
+          addBox(stage, vadd(base, a.u, 7.8), [16, 6.4, 16], [0.93, 0.93, 0.90], b);
           addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
           addFrustum(stage, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
           addCone(stage, vadd(base, a.u, 16), 4.7, 5.5, [0.96, 0.96, 0.93], 12, b);
@@ -800,8 +801,8 @@
           stage._mat = 0;
           addBox(stage, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);
           stage._mat = MAT.FABRIC;
-          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);
-          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 22), [0.4, 24, 44], GREEN, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 22), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
           stage._mat = 0;
         }, { required: true });
       }

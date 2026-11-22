@@ -509,7 +509,8 @@
       // deferred to keep props-tris within the 0.5 % ratchet of the prior slab.
       // timing/control block dropped this pass — floated unsupported over the
       // paddock apron after the pit mass grew; re-seat in a follow-up if needed.
-      broadcastCompound(K(sl(0.045)), 1, 78,{ vans: 4, dishes: 2, mastH: 10 });
+      // Park the trucks on the flatter pit-side service strip closer to the garages.
+      broadcastCompound(K(sl(0.045)), 1, 70, { vans: 4, dishes: 2, mastH: 10 });
       // Pit wall, re-keyed to the real pit straight. The engine's own wall owns the
       // pit.keep window (racing 0.93-0.04 at this dist) and supersedes every chord
       // inside it by design. The walk starts on the pit-ENTRY approach (racing

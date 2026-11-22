@@ -57,13 +57,19 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
 
 // UI hunt 2026-10-29 rows 2-3: a tap whose pointerup queued behind a long frame
 // (timer first) opened the picker; an open picker outlived its hidden button.
-function camHarness() {
+function camHarness(withEditor = false) {
   const dom = makeDom(), timers = new Map(), observers = [];
   let serial = 0;
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
     setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); },
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(el, opts) { this.el = el; this.opts = opts; } } };
   ctx.window = ctx; ctx.addEventListener = () => {};
+  if (withEditor) {
+    const create = dom.document.createElement;
+    dom.document.createElement = (tag) => Object.assign(create(tag), {ownerDocument:dom.document});
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/ui/editor-workspace.js"), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+    ctx.SettingsNav = {arrangeScreen(id){ctx.edited = id;}};
+  }
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/pedal-travel.js"), "utf8"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/hold-buttons.js"), "utf8"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
   ctx.InputHoldButtons = vm.runInNewContext("InputHoldButtons", ctx);
@@ -75,8 +81,23 @@ function camHarness() {
   button.click = () => button.onclick();
   const fire = (type, timeStamp, extra = {}) => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1, timeStamp, clientX: 20, clientY: 20, ...extra });
   const runTimers = () => { for (const fn of [...timers.values()]) fn(); };
-  return { dom, G, cams, button, fire, runTimers, observers };
+  return { dom, G, cams, button, fire, runTimers, observers, ctx };
 }
+
+test("CAM menu offers a keyboard-reachable arrangement action without changing the selected race camera", () => {
+  const h = camHarness(true);
+  h.fire("pointerdown", 0); h.runTimers(); h.fire("pointerup", 500);
+  const menu = h.dom.byId("campicker"), before = h.G.camMode;
+  const arrange = menu.querySelector('[role="menuitem"]');
+  assert.ok(arrange);
+  assert.equal(arrange.hasAttribute("aria-checked"),false);
+  h.dom.dispatch(menu,{type:"keydown",key:"End"});
+  assert.equal(h.dom.document.activeElement,arrange);
+  arrange.onclick();
+  assert.equal(h.ctx.edited,"campicker");
+  assert.equal(h.G.camMode,before);
+  assert.equal(menu.hidden,false);
+});
 
 test("CAM hold is judged by event times: a late-delivered short tap cycles, a real hold opens", () => {
   const h = camHarness();
@@ -599,6 +620,7 @@ test("CamTune comfort knobs are independent of reduce-motion and default to ship
   assert.equal(CamTune.rollTarget(0.1, 0, 0, true), 0, "reduce-motion zeroes roll");
   CamTune.comfortSet("rollLean", 0.5);
   assert.equal(CamTune.rollTarget(0.2, 0, 0, false), 0.1);
+  assert.equal(CamTune.rollTarget(0, 0, 0.2, false), -0.1, "onboard camera follows the signed physical chassis lean");
 });
 
 test("CamTune global baseline layers under per-mode; copyFrom and presets work", () => {

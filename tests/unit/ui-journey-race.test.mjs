@@ -75,7 +75,9 @@ test("free-cam pads match the steering-arrow diameter", () => {
   const overlays = readCssSource("css/overlays.css");
   assert.match(overlays, /--steer:\s*84px/);
   assert.match(hud, /\.pc-btn\s*\{[^}]*width:\s*var\(--steer\)/);
-  assert.match(hud, /\.pc-stick\s*\{[^}]*width:\s*118px/);
+  const stick = rulesMentioning(hud, ".pc-stick").find(rule => rule.body.includes("--pc-default-diameter:"));
+  assert.ok(stick.body.includes("min(118px, var(--pc-max-diameter))"));
+  assert.ok(stick.body.includes("width: var(--pc-default-diameter)") && stick.body.includes("height: var(--pc-default-diameter)"));
   assert.doesNotMatch(hud, /body\.lt-open:not\(\.pc-nopanel\) \.pc-stick \{ width: 84px/);
   assert.doesNotMatch(hud, /body\.lt-open:not\(\.pc-nopanel\) \.pc-btn \{ width: 46px/);
 });
@@ -105,7 +107,7 @@ test("compact race HUD uses body density, not orientation + max-height queries",
 
 test("pause owns paused navigation: #campicker stands down with the dim sheet", () => {
   const hud = read("css/hud.css");
-  assert.match(hud, /body:has\(> \.screen\.dim:not\(\[hidden\]\)\) #campicker \{\s*display:\s*none/);
+  assert.equal(decl(cssRules(hud), "body:has(> .screen.dim:not([hidden])) :is(#photo-controls, #campicker)", "display"), "none");
   // UI hunt 2026-10-29 row 2: an open grid painted through the results card.
   assert.equal(decl(cssRules(hud), "body:not(.in-race) #campicker", "display"), "none");
 });

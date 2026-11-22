@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "albert_park",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 2.5 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -45,9 +46,13 @@
       { frac: 0.6321, angleDeg: 3.5, widthM: 130 },   // T9, fast left past the lake
       { frac: 0.8352, angleDeg: 3.0, widthM: 110 },   // T12
     ],
-    // Arc fracs of the racing lap (were 0.2125/0.6425 through the removed
-    // 0.0925 authoring origin; + shift 0.10212 - 0.0925 keeps the road put).
-    elevations: [{ s: 0.22212, halfM: 340, rise: 0.6 }, { s: 0.65212, halfM: 300, rise: -0.4 }],
+    // OpenF1 Melbourne qualifying 2024, session 9484: Verstappen lap 20, checked
+    // against Sainz lap 17. Both traces span 2.5 m with a crest ahead of T11.
+    elevations: [-0.494, -0.007, -0.693, 0.71, -0.397, 1.155, -0.292, 0.16, 0.472, -0.078,
+      0.606, 0.826, 0.707, 0.098, 0.606, -0.069, 1.217, -0.502, 1.682, -0.478,
+      1.323, -0.522, 1.424, -0.538, 1.458, -0.426, 1.144, 0.259, 0.38, 1.623,
+      -0.184, 1.282, 0.441, 0.386, -0.625, 1.269, -0.931, 0.933, -0.497, 1.263]
+      .map((rise, i) => ({ s: i / 40, halfM: 263.07, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors: sector splits; turns: one apex per corner of the FIA 2026 event map

@@ -334,7 +334,7 @@ authored planting, distance is still the fix.
 |---|---|
 | `place(k, side, dist, [w,h,d], col)` | one box at `dist` beyond the edge, oriented to the track |
 | `prop(k, side, gap, [depth,h,len], col)` | box placed by **clearance** `gap` (its inner face never reaches the tarmac) |
-| `backdrop(k, side, dist, sz, col)` | distant box settled to the low baseline (skylines, ridges) |
+| `backdrop(k, side, dist, sz, col, opts?)` | distant box settled to the low baseline (skylines, ridges). For a building on a grade, `{ followGrade: true }` places its window bands and parapet along the wall’s up axis. |
 | `groundPlane(k, side, gap, sz, col)` | large flat slab just below grade (water, paddock) |
 | `addBox(out, c, [w,h,d], col, [r,u,f])` | raw oriented box at world `c` |
 | `ferrisWheel(k, side, dist, radius)` | the cabin-ringed wheel landmark |

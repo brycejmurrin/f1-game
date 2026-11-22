@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -241,8 +242,8 @@ test("graphics check compares one setting at a time, bracketed by current settin
   }] }));
   assert.match(B.graphicsAdvice(results), /rear-view mirror off.*10 ms.*10 ms/);
   results[4].steps[0].p95 = 45;
-  assert.match(B.graphicsAdvice(results), /Neither change/);
-  assert.match(B.graphicsAdvice(results.filter(l => l.variant !== "base")), /Insufficient/);
+  assert.equal(B.graphicsAdvice(results), "Keep your current settings. Neither change showed a repeatable frame-time improvement across both scenes.");
+  assert.equal(B.graphicsAdvice(results.filter(l => l.variant !== "base")), "Insufficient comparable samples. Try again with the game in the foreground.");
 });
 
 test("a graphics check survives the reload it initiated, and backgrounding a new leg cancels it", async () => {
@@ -315,4 +316,25 @@ test("graphics check times 30 FPS draws on a 120 Hz display while the advanced r
   assert.equal(graphics.fps, 30);
   assert.equal(advanced.p95, 8.33);
   assert.equal(advanced.fps, 120);
+});
+
+test("Graphics opens the real Benchmark dialog for arrangement without running a test", () => {
+  const dom = makeDom(), doc = dom.document, timers = new Map(), edits = [], writes = [];
+  const panel = dom.byId("pm-panel-graphics"), dialog = dom.byId("bench");
+  const header = doc.createElement("header");
+  header.className = "sheet-head"; dialog.appendChild(header); dialog.ownerDocument = doc;
+  dialog.appendChild(dom.byId("bench-body")); dialog.appendChild(dom.byId("bench-back"));
+  doc.getElementById = id => doc.querySelector("#" + id);
+  const ctx = vm.createContext({document:doc, setTimeout(fn, ms){timers.set(ms,fn);},
+    SettingsNav:{arrangeScreen(id){edits.push(id);}},
+    GameStore:{store:{raw(){return null;}, rawSet(...args){writes.push(args);}}}});
+  vm.runInContext(readFileSync(join(ROOT, "js/ui/editor-workspace.js"), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+  vm.runInContext(SRC + "\nBenchRun.create({});",ctx, { filename: absSrc("js/perf/bench-run.js") });
+  timers.get(400)();
+  panel.querySelector("#pm-bench-open").click();
+  assert.equal(dialog.hidden,false);
+  assert.ok(dialog.querySelector('[aria-label="Test"]'));
+  const door = header.querySelector("button"); door.onclick();
+  assert.deepEqual(edits,["bench"]);
+  assert.deepEqual(writes,[]);
 });

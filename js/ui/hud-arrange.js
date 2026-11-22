@@ -97,7 +97,8 @@ const HudArrange = (() => {
     let preview = null;    // title-screen HUD shell visibility, never saved as a preference
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
     let move, bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
-    let expanded = false, coarse = false;
+    let expanded = false, coarse = false, metricPicker, metric = "s";
+    const metricUnits = {width: "vw", minHeight: "vh", textSize: "%"};
     const moveControls = [], sizeControls = [], history = [];
     let initial, visibilityDraft = {}, undo;
     function visibility(id) {
@@ -216,6 +217,19 @@ const HudArrange = (() => {
       bar.appendChild(nameEl);
       bar.appendChild(hintEl);
       const smaller = mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"), larger = mk("+", "Larger", () => size(1), "hud-arrange-larger");
+      metricPicker = document.createElement("select");
+      metricPicker.id = "hud-arrange-metric";
+      metricPicker.setAttribute("aria-label", "HUD panel adjustment");
+      metricPicker.setAttribute("data-arrows", "own");
+      metricPicker.style.cssText = selectCss;
+      for (const [value, label] of [["s", "Scale"], ["width", "Width"], ["minHeight", "Min height"], ["textSize", "Text size"]]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        metricPicker.appendChild(option);
+      }
+      metricPicker.onchange = () => { metric = metricPicker.value; after(); };
+      bar.appendChild(metricPicker);
       bar.appendChild(smaller);
       bar.appendChild(larger);
       const recover = mk("BRING INTO VIEW", "Bring selected element into view without changing its size", bringIntoView, "hud-arrange-recover");
@@ -297,7 +311,15 @@ const HudArrange = (() => {
       selectColors();
       const cur = selected ? current(selected) : null;
       if (picker && selected) picker.value = selected;
-      nameEl.textContent = cur ? sizeLabel(selected, cur.s) : "";
+      const card = HudLayout.cardSizing?.(selected);
+      if (!card) metric = "s";
+      metricPicker.value = metric;
+      metricPicker.hidden = !expanded || !card;
+      let reading = "";
+      if (cur && metric === "s") reading = sizeLabel(selected, cur.s);
+      else if (cur && cur[metric] != null) reading = cur[metric] + metricUnits[metric];
+      else if (cur) reading = metric === "textSize" ? "100%" : "Auto";
+      nameEl.textContent = reading;
       nameEl.hidden = !cur;
       undo.disabled = !history.length;
       const vis = selected && visibility(selected);
@@ -389,7 +411,7 @@ const HudArrange = (() => {
       const p = pending; pending = null;
       if (!p) return;
       const e = HudLayout.set(p.id, p.v, p.set, p.profile, true);
-      if (nameEl && e && p.id === selected) nameEl.textContent = sizeLabel(p.id, e.s);
+      if (nameEl && e && p.id === selected && metric === "s") nameEl.textContent = sizeLabel(p.id, e.s);
     }
     function flush() { paint(); }
     /* Bind queued edits to the layout visible when the gesture started. */
@@ -430,7 +452,20 @@ const HudArrange = (() => {
       flush();
       remember();
       const orig = dragOrig(selected);
-      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile, true);
+      let value;
+      if (metric === "s") value = stepSize(orig.s, dir);
+      else {
+        let base = orig[metric];
+        if (base == null && metric === "textSize") base = 100;
+        if (base == null) {
+          const el = elOf(selected), horizontal = metric === "width";
+          const extent = horizontal ? el.offsetWidth : el.offsetHeight;
+          const viewport = horizontal ? window.innerWidth : window.innerHeight;
+          base = Math.round(extent * (el.currentCSSZoom || 1) * 100 / viewport);
+        }
+        value = base + dir * (metric === "textSize" ? 5 : 1) * (coarse ? 5 : 1);
+      }
+      HudLayout.set(selected, { ...orig, [metric]: value }, context.set, context.profile, true);
       after();
     }
 

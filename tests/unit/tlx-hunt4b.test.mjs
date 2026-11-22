@@ -243,7 +243,7 @@ async function mirrorRig(t, ls = {}) {
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
   const mk = new Function("THREE", "localStorage", "hooks", "renderer", "scene", `"use strict";
     let mirRT = null, mirCam = null, _mirRect = null, _mirActive = false, _warmPending = null, _mirRenders = 0;
-    let _mirReleaseWait = null, _mirReady = false;
+    let _mirReleaseWait = null, _mirReady = false, _mirFreeze = false;
     const W = 1280, H = 720, presentW = 1280, presentH = 720;
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
     const post = { hdrOk: () => true, releaseMirror: () => { hooks.post++; } };

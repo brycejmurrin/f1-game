@@ -1,5 +1,11 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-11-22 — Helmet camera controls (codex/helmet-camera-controls)
+
+`(tree) eagerCodeBytes` 3965656 → **3969867** (+4211). The camera needs the saved eye position and vibration scale while driving.
+The visor shares its opening geometry across the bezel, reflections and refraction map. The settings panel and camera-settings export share the saved choices. Changing the opening retains the reflection canvas.
+Fragment: `ratchets.d/codex--helmet-camera-controls.json`.
+
 ## 2026-11-20 — PR #6017 (claude/port-cleanroom-46-53-5973): clean-room fix 45, the two-dry-compound rule in HOW TO PLAY
 
 `(tree) shellNodes` 2321 → **2323** (+2). Deliberate raise past the absorb, on Bryce's `ratchet-raise` (decision issue
@@ -4015,3 +4021,24 @@ Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed 
 
 `(tree) eagerCodeBytes` 3956234 → **3957854** (+1620). The fallback garage renders overhead fixtures, the lighting profile store resolves lamp settings for the selected circuit, and the setup camera supplies them to the exterior renderer on arrival and departure. The detached circuit lamp selection and mesh upload remain in the lazy exterior bundle.
 Fragment: `ratchets.d/codex--pitlane-neighbor-garages.json`.
+
+## 2026-11-22 — PR #6159 (codex/desktop-scene-detail): Race scene detail controls
+
+`(tree) eagerCodeBytes` 3962979 → **3972113** (+9134). The race renderer selects rival wheel detail, applies brake lighting, and emits gravel particles as the car moves. The shared renderer and lighting paths also read the desktop graphics controls.
+Fragment: `ratchets.d/codex--desktop-scene-detail.json`.
+## 2026-11-21 — PR #6157 (codex/tt-pit-end-session): Garage animation previews
+
+`(tree) eagerCodeBytes` 3962285 → **3962612** (+327). The editor selects the pit release camera and matches its playback speed, including after a settings edit.
+`(tree) shellNodes` 2325 → **2327** (+2). The Pit exit and Race end buttons are present when the editor mounts, before the garage data loads.
+Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
+
+## 2026-11-21 — PR #6157 (codex/tt-pit-end-session): Individual garage animation settings
+
+`(tree) eagerCodeBytes` 3958534 → **3960549** (+2015). The garage resolves each moment’s settings and blends its camera across shot boundaries.
+`(tree) shellNodes` 2327 → **2335** (+8). A labelled selector exposes the four editable animations.
+Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
+
+## 2026-11-22 — PR #6157 garage camera sampling
+
+`(tree) eagerCodeBytes` 3960549 → **3960800** (+251). Sampling the previous camera shot exits before writing car and crew poses, which removes allocations during camera transitions.
+Fragment: `ratchets.d/codex--tt-pit-end-session.json`.

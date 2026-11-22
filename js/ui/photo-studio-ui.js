@@ -179,7 +179,7 @@ function create(G, deps) {
   const guide = mk("div", { id: "ps-guide", attrs: { "aria-hidden": "true" } }, [mk("div", { id: "ps-grid" })]);
   const importFile = mk("input", { id: "ps-import", type: "file", accept: "image/png,image/jpeg,image/webp", attrs: { "aria-label": "Import a personal photo" } });
   importFile.addEventListener("change", () => importPhoto(importFile.files && importFile.files[0]));
-  const group = (title, kids) => mk("section", { attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
+  const group = (id, title, kids) => mk("section", { id: "ps-group-" + id, attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
   // SUBJECT: the Home door opens on whatever the Home scene shows, and the
@@ -190,7 +190,7 @@ function create(G, deps) {
   const subjectValue = () => (isGarage() ? "garage" : "circuit");
   const subjectRow = select("Subject", [["garage", "Garage"], ["circuit", "Circuit"]], subjectValue,
     (v) => { if (st.subject && !st.busy && v !== subjectValue()) st.subject(v); }, "ps-subject");
-  const subjectGroup = group("SUBJECT", [subjectRow,
+  const subjectGroup = group("subject", "SUBJECT", [subjectRow,
     mk("p", { className: "adv-help", textContent: "Your car in the garage or on the circuit. Your Home scene stays as it is." })]);
   // CONDITIONS: the SESSION's time of day and weather through the lighting tuner's own seam (G.setTimeOfDay /
   // G.weather → Atmosphere.applyRaceSettings). A preview only: open() records what the session had, RESET and
@@ -202,12 +202,12 @@ function create(G, deps) {
   const todRow = pick("Time of day", TODS, () => G.setTimeOfDay(), setTod, "ps-tod");
   const wxRow = pick("Weather", WXS, () => G.weather(), setWx, "ps-weather");
   const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
-  const condGroup = group("TIME & WEATHER", [todRow, wxRow, condReset,
+  const condGroup = group("conditions", "TIME & WEATHER", [todRow, wxRow, condReset,
     mk("p", { className: "adv-help", textContent: "Changes the light and weather for this photo only. Your race and results stay as they were." })]);
   // DRIVING LINE: show or hide the suggested-line ribbon for this photo only (DrivingLine.setPhoto), put back on close.
   const lineRow = select("Driving line", [["on", "Shown"], ["off", "Hidden"]], () => (DrivingLine.shown() ? "on" : "off"),
     (v) => { if (st.busy || st.closing || isGarage()) return; DrivingLine.setPhoto(v === "on"); }, "ps-line");
-  const lineGroup = group("DRIVING LINE", [lineRow,
+  const lineGroup = group("line", "DRIVING LINE", [lineRow,
     mk("p", { className: "adv-help", textContent: "Shows or hides the racing line for this photo only. Your DRIVING LINE setting stays as it is." })]);
   function paintCond() {
     for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
@@ -227,7 +227,7 @@ function create(G, deps) {
   // TEAM tab's GARAGE / CREW / LIGHTING pickers (deps.garage.looks = SetupUI's lookRowSpecs, one table) and call the
   // same setters, so a pick here applies live and is saved exactly as there (apex26.garageLook / crewLook /
   // garageMood) — no reset on close. LIGHTING carries the hour: NIGHT, DAYLIGHT, SHOWROOM…
-  const looksGroup = group("GARAGE & LIGHTING", [mk("p", { className: "adv-help", textContent: "Room, crew and lighting for your garage. Saved like the Team tab." })]);
+  const looksGroup = group("garage", "GARAGE & LIGHTING", [mk("p", { className: "adv-help", textContent: "Room, crew and lighting for your garage. Saved like the Team tab." })]);
   const lookRows = {};
   let looksChanged = false;
   const lookSpecs = () => (deps.garage && deps.garage.looks ? deps.garage.looks() || [] : []);
@@ -263,7 +263,7 @@ function create(G, deps) {
   const ltTabs = mk("div", { id: "ps-lt-tabs", attrs: { role: "tablist", "aria-label": "Lighting groups" } });
   const ltRows = mk("div", { id: "ps-lt-rows" });
   const ltReset = button("RESET LIGHTING", () => resetLight(), "ps-lt-reset");
-  const lightGroup = group("PHOTO LIGHTING", [
+  const lightGroup = group("lighting", "PHOTO LIGHTING", [
     mk("p", { className: "adv-help", textContent: "Full lighting knobs for this photo only. Closing restores the race lighting exactly." }),
     ltTabs, ltRows, ltReset,
   ]);
@@ -407,7 +407,7 @@ function create(G, deps) {
     input.addEventListener("input", () => { out.textContent = input.value + unit; placeCar(id !== "ps-car-rotation"); });
     return mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: label }), input, out]);
   };
-  const carGroup = group("PLACE YOUR CAR", [
+  const carGroup = group("car", "PLACE YOUR CAR", [
     placement("Circuit position", "ps-car-position", 0, 100, .1, "%"),
     placement("Sideways", "ps-car-offset", -20, 20, .1, " m"),
     placement("Rotation", "ps-car-rotation", -180, 180, 1, "°"),
@@ -425,26 +425,35 @@ function create(G, deps) {
       lineGroup,
       lightGroup,
       looksGroup,
-      group("COMPOSITION", [
+      group("composition", "COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
         shots, mk("p", { id: "ps-help", className: "adv-help" }),
         coaching(),
         select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
-      group("YOUR PHOTO", [
+      group("photo", "YOUR PHOTO", [
         sampleRow, mk("p", { className: "adv-help", textContent: "More samples smooth edges on a frozen scene. Online sessions use Instant." }),
         mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
         mk("div", { className: "balanced-row" }, [button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
         mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("") ? "Menu background cleared." : "Background could not be cleared."))]),
         mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Import your photo" }), importFile]),
       ]),
-      mk("details", {}, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
+      mk("details", { id: "ps-album" }, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
       mk("p", { id: "ps-message", attrs: { "aria-live": "polite", role: "status" } }),
     ]),
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
   root.appendChild(guide); root.appendChild(panel);
+  // Studio hides the shared camera toolbar to keep Capture and Done clear.
+  // Its track views still render the same Move and Look sticks.
+  let stickDoor;
+  if (typeof EditorWorkspace !== "undefined") {
+    EditorWorkspace.arrangeDoor(root, panel.querySelector(".sheet-head"));
+    const body = E["ps-body"];
+    stickDoor = EditorWorkspace.arrangeDoor(G.$("photo-controls"), body, "photo-controls", "Arrange camera sticks");
+    if (stickDoor) body.insertBefore(stickDoor, subjectGroup);
+  }
   root.setAttribute("aria-label", "Photo Studio");
   root.setAttribute("data-esc-close", "ps-close");
   const say = (s) => { E["ps-message"].textContent = s; };
@@ -460,6 +469,7 @@ function create(G, deps) {
     for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background"]) {
       E[id].disabled = value || closing || (id !== "ps-capture" && !last);
     }
+    if (stickDoor) stickDoor.disabled = value || closing;
     E["ps-close"].disabled = false;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
@@ -541,6 +551,7 @@ function create(G, deps) {
       E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
     }
     placeCar();
+    if (stickDoor) stickDoor.hidden = isGarage();
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();

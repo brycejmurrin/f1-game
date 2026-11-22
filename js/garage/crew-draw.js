@@ -148,5 +148,19 @@ const GarageCrewDraw = (function () {
     return build(out, "boot", c1, c2, { p: (v) => [v[0] + f[0], v[1] + f[1] + lift, v[2] + f[2]], n: (v) => v });
   }
   const body = Object.freeze({ PARTS, build, helmet, segment, boot, palette, hi: (f) => (D = f) });
-  return Object.freeze({ acc, ease, place, mul, body });
+  function uploadMeshes(gfx, build) {
+    const owned = [];
+    try {
+      return build(data => {
+        const handle = gfx.createMesh(data);
+        if (!handle || handle._phase === 4) throw new Error("Crew mesh upload failed");
+        owned.push(handle);
+        return handle;
+      });
+    } catch (error) {
+      for (const handle of owned) gfx.freeMesh(handle);
+      throw error;
+    }
+  }
+  return Object.freeze({ acc, uploadMeshes, ease, place, mul, body });
 })();

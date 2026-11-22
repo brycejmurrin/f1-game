@@ -55,6 +55,27 @@ test("camera roll tilts toward camera right and stays upright for a vertical vie
   assert.equal(out[1], 1);
 });
 
+test("turning across a bank keeps every wheel axis in the road plane", () => {
+  const grade = 0.17;
+  const pitch = Math.atan(grade);
+  // Adjacent spline nodes may interpolate to non-unit, slightly skewed axes.
+  const right = [-0.97, 0.003 * grade, 0.003];
+  const forward = [0, 0.98 * grade, 0.98];
+  const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
+  for (const roll of [-0.32, 0, 0.32]) {
+    const normal = [Math.sin(roll), Math.cos(roll) * Math.cos(pitch), -Math.cos(roll) * Math.sin(pitch)];
+    for (const yaw of [-Math.PI, -0.3, 0, 0.5, Math.PI / 2]) {
+      const r = [], u = [], f = [];
+      M4.roadFrameAxes(right, forward, yaw, roll, r, u, f);
+      for (const axis of [r, u, f]) assert.ok(Math.abs(Math.hypot(...axis) - 1) < 1e-12);
+      assert.ok(Math.abs(dot(f, normal)) < 1e-12);
+      assert.ok(Math.abs(dot(r, normal)) < 1e-12);
+      assert.ok(Math.abs(dot(u, normal) - 1) < 1e-12);
+      assert.ok(Math.abs(dot(f, r)) < 1e-12);
+    }
+  }
+});
+
 test("clamp pins to the range and passes interior values through untouched", () => {
   assert.equal(M4.clamp(5, 0, 10), 5);
   assert.equal(M4.clamp(-1, 0, 10), 0);

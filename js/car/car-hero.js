@@ -539,7 +539,44 @@ const CarHero = (function () {
     return self;
   }
 
+  // The shared body is built once with red/green standing for its two paint colours.
+  // Vertex clustering averages these weights along with the neutral carbon/metal shades.
+  // Reuse its positions, normals and indices for every palette; no per-rival car build or decal.
+  function rivalPalettes(gfx, putBoundedMesh) {
+    const templates = [], meshes = [], orders = [], keys = new WeakMap();
+    const grey = [0.72, 0.72, 0.72];
+    function upload(geometry, primary, secondary) {
+      const source = geometry.col, col = new Float32Array(source.length);
+      for (let i = 0; i < col.length; i += 3) {
+        const base = Math.min(source[i], source[i + 1], source[i + 2]);
+        const p = source[i] - base, q = source[i + 1] - base;
+        for (let k = 0; k < 3; k++) col[i + k] = base + p * primary[k] + q * secondary[k];
+      }
+      return gfx.createMesh({ ...geometry, col });
+    }
+    function neutral(geometry, far) {
+      const mesh = upload(geometry, grey, grey);
+      const level = far ? 1 : 0;
+      templates[level] = geometry;
+      meshes[level] = Object.create(null);
+      orders[level] = [];
+      return mesh;
+    }
+    function painted(far, livery) {
+      const level = far ? 1 : 0, cache = meshes[level];
+      let key = keys.get(livery);
+      if (!key) { key = livery.c1.join(",") + ":" + livery.c2.join(","); keys.set(livery, key); }
+      return putBoundedMesh(cache, orders[level], key, () => upload(templates[level], livery.c1, livery.c2), 32);
+    }
+    function clear() {
+      for (const cache of meshes) {
+        if (cache && gfx.freeMesh) for (const mesh of Object.values(cache)) gfx.freeMesh(mesh);
+      }
+    }
+    return { neutral, painted, clear };
+  }
+
   return Object.freeze({ box, rod, arm, web, loftUv, luvLerp, bevel, weld, refine, MAX_BULGE, HERO, build, copy,
-                         nose, duct, hub, on, rig, nearAtlases });
+                         nose, duct, hub, on, rig, nearAtlases, rivalPalettes });
 })();
 if (typeof window !== "undefined") window.CarHero = CarHero;

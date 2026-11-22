@@ -327,6 +327,7 @@ test("race-entry ticks pump input and network while holding physics and governor
   const ctx = {
     lastFrame: 100, paused: false, raceRestarting: false, state: "count", _poseAt: null,
     mirrorPass: { preparing: () => preparing }, gfx: { warming: () => warming },
+    FieldLod: { updateModelBudget: dt => calls.push(["modelBudget", dt]) },
     PerfGov: { tick: dt => calls.push(["governor", dt]) }, RenderRate: { drew: () => true },
     performance: { now: () => 260 }, PerfSpans: { begin() {}, end() {} },
     Input: { poll: () => calls.push("input"), clearEdges: () => calls.push("clear") },
@@ -342,6 +343,7 @@ test("race-entry ticks pump input and network while holding physics and governor
   preparing = false;
   assert.throws(() => ctx.tickBody(276), /physics reached/);
   assert.ok(calls.some(call => Array.isArray(call) && call[0] === "governor" && call[1] === 16));
+  assert.ok(calls.some(call => Array.isArray(call) && call[0] === "modelBudget" && call[1] === 16));
   preparing = true;
   calls.length = 0; warming = true;
   ctx.tickBody(300);

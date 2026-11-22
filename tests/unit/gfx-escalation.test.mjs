@@ -67,7 +67,7 @@ test("race-entry soften does not persist envProbeOff to storage", () => {
   const soften = symbolSource("function installRaceEntrySoften()");
   assert.ok(union.includes("clearRaceEntrySoften"));
   assert.ok(!soften.includes("localStorage.setItem"));
-  assert.ok(soften.includes("envProbeOptOut"));
+  assert.ok(soften.includes("_raceEntryEnvProbeSession = true"));
   assert.ok(soften.includes("softwareRaster"));
   assert.ok(!soften.includes("setRenderScale("), "software entry must not resize; PerfGov chooses the scale once");
   assert.ok(!symbolSource("function clearRaceEntrySoften()").includes("setRenderScale("));

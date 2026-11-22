@@ -632,10 +632,10 @@ const BenchRun = (function () {
       body.appendChild(el("p", "adv-help", "Last run: " + plan.test + " · " + plan.state + " · " + String(plan.finishedAt || "").slice(0, 16).replace("T", " ") + " UTC"));
       if (plan.test === "graphics") body.appendChild(el("p", "adv-help", "FPS and frame intervals count frames drawn by the game. They include the selected frame-rate cap."));
       if (plan.advice) body.appendChild(el("p", "adv-help", plan.advice));
-      if (hasSum) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.appendChild(summaryTable(plan.summary)); body.appendChild(wrap); }
-      if (hasScenes) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.appendChild(scenesTable(plan.scenes)); body.appendChild(wrap); }
+      if (hasSum) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.id = "bench-summary"; wrap.appendChild(summaryTable(plan.summary)); body.appendChild(wrap); }
+      if (hasScenes) { const wrap = el("div"); wrap.style.overflowX = "auto"; wrap.id = "bench-scenes"; wrap.appendChild(scenesTable(plan.scenes)); body.appendChild(wrap); }
       plan.legs.forEach((l, i) => { if (l.state !== "done" && l.kind === "gpu") body.appendChild(el("p", "adv-help", "Leg " + (i + 1) + " " + l.label + ": " + l.state + (l.reason ? " (" + l.reason + ")" : ""))); });
-      const row = el("div", "balanced-row");
+      const row = el("div", "balanced-row"); row.id = "bench-export";
       row.appendChild(btn("SAVE FILE", "bigbtn", () => { const p = load(); PhoneRecorder.share(resultText(), fileName(p)).then((res) => {
         if (res.how === "download" && res.url) { const a = el("a", null, "DOWNLOAD " + res.name); a.href = res.url; a.download = res.name; _ui.status.textContent = ""; _ui.status.appendChild(a); }
         else say(res.how === "share" ? "saved" : res.how === "cancelled" ? "cancelled" : "cannot save here: use COPY"); }); }));
@@ -660,6 +660,7 @@ const BenchRun = (function () {
     _covered.forEach((n) => { n.hidden = true; });
     if (!_ui) { const body = doc().getElementById("bench-body"); _ui = { body, status: el("p", "adv-help") }; _ui.status.setAttribute("role", "status"); }
     d.hidden = false; paint();
+    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(d, d.querySelector(".sheet-head"));
     return true;
   }
   function close() { const d = (doc() && doc().getElementById("bench")); if (d) d.hidden = true; _covered.forEach((n) => { n.hidden = false; }); _covered = []; const b = (doc() && doc().getElementById("pm-bench-open")); if (b && b.focus) b.focus(); }

@@ -256,6 +256,7 @@ test("toRaw hands the factory what a circuit file would author", () => {
   assert.ok(Math.abs(raw.hwZones[0].s0 - 18 / 36) < 1e-4, "arc 0.5 → index 18/36: " + raw.hwZones[0].s0);
   assert.ok(Math.abs(raw.hwZones[0].s1 - C.arcToIndexFrac(it.pts, it.hwZones[0].s1)) < 1e-12);
   assert.equal(raw.hwZones[0].hw, 5); assert.equal(raw.hwZones[0].ease, 0.025);
+  assert.equal(raw.undulate, true, "saved custom tracks retain their seeded road ripple");
   assert.equal(raw.turns, null, "no turns stored → the engine's curvature peaks");
   assert.equal(typeof raw.scenery, "function");
   for (const id of T.ORDER) {
@@ -303,11 +304,10 @@ test("the picker's filters and tile know a custom circuit (select-screen trackIn
   assert.ok(ruleFor(cssRules(read("css/race-setup.css")), ".trb-custom"), "…styled");
 });
 
-test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
+test("sanitize: bank angle in [-30, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
   const { C } = boot();
   const banks = C.sanitize(design({ bankZones: [{ frac: 0.1, angleDeg: 0, widthM: 100 }, { frac: 0.2, angleDeg: -12, widthM: 100 }, { frac: 0.3, angleDeg: 45, widthM: 100 }, { frac: 0.4, angleDeg: 12.3, widthM: 100 }] })).bankZones;
-  // mesh.js reads (angleDeg || 18): 0 would build 18°, a negative adverse camber.
-  assert.deepEqual(plain(banks.map((z) => z.angleDeg)), [1, 1, 30, 12.25]);
+  assert.deepEqual(plain(banks.map((z) => z.angleDeg)), [0, -12, 30, 12.25]);
   const hz = C.sanitize(design({ hwZones: [{ s0: 0.1, s1: 0.2, hw: 2 }, { s0: 0.3, s1: 0.4, hw: 6, ease: 0 }, { s0: 0.5, s1: 0.6, hw: 6.5, ease: 0.04 }] })).hwZones;
   assert.deepEqual(plain(hz.map((z) => [z.hw, z.ease])), [[5, 0.025], [6, 0.005], [6.5, 0.04]], "hw floors at LIMITS.hwMin; a zero ease (a step) floors at 0.005; absent → the engine's 0.025");
   // The id must not depend on whether the author wrote the default ease: the

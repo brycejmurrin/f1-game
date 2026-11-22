@@ -207,7 +207,7 @@ let _perfTier = 0;
 let _autoShed = 0;
 // Why: docs/GOVERNOR-RATIONALE.md §gov-17.
 let _tierHold = false;
-let _swGarageScaleSaved = null;
+let _swGarageScaleSaved = null, _swGaragePreviewActive = false;
 let _swRaceScale = null;
 // Why: docs/GOVERNOR-RATIONALE.md §gov-18.
 const OPEN_FRAMES = 600;   // ~10 s at 60 fps, ~20 s at 30
@@ -737,24 +737,22 @@ return {
   // race-settings flyby + #loading entry on tip 775097e). Matches loop-health
   // slowPathCover plus the race-settings sheet (flyby stays live behind it).
   // Garage drive-out preview on SwiftShader: shed fill rate for the intro bay only.
+  get softwareGaragePreviewActive() { return _swGaragePreviewActive; },
   softwareGaragePreviewBegin(gfx) {
     if (!PerfGov.softwareRaster() || !gfx || !gfx.setRenderScale || !gfx.getRenderScale) return;
     // The race scale was chosen once, before the canvas was first sized.
-    if (_swRaceScale != null) {
-      try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
-      return;
-    }
+    _swGaragePreviewActive = true;
+    if (_swRaceScale != null) return;
     if (_swGarageScaleSaved != null) return;
     const cur = gfx.getRenderScale();
     if (cur > 0.55) { _swGarageScaleSaved = cur; gfx.setRenderScale(0.55); }
-    try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
   },
   softwareGaragePreviewEnd(gfx) {
+    _swGaragePreviewActive = false;
     if (_swRaceScale != null) _swGarageScaleSaved = null;
     if (_swGarageScaleSaved == null) return;
     if (gfx && gfx.setRenderScale) gfx.setRenderScale(_swGarageScaleSaved);
     _swGarageScaleSaved = null;
-    try { if (gfx && gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
   },
   // Live software GL presents the race at 0.5 (PostCommon.softwareRaceShed /
   // pinSoftwareRaceShed). Choose that before the first setSize so entry does

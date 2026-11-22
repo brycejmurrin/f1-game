@@ -14,7 +14,7 @@ Northern light: cool, blue-shifted, long shadows even at midday. Pine is dark an
 
 ## 3. Elevation
 
-Flat. This is among the flattest circuits in the roster — do not add relief or knife-edge terrain steps.
+The built road spans 2.82 m vertically. The circuit listing gives 152–157 m for the present layout. Period accounts describe banked constant-radius bends. A driver's lap identifies Karusellen and the left-hand Södra, which leads onto the runway. The game gives both a level cross-section. Their bank angles remain unmeasured. [Circuit listing](https://motorracingindustry.com/business/anderstorp-racing-club) · [1976 race report](https://www.motorsportmagazine.com/archive/article/july-1976/23/swedish-grand-prix-4/) · [Driver's lap](https://www.hultman.info/anderstorp.html)
 
 ## 4. Landmarks & surroundings by lap position
 
@@ -25,17 +25,17 @@ Flat. This is among the flattest circuits in the roster — do not add relief or
 | 0.045 | -1 | 22 | **Turn 1.** Pale grey sand run-off, tyre wall, marshal hut, camera tower. |
 | 0.095 | +1 | 28 | Infield paddock — corrugated shed ranks on grey hardstanding (working site). |
 | 0.150 | -1 | 5 | Pine right up to the armco. |
-| 0.185 | +1 | 26 | **Turns 2–3, Södra Kurvan.** Mown infield, low public-side sheds / billboards. |
+| 0.185 | +1 | 26 | **Turns 2–3.** Mown infield, low public-side sheds / billboards. |
 | 0.245 | -1 | 9 | Back into the trees: flag/timing hut. |
 | 0.330 | -1 | 20 | **Turn 4, Opel Kurvan.** Sponsor hoarding, tyre wall, grey sand, camera tower. |
 | 0.400 | +1 | 32 | Infield scrub between the loops — sightlines open toward the hangars. |
-| 0.480 | -1 | 18 | **Turn 5.** Long constant-radius corner, slightly banked. |
-| 0.556 | +1 | 30 | **Turn 6 — onto the runway.** Corridor opens; aged concrete apron; runway edge / threshold / touchdown paint (seated, not sunk). |
+| 0.480 | -1 | 18 | **Turn 5.** Kink after the Karusellen sweep. |
+| 0.556 | +1 | 30 | **Turn 6 — Södra Kurvan, onto the runway.** Corridor opens; aged concrete apron; runway edge / threshold / touchdown paint (seated, not sunk). |
 | 0.640 | +1 | 52 | Airfield apron: required **flight hangars** (`anderstorp-flight-hangars`), flying club, parked light aircraft, taxi stubs. |
 | 0.740 | -1 | 55 | Runway far side: mown grass to a distant treeline, falu barn, windsocks. |
 | 0.820 | +1 | 35 | End of the apron: smaller corrugated shed, concrete gives way to grass. |
 | 0.860 | -1 | 16 | **Turn 7 — off the runway.** Corridor narrows, pine closes in. |
-| 0.920 | -1 | 24 | **Turn 8 / Norra approach.** Long banked sweep onto the pit straight; timber terracing outside. |
+| 0.920 | -1 | 24 | **Turn 8.** Exit toward the pit straight; timber terracing outside. |
 
 ### Required landmark ids (wave 6)
 

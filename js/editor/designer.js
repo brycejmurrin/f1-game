@@ -876,6 +876,8 @@ const TrackDesigner = (function () {
     files.append(ui.share, ui.card, ui.export, ui.import);
     foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
+    // The compact header is zero-height; the designer reserves a grid cell by its footer for this action.
+    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, root)?.classList.add("screen-arrange-entry");
     // Short landscape phone: the foot rides under the rail (inside the body) so the dialog never scrolls.
     // Sizes are the effective ones (UI SIZE zooms the dialog); a very narrow effective width keeps the stacked layout.
     const seatFoot = (force) => {
@@ -1648,6 +1650,7 @@ const TrackDesigner = (function () {
     return true;
   }
   function onBack(ev) {
+    if (ev.target?.closest?.("#screen-arranger")) return;
     if (workspace && workspace.closeMenu(ev)) return;
     if (ev.type === "keydown" && (ev.key === "z" || ev.key === "Z") && (ev.ctrlKey || ev.metaKey)) {
       if (!openFlag) return;
@@ -1714,6 +1717,22 @@ const TrackDesigner = (function () {
     invalidateShares();
     ++replacementGeneration;   // pending single-circuit reads/decodes no longer own this visit
     saveDraft();
+    clearTimeout(previewT); previewT = 0;   // open() schedules a fresh preview
+    if (cancelDesignJob) cancelDesignJob();
+    if (typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(fromFrame);
+      cancelAnimationFrame(candThumbFrame);
+    }
+    ++fromJob; ++candThumbJob;
+    if (ui.from) ui.fromBtn.setAttribute("aria-expanded", "false");
+    for (const panel of [ui.from, ui.cands]) if (panel) {
+      while (panel.firstChild) panel.removeChild(panel.firstChild);
+      panel.hidden = true;
+    }
+    cands = []; candStyle = null;
+    if (ui.styles) for (const chip of Object.values(ui.styles)) {
+      chip.setAttribute("aria-pressed", "false"); chip.classList.remove("active");
+    }
     cancelLibraryImport(false);
     if (repair) repair.cancel();
     if (cv) cv.reset();
@@ -1748,7 +1767,7 @@ const TrackDesigner = (function () {
 
   // ── insight: TURNS, SPEED, TRACK OF THE DAY, START FROM (TrackInsight) ──
   // ins: the TURNS rows of the last preview; heatV: its per-node speeds (m/s).
-  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0;
+  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0, fromFrame = 0;
   // START FROM: def id → the OUTLINE DesignerCanvas.thumb strokes ({ px, pz, n }, at most
   // THUMB_PTS points), built once. It held each whole line-less centreline: 52 circuits,
   // ~4 MB pinned for the page after the panel opened once, for a 160×110 card.
@@ -1919,9 +1938,9 @@ const TrackDesigner = (function () {
         if (!tr) { tr = thumbOutline(Tracks.buildCenterline(def, { line: false })); thumbTr.set(def.id, tr); }
         DesignerCanvas.thumb(c, tr, { color: "#f6f6f9", width: 2 });
       } catch (e) { Log.warn("track", "start-from thumbnail " + def.id + " failed: " + (e && e.message)); }
-      requestAnimationFrame(next);
+      fromFrame = requestAnimationFrame(next);
     };
-    requestAnimationFrame(next);
+    fromFrame = requestAnimationFrame(next);
   }
 
   // ── authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ─────────
@@ -1944,7 +1963,7 @@ const TrackDesigner = (function () {
     box.insertBefore(ui.spanW, box.children[at + 1] || null);
     ui.turnPick = el("div"); ui.turnPick.hidden = true; ui.turnPick.setAttribute("role", "group"); ui.turnPick.setAttribute("aria-label", "Selected turn");
     ui.turnPickLabel = el("div", "td-label", "SELECTED TURN");
-    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v > 0 ? v + "°" : "FLAT"));
+    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v ? v + "°" : "FLAT"));
     ui.turnPick.append(ui.turnPickLabel, ui.bank);
     ui.turns.parentNode.appendChild(ui.turnPick);
   }
@@ -2033,21 +2052,20 @@ const TrackDesigner = (function () {
     const z = c && tr ? bankNear(c, tr.total, (q) => Math.max(q.widthM / 2, c.lenM / 2)) : null;
     return z ? z.angleDeg : 0;
   }
-  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, else 2 … 30). */
+  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, negative = adverse). */
   function setCornerBank(row, deg) {
     if (previewT || !verdict) runPreview();
     const c = typeof row === "number" ? ins.find((x) => x.n === row) : row, tr = verdict && verdict.tr;
     if (!c || !tr || !Number.isFinite(c.sApex)) { message("Select a turn under TURNS first", true); return false; }
     const L = tr.total, LIM = CustomTracks.LIMITS, had = design.bankZones || [];
-    deg = Math.round(Math.min(LIM.angleDeg, Math.max(0, +deg || 0)));
-    if (deg < 2) deg = 0;
+    deg = Math.round(Math.min(LIM.angleDeg, Math.max(-LIM.angleDeg, +deg || 0)));
     const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < c.lenM / 2));
     if (deg && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " banked corners at most — flatten one first", true); return false; }
     const next = deg ? keep.concat([{ frac: TrackZones.wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
     if (JSON.stringify(next) === JSON.stringify(had)) return false;
     commit(Object.assign({}, design, { bankZones: next }), "zone:bank");
     const I = insight(), fiaMax = I && I.THRESH ? I.THRESH.bankDeg : 5.7;
-    message("T" + c.n + (deg ? " banked " + deg + "°" + (deg > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
+    message("T" + c.n + (deg ? " banked " + deg + "°" + (Math.abs(deg) > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
     return true;
   }
   /** Whole-circuit kerb ribbon: flat / sausage / rumble (mesh.js buildKerbs). */
@@ -2077,7 +2095,7 @@ const TrackDesigner = (function () {
   }
   /** "· BANK 6° · 12.6 m WIDE" on a TURNS row whose apex carries a zone. */
   function turnTags(c) {
-    return (c.bankDeg > 0 ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
+    return (c.bankDeg ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
   }
 
   // ── elevation: per-node heights[] + the strip (DesignerProfile) ──
@@ -2211,7 +2229,8 @@ const TrackDesigner = (function () {
   // cands: the cards on show ({ seed, pts, score, feats, tr, stats }, best
   // first); candJob: the run in flight (a newer press drops an older one).
   const DESIGN_N = 16, DESIGN_SLICES = 4, DESIGN_STYLES = ["FAST", "TECHNICAL", "MIXED"];
-  let cands = [], candStyle = null, candJob = 0, candThumbJob = 0, candBusy = false;
+  let cands = [], candStyle = null, candThumbJob = 0, candThumbFrame = 0, candBusy = false;
+  let /** @type {(() => void) | null} */ cancelDesignJob = null;
   /** Under the RANDOMISE row's group: [FAST][TECHNICAL][MIXED] and the candidate cards. */
   function buildDesigned(circuit) {
     ui.styleRow = el("div", "td-chips");
@@ -2237,21 +2256,30 @@ const TrackDesigner = (function () {
    *  the busy state paints), then done() → the Promise's value. A newer run
    *  supersedes this one (false). */
   function runSliced(text, slices, work, done) {
-    const job = ++candJob;
+    if (!openFlag) return Promise.resolve(false);
+    if (cancelDesignJob) cancelDesignJob();
     setDesignBusy(true); message(text);
     return new Promise((resolve) => {
-      let k = 0;
+      let k = 0, timer;
+      const cancel = () => {
+        clearTimeout(timer);
+        cancelDesignJob = null;
+        setDesignBusy(false);
+        message("");
+        resolve(false);
+      };
+      cancelDesignJob = cancel;
       const step = () => {
-        if (job !== candJob) { resolve(false); return; }
+        if (cancelDesignJob !== cancel) return;
         try { work(k); } catch (e) {
           Log.warn("track", "designed randomise failed: " + (e && e.message || e));
-          setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
+          cancelDesignJob = null; setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
         }
-        if (++k < slices) { setTimeout(step, 0); return; }
-        setDesignBusy(false);
+        if (++k < slices) { timer = setTimeout(step, 0); return; }
+        cancelDesignJob = null; setDesignBusy(false);
         resolve(done());
       };
-      setTimeout(step, 30);
+      timer = setTimeout(step, 30);
     });
   }
   /** FAST / TECHNICAL / MIXED: DESIGN_N seeds (from `seed`, default the design's
@@ -2331,9 +2359,9 @@ const TrackDesigner = (function () {
       if (job !== candThumbJob || !queue.length) return;
       const [cvs, tr] = queue.shift();
       try { DesignerCanvas.thumb(cvs, tr, { color: "#f6f6f9", width: 2 }); } catch (e) { Log.warn("track", "designed thumbnail failed: " + (e && e.message)); }
-      requestAnimationFrame(next);
+      candThumbFrame = requestAnimationFrame(next);
     };
-    requestAnimationFrame(next);
+    candThumbFrame = requestAnimationFrame(next);
   }
 
   // ── files, the share card, the test drive ─────────────────────────────────

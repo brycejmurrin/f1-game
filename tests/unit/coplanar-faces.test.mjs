@@ -31,7 +31,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { overlapArea, planeGap } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
+const { facesOf, overlapArea, planeGap } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
 
 // SPOTS = distinct 40 m locations carrying at least one same-facing coplanar
 // pair (spots, not pairs: a pair count swings when one prop moves, a spot
@@ -141,6 +141,22 @@ test("overlapArea is the real overlap, exact on the shapes the emitters emit", (
   near(overlapArea(rect(0, 0, 1, 1), rect(2, 2, 3, 3)), 0, "disjoint squares");
   // A cross: two 0.1 m bars at right angles meet in one 0.1 x 0.1 square.
   near(overlapArea(rect(0, 0.45, 1, 0.55), rect(0.45, 0, 0.55, 1)), 0.01, "crossed bars");
+});
+
+test("near-parallel panels retain their overlap when moved away from the origin", () => {
+  function panel(x, z, yaw) {
+    const c = Math.cos(yaw), s = Math.sin(yaw), pos = [], nrm = [];
+    for (const [u, y] of [[0, 0], [4, 0], [4, 4], [0, 4]]) {
+      pos.push(x + c * u, y, z - s * u);
+      nrm.push(s, 0, c);
+    }
+    return facesOf({ s: 0, e: pos.length }, pos, nrm)[0];
+  }
+  for (const z of [0, 1000]) {
+    const a = panel(0, z, 0);
+    assert.ok(overlapArea(a, panel(4, z, 0.001)) < 1e-6, "panels meet at their edges");
+    assert.ok(Math.abs(overlapArea(a, panel(3, z, 0.001)) - 4) < 1e-6, "one metre overlaps");
+  }
 });
 
 test("planeGap is the point-to-plane separation, not |d_a - d_b| (#2205)", () => {

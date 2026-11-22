@@ -335,7 +335,7 @@ test("the script cache keeps only the newest CACHE_MAX sessions, LRU by use", ()
 function makeDom() {
   function el(tag, cls, text) {
     const node = {
-      tag, cls: cls || null, text: text == null ? null : String(text), children: [], type: null, value: "", listeners: {},
+      tag, cls: cls || null, text: text == null ? null : String(text), children: [], dataset: {}, type: null, value: "", listeners: {},
       appendChild(c) { node.children.push(c); c.parent = node; return c; },
       insertBefore(c, ref) { const i = node.children.indexOf(ref); node.children.splice(i < 0 ? node.children.length : i, 0, c); c.parent = node; return c; },
       get nextSibling() { const p = node.parent; if (!p) return null; const i = p.children.indexOf(node); return i >= 0 ? p.children[i + 1] || null : null; },
@@ -538,7 +538,7 @@ function hubWatchHarness() {
   function el(...args) {
     const node = dom.el(...args);
     node.classList = { add() {}, toggle() {} };
-    node.style = {}; node.dataset = {};
+    node.style = {};
     node.focus = () => {}; node.scrollIntoView = () => {};
     node.querySelector = () => null;
     Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });

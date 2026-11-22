@@ -528,6 +528,23 @@ test("--changed: a tests/data file selects the unit files that pin it; an unpinn
   assert.deepEqual(unpinned.files, all);
 });
 
+test("branch ratchet fragments include baseline and directory consumers alongside directly affected game tests", () => {
+  const frag = ["tests/data/ratchets.d", "topic.json"].join("/");
+  // Assemble the fixture path so this selector test does not become a consumer of the game camera.
+  const path = ["js/camera", "extra-rigs.js"].join("/"), game = "tests/unit/extra-rigs.test.mjs";
+  const sel = selectToolingFastChanged([frag, path, game]);
+  assert.equal(sel.reason, "matched");
+  for (const f of [game, "tests/unit/ratchets.test.mjs", "tests/unit/deploy-ratchet-fragments.test.mjs",
+    "tests/unit/merge-gate.test.mjs"]) assert.ok(sel.files.includes(f), f);
+  assert.equal(guardsScope([frag, path, game], "pull_request").mode, "changed");
+  assert.equal(selectToolingFastChanged([frag, path, "unrouted.xyz"]).reason, "unmatched");
+  assert.equal(guardsScope([frag, game], "pull_request").mode, "full");
+  assert.equal(guardsScope([frag, path, "tests/unit/tooling-fast-runner.test.mjs"], "pull_request").mode, "full");
+  assert.equal(guardsScope([frag, path, game], "push").mode, "full");
+  assert.equal(selectToolingFastChanged([frag], { pinIndex: new Map() }).reason, "tests-data-unpinned");
+  assert.equal(guardsScope([frag.replace(".json", ".txt")], "pull_request").mode, "full");
+});
+
 // #5461: the CI guards tier on a prose PR is `tooling-fast --changed`, and its docs-only set left knowledge-retention
 // out, so a 43 KB note merged green and reddened the deploy tip. The set is the list the pre-commit hook runs too.
 test("docs-only mode runs the shared docs list, knowledge-retention included, on the real floor (#5461)", () => {

@@ -1,6 +1,102 @@
 /* HUD customization controls and color stylesheet, loaded on demand. */
 "use strict";
 const HudLayoutEditor = (() => {
+  function createHiddenReason({ doc, store, ELEMENTS, hudLive, has, shownProf, shown, mirrorMode, visibilityIds }) {
+    /* WHY AN ELEMENT IS NOT ON SCREEN. [ids, test(has, attr, hide), reason, soft].
+       The classes are js/ui/hud.js's and the rules css/hud.css's /
+       css/track-detail.css's; first match wins. SOFT = the sliders still matter:
+       a placed chip shows in a touch cockpit (data-hl-user), and a chip that
+       appears only on an event (flag, limits strike, message) is edited blind.
+       "cockpit-cam" is the wheel's LCD (gear / speed); the touch-cockpit row
+       follows the painted LAYOUT set (shown(), = body[data-hl-set]) instead,
+       whatever the wheel. */
+    // SPEED rides .hud-bottom with GEAR on BROADCAST+TV (css/hud.css hides the
+    // whole band) and shares the wheel-LCD hide with GEAR on cockpit-cam. It is
+    // NOT in the plain hud-bcam list — TV cams keep a plated #hud-speed.
+    const BOTTOM = ["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb"];
+    const CHIPS = ["energy", "ot", "aero"];
+    const READOUTS = ["damage", "rel", "strat", "inputs"];   // css/hud.css hides all four on the same classes
+    // Data Hub WATCH / HIGHLIGHTS (css/hud.css). Hard: a placed chip does not
+    // bring the driving HUD back. "tower" here is the POS/LAP band (.hud-top),
+    // not #bc-tower. The radio card stands down with the rest of the HUD.
+    const REPLAY_HUD = ["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce"]
+      .concat(BOTTOM, READOUTS);
+    const replayOn = (h) => h("bc-on") || h("watch-controls-on");
+    // body.hud-prof-* / hud-met-* are painted by js/ui/hud.js while the race HUD
+    // is up. Under SETTINGS #hud is hidden, so those classes lag the store —
+    // trust shownProf() / hudMetricsLayout so MOVE & SIZE greys chips the active
+    // style already hides (#3273). A forced metrics name wins; AUTO/null falls
+    // back to whatever class is still on the body (tests + last-race leftover).
+    const profIs = (name) => (hudLive() ? has("hud-prof-" + name) : shownProf() === name);
+    const metIs = (name) => {
+      if (hudLive()) return has("hud-met-" + name);
+      // Default must match js/game.js (store-registry ratchet); AUTO/FULL mean
+      // "no forced strip" so fall back to any leftover body.hud-met-* class.
+      const want = store ? store.get("hudMetricsLayout", "full") : "full";
+      if (want && want !== "auto" && want !== "full") return want === name;
+      return has("hud-met-" + name);
+    };
+    const HIDE_RULES = Object.freeze([
+      [REPLAY_HUD, replayOn, "a real-race watch keeps the driving HUD off"],
+      [["map"], (h) => h("hud-hide-map"), "MAP is off for this camera or style (DISPLAY › HUD › MAP)"],
+      [["gaps"], (h) => h("hud-hide-gaps"), "GAPS is off for this style (DISPLAY › HUD › GAPS)"],
+      [BOTTOM, (h) => h("hud-prof-broadcast") && h("hud-bcam"), "BROADCAST style on a TV camera keeps the frame clean"],
+      [CHIPS.concat(["bb", "sectors"], READOUTS), () => profIs("minimal"), "MINIMAL style"],
+      [CHIPS.concat(["bb"]), () => metIs("timing"), "LAYOUT is TIMING"],
+      [CHIPS.concat(["bb", "sectors", "tyre"]), () => metIs("compact"), "LAYOUT is COMPACT"],
+      [["sectors"], () => metIs("driver"), "LAYOUT is DRIVER"],
+      [["gearbox", "ot", "aero", "energy", "bb", "limits"].concat(READOUTS), (h) => h("hud-bcam"), "TV camera"],
+      [["sectors"], (h) => h("hud-bcam") && !h("hud-prof-broadcast"), "TV camera"],
+      // css/track-detail.css: body.cockpit-cam hides GEAR + SPEED with no data-hl-user escape.
+      [["gearbox", "speed"], (h) => h("cockpit-cam"), "the wheel's display shows it in the cockpit"],
+      [["gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "sectors", "limits"].concat(READOUTS), (h, a, off) => off, "turned off in the HUD element list (DISPLAY › HUD)"],
+      [["tyre"], (h, a, off, el, live) => !!(live && el && el.hidden), "TYRE WEAR is off (RACE SETTINGS)"],
+      [CHIPS.concat(["tyre", "bb"]), (h, a) => shown() === "cockpit" && !h("desktop") && !a, "touch cockpit: no room beside the wheel — move it to show it", true],
+      [["ot", "aero", "bb"], (h, a) => shown() === "helmet" && !h("desktop") && !a, "touch helmet: the OT / AERO buttons carry it — move it to show it", true],
+      [["bb"], (h, a) => !h("desktop") && !a, "touch screens: move it to show it", true],
+      [["flag"], () => true, "shows when a flag is out", true],
+      [["limits"], () => true, "shows on a track-limits strike", true],
+      [["announce"], () => true, "shows with a race message", true],
+      // MIRROR: DISPLAY › HUD › MIRROR off greys the sliders (hard). AUTO / a
+      // chase cam / a session collapse soft-hides the frame — like SPEED's wheel
+      // LCD rule, a place (data-hl-user) turns it ON via revealMirror().
+      [["mirror"], (h, a) => !a && mirrorMode() === "off", "MIRROR is off (DISPLAY › HUD › MIRROR)"],
+      [["mirror"], (h, a, off, el) => !a && !!(el && el.hidden), "MIRROR is not needed now — move it to show it", true],
+    ].map(Object.freeze));
+    /** Live: is element `el` drawn? (hidden attribute, display none, zero box) */
+    function drawn(el) {
+      if (!el || el.hidden) return false;
+      if (typeof getComputedStyle === "function") {
+        try { if (getComputedStyle(el).display === "none") return false; } catch (_) { /* a fake or detached node: fall through to the box */ }
+      }
+      if (!el.getBoundingClientRect) return true;
+      const r = el.getBoundingClientRect();
+      return !!(r.width && r.height);
+    }
+    /** Why element `id` is not on screen now: {reason, soft} or null when it is
+     *  (or nothing says otherwise). While the HUD is up the live element has the
+     *  last word: drawn = null whatever the classes say; hidden with no known
+     *  class reads "hidden right now" (soft). Outside a race the classes decide. */
+    function hiddenReason(id) {
+      const row = ELEMENTS.find((e) => e[0] === id);
+      if (!row || !doc) return null;
+      const el = doc.querySelector(row[2]);
+      const live = hudLive();
+      if (live && el && el.hasAttribute && el.hasAttribute("data-col-drop")) return { reason: "not enough room", soft: true };
+      if (live && drawn(el)) return null;
+      const user = !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+      const hideAttr = doc.body && doc.body.getAttribute ? String(doc.body.getAttribute("data-hud-hide") || "") : "";
+      const ids = visibilityIds(id), hidden = hideAttr.split(/\s+/);
+      const off = ids.length > 0 && ids.every((key) => hidden.indexOf(key) >= 0);
+      for (const [ids, test, reason, soft] of HIDE_RULES) {
+        if (ids.indexOf(id) >= 0 && test(has, user, off, el, live)) return { reason, soft: !!soft };
+      }
+      return live ? { reason: "hidden right now", soft: true } : null;
+    }
+
+    return hiddenReason;
+  }
+
   function createColors(ELEMENTS, store, doc) {
     const parts = [];
     const add = (id, label, selector, property) => parts.push({ id, label, selector, property });
@@ -339,5 +435,5 @@ const HudLayoutEditor = (() => {
     paintAll();
   }
 
-  return { createColors, build };
+  return { createColors, createHiddenReason, build };
 })();

@@ -860,6 +860,7 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
     };
   }
   vm.createContext(ctx);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
@@ -1349,6 +1350,7 @@ test("optional strategy compacts, explains a drop, and restores when space retur
   assert.ok(strat.getBoundingClientRect().top >= 154);
   viewport.innerHeight = 170;ctx.HudLayout.clearReadouts();
   assert.ok(strat.hasAttribute("data-col-drop"));
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   assert.equal(ctx.HudLayout.hiddenReason("strat").reason,"not enough room");
   correctionWrites = 0;
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
@@ -1450,6 +1452,7 @@ test("optional input trace yields to occupied space and restores without saving"
   vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
   ctx.HudLayout.clearReadouts();
   assert.ok(inputs.hasAttribute("data-col-drop"));
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   assert.equal(ctx.HudLayout.hiddenReason("inputs").reason,"not enough room");
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
   assert.ok(!inputs.hasAttribute("data-col-drop"));
@@ -1855,4 +1858,27 @@ test("Arrange HUD event colors persist independently and reset one state at a ti
   restored.save("flag-yellow-fill", null);
   assert.equal(restored.value("flag-yellow-fill"), undefined);
   assert.equal(restored.value("map-armed"), "#123456");
+});
+
+test("HUD panel dimensions and type round-trip independently in their profile and camera", () => {
+  const { H, written, els } = load();
+  const id = "rel";
+  H.set(id, { width: 45, textSize: 150, minHeight: 16 }, "other", "standard");
+  const card = els["#hud-rel"];
+  assert.equal(card.props["--hl-type"], "1.5");
+  assert.equal(card.props["--hl-width"], "calc(45vw / var(--hud-z, 1))");
+  assert.equal(card.props["--hl-height"], "calc(16vh / var(--hud-z, 1))");
+  const recovered = load(written).H;
+  assert.equal(recovered.get(id, "other", "standard").textSize, 150);
+  assert.equal(recovered.get(id, "other", "standard").s, 100);
+  assert.equal(recovered.get(id, "helmet", "standard").width, undefined);
+  assert.equal(recovered.get(id, "other", "broadcast").width, undefined);
+  assert.equal(H.set(id, {width: 10000}).width, 95);
+  assert.equal(H.set(id, {textSize: "broken"}).textSize, 150);
+  H.set("mirror", { width: 50 });
+  assert.equal(H.get("mirror").width, undefined);
+  H.resetEl(id, "other", "standard");
+  assert.equal(card.props["--hl-type"], undefined);
+  assert.equal(card.props["--hl-height"], undefined);
+  assert.equal(card.props["--hl-width"], undefined);
 });

@@ -79,6 +79,11 @@ function boot(options = {}) {
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
+  if (options.arrangeScreen) {
+    for (const id of ["photo-studio", "photo-controls"]) dom.byId(id).ownerDocument = dom.document;
+    vm.runInContext(fs.readFileSync(new URL("../../js/ui/editor-workspace.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+    ctx.SettingsNav = {arrangeScreen:options.arrangeScreen};
+  }
   if (options.withModalFocus) {
     dom.document.readyState = "loading";
     vm.runInContext(fs.readFileSync(new URL("../../js/ui/modal.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/modal.js") });
@@ -162,6 +167,24 @@ test("closing a sampled capture cancels its pending read, releases controls and 
   b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32) });
   assert.equal(await b.api.capture(), true);
   assert.equal(currentPass, null);
+});
+
+test("the Studio offers the shared stick editor exactly when the real camera sticks are present", () => {
+  const opened = [];
+  const {api, dom} = boot({arrangeScreen:(id, invoker) => opened.push([id, invoker])});
+  for (const source of ["garage", "home", "home-track", "race", "watch"]) {
+    assert.equal(api.open({source}), true);
+    const door = dom.byId("ps-body").querySelector('[data-arrange-screen="photo-controls"]');
+    assert.ok(door);
+    const orbit = source === "garage" || source === "home";
+    assert.equal(door.hidden, orbit, source);
+    if (!orbit) {
+      assert.equal(door.textContent, "Arrange camera sticks");
+      door.onclick();
+      assert.deepEqual(opened.at(-1), ["photo-controls", door]);
+    }
+    api.close(false);
+  }
 });
 
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
@@ -567,6 +590,15 @@ test("Studio uses canonical sheet regions and enumerated controls with a persist
   assert.equal(b.dom.byId("ps-capture").parentElement, panel.children[2]);
   assert.equal(b.dom.byId("ps-capture").classList.contains("bigbtn"), true);
   assert.equal(body.contains(b.dom.byId("ps-export")), true);
+  // Each saved region must resolve on the real, lazily constructed Studio
+  // DOM, including collapsed panels. The framing guide cannot be displaced.
+  const reg = { window: {} };
+  vm.runInNewContext(fs.readFileSync(new URL("../../js/ui/screen-regions.js", import.meta.url), "utf8"), reg, { filename: absSrc("js/ui/screen-regions.js") });
+  const studio = b.dom.byId("photo-studio"), guide = b.dom.byId("ps-guide");
+  for (const part of Object.values(reg.window.ScreenRegions["photo-studio"].regions)) {
+    const region = studio.querySelector(part.selector);
+    assert.ok(region && !region.contains(guide), part.label);
+  }
   const frame = b.dom.byId("ps-aspect"); frame.value = "portrait"; b.dom.dispatch(frame, { type: "change" });
   assert.equal(b.api.state().aspect, "portrait");
   b.dom.byId("ps-aspect-row-next").click(); assert.equal(b.api.state().aspect, "scene");
