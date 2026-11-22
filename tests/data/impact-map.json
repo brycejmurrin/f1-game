@@ -4237,6 +4237,9 @@
       ]
     },
     "js/career/career-ui.js": {
+      "appendImport": [
+        "tests/unit/mobile-native-download.test.mjs"
+      ],
       "build": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -4271,6 +4274,9 @@
       "draftErrors": [
         "tests/unit/ui-journey-career.test.mjs"
       ],
+      "exportAllButton": [
+        "tests/unit/mobile-native-download.test.mjs"
+      ],
       "openHistory": [
         "tests/unit/setup-screens-state.test.mjs"
       ],
@@ -4295,7 +4301,6 @@
       ],
       "*": [
         "tests/unit/i18n-parts-career.test.mjs",
-        "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
     },
@@ -21409,6 +21414,7 @@
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/key-binds.test.mjs",
+        "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/screen-looks.test.mjs",

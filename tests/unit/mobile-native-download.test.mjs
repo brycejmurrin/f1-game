@@ -259,16 +259,15 @@ test("career export awaits native I/O and never retries a failed or cancelled sh
 
 test("career export button never announces success for a cancelled or failed native backup", async () => {
   const source = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
-  const start = source.indexOf("exp.onclick = (ev)");
-  const handler = source.slice(start, source.indexOf("\n      };", start) + 9);
+  const factory = source.slice(source.indexOf("function exportAllButton()"), source.indexOf("function appendImport("));
   for (const outcome of ["success", "failure", "cancel"]) {
     const { sandbox } = loadNative({ capacitor: true });
-    const notices = [], button = { disabled: false };
+    const notices = [], button = { disabled: false, setAttribute() {} };
     let resolve, reject, calls = 0;
     const held = new Promise((yes, no) => { resolve = yes; reject = no; });
-    Object.assign(sandbox, { exp: button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
+    Object.assign(sandbox, { el: () => button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
       CareerBackup: { exportAll: () => { calls++; return held; } } });
-    vm.runInContext("let armedDelete = '';\n" + handler, vm.createContext(sandbox));
+    vm.runInContext("let armedDelete = '';\n" + factory + "\nexportAllButton();", vm.createContext(sandbox), { filename: absSrc("js/career/career-ui.js") });
     const event = { stopPropagation() {} };
     button.onclick(event); button.onclick(event);
     assert.equal(calls, 1);
@@ -349,9 +348,11 @@ test("SettingsExport.download awaits the real native helper and surfaces write/s
     sandbox.Capacitor.Plugins[stage === "write" ? "Filesystem" : "Share"][stage === "write" ? "writeFile" : "share"] = () => held;
     sandbox.Blob = Blob;
     const ctx = vm.createContext(sandbox);
-    vm.runInContext(download, ctx);
+    const config = "js/ui/settings-export.js";
+    vm.runInContext(readFileSync(join(ROOT, config), "utf8"), ctx, { filename: absSrc(config) });
+    vm.runInContext("const { FORMAT, SETTINGS_MAX_BYTES } = SettingsExport._core;\n" + download, ctx, { filename: absSrc("js/ui/settings-export-body.js") });
     let settled = false;
-    const result = sandbox.download({ settings: true }, "settings.json");
+    const result = sandbox.download({ format: "apex26-settings-v1", settings: {} }, "settings.json");
     const rejected = assert.rejects(result, (err) => err === error);
     result.then(() => { settled = true; }, () => { settled = true; });
     await new Promise((resolve) => setImmediate(resolve));
