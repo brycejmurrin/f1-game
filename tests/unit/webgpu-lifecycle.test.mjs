@@ -2801,6 +2801,29 @@ test("WGX post parity: SSAO normal, haze plume space, bloom order, mirror tone c
   assert.ok(mir.values[12] > 0 && mir.values[14] > 0, "contrast / saturation knobs reach the inset (TUNE_DEFS defaults)");
 });
 
+test("WGX resolves MSAA depth for the flare only when the composite samples it", async () => {
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.msaa(), 4);
+  const identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const vp = identity.slice();
+  vp[11] = 1; // Sun direction's clip w equals its z.
+  function depthPasses(sunDir, opts) {
+    assert.equal(gfx.begin({ viewProj: vp, invProj: identity, sunDir }), true);
+    const start = h.passCalls.length;
+    gfx.present({ reflect: 0, carReflect: 0, ...opts });
+    return h.passCalls.slice(start).filter(([name, [desc]]) =>
+      name === "beginRenderPass" && !desc.colorAttachments.length && desc.depthStencilAttachment).length;
+  }
+  assert.equal(depthPasses([0, 0.5, 1]), 1, "bright on-screen sun");
+  assert.equal(depthPasses([0, 0.5, -1]), 0, "behind the camera");
+  assert.equal(depthPasses([3, 0.5, 1]), 0, "off the screen");
+  assert.equal(depthPasses([0, 0.5, 1], { flareMul: 0 }), 0, "disabled flare");
+  assert.equal(depthPasses([1 + 2 ** -25, 0.5, 1]), 1, "the uploaded f32 x rounds onto the edge");
+  assert.equal(depthPasses([3, 0.5, 1], { ssao: 0.5 }), 1, "SSAO still samples depth");
+});
+
 test("shadow model UBO flushes once per pass (not per cast)", () => {
   // Lit draws already batch via _flushDrawUBO. Shadow used to upload 16
   // floats per castShadow* (sun + car + lamp). WebGPU Fundamentals:

@@ -3,9 +3,12 @@
     "js/game.js": {
       "codeLines": 1,
       "lines": -1
+    },
+    "js/render/glx/glx.js": {
+      "lines": 5
     }
   },
   "tree": {
-    "eagerCodeBytes": 99
+    "eagerCodeBytes": 100
   }
 }

@@ -16221,10 +16221,12 @@
         "tests/unit/tlx-inst-cells.test.mjs"
       ],
       "extractPlanes": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
       "radialCulled": [
-        "tests/unit/frustum-buckets.test.mjs"
+        "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "*": [
         "tests/unit/build-worker.test.mjs",
@@ -16603,6 +16605,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cull": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "disposeShared": [
