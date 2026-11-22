@@ -1266,181 +1266,43 @@ const HudLayout = (function () {
     return live ? { reason: "hidden right now", soft: true } : null;
   }
 
-  function peek(on, holdMs) {
-    if (typeof ScreenLooks === "undefined") return;
-    if (on) ScreenLooks.peek("hud", holdMs || 0);
-    else ScreenLooks.endPeek();
+  let colors = null, editorLoad = null;
+  function colorPolicy() {
+    if (!colors && typeof HudLayoutEditor !== "undefined") colors = HudLayoutEditor.createColors(ELEMENTS, store, doc);
+    return colors;
   }
-  const txt = (k, n, id, sn, pn) => {
-    if (k === "s") return relativeSize(n, id, sn, pn) + "% of default";
-    if (!n) return factoryEl(id, sn, pn)[k] ? "0%" : "SHIPPED";
-    if (k === "x") return Math.abs(n) + "% " + (n < 0 ? "left" : "right");
-    return Math.abs(n) + "% " + (n < 0 ? "up" : "down");
-  };
-  const NAMES = { x: "LEFT / RIGHT", y: "UP / DOWN", s: "SIZE" };
+  function ensureEditor() {
+    if (colorPolicy()) return Promise.resolve(true);
+    if (typeof ScriptLoader === "undefined") return Promise.resolve(false);
+    if (!editorLoad) editorLoad = ScriptLoader.create().load(["js/ui/hud-layout-editor.js"], [],
+      { strict: true, ready: () => typeof HudLayoutEditor !== "undefined" })
+      .then(() => !!colorPolicy()).catch(() => false).finally(() => { editorLoad = null; });
+    return editorLoad;
+  }
+  function restoreColors() {
+    if (!colors && store?.get("hudColors", null)) ensureEditor();
+  }
+  restoreColors();
+  store?.subscribe?.(change => {
+    if (change.key === "hudColors" || change.keys?.includes("hudColors")) restoreColors();
+  });
 
   function build() {
-    if (!doc) return;
-    const host = doc.getElementById("pm-hud-details");
+    const host = doc?.getElementById("pm-hud-details");
     if (!host || doc.getElementById("pm-hudlayout")) return;
-    const el = (tag, props, kids) => {
-      const e = doc.createElement(tag);
-      for (const k in props || {}) {
-        if (k === "attrs") { for (const a in props.attrs) e.setAttribute(a, props.attrs[a]); } else e[k] = props[k];
-      }
-      for (const c of kids || []) e.appendChild(c);
-      return e;
-    };
-    const sum = el("summary", { id: "pm-hudlayout-sum", className: "adv-more-btn" });
-    const body = el("div", { id: "pm-hudlayout-body", attrs: { role: "group", "aria-label": "HUD element position and size" } });
-    const fold = el("details", { className: "pm-renderer-sub" }, [sum, body]);
-    fold.id = "pm-hudlayout"; foldEl = fold;   // a plain assignment, so tools/check/shell-ids.mjs sees the mount-once guard's target
-    let editing = cam, editingProf = profile(), sel = IDS[0];
-    const paintSum = () => { sum.textContent = "MOVE & SIZE · " + (isShipped(undefined, editingProf) ? "SHIPPED" : "CUSTOM"); };
-
-    const help = el("p", { className: "adv-help" });
-    body.appendChild(help);
-    const paintHelp = () => {
-      help.textContent = "Choose an element to show, hide, move or resize. AUTO follows the camera and HUD style. " +
-        "Editing " + editingProf.toUpperCase() + " · " + editing.toUpperCase() + ": other styles and camera layouts keep their own positions. " +
-          "Start with a preset or reset an element. Finish editing a value to apply it; leave the value fields to preview the HUD in a race.";
-    };
-    // Use the settings control's native-select and disabled-option semantics.
-    function stepper(id, label, options, read, write) {
-      const built = SettingRow.build(id, label, options);
-      SettingRow.wire(built.row, { values: options, read, write });
-      body.appendChild(built.row);
-      return built.sel;
-    }
-    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAM"], ["helmet", "HELMET CAM"], ["other", "OTHER CAMS"]], () => editing, (v) => {
-      editing = v; if (fold.open) preview = v; apply(); paintAll(); peek(true, 900);
-    });
-    const presetPick = stepper("pm-hl-preset", "PRESET",
-      PRESETS.map((p) => [p[0], p[1]]).concat([["custom", "CUSTOM", true]]), () => presetOf(editing, editingProf), (v) => {
-        applyPreset(v, editing, editingProf); paintAll(); peek(true, 900);
+    if (typeof HudLayoutEditor === "undefined") {
+      ensureEditor().then(ready => {
+        if (ready) build();
+        else host.addEventListener("toggle", build, { once: true });
       });
-    const pick = stepper("pm-hl-el", "ELEMENT", ELEMENTS.map((e) => [e[0], e[1]]), () => sel, (v) => {
-      sel = v; selected = sel; apply(); paintAll(); peek(true, 900);
-    });
-
-    stepper("pm-hl-visibility", "VISIBILITY", [], () => visibility(sel)?.value || "", (v) => {
-      setVisibility(sel, v); paintAll(); peek(true, 900);
-    });
-    function paintVisibility() {
-      const current = visibility(sel);
-      doc.getElementById("pm-hl-visibility").hidden = !current;
-      SettingRow.paint("pm-hl-visibility", current ? current.value : "", current ? current.choices : []);
+      return;
     }
-
-    const painters = [], sliders = [];
-    let previewPending = false;
-    for (const k of ["x", "y", "s"]) {
-      const out = el("b");
-      const paintValue = n => { out.textContent = txt(k, n, sel, editing, editingProf); };
-      const inp = el("input", { type: "number", step: "any",
-        attrs: { "aria-label": NAMES[k].toLowerCase() } });
-      inp.id = "pm-hl-" + k;
-      sliders.push(inp);
-      let dirty = false;
-      const commit = () => {
-        dirty = false;
-        const raw = inp.value.trim(), n = raw ? Number(raw) : NaN;
-        if (!Number.isFinite(n) || (k === "s" && n <= 0)) {
-          inp.value = String(get(sel, editing, editingProf)[k]);
-          return;
-        }
-        const e = set(sel, { [k]: n }, editing, editingProf);
-        inp.value = String(e[k]);
-        paintValue(e[k]); paintSum(); paintPreset();
-        previewPending = true;
-      };
-      // Drafts stay in the native field. In particular, a minus sign or an
-      // exponent halfway through typing must neither save nor fade the form.
-      inp.addEventListener("focus", () => peek(false));
-      inp.addEventListener("input", () => { dirty = true; peek(false); });
-      inp.addEventListener("change", commit);
-      inp.addEventListener("blur", () => {
-        if (dirty) commit();
-        if (!previewPending) return;
-        // Blur precedes the next field's focus. Wait for that focus before
-        // deciding whether the committed HUD can be previewed comfortably.
-        setTimeout(() => {
-          if (!fold.open) { previewPending = false; return; }
-          if (previewPending && !sliders.includes(doc.activeElement)) {
-            previewPending = false;
-            peek(true, 900);
-          }
-        }, 0);
-      });
-      painters.push(() => {
-        const n = get(sel, editing, editingProf)[k];
-        if (doc.activeElement !== inp) inp.value = String(n);
-        paintValue(n);
-      });
-      body.appendChild(el("label", { className: "tune-row" }, [
-        el("span", { className: "tune-label" }, [el("span", { textContent: NAMES[k] + " " }), out]), inp]));
-    }
-
-    // WHY the sliders are off: one line under them, empty when the element shows.
-    const why = el("p", { className: "adv-help", attrs: { "aria-live": "polite" } });
-    why.id = "pm-hl-why";
-    body.appendChild(why);
-
-    const resetOne = el("button", { type: "button", className: "opt-btn", textContent: "RESET ELEMENT" });
-    resetOne.id = "pm-hl-reset-el";
-    resetOne.addEventListener("click", () => { resetEl(sel, editing, editingProf); paintAll(); peek(true, 900); });
-    const resetAll = el("button", { type: "button", className: "opt-btn", textContent: "RESET LAYOUT" });
-    resetAll.id = "pm-hl-reset-set";
-    resetAll.addEventListener("click", () => { resetSet(editing, editingProf); paintAll(); peek(true, 900); });
-    body.appendChild(el("div", { className: "opt-row" }, [resetOne, resetAll]));
-
-    function paintPreset() {
-      for (const pid in TOUCH_UNFIT) SettingRow.optionDisabled("pm-hl-preset", pid, !presetFits(pid));
-      const p = presetOf(editing, editingProf); if (presetPick.value !== p) presetPick.value = p;
-    }
-    // The picker says which elements the current mode does not draw; a HARD
-    // reason greys the sliders (they would move nothing), a soft one only notes it.
-    function paintHidden() {
-      for (const o of pick.options) {
-        const r = hiddenReason(o.value), base = ELEMENTS.find((e) => e[0] === o.value)[1];
-        const t = r ? base + " (" + (r.soft ? "" : "hidden: ") + r.reason + ")" : base;
-        if (o.textContent !== t) o.textContent = t;
-      }
-      const r = hiddenReason(sel), off = !!(r && !r.soft);
-      for (const inp of sliders) inp.disabled = off;
-      resetOne.disabled = off;
-      why.textContent = off ? "Not drawn now: " + r.reason + ". Its controls come back when it shows." : r ? "Note: " + r.reason + "." : "";
-    }
-    function paintAll() {
-      if (!fold.open) editingProf = profile();
-      if (setPick.value !== editing) setPick.value = editing;
-      if (pick.value !== sel) pick.value = sel;
-      for (const p of painters) p();
-      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden();
-    }
-    // Open: preview the layout being edited and outline the selected element.
-    // Closed: the race shows the camera's layout again.
-    fold.addEventListener("toggle", () => {
-      if (fold.open) { editing = cam; editingProf = profile(); preview = editing; previewProf = editingProf; selected = sel; }
-      else { preview = null; previewProf = null; selected = null; previewPending = false; }
-      apply(); paintAll();
-    });
-    // The STYLE / LAYOUT / MAP / GAPS rows share this HUD fold: a change there
-    // moves the edited style and what is hidden. Next tick, after it applied.
-    const refresh = () => {
-      if (fold.open) { editingProf = profile(); previewProf = editingProf; apply(); }
-      paintAll();
-    };
-    host.addEventListener("change", (ev) => { if (!fold.contains(ev.target)) setTimeout(refresh, 0); });
-    // SettingRow.wire stops `change` propagation and the chevrons fire none, so
-    // the bubbling listener above misses those rows: follow their store keys.
-    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudElements"];
-    if (store && store.subscribe) store.subscribe((c) => {
-      if (c && (ROW_KEYS.indexOf(c.key) >= 0 || (Array.isArray(c.keys) && c.keys.some((k) => ROW_KEYS.indexOf(k) >= 0)))) setTimeout(refresh, 0);
-    });
-    onModeChange = refresh;   // setCam: the race camera or the painted style changed
-    host.appendChild(fold);
-    paintAll();
+    HudLayoutEditor.build({ host, doc, store, ELEMENTS, IDS, PRESETS, TOUCH_UNFIT, profile, get, set, apply, isShipped,
+      presetOf, applyPreset, visibility, setVisibility, presetFits, hiddenReason, resetEl, resetSet,
+      relativeSize, factoryEl, camera: () => cam,
+      setPreview: (camera, style) => { preview = camera; previewProf = style; },
+      select: id => { selected = id; }, mount: fold => { foldEl = fold; },
+      subscribeMode: fn => { onModeChange = fn; } });
   }
 
   // #4798 gate: build only
@@ -1458,7 +1320,7 @@ const HudLayout = (function () {
   // PACK_SCALE_MIN / PACK_FIXED / PACK_MOVE stay module-local (no js/ or test
   // callers). Survey lockstep still parses the LIM const from source.
   return {
-    ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
+    get colors() { return colorPolicy(); }, ensureEditor, ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
     PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, relativeSize, setCam, apply, fit, clearReadouts, build,
