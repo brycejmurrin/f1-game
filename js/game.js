@@ -4903,8 +4903,10 @@ function updateCar(c, dt, ranked) {
   // pits.update refits a set, the tread and the weather cannot change inside a car's step, and driveTune.PACE cannot
   // either — so these were the same numbers at every one of their 4-17 call sites. Same operands, same order.
   // AQUAPLANING (TyreModel.aquaplane): standing water above the tread's onset speed; exactly 1 below rain-depth water.
-  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, wxArc ? wxArc.wetnessAt(c.s, c.x) : trackWetness());   // standing water UNDER the car (a local shower)
-  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE, gmC = gripMult(c) * aq.mul, gm0 = gripMult();
+  const meanWet = trackWetness(), surfaceWet = wxArc ? wxArc.wetnessAt(c.s, c.x) : meanWet;
+  const aq = TyreModel.aquaInto(c, vStd(Math.abs(c.speed)), raceWeather, surfaceWet);
+  const vT = vTop(), tyreGrip = tyres.gripMul(c), trMul = 1 - (1 - tyreGrip) * TyreModel.LONG_SHARE;
+  const gmC = TyreModel.carGrip(c, raceWeather, meanWet, surfaceWet) * aq.mul, gm0 = TyreModel.weatherGrip(0, meanWet);
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
