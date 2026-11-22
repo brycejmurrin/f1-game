@@ -83,11 +83,14 @@ function bootTuner(weather = "wet", saved = null) {
     .map((d) => ({ ...d, group: "LAMPS", label: d.id, step: 0.1 }));
   const h = loadStore(weather, saved, defs), nodes = new Map(), storage = new Map();
   const element = () => ({ children: [], dataset: {}, textContent: "", hidden: false,
-    classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {},
+    classList: { toggle() {}, add() {}, remove() {} }, attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
     appendChild(child) { this.children.push(child); if (child.id) nodes.set(child.id, child); },
     scrollIntoView() {}, focus() {}, setSelectionRange() {} });
   const $ = (id) => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
   h.ctx.document = { createElement: element, getElementById: $, body: element() };
+  vm.runInContext(read("js/ui/setting-row.js"), h.ctx, { filename: absSrc("js/ui/setting-row.js") });
+  h.ctx.SettingRow = h.ctx.window.SettingRow;
   h.ctx.localStorage = { getItem: (k) => storage.get(k), removeItem: (k) => storage.delete(k) };
   h.ctx.PerfGov = { autoShed: () => h.tier || 0 };
   h.ctx.setTimeout = () => 1; h.ctx.clearTimeout = () => {};
@@ -108,6 +111,29 @@ function bootTuner(weather = "wet", saved = null) {
   h.input = (id, value) => { const input = $("lt-in-" + id); input.value = String(value); input.oninput(); };
   return h;
 }
+
+test("the exact lighting field commits once through the knob setter and follows slider and profile resets", () => {
+  const h = bootTuner(), field = h.$("lt-num-sunElev"), slider = h.$("lt-in-sunElev");
+  assert.deepEqual([field.type, field.min, field.max, field.step, field.inputMode], ["number", -90, 90, 0.1, "text"]);
+  assert.equal(field.getAttribute("aria-label"), "sunElev exact value");
+  Object.defineProperty(field, "valueAsNumber", { get() { return Number(this.value); } });
+  field.validity = { valid: true };
+  field.value = "-4.2";
+  field.onchange();
+  assert.equal(h.LT.sunElev, -4.2);
+  assert.equal(+slider.value, -4.2);
+  field.onchange();
+  assert.equal(h.writes.length, 1);
+  assert.deepEqual(host(h.store.profiles), { "monaco|dusk|dry": { sunElev: -4.2 } });
+  field.value = "-4.256"; field.validity.valid = false;
+  field.onchange();
+  assert.equal(field.value, "-4.2", "an off-step edit restores the saved value");
+  h.input("sunElev", -1.1);
+  assert.equal(field.value, "-1.1");
+  assert.equal(h.writes.length, 1, "dragging does not persist on each tick");
+  h.$("lt-reset").onclick();
+  assert.equal(field.value, "0");
+});
 
 test("lighting-1: drag updates profile count and returning to baseline restores defaults without persistence", () => {
   const h = bootTuner();

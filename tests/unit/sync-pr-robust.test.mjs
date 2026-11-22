@@ -8,9 +8,10 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { runProbe } from "../../tools/ci/preflip-probe.mjs";
 import { DEPLOY_BRANCH } from "../../tools/ci/pick-tests.mjs";
-import { staleSyncBranch, remoteMoved, loadWaitMinutes, waitForLoad, syncRefusal, KNOWN_FLAGS } from "../../tools/ci/sync-pr.mjs";
+import { staleSyncBranch, remoteMoved, publishSync, loadWaitMinutes, waitForLoad, syncRefusal, KNOWN_FLAGS } from "../../tools/ci/sync-pr.mjs";
 import { capForeground, FOREGROUND_CAP_SEC, parseArgs } from "../../tools/ci/wait-for.mjs";
 import { parseToolingFastArgv } from "../../tools/ci/tooling-fast.mjs";
+import { gitRun, gitMust } from "../../tools/lib/git-run.mjs";
 import { register, stop } from "../../tools/lib/run-pid.mjs";
 
 // Records every argv so a test can assert WHAT git was asked, not just what the stub answered.
@@ -77,6 +78,45 @@ test("staleSyncBranch: a leftover with no commits of its own is stale; one with 
   const kept = staleSyncBranch("sync-pr-x", "x", git({ "rev-list --count": { code: 0, out: "3", err: "" } }));
   assert.equal(kept.stale, false); assert.match(kept.why, /3 commit\(s\).*--resume/);
   assert.equal(staleSyncBranch("sync-pr-x", "x", git({})).stale, false, "an unreadable comparison deletes nothing");
+});
+
+test("sync publication requires the original live head and a fast-forward at push time (#6076)", (t) => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "sync-publish-"));
+  t.after(() => fs.rmSync(cwd, { recursive: true, force: true }));
+  const run = (args) => gitRun(args, { cwd });
+  const git = (...args) => gitMust(run(args), args.join(" "));
+  const bare = path.join(cwd, "origin.git");
+  const target = "refs/heads/topic";
+  const server = (...args) => git("--git-dir", bare, ...args);
+  git("init", "--bare", bare);
+  git("init", "-b", "sync-pr-topic");
+  git("config", "user.name", "Fixture");
+  git("config", "user.email", "fixture@example.test");
+  git("commit", "--allow-empty", "-m", "base");
+  const base = git("rev-parse", "HEAD");
+  git("remote", "add", "origin", bare);
+  git("push", "origin", `HEAD:${target}`);
+  git("commit", "--allow-empty", "-m", "verified result");
+  const verified = git("rev-parse", "HEAD");
+  const publish = (expected, runGit = run) => publishSync("sync-pr-topic", "topic", expected, runGit);
+
+  publish(base);
+  assert.equal(server("rev-parse", target), verified);
+  assert.throws(() => publish(base), /moved during this sync/);
+  git("branch", "older", base);
+  assert.throws(() => publishSync("older", "topic", verified, run), /does not contain/);
+  assert.equal(server("rev-parse", target), verified);
+
+  server("update-ref", "-d", target);
+  assert.throws(() => publish(base), /fetch refs\/heads\/topic failed/);
+  assert.equal(run(["--git-dir", bare, "show-ref", "--verify", "--quiet", target]).code, 1);
+
+  server("update-ref", target, base);
+  assert.throws(() => publish(base, (args) => {
+    if (args[0] === "push") server("update-ref", "-d", target);
+    return run(args);
+  }), /push to origin\/topic failed/);
+  assert.equal(run(["--git-dir", bare, "show-ref", "--verify", "--quiet", target]).code, 1);
 });
 
 test("remoteMoved: true when origin/<branch> is not contained in the merge result", () => {

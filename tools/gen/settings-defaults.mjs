@@ -215,7 +215,8 @@ export function check(root = ROOT) {
     const row = byKey.get(k);
     if (!row) { problems.push(`${k}: in ${TARGET} but not in SPEC — an export would never report it`); continue; }
     if (row.adaptive) problems.push(`${k}: SPEC declares a device-adaptive default (${row.def}) — pinning it here makes other devices wrong`);
-    if (row.subsystem) problems.push(`${k}: SPEC marks this a SUBSYSTEM, not a preference — ${row.subsystem}`);
+    // The owner explicitly chose a muted fresh install. Other subsystem changes still need review.
+    if (row.subsystem && !(k === "sound" && obj[k] === false)) problems.push(`${k}: SPEC marks this a SUBSYSTEM, not a preference — ${row.subsystem}`);
   }
   return { ok: problems.length === 0, problems, keys: Object.keys(obj).length };
 }

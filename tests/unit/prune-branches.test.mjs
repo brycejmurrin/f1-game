@@ -6,9 +6,11 @@
 // Pure: git and the clock come in as fixtures. The workflow is pinned to
 // dispatch-only and dry-run by default, so nothing deletes on a push.
 // Importing the module runs nothing (argv-guarded). Under a second.
+import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectPrunable, parseRefs, parseHeads, archiveRefs, migrateTagRefs, landedRefs, archiveFallback, DEPLOY } from "../../tools/ci/prune-branches.mjs";
@@ -129,11 +131,55 @@ test("the workflow is dispatch-only, dry-run by default, and passes --apply only
   assert.match(on, /apply:[\s\S]*?default: false/);
   assert.match(yml, /if \[ "\$APPLY" = "true" \]; then args\+=\(--apply\); fi/);
   assert.match(yml, /--prs "\$RUNNER_TEMP\/prs.json" --runs "\$RUNNER_TEMP\/runs.json"/);
-  assert.match(yml, /--state all [^\n]*headRefName,headRefOid/);
+  assert.match(yml, /--state all [^\n]*headRefName,headRefOid,baseRefName/);
   assert.match(yml, /--quiet-hours "\$\{QUIET:-48\}"/, "the audit surveys no-PR branches quiet for 48 h");
   assert.match(on, /quiet_hours:[\s\S]*?default: "48"/);
   assert.match(yml, /if \[ -n "\$ALSO" \]; then args\+=\(--also "\$ALSO"\); fi/);
   assert.match(on, /also:[\s\S]*?default: ""/, "no verdict beyond merged/absorbed is deleted unless a person names it");
   assert.match(yml, /contents: write/);
   assert.match(yml, /fetch-depth: 0/);
+});
+
+test("apply checks each audited tip and accepts merge evidence only for the requested base", (t) => {
+  const artifacts = path.join(ROOT, "artifacts");
+  fs.mkdirSync(artifacts, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(artifacts, "prune-refs-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const remote = path.join(dir, "remote.git");
+  const work = path.join(dir, "work");
+  fs.mkdirSync(work);
+  const git = (...args) => execFileSync("git", args, { cwd: work, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, GIT_AUTHOR_NAME: "fixture", GIT_COMMITTER_NAME: "fixture", GIT_AUTHOR_EMAIL: "t@example.org", GIT_COMMITTER_EMAIL: "t@example.org" } }).trim();
+  git("init", "--bare", remote);
+  git("init", "-b", "deploy");
+  git("remote", "add", "origin", remote);
+  git("commit", "--allow-empty", "-m", "initial deploy");
+  git("push", "origin", "HEAD:refs/heads/deploy", "HEAD:refs/heads/advanced", "HEAD:refs/heads/unchanged");
+  fs.writeFileSync(path.join(work, "feature"), "work");
+  git("add", "feature");
+  git("commit", "-m", "feature");
+  const feature = git("rev-parse", "HEAD");
+  git("push", "origin", ...["integration-pr", "deploy-pr", "unknown-base", "open-pr"].map((b) => "HEAD:refs/heads/" + b));
+  git("reset", "--soft", "HEAD~");
+  git("commit", "-m", "squashed feature");
+  git("push", "origin", "HEAD:refs/heads/deploy");
+  // Another writer updates the server without refreshing the auditor's origin/advanced.
+  const auditedTip = git("rev-parse", "refs/remotes/origin/advanced");
+  git("--git-dir", remote, "update-ref", "refs/heads/advanced", feature, auditedTip);
+  assert.equal(git("rev-parse", "refs/remotes/origin/advanced"), auditedTip);
+  const merged = { state: "MERGED", mergedAt: "2026-01-01T00:00:00Z", headRefOid: feature };
+  const prs = [
+    { ...merged, number: 1, headRefName: "integration-pr", baseRefName: "integration" },
+    { ...merged, number: 2, headRefName: "deploy-pr", baseRefName: "deploy" },
+    { ...merged, number: 3, headRefName: "unknown-base" },
+    { number: 4, headRefName: "open-pr", baseRefName: "integration", state: "OPEN", headRefOid: feature },
+  ];
+  fs.writeFileSync(path.join(work, "prs.json"), JSON.stringify(prs));
+  const result = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/prune-branches.mjs"), "--apply", "--no-audit",
+    "--prs", "prs.json", "--min-age-days", "0", "--base", "deploy"], { cwd: work, encoding: "utf8" });
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /= prune deleted 2 failed 1/);
+  for (const name of ["advanced", "integration-pr", "unknown-base", "open-pr"])
+    assert.equal(git("--git-dir", remote, "rev-parse", "refs/heads/" + name), feature, name);
+  assert.equal(git("ls-remote", remote, "refs/heads/unchanged", "refs/heads/deploy-pr"), "");
 });

@@ -1,17 +1,17 @@
 // @ts-check
+import { LANDSCAPE, PORTRAIT } from "../helpers/iphone15.mjs";
 import { writeFile } from "node:fs/promises";
-import { readProfile } from "../../tools/lib/bryce-phone.mjs";
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 
 // The legacy LOAD SETTINGS export (TEXT large, the garage look): the UI scaling contract (PR #5154) measures at it.
 // It is the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
 const LEGACY_PROFILE = readProfile("legacy");
-// Window A of the contract: an iPhone 15 Pro held sideways, notch left, home
+// Window A of the contract: an iPhone 15 held sideways, notch left, home
 // indicator below. Headless reports env(safe-area-inset-*) as 0, so inject it.
-const NOTCH_A = ":root{--sal:59px!important;--sar:59px!important;--sat:0px!important;--sab:21px!important}";
+const { left, right, top, bottom } = BRYCE_WINDOWS.standalone.insets;
+const NOTCH_A = `:root{--sal:${left}px!important;--sar:${right}px!important;--sat:${top}px!important;--sab:${bottom}px!important}`;
 
-const LANDSCAPE = { width: 852, height: 393 };
-const PORTRAIT = { width: 393, height: 852 };
 test.use({ viewport: LANDSCAPE, hasTouch: true });
 
 async function boot(page) {
@@ -324,6 +324,8 @@ test("Two tabs atomically retain six durable photos after concurrent saves", asy
     for (const [i, tab] of tabs.entries()) {
       await tab.goto("/__photo-storage");
       await tab.addScriptTag({ url: "/js/ui/setting-row.js" });
+      // Body is LAZY_UI_PRESETS (#4978); this bare page has no ScriptLoader, so load it explicitly.
+      await tab.addScriptTag({ url: "/js/ui/photo-studio-ui.js" });
       await tab.addScriptTag({ url: "/js/ui/photo-studio.js" });
       await tab.evaluate((i) => {
         window.DrivingLine = { shown: () => true, setPhoto: () => {} };   // this bare page loads no render modules

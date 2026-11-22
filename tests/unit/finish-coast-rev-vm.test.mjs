@@ -14,7 +14,8 @@ const { install } = require("./fake-audio-vm.cjs");
 
 async function bootOneLapRace() {
   let fa = null;
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  // Fixed driving pace keeps the measured crossing speed and two-second coast comparable.
+  const g = await createGame({ carMeshes: false, storage: { sound: true, pace: 11 }, onSandbox: (sb) => { fa = install(sb); } });
   const sb = g.sandbox;
   sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
   await settle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);

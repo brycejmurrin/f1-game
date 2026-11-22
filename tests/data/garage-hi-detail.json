@@ -1,11 +1,11 @@
 {
-  "_doc": "EXTREME garage detail pins (tests/unit/garage-hi-detail.test.mjs). off = the buffers of HEAD dce9a300 (setup room first-frame rebuild, every bay crew look), built with tests/helpers/garage-hi-harness.mjs; on.tris = GfxQuality garageHi + crewHi with js/garage/hi-prims.js resident.",
+  "_doc": "EXTREME garage detail pins (tests/unit/garage-hi-detail.test.mjs). off = the setup room after removing the eight solid neighbor facade blocks (e3f7c72195) and every bay crew look from dce9a300, built with tests/helpers/garage-hi-harness.mjs; on.tris = GfxQuality garageHi + crewHi with js/garage/hi-prims.js resident.",
   "off": {
     "room": {
-      "sha256": "df0e355a1130e5814bf9a95bec7d59c8f2ae8a5c270b059381db5b6eab925ed3",
+      "sha256": "6e35e7c251e45a72cc0669a25e8271d0602d20a353129445d391691a0bae52a3",
       "meshes": 20,
-      "verts": 26826,
-      "tris": 19626
+      "verts": 26634,
+      "tris": 19530
     },
     "crew": {
       "classic": {
@@ -41,7 +41,7 @@
     }
   },
   "off_tris": {
-    "room": 19626,
+    "room": 19530,
     "crew": {
       "classic": 3960,
       "sculpted": 5276,
@@ -52,7 +52,7 @@
   },
   "on": {
     "tris": {
-      "room": 79548,
+      "room": 79196,
       "crew": {
         "classic": 16560,
         "sculpted": 22152,

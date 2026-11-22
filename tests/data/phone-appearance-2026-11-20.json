@@ -1,0 +1,100 @@
+{
+  "exportedAt": "2026-11-20T09:49:04.973Z",
+  "settings": {
+    "display": {
+      "uiScale": 70,
+      "hudScale": null,
+      "hudBtnScale": 143.25
+    },
+    "appearance": {
+      "titleLayout": {
+        "v": 2,
+        "wide": {
+          "btns": {
+            "x": 0,
+            "y": 0,
+            "size": 106,
+            "width": 25
+          },
+          "title": {
+            "x": 0,
+            "y": 0,
+            "size": 108
+          },
+          "art": {
+            "x": -7,
+            "y": -2,
+            "size": 86
+          },
+          "layout": "grid",
+          "side": "auto"
+        },
+        "tall": {
+          "btns": {
+            "x": 0,
+            "y": 0,
+            "size": 105,
+            "width": 0
+          },
+          "title": {
+            "x": 0,
+            "y": 0,
+            "size": 100
+          },
+          "art": {
+            "x": 0,
+            "y": 0,
+            "size": 100
+          },
+          "layout": "grid",
+          "side": "auto"
+        }
+      },
+      "homeScene": "static",
+      "titleIntro": "full",
+      "titleArt": "on",
+      "lookPause": {
+        "btn": 125,
+        "w": 135
+      },
+      "lookSelect": null,
+      "lookRace": null,
+      "lookGarage": {
+        "pw": 115
+      },
+      "lookDesigner": null,
+      "lookCareer": {
+        "w": 100,
+        "density": "roomy",
+        "btn": 100,
+        "corners": "round",
+        "dim": "full",
+        "head": "left",
+        "layout": "auto",
+        "split": 49,
+        "side": "shipped"
+      },
+      "lookDatahub": {
+        "w": 100,
+        "btn": 100,
+        "corners": "round",
+        "dim": "full",
+        "head": "left",
+        "rows": "shipped",
+        "tabs": "underline",
+        "stripes": "on"
+      },
+      "textSize": "normal",
+      "uiContrast": "off",
+      "pauseLayout": "grid",
+      "pauseSide": "centre",
+      "pauseDim": "full",
+      "garageLook": "flood",
+      "crewLook": "pitstop",
+      "garageMood": "showroom"
+    },
+    "driving": {
+      "steerMode": "buttons"
+    }
+  }
+}

@@ -42,14 +42,13 @@ function boot(mode) {
   const sb = { document: { getElementById: (id) => els.get(id) || null }, getComputedStyle: () => ({}), Math };
   vm.createContext(sb);
   for (const rel of ["js/input/pedal-travel.js", "js/input/hold-buttons.js"]) vm.runInContext(read(rel), sb, { filename: absSrc(rel) });
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
-  const hb = sb.InputHoldButtons.create({ clamp, beforeReleaseAll() {}, slideEase: () => mode.v === "ease" });
+  const hb = sb.InputHoldButtons.create({ beforeReleaseAll() {}, slideEase: () => mode.v === "ease" });
   const lv = { gas: 0, brake: 0, left: 0, right: 0 };
   for (const id of ["gas", "brake"]) {
-    hb.wireHold(id, () => {}, (l) => { lv[id] = l; }, { sibling: id === "gas" ? "brake" : "gas", easeIn: true });
+    hb.wireHold(id, () => {}, (l) => { lv[id] = l; }, { button: id, sibling: id === "gas" ? "brake" : "gas" });
   }
-  hb.wireHold("left", () => {}, (l) => { lv.left = l; }, { axis: "x", dir: -1, sibling: "right" });
-  hb.wireHold("right", () => {}, (l) => { lv.right = l; }, { axis: "x", dir: 1, sibling: "left" });
+  hb.wireHold("left", () => {}, (l) => { lv.left = l; }, { button: "left", axis: "x", dir: -1, sibling: "right" });
+  hb.wireHold("right", () => {}, (l) => { lv.right = l; }, { button: "right", axis: "x", dir: 1, sibling: "left" });
   return { els, lv, PT: sb.PedalTravel };
 }
 // pointermove goes to whichever button holds the pointer; the landing button forwards it.

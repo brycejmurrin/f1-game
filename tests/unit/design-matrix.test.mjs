@@ -100,13 +100,13 @@ test("limits: dpr, viewport, loadavg", () => {
 test("args and sheet", () => {
   const a = parseArgs(["--part=halo,fin", "--phone", "--batch=1/2"]);
   assert.deepEqual(a.parts, ["halo", "fin"]);
-  assert.deepEqual(a.viewport, [844, 390]);
+  assert.deepEqual(a.viewport, [852, 393]);
   const g = expandMatrix({ ...spec, parts: ["sidepod"], lights: ["lamp"] });
   const cells = {};
   for (const x of g) for (const c of x.cells) cells[c.key] = { status: "done", png: c.key + ".png", diff: c.isBaseline ? null : 0.001 };
   const html = sheetHtml(g, { cells }, { phone: true });
   assert.match(html, /looks the same/);
-  assert.match(html, /844\/390/);
+  assert.match(html, /852\/393/);
   assert.match(html, /light: lamp/);
 });
 

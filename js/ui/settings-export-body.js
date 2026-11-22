@@ -68,7 +68,7 @@ function collect(mode, G) {
     // LOW resolution, its touch steering weight) exports as null, so loading
     // the file elsewhere keeps THAT device's default instead of pinning ours.
     let value = has ? stored : (all && row.perDevice ? null : def);
-    if (diff && isObj(stored) && isObj(def) && Object.keys(def).length) {
+    if (diff && !row.whole && isObj(stored) && isObj(def) && Object.keys(def).length) {
       const d = objDiff(stored, def);
       if (!Object.keys(d).length) diff = false;
       if (!all) value = d;   // CHANGES carries the moved fields; ALL the whole effective value (B·H11 hunt)
@@ -220,6 +220,7 @@ function collectGarage() {
 // allowlist never named being written into the namespace. Nothing outside SPEC
 // (settings) or isGarageKey (garage) is written, whatever the file says.
 function typeOk(v, def, row) {
+  if (v === null && row && row.nullable) return true;  // legacy empty race draft clears its override
   if (row && row.table) return isObj(v);               // an engine table, known or not yet (engineTable)
   // A raw row is a bare string flag: an object or array stored "[object Object]" (#5743 S2).
   if (row && row.lane === "raw" && v !== null && typeof v === "object") return false;
@@ -244,6 +245,15 @@ function applySettings(file, G) {
       && (groups.a11y == null || isPlain(groups.a11y))
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
     groups.a11y = Object.assign({}, groups.a11y, { motion: groups.appearance.motion });
+  }
+  // Old changes-only files can carry the line-speed flag in the predictive slider row.
+  const oldCue = groups.steering?.brakeCue;
+  if (oldCue === "on" || oldCue === "off") {
+    if ((groups.driving == null || isPlain(groups.driving)) && !Object.hasOwn(groups.driving || {}, "lineBrakeCue")) {
+      groups.driving = { ...groups.driving, lineBrakeCue: oldCue };
+    }
+    groups.steering = { ...groups.steering };
+    delete groups.steering.brakeCue;
   }
   // A STEERING SHEET FROM AN OLDER SCHEMA (#5004): the boot migration never runs over imported values (this
   // device is already at STEER_SCHEMA), so the file's own version runs the same ladder here first: a v2 PACE 3

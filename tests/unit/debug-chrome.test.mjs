@@ -14,7 +14,7 @@ test("discovery honors an absolute XDG config root without redirecting home", ()
 test("chromeArgs carries the proven flags, the loopback-only address and optional WebGPU", () => {
   const a = chromeArgs({});
   for (const f of ["--headless=new", "--no-sandbox", "--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1",
-    "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--window-size=844,390"]) assert.ok(a.includes(f), f);
+    "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--window-size=852,393"]) assert.ok(a.includes(f), f);
   assert.ok(a.some(x => x.startsWith("--user-data-dir=") && x.endsWith("scratch/debug-chrome")));
   assert.equal(a.at(-1), "http://127.0.0.1:3456/"); assert.ok(!a.includes("--enable-unsafe-webgpu"));
   const w = chromeArgs({ port: 9333, url: "http://127.0.0.1:3456/x", webgpu: true });
@@ -40,8 +40,8 @@ test("CLI help and unknown command do not touch processes", () => {
   const s = spawnSync(process.execPath, ["tools/mcp/debug-chrome.mjs", "status"], { encoding: "utf8" });
   assert.equal(s.status, 0);
 });
-test("--device picks the window and the emulated viewport (phone-landscape 844x390 + touch, desktop 1280x720)", () => {
-  assert.deepEqual([DEVICES["phone-landscape"].width, DEVICES["phone-landscape"].height, DEVICES["phone-landscape"].mobile, DEVICES["phone-landscape"].touch], [844, 390, true, true]);
+test("--device picks the window and the emulated viewport (phone-landscape 852x393 at 3x + touch, desktop 1280x720)", () => {
+  assert.deepEqual([DEVICES["phone-landscape"].width, DEVICES["phone-landscape"].height, DEVICES["phone-landscape"].deviceScaleFactor, DEVICES["phone-landscape"].mobile, DEVICES["phone-landscape"].touch], [852, 393, 3, true, true]);
   assert.deepEqual([DEVICES.desktop.width, DEVICES.desktop.height, DEVICES.desktop.touch], [1280, 720, false]);
   assert.ok(chromeArgs({ device: "desktop" }).includes("--window-size=1280,720"));
   const r = spawnSync(process.execPath, ["tools/mcp/debug-chrome.mjs", "start", "--device", "tablet"], { encoding: "utf8" });

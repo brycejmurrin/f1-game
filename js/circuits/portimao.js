@@ -69,7 +69,7 @@
     bankZones: [
       { turn: 1, angleDeg: 4.0, widthM: 110 },  // re-seated frac 0.05 (was 119 m off any apex)
       { frac: 0.300, angleDeg: 3.5, widthM: 120 },
-      { frac: 0.640, angleDeg: 4.5, widthM: 130 },
+      { turn: 12, angleDeg: 4.5, widthM: 130 },  // T12 left into the T13 dip (was frac 0.640, 72 m past T12)
       { turn: 15, angleDeg: 3.5, widthM: 110 },  // re-seated frac 0.9 (was 233 m off any apex)
     ],
 

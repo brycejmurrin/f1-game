@@ -106,11 +106,20 @@ const SettingsNav = (function () {
     if (presetsLoad) return presetsLoad;
     if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
-    presetsLoad = ScriptLoader.create().load(R.LAZY_UI_PRESETS, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
+    const files = R.LAZY_UI_PRESETS.filter(file => file !== "js/ui/screen-arranger.js" && file !== "js/ui/hud-arrange.js");
+    presetsLoad = ScriptLoader.create().load(files, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
       .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
     return presetsLoad;
   }
   enterFns.push((id) => { if (id === "appearance") presets(); });
+  if (typeof document !== "undefined" && document.addEventListener) {
+    // Contextual editors become available on first navigation. A customized
+    // installation restores its regions before the first navigation instead.
+    document.addEventListener("pointerdown", presets, { once: true, capture: true });
+    document.addEventListener("keydown", presets, { once: true, capture: true });
+    document.addEventListener("click", presets, { once: true, capture: true });
+    if (typeof GameStore !== "undefined" && GameStore.store.get("screenPlacement", null)) presets();
+  }
 
   function panels() {
     return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
@@ -216,11 +225,11 @@ const SettingsNav = (function () {
         try { window.ScrollFade.refresh(); } catch (_) { /* detached */ }
       }, 48);
     }
-    // audioTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
+    // bundleTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
     // answered once for this open. Never gate twice: a failed ensureAudio leaves
     // the stub resident, so re-gating would retry forever. (Ship #1320 used a
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
-    function show(want, focus, after, audioTried) {
+    function show(want, focus, after, bundleTried) {
       stopRestore();
       flushLazy();
       const request = ++generation;
@@ -229,10 +238,15 @@ const SettingsNav = (function () {
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
       // #audioset is revealed (programmatic show("audio") included). The door
       // click goes through here too, so it asks the bundle exactly once.
-      if (id === "audio" && !audioTried && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
-          && (typeof GameAudio === "undefined" || GameAudio._stub)) {
+      const loadAudio = id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
+        && (typeof GameAudio === "undefined" || GameAudio._stub);
+      const loadTouch = id === "controls" && typeof Input !== "undefined" && Input.setPedalSlide
+        && typeof TouchButtonSettings === "undefined" && typeof ScriptLoader !== "undefined";
+      if (!bundleTried && (loadAudio || loadTouch)) {
         let asked;
-        try { asked = Promise.resolve(AudioPanel._ensure()); } catch (_) { asked = Promise.resolve(false); }
+        try { asked = Promise.resolve(loadAudio ? AudioPanel._ensure()
+          : ScriptLoader.create().load(["js/ui/touch-button-settings.js"], [], { strict: true })); }
+        catch (_) { asked = Promise.resolve(false); }
         asked.then((ok) => ok, () => false).then((ok) => {
           // Closing hides this sheet; reopening calls showCurrent and owns a
           // new generation, even if the old audio request is still loading.
@@ -278,7 +292,8 @@ const SettingsNav = (function () {
         SettingsExport.ensureMounted();
       }
       Log.info("game", `SettingsNav.show ${id}`);
-      if (id === "audio") audioNote(pages.audio, audioTried === "failed");
+      if (id === "audio" || id === "controls") bundleNote(pages[id], id, bundleTried === "failed");
+      if (id === "controls" && typeof TouchButtonSettings !== "undefined") TouchButtonSettings.mountControls(_store, onSelect);
       // Lifecycle hooks also cover programmatic/search navigation, after lazy
       // loading, and before focus resolves newly mounted page controls.
       if (id === "progress" && typeof Badges !== "undefined") Badges.render();
@@ -295,18 +310,21 @@ const SettingsNav = (function () {
 
     // The audio bundle could not load (offline / UPDATE READY): the page still
     // reveals with the stub engine, so say why the sliders are silent.
-    function audioNote(panel, failed) {
-      let n = document.getElementById("audioset-offline");
+    function bundleNote(panel, page, failed) {
+      const audio = page === "audio";
+      let n = audio ? document.getElementById("audioset-offline") : document.getElementById("pm-touch-offline");
       if (!failed && !n) return;
       if (!n) {
         if (!panel || typeof document.createElement !== "function") return;
         n = document.createElement("p");
-        n.id = "audioset-offline"; n.className = "adv-help"; n.setAttribute("role", "status");
+        if (audio) n.id = "audioset-offline";
+        else n.id = "pm-touch-offline";
+        n.className = "adv-help"; n.setAttribute("role", "status");
         panel.insertBefore(n, panel.firstChild);
       }
       // A role=status filled as it is inserted is not announced: say it once (uihunt4 #2).
       const say = failed && (n.hidden || !n.textContent) && typeof LiveRegion !== "undefined";
-      n.textContent = "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD";
+      n.textContent = page === "audio" ? "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD" : "Touch button settings could not load. Reopen Controls to retry.";
       n.hidden = !failed;
       if (say) LiveRegion.say(n.textContent, "hud");
     }

@@ -1,9 +1,4 @@
-/* Apex 26 — DockLayout: per-scheme touch-dock REPOSITION offsets.
-   Offsets are fractions of the usable pad (viewport minus safe-area insets),
-   so orientation changes keep relative placement. Edit mode starts from SETTINGS,
-   hides the modal dialogs so the docks can be dragged, and ends on DONE / Escape;
-   apply() writes translate() on #dock-left / #dock-right. Plan slice 2:
-   docs/research/CONTROLS-RESEARCH-2026-09-14.md §2 items 2 and 6. */
+/* Per-scheme touch-dock offsets. See docs/research/CONTROLS-RESEARCH-2026-09-14.md and docs/notes/SCREEN-LOOKS-STORAGE.md. */
 const DockLayout = (function () {
   "use strict";
 
@@ -20,10 +15,7 @@ const DockLayout = (function () {
     if (!isFinite(v)) return 0;
     return v < lo ? lo : v > hi ? hi : v;
   }
-  // +x is inboard from the dock's home edge; +y is up from the bottom (apply).
-  // The home IS the safe-area edge, so an offset only moves a dock inboard or up: [0, MAX]. A negative share
-  // translated the dock past the screen edge or under the home bar (cda4027e3 allowed ±MAX for "a pack nudge",
-  // but the REPOSITION drag is the only writer — HUD review 2026-10-14). Past MAX still clips.
+  // Safe-area corners are the origin. Only inward and upward offsets are valid.
   function clampXY(xy) {
     return {
       x: clamp01(xy && xy.x, 0, MAX),
@@ -32,9 +24,7 @@ const DockLayout = (function () {
   }
   function emptyScheme() { return { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } }; }
 
-  // BUTTON SHAPE: one corner style for every touch control. AUTO is the shipped
-  // mix (round taps and arrows, squircle pedals) and is stored as null, so the
-  // default can move without a migration. css/overlays.css reads the attribute.
+  // Auto follows the shipped corner style and is stored as null.
   const SHAPE_KEY = "hudBtnShape";
   const SHAPES = Object.freeze([["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"]]);
   function shapeOf(v) { return SHAPES.some((s) => s[0] === v) ? v : "auto"; }
@@ -82,12 +72,7 @@ const DockLayout = (function () {
     return true;
   }
 
-  /** Usable pad size in CSS px: the LAYOUT viewport (documentElement.client*)
-      minus the safe-area insets — UI contract 2026-11-06 rule 1. The ICB is
-      the small viewport on iOS, so a shown toolbar already shrinks it; the
-      visual viewport this used to prefer also shrinks under a pinch, which
-      must never move a dock. inner* only when there is no layout (the unit
-      harness). */
+  // Screen fractions use the layout viewport minus safe insets, independently of pinch zoom.
   function usablePad(root) {
     const cs = root ? getComputedStyle(root) : null;
     const sal = parseFloat(cs && cs.getPropertyValue("--sal")) || 0;
@@ -100,11 +85,7 @@ const DockLayout = (function () {
     return { w: Math.max(1, vw - sal - sar), h: Math.max(1, vh - sat - sab) };
   }
 
-  // The dock carries `zoom: var(--hud-z-dock, …)` (css/touch-controls.css), and
-  // zoom multiplies a translate: a pad-pixel offset written as-is lands at
-  // px × zoom (off-screen at BUTTON SIZE 300%, and a saved dock moves when the
-  // size changes). currentCSSZoom is the EFFECTIVE zoom (ancestors included),
-  // which is what scales this element's own lengths.
+  // Undo the effective CSS zoom before writing a viewport-pixel translation.
   function zoomOf(el) {
     const z = el && el.currentCSSZoom;
     if (typeof z === "number" && z > 0) return z;
@@ -173,14 +154,9 @@ const DockLayout = (function () {
       if (typeof requestAnimationFrame === "function") fitRaf = requestAnimationFrame(fitNow);
       else fitNow();
     }
-    // REPOSITION needs the docks reachable. #pmsettings and #pausemenu are
-    // showModal() dialogs (TopModal), so while either is open the rest of the
-    // document, #dock-left/#dock-right included, is inert and a drag never
-    // starts. Entering therefore hides both (the title editor does the same
-    // with page(false)) and a floating DONE ends it; Escape does too. `shown`
-    // remembers what WE hid, so leaving restores exactly that and nothing else.
+    // The modal sheets must close during a drag; restore the ones open at entry.
     let shown = null;      // { settings, pause } — hidden by us on entry
-    let doneBtn = null;
+    let doneBtn = null, toolsButton = null, expanded = false;
     let editBar = null;    // the floating SIZE / SHAPE / DONE toolbar
     let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
     function setShape(v) {
@@ -207,6 +183,9 @@ const DockLayout = (function () {
     }
     function paintBar() {
       if (!editBar) return;
+      toolsButton.setAttribute("aria-expanded", String(expanded));
+      toolsButton.textContent = expanded ? "Hide tools" : "Size & shape";
+      for (const k of ["smaller", "size", "bigger", "shape"]) editBar.querySelector("[data-k=" + k + "]").hidden = !expanded;
       const out = $("pm-btnscale-v");
       editBar.querySelector("[data-k=size]").textContent = "SIZE " + ((out && out.textContent) || "");
       editBar.querySelector("[data-k=shape]").textContent = "SHAPE: " + SHAPES.find((s) => s[0] === shape)[1];
@@ -233,10 +212,10 @@ const DockLayout = (function () {
       editBar.id = "dock-edit-bar";
       editBar.setAttribute("role", "toolbar");
       editBar.setAttribute("aria-label", "Touch controls");
-      // Inline: the shell and stylesheets are not this module's to edit, and the
-      // bar exists only while editing. Top-centre keeps both docks clear.
-      editBar.style.cssText = "position:fixed;top:calc(8px + var(--sat,0px));left:50%;transform:translateX(-50%);" +
-        "z-index:9999;display:flex;gap:6px;align-items:center;white-space:nowrap;";
+      // Center within the safe area. Expanded controls wrap and scroll on short phones.
+      editBar.style.cssText = "position:fixed;top:var(--safe-t);left:var(--safe-l);right:var(--safe-r);margin-inline:auto;" +
+        "width:max-content;max-width:var(--safe-w);max-height:calc(100svh - var(--safe-t) - var(--safe-b));" +
+        "z-index:9999;display:flex;flex-wrap:wrap;gap:4px;align-items:center;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;";
       const mk = (k, label, aria, onclick) => {
         const b = document.createElement("button");
         b.type = "button";
@@ -249,6 +228,9 @@ const DockLayout = (function () {
         editBar.appendChild(b);
         return b;
       };
+      toolsButton = mk("tools", "Size & shape", "", () => { expanded = !expanded; paintBar(); });
+      doneBtn = mk("done", "Done", "Done repositioning touch controls", () => setEditing(false));
+      doneBtn.id = "dock-edit-done";
       mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
       // The readout is text, not a control: a disabled button paints see-through
       // over the timing tower (measured 844x390), so it is an opaque span.
@@ -262,9 +244,6 @@ const DockLayout = (function () {
         const i = SHAPES.findIndex((s) => s[0] === shape);
         setShape(SHAPES[(i + 1) % SHAPES.length][0]);
       });
-      doneBtn = mk("done", "DONE", "Done repositioning touch controls", () => setEditing(false));
-      doneBtn.id = "dock-edit-done";
-      doneBtn.style.minWidth = "96px";
       editBar.hidden = true;
       document.body.appendChild(editBar);
     }
@@ -277,9 +256,10 @@ const DockLayout = (function () {
         if (editing) document.body.setAttribute("data-dock-edit", "1");
         else document.body.removeAttribute("data-dock-edit");
       }
-      if (editing && !was) { ensureDone(); hideDialogs(); }
+      if (editing && !was) { expanded = false; ensureDone(); hideDialogs(); }
       if (!editing && was) { if (restore === false) shown = null; else restoreDialogs(); }
       if (editBar) { editBar.hidden = !editing; if (editing) paintBar(); }
+      if (editing && !was && toolsButton) toolsButton.focus?.({ preventScroll: true });
       const btn = $("pm-dock-reposition");
       if (btn) {
         btn.setAttribute("aria-pressed", editing ? "true" : "false");
@@ -330,6 +310,8 @@ const DockLayout = (function () {
       host.insertBefore(tip, btn.nextSibling);
       host.insertBefore(reset, tip.nextSibling);
     })();
+    // ARRANGE HUD goes under them (or in the HUD details fold); its editor is lazy (arrangeDoor).
+    arrangeDoor(G, () => HudArrange.create(G));
 
     // BUTTON SHAPE row, injected under BUTTON OPACITY (the shell's node count is
     // at its ceiling, so new SETTINGS chrome is built here, like REPOSITION).
@@ -377,6 +359,7 @@ const DockLayout = (function () {
       // before the target, so stopping here means the button never sees it.
       e.preventDefault();
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (drag || e.isPrimary === false) return;
       const s = schemeOf();
       drag = {
         side,
@@ -406,11 +389,18 @@ const DockLayout = (function () {
       drag = null;
       fitNow();
     }
+    function cancelDrag(e) {
+      if (!drag || (e.pointerId != null && drag.pid !== e.pointerId)) return;
+      bag[drag.scheme][drag.side] = drag.orig;
+      drag = null;
+      paint();
+    }
     if (typeof document !== "undefined") {
       document.addEventListener("pointerdown", onPointerDown, true);
       document.addEventListener("pointermove", onPointerMove, true);
       document.addEventListener("pointerup", onPointerUp, true);
-      document.addEventListener("pointercancel", onPointerUp, true);
+      document.addEventListener("pointercancel", cancelDrag, true);
+      document.addEventListener("lostpointercapture", cancelDrag, true);
       // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
       // What still ends it: ANY of them being opened by someone else (the pause
       // button, a key, QUIT), because a capture-phase drag left live would slide
@@ -435,6 +425,7 @@ const DockLayout = (function () {
     // rotation must repaint: a portrait offset kept its pixels in landscape and
     // pushed the dock off the top (the header promises relative placement).
     if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("blur", cancelDrag);
       window.addEventListener("resize", paint, { passive: true });
       window.addEventListener("orientationchange", paint, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
@@ -495,8 +486,48 @@ const DockLayout = (function () {
     };
   }
 
+  /** ARRANGE HUD's pause-card door (create() opens it). js/ui/hud-arrange.js is LAZY_UI_PRESETS: the first
+   *  tap loads it alone, calls make() (HudArrange.create(G)) once and opens the editor; a failed load logs and
+   *  the next tap retries. */
+  function arrangeDoor(G, make) {
+    const { $ } = G;
+    if (typeof document === "undefined" || $("pm-hud-arrange")) return null;
+    const hudHost = $("pm-hud-details");
+    const anchor = hudHost ? $("pm-hud-details-sum") : ($("pm-dock-reset") || $("pm-dock-reposition-help") || $("pm-mirror"));
+    const host = anchor && anchor.parentNode;
+    if (!host) return null;
+    const btn = document.createElement("button");
+    btn.id = "pm-hud-arrange";
+    btn.type = "button";
+    btn.setAttribute("aria-pressed", "false");
+    btn.textContent = "ARRANGE HUD";
+    const tip = document.createElement("p");
+    tip.className = "adv-help";
+    tip.id = "pm-hud-arrange-help";
+    tip.textContent = "Choose a readout to show, hide, move or resize. AUTO follows the camera and HUD style. Drag to move; pinch or use − / + to size. Red outlines mark overlaps. Positions are saved per HUD STYLE and camera set.";
+    let editor = null, load = null;
+    const ready = () => typeof HudArrange !== "undefined" ? Promise.resolve(true)
+      : typeof ScriptLoader === "undefined" ? Promise.resolve(false)
+      : ScriptLoader.create().load(["js/ui/hud-arrange.js"], [], { strict: true });
+    btn.onclick = () => {
+      if (editor) { editor.setEditing(!editor.isEditing()); return; }
+      if (load) return;
+      btn.setAttribute("aria-busy", "true");
+      load = ready().catch(() => false).then((ok) => {
+        load = null;
+        btn.removeAttribute("aria-busy");
+        editor = ok && typeof HudArrange !== "undefined" ? make() : null;
+        if (editor) editor.setEditing(true);
+        else Log.warn("ui", "the ARRANGE HUD editor did not load — the next tap retries");
+      });
+    };
+    host.insertBefore(btn, anchor.nextSibling);
+    host.insertBefore(tip, btn.nextSibling);
+    return btn;
+  }
+
   return Object.freeze({
-    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES,
+    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES, arrangeDoor,
     clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create, shapeOf, applyShape, sizeStep,
   });
 })();

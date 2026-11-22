@@ -461,3 +461,120 @@ test("drying line: the tabled groove knots give exactly the per-call-hash groove
   }
   assert.ok(checked > 6000);
 });
+
+// ── #4270: segs() cadence — one rebuild per distinct arc.t; netplay keys on clock+plan ──
+// Without the a._st memo, gripMult's per-car wetnessAt rebuilt RainCells.SEGS every
+// call. Peers never share `_sg`: Form 1 (above) and the local-shower series below
+// stay bit-identical with or without the memo (pure of raceT + arc fields).
+
+/** Boot with a segs-rebuild counter (and optional cache kill) injected into weather-arc.js. */
+function bootSegs(opts = {}) {
+  const rng = makeRng(0x7a1e);
+  const ctx = vm.createContext({ Math: Object.assign(Object.create(Math), { random: () => rng.unit() }),
+    Float32Array, Float64Array, Uint8Array, Array, Object, Number, JSON, WeakMap, Error });
+  ctx.window = ctx;
+  seedLog(ctx);
+  ctx.Career = { inCareer: () => false, hash: (_s, _r, _k, n) => n === "dur" ? 0.99 : 0.1 };
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/rain-cells.js"])
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  let src = read("js/race/weather-arc.js");
+  if (opts.noCache) src = src.replace(/if \(a\._st !== a\.t \|\| !a\._sg\) \{/, "if (true) {");
+  src = src.replace(
+    /a\._sg = g; a\._st = a\.t;/,
+    "a._sg = g; a._st = a.t; if (typeof __segsRebuilds === \"number\") __segsRebuilds++;",
+  );
+  vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/race/weather-arc.js") });
+  ctx.Particles.init({ drawParticles() {} });
+  ctx.GameAudio = { startRain() {}, stopRain() {} };
+  const G = {
+    raceWeather: "dry", soundOn: false, track: { total: 5800 }, announce() {}, applyRaceSettings() {},
+    simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3, state: "race", raceT: 0,
+    isWetRoad: () => false, isRaining: () => false, initRainDrops() {},
+    netPlay: { active: () => false }, player: { s: 1000, x: 0 },
+  };
+  const wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
+  return { ctx, G, wa };
+}
+
+function armLocal(G, wa) {
+  wa.changeable = true;
+  for (let dur = 120; dur <= 400 && !(wa.arc && wa.arc.cell); dur += 10) {
+    wa.endSession(); G.raceWeather = "dry"; wa.changeable = true;
+    wa.plan = { to: "rain", dur };
+    wa.startChangeable();
+  }
+  assert.ok(wa.arc && wa.arc.cell, "fixture: a MIXED plan that draws a local shower");
+}
+
+test("segs (#4270): a 20-car step rebuilds the grid once per arc.t, not per car", () => {
+  const { ctx, G, wa } = bootSegs();
+  armLocal(G, wa);
+  G.raceT = wa.arc.dur / 2; wa.tick(0);
+  ctx.__segsRebuilds = 0;
+  G.raceT += 1 / 60; wa.tick(1 / 60);
+  wa.wetness();
+  for (let i = 0; i < 20; i++) wa.wetnessAt(i * 200, (i % 5) - 2);
+  assert.equal(ctx.__segsRebuilds, 1, `rebuilds ${ctx.__segsRebuilds} (want 1 per distinct a.t)`);
+
+  // Bug proof: killing the a._st memo scales rebuilds with the car count.
+  const miss = bootSegs({ noCache: true });
+  armLocal(miss.G, miss.wa);
+  miss.G.raceT = miss.wa.arc.dur / 2; miss.wa.tick(0);
+  miss.ctx.__segsRebuilds = 0;
+  miss.G.raceT += 1 / 60; miss.wa.tick(1 / 60);
+  miss.wa.wetness();
+  for (let i = 0; i < 20; i++) miss.wa.wetnessAt(i * 200, 0);
+  assert.ok(miss.ctx.__segsRebuilds >= 20, `without cache: ${miss.ctx.__segsRebuilds} rebuilds (want ≥ 20)`);
+});
+
+test("segs (#4270): unchanged arc.t yields bit-identical grids across steps", () => {
+  const { ctx, G, wa } = bootSegs();
+  armLocal(G, wa);
+  G.raceT = wa.arc.dur / 2; wa.tick(0);
+  wa.wetness();
+  const first = Float64Array.from(wa.arc._sg);
+  ctx.__segsRebuilds = 0;
+  for (let i = 0; i < 10; i++) {
+    wa.tick(0);   // raceT frozen: the shared clock did not advance
+    wa.wetness();
+    for (let c = 0; c < 20; c++) wa.wetnessAt(c * 100, 0);
+  }
+  assert.equal(ctx.__segsRebuilds, 0, "frozen clock: no segs rebuild");
+  const again = wa.arc._sg;
+  assert.equal(again.length, first.length);
+  for (let i = 0; i < first.length; i++) assert.equal(again[i], first[i], `seg ${i}`);
+});
+
+test("segs (#4270): local-shower peers on one clock match with and without the segs memo", () => {
+  // Netplay keying: shared raceT + the same plan/cell; `_sg` is local. The memo
+  // must not change any float the Form 1 contract already pins for global arcs.
+  function series(noCache) {
+    const host = bootSegs({ noCache }), guest = bootSegs({ noCache });
+    armLocal(host.G, host.wa); armLocal(guest.G, guest.wa);
+    const rows = [];
+    for (let i = 1; i <= 60 * 90; i++) {
+      host.G.raceT = i / 60; host.wa.tick(1 / 60);
+      if (i % 20 === 0) { guest.G.raceT = i / 60; guest.wa.tick(1 / 60); }
+      if (i % 900 === 0) {
+        const s = 2500;
+        rows.push({
+          t: i / 60,
+          hw: host.wa.wetness(), gw: guest.wa.wetness(),
+          hs: host.wa.wetnessAt(s, 0), gs: guest.wa.wetnessAt(s, 0),
+          hwX: host.G.raceWeather, gwX: guest.G.raceWeather,
+        });
+      }
+    }
+    return rows;
+  }
+  const withMemo = series(false), without = series(true);
+  assert.equal(withMemo.length, without.length);
+  for (let i = 0; i < withMemo.length; i++) {
+    const a = withMemo[i], b = without[i];
+    assert.equal(a.hw, b.hw, `t=${a.t} lap-mean`);
+    assert.equal(a.hs, b.hs, `t=${a.t} surface`);
+    assert.equal(a.hw, a.gw, `t=${a.t} peers lap-mean`);
+    assert.equal(a.hs, a.gs, `t=${a.t} peers surface`);
+    assert.equal(a.hwX, a.gwX, `t=${a.t} stage`);
+  }
+});

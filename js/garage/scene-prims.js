@@ -178,6 +178,38 @@ function hose(out, pts, rad, col, seg, mid) {
 const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
   ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
 
+// Low-detail neighboring workshop, in the same local frame as the player's bay.
+function buildLaneBay(out, cx, col, left = HALF_W, right = HALF_W, fixtures = out) {
+  const front = Z_DOOR, depth = (front - Z_BACK) / 2;
+  const aperture = TrackPit.BAY.doorW / 2, half = (left + right) / 2, mid = cx + (right - left) / 2;
+  const height = CEIL_Y / 2, lintel = (CEIL_Y - TrackPit.BAY.doorH) / 2;
+  const wall = [.48, .51, .54], floor = [.25, .27, .29];
+  // Solid dividers and rear wall present faces to both the lane and the interior.
+  for (const sign of [-1, 1]) {
+    const edge = sign < 0 ? left : right, jamb = (edge - aperture) / 2;
+    block(out, cx + sign * (edge - 0.08), height, -0.09, 0.08, height, depth - 0.09, wall, MAT.CONCRETE);
+    block(out, cx + sign * (aperture + jamb), height, front - 0.09, jamb, height, 0.09, STEEL, MAT.METAL);
+  }
+  block(out, mid, height, Z_BACK + 0.10, half - 0.16, height, 0.10, wall, MAT.CONCRETE);
+  block(out, cx, CEIL_Y - lintel, front - 0.09, aperture, lintel, 0.09, col, MAT.METAL);
+  block(out, mid, CEIL_Y + 0.06, 0, half, 0.06, depth, STEEL, MAT.METAL);
+  block(out, mid, -0.06, 0, half, 0.06, depth, floor, MAT.FLAT);
+  // Workbench, team-colored cabinet fronts and a task light give the doorway depth.
+  block(out, cx, 0.54, Z_BACK + 0.80, 2.85, 0.54, 0.55, col, MAT.METAL);
+  block(out, cx, 1.14, Z_BACK + 0.80, 2.95, 0.06, 0.62, STEEL, MAT.METAL);
+  for (const z of [-2.2, 2.2]) {
+    const i = fixtures.pos.length / 3;
+    for (const [x, dz] of [[-1.6, -.25], [1.6, -.25], [1.6, .25], [-1.6, .25]]) {
+      fixtures.pos.push(cx + x, CEIL_Y - .04, z + dz);
+      fixtures.nrm.push(0, -1, 0);
+      fixtures.col.push(1.55, 1.62, 1.70);
+    }
+    pushMat(fixtures, 4, MAT.FLAT);
+    fixtures.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  }
+  block(fixtures, cx, 2.65, Z_BACK + 0.25, 2.65, 0.045, 0.05, [1.55, 1.62, 1.70], MAT.FLAT);
+}
+
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
 const rgb = (c, dflt) => (c && c.length === 3 ? c : dflt);
@@ -207,7 +239,7 @@ function tile(out, x0, x1, z0, z1, col, y, mid) {
 
 // ── room LOOKS (B·G1) ───────────────────────────────────────────────────────
 // The setup sheet's GARAGE row picks the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
-// back-wall branding. `stock` (null) is the shipped room; every other id is a
+// back-wall branding. `stock` (null) is the original room; every other id is a
 // data record GarageDress.look* reads. Trackside pit rows (buildStatic) never
 // see a look. Pick one with ?garageLook=<id>, localStorage apex26.garageLook,
 // or GaragePrims.setLook(id) (the geometry key carries lookId(), so the bay
@@ -319,11 +351,12 @@ const LOOKS = {
   },
 };
 const LOOK_IDS = Object.keys(LOOKS);
-let _look = "stock";
+let _look = "flood";
 try {
   const q = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageLook");
-  const s = typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook");
-  const v = q || s;
+  const v = q || (typeof GameStore !== "undefined" && GameStore.store
+    ? GameStore.store.raw("garageLook")
+    : typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook"));
   if (v && LOOK_IDS.indexOf(v) >= 0) _look = v;
 } catch (_) { /* no storage */ }
 function setLook(id) {
@@ -338,7 +371,7 @@ const look = () => LOOKS[_look] || null;
 const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
   // BOX_F / WALL_KEYED / sideOnly / mix stay module-local: only block/cyl/tube + LOOKS use them.
-  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
+  return { buildLaneBay, tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
     LOOKS, LOOK_IDS, setLook, lookId, look, lookCol, ex, hi: (h) => (H = h),
     // EXTREME seams GarageHiPrims replaces when it lands: the room's geometry key (the look + "+hi")
     // and run(kind, build, undo), a room / crew build in its dense scope (it also sets crewHi, a key bit).

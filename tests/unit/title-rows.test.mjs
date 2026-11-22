@@ -13,7 +13,6 @@ const css = fs.readFileSync(path.join(ROOT, "css/menu-destinations.css"), "utf8"
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const start = css.indexOf("PHONE LANDSCAPE HOME (#5199)");
 const block = css.slice(css.indexOf("@media (max-height: 519px) and (min-aspect-ratio: 1/1) {", start));
-const P = 'body[data-shape="wide"]:not([hidden]) #overlay #menu-buttons';
 
 test("the block exists and keys on the layout viewport only", () => {
   assert.ok(start > 0 && block.length > 500, "PHONE LANDSCAPE HOME block present");
@@ -23,8 +22,8 @@ test("the block exists and keys on the layout viewport only", () => {
 
 // The painted outcome (row counts, the WIDTH split, the UI SIZE and touch floors, a slider stopping at the
 // edge) is measured in tests/specs/title-fit.spec.js; source pins for those were cut on 2026-11-10 when the
-// tree's assertPins ceiling had three sites left (tests/data/ratchets.json). What stays is what a browser
-// cell does not say: which doors each group holds, and the look.
+// tree's assertPins ceiling had three sites left (tests/data/ratchets.json). What stays is the roster of each group.
+// phone-shipped-defaults.spec.js exercises Button Style across rotation in a browser.
 test("the door roster each row is built from", () => {
   const ids = (group) => [...html.slice(html.indexOf(`<div id="${group}"`)).split("</div>")[0].matchAll(/<button id="(mb-[a-z]+)"([^>]*)>/g)].filter((m) => !/\shidden[\s>]/.test(m[2] + ">") || m[1] === "mb-continue" || m[1] === "mb-phonepad").map((m) => m[1]);
   assert.deepEqual(ids("menu-retention"), ["mb-continue", "mb-daily"]);
@@ -33,15 +32,4 @@ test("the door roster each row is built from", () => {
   assert.deepEqual(ids("menu-explore"), ["mb-watch", "mb-data"]);
   assert.deepEqual(ids("menu-create"), ["mb-photo", "mb-designer", "mb-visual"]);
   assert.deepEqual(ids("menu-secondary"), ["mb-settings", "mb-phonepad", "mb-help", "mb-saves"]);
-});
-
-test("the look: italic slanted doors, and the quiet restyle stays off the short landscape screen", () => {
-  assert.match(block, /font-style: italic; font-weight: 700;[^}]*transform: skewX\(-6deg\); border-radius/);
-  const quiet = css.slice(css.indexOf("Destination presentation: one quiet control family"), css.indexOf("At comfortable heights"));
-  // Quiet media opens with transform:none; utility-row wrap folded into it (was a
-  // third duplicate of this same @media). Blocking-CSS ceiling forbids a third.
-  assert.ok(
-    /@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\) \{\n#overlay #menu-buttons \.bigbtn \{\n  transform: none;[\s\S]*#menu-secondary > \.bigbtn \{[\s\S]*?text-wrap: balance/.test(quiet)
-      && [...css.matchAll(/@media \(min-height: 520px\), \(max-aspect-ratio: 1\/1\)/g)].length === 2,
-    "quiet restyle + folded utility wrap; no third copy of the dense-home media");
 });
