@@ -8977,6 +8977,9 @@
       ]
     },
     "js/garage/scene.js": {
+      "buildPitLane": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "buildStatic": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
