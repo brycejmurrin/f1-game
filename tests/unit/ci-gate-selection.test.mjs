@@ -322,11 +322,12 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(driving, /^    needs: \[select\]$/m);
   assert.match(driving, /needs\.select\.outputs\.driving == 'true'/);
   assert.match(driving, /^    if: .*inputs\.concurrency_key == ''/m, "driving-model skips on the Pages call (decision D2)");
+  assert.doesNotMatch(driving, /reuse-draft-fast\.sh|steps\.reuse\./, "a ready driving-model run always executes its characterization traces");
   // No plumbing job is left in front of the fast tier: every job that used to
   // wait on `reuse-draft` asks the question itself, as a step.
   const jobs = parseYAML(ciWorkflow).jobs;
   for (const id of ["reuse-draft", "unit-plan", "ship-filter", "renderer-filter", "xr-filter"]) assert.ok(!jobs[id], `${id} is a step now, not a job`);
-  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts", "driving-model"]) {
+  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "sweeps-parts"]) {
     const st = jobs[id].steps.find((x) => x.id === "reuse");
     assert.ok(st && /reuse-draft-fast\.sh/.test(st.run), `${id} asks the reuse question itself`);
     assert.deepEqual(jobs[id].permissions, { contents: "read", actions: "read", checks: "read" }, `${id} needs actions:read for the runs lookup and checks:read for the draft run's guards record`);

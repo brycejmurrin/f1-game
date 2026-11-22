@@ -38,5 +38,5 @@ issue), ONE label per call:
 | `flaky` / `base-red` | issue | a test that passed on retry or fails across branches (AGENTS.md rule 9); a red on the base (advisory) |
 | `area:*` | issue | the subsystem |
 
-Retired 2026-11-03: `run-ci` (every draft push gets the fast tier plus a selected browser shard). The Board is issue
+Retired 2026-11-03: `run-ci` (every draft push starts the fast tier automatically). The Board is issue
 #1780; the Dispatch issue (Bryce's switches) is #3899.

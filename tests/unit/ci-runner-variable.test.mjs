@@ -195,12 +195,3 @@ test("the Pages train calls ci.yml with a concurrency_key, and every train event
     assert.equal(resolve(sel.env.APEX_CI_LANES, ctx), "", `pages.yml ${event}: no raised lane count`);
   }
 });
-
-test("wide draft matrices limit concurrent browser jobs while ready and train plans keep full matrix capacity", () => {
-  const strategy = jobs().find((entry) => entry.key === "ci.yml:selected").job.strategy;
-  const limit = (event, draft, inputs = {}) => resolve(strategy["max-parallel"], { event, draft, inputs, vars: {} });
-  assert.equal(limit("pull_request", true), 20);
-  assert.equal(limit("pull_request", false), 256);
-  assert.equal(limit("pull_request", true, { concurrency_key: "pages" }), 256);
-  for (const event of ["push", "schedule", "workflow_dispatch"]) assert.equal(limit(event, false), 256);
-});

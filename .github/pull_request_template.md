@@ -29,7 +29,7 @@ The last Plan item keeps that shape: ready-gate ignores an item that starts `lan
 ## Verified / Not run
 <!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = tooling-fast passed`.
      Every group the change needs that did NOT run, named, with why (AGENTS.md rule 9).
-     The tiers run on the PR (every draft push: the fast tier plus a selected browser shard; ready: the full tier). -->
+     Draft PRs run the fast tier. Ready PRs run browser jobs when the diff needs them. -->
 
 ## Hand-off
 <!-- The dispatch Action and a takeover read this block (skill `steward`): refresh it at every push and
