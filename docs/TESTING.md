@@ -1106,7 +1106,7 @@ Two always-judged checks give the PR verdict fixed names:
 | Lane | When | What |
 |---|---|---|
 | **Draft PR** | `pull_request` + draft (`opened` / `synchronize` / `reopened`) | Every push runs structural guards A–D, the selector and the parts census. Automatic browser jobs, including the selected legs, driving-model and XR, wait until ready. Bryce can dispatch a whole group for earlier feedback. The verdict is named `CI (draft fast tier)`. |
-| **Ready PR** | `pull_request` + ready, including `ready_for_review` | Marking ready cancels the draft run and starts the full tier on the same head. Selected browser legs, smoke and staged-boot run unless the full diff qualifies for the docs or audited Node-only exemption. Mixed or unknown changes take the normal route. The selector routes Node slices, geometry sweeps, driving-model, renderer-macos and XR. Desktop pack-smoke runs for packaging paths. |
+| **Ready PR** | `pull_request` + ready, including `ready_for_review` | Marking ready cancels the draft run and starts the full tier on the same head. Selected browser legs, smoke and staged-boot run unless the full diff qualifies for the docs or audited Node-only exemption. Mixed or unknown changes take the normal route. The selector routes Node slices, geometry sweeps, driving-model, renderer-macos and XR. Desktop pack-smoke runs for packaging paths. The chunk-merge timing and WebGPU census workflows also run when a ready PR touches their benchmark paths, or by manual dispatch. |
 
 **Check names (GitHub UI)** — fast tier on a **draft** PR (`ci.yml` has no push trigger; a deploy-branch push is judged by the Pages release train's `ci / …` rows):
 

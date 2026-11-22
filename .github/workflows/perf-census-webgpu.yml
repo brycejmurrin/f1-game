@@ -10,6 +10,7 @@ on:
   # A new workflow file cannot be dispatched until it is on the default branch, so the PR that adds it runs it
   # too, only when the census tools or this file change.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - claude/f1-game-project-26h3ng
     paths:
@@ -32,6 +33,7 @@ permissions:
 
 jobs:
   census:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft || startsWith(github.head_ref, 'train/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: true
