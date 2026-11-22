@@ -192,6 +192,7 @@ fieldState() {
       dnf:      c.dnf || null,
     }));
   },
+// Lists each car’s driver role, pose availability, handling modifiers and remote input.
 carRoles() {
     return G.cars.map((c, i) => ({
       id: i, code: c.code, team: c.team && c.team.id,
@@ -203,6 +204,7 @@ carRoles() {
       netInput: c.netInput ? Object.assign({}, c.netInput) : null,
     }));
   },
+// Changes a car’s driver role or handling modifiers. Returns false for an unknown index.
 carRole(idx, o) {
     const c = G.cars[idx];
     if (!c) return false;
