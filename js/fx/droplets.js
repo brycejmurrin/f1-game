@@ -30,7 +30,7 @@ const Droplets = (function () {
   // full-DPR clearRect every frame cleared an already-clear canvas (#4532 note).
   let _painted = false;
   let _lens;
-  let _n = 0, _acc = 0, _spriteReflection = 1, _spriteHelmet = false, _dropScale = 1;
+  let _n = 0, _acc = 0, _spriteReflection = -1, _spriteHelmet = false, _dropScale = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
   const _r = new Float32Array(CAP_DESK);                                       // radius, fraction of min(w, h)
@@ -84,8 +84,7 @@ const Droplets = (function () {
     }
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
-    _sprite = _paintSprite(_spriteReflection);
-    Log.info("game", "Droplets: lens overlay ready" + (_sprite ? "" : " (no sprite: arc fallback)"));
+    Log.info("game", "Droplets: lens overlay ready");
     return _cv;
   }
 
@@ -169,6 +168,7 @@ const Droplets = (function () {
 
   function _step(dt, vs, reduced, runoff, helmet, rain) {
     const air = reduced ? 0 : _air(vs);
+    const damping = reduced || !_n ? 0 : 1 - Math.exp(-dt * 7);
     for (let i = 0; i < _n; ) {
       _hit[i] += dt;
       _age[i] += dt * runoff;
@@ -186,7 +186,7 @@ const Droplets = (function () {
           : -0.9 * push + (1 - air) * 0.015 * release;
         // Exponential damping keeps the motion stable across frame rates.
         const contact = helmet ? Math.max(0, Math.min(1, (_hit[i] - 0.14) / 0.28)) : 1;
-        const k = 1 - Math.exp(-dt * 7 * contact);
+        const k = contact === 1 ? damping : contact === 0 ? 0 : 1 - Math.exp(-dt * 7 * contact);
         _vx[i] += (tx - _vx[i]) * k; _vy[i] += (ty - _vy[i]) * k;
         _x[i] += _vx[i] * dt; _y[i] += _vy[i] * dt;
         if (_x[i] < -0.05 || _x[i] > 1.05 || _y[i] < -0.05 || _y[i] > 1.05) { _kill(i); continue; }
@@ -209,7 +209,8 @@ const Droplets = (function () {
       const a = _a[i] * env;
       if (a <= 0.01) continue;
       const impact = helmet && !reduced ? Math.max(0, 1 - _hit[i] / 0.18) : 0;
-      const rad = _r[i] * m * (helmet ? _dropScale : 1) * (1 + 0.65 * Math.sin(Math.PI * (1 - impact))), cx = _x[i] * _w, cy = _y[i] * _h;
+      const swell = impact > 0 ? 1 + 0.65 * Math.sin(Math.PI * (1 - impact)) : 1;
+      const rad = _r[i] * m * (helmet ? _dropScale : 1) * swell, cx = _x[i] * _w, cy = _y[i] * _h;
       const sp = Math.hypot(_vx[i], _vy[i]);
       const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + sp * 11);
       const narrow = rad / Math.sqrt(st);
@@ -245,14 +246,16 @@ const Droplets = (function () {
   function tick(dt, on, rain, storm, vs, reduced, lens) {
     // The shield's own optics ride this heartbeat: the eye-port, the added light and the rim bend (js/fx/visor-optics.js).
     if (typeof VisorOptics !== "undefined") VisorOptics.tick(dt, on, vs, reduced);
+    // Dry frames still tick shield optics above. No water can move or spawn.
+    const falling = rain >= RAIN_MIN;
+    if (!on || (!falling && !_n)) { _show(false); return; }
     const helmet = _helmet();
     if (lens !== _lens || helmet !== _spriteHelmet) _show(false);
     _lens = lens;
     const amount = helmet ? CockpitOpts.visorRain() : "normal";
-    const runoff = helmet ? (CockpitOpts.visorRunoff() === "slow" ? 0.45 : CockpitOpts.visorRunoff() === "fast" ? 2.1 : 1) : 1;
     // Spawn only at RAIN_MIN+ (drizzle 0.35 wets the road, not the lens). Keep the
     // overlay while live drops remain so a stopping shower drains instead of wiping.
-    if (!(on && !_low() && amount !== "off" && (rain >= RAIN_MIN || _n > 0))) { _show(false); return; }
+    if (_low() || amount === "off" || (!falling && !_n)) { _show(false); return; }
     if (!_lookup()) return;
     _show(true);
     const resized = _resize();
@@ -265,7 +268,8 @@ const Droplets = (function () {
     _dropScale = scale;
     if (!(dt > 0)) { if (resized || changed || sizeChanged) _draw(!!reduced, helmet); return; }   // paused: size edits repaint existing water
     if (dt > 0.1) dt = 0.1;
-    _step(dt, vs || 0, !!reduced, runoff, helmet, rain);
+    const runoff = helmet ? CockpitOpts.visorRunoff() : "normal";
+    _step(dt, vs || 0, !!reduced, runoff === "slow" ? 0.45 : runoff === "fast" ? 2.1 : 1, helmet, rain);
     const c = cap(_mob(), !!reduced);
     _acc += rate(rain, storm, !!reduced) * dt * (amount === "light" ? 0.4 : amount === "heavy" ? 1.8 : 1);
     while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced, helmet); }
