@@ -96,14 +96,6 @@ const GarageArrivalRows = (function () {
       }
       first.parentNode.insertBefore(bar, first);
     }
-    // PREVIEW AFTER RACE joins PREVIEW PIT STOP / RACE START wherever they are
-    // (EditorWorkspace moves the foot's actions into its tools fold).
-    const out = $("ga-preview-out");
-    if (out && out.parentNode) {
-      const b = make("button", "", "PREVIEW AFTER RACE"), kids = Array.from(out.parentNode.children);
-      b.id = "ga-preview-home"; b.type = "button";
-      out.parentNode.insertBefore(b, kids[kids.indexOf(out) + 1] || null);
-    }
   }
   return Object.freeze({ build });
 })();
