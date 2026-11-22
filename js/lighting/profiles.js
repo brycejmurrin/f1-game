@@ -171,11 +171,10 @@ const LightStore = (() => {
       return v;
     }
 
+    const shipVal = (k, d) => clamp(shippedAt(k, d), d.min, d.max);
     function base(k, d) {
-      k = keyFor(d.id, k);
-      let v = shippedAt(k, d);
-      if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
-      return clamp(v, d.min, d.max);
+      const globalValue = profiles["*"]?.[d.id];
+      return typeof globalValue === "number" ? clamp(globalValue, d.min, d.max) : shipVal(keyFor(d.id, k), d);
     }
 
     // The live condition's shipped value of `id` (clamped), without the player's
@@ -184,7 +183,7 @@ const LightStore = (() => {
     function shipped(id) {
       const d = TUNE_DEFS.find((t) => t.id === id);
       if (!d) return undefined;
-      return clamp(shippedAt(keyFor(id, key()), d), d.min, d.max);
+      return shipVal(keyFor(id, key()), d);
     }
 
     function put(prof, k, d, v) {
@@ -301,8 +300,9 @@ const LightStore = (() => {
       // has is left behind rather than copied onto 39 more profiles.
       const from = [];
       for (const d of TUNE_DEFS) {
-        const v = mode === "look" ? LT[d.id] : (profiles[keyFor(d.id, src)] || {})[d.id];
-        if (typeof v === "number" && isFinite(v)) from.push([d, v]);
+        const k = keyFor(d.id, src);
+        const v = mode === "look" ? LT[d.id] : profiles[k]?.[d.id];
+        if (Number.isFinite(v) && (mode === "look" || !isMask(k, d.id))) from.push([d, v]);
       }
       if (!from.length) return { ok: false, error: "no-edits", mode, key: src, tod, weather, tracks: 0, changed: 0 };
       const out = { ok: true, mode, key: src, tod, weather, knobs: from.length, tracks: 0, changed: 0, undo: {} };
@@ -347,10 +347,10 @@ const LightStore = (() => {
     // a dry-weather edit of any other knob is a different condition's edit.
     function sunSlot(k) { const s = keyFor("sunElev", k); return s !== k ? s : null; }
     // A mask: reset() pins the shipped value where the global "*" layer reaches.
-    const shipVal = (kk, d) => clamp(shippedAt(kk, d), d.min, d.max);
     function isMask(kk, id) {
-      const g = profiles["*"], p = profiles[kk], d = TUNE_DEFS.find((t) => t.id === id);
-      return !!(g && d && typeof g[id] === "number" && p && p[id] === shipVal(kk, d));
+      if (typeof profiles["*"]?.[id] !== "number") return false;
+      const d = TUNE_DEFS.find((t) => t.id === id);
+      return !!d && profiles[kk][id] === shipVal(kk, d);
     }
     function tuned() {
       const k = key();

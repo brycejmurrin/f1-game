@@ -13,6 +13,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";   // title-flow.js is not a game.js carve-out
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const fixture = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
@@ -63,6 +64,7 @@ function harness(opts = {}) {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
+  seedHash32(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/ghost-share.js"), "utf8"), ctx, {
     filename: absSrc("js/car/ghost-share.js"),
   });
@@ -882,4 +884,32 @@ test("TT records find historical wear classes without crossing other settings", 
   }
   G.session = "race"; G.raceTyreWear = "real"; const real = records.current();
   G.raceTyreWear = "off"; assert.notEqual(records.current(), real);
+});
+
+// ── #5783 / #5999 I3 track-in-hash (appended only; DAD 2026-11-21) ──────────
+// Existing cases above are untouched. Speed (I2) and ±4% length (I3) wait on
+// remakes of the thinned-link and 3×-arc cases — append-only while #5978 is open.
+test("I3: export hash covers the track id; a kept-h relabel is refused (#5783/#5999)", async () => {
+  const { GhostShare } = harness({ plain: true, lengths: { monza: 5.8, spa: 5.8 } });
+  const g = trace(40, 90);
+  const file = GhostShare.fileExport(g, { track: "monza" });
+  assert.equal(file.ok, true);
+  assert.equal((await GhostShare.decode(file.text)).ok, true, "honest monza export imports");
+  const body = JSON.parse(file.text);
+  body.track = "spa";
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false,
+    "same arc, wrong track, h kept: refused once the hash includes the track");
+});
+
+test("I3: legacy pre-track h still verifies when the track field is honest (#5783/#5999)", async () => {
+  const { GhostShare } = harness({ plain: true });
+  const g = trace(40, 90);
+  const body = JSON.parse(GhostShare.fileExport(g, { track: "monza" }).text);
+  // Simulate a pre-track envelope: recompute h over [time,t,s,x] only.
+  const text = JSON.stringify([body.time, body.t, body.s, body.x]);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  body.h = (h >>> 0).toString(36);
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, true,
+    "old links hashed without the track still load");
 });

@@ -668,6 +668,9 @@ test.describe("shared track foundation diagnostics", () => {
     expect(Math.abs(peak.frac - 0.6152)).toBeLessThan(0.003);
     expect(peak.y).toBeGreaterThan(3);
     expect(result.walls.tightFrac).toBeGreaterThan(0.35);
+    // A null gap (inside the road carve) passes the every() below; 3 of the 9
+    // probes read terrain (headless VM, 2026-11-10), so an all-null ladder fails here.
+    expect(result.groundGaps.filter((gap) => gap !== null).length).toBeGreaterThanOrEqual(3);
     expect(result.groundGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
   });
 
@@ -691,6 +694,7 @@ test.describe("shared track foundation diagnostics", () => {
         },
         elevationRange: Math.max(...profile.map((entry) => entry.y)) -
           Math.min(...profile.map((entry) => entry.y)),
+        terrainSampled: terrainGaps.length,
         maxTerrainGap: Math.max(...terrainGaps),
         walls: window.__apex.wallStats(),
         geometry: window.__apex.geometryDiagnostics(),
@@ -706,6 +710,10 @@ test.describe("shared track foundation diagnostics", () => {
       { kind: "foliage", s0: 0.05, s1: 0.66, side: 1 },
     ]));
     expect(result.elevationRange).toBeLessThanOrEqual(3);
+    // Math.max() of no gaps is -Infinity, under any cap; 6 of the 360 probes
+    // read terrain (headless VM, 2026-11-10) (the rest sit in the street carve).
+    expect(result.terrainSampled).toBeGreaterThanOrEqual(6);
+    expect(Number.isFinite(result.maxTerrainGap)).toBe(true);
     expect(result.maxTerrainGap).toBeLessThanOrEqual(0.18);
     expect(result.walls.tightFrac).toBeGreaterThan(0.99);
     expect(result.walls.minOverHw).toBeGreaterThanOrEqual(0);
@@ -825,6 +833,9 @@ test.describe("shared track foundation diagnostics", () => {
       expect(span.clearance).toBeGreaterThanOrEqual(4.8);
     expect(result.walls.tightFrac).toBe(1);
     expect(result.walls.minOverHw).toBeGreaterThanOrEqual(0);
+    // A null gap passes the every() below; 6 of the 360 probes read terrain
+    // (headless VM, 2026-11-10) (the rest sit in the street carve).
+    expect(result.terrainGaps.filter((gap) => gap !== null).length).toBeGreaterThanOrEqual(6);
     expect(result.terrainGaps.every((gap) => gap === null || gap <= 0.18)).toBe(true);
     expect(result.elevation.range).toBeGreaterThan(4);
     expect(result.elevation.range).toBeLessThan(6);
@@ -942,6 +953,9 @@ test.describe("Madrid track foundation migration", () => {
       expect(state.walls.minB).toBeGreaterThan(1);
       expect(state.walls.maxB).toBeLessThan(60);
       expect(state.walls.minOverHw).toBeGreaterThan(-1.5);
+      // A null gap passes the every() below; 12 of 15 probes read terrain by
+      // day and night (headless VM, 2026-11-10).
+      expect(state.ground.filter((gap) => gap != null).length, time).toBeGreaterThanOrEqual(12);
       expect(state.ground.every((gap) => gap == null || gap <= 0.18)).toBe(true);
     }
   });

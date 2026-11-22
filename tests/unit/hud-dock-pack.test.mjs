@@ -44,16 +44,13 @@ function loadDockLayout() {
   return ctx.DockLayout;
 }
 
-test("clampXY keeps a dock between its safe-area home and MAX (no offset parks it past the edge)", () => {
+test("saved dock deltas include outward movement and stay within one usable viewport", () => {
   const DL = loadDockLayout();
-  assert.ok(DL && DL.clampXY, "DockLayout exports clampXY");
-  // The REPOSITION drag is the only writer; a negative share translated the dock up to 0.35 x the pad past the
-  // screen edge or under the home bar (HUD review 2026-10-14). The home is already the safe-area edge.
-  const neg = DL.clampXY({ x: -0.12, y: -0.2 });
-  assert.equal(neg.x, 0, "outboard past the home edge clips to the home");
-  assert.equal(neg.y, 0, "below the home bar clips to the home");
+  const outward = DL.clampXY({ x: -0.12, y: -0.2 });
+  assert.equal(outward.x, -0.12);
+  assert.equal(outward.y, -0.2);
   const clipped = DL.clampXY({ x: -2, y: 2 });
-  assert.equal(clipped.x, 0);
+  assert.equal(clipped.x, -DL.MAX);
   assert.equal(clipped.y, DL.MAX);
 });
 

@@ -14,7 +14,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const read = (f) => fs.readFileSync(new URL("../../" + f, import.meta.url), "utf8");
 
-function boot(file, extra = {}) {
+function boot(file, extra = {}, dom = {}) {
   const lookups = [], docListeners = [], dcl = [], gated = [];
   const inert = () => new Proxy(function () {}, { get: (_t, k) => (k === Symbol.toPrimitive ? () => "" : k === "then" ? undefined : inert()), apply: () => inert() });
   const document = {
@@ -23,7 +23,7 @@ function boot(file, extra = {}) {
     querySelector: () => null, querySelectorAll: () => [], createElement: () => inert(),
     addEventListener(t, fn) { if (t === "DOMContentLoaded") dcl.push(fn); else docListeners.push(t); },
     removeEventListener() {},
-    documentElement: inert(), body: null, head: null,
+    documentElement: inert(), body: null, head: null, ...dom,
   };
   const values = {};
   const store = { get: (k, d) => (k in values ? values[k] : d), set: (k, v) => { values[k] = v; return true; },
@@ -40,12 +40,13 @@ function boot(file, extra = {}) {
     ...extra,
   });
   ctx.globalThis = ctx; ctx.self = ctx;
-  // #4978 row 5: the APPEARANCE studio body is LAZY_UI_PRESETS; the FULL stub's
-  // gated initUI mounts it. Preload the body so flush still finds the panel.
-  if (file === "js/ui/appearance-studio.js") {
-    vm.runInContext(read("js/ui/appearance-studio-ui.js"), ctx, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  for (const f of [file].flat()) {
+    if (f === "js/ui/appearance-studio.js") {
+      const body = "js/ui/appearance-studio-ui.js";
+      vm.runInContext(read(body), ctx, { filename: absSrc(body) });
+    }
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
-  vm.runInContext(read(file), ctx, { filename: absSrc(file) });
   const at = { lookups: lookups.slice(), listeners: docListeners.slice(), rows: rowCalls.slice() };
   for (const fn of dcl) fn();
   const atDcl = { lookups: lookups.slice(), listeners: docListeners.slice(), rows: rowCalls.slice() };
@@ -121,6 +122,53 @@ for (const c of PART3) {
     assert.equal(has(flushed, c.marker), true, "runs when the gate flushes");
   });
 }
+
+test("CAMERA FEEL and VR mount lazily in the existing display order (#4798)", () => {
+  const make = (id = "") => ({
+    id, children: [],
+    setAttribute() {},
+    appendChild(child) { this.insertBefore(child, null); },
+    insertBefore(child, before) {
+      child.parentNode = this;
+      this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, child);
+    },
+  });
+  const panel = make("pm-panel-display"), visual = make("pm-panel-visual"), graphics = make("pm-panel-graphics");
+  panel.appendChild(make("pm-hud-details"));
+  visual.appendChild(make("pm-visual-tuners"));
+  graphics.appendChild(make("pm-display-adv"));
+  const find = (root, id) => root.id === id ? root : root.children.map(child => find(child, id)).find(Boolean);
+  const queue = [], order = () => panel.children.map(el => el.id);
+  const { dclCount } = boot(["js/camera/feel.js", "js/xr/xr-opts.js"], {
+    M4: {},
+    SettingRow: { build: id => ({ row: make(id) }), labels: values => values, wire() {} },
+    SettingsNav: { lazy: fn => queue.push(fn), onEnter() {} },
+  }, {
+    getElementById: id => find(panel, id) || find(visual, id) || find(graphics, id) || null,
+    createElement: () => make(),
+  });
+  assert.equal(dclCount, 0, "interactive scripts queue immediately even when DCL already fired");
+  assert.deepEqual(order(), ["pm-hud-details"]);
+  assert.equal(queue.length, 2);
+  // Cockpit may already exist when these modules are loaded late.
+  panel.appendChild(make("pm-cockpit"));
+  for (const fn of queue) fn();
+  assert.deepEqual(order(), ["pm-hud-details", "pm-camfeel", "pm-xr-block", "pm-cockpit"]);
+});
+
+test("metrics settings build only through the gate, with no independent boot timers (#4798)", () => {
+  const scheduled = [];
+  const { atDcl, flushed } = boot("js/perf/metrics-overlay.js", {
+    setTimeout(_fn, ms) { scheduled.push(ms); },
+  });
+  const fold = { id: "pm-metrics" };
+  assert.deepEqual(scheduled, []);
+  assert.equal(has(atDcl, fold), false);
+  assert.equal(has(flushed, fold), true, "the fold builds with the rows when the gate opens");
+
+  const fallback = boot("js/perf/metrics-overlay.js", { SettingsNav: undefined });
+  assert.equal(has(fallback.atDcl, fold), true, "the direct fallback also builds the fold");
+});
 
 test("js/perf/metrics-overlay.js: the ` / F9 hotkey binds in the DCL task, before the gate (#4798)", () => {
   const winListeners = [];

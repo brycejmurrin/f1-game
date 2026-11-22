@@ -830,15 +830,20 @@ test("Studio coalesces an advanced click and its store notification while preser
 });
 
 test("combined profiles restore placement, touch docks and cockpit while earlier profiles leave them alone", () => {
+  const dock = vm.runInNewContext(fs.readFileSync(absSrc("js/ui/dock-layout.js"), "utf8") + "\nDockLayout", {}, { filename: absSrc("js/ui/dock-layout.js") });
   const globals = { HudLayout: { migrate: v => ({ standard: v.standard }), apply() {} },
-    DockLayout: { normalize: v => v }, SettingsExport: { normalizePlacement: v => v } };
-  const mine = { hudLayout: LIVE.hudLayout, dockLayout: { buttons: { L: { x: 0.2, y: 0.1 } } },
+    DockLayout: dock, SettingsExport: { normalizePlacement: v => v } };
+  const customized = { L: { x: -0.02, y: 0.1 }, gap: 32, layout: "pedal-row", controls: { "btn-brake": { shape: "round", size: 140 } } };
+  const mine = { hudLayout: LIVE.hudLayout, hudBtnShape: "square", dockLayout: plain(dock.normalize({ buttons: customized })),
     screenPlacement: { v: 1, screens: { carsetup: { portrait: { panel: { width: 50 } } } } } };
   const { studio, values } = load({ ...mine, appearanceProfiles: [{ id: "old", name: "Earlier", values: { uiTheme: "light" } }] }, true, false, undefined, globals);
   studio.saveProfile("Phone");
+  studio.applyPreset("focus");
+  assert.equal(values.hudBtnShape, "square");
+  assert.equal(values.dockLayout.buttons.controls["btn-brake"].size, 140);
   studio.loadProfile("old");
   for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
-  studio.applySnapshot({ ...studio.snapshot(), hudLayout: null, dockLayout: null, screenPlacement: null });
+  studio.applySnapshot({ ...studio.snapshot(), hudLayout: null, dockLayout: null, hudBtnShape: null, screenPlacement: null });
   studio.loadProfile("profile-1");
   for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
   studio.undo();

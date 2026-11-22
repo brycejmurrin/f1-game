@@ -1,5 +1,5 @@
 // @doc UI contract PR D (#5153) measurement probe: the five sheets (select, race settings, career hub, pause, results) in the
-// contract windows A/C/D seeded from the owner export, x textSize x uiScale. Parent only (one browser); needs `npx serve -l 3456 .`.
+// contract windows A/C/D seeded from the owner export, x textSize x uiScale. Parent only (one browser); needs `node tools/serve.mjs`.
 // Usage: node tools/ui/probe-sheets-contract.mjs [A,C,D] [owner|full] [out.json]. Cells per the UI contract note (PR #5154) §2.
 import { chromium } from "playwright";
 import fs from "node:fs";
@@ -8,12 +8,12 @@ import { brycePhone, readProfile } from "../lib/bryce-phone.mjs";
 
 const EXPORT = readProfile("legacy");
 const EXPORT_UI = EXPORT.uiScale == null ? null : Math.round(100 * EXPORT.uiScale);   // percent for __apex.uiScale; null = the export's default
-// Probe layout at 1×; window C is the historical short-toolbar stress case.
+// Probe layout at 1×; window C uses the measured short Safari viewport and insets.
 const landscape = brycePhone({ window: "standalone", profile: false, dpr: 1 });
 const olderPhone = brycePhone({ window: "w844", profile: false, dpr: 1 });
 const WINDOWS = [
   { ...landscape, name: "A" },
-  { ...landscape, name: "C", viewport: { ...landscape.viewport, height: 283 }, insets: { ...landscape.insets, bottom: 0 } },
+  { ...brycePhone({ window: "safari-short", profile: false, dpr: 1 }), name: "C" },
   { ...olderPhone, name: "D", insets: { top: 0, right: 0, bottom: 0, left: 0 } },
 ];
 const only = process.argv[2] ? process.argv[2].split(",") : null;

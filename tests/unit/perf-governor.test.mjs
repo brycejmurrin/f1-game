@@ -105,14 +105,14 @@ test("software GL readback defer covers countdown and race-entry handoff", () =>
       document,
       Log: { info() {} },
       GameStore: { store: { raw: () => null } },
-      RaceEntryProfile: { stallHandoffCover: () => cover },
+      RaceEntryProfile: { readbackCover: () => cover, stallHandoffCover: () => true },
     });
     const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
     governor.init({ backendState: () => ({ softwareGL }) });
     return governor.softwareGlUiReadbackDefer();
   }
-  assert.equal(defer(true, true), true, "stallHandoffCover defers pack readback on software GL");
-  assert.equal(defer(true, false), false, "a closed handoff with hidden sheets does not defer");
+  assert.equal(defer(true, true), true, "readbackCover defers pack readback on software GL");
+  assert.equal(defer(true, false), false, "a closed handoff with hidden sheets does not defer, whatever the watchdog cover says");
   assert.equal(defer(false, true), false, "hardware keeps the readback");
 });
 

@@ -10,7 +10,7 @@ const AppearanceStudioBody = (function () {
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["auto", "reduce", "off"],
     titleIntro: ["full", "quick", "off"], menuWash: ["full", "medium", "soft", "off"], titleArt: ["on", "medium", "soft", "off"], titleButtonStyle: ["auto", "racing", "flat"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
-    hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
+    hudBtnShape: ["round", "squircle", "square"], hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
     hudMapVis: ["auto", "on", "off"], hudGapsVis: ["auto", "on", "off"], hudMirror: ["auto", "on", "off"],
     homeScene: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"], backgroundMotion: ["still", "ambient"],
     homeCamera: ["auto", "hero", "front", "side", "rear"],
@@ -21,7 +21,7 @@ const AppearanceStudioBody = (function () {
     ? SettingsDefaults.get(k) : d;
   const DEFAULTS = Object.freeze({ uiTheme: "dark", menuAccent: shipped("menuAccent", "ember"), hudAccent: "team", menuAccentHex: "#e10600", hudAccentHex: "#e10600",
     textSize: shipped("textSize", "normal"), uiContrast: shipped("uiContrast", "off"), cvdMode: "off", speedUnits: "kmh", menuHelp: "on", motion: null, uiScale: null,
-    hudScale: null, hudBtnScale: null, hudBtnOpacity: null, hudPanelOpacity: null,
+    hudScale: null, hudBtnScale: null, hudBtnShape: null, hudBtnOpacity: null, hudPanelOpacity: null,
     titleIntro: "full", menuWash: "full", titleArt: "on", titleButtonStyle: "auto", titleLayout: null, hudLayout: null, dockLayout: null, screenPlacement: null,
     pauseLayout: "grid", pauseSide: "centre", pauseDim: "full",
     hudProfile: "standard", hudMetricsLayout: "full", hudMapVis: "on", hudGapsVis: "on", hudMirror: shipped("hudMirror", "auto"),
@@ -33,12 +33,12 @@ const AppearanceStudioBody = (function () {
   // Cosmetic presets must not replace readability, comfort, unit, size or layout
   // preferences (#5058): a preset value never names one of these keys, and a
   // screen look the preset names is merged into the current one, not replaced.
-  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleButtonStyle", "titleLayout", "hudLayout", "dockLayout", "screenPlacement", "pauseLayout", "pauseSide", "pauseDim"]);
+  const PRESET_PRESERVE = Object.freeze(["motion", "textSize", "uiScale", "uiContrast", "cvdMode", "speedUnits", "hudScale", "hudBtnScale", "hudBtnShape", "hudBtnOpacity", "hudPanelOpacity", "titleButtonStyle", "titleLayout", "hudLayout", "dockLayout", "screenPlacement", "pauseLayout", "pauseSide", "pauseDim"]);
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups", lookDesigner: "designer" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleButtonStyle", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
-    hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnShape", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
@@ -162,7 +162,7 @@ const AppearanceStudioBody = (function () {
       .map((p) => {
         const values = normalizeSnapshot(p.values);
         // Profiles saved before layout capture leave these devices and screens as configured.
-        for (const k of ["hudLayout", "dockLayout", "screenPlacement"]) if (!Object.hasOwn(p.values || {}, k)) delete values[k];
+        for (const k of ["hudLayout", "dockLayout", "hudBtnShape", "screenPlacement"]) if (!Object.hasOwn(p.values || {}, k)) delete values[k];
         return { id: p.id, name: p.name.trim().slice(0, 40), values };
       });
   }

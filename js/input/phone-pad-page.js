@@ -173,7 +173,7 @@ const PhonePadPage = (function () {
       const levels = new Map();    // each contact keeps its own pedal travel
       if (travel) PedalTravel.watchButtonProfile(travel, profile => {
         el.classList.toggle("feedback-off", !profile.feedback);
-        if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
+        if (travel !== "gas" && profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
         else el.removeAttribute?.("data-touch-response");
       });
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
@@ -305,7 +305,7 @@ const PhonePadPage = (function () {
     if (dom.steer) {
       let steeringPointer = null, anchorX = 0, stripW = 40;   // strip width read once per gesture, not per move (audit4 UB4)
       const steeringKeys = new Set();
-      const release = (e) => { if (e && e.pointerId !== steeringPointer) return; steeringPointer = null; if (!e) steeringKeys.clear(); steer = steeringKeys.size ? (Array.from(steeringKeys).pop() === "ArrowLeft" ? -1 : 1) : 0; push(); };
+      const release = (e) => { if (e && (steeringPointer === null || e.pointerId !== steeringPointer)) return; steeringPointer = null; if (!e) steeringKeys.clear(); steer = steeringKeys.size ? (Array.from(steeringKeys).pop() === "ArrowLeft" ? -1 : 1) : 0; push(); };
       releases.push((pointersOnly) => release(pointersOnly ? { pointerId: steeringPointer } : undefined)); pointerReleases.push(release);
       dom.steer.addEventListener("pointerdown", (e) => { if ((e.pointerType === "mouse" && e.button !== 0) || steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; stripW = Math.max(40, dom.steer.getBoundingClientRect().width * 0.4); steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
       dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = PhonePadCodec.num((e.clientX - anchorX) / stripW, -1, 1); push(false); });

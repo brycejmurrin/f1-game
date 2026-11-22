@@ -28,3 +28,14 @@ test('agent --vm without --seed keeps the CLI default seed 1', async () => {
   const { booted } = await vmBootOpts(['spa', 'atmosphere', '--vm']);
   assert.equal(booted[0].search, '?seed=1');
 });
+
+test('agent help --vm and car --vm reach createGame with the seed instead of being refused (#5296 W25)', async () => {
+  const help = await vmBootOpts(['help', '--vm', '--seed', '7']);
+  assert.notEqual(help.exited, 2, 'help --vm was refused');
+  assert.deepEqual(help.booted.map((o) => o.search), ['?seed=7']);
+  const car = await vmBootOpts(['monza', 'car', '--vm', '--seed', '3']);
+  assert.notEqual(car.exited, 2, 'car --vm was refused');
+  assert.equal(car.booted.length, 1);
+  assert.equal(car.booted[0].search, '?seed=3');
+  assert.ok(car.booted[0].track);
+});

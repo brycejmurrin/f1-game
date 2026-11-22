@@ -303,33 +303,60 @@ test.describe("separation pass with large packs", () => {
 test.describe("AI banking grip on banked circuits", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("AI carry banked-corner speed comparable to a flat straight (banking grip applies to AI)", async ({ page }) => {
+  test("AI carry banked-corner speed and banking grip steers the AI (bank vs flat-stubbed bank)", async ({ page }) => {
     // Regression for the bug where bankMu was player-only, so AI had FLAT lateral
-    // grip in banked corners and scrubbed speed there. Relative check (no magic
-    // 30 m/s): AI average speed through the banked section must be a healthy
-    // fraction of the average speed they build on a flat straight — proving the
-    // bank isn't collapsing their grip. Survives any PACE/grip retune.
+    // grip in banked corners. Like with like: ONE AI car is placed by aiPlace ON
+    // the bank (Zandvoort's banks are at frac ~0.19 Hugenholtz and ~0.885 Arie
+    // Luyendijk; 0.65, the old start point, is flat) at a fixed entry speed,
+    // the rest parked out of its way. The SAME placement is then replayed with
+    // Tracks.banking stubbed flat for the run: if banking grip reaches the AI,
+    // its lateral path differs; with the bug the two paths are identical.
+    // (The old version reset() the PLAYER and averaged AI launching off the
+    // grid in both runs, against `banked > flat * 0.5`: it could not fail.)
     await loadRace(page, "zandvoort");
     const result = await page.evaluate(() => {
-      const runAvg = (frac) => {
-        window.__apex.headless(true);
-        window.__apex.reset(frac, 20, 0);
-        for (let i = 0; i < 480; i++) window.__apex.act({ steer: 0, throttle: true, brake: false }, 1 / 60, 1);
-        window.__apex.headless(false);
-        const ai = window.__apex.cars().filter((c) => !c.p);
-        return {
-          avg: ai.reduce((s, c) => s + c.speed, 0) / (ai.length || 1),
-          finite: window.__apex.cars().every((c) => isFinite(c.x) && isFinite(c.speed)),
-        };
+      // Tracks is a script-scope `const`, not a window property.
+      // @ts-ignore
+      const A = window.__apex, T = Tracks, orig = T.banking;
+      const run = (frac, v, flat) => {
+        A.headless(true);
+        A.reset(0.5, 0, 0);
+        const ai = A.cars().filter((c) => !c.p).map((c) => c.id);
+        ai.forEach((id, j) => A.aiPlace(id, 0.4 + j * 0.003, 0, 0));
+        const id = ai[0];
+        A.aiPlace(id, frac, v, 0);
+        if (flat) T.banking = () => null;
+        const xs = []; let sum = 0, finite = true;
+        try {
+          for (let i = 0; i < 120; i++) {
+            A.act({ steer: 0, throttle: false, brake: true }, 1 / 60, 1);
+            const c = A.cars().find((k) => k.id === id);
+            xs.push(c.x); sum += c.speed;
+            finite = finite && isFinite(c.x) && isFinite(c.speed);
+          }
+        } finally { T.banking = orig; A.headless(false); }
+        return { xs, avg: sum / 120, finite };
       };
-      const flat   = runAvg(0.0);    // start/finish straight — the grip reference
-      const banked = runAvg(0.65);   // Arie Luyendijk banked turn (~0.65–0.75)
-      return { flat: flat.avg, banked: banked.avg, allFinite: flat.finite && banked.finite };
+      const out = { finite: true, maxDx: 0, rows: [] };
+      for (const frac of [0.19, 0.885]) {
+        const bank = run(frac, 50, false), flat = run(frac, 50, true);
+        const dx = Math.max(...bank.xs.map((x, i) => Math.abs(x - flat.xs[i])));
+        out.maxDx = Math.max(out.maxDx, dx);
+        out.finite = out.finite && bank.finite && flat.finite;
+        out.rows.push({ frac, dx, avg: bank.avg });
+      }
+      const straight = run(0.0, 50, false);   // same car, same entry speed, flat straight
+      out.straight = straight.avg;
+      out.finite = out.finite && straight.finite;
+      return out;
     });
-    expect(result.allFinite).toBe(true);
-    // AI hold at least half their flat-straight pace through the bank. With the
-    // bug (flat grip) they'd understeer wide and scrub far more than that.
-    expect(result.banked).toBeGreaterThan(result.flat * 0.5);
+    expect(result.finite).toBe(true);
+    // Banking grip reaches the AI: removing the bank moves its line (measured
+    // ~0.1-0.3 m over 2 s; identical paths would read 0).
+    expect(result.maxDx, JSON.stringify(result.rows)).toBeGreaterThan(0.05);
+    // And through the bank it keeps the pace the same entry speed holds on the
+    // flat straight (measured 0.70 at the Hugenholtz hairpin, 0.98 on the Luyendijk bank).
+    for (const r of result.rows) expect(r.avg, JSON.stringify(r)).toBeGreaterThan(result.straight * 0.55);
   });
 
   test("player with racing-line assist stays on banked Zandvoort section", async ({ page }) => {

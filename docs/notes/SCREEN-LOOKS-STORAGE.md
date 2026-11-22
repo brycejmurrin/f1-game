@@ -160,6 +160,6 @@ BIG: tower/map grow in the top band; gaps stay between map and tower (x+7 clears
 
 ## Touch dock and phone wheel coordinates
 
-Touch docks store inward and upward fractions of the layout viewport after subtracting the safe insets. The safe corner is the zero position. Travel stops at 35% so neither pedal group can be placed beyond its home edge. The dock compensates for its effective CSS zoom when painting these offsets. Pinching or changing button size therefore preserves the saved position. Each steering scheme has its own pair of offsets in `apex26.dockLayout`.
+Each steering scheme in `apex26.dockLayout` keeps its own left and right dock positions. Offsets are signed fractions of the viewport after subtracting safe insets. Zero means the shipped position, positive X moves toward the centre and positive Y moves up. The editor measures the visible controls when it limits travel and compensates for effective CSS zoom. A legacy pair of offsets still loads. Optional fields store arrow spacing, driving layout and individual control overrides by button ID. An omitted field follows the normal layout or global button size and shape. Settings files and combined Appearance profiles can restore those choices. Reset Dock Layout clears overrides for the current steering scheme.
 
 The landscape phone wheel stores button offsets as viewport percentages in `apex26.padLayout`. Apply commits the wheel draft. Pairing and menu-pad regions use the shared orientation-specific `apex26.screenPlacement` store on the controller device.

@@ -832,13 +832,13 @@
     // Viewport, not scissor: the quad covers exactly the viewport. A target's
     // own .viewport is what three reads when one is bound; the renderer's is
     // the canvas's (pixelRatio 1, tlx.js).
-    function mirrorPass(dest) {
+    function mirrorPass(dest, count = true) {
       const M = P.mirror;
       if (!mirrorUniforms()) return;
       M.tex.value = _mirTex;
       if (dest) dest.viewport.set(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]);
       else { renderer.getViewport(_mirPrevVP || (_mirPrevVP = new THREE.Vector4())); renderer.setViewport(_mirRect[0], _mirRect[1], _mirRect[2], _mirRect[3]); }
-      try { runPass(M.mat, dest, true); _mirComposites++; }
+      try { runPass(M.mat, dest, true); if (count) _mirComposites++; }
       finally {
         if (dest) dest.viewport.set(0, 0, dest.width, dest.height);
         else renderer.setViewport(_mirPrevVP);
@@ -955,6 +955,33 @@
         } finally { B.tex.value = tex0; renderer.setRenderTarget(t0); renderer.autoClear = ac; }
         return cap8RT;
       } catch (_) { return rt; }
+    }
+
+    // Direct-to-canvas FXAA retains its input, not its finished pixels. Replay only
+    // the final pass(es) on a screenshot request, then let three read the target asynchronously.
+    let fxaaCaptureRT = null;
+    function captureTarget() {
+      if (viz) return _vizDest;
+      if (!_last.fxaa || _last.sgsr || _lastPresentRT !== ldrRT) return cap8(_lastPresentRT || ldrRT);
+      const w = renderer.domElement.width, h = renderer.domElement.height;
+      if (!fxaaCaptureRT) {
+        fxaaCaptureRT = makeRT(w, h, THREE.UnsignedByteType);
+        fxaaCaptureRT.texture.name = "TLXPostFXAACapture";
+      }
+      rtSetSize(fxaaCaptureRT, w, h);
+      const target = renderer.getRenderTarget(), face = renderer.getActiveCubeFace(), mip = renderer.getActiveMipmapLevel();
+      const mrt = renderer.getMRT(), ac = renderer.autoClear, mat = quad.material;
+      try {
+        renderer.setMRT(null);
+        runPass(P.fxaa.mat, fxaaCaptureRT);
+        if (!P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
+      } finally {
+        quad.material = mat;
+        renderer.setMRT(mrt);
+        renderer.setRenderTarget(target, face, mip);
+        renderer.autoClear = ac;
+      }
+      return fxaaCaptureRT;
     }
 
     // Output logical size of a pass (phys mode; the shaders' VP.uv reads it).
@@ -1387,7 +1414,7 @@
         _last.taa = false;
         if (useTaa) {
           // TRAA: history <- resolve(ldr, history), history -> dest, the mirror inset on top (never jittered: its
-          // own camera, composited after the resolve). Captures keep reading the pre-AA LDR, as on the FXAA path.
+          // own camera, composited after the resolve). Its retained target may be the pre-AA LDR when drawing to the canvas.
           if (P.fxaa.mirTex) fxaaMirror(false);
           AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm);
           _last.taa = true;
@@ -1666,8 +1693,9 @@
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
       ldrTarget: () => cap8(ldrRT),
-      // WHAT THE LAST FRAME ACTUALLY WROTE. Soft-present / capture must read
-      // the FXAA (or SGSR) destination when upscaling — not pre-FXAA ldrRT.
+      // Soft-present target, or the latest offscreen intermediate when rendering to the canvas.
+      // captureTarget reproduces direct-to-canvas FXAA on demand.
+      captureTarget,
       presentedTarget: () => (viz ? _vizDest : cap8(_lastPresentRT || ldrRT)),
       // TRAA: this frame's NDC jitter for the main camera (tlx.js begin), or null while the TAA would not run.
       taaJitter: (w, h) => (taaLive() ? AA.jitter(w, h) : null),

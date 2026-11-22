@@ -4274,13 +4274,13 @@ function syncRotateBlocker(moveFocus) {
   // outside itself: the OPEN CONTROLS roundtrip landed on RESUME instead of
   // back on the blocker's button. `paused` survives; the card returns the
   // moment the blocker leaves (rotate to landscape mid-pause and it is there).
-  // A live race does not run on behind the blocker: turning the phone upright
-  // mid-race must not leave the field (and TOUCH's auto-throttle) racing on.
+  // Pause a live race behind the blocker so the field and touch auto-throttle stop.
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
   if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) {
-    const hide = active || photoMode || els.pmsettings?.hidden === false, was = els.pausemenu.hidden, ae = body && document.activeElement;
+    // ARRANGE temporarily hides Settings. Reopening Pause would cancel the editor on rotation.
+    const hide = active || photoMode || !!body?.hasAttribute("data-hud-arrange") || els.pmsettings?.hidden === false, was = els.pausemenu.hidden, ae = body && document.activeElement;
     // Focus survives the round trip: remember the control the card loses (kept on the card), restore it when the card returns
     if (hide && !was && ae && els.pausemenu.contains(ae)) els.pausemenu._back = ae;
     els.pausemenu.hidden = hide;

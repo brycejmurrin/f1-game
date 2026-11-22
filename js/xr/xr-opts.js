@@ -182,24 +182,22 @@ const XROpts = (function () {
     wrap.appendChild(hint);
     _reloadHint = hint;
 
-    // Place after the RENDERER fold when present, else at end of display panel.
     const adv = document.getElementById("pm-display-adv");
-    if (adv && adv.parentNode === hostParent) {
-      hostParent.insertBefore(wrap, adv.nextSibling);
-    } else {
-      hostParent.appendChild(wrap);
-    }
+    const cock = document.getElementById("pm-cockpit");
+    // In HUD & CAMERA, VR follows CAMERA FEEL and precedes COCKPIT.
+    hostParent.insertBefore(wrap, adv && adv.parentNode === hostParent ? adv.nextSibling
+      : cock && cock.parentNode === hostParent ? cock : null);
     _host = wrap;
     // Boots read apex26.xrCaps; this page is the one re-ask (#5417).
     if (typeof SettingsNav !== "undefined") SettingsNav.onEnter((id) => { if (id === "display") XrBoot.recheck(); });
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => {
-      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+    const atGate = () => {
       if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
-    }, { once: true });
-    else initUI();
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", atGate, { once: true });
+    else atGate();
   }
 
   return {

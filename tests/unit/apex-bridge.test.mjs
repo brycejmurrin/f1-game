@@ -389,7 +389,10 @@ test("geom reads the device's own geometry: insets, viewport units, the zoom sel
   const mk = () => { const n = { style: { cssText: "" }, children: [], offsetWidth: 100, currentCSSZoom: 2, appendChild(c) { c.parent = n; n.children.push(c); }, remove() { n.removed = true; },
     getBoundingClientRect() {
       const c = n.style.cssText, m = /height:100(vh|svh|dvh|lvh)/.exec(c), w = /width:100(vw|svw)/.exec(c);
-      if (n.parent && n.parent.style) return { width: 2 * (W / 10 + INS.l), height: 2 };            // 10vw + env() padding, inside zoom 2
+      if (n.parent && n.parent.style) {
+        const paddingOutsideWidth = c.includes("box-sizing:content-box") ? INS.l : 0; // tokens.css defaults to border-box
+        return { width: 2 * (W / 10 + paddingOutsideWidth), height: 2 };
+      }
       if (m) return { left: 0, top: 0, width: 1, height: m[1] === "lvh" ? 430 : H, right: 1, bottom: H };
       if (w) return { left: 0, top: 0, width: W, height: 1, right: W, bottom: 1 };
       if (/zoom:2/.test(c)) return { left: 0, top: 0, width: 200, height: 100, right: 200, bottom: 100 };

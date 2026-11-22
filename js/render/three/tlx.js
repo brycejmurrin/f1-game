@@ -5025,9 +5025,9 @@ const TLX = (function () {
       const noopMesh = () => ({ __tlx: true, count: 0 });
 
       function _captureRT() {
-        // presentedTarget() follows ?viz= (it returns ldrRT normally, the viz
-        // dest in viz mode) — ldrTarget() alone made every viz bisect read a
-        // stale RT on the soft path. Fall back for an older post module.
+        // captureTarget includes direct-to-canvas FXAA. Older chains expose
+        // their last offscreen target, including the ?viz= destination.
+        if (post && typeof post.captureTarget === "function") return post.captureTarget();
         if (post && typeof post.presentedTarget === "function") return post.presentedTarget();
         if (post && typeof post.ldrTarget === "function") return post.ldrTarget();
         return _blitRT;
@@ -6234,9 +6234,7 @@ const TLX = (function () {
           return TLXShaders.makeFrustumPlanes(viewProj, out);
         },
         // Screenshot counterparts of WGX capturePixels / awaitSoftPresent.
-        // WebGL2: readPixels from the canvas (Y-flip). WebGPU: three's
-        // readRenderTargetPixelsAsync → copyTextureToBuffer + mapAsync on the
-        // LDR target (WebGPU Fundamentals). Never getCurrentTexture().
+        // WebGL2 reads the backbuffer. WebGPU reads a render target asynchronously.
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
@@ -6246,7 +6244,8 @@ const TLX = (function () {
             if (bw > 0 && bh > 0) return readGlCapture(gl, bw, bh);
             return fixedActive() ? readGlCapture(gl, presentW, presentH) : readGlCapture(gl, W, H);
           }
-          const rt = _captureRT();
+          let rt;
+          try { rt = _captureRT(); } catch (e) { return Promise.reject(e); }
           if (!rt || typeof renderer.readRenderTargetPixelsAsync !== "function") {
             return Promise.reject(new Error(
               "three.js WebGPU screenshot needs SCREENSHOTS: 2D BLIT (or AUTO on software)"));
