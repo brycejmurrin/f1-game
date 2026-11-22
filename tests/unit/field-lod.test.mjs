@@ -46,7 +46,10 @@ function carPoseRig() {
   const render = symbolSource("function render(dt)");
   const start = render.indexOf("for (const c of cars)", render.indexOf("const _fxCullR2"));
   const end = render.indexOf("let bankC;", start);
-  const heading = render.slice(render.indexOf("let _camFwdX"), render.indexOf("const _carCullPlanes"));
+  const headingStart = render.indexOf("let _camFwdX");
+  const headingEnd = render.indexOf("const paint = carPaintMat", headingStart);
+  assert.ok(headingStart >= 0 && headingEnd > headingStart && headingEnd < start, "camera heading is prepared before the car loop");
+  const heading = render.slice(headingStart, headingEnd);
   assert.ok(start > 0 && end > start, "render car-pose boundary exists");
   const projected = [], prepared = [];
   const ctx = vm.createContext({
