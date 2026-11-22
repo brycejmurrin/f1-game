@@ -227,7 +227,11 @@ test.describe("results-flow — phone landscape acceptance", () => {
   });
 
   test("natural flag: actual SKIP/CONTINUE advance every phase at 844×390", async ({ page }) => {
-    await startGp(page); await crossFlag(page); await skipChain(page);
+    await startGp(page); await crossFlag(page);
+    await expect(page.locator("#btn-throttle")).toBeVisible();
+    await expect(page.locator("#btn-brake")).toBeVisible();
+    await skipChain(page);
+    await expect(page.locator("#btn-brake")).toBeHidden();
     const buttons = page.locator("#results .sheet-foot button:visible");
     expect(await buttons.count()).toBeGreaterThan(0);
     for (const button of await buttons.all()) {

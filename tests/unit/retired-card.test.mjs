@@ -16,7 +16,7 @@ const SRC = readFileSync(join(ROOT, "js/race/retired-card.js"), "utf8");
 
 function fakeDom() {
   const nodes = {};
-  const mk = (tag) => ({ tag, id: "", hidden: false, clicks: 0, listeners: {}, attrs: {}, children: [], textContent: "",
+  const mk = (tag) => ({ tag, id: "", hidden: false, clicks: 0, listeners: {}, attrs: {}, children: [], get firstElementChild() { return this.children[0]; }, textContent: "",
     addEventListener(t, f) { this.listeners[t] = f; }, click() { this.clicks++; },
     setAttribute(k, v) { this.attrs[k] = v; }, append(...c) { this.children.push(...c); } });
   const attrs = new Set();
@@ -39,11 +39,12 @@ function load(dom, now = { t: 0 }) {
 const view = (over = {}) => Object.assign({ state: "race", session: "race", net: false, watch: false, timeTrial: false,
   player: { retired: true, finished: false } }, over);
 
-test("wanted: only a retired, unfinished player in a solo Grand Prix", () => {
+test("wanted: a finished or retired player in a solo Grand Prix", () => {
   const { RC } = load(fakeDom());
   assert.equal(RC.wanted(view()), true);
   assert.equal(RC.wanted(view({ player: { retired: false } })), false, "still racing");
-  assert.equal(RC.wanted(view({ player: { retired: true, finished: true } })), false, "finished");
+  assert.equal(RC.wanted(view({ player: { finished: true } })), true, "finished");
+  assert.equal(RC.wanted(view({ player: { finished: true }, pending: true })), false, "penalty still pending");
   assert.equal(RC.wanted(view({ net: true })), false, "a room: the host's classification");
   assert.equal(RC.wanted(view({ watch: true })), false);
   assert.equal(RC.wanted(view({ session: "quali" })), false);
