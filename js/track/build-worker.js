@@ -242,7 +242,8 @@ self.onmessage = async (e) => {
         self.postMessage({ type: "preview", seq: m.seq, id: m.id, track: null });
         return;
       }
-      const tr = Tracks.buildCenterline(def, { line: false });
+      // Older pages expect their preview to contain a complete banking profile.
+      const tr = Tracks.buildCenterline(def, { line: false, banking: m.banking !== false });
       const track = {
         total: tr.total, n: tr.n, map: tr.map, street: !!tr.street, line: null,
         px: tr.px, py: tr.py, pz: tr.pz, tx: tr.tx, ty: tr.ty, tz: tr.tz,
