@@ -236,6 +236,9 @@
   --visor-amber: #503d20;
   --visor-ice: #233b50;
   --visor-rose: #4c2d3c;
+  --visor-green: #244c38;
+  --visor-violet: #493658;
+  --visor-copper: #643b29;
   --dim: #bdbdca; /* APCA Lc 67 on --bg, >= 60 on the HUD plate (#4258) */
   --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim));
   --sal: env(safe-area-inset-left, 0px);
