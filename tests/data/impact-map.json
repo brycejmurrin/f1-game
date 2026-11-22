@@ -9759,7 +9759,8 @@
         "tests/unit/throttle-latch.test.mjs"
       ],
       "padAxesAreDefault": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/controller-profiles.test.mjs"
       ],
       "padCapture": [
         "tests/unit/key-binds.test.mjs",
@@ -13992,6 +13993,9 @@
       "detectS": [
         "tests/unit/overtake-mode.test.mjs"
       ],
+      "detectionCrossed": [
+        "tests/unit/overtake-mode.test.mjs"
+      ],
       "energy": [
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/overtake-mode.test.mjs"
@@ -15025,6 +15029,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "setAuto": [
@@ -15053,6 +15058,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "status": [
@@ -15070,6 +15076,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -15079,6 +15086,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "trackTrace": [
@@ -19727,6 +19735,9 @@
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-status-stack.test.mjs"
+      ],
+      "radioPaintedCollapseTick": [
+        "tests/unit/hud-radio-slot.test.mjs"
       ],
       "radioTopSlot": [
         "tests/unit/hud-metrics-layout.test.mjs"

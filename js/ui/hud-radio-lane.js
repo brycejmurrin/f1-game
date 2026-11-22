@@ -308,15 +308,17 @@ function radioPaintedCollapse(root) {
     const speed = typeof document !== "undefined" ? document.getElementById("hud-speed") : null;
     const controls = [els.btnCam, els.pausebtn];
     for (const dock of docks()) if (dock) controls.push(...dock.children);
-    if (controls.some(hit)) {
+    let hitsControl = controls.some(hit);
+    if (hitsControl) {
       // Enlarged steering can meet the painted card below its predicted band.
       // Re-budget that real row before hiding a call: a central gap may still fit.
       hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner");
       for (const prop of ["--announce-lane-w", "--hud-clear-x", "--hud-clear-y"]) hUnstyle(annPaint, prop);
       dropLaneRects(); announceLane(root, a);
       a = annPaint.getBoundingClientRect();
+      hitsControl = controls.some(hit);
     }
-    if (controls.some(hit) || hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed) || hit(els.flag) || hit(els.hudLimits) || hit(els.tyre)) {
+    if (hitsControl || hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed) || hit(els.flag) || hit(els.hudLimits) || hit(els.tyre)) {
       hToggle(document.body, "hud-radio-top", false);
       if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();
@@ -342,7 +344,8 @@ function radioPaintedKey(root) {
 }
 function radioPaintedCollapseTick(root, force) {
   const k = radioPaintedKey(root);
-  if (!force && k && k === _rpcKey && --_rpcWait > 0) return;
+  if (!k) { _rpcKey = ""; return; }   // A reopened card must be checked even if it repeats the last message.
+  if (!force && k === _rpcKey && --_rpcWait > 0) return;
   radioPaintedCollapse(root);
   _rpcKey = radioPaintedKey(root); _rpcWait = 30;
 }

@@ -3219,6 +3219,13 @@ test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 
   const gfx = await h.create();
   gfx.resize();
   const opens = () => h.passCalls.filter(([k]) => k === "beginRenderPass").map(([, a]) => a[0]);
+  const sampled = [];
+  const makeGroup = h.device.createBindGroup;
+  h.device.createBindGroup = desc => {
+    const view = desc.entries.find(e => e.binding === 0)?.resource;
+    if (view?.viewDesc?.mipLevelCount === 1) sampled.push(view);
+    return makeGroup(desc);
+  };
   const perFace = [];
   for (let f = 0; f < 6; f++) {
     const s0 = h.submitCount, p0 = opens().length;
@@ -3232,6 +3239,28 @@ test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 
   assert.deepEqual(perFace.slice(0, 5).map((r) => r.passes), [1, 1, 1, 1, 1], "faces 0-4: the face pass alone");
   assert.equal(perFace[5].passes, 1 + 6 * 3, "face 5: its pass plus 6 layers x 3 levels");
   assert.deepEqual(perFace.map((r) => r.submits), [1, 1, 1, 1, 1, 1], "the ladder rides face 5's own submit");
+  const stages = () => opens().filter(pass => {
+    const view = pass.colorAttachments[0]?.view;
+    return view?.texture === cube && view.viewDesc?.baseMipLevel > 0;
+  });
+  const first = stages();
+  const inputs = sampled.filter(view => view.texture === cube);
+  assert.equal(inputs.length, 18);
+  for (let i = 0; i < first.length; i++) {
+    const src = inputs[i], dst = first[i].colorAttachments[0].view;
+    assert.equal(src.viewDesc.baseArrayLayer, Math.floor(i / 3));
+    assert.equal(dst.viewDesc.baseArrayLayer, src.viewDesc.baseArrayLayer);
+    assert.equal(dst.viewDesc.baseMipLevel, src.viewDesc.baseMipLevel + 1);
+  }
+  assert.equal(new Set([...inputs, ...first.map(s => s.colorAttachments[0].view)]).size, 24,
+    "one GPU view per face and mip level");
+  for (let f = 0; f < 6; f++) {
+    gfx.envFaceBegin(f, [0, 0, 0], {});
+    gfx.envFaceEnd(f);
+  }
+  const second = stages().slice(first.length);
+  assert.equal(second.length, first.length);
+  for (let i = 0; i < first.length; i++) assert.equal(second[i], first[i], "reuse that subresource's pass descriptor");
 });
 
 test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and mirror no longer evict each other", async () => {
@@ -3844,7 +3873,7 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
   // 1. The async path: token at once, nothing written, bind held back, then layers in order + mips + bound.
   {
     const assets = makeAssets();
-    const h = makeGpuHarness({ assets, reflectTextures: true });
+    const h = makeGpuHarness({ assets, reflectTextures: true, recordPass: true });
     const gfx = await h.create();
     const w0 = h.textureWrites.length;
     const albedo = gfx.createTextureArray(size, images, n);
@@ -3868,7 +3897,11 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     st = gfx.materialMapState();
     assert.equal(st.albedo, true, "bound once ready"); assert.equal(st.layers, 3); assert.equal(st.pending, 0);
     assert.equal(h.textures.filter((t) => t.destroyed).length, submitsBefore, "nothing destroyed");
-    assert.ok(albedo.texture.__wgxMipLadder, "the mips were built after the last layer");
+    const mipPasses = h.passCalls.filter(([name, args]) => name === "beginRenderPass" &&
+      args[0].colorAttachments[0]?.view.texture === albedo.texture);
+    assert.deepEqual(mipPasses.map(([, [pass]]) => pass.colorAttachments[0].view.viewDesc.baseArrayLayer),
+      Array.from({ length: n }, (_, i) => i), "all array layers received their mip pass");
+    assert.equal(albedo.texture.__wgxMipLadder, undefined, "one-shot uploads release their mip ladder");
   }
   // Re-adopting a pending token transfers the wait, not ownership of its destruction.
   for (const replacement of ["same", "partial", "different", "unload"]) {

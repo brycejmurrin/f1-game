@@ -5,10 +5,12 @@
       "lines": -1
     },
     "js/render/glx/glx.js": {
-      "lines": 5
+      "lines": 7
     }
   },
   "tree": {
-    "eagerCodeBytes": 100
+    "assertPins": 3,
+    "assertPinsAll": 3,
+    "eagerCodeBytes": 550
   }
 }

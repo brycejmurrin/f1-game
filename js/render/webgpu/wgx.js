@@ -2725,32 +2725,32 @@ const WGX = (function () {
           _mipPipes.set(tex.format, pipe);
         }
         if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
-        // Views + bind groups on an immutable texture are stable. Rebuilding
-        // the full ladder every call was 72 createView + 36 createBindGroup
-        // per 6-face env cycle (~every 6 frames with CAR ENV REFLECTION on).
-        // Cache the ladder on the texture — it dies with the texture.
+        // Mirror and probe mips are recorded repeatedly. Reuse their views, bindings and
+        // attachment descriptors for the lifetime of that texture. Uploaded atlases run once.
         let ladder = tex.__wgxMipLadder;
         if (!ladder || ladder.length !== nLay * (levels - 1)) {
           ladder = [];
+          const layout = pipe.getBindGroupLayout(0);
           for (let layer = 0; layer < nLay; layer++) {
+            let srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+              baseMipLevel: 0, mipLevelCount: 1 });
             for (let level = 1; level < levels; level++) {
-              const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-                baseMipLevel: level - 1, mipLevelCount: 1 });
               const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
                 baseMipLevel: level, mipLevelCount: 1 });
-              ladder.push({ dstView, bg: device.createBindGroup({
-                layout: pipe.getBindGroupLayout(0),
-                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
-              }) });
+              const bg = device.createBindGroup({ layout,
+                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }] });
+              const pass = { colorAttachments: [{ view: dstView, loadOp: "clear",
+                clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] };
+              ladder.push({ bg, pass });
+              srcView = dstView;
             }
           }
-          tex.__wgxMipLadder = ladder;
+          if (intoEnc) tex.__wgxMipLadder = ladder;
         }
         const enc = intoEnc || device.createCommandEncoder();
         for (let i = 0; i < ladder.length; i++) {
           const st = ladder[i];
-          const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
-            clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+          const p = enc.beginRenderPass(st.pass);
           p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
         }
         if (!intoEnc) device.queue.submit([enc.finish()]);

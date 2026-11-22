@@ -904,6 +904,7 @@ const GLXBackend = (function () {
       markBatchVAO = gl.createVertexArray();
       gl.bindVertexArray(markBatchVAO);
       markBatchVBO = gl.createBuffer();
+      markBatchCap = 0;
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       const mst = 5 * 4;   // 5 floats per vertex
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, mst, 0);
@@ -2529,11 +2530,12 @@ const GLXBackend = (function () {
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
-    if (dirty) {
+    const nF = vertCount * 5;
+    if (dirty || nF > markBatchCap) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
-      const nF = vertCount * 5;
       if (nF > markBatchCap) {
-        markBatchCap = nF;
+        // The trail supplies its bounded ring storage; only the live prefix needs an upload.
+        markBatchCap = verts.length;
         gl.bufferData(gl.ARRAY_BUFFER, markBatchCap * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
