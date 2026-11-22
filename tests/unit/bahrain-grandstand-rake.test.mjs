@@ -53,6 +53,9 @@ test("bahrain grandstandEx calls keep positive seating rake (no hollow shells)",
   assert.ok(def, "bahrain def");
   const orig = env.sandbox.TrackScenery.bahrain;
   assert.equal(typeof orig, "function", "bahrain scenery callback");
+  // Asset discovery reads the registered callback before either build mode runs.
+  const source = env.sandbox.TrackDef.scenerySource(def, env.sandbox.TrackScenery);
+  assert.match(source, /modelGroup\("bahrain-main-tribuna"/);
   const calls = [];
   env.sandbox.TrackScenery.bahrain = function (api) {
     const real = api.grandstandEx;
