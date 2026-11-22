@@ -503,6 +503,8 @@ function create(G, deps) {
     if (isGarage()) {
       if (!deps.garage) return false;
       st.snapshot = deps.garage.snapshot ? deps.garage.snapshot() : null;
+      // Park the garage turntable for a still. Keep a manually composed view.
+      if (st.source === "garage" && st.snapshot?.spin) deps.garage.shot?.("hero");
     } else {
       const fc = camera();
       const prior = fc && (fc.state ? fc.state() : fc.cmd ? fc.cmd() : null);

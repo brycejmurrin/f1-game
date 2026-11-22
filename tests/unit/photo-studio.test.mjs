@@ -50,7 +50,7 @@ function boot(options = {}) {
     close: (_pause, keep) => { closed++; order.push("close"); if (!keep) G.photoMode = false; },
     cmd: (v) => { current = v; restored = v; },
   };
-  const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
+  const garage = { snapshot: () => ({ az: 1, spin: options.garageSpin ?? true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
     looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
   const ltWrites = [], latchWrites = [];
@@ -409,7 +409,10 @@ test("a delayed save retains its original photo and cannot clear a reopened capt
   assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "persisted entry retains its initiating context");
 });
 test("garage camera snapshot is restored and a borrowed FreeCam returns only on normal exit", () => {
-  const garage = boot(); garage.api.open({ source: "garage" }); garage.api.close(true);
+  const manual = boot({ garageSpin: false }); manual.api.open({ source: "garage" });
+  assert.equal(manual.order.includes("shot:hero"), false);
+  const garage = boot(); garage.api.open({ source: "garage" });
+  assert.ok(garage.order.includes("shot:hero")); garage.api.close(true);
   assert.deepEqual(plain(garage.restored()), { az: 1, spin: true }); assert.equal(garage.closed(), 0);
   const prior = { open: true, speed: 25, roll: 5, lens: "flyby", eye: [1, 2, 3], target: [4, 5, 6], fov: 40 };
   const b = boot({ priorCamera: prior }); b.api.open(); b.api.close(true);
@@ -772,7 +775,7 @@ test("coaching is optional DOM content; presets cannot move a pending capture", 
   let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
   b.api.open({ source: "garage" }); const pending = b.api.capture();
   b.dom.byId("ps-shots").children[1].click();
-  assert.equal(b.order.some((s) => s.startsWith("shot:")), false);
+  assert.deepEqual(b.order.filter((s) => s.startsWith("shot:")), ["shot:hero"]);
   const coach = b.dom.byId("ps-coach"); coach.children[coach.children.length - 1].click();
   assert.equal(coach.hidden, true);
   resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await pending;

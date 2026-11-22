@@ -93,7 +93,8 @@
   @media (prefers-reduced-motion: no-preference) {
     :root:not([data-motion="reduce"]) #title-car { transition: opacity var(--dur-4) var(--ease-out); }
   }
-  #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
+  /* Match the live-scene wash's specificity so the selected image paints behind the menu. */
+  #overlay[data-home-scene="photo"][style*="data:image"] { background-image: var(--home-scene-image); background-size: cover; background-position: center; }
   #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
   #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #menu-brand :is(#soundbtn, #disclaimer) {
