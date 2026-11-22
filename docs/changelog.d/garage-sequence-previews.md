@@ -1,1 +1,1 @@
-Improved: The garage animation editor previews Race start, Pit entry, Pit exit and Race end. Pit exit plays at the same pace as leaving the pit garage during a session. Race end follows the car back into the garage.
+Improved: The garage animation editor previews Race start, Pit entry, Pit exit and Race end. Pit exit plays at the same pace as leaving the pit garage during a session. Race end follows the car back into the garage. Each animation now saves its own camera, crew, timing and appearance settings. Camera changes ease between shots.

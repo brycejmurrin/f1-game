@@ -13,9 +13,9 @@
     }
   },
   "tree": {
-    "assertPins": -1,
-    "assertPinsAll": -1,
-    "eagerCodeBytes": 692,
-    "shellNodes": 3
+    "assertPins": -2,
+    "assertPinsAll": -2,
+    "eagerCodeBytes": 2707,
+    "shellNodes": 11
   }
 }

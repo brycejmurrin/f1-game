@@ -12,9 +12,9 @@
   "sites": {
     "js/garage/arrival.js::map.innerHTML": {
       "count": 1,
-      "reason": "GARAGE ANGLE plan of the bay: angleMap(value.angle, value.shots) where value is settings(), which only returns an ANGLES member for angle and CAMS keys for shots; every other part is a number from CAMS / the bay constants formatted with toFixed, a shot index, or a literal.",
+      "reason": "GARAGE ANGLE plan of the bay: angleMap(value.angle, value.shots, dir) selects a fixed in/out camera table. The value is settings(), which only returns an ANGLES member for angle and CAMS keys for shots; every other part is a number from CAMS / the bay constants formatted with toFixed, a shot index, or a literal.",
       "rhs": [
-        "c3132870ca2e"
+        "9c2eb46e1c25"
       ]
     },
     "js/game.js::sum.innerHTML": {

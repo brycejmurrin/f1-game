@@ -85,7 +85,9 @@ const EditorWorkspace = (function () {
       // A bare garage editor has no scene. Start its real preview action only
       // when no transport is active; an edited or paused sequence keeps its pose.
       if (on && options.defaultPreview && (!session || session.hidden)) {
-        const button = doc.getElementById(options.defaultPreview);
+        const scope = doc.getElementById("ga-edit-moment");
+        const selected = scope && { raceStart: "ga-preview-out", pitIn: "ga-preview-in", pitOut: "ga-preview-pit-exit", afterRace: "ga-preview-home" }[scope.value];
+        const button = doc.getElementById(selected || options.defaultPreview);
         if (button) {
           // The domain hides its sheet for playback and restores it on Stop.
           // Leave edit furniture ready for that return rather than hiding it twice.
@@ -159,7 +161,7 @@ const EditorWorkspace = (function () {
       rail, title, note, done: ({ lighting: "lt-close", camtune: "ct-close", flyby: "fb-close", garrival: "ga-close" })[id],
       previews: id === "camtune" ? "ct-previews" : null,
       entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
-      rows: id === "garrival" ? "ga-rows" : null, first: "ga-angle", reset: "ga-reset",
+      rows: id === "garrival" ? "ga-rows" : null, first: "ga-edit-moment", reset: "ga-reset",
       defaultPreview: id === "garrival" ? "ga-preview-out" : null, previewSession: id === "garrival" ? "ga-transport" : null,
       sequences: [["ga-preview-out", "Race start"], ["ga-preview-in", "Pit entry"], ["ga-preview-pit-exit", "Pit exit"], ["ga-preview-home", "Race end"]],
       launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,

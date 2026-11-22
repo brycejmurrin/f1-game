@@ -4021,3 +4021,9 @@ Fragment: `ratchets.d/codex--pitlane-neighbor-garages.json`.
 `(tree) eagerCodeBytes` 3962285 → **3962612** (+327). The editor selects the pit release camera and matches its playback speed, including after a settings edit.
 `(tree) shellNodes` 2325 → **2327** (+2). The Pit exit and Race end buttons are present when the editor mounts, before the garage data loads.
 Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
+
+## 2026-11-21 — PR #6157 (codex/tt-pit-end-session): Individual garage animation settings
+
+`(tree) eagerCodeBytes` 3958534 → **3960549** (+2015). The garage resolves each moment’s settings and blends its camera across shot boundaries.
+`(tree) shellNodes` 2327 → **2335** (+8). A labelled selector exposes the four editable animations.
+Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
