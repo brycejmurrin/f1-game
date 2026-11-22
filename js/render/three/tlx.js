@@ -2175,7 +2175,9 @@ const TLX = (function () {
       // caller's object is never mutated and a dead one is never held. The memo
       // caches the KEY, never the material — matCache's eviction decides what a
       // key resolves to, and a cached material would outlive an eviction.
-      const _matKeyMemo = new WeakMap();
+      // Props submit the same options to instanced batches and then to chunked geometry each frame.
+      // Keep a weak memo per draw mode so those two submissions can both hit.
+      const _matKeyMemo = Array.from({ length: 6 }, () => new WeakMap());
       function buildMatKey(o, chunked, instanced) {
         // emissive and alpha are NOT in the key: they are per-draw uniforms
         // (tsl-lit.js perObject, written by acquireMesh). Only alpha < 1 is,
@@ -2200,7 +2202,8 @@ const TLX = (function () {
       const _instMode = (i) => (i === 2 ? 2 : i ? 1 : 0);
       function matKeyFor(o, chunked, instanced) {
         const db = o.depthBias, db0 = db ? db[0] : 0, db1 = db ? db[1] : 0;
-        let c = _matKeyMemo.get(o);
+        const memo = _matKeyMemo[(chunked ? 3 : 0) + _instMode(instanced)];
+        let c = memo.get(o);
         // A NaN field compares false against itself, so a caller feeding one
         // degrades to rebuilding every frame — the behaviour before this memo,
         // never a stale key.
@@ -2209,14 +2212,12 @@ const TLX = (function () {
           && c.me === o.metalness && c.sp === o.specular && c.de === o.detail
           && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
           && c.cf === !!o.carFinish && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
-          && c.hb === !!db && c.b0 === db0 && c.b1 === db1
-          && c.ch === !!chunked && c.in === _instMode(instanced)) return c.key;
-        if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
+          && c.hb === !!db && c.b0 === db0 && c.b1 === db1) return c.key;
+        if (c === undefined) { c = {}; memo.set(o, c); }
         c.tr = tr; c.ro = o.roughness; c.me = o.metalness;
         c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
         c.sk = o.sparkle; c.cf = !!o.carFinish; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
         c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
-        c.ch = !!chunked; c.in = _instMode(instanced);
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
