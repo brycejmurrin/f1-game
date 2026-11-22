@@ -482,7 +482,8 @@ test("a pointerdown on #dock-right starts a drag while editing, and the move shi
   const ev = (o) => Object.assign({ target, pointerId: 1, preventDefault() { this.stopped = true; } }, o);
   // Not editing: ignored.
   const idle = ev({ clientX: 300, clientY: 700 });
-  docL.pointerdown(idle);
+  assert.equal(docL.pointerdown, undefined, "the editor registers drag handlers on first use");
+  docL.pointerdown?.(idle);
   assert.ok(!idle.stopped, "outside edit mode the press passes through to the pedals");
   api.setEditing(true);
   const down = ev({ clientX: 300, clientY: 700 });
@@ -520,9 +521,9 @@ test("a REPOSITION drag that starts on GAS never reaches the button: the throttl
   const press = (o) => {
     const e = Object.assign({ target: gas, pointerId: 7, preventDefault() {}, stopped: false,
       stopImmediatePropagation() { this.stopped = true; }, stopPropagation() { this.stopped = true; } }, o);
-    docL.pointerdown(e);
+    docL.pointerdown?.(e);
     if (!e.stopped) latched = !latched;
-    docL.pointerup(Object.assign({}, e, { clientX: o.clientX + 30 }));
+    docL.pointerup?.(Object.assign({}, e, { clientX: o.clientX + 30 }));
     return e;
   };
   press({ clientX: 50, clientY: 700 });

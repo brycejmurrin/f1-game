@@ -111,7 +111,9 @@ const PedalTravel = (function () {
       out.adaptive = Math.max(1, Math.min(10, Math.round(value.adaptive)));
     if (["up", "down", "left", "right"].includes(value.direction)) out.direction = value.direction;
     if (Number.isFinite(value.start)) out.start = Math.max(0, Math.min(100, Math.round(value.start)));
-    if (["top", "bottom", "left", "right"].includes(value.fullEdge)) out.fullEdge = value.fullEdge;
+    const edges = ["top", "bottom", "left", "right"];
+    if (edges.includes(value.fullEdge)) out.fullEdge = value.fullEdge;
+    if ((id === "gas" || id === "brake") && edges.includes(value.sliderEdge)) out.sliderEdge = value.sliderEdge;
     if (["percent", "bar"].includes(value.indicator)) out.indicator = value.indicator;
     if ([0.5, 2].includes(value.buildPower)) out.buildPower = value.buildPower;
     if ([250, 500, 1000, 2000].includes(value.buildMs)) out.buildMs = value.buildMs;
@@ -150,20 +152,29 @@ const PedalTravel = (function () {
     const slide = pedal && (globalSlide ?? store()?.get("pedalSlide", "instant"));
     return { press: "instant", travel: TRAVEL_PX, slide: slide === "ease" ? "ease" : "instant", feedback: true, ...buttonOverrides(id) };
   }
-  // Snapshot the physical button at touchdown. Subsequent slides keep the same origin.
-  function contactProfile(id, slide, event, el) {
-    const profile = buttonProfile(id, slide);
-    if (!profile.fullEdge || !event) return profile;
-    const rect = el.getBoundingClientRect();
-    const edge = profile.fullEdge;
+  function positionLevel(edge, rect, event) {
     const horizontal = edge === "left" || edge === "right";
     const distance = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
     const fraction = distance / (horizontal ? rect.width : rect.height);
-    if (Number.isFinite(fraction)) {
-      const amount = edge === "left" || edge === "top" ? 1 - fraction : fraction;
-      profile.start = 100 * Math.max(0, Math.min(1, amount));
+    if (!Number.isFinite(fraction)) return undefined;
+    const amount = edge === "left" || edge === "top" ? 1 - fraction : fraction;
+    return Math.max(0, Math.min(1, amount));
+  }
+
+  // One layout read per position-based contact. Absolute sliders sample every
+  // movement against this rectangle; relative buttons use only the landing.
+  function contactProfile(id, slide, event, el) {
+    const profile = buttonProfile(id, slide);
+    if (profile.sliderEdge) profile.sliderBounds = el.getBoundingClientRect();
+    else if (profile.fullEdge && event) {
+      const amount = positionLevel(profile.fullEdge, el.getBoundingClientRect(), event);
+      if (amount !== undefined) profile.start = 100 * amount;
     }
     return profile;
+  }
+
+  function sliderLevel(profile, event) {
+    return positionLevel(profile.sliderEdge, profile.sliderBounds, event) ?? 0;
   }
   function watchButtonProfile(id, callback) {
     const refresh = () => callback(buttonProfile(id));
@@ -187,7 +198,7 @@ const PedalTravel = (function () {
     return buttonProfile(id);
   }
 
-  return { raceButtons, phoneButtons, colors, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile,
+  return { raceButtons, phoneButtons, colors, DEAD_PX, TRAVEL_PX, MIN, RAMP_PX, ease, arrive, level, advance, startPercent, buildOnHold, normalizeProfiles, buttonOverrides, buttonProfile, contactProfile, sliderLevel,
     watchButtonProfile, setButtonProfile, resetButtonProfile: id => setButtonProfile(id, null) };
 })();
 Object.freeze(PedalTravel);

@@ -220,6 +220,7 @@ const SPEC = [
   // PER-DEVICE STEERING (js/input/steer-tuning.js). Each defaults to the notch
   // that reproduces exactly what shipped, so an absent key is a no-op.
   { k: "tiltCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
+  { k: "touchSteeringGuide", lane: "json", group: "driving", def: "ring", oneOf: ["ring", "wheel"], src: "js/input/touch-button-actions.js (touch steering guide)" },
   { k: "touchCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "padCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "touchRange", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js touchRangeFromSlider (0.12 of the long edge at 5)" },

@@ -146,6 +146,9 @@ test("a driver can tune Gas and Left independently, reload, and reset only Gas",
     await page.locator("#pm-touch-response").tap();
   };
   await openControls();
+  const guide = page.locator("#pm-touch-steering-guide-sel");
+  await expect(guide).toHaveValue("ring");
+  await guide.selectOption("wheel");
   const form = page.locator("#pm-touch-response-fields");
   const button = form.locator('[data-field="button"]');
   const press = form.locator('[data-field="press"]');
@@ -167,6 +170,7 @@ test("a driver can tune Gas and Left independently, reload, and reset only Gas",
 
   await page.reload();
   await openControls();
+  await expect(guide).toHaveValue("wheel");
   await button.selectOption("gas");
   await expect(press).toHaveValue("progressive");
   await expect(travel).toHaveValue("40");

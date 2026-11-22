@@ -2925,3 +2925,26 @@ test("host(): decision B — the first phone on a code this screen just minted s
   assert.equal(o.asks.length, 1);
   old.ctl.cancel();
 });
+
+test("paired absolute brake uses its full physical length and releases immediately", () => {
+  const dom = { gas: fakeEl(), brake: fakeEl() };
+  let boundsReads = 0;
+  dom.brake.getBoundingClientRect = () => {
+    boundsReads++; return { left: 80, top: 20, right: 180, bottom: 220, width: 100, height: 200 };
+  };
+  let ctl;
+  try {
+    PedalTravel.setButtonProfile("brake", { sliderEdge: "bottom", press: "instant", buildMs: 500, slideCurve: "quick" });
+    ctl = PhonePad.pad(dom);
+    const sample = (type, y) => dom.brake.dispatch(type, { pointerId: 9, clientX: 110, clientY: y });
+    sample("pointerdown", 70);
+    assert.equal(ctl.state().brk, 0.25);
+    for (const [y, level] of [[120, 0.5], [170, 0.75], [220, 1], [0, 0], [120, 0.5]]) {
+      sample("pointermove", y);
+      assert.equal(ctl.state().brk, level);
+    }
+    assert.equal(boundsReads, 1);
+    sample("pointerup", 120);
+    assert.equal(ctl.state().brk, 0);
+  } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});

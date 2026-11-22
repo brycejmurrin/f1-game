@@ -1326,12 +1326,16 @@ const Input = (function () {
     if (!mark) return;
     mark.style.left = rec.anchorX + "px";
     mark.style.top = rec.anchorY + "px";
-    const dx = rec.x - rec.anchorX;
-    const adx = Math.abs(dx);
-    const range = touchRangePx();
-    const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
-    const dot = dragDot(mark);
-    if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
+    if (mark.dataset?.steeringGuide === "wheel") {
+      mark.style.setProperty("--drag-turn", (touchSteer * 120) + "deg");
+    } else {
+      const dx = rec.x - rec.anchorX;
+      const adx = Math.abs(dx);
+      const range = touchRangePx();
+      const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
+      const dot = dragDot(mark);
+      if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
+    }
     mark.classList.add("on");
   }
 
@@ -2053,6 +2057,7 @@ const Input = (function () {
       btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     }
     if (steerMode !== "touch") {
+      if (touchActive) hideDragAnchor();
       touches.clear();
       touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
       dragFilterClear();

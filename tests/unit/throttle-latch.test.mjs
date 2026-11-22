@@ -805,3 +805,33 @@ test("Gas reads its selected full edge only on touchdown, then follows its slide
   gas.fire("pointerup", point);
   assert.equal(btn().throttleVal, 0);
 });
+
+test("absolute gas follows the current tick with independent fingers, brake handoff and cancel", () => {
+  const { sb, gas, brake, mid, btn } = bootDock();
+  const select = (id, edge) => sb.PedalTravel.setButtonProfile(id, {
+    sliderEdge: edge, fullEdge: "left", press: "progressive", start: 10, buildMs: 250, slideCurve: "fine", slide: "ease",
+  });
+  select("gas", "right"); select("brake", "top");
+  const { left, width } = BOX["btn-throttle"];
+  const sample = (type, fraction, pointerId) => gas.fire(type, {
+    clientX: left + width * fraction, clientY: mid("btn-throttle").clientY, pointerId,
+  });
+  sample("pointerdown", 0.25, 1);
+  assert.equal(btn().throttleVal, 0.25);
+  sample("pointermove", 0.75, 1);
+  sample("pointerdown", 0.5, 2);
+  assert.equal(btn().throttleVal, 0.75);
+  sample("pointermove", -0.5, 1);
+  assert.equal(btn().throttleVal, 0.5);
+  sample("pointerup", 0.5, 2);
+  assert.equal(btn().throttleVal, 0);
+  sample("pointermove", 1.5, 1);
+  assert.equal(btn().throttleVal, 1);
+  gas.fire("pointermove", { ...mid("btn-brake"), pointerId: 1 });
+  assert.equal(btn().throttleVal, 0);
+  assert.equal(btn().brakeVal, 0.5);
+  brake.fire("pointermove", { clientX: mid("btn-brake").clientX, clientY: BOX["btn-brake"].top, pointerId: 1 });
+  assert.equal(btn().brakeVal, 1);
+  brake.fire("pointercancel", { pointerId: 1 });
+  assert.equal(btn().brakeVal, 0);
+});

@@ -10093,7 +10093,8 @@
       "setButtonProfile": [
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/settings-export.test.mjs",
-        "tests/unit/throttle-latch.test.mjs"
+        "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs"
       ],
       "tick": [
         "tests/unit/controller-profiles.test.mjs",
@@ -10326,7 +10327,8 @@
       ],
       "*": [
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
+        "tests/unit/phone-pad.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs"
       ]
     },
     "js/lighting/atmosphere.js": {
@@ -11266,7 +11268,8 @@
       ],
       "start": [
         "tests/unit/async-lifecycle.test.mjs",
-        "tests/unit/net-qr.test.mjs"
+        "tests/unit/net-qr.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs"
       ],
       "stop": [
         "tests/unit/async-lifecycle.test.mjs",

@@ -235,3 +235,48 @@ test("slide responses shape direct touch travel independently of timed buildup a
   select("button", "gas"); assert.equal(control("slideCurve").value, "fine");
   host.querySelector("button").onclick(); assert.equal(control("slideCurve").value, "linear");
 });
+
+test("absolute mapping preserves relative settings, only appears on pedals and resets per button", () => {
+  const { host, dom, editor, model } = boot();
+  editor.mount(host);
+  const field = key => dom.byId("touch-test-" + key);
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  assert.ok(field("sliderEdge").parentElement.parentElement.hidden);
+  choose("button", "gas"); choose("press", "progressive"); choose("fullEdge", "bottom");
+  choose("sliderEdge", "right");
+  assert.equal(model.buttonProfile("gas").sliderEdge, "right");
+  assert.equal(dom.byId("touch-test-slider-help").textContent.includes("25%, 50% and 75%"), true);
+  choose("button", "brake"); assert.equal(field("sliderEdge").value, "relative");
+  choose("button", "gas"); choose("sliderEdge", "relative");
+  assert.equal(field("press").value, "progressive");
+  assert.equal(field("fullEdge").value, "bottom");
+  choose("sliderEdge", "left"); host.querySelector("button").onclick();
+  assert.equal(model.buttonProfile("gas").sliderEdge, undefined);
+});
+
+test("absolute slider paints a single decorative quarter scale and restores its relative edge guide", () => {
+  const { actions, model } = boot();
+  const attributes = new Map(), children = [];
+  const el = {
+    setAttribute: (key, value) => attributes.set(key, value),
+    removeAttribute: key => attributes.delete(key),
+    appendChild: child => children.push(child),
+    ownerDocument: { createElement: () => ({
+      setAttribute(key, value) { this[key] = value; },
+      remove() { children.splice(children.indexOf(this), 1); },
+    }) },
+  };
+  actions.bindControl(el, "brake");
+  model.setButtonProfile("brake", { sliderEdge: "left", fullEdge: "top" });
+  assert.equal(attributes.get("data-touch-edge"), "left");
+  assert.equal(children[0]["aria-hidden"], "true");
+  assert.equal(children[0]["data-pedal-ticks"], "");
+  model.setButtonProfile("brake", { sliderEdge: "bottom" });
+  assert.equal(children.length, 1);
+  model.setButtonProfile("brake", { feedback: false });
+  assert.equal(children.length, 0);
+  assert.equal(attributes.has("data-touch-edge"), false);
+  model.setButtonProfile("brake", { feedback: true, sliderEdge: "relative" });
+  assert.equal(attributes.get("data-touch-edge"), "top");
+  assert.equal(children.length, 0);
+});

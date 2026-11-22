@@ -34,6 +34,12 @@ const TouchButtonSettings = (() => {
     gestureHelp.className = "adv-help"; gestureHelp.id = host.id + "-activation-help";
     activation.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
     const response = node("div"); host.appendChild(response); section = response;
+    const slider = choice("sliderEdge", "PEDAL MAPPING", [["relative", "RELATIVE SLIDE"],
+      ...["top", "bottom", "left", "right"].map(k => [k, "ABSOLUTE · FULL AT " + k.toUpperCase()])]);
+    const sliderHelp = node("p"); sliderHelp.className = "adv-help"; sliderHelp.id = host.id + "-slider-help";
+    slider.setAttribute("aria-describedby", sliderHelp.id); section.appendChild(sliderHelp);
+    const sliderEntry = choice("sliderEntry", "SLIDE ONTO PEDAL", [["stay", "STAY ON ORIGINAL PEDAL"], ["enter", "USE SLIDER POSITION"]]);
+    const relative = node("div"); response.appendChild(relative); section = relative;
     const press = choice("press", "FIRST TOUCH", [["instant", "INSTANT"], ["progressive", "PROGRESSIVE"]]);
     const help = node("p"); help.className = "adv-help"; help.id = host.id + "-help";
     press.setAttribute("aria-describedby", help.id); section.appendChild(help);
@@ -56,6 +62,7 @@ const TouchButtonSettings = (() => {
     const buildHelp = node("p", "From the starting input, a steady hold builds to full over this time. Choose a starting input below 100% to feel it. Linear builds evenly. Gentle Start builds slowly at first. Fast Start builds quickly and eases into full input. You can still slide during the hold.");
     buildHelp.className = "adv-help"; buildHelp.id = host.id + "-build-help";
     build.setAttribute("aria-describedby", buildHelp.id); section.appendChild(buildHelp);
+    section = response;
     const slide = choice("slide", "SLIDE ONTO PEDAL", [["inherit", standalone ? "STAY ON ORIGINAL PEDAL" : "DEFAULT"], ["instant", "INSTANT"], ["ease", "EASE"]]);
     const slideHelp = node("p", (standalone
       ? "Stay on Original Pedal keeps the first pedal held when you cross onto this one. "
@@ -86,15 +93,24 @@ const TouchButtonSettings = (() => {
       const pedal = id === "gas" || id === "brake";
       const analog = pedal || id === "left" || id === "right";
       response.hidden = !analog;
+      slider.value = profile.sliderEdge || "relative";
+      slider.parentElement.parentElement.hidden = sliderHelp.hidden = !pedal;
+      relative.hidden = !!profile.sliderEdge;
+      sliderEntry.parentElement.parentElement.hidden = !standalone || !profile.sliderEdge;
+      sliderHelp.textContent = profile.sliderEdge ? "Your thumb position sets the pedal continuously. The " + profile.sliderEdge +
+        " edge gives 100%, and the opposite edge gives 0%. Lift to release. With feedback on, three ticks mark 25%, 50% and 75%." +
+        (id === "gas" && !standalone ? " Use Hold throttle for manual Gas." : "") :
+        "Relative Slide uses your first touch and slide distance. Absolute reads your position across the whole pedal.";
       idle.value = profile.idleColor || "default"; pressed.value = profile.pressedColor || "default";
       activation.value = profile.activation || "default";
       activation.parentElement.parentElement.hidden = gestureHelp.hidden = analog || id === "look";
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
-      slide.parentElement.parentElement.hidden = !pedal; slideHelp.hidden = !pedal;
+      slide.parentElement.parentElement.hidden = slideHelp.hidden = !pedal || !!profile.sliderEdge;
       feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
       if (id !== "gas" && profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
       const overrides = PedalTravel.buttonOverrides(id);
       slide.value = overrides.slide || "inherit";
+      sliderEntry.value = overrides.slide ? "enter" : "stay";
       adaptive.parentElement.parentElement.hidden = pedal; adaptiveHelp.hidden = pedal;
       adaptive.value = String(overrides.adaptive || "inherit");
       feedback.value = profile.feedback ? "on" : "off";
@@ -125,6 +141,8 @@ const TouchButtonSettings = (() => {
     }
     button.onchange = () => { note.textContent = ""; refresh(); };
     for (const control of [idle, pressed, activation]) control.onchange = () => change({ [control.dataset.field]: control.value });
+    slider.onchange = () => change({ sliderEdge: slider.value });
+    sliderEntry.onchange = () => change({ slide: sliderEntry.value === "enter" ? "instant" : "inherit" });
     press.onchange = () => change({ press: press.value });
     travel.oninput = () => distance(travel.value);
     travel.onchange = () => change({ travel: Number(travel.value) });
@@ -147,9 +165,24 @@ const TouchButtonSettings = (() => {
   }
   function mountControls(store, onSelect) {
     const existing = document.getElementById("pm-touch-response-fields");
-    if (existing) { if (existing.parentElement.open) mount(existing); return; }
+    const readGuide = () => store.get("touchSteeringGuide", "ring") === "wheel" ? "wheel" : "ring";
+    if (existing) {
+      SettingRow.paint("pm-touch-steering-guide", readGuide());
+      if (existing.parentElement.open) mount(existing);
+      return;
+    }
     const mirrorHelp = document.getElementById("pm-mirror")?.nextElementSibling;
     if (!mirrorHelp) return;
+    const guideValues = [["ring", "DRAG RING"], ["wheel", "FLOATING WHEEL"]];
+    const guide = SettingRow.build("pm-touch-steering-guide", "TOUCH STEERING GUIDE", guideValues);
+    const guideHelp = document.createElement("p");
+    guideHelp.id = "pm-touch-steering-guide-help"; guideHelp.className = "adv-help";
+    guideHelp.textContent = "With TOUCH steering, touch the track to center the guide there. Drag left or right to turn. Lift to release.";
+    guide.sel.setAttribute("aria-describedby", guideHelp.id);
+    document.getElementById("pm-steer-item")?.append(guide.row, guideHelp);
+    SettingRow.wire("pm-touch-steering-guide", { values: guideValues,
+      read: readGuide,
+      write: v => { store.set("touchSteeringGuide", v); if (onSelect) onSelect(); } });
     const SLIDE_VALUES = [["instant", "INSTANT"], ["ease", "EASE"]];
     const built = SettingRow.build("pm-pedalslide", "PEDAL SLIDE", SLIDE_VALUES);
     const help = document.createElement("p");

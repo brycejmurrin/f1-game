@@ -4,6 +4,7 @@ const TouchButtonActions = (() => {
   function bindControl(el, id) {
     if (!el) return;
     let mode, pointer = null, began = 0, previous = -Infinity, touchClick = false;
+    let ticks = null;
     PedalTravel.watchButtonProfile(id, profile => {
       for (const [field, attribute] of [["idleColor", "idle"], ["pressedColor", "pressed"]]) {
         const color = profile[field], name = "--touch-custom-" + attribute;
@@ -15,7 +16,16 @@ const TouchButtonActions = (() => {
           el.removeAttribute?.("data-custom-" + attribute);
         }
       }
-      if (profile.fullEdge && profile.feedback) el.setAttribute("data-touch-edge", profile.fullEdge);
+      if (profile.sliderEdge && profile.feedback && el.ownerDocument) {
+        if (!ticks) {
+          ticks = el.ownerDocument.createElement("span");
+          ticks.setAttribute("data-pedal-ticks", "");
+          ticks.setAttribute("aria-hidden", "true");
+          el.appendChild(ticks);
+        }
+      } else if (ticks) { ticks.remove(); ticks = null; }
+      const edge = profile.sliderEdge || profile.fullEdge;
+      if (edge && profile.feedback) el.setAttribute("data-touch-edge", edge);
       else el.removeAttribute?.("data-touch-edge");
       if (profile.indicator && profile.feedback) el.setAttribute("data-touch-indicator", profile.indicator);
       else el.removeAttribute?.("data-touch-indicator");
@@ -54,6 +64,16 @@ const TouchButtonActions = (() => {
   }
 
   if (typeof document !== "undefined" && document.getElementById?.("btn-throttle")) {
+    const guide = document.getElementById("drag-anchor");
+    if (guide && typeof GameStore !== "undefined") {
+      const store = GameStore.store;
+      const paint = () => {
+        if (store.get("touchSteeringGuide", "ring") === "wheel") guide.dataset.steeringGuide = "wheel";
+        else delete guide.dataset.steeringGuide;
+      };
+      paint();
+      store.subscribe(change => { if (change.key === "touchSteeringGuide" || change.key === null) paint(); });
+    }
     const byId = new Map(Object.entries(PedalTravel.raceButtons).map(([profile, id]) => [id, profile]));
     for (const button of document.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-restore")) {
       const profile = byId.get(button.id);
