@@ -852,7 +852,7 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   top: calc(8px + var(--sat) / var(--hud-z));
   width: 128px; height: 128px;
   opacity: 1;
-  background: var(--hud-strip-bg); box-shadow: inset 0 0 0 2px var(--you), 0 2px 8px rgba(0,0,0,0.6);
+  background: var(--hud-strip-bg); box-shadow: inset 0 0 0 2px var(--map-frame-color, var(--you)), 0 2px 8px rgba(0,0,0,0.6);
 }
 /* PHONE PORTRAIT: the centred POS/LAP/TIME/BEST row is wider than the slot
    beside #minimap (survey 390×844: tower x=31–359 vs map x=10–138, ranked
