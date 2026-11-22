@@ -2062,7 +2062,7 @@ test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stri
   peers[0].sendEvent = function (t, d, json) { if (t === NetPlay.EV.STRATEGY) this.sentJson.push(json); return sendEvent0.call(this, t, d, json); };
   net.start({ role: "host", session: peers[0], sessions: peers.map((session, i) => ({ id: "p" + i, session })) });
   const model = peers[0].sent.find((e) => e.t === NetPlay.EV.MODEL).d;
-  peers.forEach((p, i) => p.deliver(NetPlay.EV.MODEL, { ...model, epoch: "r" + i }));
+  peers.forEach((p, i) => p.deliver(NetPlay.EV.MODEL, { ...model, epoch: 'r"\\' + i }));
   const realStringify = JSON.stringify;
   let stringifies = 0, broadcasts = 0;
   JSON.stringify = function (...a) { stringifies++; return realStringify.apply(this, a); };
@@ -2083,8 +2083,8 @@ test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stri
   const full = strat.reduce((n, e) => n + realStringify({ t: e.t, d: { ...NetPlay.strategyState(G.cars[e.d.wire] || G.cars[0], e.d.wire, "monza"), epoch: e.d.epoch } }).length, 0);
   t.diagnostic(`strategy B/s per receiver: ${Math.round(bytes / 60)} (full every refresh: ${Math.round(full / 60)}); ${broadcasts} broadcasts, ${stringifies} stringify calls, ${peers.length} receivers`);
   assert.ok(bytes < full * 0.6, `scalar refresh: ${Math.round(bytes / 60)} B/s vs ${Math.round(full / 60)} B/s full, per receiver`);
-  // Per broadcast: one for the payload and one per receiver's epoch string — never one whole payload per receiver.
-  assert.ok(stringifies <= broadcasts * (1 + peers.length) + 200, `JSON.stringify calls ${stringifies} for ${broadcasts} broadcasts to ${peers.length} receivers`);
+  // The receivers' escaped epochs were cached at the handshake; each strategy consumes only one stringify.
+  assert.equal(stringifies, broadcasts, `JSON.stringify calls ${stringifies} for ${broadcasts} broadcasts to ${peers.length} receivers`);
   const sample = strat.at(-1);
   const wireJson = peers[0].sentJson.at(-1);
   assert.equal(typeof wireJson, "string", "the broadcast hands each session the pre-serialised payload");

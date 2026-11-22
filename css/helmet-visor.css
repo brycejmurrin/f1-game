@@ -1,5 +1,6 @@
 @layer hud {
-/* HELMET CAM optics (js/fx/visor-optics.js). Three layers, bottom to top:
+/* HELMET CAM optics (js/fx/visor-optics.js). Direct hardware FXAA samples the bend map and dry-glass light in its final scene pass.
+   Other presentation paths use these layers, bottom to top:
      the world canvas (#game / #game-soft)  — bent at the rim by filter: url(#visor-bend-*) when VISOR REFRACTION is on
      #fx-visor (z 3, this file)             — the ADDED light: sun glint, rim sheen, lamp glints, chromatic fringe.
                                               plus-lighter adds the canvas to the scene (screen where unsupported),
@@ -24,7 +25,7 @@ body[data-helmet-visor-color="rose"] { --visor-lens: var(--visor-rose); }
 
 #fx-visor { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; mix-blend-mode: screen; }
 @supports (mix-blend-mode: plus-lighter) { #fx-visor { mix-blend-mode: plus-lighter; } }
-#fx-visor[hidden] { display: none; }
+body[data-visor-light-folded] #fx-visor, #fx-visor[hidden] { display: none; }
 /* #3657: plus-lighter tripped the perf governor on iPhone WebGL2 (free on WebGPU). VisorOptics sets
    data-visor-blend="over" on every path but WebGPU, and there the light layer composites as plain alpha. */
 body[data-visor-blend="over"] #fx-visor { mix-blend-mode: normal; }
@@ -33,9 +34,11 @@ body[data-visor-blend="over"] #fx-visor { mix-blend-mode: normal; }
    port-shaped rim field VisorOptics builds (zero across the centre). Broadcast, WATCH, a hidden HUD and photo
    mode keep the road undistorted. */
 /* Minimal mobile budget drops world refraction; severe load also hides the light layer. The port stays. */
-body[data-helmet-cam]:not([data-visor-shed], [data-visor-budget="2"], .bc-on, .watch-controls-on, .hud-hidden, .pc-uihidden):is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]):has(> #hud:not([hidden])) {
-  &[data-helmet-visor-refraction="light"] :is(#game, #game-soft) { filter: url(#visor-bend-light); }
-  &[data-helmet-visor-refraction="medium"] :is(#game, #game-soft) { filter: url(#visor-bend-medium); }
-  &[data-helmet-visor-refraction="strong"] :is(#game, #game-soft) { filter: url(#visor-bend-strong); }
+body[data-helmet-cam]:not([data-visor-folded], [data-visor-shed], [data-visor-budget="2"], .bc-on, .watch-controls-on, .hud-hidden, .pc-uihidden):has(> #hud:not([hidden])) {
+  &:is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]) {
+    &[data-helmet-visor-refraction="light"] :is(#game, #game-soft) { filter: url(#visor-bend-light); }
+    &[data-helmet-visor-refraction="medium"] :is(#game, #game-soft) { filter: url(#visor-bend-medium); }
+    &[data-helmet-visor-refraction="strong"] :is(#game, #game-soft) { filter: url(#visor-bend-strong); }
+  }
 }
 }

@@ -10,9 +10,9 @@
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 
-  // Terrain, road and props share a projection within a pass. Camera and shadow
-  // matrices can be rewritten in place, so the pooled planes are keyed by value.
-  const _fcVP = new Float64Array(16).fill(NaN);
+  // All chunked records in a pass see the same matrix. Camera and shadow
+  // buffers change in place, so compare their values before reusing planes.
+  const _cullVP = new Float64Array(16).fill(NaN);
 
   // Vertex-attribute packing.
   // three keeps the CPU copy of every attribute array forever (measured: 49.8
@@ -785,18 +785,20 @@
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
       for (let i = 0; i < 16; i++) {
-        if (vp[i] === _fcVP[i]) continue;
-        Frustum.extractPlanes(vp, _fcPlanes);
-        for (let j = i; j < 16; j++) _fcVP[j] = vp[j];
-        break;
+        if (_cullVP[i] !== vp[i]) {
+          Frustum.extractPlanes(vp, _fcPlanes);
+          _cullVP.set(vp);
+          break;
+        }
       }
       const cd = cullDist > 0 ? cullDist : 0, cf = fog || null,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
+      const radial = cd > 0 || !!(cf && cf[0] > 0);
       let n = 0;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        if (Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
+        if (radial && Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
         _visList[n++] = ch;
       }
       return n;

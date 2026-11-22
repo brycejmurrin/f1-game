@@ -1,6 +1,6 @@
 /* Apex 26 — VisorOptics: the HELMET camera's eye-port and the light on the inside of its shield.
  *
- * Three parts, all renderer-agnostic 2D overlays (GLX, TLX and WGX get the same visor and no backend pays a pass):
+ * Three parts share the same source maps across backends. Direct TLX FXAA samples BEND and dry LIGHT inside the final pass.
  *   PORT    the helmet's eye-port as an SVG image on #hud::before (css/helmet-visor.css): a wide, flat-browed
  *           aperture with rounded lower corners, cheek pads in the periphery and a chin bar below — not a centred
  *           ellipse. Built per viewport aspect (resize only) and per tint setting; nothing per frame.
@@ -52,7 +52,7 @@ const VisorOptics = (function () {
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
   let _budget = 0, _paintHz = HZ;
-  let _portKey = "", _bendKey = "", _paths = null, _svg = null;
+  let _portKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
   // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
   // repaint (39 forced reads per 15 s in a rain race here, up to 2.4 ms each on a desktop CPU).
@@ -421,23 +421,38 @@ const VisorOptics = (function () {
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
     // tick measured the layout before lookup; size a newly acquired canvas for its first paint.
-    if (_cv.width !== _w || _cv.height !== _h) { _cv.width = _w; _cv.height = _h; }
+    _sizeLightCanvas(_w, _h);
     // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
     if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name !== "visorBeams") _portKey = ""; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
     return _cv;
   }
 
+  let _viewport = null;
+  function _sizeLightCanvas(w, h) {
+    _cv.width = Math.ceil(w / 2); _cv.height = Math.ceil(h / 2);
+    _ctx.setTransform(_cv.width / w, 0, 0, _cv.height / h, 0, 0);
+  }
   function _size() {
     if (typeof window === "undefined") return false;
     // The layout viewport (ICB) the fixed 100% layer is laid out in, not inner*: a Home Screen landscape launch can hold
     // the portrait inner* pair with no resize to follow, and a 393x852 store stretched over the 852x393 box bent the
     // port (#5201). No layout (unit harness): inner*.
-    const de = document.documentElement, bw = de ? de.clientWidth | 0 : 0, bh = de ? de.clientHeight | 0 : 0, box = bw > 0 && bh > 0;
+    const de = document.documentElement;
+    if (!_viewport && de && typeof CanvasCssSize !== "undefined") _viewport = CanvasCssSize.create(de, { settleFrames: 3 });
+    const boxSize = _viewport && _viewport.read();
+    const bw = boxSize ? boxSize.width : de ? de.clientWidth | 0 : 0;
+    const bh = boxSize ? boxSize.height : de ? de.clientHeight | 0 : 0;
+    const box = bw > 0 && bh > 0;
     const w = Math.max(1, box ? bw : window.innerWidth | 0), h = Math.max(1, box ? bh : window.innerHeight | 0);
-    if (w === _w && h === _h && (!_cv || _cv.width === w)) return false;
+    const lightW = Math.ceil(w / 2), lightH = Math.ceil(h / 2);
+    if (w === _w && h === _h && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
     _w = w; _h = h;
-    if (_cv) { _cv.width = w; _cv.height = h; }   // 1 css px per device px: the layer is soft light, never detail
+    if (_cv) {
+      // The broad reflected light is low-frequency. Keep projection, stroke widths
+      // and paths in CSS pixels, and leave the bezel and scene at full resolution.
+      _sizeLightCanvas(w, h);
+    }
     // The sheen and the fringe are stroked INSIDE the port edge (inset paths), where the glass is clear; on the
     // edge itself the bezel's falloff would swallow them.
     const base = Math.min(w, h);
@@ -486,13 +501,14 @@ const VisorOptics = (function () {
    *  viewport; its red/green channels move the sample INWARD by an amount that is zero across the centre and
    *  peaks at the port edge, so the bend follows the aperture and never exposes pixels outside the scene.
    *  SVG displacement reads sRGB channels: https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/feDisplacementMap */
-  function _bend() {
+  const bendField = { data: null, size: 128, x: 0, y: 0 };
+  let _bendActive = false, _lightValid = false, _folded = false, _bendW = 0, _bendH = 0;
+  function _bend(level) {
     if (typeof document === "undefined" || !document.createElementNS || !document.createElement) return;
-    const level = _opt("visorRefraction", "off");
-    if (level === "off") return;
-    const key = _w + "x" + _h;
-    if (key === _bendKey) return;
-    const N = 128, map = document.createElement("canvas"); map.width = map.height = N;
+
+    bendField.x = BEND[level] / _w; bendField.y = BEND[level] / _h;
+    if (_w === _bendW && _h === _bendH) return;
+    const N = bendField.size, map = document.createElement("canvas"); map.width = map.height = N;
     const g = map.getContext("2d", { willReadFrequently: true });   // a CPU canvas: getImageData/toDataURL without a GPU readback
     if (!g || !g.createImageData || !g.getImageData) return;
     // Rasterise the port at map resolution, then blur it into a soft inside/outside field F.
@@ -547,7 +563,8 @@ const VisorOptics = (function () {
       document.body.appendChild(_svg);
     }
     for (const img of _svg.querySelectorAll("feImage")) img.setAttribute("href", uri);
-    _bendKey = key; _bendLevelBuilt = level;
+    bendField.data = new Uint8Array(px.data.buffer, px.data.byteOffset, px.data.byteLength);
+    _bendW = _w; _bendH = _h; _bendLevelBuilt = level;
   }
 
   function _show(on) {
@@ -681,6 +698,7 @@ const VisorOptics = (function () {
   /** Once per rendered frame (from Droplets.tick). on: an onboard camera, racing, not photo mode. dt 0 = paused
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
+    _bendActive = false;
     const helmet = _helmet();
     if (!helmet) { _syncBudget(0); _show(false); return; }
     const visor = _opt("visor", "off");
@@ -691,8 +709,12 @@ const VisorOptics = (function () {
     const budget = BUDGETS[_budget];
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
-    if (_budget < 2) _bend();
-    if (t2 && _bendKey && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
+    const refraction = _budget < 2 ? _opt("visorRefraction", "off") : "off";
+    if (BEND[refraction]) {
+      _bend(refraction);
+      _bendActive = !!bendField.data && _bendW === _w && _bendH === _h;
+    }
+    if (t2 && _bendActive && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (!(level > 0)) { _show(false); return; }
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
@@ -709,16 +731,18 @@ const VisorOptics = (function () {
     const scene = readScene();
     if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
     _show(true);
-    const fringe = _budget < 2 ? FRINGE[_opt("visorRefraction", "off")] || 0 : 0;
+    const fringe = FRINGE[refraction] || 0;
     const beams = budget.beams ? _beams() : 0;
     const kn = readKnobs(t0 || 0);
     let m;
     try {
       m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams, glintLimit: budget.glints });
       _paint(m);
+      _lightValid = true;
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
       // down with it. Clear the glass, say so once, and try again next tick.
+      _lightValid = false;
       if (!_stats.errors++) Log.warn("game", "VisorOptics: paint skipped — " + (e && e.message ? e.message : e));
       if (_ctx) _ctx.clearRect(0, 0, _w, _h);
       return;
@@ -735,7 +759,27 @@ const VisorOptics = (function () {
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
              port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
-  function clear() { _syncBudget(0); _show(false); }
+  // Only a visible race HUD owns the lens. These are also the CSS fallback gates.
+  const lensFrame = { bend: null, light: null, revision: 0, additive: false };
+  function frameLens() {
+    if ((!_bendActive && !_shown) || !document.body.matches("body[data-helmet-cam]:not(.bc-on,.watch-controls-on,.hud-hidden,.pc-uihidden)")) return null;
+    const hud = document.getElementById("hud");
+    if (!hud || hud.hidden) return null;
+    const drops = document.getElementById("fx-droplets");
+    lensFrame.bend = _bendActive ? bendField : null;
+    // Draining drops remain between the world and the reflected light.
+    lensFrame.light = _shown && _lightValid && (!drops || drops.hidden) ? _cv : null;
+    lensFrame.revision = _stats.paints;
+    lensFrame.additive = _blend === "add";
+    return lensFrame.bend || lensFrame.light ? lensFrame : null;
+  }
+  function folded(on) {
+    if (_folded === on) return;
+    _folded = on;
+    document.body.toggleAttribute("data-visor-folded", !!on);
+    document.body.toggleAttribute("data-visor-light-folded", on === 2);
+  }
+  function clear() { _bendActive = false; folded(false); _syncBudget(0); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
@@ -749,6 +793,6 @@ const VisorOptics = (function () {
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { bind, tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, tick, clear, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

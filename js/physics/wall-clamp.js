@@ -44,7 +44,10 @@ const WallClamp = (function () {
     const wallR = lim.r, wallL = lim.l, laneMin = lim.laneMin, pitSd = lim.side;
     let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
     // A wall that steps inward along s is an END FACE, not a side wall (#1623): hold s, scrub, keep x.
-    if ((c.x > wallR || c.x < -wallL) && WallEndFace.apply(c, track, lim, dt)) xPinned = true;
+    const pitNose = laneMin > 0 && c.x * pitSd < laneMin && track.pit && pitSd === track.pit.side
+      && !(track.posts && track.posts.length && postLim.minOut >= laneMin);
+    const faceHeld = (c.x > wallR || c.x < -wallL || pitNose) && WallEndFace.apply(c, track, lim, dt);
+    if (faceHeld) xPinned = true;
     else if (c.x > wallR || c.x < -wallL) {
       const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
       // Debris hook (render-only side-world): the pre-clamp overshoot is the
@@ -236,7 +239,7 @@ const WallClamp = (function () {
     }
     // The lane side of the pit wall: a car on the lane is kept off the platform
     // and its barrier — it cannot rejoin the track through the wall either.
-    if (laneMin > 0 && c.x * pitSd < laneMin) {
+    if (!faceHeld && laneMin > 0 && c.x * pitSd < laneMin) {
       c.x = laneMin * pitSd; xPinned = true;
       if (c.vLat) c.vLat = 0;
       if (c.human) Tracks.sample(track, c.s, smp);

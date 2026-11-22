@@ -173,9 +173,9 @@ const NetPlay = (function () {
       let head = null;
       for (const [id, s] of sessions) {
         const to = peerEpochs.get(id);
-        if (!to) continue;
+        if (!to?.value) continue;
         if (head === null) head = JSON.stringify(data).slice(0, -1) + ',"epoch":';
-        try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }, head + JSON.stringify(to) + "}"); } catch (e) { /* peer closed */ }
+        try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to.value }, head + to.json + "}"); } catch (e) { /* peer closed */ }
       }
     }
     // Scratch snapshots — tick already used _pumpBuf; broadcast/status used to
@@ -598,7 +598,7 @@ const NetPlay = (function () {
               return;
             }
             if (typeof d.epoch === "string" && d.epoch.length <= 64) {
-              peerEpochs.set(id, d.epoch); lastStrategy = -Infinity;
+              peerEpochs.set(id, { value: d.epoch, json: JSON.stringify(d.epoch) }); lastStrategy = -Infinity;
               if (!d.ack) s.sendEvent(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch, ack: true });
             }
           }
@@ -1044,7 +1044,7 @@ const NetPlay = (function () {
         let sent = false;
         for (const [id, s] of sessions) {
           const to = peerEpochs.get(id);
-          try { sent = s.sendEvent(EV.LAP, { ...data, epoch: to }) || sent; } catch (e) { /* peer closed */ }
+          try { sent = s.sendEvent(EV.LAP, { ...data, epoch: to?.value }) || sent; } catch (e) { /* peer closed */ }
         }
         return sent;
       }

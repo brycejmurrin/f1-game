@@ -2460,10 +2460,9 @@ const TLX = (function () {
           if (hideUndrawn && im.__tlxShown !== _instStamp) im.visible = false;
           else if (_instRootOn && im.visible) _instKids[n++] = im;
         }
-        if (_instRootOn) {
-          if (_instKids.length !== n) _instKids.length = n;
-          instRoot.children = _instKids;
-        }
+        if (!_instRootOn) return;
+        if (_instKids.length !== n) _instKids.length = n;
+        instRoot.children = _instKids;
       }
       // A-H1 (perf hunt 4) — STREAM, NOT DYNAMIC, ON THE PLAIN-MESH INSTANCE-RATE BUFFERS. three r186's
       // Attributes.update uploads when `version < attribute.version || usage === DynamicDrawUsage`, and with an
@@ -5631,14 +5630,7 @@ const TLX = (function () {
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
         flushTexPool,
-        // texCensus: GLX-only. Declared ABSENT rather than left off, because
-        // game.js installs a backend by descriptor-copy onto GLX and an absent
-        // NAME would keep GLX's own function — which would then run against a
-        // null gl. This makes `if (gfx.texCensus)` answer honestly, and
-        // __apex.texCensus() report supported:false instead of a measured zero.
-        // three tracks its own retained counts through __tlx.memState();
-        // reconciling the two is follow-up work, not a silencer to remove.
-        texCensus: undefined,
+        texCensus: function () { return TLXShaders.memCensus(this.__tlx); },
 
         // Baked material arrays — the GLX.createTextureArray counterpart
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
@@ -6996,6 +6988,7 @@ const TLX = (function () {
           // Post-only death: same materials, canvas (the 1269 intent). The chain is
           // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
+            if (opts && opts.visorFolded) opts.visorFolded = false;
             const deadPost = post;
             post = null;
             _cancelSoftBlits();

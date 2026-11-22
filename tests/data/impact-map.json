@@ -519,6 +519,7 @@
         "tests/unit/results-cam.test.mjs"
       ],
       "fieldContact": [
+        "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
       "fieldContactState": [
@@ -3591,6 +3592,9 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/race-insights.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs"
+      ],
+      "round": [
+        "tests/specs/time-trial.spec.js"
       ],
       "scheduleSave": [
         "tests/specs/time-trial.spec.js"
@@ -7605,6 +7609,12 @@
       "clear": [
         "tests/unit/visor-optics.test.mjs"
       ],
+      "folded": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "frameLens": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "lampAdapt": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -8270,7 +8280,6 @@
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/menu-baseline.spec.js",
         "tests/specs/multiplayer-seats.spec.js",
-        "tests/specs/results-flow.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
         "tests/unit/agent-output.test.mjs",
@@ -9776,7 +9785,8 @@
         "tests/unit/throttle-latch.test.mjs"
       ],
       "padAxesAreDefault": [
-        "tests/unit/a11y-pwa-pass.test.mjs"
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/controller-profiles.test.mjs"
       ],
       "padCapture": [
         "tests/unit/key-binds.test.mjs",
@@ -12268,9 +12278,6 @@
         "tests/unit/ai-band.test.mjs",
         "tests/unit/sim-step-alloc.test.mjs"
       ],
-      "mode": [
-        "tests/unit/sim-step-alloc.test.mjs"
-      ],
       "normalize": [
         "tests/unit/ai-band.test.mjs"
       ],
@@ -13352,6 +13359,9 @@
       "tempGrip": [
         "tests/unit/tyre-model.test.mjs"
       ],
+      "temperatureInfo": [
+        "tests/unit/tyre-model.test.mjs"
+      ],
       "trackTemp": [
         "tests/unit/tyre-model.test.mjs"
       ],
@@ -14012,6 +14022,9 @@
         "tests/unit/overtake-mode.test.mjs"
       ],
       "detectS": [
+        "tests/unit/overtake-mode.test.mjs"
+      ],
+      "detectionCrossed": [
         "tests/unit/overtake-mode.test.mjs"
       ],
       "energy": [
@@ -15050,6 +15063,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "setAuto": [
@@ -15078,6 +15092,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "status": [
@@ -15095,6 +15110,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -15104,6 +15120,7 @@
         "tests/unit/real-replay-audio-focus.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
+        "tests/unit/real-replay-frame-fit.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
       "trackTrace": [
@@ -16257,7 +16274,8 @@
         "tests/unit/xr-cull-union.test.mjs"
       ],
       "radialCulled": [
-        "tests/unit/frustum-buckets.test.mjs"
+        "tests/unit/frustum-buckets.test.mjs",
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "*": [
         "tests/unit/build-worker.test.mjs",
@@ -16689,6 +16707,9 @@
       ]
     },
     "js/render/three/tlx-post.js": {
+      "bindLens": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "captureTarget": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -17533,6 +17554,7 @@
         "tests/unit/global-registry.test.mjs",
         "tests/unit/mem-census-growth.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
+        "tests/unit/tlx-mem.test.mjs",
         "tests/unit/validation-cli-check.test.mjs",
         "tests/unit/vm-debug-preload.test.mjs"
       ]
@@ -19636,6 +19658,28 @@
         "tests/unit/cvd-palette.test.mjs"
       ]
     },
+    "js/ui/hud-layout-editor.js": {
+      "build": [
+        "tests/unit/hud-layout-hidden.test.mjs",
+        "tests/unit/hud-layout.test.mjs",
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "options": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "read": [
+        "tests/unit/layout-presets.test.mjs"
+      ],
+      "save": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "*": [
+        "tests/unit/hud-arrange.test.mjs"
+      ]
+    },
     "js/ui/hud-layout.js": {
       "apply": [
         "tests/specs/hud-layout.spec.js",
@@ -19666,6 +19710,9 @@
       ],
       "endArrangeDraft": [
         "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "ensureEditor": [
         "tests/unit/hud-layout.test.mjs"
       ],
       "hiddenReason": [
@@ -19717,6 +19764,9 @@
       ],
       "restoreSnapshot": [
         "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/hud-layout.test.mjs"
+      ],
+      "save": [
         "tests/unit/hud-layout.test.mjs"
       ],
       "scaleOf": [
@@ -19787,6 +19837,9 @@
         "tests/unit/hud-metrics-layout.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-status-stack.test.mjs"
+      ],
+      "radioPaintedCollapseTick": [
+        "tests/unit/hud-radio-slot.test.mjs"
       ],
       "radioTopSlot": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
@@ -21051,6 +21104,9 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs"
       ],
+      "options": [
+        "tests/unit/hud-layout.test.mjs"
+      ],
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
@@ -21064,6 +21120,7 @@
       ],
       "value": [
         "tests/specs/career-season.spec.js",
+        "tests/unit/hud-layout.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "wire": [

@@ -2728,32 +2728,32 @@ const WGX = (function () {
           _mipPipes.set(tex.format, pipe);
         }
         if (!_mipSamp) _mipSamp = device.createSampler({ magFilter: "linear", minFilter: "linear" });
-        // Views + bind groups on an immutable texture are stable. Rebuilding
-        // the full ladder every call was 72 createView + 36 createBindGroup
-        // per 6-face env cycle (~every 6 frames with CAR ENV REFLECTION on).
-        // Cache the ladder on the texture — it dies with the texture.
+        // Mirror and probe mips are recorded repeatedly. Reuse their views, bindings and
+        // attachment descriptors for the lifetime of that texture. Uploaded atlases run once.
         let ladder = tex.__wgxMipLadder;
         if (!ladder || ladder.length !== nLay * (levels - 1)) {
           ladder = [];
+          const layout = pipe.getBindGroupLayout(0);
           for (let layer = 0; layer < nLay; layer++) {
+            let srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
+              baseMipLevel: 0, mipLevelCount: 1 });
             for (let level = 1; level < levels; level++) {
-              const srcView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
-                baseMipLevel: level - 1, mipLevelCount: 1 });
               const dstView = tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1,
                 baseMipLevel: level, mipLevelCount: 1 });
-              ladder.push({ dstView, bg: device.createBindGroup({
-                layout: pipe.getBindGroupLayout(0),
-                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }],
-              }) });
+              const bg = device.createBindGroup({ layout,
+                entries: [{ binding: 0, resource: srcView }, { binding: 1, resource: _mipSamp }] });
+              const pass = { colorAttachments: [{ view: dstView, loadOp: "clear",
+                clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] };
+              ladder.push({ bg, pass });
+              srcView = dstView;
             }
           }
-          tex.__wgxMipLadder = ladder;
+          if (intoEnc) tex.__wgxMipLadder = ladder;
         }
         const enc = intoEnc || device.createCommandEncoder();
         for (let i = 0; i < ladder.length; i++) {
           const st = ladder[i];
-          const p = enc.beginRenderPass({ colorAttachments: [{ view: st.dstView, loadOp: "clear",
-            clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+          const p = enc.beginRenderPass(st.pass);
           p.setPipeline(pipe); p.setBindGroup(0, st.bg); p.draw(3); p.end();
         }
         if (!intoEnc) device.queue.submit([enc.finish()]);
@@ -4274,7 +4274,8 @@ const WGX = (function () {
       const r = PostCommon.sunScreen(frameSunDir, frameViewProj, frameSunColor, _sunScr);
       if (!r.visible) return null;
       // GL NDC (y-up) -> texture-space uv (y-down), matching POST_VS.
-      const ux = r.ndcx * 0.5 + 0.5, uy = 0.5 - r.ndcy * 0.5;
+      // Compare the same f32 UV the composite receives, including its y flip.
+      const ux = Math.fround(r.ndcx * 0.5 + 0.5), uy = Math.fround(0.5 - r.ndcy * 0.5);
       _sunOut.ux = ux; _sunOut.uy = uy; _sunOut.flare = r.flare; _sunOut.shaft = r.shaft;
       _sunOut.onScreen = ux >= 0 && ux <= 1 && uy >= 0 && uy <= 1;
       return _sunOut;
@@ -4437,9 +4438,9 @@ const WGX = (function () {
         : PostCommon.knob(o.tune, "carReflect");   // TUNE_DEFS default (0.05) — same read as _carRefl below
       const _ssrEarly = !!(frameHaveProj && _ssrReady && (
         _ssrStrEarly > 0.001 || _carReflEarly > 0.001));
-      const _slEarly = frameSunColor
-        ? Math.max(frameSunColor[0], frameSunColor[1], frameSunColor[2]) : 1;
-      const _flareEarly = !!(frameSunDir && frameSunDir[1] > -0.02 && _slEarly > 0.35);
+      const sun = _sunScreen();
+      const flareStr = sun ? Math.fround(sun.flare * (o.flareMul != null ? o.flareMul : 1)) : 0;
+      const _flareEarly = sun && sun.onScreen && flareStr > 0;
       const _needDepth = _haveAOEarly || _haveGREarly || _ssrEarly || _flareEarly;
       if (_needDepth && _passSamples > 1 && pDepthResolve && depthMSView && depthView) {
         try {
@@ -4497,7 +4498,6 @@ const WGX = (function () {
       // frame, where _texW is still 0.
       const tw = _texW || width, th = _texH || height;
       const halfW = Math.max(1, tw >> 1), halfH = Math.max(1, th >> 1);
-      const sun = _sunScreen();
       const sunUVx = sun ? sun.ux : -2, sunUVy = sun ? sun.uy : -2;
 
       //    by COMPOSITE this same present() (binding 8). Skipped when po.reflect and car-paint SSR are both off.
@@ -4696,7 +4696,6 @@ const WGX = (function () {
         const s = postScratch;
         // Normalise mip-chain accumulation to keep the tuned bloom energy (GLX).
         const bloomNorm = bloomAmt > 0 ? bloomAmt * 1.25 / Math.max(useLv - 1, 1) : 0;
-        const flareStr = sun ? sun.flare * (o.flareMul != null ? o.flareMul : 1) : 0;
         // SCREEN SUN-SHAFT: p0.z scales ONLY the composite radial bloom shaft
         // (GLX uSunShaft). Volumetric god-ray is added unscaled in WGSL.
         // GATED ON bloomAmt: the shaft pass READS THE BLOOM CHAIN (GLX

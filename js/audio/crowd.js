@@ -193,7 +193,7 @@ var CrowdAudio = (function () {
       filt.connect(g);
       g.connect(d);
       try { src.start(0); } catch (e) { /* already */ }
-      cheers.push({ src, filt, g, freeAt: 0 });
+      cheers.push({ src, filt, g, freeAt: 0, played: false });
     }
     return true;
   }
@@ -207,6 +207,9 @@ var CrowdAudio = (function () {
         // A cheer's own exponential ramp is still pending and REPLACES a later setTarget (Web Audio §SetTarget
         // then ramp: measured louder, not quieter, in Chromium). Cut the envelope where it stands first.
         const g = cheers[i].g.gain;
+        // An unused countdown voice already has its fade to zero. Once a
+        // voice played, keep the full hold sequence for its interleaved ramps.
+        if (!cheers[i].played && g._apexCrowdTgt === 0 && cheers[i].freeAt <= at) continue;
         if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(at); else if (g.cancelScheduledValues) g.cancelScheduledValues(at);
         g._apexCrowdTgt = undefined;
         aim(g, 0, at, 0.05);
@@ -309,6 +312,7 @@ var CrowdAudio = (function () {
     const pk = Math.min(CHEER_PEAK, peak || CHEER_PEAK) * (lowPower() ? 0.7 : 1);
     const d = dur > 0 ? dur : 0.55;
     const g = v.g.gain;
+    v.played = true;
     g.cancelScheduledValues(t0);
     g.setValueAtTime(EMPTY, t0);
     g.linearRampToValueAtTime(pk, t0 + 0.04);

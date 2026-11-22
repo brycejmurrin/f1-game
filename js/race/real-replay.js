@@ -177,15 +177,20 @@ const RealReplay = (function () {
     return { t, prog, x, n: t.length, end: t.length ? t[t.length - 1] : 0 };
   }
   /** The car at time tt: out.prog, out.x, out.speed (m/s), out.before (not yet in the data), out.ended (its data ran out). */
-  function sampleAt(tr, tt, out) {
+  function sampleAt(tr, tt, out, cursor) {
     out = out || {};
     const n = tr.n;
     out.before = false; out.ended = false; out.speed = 0;
     if (!n) { out.ended = true; out.prog = 0; out.x = 0; return out; }
     if (tt <= tr.t[0]) { out.before = tt < tr.t[0]; out.prog = tr.prog[0]; out.x = tr.x[0]; return out; }
     if (tt >= tr.end) { out.ended = tt > tr.end + ENDED_S; out.prog = tr.prog[n - 1]; out.x = tr.x[n - 1]; return out; }
-    let lo = 0, hi = n - 1;
-    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (tr.t[mid] <= tt) lo = mid; else hi = mid; }
+    // Playback usually remains between the same two recorded positions for several frames.
+    let lo = cursor ? cursor.sampleIndex : 0, hi = lo + 1;
+    if (!(tr.t[lo] <= tt && tt < tr.t[hi])) {
+      lo = 0; hi = n - 1;
+      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (tr.t[mid] <= tt) lo = mid; else hi = mid; }
+      if (cursor) cursor.sampleIndex = lo;
+    }
     const dt = tr.t[hi] - tr.t[lo] || 1e-3, a = (tt - tr.t[lo]) / dt;
     out.prog = tr.prog[lo] + (tr.prog[hi] - tr.prog[lo]) * a;
     out.x = tr.x[lo] + (tr.x[hi] - tr.x[lo]) * a;
@@ -303,7 +308,7 @@ const RealReplay = (function () {
       for (const c of G.cars) {
         const d = o.seats.get(c);
         const tr = d ? built.byNum.get(d.num) : null;
-        cars.set(c, { num: d ? d.num : null, d, tr: tr && tr.n ? tr : null, posed: false, parked: false });
+        cars.set(c, { num: d ? d.num : null, d, tr: tr && tr.n ? tr : null, posed: false, parked: false, sampleIndex: 0 });
       }
       if (![...cars.values()].some((f) => f.tr)) return false;
       const traces = [...cars.values()].filter((f) => f.tr).map((f) => f.tr);
@@ -568,7 +573,7 @@ const RealReplay = (function () {
       const track = G.track, total = track.total;
       for (const [c, f] of run.cars) {
         if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dns ? "dns" : f.d && f.d.dnf ? "dnf" : null; idle(c); } continue; }
-        sampleAt(f.tr, run.T, at);
+        sampleAt(f.tr, run.T, at, f);
         if (at.before && !discontinuous) { if (f.posed) { idle(c); } continue; }   // a seek before the trace reposes its first sample
         if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; idle(c); c.dnfAt = null; } continue; }
         f.posed = true; f.parked = false; c.dnf = null;

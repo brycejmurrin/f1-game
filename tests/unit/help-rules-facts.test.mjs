@@ -61,3 +61,12 @@ test("help: TWO DRY COMPOUNDS states the rule's lap floor, warning and red-flag 
   assert.equal(words[(entry.match(/warns you (\w+) laps out/) || [])[1]], num(pit, /const COMPOUND_WARN_LAPS = (\d+)/));
   assert.equal(num(entry, /costs (\d+) s/), num(read("js/race/sporting-regs.js"), /const SUSPENDED_PEN_S = (\d+)/));
 });
+
+test("help: RACE CONTROL quotes the give-back window and blue-flag thresholds", () => {
+  const entry = help.match(/<dt>RACE CONTROL<\/dt>\s*<dd>([\s\S]*?)<\/dd>/)[1];
+  const regs = read("js/race/sporting-regs.js");
+  assert.equal(num(entry, /return within (\d+) s/), num(regs, /const GIVE_BACK_S = (\d+)/));
+  assert.equal(num(entry, /Holding it up for (\d+) s/), num(regs, /const BLUE_WARN_S = (\d+)/));
+  assert.equal(num(entry, /At (\d+) s you receive/), num(regs, /const BLUE_HOLD_S = (\d+)/));
+  assert.equal(num(entry, /receive a (\d+) s penalty/), num(regs, /const BLUE_PEN_S = (\d+)/));
+});

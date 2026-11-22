@@ -273,12 +273,33 @@ test("silence() cuts a sounding cheer's envelope, then aims it at 0 (also after 
   const cheer = nodes.map((n) => n.gain).find((g) => g && g.ramped);
   assert.ok(cheer, "the fired cheer's gain ran its envelope");
   const before = cheer.targets.length, holds = cheer.holds || 0;
+  const quiet = nodes.map(n => n.gain).filter(g => g.holds && g !== cheer);
   GameAudio.stopEngine();   // the pause / quit / flag path
   // A pending exponential ramp replaces a later setTarget (measured in Chromium): the envelope is cut first.
   assert.equal(cheer.holds, holds + 1, "the cheer's own envelope is cancelled where it stands");
   assert.equal(cheer.heldAt, ctx.currentTime);
+  assert.ok(quiet.length > 0 && quiet.every(g => g.holds === 1), "other voices keep their original fade");
   assert.equal(cheer.targets.length, before + 1, "then the sounding cheer is aimed at silence");
   assert.equal(cheer.targets[cheer.targets.length - 1], 0);
+  GameAudio.setGridIdle();
+  assert.equal(cheer.holds, holds + 2, "played voices retain the hold sequence during the next grid update");
+});
+
+test("countdown silences the cheer pool once across repeated grid updates", () => {
+  for (const mobile of [false, true]) {
+    const { CrowdAudio, GameAudio, ctx, nodes } = boot({ mobile, state: "count" });
+    const voices = mobile ? 2 : 4;
+    for (let i = 0; i < 300; i++) {
+      ctx.currentTime = i / 60;
+      GameAudio.setGridIdle();
+    }
+    const gains = nodes.map(n => n.gain).filter(g => g.holds);
+    assert.equal(gains.length, voices);
+    for (const g of gains) {
+      assert.equal(g.holds, 1);
+      assert.deepEqual(g.targets, [0]);
+    }
+  }
 });
 
 test("crowd reattaches after an AudioContext rebuild (startEngineGraph bypass)", () => {

@@ -959,6 +959,44 @@
       } catch (_) { return rt; }
     }
 
+    // Lens textures belong to this post chain. Update each at its source cadence.
+    let bendTexture = null, lightTexture = null, lightRevision = -1, lightW = 0, lightH = 0;
+    function bindLens(lens) {
+      if (!P.fxaa.bendTex) return;
+      const field = lens && lens.bend;
+      if (lens && lens.light) {
+        if (lightTexture && (lens.light.width !== lightW || lens.light.height !== lightH)) {
+          ownedTextures.delete(lightTexture);
+          lightTexture.dispose();
+          lightTexture = null;
+        }
+        if (!lightTexture) {
+          lightW = lens.light.width; lightH = lens.light.height;
+          lightTexture = ownTexture(new THREE.CanvasTexture(lens.light));
+          lightTexture.generateMipmaps = lightTexture.flipY = false;
+          lightTexture.minFilter = lightTexture.magFilter = THREE.LinearFilter;
+          lightTexture.premultiplyAlpha = true;
+        }
+        if (lightRevision !== lens.revision) {
+          lightTexture.needsUpdate = true;
+          lightRevision = lens.revision;
+        }
+        P.fxaa.lightTex.value = lightTexture;
+      }
+      P.fxaa.U.lightBlend.value = lens && lens.light ? (lens.additive ? 2 : 1) : 0;
+      if (field) {
+        if (!bendTexture) {
+          bendTexture = ownTexture(new THREE.DataTexture(field.data, field.size, field.size));
+          bendTexture.minFilter = bendTexture.magFilter = THREE.LinearFilter;
+          bendTexture.needsUpdate = true;
+        } else if (bendTexture.image.data !== field.data) {
+          bendTexture.image.data = field.data;
+          bendTexture.needsUpdate = true;
+        }
+        P.fxaa.bendTex.value = bendTexture;
+      }
+      P.fxaa.U.bend.value.set(field ? field.x : 0, field ? field.y : 0);
+    }
     // Direct-to-canvas FXAA retains its input, not its finished pixels. Replay only
     // the final pass(es) on a screenshot request, then let three read the target asynchronously.
     let fxaaCaptureRT = null;
@@ -975,7 +1013,13 @@
       const mrt = renderer.getMRT(), ac = renderer.autoClear, mat = quad.material;
       try {
         renderer.setMRT(null);
-        runPass(P.fxaa.mat, fxaaCaptureRT);
+        const bend = P.fxaa.U.bend && P.fxaa.U.bend.value;
+        const x = bend && bend.x, y = bend && bend.y;
+        const blend = P.fxaa.U.lightBlend, previousBlend = blend && blend.value;
+        if (blend) blend.value = 0;
+        if (bend) bend.set(0, 0);   // captures contain the world without helmet optics
+        try { runPass(P.fxaa.mat, fxaaCaptureRT); }
+        finally { if (bend) bend.set(x, y); if (blend) blend.value = previousBlend; }
         if (!P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
       } finally {
         quad.material = mat;
@@ -1429,6 +1473,7 @@
           _last.sgsr = false;
         } else if (useUpscale) {
           if (P.fxaa.mirTex) fxaaMirror(false);   // FXAA -> aaRT: the inset goes on after SGSR
+          bindLens(null);
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
           P.sgsr.U.viewport.value.set(1 / pW, 1 / pH, pW, pH);
@@ -1447,7 +1492,10 @@
           // scale 1, where SGSR is bypassed; pW/pH here would crop the image.
           if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
+          const lens = !dest && !compileJobs && !_scissorWarm && (!_mirTex || mirIn) ? o.visorLens : null;
+          bindLens(lens);
           runPass(P.fxaa.mat, dest);
+          if (lens && P.fxaa.bendTex) o.visorFolded = lens.light ? 2 : 1;
           if (mirIn) _mirComposites++;
           else mirrorPass(dest);
           _lastPresentRT = dest || ldrRT;
