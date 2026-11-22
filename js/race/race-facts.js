@@ -51,6 +51,8 @@ var RaceFacts = (function () {
       t = 0; lapLen = 0; cars = null; nextId = 1; pairVisit = 0;
       st.clear(); pairs.clear(); battles.clear(); hist.clear();
       order = []; orderedStates.length = 0; fastest = { time: Infinity, car: null };
+      _out.ev.length = _finishers.length = 0; _out.f = null;
+      _f.ahead = _f.behind = _f.leader = _f.second = _f.fastest = _fastestOut.car = null;
       pitEndT = -1e9;   // last race's pit exit must not mute this race's pace calls
       pos = 0; pendPos = 0; pendT = 0; grid = null; started = false; caution = 0; playerHits = 0; playerSev = 0;
       leadLap = 0; rankAcc = 0; primed = false;
