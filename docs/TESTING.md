@@ -798,7 +798,7 @@ so a unit file that reads history skips there.
 
 ### CI runners: one repo variable per browser lane (D-RUNNER)
 
-Every job runs on GitHub-hosted `ubuntu-latest`. On this public repo that is 4 vCPU and 16 GB
+Most Linux jobs run on GitHub-hosted `ubuntu-latest`. On this public repo that is 4 vCPU and 16 GB
 ([GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)),
 inside the account's 40-concurrent-job pool. Two browser lanes can take their runner from a repository variable
 (Settings → Secrets and variables → Actions → Variables). Unset or empty, they resolve to `ubuntu-latest` exactly as
@@ -809,8 +809,8 @@ before:
 | `APEX_BROWSER_RUNNER` | `browser-group.yml` `group` (every shard) | `workflow_dispatch` (its only trigger) |
 | `APEX_CI_BROWSER_RUNNER` | `ci.yml` `selected` (every leg: selected, packed, spill, oversize, overbudget) | this repo's own `pull_request` and ci.yml's own dispatch only; the pages.yml train (any event) and the nightly stay on `ubuntu-latest` so a managed-runner outage never blocks a deploy |
 
-The value is ONE `runs-on` label string. Nothing else reads a variable for its runner. Land, the gate, Pages, the
-deploy, the structural guards and the fast tier stay literal `ubuntu-latest`, and so does `renderer-macos`
+The value is ONE `runs-on` label string. The pure Node matrix also has a runner override. On same-repository ready PRs it defaults to `ubicloud-standard-4` (4 vCPU, 16 GB). Set `APEX_CI_NODE_RUNNER=ubuntu-latest` to route these jobs back to GitHub, or clear the override to restore Ubicloud. Fork PRs, the nightly and standalone dispatches use GitHub-hosted runners. Land, the gate, Pages, the
+deploy, the structural guards and the fast tier stay literal `ubuntu-latest`, while `renderer-macos` uses `macos-latest`
 (`tests/unit/ci-runner-variable.test.mjs` pins the list).
 
 **Train stays hosted (2026-11-20).** Pages run 44835564654 redded in mesa-xvfb setup on a Ubicloud leg (no apt mirror

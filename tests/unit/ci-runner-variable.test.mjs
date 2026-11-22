@@ -18,10 +18,12 @@ const workflows = fs.readdirSync(WF_DIR).filter((f) => /\.ya?ml$/.test(f))
 // deploy and the structural guards are not here: they stay literal `ubuntu-latest`.
 const ALLOWED = {
   "browser-group.yml:group": "APEX_BROWSER_RUNNER",
+  "ci.yml:node-suites": "APEX_CI_NODE_RUNNER",
   "ci.yml:selected": "APEX_CI_BROWSER_RUNNER",
 };
 
 const EXPR = {
+  "ci.yml:node-suites": "${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (vars.APEX_CI_NODE_RUNNER || 'ubicloud-standard-4') || 'ubuntu-latest' }}",
   "browser-group.yml:group": "${{ github.event_name == 'workflow_dispatch' && vars.APEX_BROWSER_RUNNER || 'ubuntu-latest' }}",
   "ci.yml:selected": "${{ inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && vars.APEX_CI_BROWSER_RUNNER || 'ubuntu-latest' }}",
 };
@@ -46,7 +48,7 @@ function resolve(expr, ctx) {
   return Function(`"use strict"; return (${body});`)();
 }
 
-test("only the two browser jobs may read a runner variable, each its own", () => {
+test("only the configured browser and Node jobs read their runner variables", () => {
   const readers = {};
   for (const { key, job } of jobs()) {
     const ro = JSON.stringify(job["runs-on"] ?? "");
@@ -74,14 +76,28 @@ test("land, gate, Pages, deploy and the structural guards stay on literal ubuntu
   for (const key of must) assert.equal(jobs().find((j) => j.key === key)?.job["runs-on"], "ubuntu-latest", key);
 });
 
-test("unset variable: every event resolves to ubuntu-latest exactly as before", () => {
+test("unset browser variables use ubuntu-latest for every event", () => {
   const events = ["pull_request", "pull_request_target", "push", "schedule", "workflow_dispatch", "workflow_call"];
-  for (const expr of Object.values(EXPR)) for (const event of events) {
+  for (const expr of [EXPR["browser-group.yml:group"], EXPR["ci.yml:selected"]]) for (const event of events) {
     for (const headRepo of ["brycejmurrin/f1-game", "someone/fork"]) {
       assert.equal(resolve(expr, { event, headRepo, vars: {} }), "ubuntu-latest", `${event} ${headRepo}`);
       assert.equal(resolve(expr, { event, headRepo, vars: { APEX_BROWSER_RUNNER: "", APEX_CI_BROWSER_RUNNER: "" } }), "ubuntu-latest");
     }
   }
+});
+
+test("Node suites use Ubicloud on same-repository PRs with an independent rollback", () => {
+  const expr = EXPR["ci.yml:node-suites"];
+  const own = { event: "pull_request", headRepo: "brycejmurrin/f1-game" };
+  for (const [vars, expected] of [
+    [{}, "ubicloud-standard-4"], [{ APEX_CI_NODE_RUNNER: "" }, "ubicloud-standard-4"],
+    [{ APEX_CI_NODE_RUNNER: "ubuntu-latest" }, "ubuntu-latest"],
+    [{ APEX_CI_NODE_RUNNER: "ubicloud-standard-2" }, "ubicloud-standard-2"],
+  ]) assert.equal(resolve(expr, { ...own, vars }), expected);
+  for (const ctx of [
+    { ...own, headRepo: "someone/fork" }, { ...own, inputs: { concurrency_key: "pages-1" } },
+    ...["workflow_dispatch", "workflow_call", "push", "pull_request_target", "schedule"].map(event => ({ ...own, event })),
+  ]) assert.equal(resolve(expr, { ...ctx, vars: { APEX_CI_NODE_RUNNER: "ubicloud-standard-4" } }), "ubuntu-latest");
 });
 
 test("set variable: own code gets the label, fork code falls back", () => {
