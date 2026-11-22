@@ -842,7 +842,7 @@ test("AI pace calibration terms (#5330): the scripted trim, bounded ERS, the cle
   assert.equal(A.slowHazard({ speed: 17.9 }, 72), true);
   assert.equal(A.slowHazard({ speed: 18 }, 72), false, "a quarter of top speed is racing");
   assert.equal(A.slowHazard({ speed: 0, retired: true }, 72), false, "a retirement is the parked list's");
-  assert.equal(A.slowHazard({ speed: 0, finished: true }, 72), false);
+  assert.equal(A.slowHazard({ speed: 9.07, finished: true }, 72), true, "#5979 coasting finisher is a slow hazard");
   assert.equal(A.slowHazard({ speed: 0, inPitLane: true }, 72), false);
   assert.equal(A.slowHazard(null, 72), false);
 });
@@ -2000,9 +2000,23 @@ test("row 5: a stopped car is a hazard, a moving or retired or pitting one is no
   assert.equal(A.stoppedHazard({ speed: 20 }, vT), false);
   assert.equal(A.stoppedHazard({ speed: 0, retired: true }, vT), false, "a retired car is Collide.parkedAhead's");
   assert.equal(A.stoppedHazard({ speed: 0, inPit: true }, vT), false, "the box is not the road");
-  assert.equal(A.stoppedHazard({ speed: 0, finished: true }, vT), false);
+  assert.equal(A.stoppedHazard({ speed: 0, finished: true }, vT), true, "#5979 stopped finisher is a hazard");
   assert.equal(A.stoppedHazard(null, vT), false);
   assert.ok(A.hazardReach(50) > 30 + 1.5 * 50, "reacts from further back than the parked-car reach");
+});
+
+// #5979: a coasting/crawling finisher after the flag is still on track — AI must treat it as a
+// slow/stopped hazard (retired and in-pit stay excluded; a finished car at racing speed is not).
+test("#5979: a finished car still on track and slow/stopped counts as a hazard", () => {
+  const vT = 72;
+  const crawl = 9.07; // GRASS_V × 0.6 × PACE at the issue's repro pace
+  assert.equal(A.slowHazard({ speed: crawl, finished: true }, vT), true, "coasting finisher");
+  assert.equal(A.stoppedHazard({ speed: 0, finished: true }, vT), true, "stopped finisher");
+  assert.equal(A.slowHazard({ speed: crawl, finished: true, retired: true }, vT), false, "retired wins");
+  assert.equal(A.stoppedHazard({ speed: 0, finished: true, inPit: true }, vT), false, "box wins");
+  assert.equal(A.slowHazard({ speed: crawl, finished: true, inPitLane: true }, vT), false, "pit lane wins");
+  assert.equal(A.slowHazard({ speed: 40, finished: true }, vT), false, "finished at racing speed is not slow");
+  assert.equal(A.stoppedHazard({ speed: 20, finished: true }, vT), false, "finished and moving past the stop floor");
 });
 
 test("#5539: a static hazard gets a full lane, and the heading stops at its clear line", () => {

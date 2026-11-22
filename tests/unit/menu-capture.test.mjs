@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -30,6 +31,24 @@ test("cellFileBase and cellPaths agree", () => {
 test("cellRecorded requires both png and dom", () => {
   const dir = path.join(ROOT, "artifacts", "layout-audit", "gallery");
   assert.equal(cellRecorded(dir, "missing", "ios-iphone-landscape"), false);
+});
+
+test("resuming a native phone gallery replaces an older low-density capture", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "menu-capture-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const paths = cellPaths(dir, "title", "bryce-portrait");
+  fs.mkdirSync(path.dirname(paths.png));
+  fs.mkdirSync(path.dirname(paths.dom));
+  fs.writeFileSync(paths.dom, "{}");
+  const { viewports: [[, options]] } = parseMenuGalleryArgv(["--viewports=bryce-portrait"]);
+  const header = Buffer.alloc(24);
+  header.writeUInt32BE(0x89504e47);
+  for (const scale of [2, 3]) {
+    header.writeUInt32BE(393 * scale, 16);
+    header.writeUInt32BE(852 * scale, 20);
+    fs.writeFileSync(paths.png, header);
+    assert.equal(cellRecorded(dir, "title", "bryce-portrait", options), scale === 3);
+  }
 });
 
 test("parseMenuGalleryArgv picks screens and viewports", () => {

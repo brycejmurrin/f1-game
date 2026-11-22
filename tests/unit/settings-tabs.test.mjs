@@ -26,6 +26,33 @@ function boot({ ensure, stub = true, onSelect = () => {} }) {
   return { nav, dom, audio, calls, ctx, said };
 }
 
+test("Controls loads only its touch form, mounts before search focuses it, and retries after an offline visit", async () => {
+  const { nav, dom, ctx } = boot({ ensure: () => true });
+  const loads = [], visits = [];
+  ctx.Input = { setPedalSlide() {} };
+  ctx.ScriptLoader = { create: () => ({ load: async files => {
+    loads.push(...files);
+    if (loads.length === 1) return false;
+    ctx.TouchButtonSettings = { mountControls: () => visits.push("mounted") };
+    return true;
+  } }) };
+  nav.show("driving", false);
+  assert.deepEqual(loads, []);
+  nav.show("controls", false);
+  await tick();
+  assert.equal(nav.current(), "controls");
+  assert.equal(dom.byId("pm-touch-offline").hidden, false);
+  nav.show("home", false);
+  nav.show("controls", false, () => { visits.push("search target"); });
+  await tick();
+  assert.deepEqual(visits, ["mounted", "search target"]);
+  assert.equal(dom.byId("pm-touch-offline").hidden, true);
+  nav.show("home", false);
+  nav.show("controls", false);
+  assert.deepEqual(loads, ["js/ui/touch-button-settings.js", "js/ui/touch-button-settings.js"]);
+  assert.equal(visits.length, 3);
+});
+
 test("MUSIC & SOUND: a bundle that fails to load is asked once per click and the page still reveals", async () => {
   const { dom, audio, calls } = boot({ ensure: () => Promise.resolve(false) });
   dom.byId("pm-audio").onclick();

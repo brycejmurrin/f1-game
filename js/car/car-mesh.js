@@ -1021,28 +1021,41 @@ function drawRetroTelemetry(mat,c,kph,t) {
     _gfx.draw(getOtLamp(c.otT>0),_retroM,_RETRO_FX);
   }
 }
-const _wheelStatus = {}, _wheelStatusIx = [];   // ix: (mph, 0..4, 0..4) -> mesh, no key string per frame
-function getWheelStatus(mph,throttle,brake) {
-  const ix = (throttle | 0) === throttle && (brake | 0) === brake && throttle >= 0 && throttle <= 4 && brake >= 0 && brake <= 4
-    ? (mph ? 25 : 0) + throttle * 5 + brake : -1;
-  if (ix >= 0 && _wheelStatusIx[ix]) return _wheelStatusIx[ix];
-  const key=(mph?1:0)+'|'+throttle+'|'+brake;
-  if(_wheelStatus[key])return ix >= 0 ? (_wheelStatusIx[ix] = _wheelStatus[key]) : _wheelStatus[key];
-  const out={pos:[],nrm:[],col:[],idx:[]};
-  CockpitRig.label(out,mph?'MPH':'KPH',-.034,.001,-.037,.0013,[.35,.75,.78]);
-  for(const [x,n,col,label] of [[-.036,throttle,[.16,.85,.35],'T'],[.005,brake,[.95,.18,.12],'B']]) {
-    CockpitRig.label(out,label,x-.017,-.016,-.034,.0012,[.48,.55,.59]);
-    CockpitRig.box(out,x,-.016,-.034,.026,.003,.002,[.04,.055,.06]);
-    if(n>0)CockpitRig.box(out,x-.013+.013*n/4,-.016,-.036,.026*n/4,.003,.001,col);
+// The plate has two unit variants. Each pedal gets one reusable fill whose
+// wheel-local x scale is the resolved demand, even on a light initial press.
+const _wheelStatus = [], _pedalFill = [];
+const PEDAL_X = [-0.049, -0.008], PEDAL_WIDTH = 0.028;
+function getWheelStatus(mph) {
+  const unit = mph ? 1 : 0;
+  if (_wheelStatus[unit]) return _wheelStatus[unit];
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  CockpitRig.label(out, mph ? "MPH" : "KPH", -.034, .001, -.037, .0013, [.35, .75, .78]);
+  for (let i = 0; i < PEDAL_X.length; i++) {
+    const x = PEDAL_X[i];
+    CockpitRig.label(out, i ? "B" : "T", x - .005, -.016, -.034, .0015, [.65, .72, .76]);
+    CockpitRig.box(out, x + PEDAL_WIDTH / 2, -.016, -.034, PEDAL_WIDTH, .005, .002, [.04, .055, .06]);
+    if (!_pedalFill[i]) {
+      const fill = { pos: [], nrm: [], col: [], idx: [] };
+      CockpitRig.box(fill, PEDAL_WIDTH / 2, 0, 0, PEDAL_WIDTH, .005, .001, i ? [.95, .18, .12] : [.16, .85, .35]);
+      _pedalFill[i] = _gfx.createMesh(fill);
+    }
   }
-  _wheelStatus[key]=_gfx.createMesh(out);
-  if (ix >= 0) _wheelStatusIx[ix] = _wheelStatus[key];
-  return _wheelStatus[key];
+  return (_wheelStatus[unit] = _gfx.createMesh(out));
+}
+function drawPedalFill(mat, i, demand) {
+  if (!(demand > 0)) return;
+  _axT[12] = PEDAL_X[i]; _axT[13] = -.016; _axT[14] = -.036;
+  M4.mulTo(_axM, mat, _axT);
+  const amount = Math.min(1, demand);
+  _axM[0] *= amount; _axM[1] *= amount; _axM[2] *= amount;
+  _gfx.draw(_pedalFill[i], _axM, _AX_FX);
 }
 const _AX_PULSE = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };   // pooled: a fresh literal defeated TLX's matKeyFor memo
 function drawWheelExtras(mat, c, t) {
   const mph=typeof AppearanceOpts!=='undefined' && AppearanceOpts.units()==='mph';
-  _gfx.draw(getWheelStatus(mph,Math.round(Math.max(0,Math.min(1,c.throttleDemand||0))*4),Math.round(Math.max(0,Math.min(1,c.brakeDemand||0))*4)),mat,_AX_FX);
+  _gfx.draw(getWheelStatus(mph), mat, _AX_FX);
+  drawPedalFill(mat, 0, c.throttleDemand);
+  drawPedalFill(mat, 1, c.brakeDemand);
   const ax = Math.max(0, Math.min(1, c.aeroX || 0));
   const open = ax > 0.05;
   _gfx.draw(getAeroLamp(open ? 2 : c.xArmed ? 1 : 0), mat, _AX_FX);
@@ -1057,7 +1070,8 @@ function drawWheelExtras(mat, c, t) {
 // #5387 primeRace: each wheel-extra mesh with its live opts, at the caller's zero matrix.
 function primeWheelExtras(m) {
   const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
-  for (let th = 0; th <= 4; th++) for (let br = 0; br <= 4; br++) _gfx.draw(getWheelStatus(mph, th, br), m, _AX_FX);
+  _gfx.draw(getWheelStatus(mph), m, _AX_FX);
+  for (const fill of _pedalFill) _gfx.draw(fill, m, _AX_FX);
   for (let s = 0; s <= 2; s++) _gfx.draw(getAeroLamp(s), m, _AX_FX);
   _gfx.draw(getAeroBar(false), m, _AX_FX); _gfx.draw(getAeroBar(true), m, _AX_FX);
   _AX_PULSE.alpha = 0.65; _gfx.draw(getAeroBar(true), m, _AX_PULSE);

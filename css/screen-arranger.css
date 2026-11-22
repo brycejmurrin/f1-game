@@ -1,0 +1,321 @@
+@layer layout {
+/* The streaming companion ships without the game shell stylesheet so OBS
+   retains its transparent background. Map its own palette into the editor. */
+body:has(> main#overlay) {
+  --text: var(--ov-ink);
+  --dim: var(--ov-dim);
+  --bg: #090a10;
+  --surf-1: #13151b;
+  --surf-3: #282b36;
+  --card-line: var(--ov-line);
+  --focus: var(--ov-ink);
+  --font-ui: system-ui, sans-serif;
+  --fs-2: 1rem;
+  --fs-3: 1rem;
+  --fs-6: 1.25rem;
+  --r-md: .5rem;
+  --r-lg: .75rem;
+  --tap: 44px;
+  --safe-t: max(.5rem, env(safe-area-inset-top));
+  --safe-r: max(.5rem, env(safe-area-inset-right));
+  --safe-b: max(.5rem, env(safe-area-inset-bottom));
+  --safe-l: max(.5rem, env(safe-area-inset-left));
+  --safe-w: calc(100% - var(--safe-l) - var(--safe-r));
+  --kb: 0px;
+}
+/* The dialog is a transparent input shield. Its coordinate system stays in
+   viewport pixels even when a menu underneath it uses the game's sheet zoom. */
+#screen-arranger {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font: 600 var(--fs-3)/1.35 var(--font-ui);
+  touch-action: none;
+}
+#screen-arranger::backdrop { background: transparent; }
+.screen-arranger:not([open]) { display: none; }
+/* Draw inside the measured region, including regions clipped by a scroller. */
+.arrange-selection {
+  outline: 3px dashed var(--focus);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 4px var(--bg);
+}
+#screen-arranger .arrange-tools {
+  position: absolute;
+  z-index: 1;
+  right: var(--safe-r);
+  bottom: max(var(--safe-b), var(--kb));
+  box-sizing: border-box;
+  display: grid;
+  width: min(24rem, var(--safe-w));
+  max-height: min(54svh, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: calc(var(--gap, .75rem) / 4);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-lg);
+  background: var(--surf-1);
+  color: var(--text);
+  scroll-padding: .75em;
+}
+#screen-arranger[data-edge="start"] .arrange-tools { right: auto; left: var(--safe-l); }
+#screen-arranger #screen-arranger-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap, .75rem) / 4);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+#screen-arranger #screen-arranger-bar select {
+  height: max(44px, 2.4em);
+  white-space: nowrap;
+  flex: 1 1 5em;
+  min-width: 44px;
+  text-overflow: ellipsis;
+}
+#screen-arranger #screen-arranger-bar :is(button, select) {
+  min-width: 44px;
+  padding-inline: .4em;
+}
+#arrange-controls:not([hidden]) {
+  display: grid;
+  gap: .4em;
+  padding: .4em;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+#screen-arranger .arrange-tools :is(h2, p) { margin: 0; }
+#screen-arranger .arrange-tools h2 { font-size: var(--fs-6); }
+#screen-arranger .arrange-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35em;
+  min-width: 0;
+}
+#screen-arranger .arrange-tools :is(button, select, input:not([type="checkbox"])),
+.screen-arrange-entry {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 44px;
+  padding: .35em .65em;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  background: var(--surf-3);
+  color: var(--text);
+  font: inherit;
+}
+#screen-arranger #arrange-controls > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .35em;
+}
+#screen-arranger .arrange-tools output {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#screen-arranger .arrange-tools #screen-arranger-cancel + button {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+}
+#screen-arranger .arrange-tools button { white-space: normal; }
+#screen-arranger .arrange-tools :is(button, select):enabled { cursor: pointer; }
+#screen-arranger .arrange-tools :disabled { color: var(--dim); border-style: dashed; }
+#screen-arranger :focus-visible, .screen-arrange-entry:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.screen-arrange-entry {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 2;
+  inset-inline-end: max(var(--safe-r), var(--safe-l));
+  top: var(--safe-t);
+  font: 600 var(--fs-2)/1.2 var(--font-ui);
+  cursor: pointer;
+}
+/* TITLE: #overlay zooms its children by UI SIZE (css/title.css), which painted
+   this entry 25 px tall at 50 % and pulled its inset inside the notch, and the
+   phone's landscape menu column (PHONE_WIDE) covered it with CAREER (852x393:
+   entry 694..811 x 6..36 under CAREER 391..787 x 15..61). Unzoomed, inside the
+   safe box, and in landscape at the foot of the wordmark's column, over the art. */
+#overlay > #title-arrange-entry { zoom: 1; top: var(--safe-t); inset-inline-end: var(--safe-r); }
+:where(body[data-shape="wide"]) #overlay > #title-arrange-entry {
+  top: auto; bottom: var(--safe-b);
+  inset-inline-end: auto; inset-inline-start: var(--safe-l);
+}
+:root[data-title-side="swap"] :where(body[data-shape="wide"]) #overlay > #title-arrange-entry {
+  inset-inline-start: auto; inset-inline-end: var(--safe-r);
+}
+/* On a short phone Pause reserves every row for the race controls; the
+   existing responsive layout removes this entire header there. The same
+   editor opens from the Pause page in Appearance on every screen size. */
+#pausemenu .sheet-head > .screen-arrange-entry {
+  position: static;
+  margin-inline-start: auto;
+}
+/* The fly-cam's door is one more item in #pc-bar (js/ui/screen-regions.js):
+   in the top-right corner it covered the docked tuner's #pc-toggle. */
+#pc-bar > .screen-arrange-entry {
+  position: static; min-height: var(--tap-min);   /* its siblings' floor, inside the bar's UI SIZE zoom */
+  font-size: var(--fs-micro);
+}
+@media (pointer: coarse) { #pc-bar > .screen-arrange-entry { min-height: var(--tap-paint); } }
+/* Most menus already have a safe, single-column grid. Put the extra door
+   after the sheet, beyond the scrollport and the player's moveable regions. */
+.screen:has(> .sheet):has(> .screen-arrange-entry):not(#photo-studio, #carsetup) {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.screen:has(> .sheet):not(#photo-studio, #carsetup) > .screen-arrange-entry {
+  position: static;
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+}
+.screen:has(> .screen-arrange-entry):not(#photo-studio, #carsetup) > .sheet {
+  grid-row: 1;
+  max-height: 100%;
+}
+/* The hub and its nested telemetry popup have flex cards in the same
+   viewport. Keep Close on the header clickable and keep the list scrollable. */
+:is(#datahub, .dh-tpopup)[open]:has(> .screen-arrange-entry) {
+  display: grid;
+  grid-template: minmax(0, 1fr) auto / minmax(0, 1fr);
+  place-items: center;
+}
+:is(#datahub, .dh-tpopup) > :is(.dh-card, .dh-tpopup-card) {
+  grid-row: 1;
+  min-height: 0;
+  max-height: 100%;
+}
+#datahub > .dh-card { height: min(880px, 100%); }
+:is(#datahub, .dh-tpopup) > .screen-arrange-entry {
+  position: static;
+  grid-row: 2;
+  justify-self: end;
+}
+#carsetup > .screen-arrange-entry {
+  left: var(--safe-l);
+  right: auto;
+}
+:root[data-look-garage-side="left"] #carsetup > .screen-arrange-entry {
+  left: auto;
+  right: var(--safe-r);
+}
+/* A narrow landscape phone: the left panel reaches the right inset, and DONE
+   sits at its right end (568x320: entry 363..509 over DONE 392..497, so CLOSE
+   GARAGE never took a click). Keep the entry at the left, as the right panel does. */
+@media (orientation: landscape) and (max-width: 700px) {
+  :root[data-look-garage-side="left"] #carsetup > .screen-arrange-entry {
+    left: var(--safe-l);
+    right: auto;
+  }
+}
+#trackdesigner > .screen-arrange-entry { position: static; grid-row: 4; justify-self: end; }
+/* Short landscape phone, foot tucked under the rail (js/editor/designer.js
+   seatFoot): a fourth 44 px row made the dialog scroll 16 px at 734x343 and
+   852x344. The entry shares the body's cell, at its end, a fixed width the
+   foot's status line keeps clear (css/editor.css). The cell ends where the
+   content does, so a dialog that scrolls (UI SIZE 150 %) keeps it off the foot's
+   buttons; an absolute bottom anchored it to the visible box, over SHARE & FILES. */
+#trackdesigner[data-foot="in"] > .screen-arrange-entry {
+  position: relative; inset: auto; z-index: 2; width: 9rem;
+  grid-row: 2; grid-column: 1; align-self: end; justify-self: end;
+}
+/* These owners position their panel on the right. Some have zero-width
+   wrappers so a button sized against the wrapper would be unclickable. */
+:is(#lighting, #camtune, #flyby, #freecam, #garrival, #photo-studio) > .screen-arrange-entry {
+  position: fixed;
+  right: auto;
+  left: var(--safe-l);
+  width: max-content;
+  max-width: var(--safe-w);
+}
+.watch-transport > .screen-arrange-entry {
+  top: auto;
+  right: 0;
+  bottom: 100%;
+}
+body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hidden; }
+@media (orientation: portrait) {
+  #screen-arranger .arrange-tools {
+    left: var(--safe-l);
+    width: auto;
+    max-height: min(26svh, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
+  }
+  #screen-arranger[data-edge="start"] .arrange-tools {
+    right: var(--safe-r);
+    top: var(--safe-t);
+    bottom: auto;
+  }
+}
+@media (orientation: landscape) and (max-height: 32rem) {
+  #screen-arranger .arrange-tools { width: min(24rem, var(--safe-w)); }
+}
+} /* @layer layout */
+
+@layer base {
+:root[data-ui-theme="endurance"] {
+  --r-lg: 20px;
+  --r-md: 12px;
+}
+:root[data-ui-theme="drafting"] {
+  --r-lg: 6px;
+  --r-md: 3px;
+  --r-sm: 2px;
+  --font-ui: system-ui, sans-serif;
+}
+:root[data-ui-theme="endurance"] :is(#hud, #announce, #game-metrics) {
+  --bg: var(--endurance-bg);
+  --carbon: var(--endurance-carbon);
+  --text: var(--endurance-text);
+}
+:root[data-ui-theme="drafting"] :is(#hud, #announce, #game-metrics) {
+  --bg: var(--drafting-bg);
+  --carbon: var(--drafting-carbon);
+  --text: var(--drafting-text);
+}
+:root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])),
+:root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
+  --dim: var(--endurance-dim);
+  --plate-line: var(--endurance-line);
+}
+:root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])),
+:root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
+  --dim: var(--drafting-dim);
+  --plate-line: var(--drafting-line);
+}
+}
+
+@layer components {
+/* Keep selection recognizable when team and flag colours coincide. The underline
+   stays within the label, leaving the independent keyboard focus ring visible. */
+button[role="tab"][aria-selected="true"] {
+  text-decoration: underline;
+  text-decoration-thickness: .12em;
+  text-underline-offset: .2em;
+}
+:root[data-ui-theme="endurance"] .sheet-head h2 {
+  font-family: Georgia, serif;
+  letter-spacing: .025em;
+}
+:root[data-ui-theme="drafting"] .sheet-head h2 {
+  font-style: normal;
+  letter-spacing: .08em;
+}
+}

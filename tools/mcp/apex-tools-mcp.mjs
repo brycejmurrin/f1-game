@@ -528,7 +528,7 @@ const CATALOG = [
   {
     name: "apex_debug_chrome",
     kind: "tree",
-    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, 844x390 touch + iPhone UA by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
+    description: "Tree — start/status/stop the ONE shared debug Chromium (tools/mcp/debug-chrome.mjs: CDP 9222, standard iPhone 15 landscape by default, static server on 3456) that js-debugger (no endpoint needed), browser-use and opt-in Playwright/DevTools MCP attach to. start refuses beside a test run or at loadavg >= 3; while it runs the browser apex_* tools refuse (one browser). Skill: mcp-probe.",
     inputSchema: {
       type: "object",
       required: ["action"],
@@ -1054,7 +1054,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "layout-audit screen id (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844). `bryce-standalone` / `bryce-safari` = the owner's iPhone with his live settings (UI SIZE 61 %) and a `paint` block of PAINTED sizes." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape. Ids: `node tools/ui/layout-audit.mjs --list` (a phone at 844x390 is ios-iphone-landscape-844). `bryce-standalone` / `bryce-portrait` / `bryce-safari` = the owner's iPhone 15 with his saved settings and a `paint` block of PAINTED sizes." },
         scale: { type: "number", minimum: 40, maximum: 200, description: "Interface size %, default 100." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
@@ -1073,7 +1073,7 @@ const CATALOG = [
       additionalProperties: false,
       properties: {
         screen: { type: "string", description: "A screen id from `node tools/ui/layout-audit.mjs --list` (title, select, garage, settings, …)." },
-        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844; the owner's iPhone with his live settings is bryce-standalone / bryce-safari)." },
+        viewport: { type: "string", description: "Default ios-iphone-landscape; ids from the same --list (a phone at 844x390 is ios-iphone-landscape-844; the owner's iPhone with his live settings is bryce-standalone / bryce-portrait / bryce-safari)." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },

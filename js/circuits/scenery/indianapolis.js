@@ -10,7 +10,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, terrainYAt, modelGroup, waterSurface,
         floodMast, cameraTower, sponsorHoarding, signDigit, indexSolid,
-        bleacher, scaffoldStand, seat,
+        bleacher, scaffoldStand, seat, recordBarrier,
         addBox, addCyl, addFrustum } = api;
 
       const LEAF = [0.22, 0.44, 0.20], LEAF_D = [0.16, 0.36, 0.17];
@@ -380,13 +380,19 @@
       // Alternate slabs sit 3 cm apart radially: where the walk bunches on
       // the bend, neighbours' road faces would otherwise share one plane
       // (coplanar-audit, 3 pairs on the first outside pass, 2026-10-05).
+      // Collision (#6004): the slabs are raw addBox (visual only). Without
+      // recordBarrier the driving limit stays at the 9 m run-off default and
+      // the car centre can pass ~7.6 m behind the 1.4 m face. fence() below
+      // is geometry-only (indexBarrier) by design and must not tighten barL.
+      const OVAL_WALL_S0 = 0.765, OVAL_WALL_S1 = 0.140, OVAL_WALL_GAP = 1.4;
+      recordBarrier(OVAL_WALL_S0, OVAL_WALL_S1, OUT, OVAL_WALL_GAP);
       let slab = 0;
-      along(0.765, 0.140, 9, (k, spacing) => {
-        const a = anchor(k, OUT, 1.4 + (slab++ & 1) * 0.03);
+      along(OVAL_WALL_S0, OVAL_WALL_S1, 9, (k, spacing) => {
+        const a = anchor(k, OUT, OVAL_WALL_GAP + (slab++ & 1) * 0.03);
         addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, spacing], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
       });
       // Catch fence just behind it, in front of the stand bank (gap 18).
-      fence(0.765, 0.140, OUT, 4, 5, [0.74, 0.76, 0.80]);
+      fence(OVAL_WALL_S0, OVAL_WALL_S1, OUT, 4, 5, [0.74, 0.76, 0.80]);
       for (const s of [0.28, 0.36, 0.44, 0.58, 0.66, 0.74]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }

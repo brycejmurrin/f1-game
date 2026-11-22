@@ -41,11 +41,6 @@ test("MUSIC & SOUND rows never share a label (two VOLUMEs; a layer's level and i
   }
 });
 
-test("Appearance Studio names its two accent colours apart", () => {
-  const src = read("js/ui/appearance-studio.js");
-  assert.doesNotMatch(src, /colour\((menu|hud), "Accent colour"/, "menu and HUD accent both read \"Accent colour\"");
-});
-
 test("DRIVING HELP and STEER ASSIST: one name each, the FINE sliders and their DRIVING AIDS rows jump to each other", () => {
   assert.match(SHELL, /DRIVING HELP · FINE <b id="pm-help-v">/);
   assert.match(SHELL, /STEER ASSIST · FINE <b id="pm-line-v">/);

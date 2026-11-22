@@ -203,6 +203,13 @@ test("Appearance rows wire and round-trip intro + wash + titleArt (motion via se
   ids.get("pm-titleintro")._spec.write("quick");
   assert.equal(written.titleIntro, "quick");
   assert.equal(html.dataset.titleIntro, "quick");
+  for (const [id, key] of [["pm-menuwash", "menuWash"], ["pm-titleart", "titleArt"]]) {
+    const spec = ids.get(id)._spec;
+    assert.deepEqual(Array.from(spec.values, ([value]) => value).slice(1), ["medium", "soft", "off"]);
+    spec.write("medium");
+    assert.equal(written[key], "medium");
+    assert.equal(html.dataset[key], "medium");
+  }
   ids.get("pm-menuwash")._spec.write("soft");
   assert.equal(written.menuWash, "soft");
   assert.equal(html.dataset.menuWash, "soft");

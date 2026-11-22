@@ -528,6 +528,7 @@ test("TLX M6 skid stint still clears Monza hw with incidents off", async () => {
 test("past the peak the tyre lets go: a full-lock slide settles under the limit on the curve", async () => {
   await startRace();
   const a = g.apex, PC = g.ctx.PhysicsConsts, TM = g.ctx.TyreModel;
+  a.setPhysics({ pace: Math.pow(1.06, -3) });   // the 70 m/s recipe was measured at notch 11
   a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
   a.headless(true);
   a.park(0.1);

@@ -124,8 +124,10 @@ test("Menu customization exposes the existing editor and retains persistence, fo
   assert.equal(panel.hidden, true);
   assert.equal(dom.byId("pmsettings").hidden, true);
   dom.byId("tl-size-up").click();
-  assert.equal(values.titleLayout.wide.btns.size, 105, "real editor writes the existing landscape preference");
+  assert.equal(title.current().btns.size, 105, "preview shows the draft");
+  assert.equal(values.titleLayout, undefined, "the title draft waits for Apply");
   dom.byId("tl-done").click();
+  assert.equal(values.titleLayout.wide.btns.size, 105, "Apply writes the existing landscape preference");
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(title.editing, false);
   assert.equal(panel.hidden, false);
@@ -173,6 +175,29 @@ test("Colour Vision profiles, reset and Undo update the actual owner, palette an
   for (const invalid of ["unknown", {}, 1, null]) assert.equal(studio.normalizeSnapshot({ cvdMode: invalid }).cvdMode, "off");
   studio.applySnapshot({ ...studio.snapshot(), cvdMode: "unknown" }); assertMode("off");
   studio.undo(); assertMode("tritan");
+});
+
+test("a Home profile restores medium drawing and wash strengths", () => {
+  const { studio, values } = load({ titleArt: "medium", menuWash: "medium" });
+  studio.saveProfile("Medium");
+  studio.reset("screen");
+  assert.equal(values.titleArt, "on");
+  assert.equal(values.menuWash, "full");
+  studio.loadProfile("profile-1", "screen");
+  assert.equal(values.titleArt, "medium");
+  assert.equal(values.menuWash, "medium");
+});
+
+test("title button style follows Home profiles and undo across a screen reset", () => {
+  const { studio, values } = load({ titleButtonStyle: "flat" });
+  studio.saveProfile("Flat");
+  studio.reset("screen"); assert.equal(values.titleButtonStyle, "auto");
+  studio.undo(); assert.equal(values.titleButtonStyle, "flat");
+  studio.applySnapshot({ ...studio.snapshot(), titleButtonStyle: "racing" });
+  studio.applyPreset("broadcast"); assert.equal(values.titleButtonStyle, "racing");
+  studio.loadProfile("profile-1", "screen"); assert.equal(values.titleButtonStyle, "flat");
+  assert.equal(studio.normalizeSnapshot({}).titleButtonStyle, "auto");
+  assert.equal(studio.normalizeSnapshot({ titleButtonStyle: "unknown" }).titleButtonStyle, "auto");
 });
 
 test("profile restore, Undo and reset repaint mounted title and pause controls without duplicating them", () => {
@@ -251,8 +276,8 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before); assert.equal(studio.undo(), false);
   studio.applyPreset("classic", "screen"); assert.equal(values.homeScene, "static");
   assert.equal(values.uiTheme, "light"); assert.equal(values.hudProfile, "minimal");
-  // Screen-scope RESET restores the shipped home scene (photo), not the prior garage value.
-  studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
+  // Screen-scope RESET restores the shipped home scene (static).
+  studio.reset("screen"); assert.equal(values.homeScene, "static"); assert.equal(values.uiTheme, "light");
 });
 
 test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD style (#4920)", () => {
@@ -290,7 +315,7 @@ test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD 
 });
 
 test("every ScreenLooks page has a screen scope and a preview entry", () => {
-  const { studio } = load();
+  const { studio, dom } = loadStudioRenderCounts();
   const keys = id => Array.from(studio.SCREEN_KEYS[id]);
   assert.deepEqual(keys("pause"), ["lookPause", "pauseLayout", "pauseSide", "pauseDim"]);
   assert.deepEqual(keys("datahub"), ["lookDatahub"]);
@@ -299,9 +324,14 @@ test("every ScreenLooks page has a screen scope and a preview entry", () => {
   assert.deepEqual(keys("career"), ["lookCareer"]);
   assert.deepEqual(keys("garage"), ["lookGarage"]);
   assert.deepEqual(keys("popups"), ["lookPopups"]);
-  const sourceText = fs.readFileSync(new URL("../../js/ui/appearance-studio-ui.js", import.meta.url), "utf8");
-  for (const id of ["pause", "datahub", "select", "career", "race", "garage", "hud", "popups"]) {
-    assert.match(sourceText, new RegExp('\\[\\"' + id + '\\",'), id + " preview button");
+  const panel = dom.byId("appearance-studio");
+  for (const [page, label] of Object.entries({ pause: "PAUSE", datahub: "DATA HUB", select: "TRACK SELECTOR",
+    career: "CAREER", race: "RACE SETUP", garage: "GARAGE", hud: "HUD", popups: "POPUP" })) {
+    const button = panel.querySelectorAll("button").find(el => el.textContent === label);
+    assert.ok(button, label + " preview entry");
+    button.click();
+    assert.equal(button.getAttribute("aria-pressed"), "true");
+    assert.equal(panel.querySelector('[aria-label="Illustrative appearance preview"]').dataset.screen, page);
   }
 });
 
@@ -333,7 +363,7 @@ test("Profile boundary rejects duplicates and bad ids and enforces the saved-pro
 });
 
 test("Scene events and independent background motion respect OS reduce and unsubscribe", () => {
-  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   const changes = []; const stop = studio.onSceneChange((v) => changes.push(plain(v)));
   studio.setScene("night", "ambient"); assert.deepEqual(plain(studio.scene()), { mode: "night", motion: "ambient" });
   assert.equal(studio.effectiveSceneMotion(), "still"); assert.equal(changes.length, 1); stop(); studio.setScene("studio", "still"); assert.equal(changes.length, 1);
@@ -362,7 +392,7 @@ test("Home camera defaults and hostile saved choices normalize without expanding
   const fresh = load().studio;
   assert.equal(fresh.homeCamera(), "side"); assert.equal(fresh.snapshot().homeCamera, "side");
   const { studio, values } = load({ homeScene: "unknown", homeCamera: "driver" });
-  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   const changes = []; studio.onSceneChange((value) => changes.push(plain(value)));
   studio.setScene("garage", "still"); studio.setHomeCamera("front");
   assert.equal(values.homeCamera, "front"); assert.equal(studio.homeCamera(), "front"); assert.equal(changes.length, 2);
@@ -389,7 +419,7 @@ test("Circuit, pit lane and mixed environments persist through named visual prof
 test("Home scoped reset includes camera and environment while undo preserves other screens", () => {
   const { studio, values } = load({ homeScene: "pitlane", homeCamera: "rear", backgroundMotion: "still", hudProfile: "broadcast", uiTheme: "light", raceSettings: { laps: 18 } });
   const before = plain(studio.snapshot()); studio.reset("screen");
-  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   assert.equal(values.hudProfile, "broadcast"); assert.equal(values.uiTheme, "light"); assert.deepEqual(values.raceSettings, { laps: 18 });
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before);
   studio.applyPreset("classic", "screen"); assert.equal(studio.scene().mode, "static"); assert.equal(studio.homeCamera(), "side");
@@ -644,7 +674,7 @@ function photoPickerHarness(album, setBackground = () => true) {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance");
   panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   const observers = [];
-  const result = load({}, true, false, dom.document, {
+  const result = load({ homeScene: "photo" }, true, false, dom.document, {
     PhotoStudio: { album, setBackground },
     ScreenLooks: { endPeek() {}, normalize: (_id, value) => value, apply() {}, refresh() {} },
     MutationObserver: class { constructor(cb) { observers.push(cb); } observe() {} },
@@ -797,4 +827,20 @@ test("Studio coalesces an advanced click and its store notification while preser
   assert.deepEqual(plain(studio.snapshot()), before);
   assert.deepEqual(scenes, ["front", "side"]);
   expectRenders(() => assert.equal(studio.undo(), false), 0);
+});
+
+test("combined profiles restore placement, touch docks and cockpit while earlier profiles leave them alone", () => {
+  const globals = { HudLayout: { migrate: v => ({ standard: v.standard }), apply() {} },
+    DockLayout: { normalize: v => v }, SettingsExport: { normalizePlacement: v => v } };
+  const mine = { hudLayout: LIVE.hudLayout, dockLayout: { buttons: { L: { x: 0.2, y: 0.1 } } },
+    screenPlacement: { v: 1, screens: { carsetup: { portrait: { panel: { width: 50 } } } } } };
+  const { studio, values } = load({ ...mine, appearanceProfiles: [{ id: "old", name: "Earlier", values: { uiTheme: "light" } }] }, true, false, undefined, globals);
+  studio.saveProfile("Phone");
+  studio.loadProfile("old");
+  for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
+  studio.applySnapshot({ ...studio.snapshot(), hudLayout: null, dockLayout: null, screenPlacement: null });
+  studio.loadProfile("profile-1");
+  for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
+  studio.undo();
+  for (const key of Object.keys(mine)) assert.equal(values[key], null);
 });

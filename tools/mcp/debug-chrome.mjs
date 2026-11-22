@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromiumPath } from "../lib/chromium-path.mjs";
+import { BRYCE_DPR, BRYCE_WINDOWS } from "../lib/bryce-phone.mjs";
 import { liveSpecRun } from "../ci/test-bg.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -23,8 +24,9 @@ const SERVER_PORT = 3456;
 // viewport + touch alone stayed on the desktop tier (measured 2026-10-19: tier 0 vs 2,
 // docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md). --user-agent is process-wide, so new tabs get it too.
 export const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const phone = BRYCE_WINDOWS.standalone;
 export const DEVICES = {
-  "phone-landscape": { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, touch: true, ua: IPHONE_UA },
+  "phone-landscape": { width: phone.width, height: phone.height, deviceScaleFactor: BRYCE_DPR, insets: phone.insets, mobile: true, touch: true, ua: IPHONE_UA },
   desktop: { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, touch: false },
 };
 // The proven cloud-container flags (issue #2534). --webgpu only adds the WebGPU switch.
@@ -124,7 +126,9 @@ async function runPlan(port, plan) {
 // The holder keeps its CDP session open so the override outlives this CLI.
 async function hold(port, device) {
   const d = DEVICES[device]; const { send, ws } = await pageSocket(port);
-  await send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+  await send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile,
+    ...(d.mobile ? { screenWidth: d.width, screenHeight: d.height, screenOrientation: { type: "landscapePrimary", angle: 90 } } : {}) });
+  if (d.insets) await send("Emulation.setSafeAreaInsetsOverride", { insets: d.insets });
   // A hidden/background tab gets no frames, so race() would wait forever: keep the page focused.
   await send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
   await send("Emulation.setTouchEmulationEnabled", { enabled: d.touch, maxTouchPoints: d.touch ? 5 : 0 });
@@ -202,7 +206,7 @@ export async function main(args = process.argv.slice(2)) {
   }
   console.log(`debug-chrome — own a headless Chromium for the js-debugger (a CLI, not an MCP tool; the debugger never launches Chrome)
   start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
-        phone-landscape = 844x390 touch + iPhone UA (mobile render tier); writes ~/.config/chromium/DevToolsActivePort so browser-use attaches;
+        phone-landscape = standard iPhone 15 full screen (${phone.width}x${phone.height} CSS px at ${BRYCE_DPR}x), touch + iPhone UA (mobile render tier); writes ~/.config/chromium/DevToolsActivePort so browser-use attaches;
         js-debugger and apex_status pick the endpoint up from the pid file; playwright/devtools attach with APEX_PW_CDP / APEX_CDT_BROWSER_URL
   status                                                           chromeAlive, viewport (innerWidth x innerHeight), PIDs, page targets
   stop                                                             kills exactly the PIDs in artifacts/debug-chrome/pids.json`);

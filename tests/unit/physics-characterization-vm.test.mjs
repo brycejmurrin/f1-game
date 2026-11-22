@@ -114,7 +114,7 @@ test("recipe parity detects changes invisible to scenario-name checks", () => {
 // cannot silently rescale gripMult under the committed numbers.
 let g = null;
 before(async () => {
-  g = await createGame({ track: "monza", wx: "dry" });
+  g = await createGame({ track: "monza", wx: "dry", storage: { pace: 11, adaptiveButtons: 5 } });
   g.apex.weather("dry");
   g.apex.step(0, 1);
 });

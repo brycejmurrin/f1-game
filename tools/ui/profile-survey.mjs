@@ -5,7 +5,6 @@
 // Output: artifacts/profile-survey/report-<windows>.json + one JPEG per cell. Insets are injected as --sa* before first layout. Results: docs/notes/VIEWPORT-ASSUMPTIONS-2026-11-10.md.
 import fs from "node:fs";
 import path from "node:path";
-import { devices } from "playwright";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { captureShot } from "../lib/ui-mock-core.mjs";
 import { SCREENS } from "./menu-screens.mjs";
@@ -13,16 +12,22 @@ import { bootPage, resetToTitle, waitScreenReady } from "./menu-capture.mjs";
 import { chromiumArgs } from "../shot/hud-survey.mjs";
 import { ensureTapFloor } from "./tap-floor.mjs";
 import { probeMenu, leaveToMenu } from "./menu-mock.mjs";
-import { readProfile } from "../lib/bryce-phone.mjs";
+import { brycePhone, readProfile } from "../lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 // SURVEY_PROFILE=live|legacy (default legacy, the file the report notes were measured on); live = his phone today.
 const EXPORT = readProfile(process.env.SURVEY_PROFILE || "legacy");
+// Survey geometry at 1×. Window C preserves the original short-toolbar stress case.
+const contractWindow = (window) => {
+  const { contextOptions, viewport, insets } = brycePhone({ window, profile: false, dpr: 1 });
+  return { contextOptions, w: viewport.width, h: viewport.height, l: insets.left, r: insets.right, t: insets.top, b: insets.bottom };
+};
+const landscape = contractWindow("standalone");
 const WINDOWS = {
-  A: { w: 852, h: 393, l: 59, r: 59, t: 0, b: 21, standalone: true },
-  C: { w: 852, h: 283, l: 59, r: 59, t: 0, b: 0 },
-  D: { w: 844, h: 390, l: 47, r: 47, t: 0, b: 21, standalone: true },
-  As: { w: 852, h: 393, l: 59, r: 59, t: 0, b: 21, standalone: true, stale: true },
+  A: { ...landscape, standalone: true },
+  C: { ...landscape, h: 283, b: 0 },
+  D: { ...contractWindow("w844"), standalone: true },
+  As: { ...landscape, standalone: true, stale: true },
 };
 const wantW = (process.argv[2] || "A,C,D").split(",");
 const wantS = process.argv[3] && process.argv[3] !== "*" ? process.argv[3].split(",") : null;
@@ -94,8 +99,7 @@ try {
   for (const name of wantW) {
     const win = WINDOWS[name];
     if (!win) throw new Error("window " + name);
-    const o = devices["iPhone 15 Pro landscape"];
-    const ctx = await browser.newContext({ hasTouch: true, isMobile: true, userAgent: o.userAgent, deviceScaleFactor: 1, colorScheme: "dark", viewport: { width: win.w, height: win.h }, screen: { width: win.w, height: win.h } });
+    const ctx = await browser.newContext({ ...win.contextOptions, colorScheme: "dark", viewport: { width: win.w, height: win.h } });
     // Insets before first layout (a real device has env() at parse time); standalone; the #5152 stale launch.
     await ctx.addInitScript((v) => {
       const put = () => { const s = document.documentElement.style; s.setProperty("--sal", v.l + "px"); s.setProperty("--sar", v.r + "px"); s.setProperty("--sat", v.t + "px"); s.setProperty("--sab", v.b + "px"); };

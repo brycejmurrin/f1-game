@@ -416,8 +416,8 @@ body.hud-prof-minimal #hud-ot { display: none !important; }
 body.hud-prof-minimal #hud-pit { order: -1; font-size: var(--fs-3); }
 body.hud-prof-minimal #hud-pit-arrow { font-size: 2em; line-height: 1; }
 /* Plain: nothing sets #minimap or .hud-gaps a display (F-13 slice 5). */
-body.hud-hide-map #minimap { display: none; }
-body.hud-hide-gaps .hud-gaps { display: none; }
+body.hud-hide-map #minimap:not([data-hl-arr]) { display: none; }
+body.hud-hide-gaps .hud-gaps:not([data-hl-arr]) { display: none; }
 /* Broadcast tower takes the top-left — park map + gaps under it.
    Same --hud-top-h stack as body.hud-prof-broadcast below (measured tower
    height, not a guessed 68px). */
@@ -1148,7 +1148,12 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
 :root[data-motion="reduce"] :is(#hud, #announce, .touchbtn) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
+  transition-duration: var(--hud-feedback-transition, 0.01ms) !important;
+}
+/* Input strength is a live sample. Even the 0.01ms backstop holds the old
+   opacity until the next animation frame when a player moves their thumb. */
+:root[data-motion="reduce"] #hud .touchbtn[data-touch-feedback="on"]::after {
+  --hud-feedback-transition: 0s;
 }
 /* …BUT NEVER ON GEOMETRY fitHud MEASURES. A duration on the initial
    `transition-property: all` animates `zoom` and every var()-driven size too,
@@ -2594,11 +2599,16 @@ body.desktop #hud-inputs:not([data-hl-user]) {
    widgets use HUD SIZE directly, including instruments detached from the
    bottom flex/grid cluster by HudLayout. */
 [data-hl][data-hl-v4] {
-  --hud-z: var(--hud-scale) !important;
+  --hud-z: var(--hl-z-seed, var(--hud-scale)) !important;
   --vwzh: calc(1vw / var(--hud-z)) !important;
   zoom: var(--hud-z) !important;
   max-width: none !important; max-height: none !important;
 }
+/* The factory phone seed (data-hl-seed, PHONE_STANDARD) keeps its band's
+   screen-fit cap (Bryce 2026-11-20); only a player's own placement paints the
+   raw --hud-scale. A piece lifted out of the bottom cluster rides the bottom band. */
+[data-hl-seed] { --hl-z-seed: var(--hud-z-top, var(--hud-scale)); }
+[data-hl-seed][data-hl-bottom] { --hl-z-seed: var(--hud-z-bot, var(--hud-scale)); }
 [data-hl-bottom] {
   position: fixed !important; position-anchor: auto !important;
   left: calc(50vw / var(--hud-z)) !important; right: auto !important;
