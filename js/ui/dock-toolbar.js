@@ -20,7 +20,7 @@ const DockToolbar = (() => {
     let initial, current;
     const history = [];
     const scaleKeys = ["hudScale", "hudBtnScale", "hudBotKeep"];
-    const snapshot = () => ({ layout: readLayout(), shape: getShape(), scales: scaleKeys.map(key => G.store?.get(key, null)) });
+    const snapshot = () => ({ layout: readLayout(), shape: getShape(), scales: Object.fromEntries(scaleKeys.map(key => [key, G.store?.get(key, null)])) });
     const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     function remember() {
       const next = snapshot();
@@ -32,8 +32,11 @@ const DockToolbar = (() => {
     function restore(state) {
       restoreLayout(state.layout);
       if (state.shape !== getShape()) setShape(state.shape);
-      const changed = scaleKeys.filter((key, i) => !equal(G.store?.get(key, null), state.scales[i]));
-      for (const key of changed) G.store?.set(key, state.scales[scaleKeys.indexOf(key)]);
+      const scale = state.scales;
+      const changed = scaleKeys.filter(key => !equal(G.store?.get(key, null), scale[key]));
+      if (changed.includes("hudScale")) G.store?.set("hudScale", scale.hudScale);
+      if (changed.includes("hudBtnScale")) G.store?.set("hudBtnScale", scale.hudBtnScale);
+      if (changed.includes("hudBotKeep")) G.store?.set("hudBotKeep", scale.hudBotKeep);
       if (changed.length) refreshScale();
       current = state;
       G.refreshHud?.(true);
