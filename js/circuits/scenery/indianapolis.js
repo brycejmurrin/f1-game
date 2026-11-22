@@ -541,12 +541,8 @@
           { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
       });
 
-      // Infield viewing on the run from T2 into T3: built window 0.190-0.232
-      // is the right-hand curve between the T2 left (0.1684) and the T3 right
-      // (0.2419), side +1 = the infield (the inside of that curve), 40 m
-      // short of the T3 apex. Bleachers, not grandstandEx, so crowdBank/rejBox
-      // cannot suppress the whole stand. (Was labelled "Turn 1 outside", 184 m
-      // past the T1 apex 0.1449 and on its inside; corner-frames 2026-11-18.)
+      // Infield bleachers from T3 toward T4. The first stand spans the T3
+      // apex (0.1925); the second ends 40 m before the T4 apex (0.2419).
       bleacher(0.190, 0.210, 1, 18, {
         rows: 8, step: 9, density: 0.42,
         plankCol: [0.72, 0.72, 0.74], frameCol: [0.58, 0.59, 0.62],
@@ -557,9 +553,7 @@
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });
-      // Infield mid-course bleacher (side +1 matches the gravel apron at 0.300).
-      // Authored rise/setback are positive; world-space "beyond" is contaminated
-      // here by the nearby oval ribbon, so do not flip side from a distance probe.
+      // T7 infield bleacher. Its 0.392–0.408 window straddles the apex at 0.3974.
       bleacher(0.392, 0.408, 1, 24, {
         rows: 7, step: 8, density: 0.40,
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],
