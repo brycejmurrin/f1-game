@@ -1601,7 +1601,7 @@ const GLXBackend = (function () {
     // redirects begin() to the probe FBO; leaving it set because the texture
     // went away mid-cycle is the same brick as above, one frame later.
     _envActive = false;
-    if (!gl || !envTex) return;
+    if (!gl || !envTex) return false;
     envFacesMask |= 1 << face;
     // Unbind the probe FBO FIRST. generateMipmap below must NOT run while envTex
     // is still the COLOR_ATTACHMENT0 of the bound framebuffer — that read/write
@@ -2833,6 +2833,7 @@ const GLXBackend = (function () {
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
     drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
+    get envProbeOptOut() { return _envDisabled; },
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.

@@ -9,6 +9,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -52,6 +53,66 @@ test("continuous rainfall scales the bounded particle field and clears stale geo
   assert.equal(uploads.length, 0, "no previous field is submitted");
   P.rainUpdate(0.016, eye, 1); P.draw();
   assert.equal(uploads.at(-1).floats, full, "the field recovers within its original cap");
+});
+
+test("a camera cut re-expands a frozen pool and XR gets the full stream", () => {
+  const uploads = [], P = make(uploads);
+  P.tyreSmoke(0, 0, -20, 0, 0, 1, 1);
+  P.tyreSmoke(0, 0, 20, 0, 0, 1, 1);
+  P.update(0.08);
+  function smoke(plane) {
+    uploads.length = 0;
+    P.draw(plane);
+    const alpha = uploads.find(u => !u.additive);
+    const z = [];
+    for (let i = 4; alpha && i < alpha.floats; i += 60) z.push(Math.sign(alpha.data[i]));
+    return z;
+  }
+  const near = [0, 0, 1, -0.1];
+  assert.deepEqual(smoke(near), [1]);
+  assert.deepEqual(smoke(near), [1]);
+  assert.equal(uploads[0].dirty, false);
+  near[2] = -1; // the game's plane buffer is reused in place
+  assert.deepEqual(smoke(near), [-1]);
+  assert.equal(uploads[0].dirty, true);
+  assert.deepEqual(smoke(null), [-1, 1], "multiview can see either side");
+  assert.deepEqual(smoke(near), [-1], "returning to a single view clips again");
+  assert.equal(P.count(), 2, "both particles stay live");
+});
+
+test("near-plane clipping keeps an intersecting flare and rejects a wholly hidden one", () => {
+  const uploads = [], P = make(uploads);
+  P.flare(0, 0, -1.2, 1, 1, 1, 1, 1);
+  P.flare(0, 0, -5, 1, 1, 1, 1, 1);
+  P.draw([0, 0, 1, 0]);
+  assert.equal(uploads.length, 1);
+  assert.equal(uploads[0].floats, 60);
+  assert.ok(Math.abs(uploads[0].data[4] + 1.2) < 1e-6);
+  uploads.length = 0;
+  P.draw([0, 0, -1, 0]);
+  assert.equal(uploads.length, 0, "neither one-frame flare survives a cut");
+  P.flare(0, 0, -5, 1, 1, 1, 1, 1);
+  P.draw([0, 0, -1, 0]);
+  assert.equal(uploads[0].floats, 60, "a new flare can appear on the other side");
+  assert.equal(uploads[0].dirty, true);
+});
+
+test("the flat-game particle plane clips the same boundary on GL and WebGPU", () => {
+  const read = name => fs.readFileSync(path.join(ROOT, name), "utf8");
+  const ctx = vm.createContext({});
+  const math = vm.runInContext(read("js/core/mat4.js") + ";M4", ctx, { filename: absSrc("js/core/mat4.js") });
+  const frustum = vm.runInContext(read("js/render/shared/frustum.js") + ";Frustum", ctx, { filename: absSrc("js/render/shared/frustum.js") });
+  const proj = new Float32Array(16);
+  math.perspectiveTo(proj, 0.9, 1.5, 0.2, 300);
+  const near = frustum.makeFrustumPlanes(proj)[4];
+  for (const z of [-10, -0.3, -0.1, 1]) {
+    const clipZ = proj[10] * z + proj[14], w = proj[11] * z + proj[15];
+    const inside = near[2] * z + near[3] >= 0;
+    assert.equal(inside, clipZ >= -w, "GL near");
+    assert.equal(inside, (clipZ + w) * 0.5 >= 0, "the WGX Z01 remap");
+  }
+  assert.match(gameSource(), /Particles\.draw\(!_xrEyes && _carCullPlanes \? _carCullPlanes\[4\] : null\)/,
+    "XR uses the unclipped stream for every eye");
 });
 
 test("rain ignores eye displacement across player and director camera cuts", () => {

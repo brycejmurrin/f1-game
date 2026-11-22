@@ -197,7 +197,7 @@ const Car3D = (function () {
     Helmets.build(out, 0, 0.715, -0.075, des, S);
   }
 
-  const { addWheel, buildWheel, buildWheelLayers } = CarWheels.create({
+  const { addWheel, buildWheel, buildWheelLayers, buildFarWheel } = CarWheels.create({
     geometry, SURFACES, TYRE, INTAKE,
   });
 
@@ -2914,7 +2914,7 @@ const Car3D = (function () {
     return out;
   }
 
-  return { build, buildComplete, refinish, garageDetail, heroCopy: (d) => d && d._hero ? CarHero.copy(d) : d, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, bodyAnchors, SURFACES, FINISH_SURFACE,
+  return { build, buildComplete, refinish, garageDetail, heroCopy: (d) => d && d._hero ? CarHero.copy(d) : d, FINISH_FIELDS, PART_STYLE_FIELDS, appearanceParts, buildWheel, buildWheelLayers, buildFarWheel, bodyAnchors, SURFACES, FINISH_SURFACE,
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, BODY_STYLES, BODY_STYLE_IDS, ALLOW_TEAM_BODY_SWAP, teamStyleOf, bodyStyleKey,

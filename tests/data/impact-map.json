@@ -2809,6 +2809,7 @@
         "tests/unit/mirror-glass-night.test.mjs"
       ],
       "drawPlayerWheels": [
+        "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "farRivalBodyReady": [
@@ -5793,6 +5794,7 @@
         "tests/unit/agentview-api-contract.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/particles-dirty.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/shadow-pass-depth.test.mjs",
@@ -6805,7 +6807,8 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "thumb": [
-        "tests/unit/designer-canvas.test.mjs"
+        "tests/unit/designer-canvas.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "view": [
         "tests/unit/designer-canvas.test.mjs",
@@ -7111,6 +7114,9 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "toggleHeat": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ],
+      "toggleStartFrom": [
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "trackOfTheDay": [
@@ -16275,6 +16281,9 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
+      "makeFrustumPlanes": [
+        "tests/unit/particles-dirty.test.mjs"
+      ],
       "radialCulled": [
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
@@ -16716,10 +16725,12 @@
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
       "depthBegin": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "depthEnd": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ],
       "discardAttachments": [
         "tests/unit/tlx-hunt4b.test.mjs"
@@ -17227,6 +17238,9 @@
         "tests/unit/tlx-cull-shadow-pack.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
         "tests/unit/tlx-inst-cells.test.mjs"
+      ],
+      "cullPassInstances": [
+        "tests/unit/tlx-cull-shadow-pack.test.mjs"
       ],
       "detectSoftwareGL": [
         "tests/unit/gfx-backend-canary.test.mjs"
@@ -17785,7 +17799,8 @@
         "tests/unit/tsl-gi.test.mjs"
       ],
       "*": [
-        "tests/unit/tlx-hunt4b.test.mjs"
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-viewport.test.mjs"
       ]
     },
     "js/render/three/tsl-lit.js": {

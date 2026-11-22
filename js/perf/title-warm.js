@@ -19,7 +19,6 @@ const TitleWarm = (function () {
   // Why the title warm may not start now; [] means go. `e` is a plain snapshot (see create's env()).
   function blockers(e) {
     const out = [];
-    if (e.state !== "menu") out.push("state");
     if (!e.title) out.push("surface");
     if (e.homeDraws) out.push("home-3d");
     if (!e.warmable) out.push("no-warm");
@@ -58,7 +57,7 @@ const TitleWarm = (function () {
       const s = store();
       if (quietSince === null) quietSince = now();
       return {
-        state: G.state, title: titleShowing() && !G.setupPreviewOn,
+        title: titleShowing() && !G.setupPreviewOn,
         homeDraws: !!(st && st.home), warmable: !!d.warmable(), intro: !!(ov && ov.hasAttribute("data-intro")),
         sheetOpen: GaragePrebuild.sheetOpenNow(), tabHidden: typeof document !== "undefined" && !!document.hidden,
         headless: !!G.headlessMode, saveData: GaragePrebuild.saveData(nav, typeof matchMedia === "function" ? matchMedia : null),
@@ -67,12 +66,18 @@ const TitleWarm = (function () {
       };
     }
     function poll() {
+      if (G.state !== "menu") {
+        // Restart the idle delay on the first menu poll, even after a long race.
+        if (!last || last.why?.[0] !== "state") last = { at: Math.round(now()), why: ["state"] };
+        wanted = false; quietSince = null;
+        return;
+      }
       if (wanted) {
         // The prep runs while the title stays up, and on through the picker / RACE SETTINGS if the player taps RACE
         // (their own current() keeps it). Anywhere else (a race, the garage, career) it was abandoned: re-arm.
         const sel = d.$("select"), rs = d.$("race-settings");
         const menus = titleShowing() || !!(sel && !sel.hidden) || !!(rs && !rs.hidden);
-        if (G.state !== "menu" || !menus) { wanted = false; noisy(); }
+        if (!menus) { wanted = false; noisy(); }
         else if (d.prepReady()) {
           const e = env();
           wanted = false;

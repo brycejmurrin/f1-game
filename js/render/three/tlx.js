@@ -1618,6 +1618,7 @@ const TLX = (function () {
       // composites it into the HUD rect (tlx-post.js).
       let mirRT = null, mirCam = null, _mirActive = false, _mirDead = false, _mirFails = 0, _mirErr = null;
       let _mirReleaseWait = null, _mirReady = false;
+      let _mirFreeze = false;
       let _mirRect = null, _mirRenders = 0, _mirEye = null, _mirCull = 0, _mirFog = null, _mirFlip = true;   // flip false: the broadcast PiP
       let _mirGlass = 0, _glassProbeGeo = null;   // drawMirrorGlass records; the warm's stand-in glass quad
       // Latched by the first mirrorBegin. The mirror target is a render context
@@ -2825,6 +2826,12 @@ const TLX = (function () {
       }
       function _passBatch(batch) {
         return _mirActive && _instPerPass && batch && batch.imesh && batch.geo && !skipBatches() ? _mirOf(batch) : batch;
+      }
+      function cullPassInstances(batch, planes, opts) {
+        if (opts && opts.upload === false) return cullInstances(batch, planes, opts);
+        const view = _passBatch(batch);
+        if (view !== batch && InstCells.holdMirror(view, _mirRenders, _mirFreeze)) return view.visible;
+        return cullInstances(view, planes, opts);
       }
       // The mirror warm compiles the mirror's own instanced objects — before A1
       // it compiled the shared ones, which the mirror context drew. Swaps each
@@ -5835,7 +5842,7 @@ const TLX = (function () {
           // life of the session (the Metal case, 2026-08-29).
           if (_envGaveUp) return null;
           ensureEnvCam();
-          if (!envCubeCam) return null;
+          if (!envCubeCam) { _envGaveUp = true; return null; }
           _envActive = true;
           envCubeCam.position.set(eye[0], eye[1], eye[2]);
           envCubeCam.updateMatrixWorld(true);
@@ -5892,7 +5899,7 @@ const TLX = (function () {
           if (!envRT || !envCubeCam || !_envActive) {
             _envActive = false;
             _restoreEnvFrame();
-            return;
+            return false;
           }
           const faceCam = envCubeCam.children[face & 7];
           // Software GL: six world presents into a 64px cube miss the 360 s
@@ -6004,7 +6011,9 @@ const TLX = (function () {
           if (_gpuErrors > _errAtFace) _envFaceErr = true;
           if (faceOk) { envFacesMask |= 1 << (face & 7); _envEnds++; }
           const probeErrored = _envFaceErr;
+          let accepted = faceOk;
           if (faceOk && envFacesMask === 63 && probeErrored) {
+            accepted = false;
             // The GPU rejected something while the six faces were drawn, so at
             // least one of them holds nothing. Binding that cube would light
             // every surface from black — the symptom this guard exists to stop
@@ -6054,6 +6063,7 @@ const TLX = (function () {
             try { this.readEnvCube(); } catch (_) { /* diagnostics never cost a frame */ }
           }
           _restoreEnvFrame();
+          return accepted;
         },
         mirrorBegin(frame, w, h) {
           // The second world pass shares the soft-present queue. Submitting it
@@ -6091,6 +6101,7 @@ const TLX = (function () {
           // A real pass can claim the target after warm-up clears but before
           // a previous session's queued quit callback runs. Warm draws cannot claim it.
           _mirReleaseWait = null;
+          _mirFreeze = !!frame.mirrorFreezeInstanced;
           _mirActive = true;
           _mirUsed = true;
           return true;
@@ -6197,7 +6208,7 @@ const TLX = (function () {
         // The cube stays unbound — envState() is where the difference shows.
         // The opt-out as a capability: game.js skips its whole probe branch (a track
         // sample, the latch bookkeeping) instead of calling a begin that returns null.
-        envProbeOptOut: _envOptOut,
+        get envProbeOptOut() { return _envOptOut || !envRT || _envGaveUp; },
         envProbeReady() { return envReady || _envGaveUp; },
         envProbeReset() {
           envFacesMask = 0; envReady = false; _envBlank = false;
@@ -6312,7 +6323,7 @@ const TLX = (function () {
         // keep dead GLX closures. See backend-surface-parity.test.mjs.
         createInstancedBatch,
         // While the mirror records, each routes to the batch's mirror view (A1).
-        cullInstances: (b, planes, opts) => cullInstances(opts && opts.upload === false ? b : _passBatch(b), planes, opts),
+        cullInstances: cullPassInstances,
         updateInstances: (b, m, n, c) => updateInstances(_passBatch(b), m, n, c),
         drawInstanced: (b, opts) => drawInstanced(_passBatch(b), opts),
         instPerPass: _instPerPass,
