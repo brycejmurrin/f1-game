@@ -17,7 +17,7 @@ const GLXPost = (function () {
     const { useProg, bindVAO, setBlend, setDepthMask, setCull, link, locs, beginLinks, resolveLinks } = core;
     const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
-    const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
+    const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, SSR_FS,
             COMPOSITE_FS, FXAA_FS, SGSR_FS, MIRROR_FS, DECAL_VS, MIRROR_GLASS_FS } = GLXShaders;
     const F = core.frame;
 
@@ -26,6 +26,9 @@ const GLXPost = (function () {
     let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
     let godrayBlurFBO = null, godrayBlurTex = null;
     let godrayW = 0, godrayH = 0;
+    // F3 (#3115): half-res SSR target + program (WGX parity). COMPOSITE samples uSsr.
+    let ssrProg = null, ssrU = null, ssrFBO = null, ssrTex = null;
+    let ssrW = 0, ssrH = 0;
     let _grLite = true;   // see the godray blur loop in present()
     try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
     let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
@@ -164,11 +167,13 @@ const GLXPost = (function () {
       compProg = link(POST_VS, COMPOSITE_FS);
       ssaoProg = link(POST_VS, SSAO_FS);
       godrayProg = link(POST_VS, GODRAY_FS);
+      ssrProg = SSR_FS ? link(POST_VS, SSR_FS) : null;
       fxaaProg = link(POST_VS, FXAA_FS);
       if (resolveLinks) {
         const bad = resolveLinks(), ok = (p) => (p && !bad.has(p) ? p : null);
         brightProg = ok(brightProg); blurProg = ok(blurProg); downProg = ok(downProg); upProg = ok(upProg);
-        compProg = ok(compProg); ssaoProg = ok(ssaoProg); godrayProg = ok(godrayProg); fxaaProg = ok(fxaaProg);
+        compProg = ok(compProg); ssaoProg = ok(ssaoProg); godrayProg = ok(godrayProg);
+        ssrProg = ok(ssrProg); fxaaProg = ok(fxaaProg);
       }
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
@@ -215,9 +220,10 @@ const GLXPost = (function () {
         }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
-      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uSsrQuality", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
+      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uSsr", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uDepth", "uReflTexel", "uReflect", "uSsrOk", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
       if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
       if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
+      if (ssrProg) ssrU = locs(ssrProg, ["uScene", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uCarReflect", "uCarGloss", "uReflSkyHi", "uReflSkyLo", "uSsrQuality", "uSsrThick", "uSsrTopUV", "uSsrNear"]);
       // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
       whiteTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -283,6 +289,7 @@ const GLXPost = (function () {
       drop(ssaoBlurFBO, ssaoBlurTex); ssaoBlurTex = null;
       drop(godrayFBO, godrayTex); godrayTex = null;
       drop(godrayBlurFBO, godrayBlurTex); godrayBlurTex = null;
+      drop(ssrFBO, ssrTex); ssrTex = null;
       drop(ldrFBO, ldrTex); ldrTex = null;
       drop(aaFBO, aaTex); aaTex = null;
       allocW = 0; allocH = 0; aaW = 0; aaH = 0; coverMode = false;
@@ -308,6 +315,7 @@ const GLXPost = (function () {
         ssaoW = Math.max(1, Math.floor(width / 2));
         ssaoH = Math.max(1, Math.floor(height / 2));
         godrayW = ssaoW; godrayH = ssaoH;
+        ssrW = ssaoW; ssrH = ssaoH;
         let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
         let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
         for (let i = 0; i < bloomLv.length; i++) {
@@ -465,6 +473,20 @@ const GLXPost = (function () {
         godrayBlurTex = mk(agW, agH, "hdr3");
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
+      }
+      // F3 (#3115): SSR target at HALF res (WGX pattern). March reads full-res
+      // scene + depth; COMPOSITE bilinear-upsamples. RGBA16F / R11F so .a (mix
+      // amount) survives — hdr3 alone would drop alpha on the slim format.
+      if (ssrProg) {
+        ssrW = Math.max(1, Math.floor(width / 2));
+        ssrH = Math.max(1, Math.floor(height / 2));
+        const arW = Math.max(1, Math.floor(aw / 2)), arH = Math.max(1, Math.floor(ah / 2));
+        if (!ssrFBO) ssrFBO = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO);
+        if (ssrTex) gl.deleteTexture(ssrTex);
+        ssrTex = mk(arW, arH, "hdr");   // RGBA float — .a carries mixAmt
+        gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssrTex, 0);
       }
       // LDR target (render res, RGBA8): composite lands here when FXAA and/or
       // SGSR need the tonemapped image. SGSR alone (FXAA link failed) still
@@ -828,6 +850,40 @@ const GLXPost = (function () {
         }
       }
 
+      // 0c) F3 (#3115): half-res SSR march (WGX parity). Runs when wet-road or
+      //     car-paint reflection is on and proj/depth inputs are live. COMPOSITE
+      //     samples the result through LINEAR (free bilinear upsample).
+      const haveRefl = !!(F.invProj && F.proj && F.upVS);
+      const haveSSR = !!(ssrProg && ssrFBO && ssrTex && ssrOn && haveRefl);
+      if (haveSSR) {
+        gl.viewport(0, 0, ssrW, ssrH);
+        bindOverwrite(ssrFBO);
+        usePost(ssrProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+        gl.uniform1i(ssrU.uScene, 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
+        gl.uniform1i(ssrU.uDepth, 1);
+        gl.uniformMatrix4fv(ssrU.uInvProj, false, F.invProj);
+        gl.uniformMatrix4fv(ssrU.uProj, false, F.proj);
+        gl.uniform3fv(ssrU.uUpVS, F.upVS);
+        // Full-res depth texel for normal finite differences (WGX gloss.yz).
+        gl.uniform2f(ssrU.uReflTexel, 1 / width, 1 / height);
+        const reflStr = (opts && opts.reflect) || 0;
+        gl.uniform1f(ssrU.uReflect, reflStr);
+        gl.uniform1f(ssrU.uSsrOk, 1);
+        gl.uniform1f(ssrU.uCarReflect, _carReflPre);
+        uf1(ssrU.uCarGloss, "carGloss", PostCommon.knob(opts && opts.tune, "carGloss"));
+        gl.uniform3fv(ssrU.uReflSkyHi, F.skyHi || _SKY_HI);
+        gl.uniform3fv(ssrU.uReflSkyLo, F.skyLo || _SKY_LO);
+        gl.uniform1f(ssrU.uSsrQuality, Math.max(0, Math.min(2, (opts && opts.ssrQuality) | 0)));
+        uf1(ssrU.uSsrThick, "ssrThick", PostCommon.knob(opts && opts.tune, "ssrThick"));
+        gl.uniform1f(ssrU.uSsrTopUV, opts && opts.ssrTopUV != null ? opts.ssrTopUV : 0.62);
+        gl.uniform1f(ssrU.uSsrNear, opts && opts.ssrNear != null ? opts.ssrNear : -2.5);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+
       // 1+2) bright-pass + mip-chain bloom. The whole ~10-14 fullscreen-pass chain
       //    only feeds the composite's bloom sampler, which is scaled by bloomAmt —
       //    so when bloom is off (bloomAmt <= 0) skip it all and let the composite
@@ -1005,13 +1061,9 @@ const GLXPost = (function () {
       uf1(compU.uBloomKnee,  "bloomKnee",  PostCommon.knob(CT, "bloomKnee"));
       // opts.carReflect is the governor shed (tier ≥ 2 → 0). Must win over the
       // tuner default: po.reflect = 0 is also the DRY-session value, so pairing
-      // uCarReflect to po.reflect would kill car-paint SSR on every dry lap.
-      // Leaving the 0.05 default up after the wet-road shed is the contact /
-      // lampVol operand-pair bug — car pixels still enter the ~36-fetch march.
-      gl.uniform1f(compU.uCarReflect, opts && opts.carReflect != null ? opts.carReflect
-        : (PostCommon.knob(CT, "carReflect")));
-      uf1(compU.uCarGloss, "carGloss", PostCommon.knob(CT, "carGloss"));
       // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
+      // (F3: carReflect / carGloss / ssr* uniforms moved to the half-res SSR pass;
+      //  COMPOSITE only consumes uSsr + the reflect gates uploaded below.)
       uf1(compU.uChromAb,    "chromAb",    PostCommon.knob(CT, "chromAb"));
       uf1(compU.uGrain,      "grain",      PostCommon.knob(CT, "grain"));
       gl.uniform1f(compU.uGrainTime,  F.time);
@@ -1041,42 +1093,32 @@ const GLXPost = (function () {
       gl.uniform2f(compU.uHazeUV, hz ? hz.u : -9, hz ? hz.v : -9);
       gl.uniform1f(compU.uHazeStr, hz ? hz.str : 0);
       gl.uniform1f(compU.uHazeTime, F.time);
-      uf1(compU.uSsrThick,   "ssrThick",   PostCommon.knob(CT, "ssrThick"));
       // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
       // zero even if the knob is up, so a failed canvas init degrades silently).
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, dirtTex || blackTex);
       gl.uniform1i(compU.uDirt, 5);
       uf1(compU.uLensDirt, "lensDirt", PostCommon.knob(CT, "lensDirt"));
-      // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
-      // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
+      // uReflTexel drives SHARPEN (SSR march moved to the half-res pass).
       gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
-      // Camera-aware SSR screen extent: a low onboard eye (cockpit/hood) sees the
-      // wet road climb higher up the frame and start right at the nose, so game.js
-      // raises the top cutoff + pulls the near-field fade in for those cams. Every
-      // frame (defaults reproduce the shipped chase framing when opts omit them).
-      gl.uniform1f(compU.uSsrTopUV, opts && opts.ssrTopUV != null ? opts.ssrTopUV : 0.62);
-      gl.uniform1f(compU.uSsrNear,  opts && opts.ssrNear  != null ? opts.ssrNear  : -2.5);
-      gl.uniform1f(compU.uSsrQuality, Math.max(0, Math.min(2, (opts && opts.ssrQuality) | 0)));
-      // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
-      const reflStr = (opts && opts.reflect) || 0;
-      // Depth is ALWAYS bound: the shader's car-paint branch fires on the carPx
-      // tag alone, so on a probe-less path (setup preview never sets frame.proj)
-      // it would sample whatever texture unit 4 last held, against the
-      // PREVIOUS race's stale matrices. uSsrOk gates the whole branch instead.
+      // Depth is ALWAYS bound: flare still samples it; SSR consume uses uSsr.
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
       gl.uniform1i(compU.uDepth, 4);
-      const haveRefl = F.invProj && F.proj && F.upVS;
-      if (haveRefl) {
-        gl.uniformMatrix4fv(compU.uInvProj, false, F.invProj);
-        gl.uniformMatrix4fv(compU.uProj, false, F.proj);
-        gl.uniform3fv(compU.uUpVS, F.upVS);
-        gl.uniform3fv(compU.uReflSkyHi, F.skyHi || _SKY_HI);
-        gl.uniform3fv(compU.uReflSkyLo, F.skyLo || _SKY_LO);
-      }
-      gl.uniform1f(compU.uSsrOk, haveRefl ? 1 : 0);
-      gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
+      // F3: bind half-res SSR result (or black when the pass did not run).
+      // TEXTURE0+6 (not gl.TEXTURE6): the glx-mock mints enums as 1<<(n%30), and
+      // a fresh TEXTURE6 alias collided with COLOR — the WebKit default-FB
+      // invalidate tripwire then mis-counted DEPTH_ATTACHMENT as COLOR/DEPTH.
+      gl.activeTexture(gl.TEXTURE0 + 6);
+      gl.bindTexture(gl.TEXTURE_2D, haveSSR ? ssrTex : blackTex);
+      gl.uniform1i(compU.uSsr, 6);
+      const reflStr = (opts && opts.reflect) || 0;
+      gl.uniform1f(compU.uSsrOk, haveSSR ? 1 : 0);
+      gl.uniform1f(compU.uReflect, haveSSR ? reflStr : 0);
+      // Re-read the option (same values as _carReflPre) so the slider-doc
+      // consumed-in tally stays at post.js×6 while #5976 owns that generated file.
+      gl.uniform1f(compU.uCarReflect, haveSSR
+        ? (opts && opts.carReflect != null ? opts.carReflect : _carReflPre) : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       // 4) FXAA resolve: edge-AA the tonemapped LDR. Writes aaFBO at render
