@@ -597,10 +597,14 @@ const CarDraw = (function () {
     // fitted id's atlas stays live (#3609). Drop every non-draft atlas for this
     // team whose key is not under the CURRENT fitted id. Skip while a draft is
     // live for the team so CANCEL still restores the saved 2048.
+    let checkedAtlasTeam = null, checkedAtlasLivery = null;
     function dropSupersededFittedAtlases(team) {
       const d = G.livDraftOverride;
       if (d && d.teamId === team.id) return;
-      const keep = team.id + ":" + G.getLiveryId(team.id) + ":";
+      const fitted = G.getLiveryId(team.id);
+      if (checkedAtlasTeam === team.id && checkedAtlasLivery === fitted) return;
+      checkedAtlasTeam = team.id; checkedAtlasLivery = fitted;
+      const keep = team.id + ":" + fitted + ":";
       const teamColon = team.id + ":";
       const draftPrefix = teamColon + DRAFT_TAG;
       const keys = Object.keys(_decalTexCache);
@@ -896,6 +900,8 @@ const CarDraw = (function () {
           if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
           if (n < 3) return null;
         }
+        // A new key can introduce a superseded atlas. Removals and in-place hi-res upgrades cannot.
+        checkedAtlasTeam = null;
         _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick); _decalSeen.set(key, _flushFrame);
         if (wantHi && t) schedulePlayerHiRes(team, num, key);
         // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
