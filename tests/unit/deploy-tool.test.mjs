@@ -262,7 +262,7 @@ test("only GENERATED files cure themselves, and only when their source merged cl
 
   // The agent output catalog is derived (gen-output-surface.mjs); its policy source is not.
   assert.equal(cure(["docs/agent-output/catalog.json", "tools/README.md"]), true, "two tool indexes regenerate together");
-  assert.deepEqual(cureableConflicts(["docs/agent-output/catalog.json"]).catalogF, ["docs/agent-output/catalog.json"]);
+  assert.deepEqual(cureableConflicts(["docs/agent-output/catalog.json"]).builtF, ["docs/agent-output/catalog.json"]);
   assert.equal(cure(["docs/agent-output/catalog.json", "docs/agent-output/policies.json"]), false, "policies.json is hand-written");
 
   // System audit 2026-10-26: the merge-conflict hot spots that are generated —

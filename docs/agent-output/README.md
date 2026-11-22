@@ -159,7 +159,7 @@ Protocol notifications, cancellation and approval decisions are unaffected.
 
 ## Coverage and discovery
 
-[The generated catalog](catalog.json) lists the tool-file inventory, npm scripts,
+Run `node tools/gen/ensure-built.mjs --with docs/agent-output/catalog.json` to build the local catalog. It lists the tool-file inventory, npm scripts,
 configured MCP routes and entrypoint coverage. Libraries, assets and data files
 are distinguished from executable candidates; the inventory does not execute
 scripts to guess what they do.
