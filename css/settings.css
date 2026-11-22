@@ -76,7 +76,7 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
 /* Backup actions stay discoverable without a long mixed import/export page. */
 #pmsettings-inner #pm-files-nav { display: flex; flex-wrap: wrap; gap: var(--gap); width: 100%; max-width: none; }
 #pmsettings-inner #pm-files-nav button { flex: 1 1 7rem; width: auto; height: auto; min-height: var(--tap); white-space: normal; }
-#pm-files-nav button[aria-pressed="true"] { border-color: var(--red); background: var(--plate-on); }
+#pm-files-nav button[aria-selected="true"] { border-color: var(--red); background: var(--plate-on); }
 #pm-files-save, #pm-files-restore, #pm-files-share { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 #pm-files-save[hidden], #pm-files-restore[hidden], #pm-files-share[hidden] { display: none; }
 #pm-share-code-in { width: 100%; min-width: 0; box-sizing: border-box; }
