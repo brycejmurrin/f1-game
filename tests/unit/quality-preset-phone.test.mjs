@@ -235,3 +235,19 @@ test("detail / feature: HIGH 0, ULTRA 1, EXTREME 2; phones 0; shed, cinema and t
   assert.equal(held.feature("dof"), false, "holding the extras does not turn CINEMA on");
   assert.equal(boot("extreme", false, { "apex26.gfxx.csm": "0" }).feature("csm"), false);
 });
+
+test("desktop scene effects are independent opt-ins, including on the cinema preset", () => {
+  const names = ["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"];
+  const src = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  for (const mobile of [true, false]) {
+    for (const selected of names) {
+      const store = { get: (key) => key === "gfxPreset" ? "extreme" : { [selected]: true }, raw: () => null };
+      const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
+      q.setCinema(true);
+      for (const name of names) {
+        assert.equal(q.supportsOption(name), !mobile);
+        assert.equal(q.feature(name), !mobile && name === selected);
+      }
+    }
+  }
+});

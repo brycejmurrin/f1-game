@@ -56,6 +56,8 @@ function detail() {
   return (_detail = d);
 }
 // Player overrides are a boot snapshot: changing several controls never rebuilds half a scene.
+// Desktop scene experiments stay opt-in until their frame cost has been measured on hardware.
+const optInEffects = new Set(["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"]);
 const phoneEffects = new Set(["anisotropy", "skyAtmo", "meshHi", "heroCar", "rivalLod", "garageHi", "crewHi",
   "crowd3d", "treesHi", "kerbProfile", "farTerrain", "density", "propsHi"]);
 function phoneDetail() { return typeof GLX !== "undefined" && GLX.isMobile; }
@@ -76,6 +78,7 @@ function needsBundle() {
   return detail() >= 2 || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
 }
 function feature(name, building = false) {
+  if (optInEffects.has(name)) return option(name, false);
   const need = FEATURES[name];
   if (!need) return false;
   try { const o = gstore() && gstore().raw("apex26.gfxx." + name); if (o === "0") return false; if (o === "1") return true; } catch (_) { /* no override */ }

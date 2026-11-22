@@ -28,9 +28,16 @@
       envProbe: ["Environment reflection probe", "Captures the surroundings for reflections that change as the car moves."],
       envMap: ["High-resolution reflection probe", "Captures more detail in the environment map used by reflective surfaces."],
       envAll: ["World metal reflections", "Lets metal surfaces around the circuit reflect their surroundings."],
+      garageProbeParallax: ["Garage reflections", "Aligns reflections on the car with the walls of its garage bay as you orbit. Uses the three.js renderer. Off by default."],
       skyAtmo: ["Atmospheric sky", "Models how sunlight scatters through the air, changing the sky colour near the horizon."],
     },
+    "Weather": {
+      rainCurtains: ["Distant showers", "Shows the rain falling over a wet section of the circuit during a moving local shower. Off by default."],
+    },
     "Cars and scenery": {
+      rivalLiveryLod: ["Distant team colours", "Keeps two livery colours visible when rivals switch to simplified models farther down the track. Off by default."],
+      circuitSurfaces: ["Silverstone surface detail", "Shows worn asphalt, resurfaced patches and painted kerbs at Silverstone. Off by default."],
+      tyreWearVisual: ["Visible tyre wear", "Shows scuffing as tyres wear. Preview fresh and worn tyres in the garage. Off by default."],
       meshHi: ["Car mesh detail", "Uses finer geometry to smooth the outlines of curved bodywork and wheels."],
       heroCar: ["Modelled player car parts", "Adds individually modelled parts to the player car. Look closely at the bodywork in the garage."],
       liveryHi: ["High-resolution liveries", "Uses sharper livery textures so stripes and decals hold their detail up close."],
