@@ -132,6 +132,21 @@ test("bed is audible during a live race near the pit straight", () => {
   assert.ok(near > mid, `pit-straight bed ${near} should exceed mid-lap ${mid}`);
 });
 
+test("the crowd bed samples results visibility once per engine update", () => {
+  const { GameAudio, CrowdAudio, ctx, results } = boot({ mobile: true, player: { s: 2000, pos: 8 } });
+  let reads = 0, hidden = true;
+  Object.defineProperty(results, "hidden", { get() { reads++; return hidden; } });
+  for (let i = 0; i < 120; i++) {
+    ctx.currentTime = i / 60;
+    GameAudio.setEngine();
+  }
+  assert.equal(reads, 120);
+  hidden = false;
+  GameAudio.setEngine();
+  assert.equal(reads, 121);
+  assert.equal(CrowdAudio.inspect().bed, 0);
+});
+
 test("silent on countdown, pause, results, and SFX off", () => {
   const b = boot();
   b.CrowdAudio.update();

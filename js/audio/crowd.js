@@ -359,8 +359,9 @@ var CrowdAudio = (function () {
     const t = now();
     if (G && G.track !== standTrack) cacheStands();
 
+    const live = liveOk();
     let target = 0;
-    if (liveOk()) {
+    if (live) {
       const mul = lowPower() ? 0.55 : 1;
       const pit = pitStraightBoost(G.player);
       const stands = grandstandBoost();
@@ -376,10 +377,8 @@ var CrowdAudio = (function () {
       if (t - lastCheerT > CHEER_MIN_GAP && prox > 0.35 && (t * 10) % 17 < 1) {
         fireCheer(0.035 + 0.03 * prox, 0.45);
       }
-    } else if (bedGain && bedGain.gain && bedGain.gain._apexCrowdTgt !== 0) {
-      // fall through to aim 0
     }
-    aim(bedGain.gain, target, t, liveOk() ? 0.22 : 0.08);
+    aim(bedGain.gain, target, t, live ? 0.22 : 0.08);
   }
 
   function bindHost(h) {
