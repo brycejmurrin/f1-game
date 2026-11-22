@@ -6974,6 +6974,7 @@ const TLX = (function () {
           // Post-only death: same materials, canvas (the 1269 intent). The chain is
           // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
+            if (opts && opts.visorFolded) opts.visorFolded = false;
             const deadPost = post;
             post = null;
             _cancelSoftBlits();
