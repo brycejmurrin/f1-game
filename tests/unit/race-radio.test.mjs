@@ -1584,3 +1584,15 @@ test("the radio seed is built from the race seed and round only — no language"
     }
   }
 });
+
+test("quiet cockpit ticks check the commentary camera only when rules are due or an event arrives", () => {
+  const { G, radio, step, said } = race({ cam: 1 });
+  let cameraReads = 0;
+  Object.defineProperty(G, "camMode", { get() { cameraReads++; return 1; } });
+  step(1 / 64, 63);
+  assert.equal(cameraReads, 2, "the two half-second evaluations");
+  assert.ok(radio.request(), "fresh facts still answer an on-demand check");
+  G._caution = 3;
+  step(1 / 64);
+  assert.ok(said.some(line => line.kind === "warning"));
+});
