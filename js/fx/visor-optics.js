@@ -420,6 +420,8 @@ const VisorOptics = (function () {
     }
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
+    // tick measured the layout before lookup; size a newly acquired canvas for its first paint.
+    if (_cv.width !== _w || _cv.height !== _h) { _cv.width = _w; _cv.height = _h; }
     // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
     if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name !== "visorBeams") _portKey = ""; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
@@ -460,9 +462,9 @@ const VisorOptics = (function () {
   }
 
   /** The port image on body (--visor-port) for the current size and tint; rebuilt only when either changes. */
-  function _port() {
-    if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
-    const visor = _opt("visor", "off"), color = _opt("visorColor", "amber"), strength = _opt("visorIntensity", "medium");
+  function _port(visor) {
+    if (!document.body.style) return;
+    const color = _opt("visorColor", "amber"), strength = _opt("visorIntensity", "medium");
     if (_portKey && _w === _portW && _h === _portH && visor === _portV && color === _portC && strength === _portS) return;   // no per-frame key string
     _portW = _w; _portH = _h; _portV = visor; _portC = color; _portS = strength;
     _portKey = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
@@ -681,10 +683,9 @@ const VisorOptics = (function () {
   function tick(dt, on, vs, reduced) {
     const helmet = _helmet();
     if (!helmet) { _syncBudget(0); _show(false); return; }
-    let resized = _size();
-    _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
-    const level = LEVEL[_opt("visorReflections", "light")] || 0;
+    const resized = visor !== "off" && _size();
+    _port(visor);                                              // OFF clears the aperture without measuring the viewport
     const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
     if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
     const budget = BUDGETS[_budget];
@@ -692,17 +693,18 @@ const VisorOptics = (function () {
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     if (_budget < 2) _bend();
     if (t2 && _bendKey && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
+    const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (!(level > 0)) { _show(false); return; }
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
+    const newSizeOrCanvas = resized || !_looked;
     if (!_lookup()) return;
-    if (_size()) resized = true;                               // idempotent: sizes a canvas _lookup just made (visor first turned on mid-helmet)
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
     const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
-    if (!resized && _acc < 1 / hz) return;
-    if (!(dt > 0) && !resized && !changed) return;              // a paused profile change still refreshes once
-    _acc = resized || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
+    if (!newSizeOrCanvas && _acc < 1 / hz) return;
+    if (!(dt > 0) && !newSizeOrCanvas && !changed) return;              // a paused profile change still refreshes once
+    _acc = newSizeOrCanvas || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
     if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden

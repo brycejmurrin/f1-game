@@ -383,14 +383,20 @@ test("visor exit via Droplets (#4751 row 15): leaving the onboard cam in the dry
 });
 
 test("visor size (audit4 R2): turning the visor ON mid-helmet sizes the new canvas before its first paint", () => {
-  const { V, calls, listeners, live } = load({ apex: { visorScene: () => DAY }, visor: "off" });
-  V.tick(1 / 60, true, 0, false);                     // visor OFF: _size records the viewport, no canvas yet
+  const { V, calls, listeners, live, ctx } = load({ apex: { visorScene: () => DAY }, visor: "off" });
+  let width = 390, height = 844, reads = 0;
+  ctx.document.documentElement = { get clientWidth() { reads++; return width; }, get clientHeight() { reads++; return height; } };
+  for (let i = 0; i < 120; i++) V.tick(1 / 60, true, 0, false);
+  assert.equal(reads, 0, "disabled optics need no viewport measurements");
+  width = 844; height = 390;
   live.visor = "clear";
   for (const fn of listeners) fn("visor", "clear");
   V.tick(1 / 60, true, 0, false);
   assert.ok(calls.inserted, "the canvas is built");
   assert.equal(calls.inserted.width, 844, "the first paint lands on a viewport-sized store, not 300x150");
   assert.ok(V.stats().paints >= 1, "and it paints at once");
+  for (let i = 1; i < 120; i++) V.tick(1 / 60, true, 0, false);
+  assert.equal(reads, 240, "one width and height measurement per active tick");
 });
 
 test("visor refraction: the rim bend map and its three filters are built once per size when refraction is on", () => {
