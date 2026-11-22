@@ -179,6 +179,16 @@ async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// Wait for the game to RENDER `n` more frames (cameraState().renderFrame is the
+// render loop's own counter). For a NEGATIVE check — "that input did not move
+// the view", "the menu survived the keyup" — this is the state to wait on: the
+// loop has had real frames in which to react, however slow the box is.
+async function awaitRenderFrames(page, n = 2) {
+  const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+  await page.waitForFunction(({ f0, n }) => window.__apex.cameraState().renderFrame >= f0 + n,
+    { f0, n }, { polling: 100, timeout: BOOT_MS });
+}
+
 async function openPauseMenu(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
@@ -390,12 +400,20 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40, 0); });
-    await page.waitForTimeout(400);
+    // PAUSE acts only in a running race with the pause door up (openPauseMenu's wait).
+    await page.waitForFunction(() => {
+      const b = document.getElementById("pausebtn");
+      return window.__apex.info().state === "race" && !!b && !b.hidden;
+    }, null, { polling: 100, timeout: BOOT_MS });
     // focus must be off the pause BUTTON, or this measures the button's own key
     // handling rather than the global one.
     await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    await expect(page.locator("#pausemenu")).toBeVisible();
+    // Then let the browser run two animation frames past the keyup (the bug closed
+    // the menu again on it). Browser frames, not render frames: a bare pause menu
+    // stops render(), so cameraState().renderFrame would never advance here.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     expect(await page.evaluate(() => document.getElementById("pausemenu").hidden)).toBe(false);
   });
 
@@ -522,7 +540,8 @@ test.describe("Lighting tuner — free camera touch controls", () => {
     // camState() is the observable: the fly-cam publishes through dbgCam, so
     // "did that pointer move the view" is answerable without reading privates.
     const eye = () => page.evaluate(() => window.__apex.camState().eye.slice());
-    const settle = () => page.waitForTimeout(250);
+    // Negative checks: give the fly-cam rendered frames in which it could move.
+    const settle = () => awaitRenderFrames(page, 2);
 
     const ev = (type, id, x, y, onCanvas) => page.evaluate(({ type, id, x, y, onCanvas }) => {
       const target = onCanvas ? document.getElementById("game") : window;
@@ -587,8 +606,7 @@ test.describe("Pause menu — tilt mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "tilt");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "tilt");   // waits on the select + #pm-calib state
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeVisible();
     await expect(calib).toBeEnabled();
@@ -603,8 +621,7 @@ test.describe("Pause menu — button mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "buttons");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "buttons");   // waits on the select + #pm-calib state
     // Disabled, NOT hidden — hiding it reflowed the settings grid so the next
     // tap landed on a different button (see setSteerMode in game.js).
     const calib = page.locator("#pm-calib");
@@ -621,8 +638,7 @@ test.describe("Pause menu — touch mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "touch");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "touch");   // waits on the select + #pm-calib state
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeVisible();
     await expect(calib).toBeDisabled();
@@ -641,8 +657,7 @@ test.describe("Pause settings — stable layout", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "tilt");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "tilt");   // waits on the select + #pm-calib state
 
     const ids = ["pm-steer", "pm-calib", "adv-feel-details", "pm-advanced", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
@@ -656,7 +671,7 @@ test.describe("Pause settings — stable layout", () => {
 
     const before = await grab();
     await page.locator("#pm-steer-next").click();   // tilt -> buttons (hides nothing now)
-    await page.waitForTimeout(200);
+    await expect(page.locator("#pm-steer-sel")).not.toHaveValue("tilt");
     const after = await grab();
     expect(after).toEqual(before);
 
@@ -757,7 +772,6 @@ test.describe("Race settings — portrait layout", () => {
     // door beside it — this spec is about the settings sheet, not the garage.
     await page.locator("#sel-go").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
-    await page.waitForTimeout(300);
     // RACE! button must be visible without scrolling
     await expect(page.locator("#rs-go")).toBeVisible();
     await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-portrait.png") });
@@ -875,7 +889,9 @@ test.describe("Race settings — landscape layout", () => {
     // door beside it — this spec is about the settings sheet, not the garage.
     await page.locator("#sel-go").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
-    await page.waitForTimeout(300);
+    // The sheet's content is laid out once its last control is (reduced motion:
+    // the final layout lands on the first frame, see waitReady).
+    await expect(page.locator("#rs-go")).toBeVisible();
     // Panel must not overflow
     const scrollable = await page.evaluate(() => {
       const panel = document.getElementById("race-settings");
