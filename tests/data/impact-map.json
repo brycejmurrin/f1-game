@@ -5798,6 +5798,9 @@
         "tests/unit/shadow-pass-depth.test.mjs",
         "tests/unit/shared-math.test.mjs"
       ],
+      "rolledUpTo": [
+        "tests/unit/shared-math.test.mjs"
+      ],
       "wrapDelta": [
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/shared-math.test.mjs"
@@ -8621,6 +8624,9 @@
       "paintCareer": [
         "tests/unit/garage-followups.test.mjs"
       ],
+      "project": [
+        "tests/unit/photo-studio.test.mjs"
+      ],
       "statsOf": [
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
@@ -8630,7 +8636,6 @@
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
-        "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
       ]
     },
@@ -11525,6 +11530,9 @@
       ]
     },
     "js/perf/bench-run.js": {
+      "graphicsAdvice": [
+        "tests/unit/bench-run.test.mjs"
+      ],
       "growth": [
         "tests/unit/bench-run.test.mjs"
       ],
@@ -12080,6 +12088,9 @@
       "observe": [
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/phone-recorder.test.mjs",
+        "tests/unit/render-rate.test.mjs"
+      ],
+      "setDesktopTarget": [
         "tests/unit/render-rate.test.mjs"
       ],
       "setMode": [
@@ -16692,6 +16703,9 @@
       "releaseMirrors": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-r187-contracts.test.mjs"
+      ],
+      "roadRanges": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "splitRanges": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
