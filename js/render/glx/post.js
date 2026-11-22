@@ -215,6 +215,7 @@ const GLXPost = (function () {
             let _p = localStorage.getItem("apex26.gfxPreset");
             try { _p = JSON.parse(_p); } catch (_) { /* not JSON: compare the raw string */ }
             _ultra = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+            if (typeof GfxQuality !== "undefined" && GfxQuality.option) _ultra = GfxQuality.option("msaa", _ultra);
           } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
           if (!_ultra && msaaSamples > 2) msaaSamples = 2;
         }
@@ -299,8 +300,9 @@ const GLXPost = (function () {
 
     // (Re)allocate the scene + bloom render targets at the current size.
     function createTargets() {
-      if (!postEnabled) return;
+      if (!programsReady) return;
       const { width, height } = core.getSize();
+      if (!postEnabled && width === targetW && height === targetH) return;
       // A present-size change (UPSCALE toggle) leaves the scene size intact.
       // Preserve its textures/MSAA storage; only the AA intermediate changes.
       if (sceneTex && width === targetW && height === targetH) {
@@ -326,6 +328,10 @@ const GLXPost = (function () {
         syncSpatialTarget(width, height);
         return;
       }
+      // A failed target falls back for this size. Retry the linked chain and its selected MSAA on reallocation.
+      targetW = width; targetH = height;
+      postEnabled = true;
+      msaaSamples = requestedSamples;
       // Phone / mobile-tier: allocate a square cover of max(w,h) so the first
       // portrait↔landscape flip never rebuilds (#3311). Desktop keeps exact size.
       const cover = (IS_MOBILE || MOBILE_TIER) ? Math.max(1, width, height) : 0;
@@ -507,7 +513,6 @@ const GLXPost = (function () {
       }
       allocW = aw; allocH = ah;
       coverMode = !!cover;
-      targetW = width; targetH = height;
       setCoverScale(width, height);
       syncSpatialTarget(width, height);
     }
@@ -1406,7 +1411,9 @@ const GLXPost = (function () {
       for (const k in _compUf) delete _compUf[k];
     }
 
-    postEnabled = setup();   // best-effort; false -> render straight to screen
+    const programsReady = setup();
+    const requestedSamples = msaaSamples;
+    postEnabled = programsReady;
     Log.info("gfx", "GLX post init on=" + (postEnabled ? 1 : 0));
 
     return {

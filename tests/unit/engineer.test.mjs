@@ -402,6 +402,26 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
 });
 
+test("rival stop tracking records arrivals and counter changes without rewriting a steady field", (t) => {
+  const { eng, tyres, G } = sessionFor();
+  const player = carOn(tyres, { prog: 5000 });
+  G.cars = [player];
+  G.pits = { estimate: () => ({ lossS: 22 }) };
+  eng.senseOf(player);
+  const writes = t.mock.method(player._eng.stops, "set");
+  const rival = { code: "VER", prog: 4900, pitStops: 3 };
+  G.cars.push(rival);
+  assert.equal(eng.senseOf(player).rivalBoxed, null, "an arriving rival establishes a baseline");
+  assert.equal(writes.mock.callCount(), 1);
+  for (let i = 0; i < 60; i++) eng.update(player, 1 / 60);
+  assert.equal(writes.mock.callCount(), 1, "an unchanged stop count needs no writes");
+  rival.pitStops = 0;
+  assert.equal(eng.senseOf(player).rivalBoxed, null, "a counter reset is quiet");
+  rival.pitStops = 1;
+  assert.equal(eng.senseOf(player).rivalBoxed, "VER", "the first stop after the reset counts");
+  assert.equal(writes.mock.callCount(), 3);
+});
+
 test("the PIT CALL rides its own priority; every other line still yields", () => {
   // Every engineer line was "info" (js/game.js ANN_PRI rank 2), which put the
   // instruction to pit BELOW the pit lane's own "PIT ENTRY — LIMITER ON"

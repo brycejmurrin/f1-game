@@ -495,8 +495,9 @@
     // it; the next chain build reads it). The tone-map knob stays numeric and shared with GLX; ACES is the default.
     let agx = false;
     try {
-      agx = webgpu && !ctx.isMobile && !phys && typeof GfxQuality !== "undefined" && GfxQuality.detail() >= 2
-        && typeof TSL.agxToneMapping === "function" && localStorage.getItem("apex26.tlxAgx") === "1";
+      agx = webgpu && !ctx.isMobile && !phys && typeof GfxQuality !== "undefined" && typeof TSL.agxToneMapping === "function";
+      const preset = agx && GfxQuality.detail() >= 2 && localStorage.getItem("apex26.tlxAgx") === "1";
+      agx = agx && (GfxQuality.option ? GfxQuality.option("agx", preset) : preset);
     } catch (_) { agx = false; }
     // SSGI temporal accumulation (tsl-gi.js giAccPass): wherever SSGI is built on native WebGPU.
     const giTemporal = !!(HI && HI.ssgi && webgpu);
@@ -626,7 +627,7 @@
       return true;
     }
     function ensureCine() {
-      if (!cineA) { cineA = makeRT(1, 1, THREE.UnsignedByteType); cineB = makeRT(1, 1, THREE.UnsignedByteType); layoutHalf(); }
+      if (!cineA) { cineA = makeRT(1, 1, ldrRT.texture.type); cineB = makeRT(1, 1, ldrRT.texture.type); layoutHalf(); }
       return true;
     }
     function ensureFocus() {
@@ -639,7 +640,7 @@
       layoutHalf();
     }
     // CINEMA (dof / motionBlur live): composite output -> motion blur -> depth of field, ping-ponging cineA / cineB.
-    // Returns the target FXAA reads (src itself when neither runs, which is every frame below EXTREME).
+    // Returns the target the AA resolve reads (src itself when neither runs, which is every frame below EXTREME).
     function cinemaPost(src, F, o) {
       const HV = _hiLive, G = P.gi;
       _last.dof = false; _last.mblur = false;
@@ -995,12 +996,13 @@
       }
       P.fxaa.U.bend.value.set(field ? field.x : 0, field ? field.y : 0);
     }
-    // Direct-to-canvas FXAA retains its input, not its finished pixels. Replay only
+    // Direct-to-canvas presentation retains the final pass input. Replay only
     // the final pass(es) on a screenshot request, then let three read the target asynchronously.
     let fxaaCaptureRT = null;
     function captureTarget() {
       if (viz) return _vizDest;
-      if (!_last.fxaa || _last.sgsr || _lastPresentRT !== ldrRT) return cap8(_lastPresentRT || ldrRT);
+      const direct = _lastPresentRT && _lastPresentRT === (_last.sgsr ? aaRT : ldrRT);
+      if (!direct || !(_last.fxaa || _last.taa)) return cap8(_lastPresentRT || ldrRT);
       const w = renderer.domElement.width, h = renderer.domElement.height;
       if (!fxaaCaptureRT) {
         fxaaCaptureRT = makeRT(w, h, THREE.UnsignedByteType);
@@ -1016,9 +1018,11 @@
         const blend = P.fxaa.U.lightBlend, previousBlend = blend && blend.value;
         if (blend) blend.value = 0;
         if (bend) bend.set(0, 0);   // captures contain the world without helmet optics
-        try { runPass(P.fxaa.mat, fxaaCaptureRT); }
-        finally { if (bend) bend.set(x, y); if (blend) blend.value = previousBlend; }
-        if (!P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
+        try {
+          if (_last.taa) AA.copyLast(fxaaCaptureRT);
+          else runPass(_last.sgsr ? P.sgsr.mat : P.fxaa.mat, fxaaCaptureRT);
+        } finally { if (bend) bend.set(x, y); if (blend) blend.value = previousBlend; }
+        if (_last.taa || _last.sgsr || !P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
       } finally {
         quad.material = mat;
         renderer.setMRT(mrt);
@@ -1460,7 +1464,7 @@
           // TRAA: history <- resolve(ldr, history), history -> dest, the mirror inset on top (never jittered: its
           // own camera, composited after the resolve). Its retained target may be the pre-AA LDR when drawing to the canvas.
           if (P.fxaa.mirTex) fxaaMirror(false);
-          AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm);
+          AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm, P.fxaa.tex.value);
           _last.taa = true;
           mirrorPass(dest);
           _lastPresentRT = dest || ldrRT;
@@ -1471,10 +1475,10 @@
           runPass(P.fxaa.mat, aaRT);
           P.sgsr.tex.value = aaRT.texture;
           P.sgsr.U.viewport.value.set(1 / pW, 1 / pH, pW, pH);
-          if (fixed) {
+          if (phys) {
             const ps = presentSize();
             vset(P.sgsr, ps[0], ps[1]);   // the canvas / soft target: always present-sized
-            P.sgsr.U.plain.value = ctx.userSpatialUpscale && ctx.userSpatialUpscale() ? 0 : 1;
+            P.sgsr.U.plain.value = fixed && !(ctx.userSpatialUpscale && ctx.userSpatialUpscale()) ? 1 : 0;
           }
           runPass(P.sgsr.mat, dest);
           mirrorPass(dest);
@@ -1742,7 +1746,7 @@
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
       ldrTarget: () => cap8(ldrRT),
       // Soft-present target, or the latest offscreen intermediate when rendering to the canvas.
-      // captureTarget reproduces direct-to-canvas FXAA on demand.
+      // captureTarget replays direct-to-canvas presentation on demand.
       captureTarget,
       presentedTarget: () => (viz ? _vizDest : cap8(_lastPresentRT || ldrRT)),
       // TRAA: this frame's NDC jitter for the main camera (tlx.js begin), or null while the TAA would not run.

@@ -299,7 +299,7 @@ const TrackMesh = (function () {
   // The centreline stays fixed. Beyond the tarmac the height holds at its edge.
   //
   // Everything laid alongside the road must use this. buildRoad applied the
-  // pivot inline while buildKerbs did not, so on Zandvoort's banked corners the
+  // pivot inline while buildKerbSteps did not, so on Zandvoort's banked corners the
   // road edge moved +/-2.4 m while the kerb ribbon stayed at the unbanked
   // height — the tarmac fell away from its own kerb into a cliff on the low
   // side and swallowed it on the high side.
@@ -350,7 +350,7 @@ const TrackMesh = (function () {
     return [nx * sg, ny * sg, nz * sg];
   }
 
-  function buildKerbs(track, out) {
+  function* buildKerbSteps(track, out) {
     // EXTREME kerbProfile's strip hook (js/track/scenery/detail.js attach; it mirrors KW / KH0 / STRIPE_M below).
     const kp = track._kerb && track._kerb(out);
     const { n, px, py, pz, hw } = track;
@@ -516,6 +516,7 @@ const TrackMesh = (function () {
         ribbon(U(i), U(i) + len, side);
         kp && kp(U(i), U(i) + len, side);   // kerbProfile: the same strip, profiled, into a drawn-only buffer
         m += len;
+        yield;
       }
     }
   }
@@ -713,6 +714,10 @@ const TrackMesh = (function () {
   }
 
   function buildRoad(track) {
+    return finishSteps(buildRoadSteps(track));
+  }
+
+  function* buildRoadSteps(track) {
     Log.info("track", "buildRoad start " + (track.def && track.def.id));
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [], mat = [], trk = [];
@@ -772,6 +777,7 @@ const TrackMesh = (function () {
     const ds = track.total / n;
     const V = 14;
     for (let k = 0; k < n; k++) {
+      if (k && k % 32 === 0) yield;
       const u = upOf(track, k);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const w = hw[k];
@@ -819,7 +825,7 @@ const TrackMesh = (function () {
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
       for (let v = 0; v < V; v++) {
         const o = offs[v];
-        // Shared with buildKerbs so the two can never disagree about where the
+        // Shared with buildKerbSteps so the two can never disagree about where the
         // banked surface is — see bankOffsetAt().
         const by = bankOffsetAt(track, k, o);
         // …AND THE VERGE DOES NOT DIP INTO THE PIT APRON. Those outer columns
@@ -870,7 +876,7 @@ const TrackMesh = (function () {
             c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
             m = MAT.ASPHALT;
           } else {
-            // kerb ribbons added separately by buildKerbs; a def that names its
+            // kerb ribbons added separately by buildKerbSteps; a def that names its
             // ground material (terrainMat) carries it onto these edge columns too
             c = grass; m = edgeMat;
           }
@@ -902,6 +908,7 @@ const TrackMesh = (function () {
       trk.push(track.total, trk[v * 3 + 1], trk[v * 3 + 2]);
     }
     for (let k = 0; k < n; k++) {
+      if (k && k % 128 === 0) yield;
       const a = k * V, b = k === n - 1 ? seam : (k + 1) * V;
       for (let v = 0; v < V - 1; v++) {
         idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
@@ -914,10 +921,11 @@ const TrackMesh = (function () {
         const innerLat = surf.rails[0];
         const topC = [grass[0] * 0.72, grass[1] * 0.72, grass[2] * 0.72];
         const botC = [grass[0] * 0.42, grass[1] * 0.42, grass[2] * 0.42];
-        const skirt = (v) => {
+        function* skirt(v) {
           const base = pos.length / 3;
           const sgn = v === 0 ? -1 : 1;
           for (let k = 0; k < n; k++) {
+            if (k && k % 128 === 0) yield;
             const i3 = (k * V + v) * 3;
             const ex = pos[i3], ey = pos[i3 + 1], ez = pos[i3 + 2];
             // Deep enough for both the seam drop and the clip trench…
@@ -937,17 +945,20 @@ const TrackMesh = (function () {
             idxArr.push(a, a + 1, b, a + 1, b + 1, b);
             idxArr.push(a, b, a + 1, a + 1, b, b + 1);
           }
-        };
-        skirt(0); skirt(13);
+        }
+        yield* skirt(0); yield* skirt(13);
       }
     }
-    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    yield* buildKerbSteps(track, { pos, nrm, col, mat, trk, idx: idxArr });
     buildPitHatch(track, { pos, nrm, col, mat, trk, idx: idxArr });
     return { pos, nrm, col, mat, trk, idx: idxArr };
   }
 
   function buildTerrain(track) {
-    const it = buildTerrainSteps(track);
+    return finishSteps(buildTerrainSteps(track));
+  }
+
+  function finishSteps(it) {
     for (;;) { const r = it.next(); if (r.done) return r.value; }
   }
 
@@ -1385,6 +1396,10 @@ const TrackMesh = (function () {
   // This is only the fallback for a track built without a road mesh.
   const PIT_TARMAC = [0.135, 0.145, 0.165];
   function buildPitLane(track, out) {
+    return finishSteps(buildPitLaneSteps(track, out));
+  }
+
+  function* buildPitLaneSteps(track, out) {
     const p = track.pit;
     if (!p) return out;
     const { hw, n, total: L } = track;
@@ -1437,6 +1452,7 @@ const TrackMesh = (function () {
     const lat = (k, off) => sd * (hw[k] + off);
     for (let k = 0; k < n; k++) {
       const k2 = (k + 1) % n;
+      if (k && k % 64 === 0) yield;
       const a = bands(k), b = bands(k2);
       if (!a || !b) continue;
       const ua = upOf(track, k), ub = upOf(track, k2);
@@ -1605,9 +1621,9 @@ const TrackMesh = (function () {
 
   // The garages are js/track/scenery/pits.js's, built into the props mesh from
   // the same row the boxes are painted from.
-  // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
+  // buildKerbSteps stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
-           nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
-           buildPitLane, buildPitMarks, buildPitBoxes, pitHatch, buildPitHatch, GRID_SLOTS };
+           nodeGrid, buildRoad, buildRoadSteps, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
+           buildPitLane, buildPitLaneSteps, buildPitMarks, buildPitBoxes, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

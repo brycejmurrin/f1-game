@@ -180,6 +180,7 @@ const TrackDef = (function () {
       // the road and modelGroup suppresses it as "footprint rejected".
       sceneryLapMirror: !!d.sceneryLapMirror,
       dressingExclusions: d.dressingExclusions || null,
+      ...(d.rainShelter ? { rainShelter: d.rainShelter } : {}),
       // These five are READ OFF THE COPIED DEF and so have to be copied onto
       // it. Each was authored in js/circuits/<id>.js, never copied here, and
       // therefore read as undefined at every consumer — silently, because

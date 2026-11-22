@@ -306,6 +306,22 @@ const RenamedAudit = (() => {
   });
 });
 
+test("outlines group later window member assignments with their own global", async () => {
+  await fixture(async (lsp, root) => {
+    fs.writeFileSync(path.join(root, "src/consts.js"), `window.Consts = { START: 1 };
+window.Other = { DECOY: 1 };
+window.Consts.FIXED_DT = 1 / 60;
+window.Consts.BAND_CEIL = (() => { return Math.min(1, 2); })();
+window.Consts.read = () => window.Consts.FIXED_DT;
+`);
+    const expected = [["read", "function"], ["START", "property"], ["FIXED_DT", "property"], ["BAND_CEIL", "property"]];
+    assert.deepEqual(auditExports(await query(lsp, "lsp_outline", { symbol: "Consts" })), expected);
+    assert.deepEqual(auditExports(await query(lsp, "lsp_outline", { symbol: "Other" })), [["DECOY", "property"]]);
+    const file = await query(lsp, "lsp_outline", { file: "src/consts.js" });
+    assert.deepEqual(auditExports(file), [...expected, ["DECOY", "property"]]);
+  });
+});
+
 test("audit: unused member fallback stays inside the selected IIFE", async () => {
   await fixture(async (lsp, root) => {
     fs.writeFileSync(path.join(root, "src/audit.js"), `const LeftAudit = (() => {

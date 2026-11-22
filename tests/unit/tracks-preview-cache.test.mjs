@@ -90,3 +90,16 @@ test("adoptPreviewCenterline primes the cache without rebuilding", () => {
   assert.equal(hit.px, stub.px, "adopted preview typed arrays are what buildCenterline returns");
   assert.equal(hit.total, stub.total);
 });
+
+test("the two most recently used preview centrelines survive browsing a third circuit", () => {
+  const { Tracks } = loadTracks();
+  const [a, b, c] = Tracks.LIST.slice(0, 3);
+  const prime = def => Tracks.buildCenterline(def, { line: false, preview: true });
+  const first = prime(a), second = prime(b);
+  assert.equal(Tracks.buildCenterline(a, { line: false }).px, first.px);
+  const third = Tracks.buildCenterline(c, { line: false, banking: false });
+  assert.equal(Tracks.adoptPreviewCenterline(c, third), true);
+  assert.equal(Tracks.buildCenterline(c, { line: false }).px, third.px);
+  assert.equal(Tracks.buildCenterline(a, { line: false }).px, first.px);
+  assert.notEqual(Tracks.buildCenterline(b, { line: false }).px, second.px);
+});

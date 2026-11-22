@@ -14,7 +14,6 @@ export const GENERATED_PATHS = Object.freeze([
   "version.json",
   "package.json",
   "tools/README.md",
-  "docs/agent-output/catalog.json",
   "docs/agent-index.json",
   "docs/AGENT-HOOKS.md",
   "tests/data/impact-map.json",
@@ -44,6 +43,7 @@ export const BUILT_PATHS = Object.freeze([
 // that throws fails the reader. Each entry is gitignored and untracked (tests/unit/deploy-staging.test.mjs), and
 // a modify/delete conflict in one cures by taking the deletion, exactly as a BUILT path (deploy.mjs).
 export const ON_DEMAND_PATHS = Object.freeze([
+  "docs/agent-output/catalog.json",
   "tools/shot/scenery-locations.json",
 ]);
 

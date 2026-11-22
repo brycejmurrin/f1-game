@@ -1490,6 +1490,7 @@ const TrackBuildProps = (function () {
       // Qatar carried 24 such pairs. Claim each (node, side) once.
       const stacked = new Set();
       for (const c of findCorners(track, 0.014)) {
+        if (region) yield;
         // +curv = LEFT turn (mesh.js banking comment; measured in agentview's
         // corner table), so the outside of a c.sign>0 corner is the RIGHT (+x)
         // side. The retired "+k = right" read here put every tyre barrier on
@@ -2133,11 +2134,14 @@ const TrackBuildProps = (function () {
       // FINAL api — the wrapped anchor/K/along — so they take authored-frame
       // k and s like circuit code and need no wrapper of their own.
       Object.assign(sceneryApi, TrackModels.drapeKit(sceneryApi));
-      sceneryFn(sceneryApi);
+      // A paced author can yield between complete landmarks. Existing callbacks finish inline.
+      const authoredSteps = sceneryFn(sceneryApi, true);
+      if (authoredSteps && typeof authoredSteps.next === "function") yield* authoredSteps;
     }
     yield;   // perf hunt 7: the circuit's closure is the build's biggest single step; the venue dressing reads only its finished index
 
     placePitStraightCrowd();   // from the run-off edge the circuit's barriers left (#5998)
+    if (region) yield;
     SceneryVenue.build(ctx, sceneryTheme, dressingExcluded);
 
     // Foliage runs LAST, once every barrier on the circuit is registered, so the

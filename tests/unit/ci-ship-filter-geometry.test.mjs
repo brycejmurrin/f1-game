@@ -118,13 +118,12 @@ test("ci.yml runs on PRs into the deploy branch only, on four event types, with 
   const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
   assert.ok(reuse.includes('"Structural guards (tooling A)"') && !/run-ci|CI ignored/.test(reuse),
     "a green run whose tooling A did not run is never reused as the fast tier; the label vocabulary is gone");
-  assert.equal(wf.jobs.selected.if, "${{ needs.select.outputs.any == 'true' && needs.select.outputs.selected_reused != 'true' }}",
-    "the selected legs run on a draft too (one 5-min shard: the budget test below); a ready flip skips them only on a reused draft verdict (#5426)");
+
 });
 
 // EVERY PUSH RUNS (2026-11-03). Evaluated, not pattern-matched: every job's `if`, the group, the verdict name and
 // the selected budget, for a draft push, a ready push and the ready flip.
-test("a draft push runs the fast tier plus the selected legs on a 5-min budget; ready adds the full tier under the name `CI`", () => {
+test("a draft push runs the fast tier with a selection plan and defers browser jobs; ready adds the full tier under the name `CI`", () => {
   const wf = parseYAML(ciWorkflow);
   const ctx = ({ action = "synchronize", draft = true } = {}) => ({
     github: {
@@ -147,25 +146,45 @@ test("a draft push runs the fast tier plus the selected legs on a 5-min budget; 
   };
   const on = (v) => Object.entries(v.jobs).filter(([, x]) => x).map(([id]) => id).sort();
   const draft = view(ctx());
-  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "lints", "sweeps-parts", "select", "selected", "selected-verdict", "driving-model", "ci-verdict"])
+  for (const id of ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "lints", "sweeps-parts", "select", "selected-verdict", "ci-verdict"])
     assert.ok(draft.jobs[id], `a draft push runs ${id}`);
-  for (const id of ["node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr", "train-twins", "baseline-trial"])
+  for (const id of ["selected", "driving-model", "node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr", "train-twins", "baseline-trial"])
     assert.ok(!draft.jobs[id], `a draft push does not run ${id} (ready_for_review does)`);
   assert.equal(draft.verdict, "CI (draft fast tier)", "a draft never supplies the required `CI` name (#2664)");
   assert.equal(draft.group, "ci-pr-77", "a draft push replaces the PR's live run (keyed on the PR number)");
-  assert.equal(draft.budget, "5", "one ~5-min selected shard on a draft");
+  assert.equal(draft.budget, "5", "the draft still publishes its preview plan");
   for (const action of ["opened", "synchronize", "reopened"]) assert.deepEqual(view(ctx({ action })), draft, `${action}: the same draft tier`);
   for (const action of ["synchronize", "ready_for_review"]) {
     const ready = view(ctx({ action, draft: false }));
     assert.equal(ready.verdict, "CI");
     assert.equal(ready.budget, "", "ready keeps select-specs' default budget");
     for (const id of on(draft)) assert.ok(ready.jobs[id], `ready still runs ${id}`);
-    for (const id of ["node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr"]) assert.ok(ready.jobs[id], `ready runs ${id}`);
+    for (const id of ["selected", "driving-model", "node-suites", "smoke", "staged-boot", "sweeps", "renderer-macos", "xr"]) assert.ok(ready.jobs[id], `ready runs ${id}`);
     assert.equal(ready.group, "ci-pr-77");
   }
   // The nightly keeps its 60-min budget; a dispatch and the train keep select-specs' default.
   assert.equal(evalTemplate(budgetEnv, { github: { event_name: "schedule", event: {} }, inputs: { concurrency_key: "" } }), "60");
   assert.equal(evalTemplate(budgetEnv, { github: { event_name: "workflow_dispatch", event: {} }, inputs: { concurrency_key: "" } }), "");
+});
+
+test("only ordinary ready PRs can exempt fixed browser jobs", () => {
+  const jobs = parseYAML(ciWorkflow).jobs;
+  const policy = jobs.select.steps.find((s) => s.id === "sel").env.READY_PR;
+  const context = (event_name, draft, head_ref, concurrency_key = "") => ({
+    github: { event_name, head_ref, event: { pull_request: { draft } } }, inputs: { concurrency_key }
+  });
+  assert.equal(evalTemplate(policy, context("pull_request", false, "codex/report")), true);
+  for (const ctx of [context("pull_request", true, "codex/report"), context("pull_request", false, "train/batch"),
+    context("pull_request", true, "train/batch"), context("schedule", false, ""), context("push", false, "", "pages")]) {
+    assert.equal(evalTemplate(policy, ctx), false);
+  }
+  const ready = context("pull_request", false, "codex/report");
+  for (const browser_exempt of ["true", "false", ""]) {
+    ready.needs = { select: { outputs: { browser_exempt, driving: "true", renderer: "true", xr: "true" } } };
+    for (const job of ["smoke", "staged-boot", "driving-model", "renderer-macos", "xr"]) {
+      assert.equal(Boolean(evalTemplate(jobs[job].if, ready)), browser_exempt !== "true", job);
+    }
+  }
 });
 
 test("geometry planning avoids empty fanout without guessing an unknown diff is empty", () => {

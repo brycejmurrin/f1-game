@@ -5,7 +5,7 @@
  * Run: node --test tests/unit/director.test.mjs
  */
 import { test } from "node:test";
-import { gameSource, symbolSource } from "../helpers/game-source.mjs";
+import { GAME_REL, gameSource, symbolSource } from "../helpers/game-source.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "path";
@@ -611,18 +611,17 @@ test("subject framing preserves tuner pitch/yaw and the viewer's look-back", () 
 });
 
 test("the render loop keeps a remote TV/results subject even beyond the player's driving fog", () => {
-  const game = gameSource();
-  const start = game.indexOf("for (const c of cars) {", game.indexOf("// Driving fog culls"));
+  const game = symbolSource("function render(dt)");
+  const start = game.indexOf("for (const c of cars) {", game.indexOf("const _carCullPlanes"));
   const end = game.indexOf("// Player: reuse frame-cached", start);
   assert.ok(start > 0 && end > start);
   // Run the actual early render culls; the later frustum/LOD still handles the active view.
   const run = game.slice(start, end) + "seen.push(c.code); }";
   const player = { code: "ME", isPlayer: true, s: 50 };
-  // These arc-only fixtures reach the later sampled visibility test. Their
-  // world-pose gate cannot reject them before road projection.
   const ctx = vm.createContext({ state: "race", player, track: { total: 5000 }, dbgCam: null,
-    renderPosOf: () => ({ world: false }),
-    cars: [player, { code: "NEAR", s: 4900 }, { code: "FAR", s: 2500 }], seen: [] });
+    camEye: [0, 0, 0], _useHorizontalCull: false, renderPosOf: c => ({ world: true, x: 0, z: c.z }),
+    cars: [player, { code: "NEAR", s: 4900, z: 600 }, { code: "FAR", s: 2500, z: 2500 }], seen: [] });
+  vm.runInContext(symbolSource("function outsideFieldRange(c, dx, dz)"), ctx, { filename: absSrc(GAME_REL) });
   vm.runInContext(run, ctx);
   assert.deepEqual(Array.from(ctx.seen), ["ME", "NEAR"], "ordinary driving keeps the wrap-safe fog cull");
   for (const camera of [{ eye: [0, 5, 2500] }, { _resultsCam: true, eye: [0, 5, 2500] }]) {

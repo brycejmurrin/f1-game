@@ -1072,7 +1072,7 @@ function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 
       out.r = right; out.t = tangent; out.hw = 0;
       out.p = origin.map((v, i) => v - right[i] * 6.4 - (i === 1 ? .02 : 0));
     } }, TrackGeom: { norm, cross, addBox() {}, emit() {} },
-    TrackMesh: { bankOffsetAt: () => 0, buildRoad: () => raw, buildPitLane() {}, buildPitBoxes() {}, buildFloor: blank,
+    TrackMesh: { bankOffsetAt: () => 0, *buildRoadSteps() { yield; return raw; }, *buildPitLaneSteps() { yield; }, buildPitBoxes() {}, buildFloor: blank,
       *buildTerrainSteps() { yield; return dress ? raw : blank(); } },
     TrackModels: { sealGeometry: geo => geo }, TrackBuildProps: { *buildSteps(track, opts) {
       assert.equal(opts.skipPits, true); assert.ok(track.terrainGeo, 'real terrain precedes scenery anchoring');
@@ -1189,7 +1189,13 @@ test('Bahrain at night and Monaco by day retain departure contact heights and vi
   for (const id of ['bahrain', 'monaco']) {
     const def = h.Tracks.LIST.find(d => d.id === id);
     const it = Builder.buildSteps(def, { teamId: 'ferrari', night: id === 'bahrain' });
-    let next; do { next = it.next(); } while (!next.done);
+    let next, phase, roadBuildYields = 0;
+    do {
+      next = it.next();
+      if (next.value && next.value.phase) phase = next.value.phase;
+      else if (phase === 'surface') roadBuildYields++;
+    } while (!next.done);
+    assert.ok(roadBuildYields > 1, 'road construction can yield repeatedly before clipping starts');
     const data = next.value; assert.equal(data.supported, true);
     assert.ok(data.bayFixtures.idx.length > 0);
     assert.ok(data.bayFixtures.col.every(v => v > 1));

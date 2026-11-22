@@ -20,38 +20,38 @@ const Tracks = (function () {
   // designer's) is built by the same code as a script-tag circuit.
   const { elevationAt, hasRealElevation, fromRaw } = TrackDef;
 
-  /** Centreline only, no meshes. `opts.line === false` skips ONLY the racing-line bake (~75 %
-   *  of the time): tr.line = null, lineW/lineCorners/… absent — the designer's preview build. */
-  // D·DP5 preview cache: adoptPreviewCenterline or {line:false,preview:true} only; key
-  // includes hwZones/baseHW; hydrate forgets. Plain line:false must not auto-store.
+  // Adopted or explicitly primed centrelines serve the picker and garage; TrackMaps caches finished maps.
   const previewCL = new Map();
   function previewKey(def) {
-    if (!def || !def.id) return null;
-    const n = (def.path && def.path.pts && def.path.pts.length) || (def.points && def.points.length) || 0;
+    if (!def?.id) return null;
+    const n = def.path?.pts?.length || def.points?.length || 0;
     let zones = "";
-    if (def.hwZones && def.hwZones.length) try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
-    return def.id + "\0" + (def.reverse ? "1" : "0") + "\0" + n + "\0"
-      + (def.baseHW != null ? String(def.baseHW) : "") + "\0" + zones;
+    if (def.hwZones?.length) try { zones = JSON.stringify(def.hwZones); } catch (_) { zones = "hz"; }
+    return [def.id, def.reverse ? 1 : 0, n, def.baseHW ?? "", zones].join("\0");
   }
   function forgetPreviewCenterline(id) {
     if (id == null) { previewCL.clear(); return; }
     for (const k of previewCL.keys()) if (k.startsWith(id + "\0")) previewCL.delete(k);
   }
-  function adoptPreviewCenterline(def, track) {
-    const key = previewKey(def);
+  function adoptPreviewCenterline(def, track, key = previewKey(def)) {
     if (!key || !track) return false;
     track.def = def;
+    previewCL.delete(key);
     previewCL.set(key, track);
+    if (previewCL.size > 2) previewCL.delete(previewCL.keys().next().value);
     return true;
   }
   function buildCenterline(def, opts) {
-    const key = opts && opts.line === false ? previewKey(def) : null;
-    if (key && previewCL.has(key)) {
-      const hit = previewCL.get(key); // shallow clone — callers null bankP on one copy
+    const key = opts?.line === false ? previewKey(def) : null;
+    const hit = key && previewCL.get(key);
+    if (hit) {
+      adoptPreviewCenterline(def, hit, key);
+      // undefined means the 2-D map skipped this bake; null is a baked flat road.
+      if (opts.banking !== false && hit.bankP === undefined) hit.bankP = bankingProfile(hit);
       return Object.assign({}, hit, { meshes: hit.meshes || {} });
     }
     const track = buildCenterlineFresh(def, opts);
-    if (key && opts && opts.preview === true) previewCL.set(key, track);
+    if (key && opts.preview === true) adoptPreviewCenterline(def, track, key);
     return track;
   }
   function buildCenterlineFresh(def, opts) {
@@ -196,7 +196,7 @@ const Tracks = (function () {
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
     if (opts && opts.line === false) track.line = null; else TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
-    track.bankP = bankingProfile(track);
+    if (opts?.banking !== false) track.bankP = bankingProfile(track);
     return track;
   }
 

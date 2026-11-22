@@ -175,12 +175,15 @@ export function carVerdict(v, head = "") {
   return bad.length ? { ok: false, why: bad.map((k) => `${k}: ${String(v.rows?.[k]?.evidence || "missing").slice(0, 120)}`).join("; ") } : { ok: true, why: "" };
 }
 
-/** Closed, unmerged trains newest first ({cars, outcome, closed}) → the next train's cap and the cars left out. Pure. */
+/** Closed trains ({cars, outcome, closed}) → the next train's cap and the cars left out. Pure. */
 export function trainHistory(closed, { now = Date.now(), hours = HISTORY_H, max = TRAIN_MAX } = {}) {
-  const recent = (closed || []).filter((t) => t && now - Date.parse(t.closed) <= hours * 3600_000);
+  // GitHub lists pulls by last update; edits to an older train can move it ahead of a later closure.
+  const recent = (closed || []).filter((t) => t && now - Date.parse(t.closed) <= hours * 3600_000)
+    .sort((a, b) => Date.parse(b.closed) - Date.parse(a.closed));
   const exclude = new Set();
   for (const t of recent) if (t.outcome === "red" && t.cars.length === 1) exclude.add(`${t.cars[0].pr}@${t.cars[0].head}`);
-  const last = recent.find((t) => t.outcome === "red" || t.outcome === "merged");
+  // A stale train ends the previous bisection. Keep exclusions tied to proven red car heads.
+  const last = recent.find((t) => ["red", "merged", "stale"].includes(t.outcome));
   const cap = last?.outcome === "red" ? Math.max(1, Math.floor(last.cars.length / 2)) : max;
   return { cap: Math.min(cap, max), exclude };
 }

@@ -474,6 +474,7 @@ const Particles = (function () {
   let _rox = null, _roy = null, _roz = null;          // offset from the eye (m)
   let _rspd = null, _rlen = null, _ralpha = null;     // fall speed (m/s), streak-length scale, opacity
   const _rainEye = [0, 0, 0];
+  let _rainCamera;
   let _rainEyeOk = false;                              // false until the first update after a seed/show (no finite difference)
   const _camVel = [0, 0, 0];
   let _windX = 0, _windZ = 0;
@@ -599,7 +600,7 @@ const Particles = (function () {
   // velocity is its finite difference, and a cut (> 40 m in one frame) resets
   // it rather than painting one frame of 4 km/h streaks. Render-only: reads the
   // handed-in eye, never writes physics state.
-  function rainUpdate(dt, eye, raining) {
+  function rainUpdate(dt, eye, raining, camera, cut = false) {
     if (!_rainN || !_rainOn || !eye) return;
     if (!(dt > 0)) dt = 0;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport the field
@@ -616,6 +617,8 @@ const Particles = (function () {
     const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6, dzLen = LT.drizzleLen != null ? LT.drizzleLen : 0.5;
     _rainSpeedScale = dzSpeed + (1 - dzSpeed) * shape; _rainLenScale = dzLen + (1 - dzLen) * shape;
     _rainFed = true;
+    if (cut || camera !== _rainCamera) { _rainEyeOk = false; _dirty = true; }
+    _rainCamera = camera;
     if (_rainEyeOk && dt > 0) {
       const dx = eye[0] - _rainEye[0], dy = eye[1] - _rainEye[1], dz = eye[2] - _rainEye[2];
       if (dx * dx + dy * dy + dz * dz < 40 * 40) { _camVel[0] = dx / dt; _camVel[1] = dy / dt; _camVel[2] = dz / dt; }

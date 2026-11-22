@@ -9,7 +9,7 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
-import { ciWorkflow, gpuWorkflow } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, gpuWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
 import { buildSummary, compareTimings, timingPlan, validateLiveCell, validateTimingWindow } from "../../tools/gfx/chunk-merge-timing.mjs";
 
 test("chunk-merge timing uses one path-filtered macOS job with balanced isolated boots", () => {
@@ -31,6 +31,21 @@ test("chunk-merge timing uses one path-filtered macOS job with balanced isolated
     for (let position = 0; position < 3; position++) {
       assert.deepEqual([arms[position], arms[position + 3], arms[position + 6]].map((x) => x.factor).sort(), [2, 3, 4]);
     }
+  }
+});
+
+test("path-filtered hardware timing and WebGPU census defer ordinary drafts and run on ready or dispatch", () => {
+  for (const [file, job] of [["chunk-merge-timing", "timing"], ["perf-census-webgpu", "census"]]) {
+    const workflow = parseYAML(fs.readFileSync(new URL(`../../.github/workflows/${file}.yml`, import.meta.url), "utf8"));
+    assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
+    assert.ok(workflow.on.pull_request.paths.length);
+    assert.ok(Object.hasOwn(workflow.on, "workflow_dispatch"));
+    const enabled = (event_name, draft, head_ref) => evalTemplate(workflow.jobs[job].if,
+      { github: { event_name, head_ref, event: { pull_request: { draft } } } });
+    assert.equal(enabled("pull_request", true, "topic"), false);
+    assert.equal(enabled("pull_request", false, "topic"), true);
+    assert.equal(enabled("pull_request", true, "train/batch"), true);
+    assert.equal(enabled("workflow_dispatch", undefined, ""), true);
   }
 });
 

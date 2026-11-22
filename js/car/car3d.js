@@ -2883,7 +2883,7 @@ const Car3D = (function () {
   }
   // The garage / CAR STUDIO opts (js/garage/setup-camera.js): {} below ULTRA, every phone, node.
   function garageDetail() {
-    const d = CarGeometry.detailFor(true), h = CarGeometry.heroOn() && d > 1;
+    const d = CarGeometry.detailFor(true), h = CarGeometry.heroOn();
     return d || h ? { detail: d, hero: h } : {};
   }
   const HK = { G: geometry, CARBON, DARK, mouth: addInletMouth };   // CarHero's kit (it reads Car3D.SURFACES / AXLES)

@@ -45,7 +45,16 @@ if git fetch -q origin +refs/heads/bot/spec-timings:refs/remotes/origin/bot/spec
 else
   echo "timings: bot/spec-timings unavailable; committed record only"
 fi
-node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt \
+# Only certify the complete PR diff against the base GitHub merged. A fallback
+# HEAD~1 on a plain branch would certify only the last commit of a series.
+ready_args=()
+if [ "${READY_PR:-false}" = true ] && [ "${EVENT:-}" = pull_request ] && [ "${CALLED:-false}" != true ]; then
+  [ "$(git rev-parse --verify 'HEAD^2' 2>/dev/null)" = "${PR_HEAD:-missing}" ] \
+    && [ "$(git rev-parse --verify 'HEAD^1')" = "$BEFORE" ] \
+    || fail "ready PR checkout does not match the event head and resolved merge base"
+  ready_args=(--ready-pr)
+fi
+node tools/ci/select-specs.mjs --since "$BEFORE" "${ready_args[@]}" --failed-from .selected-failed.txt \
   ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} \
   ${OVER_BUDGET_SHARDS:+--over-budget-shards "$OVER_BUDGET_SHARDS"} --json > sel.json \
   || fail "selector failed"
@@ -106,6 +115,7 @@ node -e '
   console.log(`dropped ${dropped} routed spec(s) this plan cannot run`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
     `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`
+    + `browser_exempt=${r.reason === "browser-exempt"}\n`
     + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`
     + `unrepresented=${(r.runnerUnrepresented || []).join(" ")}\n`);
   // Groups the runner fan-out could not represent (every spec over budget) are said where a person reads them.
@@ -113,11 +123,11 @@ node -e '
     require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY,
       `**Not run on this PR:** ${r.runnerUnrepresented.join(", ")} (runner fan-out; every spec in the group is over budget), nightly rota covers them\n`);
   }
-  // AN EMPTY PLAN IS A PASS ONLY FOR A DOCS-ONLY (OR EMPTY) DIFF (audit W31).
+  // Only an empty, docs-only, or explicitly browser-exempt PR diff can have no plan.
   // select() puts the boot floor in every other plan; a code diff that still
   // has no job and dropped nothing (a drop reds the verdict on its own) means
   // the selection is broken: fail closed.
-  if (!shards.length && !dropped && !["none", "docs"].includes(r.reason)) {
+  if (!shards.length && !dropped && !["none", "docs", "browser-exempt"].includes(r.reason)) {
     console.error(`SELECTED GATE FAILED CLOSED: a ${r.reason} diff produced an empty plan (the boot floor is missing)`);
     process.exit(1);
   }
