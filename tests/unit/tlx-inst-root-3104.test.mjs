@@ -26,8 +26,14 @@ const hide = fnSource(TLX, "function _hideUndrawnInstanced() {");
 const walked = (o) => { let n = 1; if (o.visible) for (const c of o.children) n += walked(c); return n; };
 
 function rig(THREE, scene, flag) {
-  const src = flag === "0" ? decl.replace("const _instRootOn = true;", "const _instRootOn = false;") : decl;
+  let src = flag === "0" ? decl.replace("const _instRootOn = true;", "const _instRootOn = false;") : decl;
   assert.notEqual(flag === "0" ? src : null, decl, "the before-arm switch moved — check this test");
+  // Count numeric member reads through the production loop, excluding adds and frees.
+  src = src.replace("const _instRegistry = [];", `let reads = 0;
+    const _instRegistry = new Proxy([], { get(list, key) {
+      if (typeof key === "string" && /^\\d+$/.test(key)) reads++;
+      return list[key];
+    } });`);
   return new Function("THREE", "scene", "localStorage", `"use strict";
     ${src}
     ${show}
@@ -35,7 +41,7 @@ function rig(THREE, scene, flag) {
     const unlitMat = null;
     return { add(im) { im.visible = false; _instAdd(im); _instRegistry.push(im); },
       remove(im) { const k = _instRegistry.indexOf(im); if (k >= 0) _instRegistry.splice(k, 1); _instRemove(im); },
-      pass(recs) { _instStamp++; for (let i = 0; i < recs.length; i++) _showInstanced(recs[i], recs[i].order); _hideUndrawnInstanced(); },
+      pass(recs) { reads = 0; _instStamp++; for (let i = 0; i < recs.length; i++) _showInstanced(recs[i], recs[i].order); _hideUndrawnInstanced(); return reads; },
       root: typeof instRoot !== "undefined" ? instRoot : null };`)(THREE, scene, { getItem: () => null });
 }
 
@@ -72,7 +78,8 @@ test("F3: hidden instanced batches are not walked; the draws and their order are
   const passes = [[3, 7, 9, 21, 30, 39], [7, 30], [], [0, 1, 2, 3, 39]];
   for (const shown of passes) {
     const run = (S) => {
-      S.R.pass(shown.map((k, j) => ({ instanced: { instances: 4, imesh: S.ims[k] }, mat: mats[k % 2], order: (shown.length - j) * 3 })));
+      const reads = S.R.pass(shown.map((k, j) => ({ instanced: { instances: 4, imesh: S.ims[k] }, mat: mats[k % 2], order: (shown.length - j) * 3 })));
+      assert.equal(reads, S.ims.length, "one registry walk per flush");
       return S.raw();
     };
     const a = run(on), b = run(off);
@@ -95,7 +102,7 @@ test("F3: every registry member is parented through _instAdd and every visibilit
   assert.equal((TLX.match(/_instRegistry\.push\(/g) || []).length, (TLX.match(/_instAdd\((\w+|imesh)\);? ?_instRegistry\.push\(|_instAdd\(\w+\);\n\s+_instRegistry\.push\(/g) || []).length,
     "each push into the registry follows an _instAdd");
   assert.doesNotMatch(TLX, /scene\.add\((im|imesh|m)\); _instRegistry|scene\.add\((im|imesh)\);\n\s+_instRegistry/, "no member goes straight into the scene");
-  assert.match(fnSource(TLX, "function _hideUndrawnInstanced() {"), /_instShow\(\);/);
+  assert.match(fnSource(TLX, "function _hideUndrawnInstanced() {"), /_instShow\(true\);/);
   assert.match(fnSource(TLX, "function _mirWarmSwap() {"), /_instShow\(\);/);
   assert.match(fnSource(TLX, "function _mirWarmUnswap() {"), /_instShow\(\);/);
 });

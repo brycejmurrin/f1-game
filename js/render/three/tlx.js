@@ -2439,12 +2439,18 @@ const TLX = (function () {
         im.parent = null;
       }
       // What three may walk this pass: exactly the registry members that are visible now.
-      function _instShow() {
-        if (!_instRootOn) return;
+      function _instShow(hideUndrawn = false) {
+        if (!_instRootOn && !hideUndrawn) return;
         let n = 0;
-        for (let i = 0; i < _instRegistry.length; i++) { const im = _instRegistry[i]; if (im.visible) _instKids[n++] = im; }
-        if (_instKids.length !== n) _instKids.length = n;
-        instRoot.children = _instKids;
+        for (let i = 0; i < _instRegistry.length; i++) {
+          const im = _instRegistry[i];
+          if (hideUndrawn && im.__tlxShown !== _instStamp) im.visible = false;
+          else if (_instRootOn && im.visible) _instKids[n++] = im;
+        }
+        if (_instRootOn) {
+          if (_instKids.length !== n) _instKids.length = n;
+          instRoot.children = _instKids;
+        }
       }
       // A-H1 (perf hunt 4) — STREAM, NOT DYNAMIC, ON THE PLAIN-MESH INSTANCE-RATE BUFFERS. three r186's
       // Attributes.update uploads when `version < attribute.version || usage === DynamicDrawUsage`, and with an
@@ -2853,11 +2859,7 @@ const TLX = (function () {
       }
 
       function _hideUndrawnInstanced() {
-        for (let i = 0; i < _instRegistry.length; i++) {
-          const im = _instRegistry[i];
-          if (im.__tlxShown !== _instStamp) im.visible = false;
-        }
-        _instShow();
+        _instShow(true);
         _instStamp++;   // the next flush starts clean (pass starts bump it too)
       }
       // the mesh pool is keyed on (geometry, material), NOT on draw order
