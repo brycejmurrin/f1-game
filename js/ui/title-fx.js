@@ -43,11 +43,13 @@ const TitleFx = (function () {
   // Stored choice for REDUCE MOTION. Legacy "on" (old MOTION: ON) maps to AUTO
   // so an OS that asks for reduced motion still wins for those saves; "reduce"
   // stays ON (always reduce); "off" is the new override.
+  let choiceRev, choiceRawRev, savedChoice;
   function choice() {
+    if (store.rev !== undefined && choiceRev === store.rev && choiceRawRev === store.rawRev) return savedChoice;
     const v = store.get(KEY, null);
-    if (v === "reduce") return "reduce";
-    if (v === "off") return "off";
-    return "auto";   // null, "auto", legacy "on", garbage
+    choiceRev = store.rev; choiceRawRev = store.rawRev;
+    savedChoice = v === "reduce" || v === "off" ? v : "auto";
+    return savedChoice;
   }
   // Effective motion for CSS / race callers: "reduce" | "on".
   function mode() {
