@@ -786,21 +786,6 @@ test("a title layout on a compact screen scales the shipped compact cap, not the
   assert.ok(CSS.indexOf(':where(body[data-density="compact"]) #menu-buttons') > CSS.indexOf(":root[data-title-layout] #menu-buttons {"));
 });
 
-// bryce-phone-paint standalone@50/70/109 title (CI 44819581053): the title's ARRANGE
-// entry rode #overlay's UI-SIZE zoom (25 px tall at 50 %, its inset inside the notch)
-// and, in landscape, sat under CAREER in PHONE_WIDE's menu column. It paints unzoomed
-// inside the safe box, at the foot of the wordmark's column in landscape (bryce-paint
-// --check: 9 title cells hold their ceilings).
-test("the title's arrange entry paints unzoomed, inside the safe box, clear of the landscape menu column", async () => {
-  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
-  const rules = cssRules(read("css/screen-arranger.css"));
-  const base = "#overlay > #title-arrange-entry", wide = ':where(body[data-shape="wide"]) #overlay > #title-arrange-entry';
-  assert.equal(decl(rules, base, "zoom"), "1");
-  assert.equal(decl(rules, base, "inset-inline-end"), "var(--safe-r)");
-  assert.deepEqual([decl(rules, wide, "bottom"), decl(rules, wide, "inset-inline-start"), decl(rules, wide, "top")], ["var(--safe-b)", "var(--safe-l)", "auto"]);
-  assert.equal(decl(rules, `:root[data-title-side="swap"] ${wide}`, "inset-inline-end"), "var(--safe-r)");
-});
-
 test("the arranger browses tabs, disclosures and scrollable regions without invoking gameplay actions", () => {
   const dom = makeDom(), root = dom.byId("datahub");
   const owningSheet = dom.document.body.appendChild(dom.makeElement("section"));

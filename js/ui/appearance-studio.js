@@ -190,7 +190,7 @@ const AppearanceStudio = (function () {
     if (takeBody()) { run(); return; }
     // Do not re-enter SettingsNav.lazy: this initUI is often already the gated
     // callback (#4798), and a second lazy() after flush would never run.
-    ensureBody().then((ok) => { if (ok) run(); });
+    return ensureBody().then((ok) => { if (ok) run(); });
   }
   function setPreviewFrame(url) {
     const b = takeBody();

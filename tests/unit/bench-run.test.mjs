@@ -232,22 +232,18 @@ test("bench-run: with room the plan is saved before the leg pins its renderer, a
 });
 
 test("Graphics opens the real Benchmark dialog for arrangement without running a test", () => {
-  const dom = makeDom(), doc = dom.document, timers = new Map(), edits = [], writes = [];
+  const dom = makeDom(), doc = dom.document, timers = new Map(), writes = [];
   const panel = dom.byId("pm-panel-graphics"), dialog = dom.byId("bench");
   const header = doc.createElement("header");
   header.className = "sheet-head"; dialog.appendChild(header); dialog.ownerDocument = doc;
   dialog.appendChild(dom.byId("bench-body")); dialog.appendChild(dom.byId("bench-back"));
   doc.getElementById = id => doc.querySelector("#" + id);
   const ctx = vm.createContext({document:doc, setTimeout(fn, ms){timers.set(ms,fn);},
-    SettingsNav:{arrangeScreen(id){edits.push(id);}},
     GameStore:{store:{raw(){return null;}, rawSet(...args){writes.push(args);}}}});
-  vm.runInContext(readFileSync(join(ROOT, "js/ui/editor-workspace.js"), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
   vm.runInContext(SRC + "\nBenchRun.create({});",ctx, { filename: absSrc("js/perf/bench-run.js") });
   timers.get(400)();
   panel.querySelector("#pm-bench-open").click();
   assert.equal(dialog.hidden,false);
   assert.ok(dialog.querySelector('[aria-label="Test"]'));
-  const door = header.querySelector("button"); door.onclick();
-  assert.deepEqual(edits,["bench"]);
   assert.deepEqual(writes,[]);
 });

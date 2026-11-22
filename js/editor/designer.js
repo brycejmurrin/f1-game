@@ -877,7 +877,6 @@ const TrackDesigner = (function () {
     foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
     // The compact header is zero-height; the designer reserves a grid cell by its footer for this action.
-    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, root)?.classList.add("screen-arrange-entry");
     // Short landscape phone: the foot rides under the rail (inside the body) so the dialog never scrolls.
     // Sizes are the effective ones (UI SIZE zooms the dialog); a very narrow effective width keeps the stacked layout.
     const seatFoot = (force) => {

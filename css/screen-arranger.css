@@ -104,8 +104,7 @@ body:has(> main#overlay) {
   gap: .35em;
   min-width: 0;
 }
-#screen-arranger .arrange-tools :is(button, select, input:not([type="checkbox"])),
-.screen-arrange-entry {
+#screen-arranger .arrange-tools :is(button, select, input:not([type="checkbox"])) {
   box-sizing: border-box;
   max-width: 100%;
   min-height: 44px;
@@ -136,122 +135,15 @@ body:has(> main#overlay) {
 #screen-arranger .arrange-tools button { white-space: normal; }
 #screen-arranger .arrange-tools :is(button, select):enabled { cursor: pointer; }
 #screen-arranger .arrange-tools :disabled { color: var(--dim); border-style: dashed; }
-#screen-arranger :focus-visible, .screen-arrange-entry:focus-visible {
+#screen-arranger :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-.screen-arrange-entry {
-  position: absolute;
-  pointer-events: auto;
-  z-index: 2;
-  inset-inline-end: max(var(--safe-r), var(--safe-l));
-  top: var(--safe-t);
-  font: 600 var(--fs-2)/1.2 var(--font-ui);
-  cursor: pointer;
-}
-/* TITLE: #overlay zooms its children by UI SIZE (css/title.css), which painted
-   this entry 25 px tall at 50 % and pulled its inset inside the notch, and the
-   phone's landscape menu column (PHONE_WIDE) covered it with CAREER (852x393:
-   entry 694..811 x 6..36 under CAREER 391..787 x 15..61). Unzoomed, inside the
-   safe box, and in landscape at the foot of the wordmark's column, over the art. */
-#overlay > #title-arrange-entry { zoom: 1; top: var(--safe-t); inset-inline-end: var(--safe-r); }
-:where(body[data-shape="wide"]) #overlay > #title-arrange-entry {
-  top: auto; bottom: var(--safe-b);
-  inset-inline-end: auto; inset-inline-start: var(--safe-l);
-}
-:root[data-title-side="swap"] :where(body[data-shape="wide"]) #overlay > #title-arrange-entry {
-  inset-inline-start: auto; inset-inline-end: var(--safe-r);
-}
-/* On a short phone Pause reserves every row for the race controls; the
-   existing responsive layout removes this entire header there. The same
-   editor opens from the Pause page in Appearance on every screen size. */
-#pausemenu .sheet-head > .screen-arrange-entry {
-  position: static;
-  margin-inline-start: auto;
-}
-/* The fly-cam's door is one more item in #pc-bar (js/ui/screen-regions.js):
-   in the top-right corner it covered the docked tuner's #pc-toggle. */
-#pc-bar > .screen-arrange-entry {
-  position: static; min-height: var(--tap-min);   /* its siblings' floor, inside the bar's UI SIZE zoom */
-  font-size: var(--fs-micro);
-}
-@media (pointer: coarse) { #pc-bar > .screen-arrange-entry { min-height: var(--tap-paint); } }
-/* Most menus already have a safe, single-column grid. Put the extra door
-   after the sheet, beyond the scrollport and the player's moveable regions. */
-.screen:has(> .sheet):has(> .screen-arrange-entry):not(#photo-studio, #carsetup) {
-  grid-template-rows: minmax(0, 1fr) auto;
-}
-.screen:has(> .sheet):not(#photo-studio, #carsetup) > .screen-arrange-entry {
-  position: static;
-  grid-column: 1;
-  grid-row: 2;
-  justify-self: end;
-}
-.screen:has(> .screen-arrange-entry):not(#photo-studio, #carsetup) > .sheet {
-  grid-row: 1;
-  max-height: 100%;
-}
-/* The hub and its nested telemetry popup have flex cards in the same
-   viewport. Keep Close on the header clickable and keep the list scrollable. */
-:is(#datahub, .dh-tpopup)[open]:has(> .screen-arrange-entry) {
-  display: grid;
-  grid-template: minmax(0, 1fr) auto / minmax(0, 1fr);
-  place-items: center;
-}
 :is(#datahub, .dh-tpopup) > :is(.dh-card, .dh-tpopup-card) {
-  grid-row: 1;
   min-height: 0;
   max-height: 100%;
 }
 #datahub > .dh-card { height: min(880px, 100%); }
-:is(#datahub, .dh-tpopup) > .screen-arrange-entry {
-  position: static;
-  grid-row: 2;
-  justify-self: end;
-}
-#carsetup > .screen-arrange-entry {
-  left: var(--safe-l);
-  right: auto;
-}
-:root[data-look-garage-side="left"] #carsetup > .screen-arrange-entry {
-  left: auto;
-  right: var(--safe-r);
-}
-/* A narrow landscape phone: the left panel reaches the right inset, and DONE
-   sits at its right end (568x320: entry 363..509 over DONE 392..497, so CLOSE
-   GARAGE never took a click). Keep the entry at the left, as the right panel does. */
-@media (orientation: landscape) and (max-width: 700px) {
-  :root[data-look-garage-side="left"] #carsetup > .screen-arrange-entry {
-    left: var(--safe-l);
-    right: auto;
-  }
-}
-#trackdesigner > .screen-arrange-entry { position: static; grid-row: 4; justify-self: end; }
-/* Short landscape phone, foot tucked under the rail (js/editor/designer.js
-   seatFoot): a fourth 44 px row made the dialog scroll 16 px at 734x343 and
-   852x344. The entry shares the body's cell, at its end, a fixed width the
-   foot's status line keeps clear (css/editor.css). The cell ends where the
-   content does, so a dialog that scrolls (UI SIZE 150 %) keeps it off the foot's
-   buttons; an absolute bottom anchored it to the visible box, over SHARE & FILES. */
-#trackdesigner[data-foot="in"] > .screen-arrange-entry {
-  position: relative; inset: auto; z-index: 2; width: 9rem;
-  grid-row: 2; grid-column: 1; align-self: end; justify-self: end;
-}
-/* These owners position their panel on the right. Some have zero-width
-   wrappers so a button sized against the wrapper would be unclickable. */
-:is(#lighting, #camtune, #flyby, #freecam, #garrival, #photo-studio) > .screen-arrange-entry {
-  position: fixed;
-  right: auto;
-  left: var(--safe-l);
-  width: max-content;
-  max-width: var(--safe-w);
-}
-.watch-transport > .screen-arrange-entry {
-  top: auto;
-  right: 0;
-  bottom: 100%;
-}
-body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hidden; }
 @media (orientation: portrait) {
   #screen-arranger .arrange-tools {
     left: var(--safe-l);

@@ -121,6 +121,7 @@ const AppearanceStudioBody = (function () {
     if (!arrangementTarget) return SCREEN_KEYS[previewPage];
     const id = arrangementTarget.id;
     if (id === "trackdesigner") return ["lookDesigner"];
+    if (id === "touch-controls") return ["dockLayout"];
     return SCREEN_KEYS[regionalLooks[id] || id] || [];
   }
   function placementTarget() {
@@ -362,7 +363,7 @@ const AppearanceStudioBody = (function () {
     const tools = node("div", "as-preview-toolbar"), pages = node("div", "as-segment"); pages.setAttribute("role", "group"); pages.setAttribute("aria-label", "Preview screen");
     for (const [id, name] of [["home", "HOME"], ["pause", "PAUSE"], ["datahub", "DATA HUB"], ["select", "TRACK SELECTOR"], ["career", "CAREER"], ["race", "RACE SETUP"], ["garage", "GARAGE"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
     const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
-    tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Representative preview. Use the advanced screen controls below for exact layout and the real-screen preview."));
+    tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Illustrative preview. Choose a screen above to arrange its live layout."));
     previewSide.addEventListener("apex:arrangement-target", event => {
       arrangementTarget = event.detail;
       renderScope();

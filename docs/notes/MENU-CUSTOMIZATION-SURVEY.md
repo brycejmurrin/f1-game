@@ -4,11 +4,11 @@ Kind: design
 
 ## Implemented follow-up
 
-The shared registry now defines **54 screen targets and 589 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 28, Telemetry detail 18, Saves & Data 19 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
+The shared registry now defines **54 screen targets and 590 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 28, Telemetry detail 18, Saves & Data 19 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
 
 ### Adjust a menu
 
-1. Open **Settings** from Home or Pause. The index groups destinations under **Controls and driving**, **Display and sound**, and **Player and data**. Open the page you want, then choose **Arrange this screen** beside Back. For a menu outside Settings, use the **Screen to arrange** picker in Appearance.
+1. Open **Settings** from Home or Pause. Open **Appearance**, choose a destination under **Screen to arrange**, then use the **Arrange** button for that destination. The picker explains any session or navigation steps needed to open the editor.
 2. Select a visible region and move it with the direction buttons or by dragging. Use **Fine** for a small move and **Coarse** for a larger one. Move the toolbar if it covers the part you want. On longer screens use **Scroll up** and **Scroll down**. **Browse section** can open disclosures or switch supported tabs during editing.
 3. For a Race Settings preset such as **Quick race**, change **Button width** to reflow it, **Button height** to set its minimum height, or **Text size** to enlarge its label. **Scale** resizes the selected unit. Under **Advanced style**, adjust text alignment or corners, form width where a region contains a supported input, or row and column gaps on flex and grid containers. A blank numeric field restores automatic styling.
 4. Changes preview immediately. Rotate to edit the other orientation or use **Copy from** to replace the current orientation’s draft with the other one. **Apply** saves. **Cancel** returns to the page. **Reset region** clears just the selected region in the current orientation. **Reset screen** followed by **Apply** restores that screen in both orientations.
@@ -16,7 +16,7 @@ The shared registry now defines **54 screen targets and 589 region bindings**. T
 
 ### Arrange data screens
 
-Open **Data Hub**, choose a tab, then use **Arrange** in the header. Driver and constructor standings, classification and session tools have their own regions when visible. Open a driver’s telemetry comparison to arrange its trace and map columns in the detail window. In **Settings → Saves & Data**, **Browse section** switches between the backup, restore and sharing controls while editing. Select an action button to adjust its placement. Cancel returns to the previously selected tab.
+Choose **Data Hub** in the Appearance picker. Use **Browse section** to switch tabs in the editor. Driver and constructor standings, classification and session tools have their own regions when visible. Choose **Telemetry detail** in Appearance, then open a driver’s telemetry comparison to arrange its trace and map columns. When arranging **Saves & Data**, **Browse section** switches between the backup, restore and sharing controls while editing. Select an action button to adjust its placement. Cancel returns to the previously selected tab.
 
 ### Adjust race readouts and touch buttons
 
@@ -30,7 +30,7 @@ In **Settings → Appearance**, choose **Global**, then **Endurance** for forest
 
 ### Arrange a tuner window
 
-Open **Settings → Visual Studio**, open a tuner, then use **Arrange this screen** in its toolbar. **Whole window** moves or resizes the panel in front of the scene. Select **Toolbar**, **Controls**, **Actions**, or a visible tool group to change its layout independently. Compact phone layouts fold some tools. Open **Scope and tools** to reveal them. **Apply** returns to the tuner. **Reset region** on Whole window restores its shipped position and size for that orientation.
+Choose the tuner in **Settings → Appearance → Screen to arrange**. **Whole window** moves or resizes the panel in front of the scene. Select **Toolbar**, **Controls**, **Actions**, or a visible tool group to change its layout independently. Compact phone layouts fold some tools. Open **Scope and tools** to reveal them. **Apply** returns to the tuner. **Reset region** on Whole window restores its shipped position and size for that orientation.
 
 | Window | Editable parts in addition to the panel |
 | --- | --- |
@@ -40,13 +40,13 @@ Open **Settings → Visual Studio**, open a tuner, then use **Arrange this scree
 | Garage Enter & Leave | Animation previews, transport, garage angle, playback speed and animation settings |
 | Free Camera | Framing, lens, camera snaps, bookmarks, depth of field and copied view |
 
-Garage Enter & Leave works from Home. Lighting, Camera and Flyby use an active track session. The cockpit preview inside Settings, race camera picker and in-game Graphics Benchmark also have contextual arrangement. Opening the Benchmark arranger leaves the Run command under player control.
+Garage Enter & Leave works from Home. Lighting, Camera and Flyby use an active track session. The cockpit preview inside Settings, race camera picker and in-game Graphics Benchmark can also be selected in Appearance. Opening the Benchmark arranger leaves the Run command under player control.
 
 In Chromium phone emulation at 852 × 393 CSS px, a first visit through Visual Studio opened all four primary tuners. On each tuner, Whole window width changed from 266 to 257.47 CSS px. The width after Apply matched the preview. Reset region restored 266 px. The track-only runs used a deterministic Monza race with rendering paused to measure the interface. On the same emulated screen, both Free Camera and its separate Photo Controls opened their own editors from Flyby and dismissed on Cancel. A second Lighting capture at DPR 3 held a rendered Monza cockpit frame behind the panel. Two Left taps moved the narrowed window from x = 527.53 to 510.49 CSS px. Apply retained that position and Reset returned it to x = 519.
 
 ### Size the camera joysticks
 
-In Free Camera, tap **Arrange camera sticks** on the camera controls bar. The same button appears inside Photo Studio when photographing a circuit or a race. Garage photos use drag-to-orbit. Choose **Movement stick** or **Look stick**, open **Controls**, and adjust **Diameter**. Under **Advanced style**, enter an exact percentage of the shorter viewport side. The diameter resizes the circular touch pad and its thumb indicator. Scale resizes the whole group, including its label.
+In a paused circuit session, choose **Photo controls** in the Appearance picker to open the camera sticks in Photo Studio. Garage photos use drag-to-orbit. Choose **Movement stick** or **Look stick**, open **Controls**, and adjust **Diameter**. Under **Advanced style**, enter an exact percentage of the shorter viewport side. The diameter resizes the circular touch pad and its thumb indicator. Scale resizes the whole group, including its label.
 
 Apply saves each stick independently for the current orientation. Reset region restores only the selected stick. Free Camera and Photo Studio share these settings. A larger stick gives your thumb more travel before reaching full movement or turn input. The panel and phone safe area can limit its visible diameter.
 
@@ -57,7 +57,7 @@ Apply saves each stick independently for the current orientation. Reset region r
 
 ### Verification and constraints
 
-One browser owner followed **Settings → Graphics → Arrange this screen → Cancel** on the follow-up working tree in Linux Chromium 154.0.8037.57, emulated touch, DPR 1 and reduced motion, at **393 × 852 CSS px portrait** and **852 × 393 CSS px landscape**. All three index headings appeared. The Graphics editor offered five visible regions. Cancel returned to Graphics with keyboard focus on the arrangement button. The registry defines six possible Graphics bindings. The focused Node 22 run passed all 89 title-layout, Settings router, search and source-integrity tests, including the grouping of all eleven index doors.
+Before the entries were consolidated in Appearance, one browser owner followed **Settings → Graphics → Arrange this screen → Cancel** on the follow-up working tree in Linux Chromium 154.0.8037.57, emulated touch, DPR 1 and reduced motion, at **393 × 852 CSS px portrait** and **852 × 393 CSS px landscape**. All three index headings appeared. The Graphics editor offered five visible regions. Cancel returned to Graphics with keyboard focus on the arrangement button. The registry defines six possible Graphics bindings. The focused Node 22 run passed all 89 title-layout, Settings router, search and source-integrity tests, including the grouping of all eleven index doors.
 
 In both emulated orientations, applying Endurance changed the surface token to `#16342b` and Drafting changed it to `#192e45`. At 852 × 393 the Track Designer editor and Photo Studio editor both dismissed with a touch on Cancel. Photo Studio hit the 30-second automation timeout on earlier attempts. The final interaction used the button’s rendered coordinates and a longer wait on software rendering.
 

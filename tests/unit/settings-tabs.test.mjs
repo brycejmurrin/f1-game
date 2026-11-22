@@ -259,39 +259,17 @@ test("the shipped Settings index groups every door under a task heading", () => 
   });
 });
 
-test("the in-flow Arrange action edits the current page without adding to its back stack", async () => {
+test("the Settings footer keeps its Back action on every page", () => {
   const { ctx, dom, nav } = boot({ ensure: () => true, stub: false, prepare(dom) {
     const footer = dom.makeElement("div");
     dom.byId("pmsettings").appendChild(footer);
     footer.appendChild(dom.byId("pm-settings-close"));
   } });
-  const arrange = dom.byId("pm-settings-close").parentElement.querySelector("#pm-arrange-current");
-  const calls = [];
-  ctx.window.ScreenArranger = { open: (id, trigger) => { calls.push(id); assert.equal(trigger, arrange); return true; } };
+  const back = dom.byId("pm-settings-close");
   for (const page of Object.keys(ctx.SettingsNav.routes)) {
     nav.show(page);
-    await arrange.onclick();
-    assert.equal(calls.at(-1), page === "home" ? "pmsettings" : "pm-panel-" + page);
-    assert.equal(nav.current(), page);
+    assert.deepEqual(back.parentElement.children, [back]);
   }
-  nav.show("home");
-  dom.byId("pm-open-controls").onclick();
-  await arrange.onclick();
-  assert.equal(nav.back(), false);
-  assert.equal(nav.current(), "home");
-  // A previous request completing after Back must never open another editor.
-  delete ctx.window.ScreenArranger;
-  ctx.LayoutPresets = {};
-  let loaded;
-  ctx.ScriptLoader = { create: () => ({ load: () => new Promise(resolve => { loaded = resolve; }) }) };
-  nav.show("controls");
-  const opening = arrange.onclick();
-  await tick();
-  nav.show("home");
-  ctx.window.ScreenArranger = { open: () => assert.fail("a stale route opened its editor") };
-  loaded(true);
-  await opening;
-  assert.equal(arrange.disabled, false);
 });
 
 test("a cross-link returns through nested pages with each launcher's focus and scroll", () => {

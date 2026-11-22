@@ -209,7 +209,6 @@ const DataHub = (function () {
     });
     header.appendChild(tabs);
     header.appendChild(developerTools);
-    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, header, "datahub", "Arrange");
     header.appendChild(closeBtn);
 
     // content

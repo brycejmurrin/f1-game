@@ -343,7 +343,6 @@ function transport() {
     + '<button id="ga-loop" type="button" aria-pressed="false">LOOP</button>'
     + '<button id="ga-edit" type="button" aria-pressed="false">EDIT</button></div>');
   $("ga-transport").appendChild(stop);
-  if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor($("garrival"), $("ga-transport"));
   $("ga-play").onclick = () => previewPause(!(preview && preview.paused));
   $("ga-back").onclick = () => previewSeek(preview ? preview.t - FRAME_S : 0);
   $("ga-fwd").onclick = () => previewSeek(preview ? preview.t + FRAME_S : 0);

@@ -14,6 +14,7 @@ const SettingsSearch = (function () {
     ["hud-size", "HUD size", "display", "pm-hudscale", "bigger smaller scale readouts"],
     ["map", "Track map", "display", "pm-hudmap-sel", "minimap"],
     ["gaps", "Gap readouts", "display", "pm-hudgaps-sel", "timing intervals"],
+    ["appearance-arrange-screen", "Arrange a screen", "appearance", "appearance-arrange-screen", "menu arrangement layout screen picker move resize buttons text size"],
     ["ui-size", "Interface size", "appearance", "pm-uiscale", "menus text bigger smaller zoom"],
     ["motion", "Reduce motion", "a11y", "pm-motion-sel", "shake flyby animation comfort"],
     ["focus", "Keyboard focus", "a11y", "pm-focus-sel", "outline ring accessibility"],

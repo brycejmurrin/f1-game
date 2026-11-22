@@ -25,7 +25,7 @@ window.ScreenRegions = (function () {
     display: parts("pm-", { "hud-details": "HUD settings", hudprofile: "HUD profile", hudmetrics: "Metrics layout", hudmap: "Map", hudmirror: "Mirror", "hud-sample": "HUD preview" }),
     graphics: parts("pm-", { "display-adv": "Renderer settings", res: "Resolution", fullscreen: "Fullscreen", upscale: "Upscaling", "graphics-details-body": "Individual effects" }),
     appearance: { studio: part("#appearance-studio", "Appearance Studio"), ...parts("pm-", { "appearance-menu": "Menu colours", "appearance-hud": "HUD colours", general: "Readability" }),
-      presets: part('[data-as="preset-list"]', "Appearance presets"), scope: part('[data-as="preview-side"]', "Preview and screen picker") },
+      presets: part('[data-as="preset-list"]', "Appearance presets"), scope: part('[data-as="preview-side"]', "Appearance preview"), picker: part("#appearance-arrange", "Screen to arrange") },
     a11y: parts("pm-", { motion: "Reduced motion", focus: "Keyboard focus", cbcues: "Colourblind cues", "hold-throttle": "Gas input", "hold-lookback": "Look back input" }),
     advanced: { pace: part("label[for=pm-pace]", "Overall speed"), more: part("#adv-details", "Advanced handling"), ...parts("pm-", { "tiltdeg-jump": "Tilt setup", "line-jump": "Steer assist" }) },
     audio: parts("as-", { "music-details": "Music", "sound-details": "Sound effects", "radio-details": "Team radio", "ann-details": "Announcers", "engine-details": "Engine" }),
@@ -254,47 +254,45 @@ window.ScreenRegions = (function () {
   // launchers a player would press, so their Career slot or race stays theirs.
   const previewTargets = { garage: "carsetup", race: "race-settings", pause: "pausemenu" };
   const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data", "telemetry-detail": "mb-data",
-    "race-settings": "mb-race", "track-detail": "mb-race", "duel-picker": "mb-race", quali: "mb-race", teampicker: "mb-garage", "season-setup": "mb-season",
+    results: "mb-race", "share-card-preview": "mb-race", "race-settings": "mb-race", "track-detail": "mb-race", "duel-picker": "mb-race", customize: "mb-garage", "career-offers": "mb-career", "career-history": "mb-career", "career-guide": "mb-career", standings: "mb-standings", quali: "mb-race", teampicker: "mb-garage", "season-setup": "mb-season",
     trackdesigner: "mb-designer", "photo-studio": "mb-photo", watch: "mb-watch", vsfriend: "mb-vs", howtoplay: "mb-help" };
+  const pauseDoors = { "photo-controls": "pm-photo", "photo-studio": "pm-photo", standings: "pm-standings", howtoplay: "pm-howto" };
   const flybyDoor = () => document.getElementById("pm-flyby");
   const visualDoors = {
     lighting: () => document.getElementById("pm-lighting"),
     camtune: () => document.getElementById("pm-camtune"),
     garrival: () => document.getElementById("pm-garrival"),
-    flyby: flybyDoor, freecam: flybyDoor, "photo-controls": flybyDoor,
+    flyby: flybyDoor, freecam: flybyDoor,
   };
   const separatePages = { pair: "controller.html", menupad: "controller.html", wheel: "controller.html", broadcast: "overlay.html" };
   let pending;
-  const reentry = new WeakMap();
-  // Screens with tabs, folds or multiple steps can expose different regions
-  // after the first edit. Keep a way back while this screen remains open.
-  function addReentry(id, root) {
-    if (reentry.has(root) || root.hidden) return;
-    const door = document.createElement("button");
-    door.type = "button";
-    door.textContent = "Arrange again";
-    door.onclick = () => window.ScreenArranger.open(id, door);
-    root.querySelector(".sheet-head").appendChild(door);
-    reentry.set(root, door);
-  }
+  let controllerOrientation;
   function tryPending(id) {
-    if (pending !== id) return;
+    if (pending !== id || (id === "menupad" && controllerOrientation?.matches)) return;
     const root = document.querySelector(screens[id].root);
     if (!root || root.hidden || root.tagName === "DIALOG" && !root.open || !root.getClientRects().length) return;
     const focus = Array.from(root.querySelectorAll("button:enabled")).find(el => el.getClientRects().length);
     if (window.ScreenArranger?.open(id, focus || root)) {
       pending = null;
-      if (["race-settings", "vsfriend"].includes(id)) addReentry(id, root);
     }
   }
   function attachPicker(host) {
     const preview = host.querySelector('[data-as="preview"]');
-    if (!preview || host.querySelector(".arrange-route")) return;
-    const note = host.querySelector('[data-as="note"]');
+    const studio = host.closest("#appearance-studio");
+    if (!preview || !studio || studio.querySelector("#appearance-arrange")) return;
+    const group = document.createElement("section");
+    group.id = "appearance-arrange";
+    const note = document.createElement("p");
+    note.id = "appearance-arrange-help";
+    note.setAttribute("aria-live", "polite");
     const target = document.createElement("select");
-    target.setAttribute("aria-label", "Screen to arrange");
+    target.id = "appearance-arrange-screen";
+    const label = document.createElement("label");
+    label.htmlFor = target.id;
+    label.textContent = "Screen to arrange";
     target.add(new Option("Home", "home"));
     target.add(new Option("Race HUD", "hud"));
+    target.add(new Option("Touch controls", "touch-controls"));
     for (const [id, def] of Object.entries(screens)) {
       target.add(new Option(def.label, id));
     }
@@ -303,28 +301,43 @@ window.ScreenRegions = (function () {
     const go = document.createElement("button");
     go.type = "button";
     go.className = "arrange-route";
-    host.append(target, go);
+    target.setAttribute("aria-describedby", note.id);
+    group.append(label, target, go, note);
+    studio.insertBefore(group, studio.firstChild);
     const atHome = () => document.getElementById("overlay")?.hidden === false && !window.UiLayers?.inRace();
+    const needsCircuit = id => atHome() && (id === "campicker" || id === "photo-controls" || visualDoors[id]?.()?.disabled);
     function describe() {
       const id = target.value;
       const label = target.selectedOptions[0].text;
       host.dispatchEvent(new CustomEvent("apex:arrangement-target", {detail: {id, label}}));
       go.textContent = id === "popups" ? "Edit shared popup style" : "Arrange " + label;
       go.disabled = (id === "home" || id === "home-style") && !atHome();
-      if ((id === "datahub" || id === "telemetry-detail") && !atHome()) {
-        go.disabled = true;
-        note.textContent = "Open Data Hub from Home. Its header and the telemetry detail window each have an Arrange button.";
+      if (id === "touch-controls") {
+        const pedals = document.getElementById("btn-brake");
+        go.disabled = !window.UiLayers?.inRace() || !pedals || pedals.hidden;
+        note.textContent = go.disabled ? "Pause a race with touch driving controls enabled to arrange the buttons." :
+          "Move, resize and shape the active touch driving buttons.";
         return;
       }
-      if (id === "campicker" && atHome()) {
-        go.disabled = true;
-        note.textContent = "During a race, hold or right-click the camera button and choose Arrange this screen.";
+      if (id === "hud") {
+        note.textContent = atHome() ? "Preview the race HUD with sample readouts. Apply or Cancel returns to Appearance." : "Arrange the active race HUD and camera profile.";
         return;
       }
-      if (visualDoors[id]?.()?.disabled) {
-        go.disabled = !atHome();
-        if (!go.disabled) go.textContent = "Choose a circuit for " + label;
-        note.textContent = "Start a race, then open Pause → Settings → Visual Studio. Choose the tuner and select Arrange this screen.";
+      if (!atHome() && launchers[id] && !pauseDoors[id] && id !== "results" && id !== "share-card-preview") {
+        go.disabled = true;
+        note.textContent = "Open Settings → Appearance from Home to arrange " + label + ".";
+        return;
+      }
+      if (needsCircuit(id)) {
+        go.textContent = "Choose a circuit for " + label;
+        note.textContent = id === "campicker" ? "Start a race, then hold or right-click the camera button. The editor opens with the view picker." :
+          id === "photo-controls" ? "Start a race, then choose Photo from Pause. The editor opens on the camera sticks." :
+          "Start a race, then choose the tuner in Pause → Settings → Visual Studio." + (id === "freecam" ? " Choose Free Camera in Flyby." : "") + " The editor opens when its window appears.";
+        return;
+      }
+      if (id === "standings" && (atHome() ? document.getElementById("mb-standings") : document.getElementById("pm-standings"))?.hidden) {
+        go.disabled = true;
+        note.textContent = "Complete a season round to make the standings available.";
         return;
       }
       if (screens[id]?.settingsPage && typeof SettingsNav !== "undefined" && SettingsNav.routes[screens[id].settingsPage]?.scope === "session" && atHome()) {
@@ -336,9 +349,15 @@ window.ScreenRegions = (function () {
         atHome() && id === "duel-picker" ? "Continue from the circuit list to Race Settings, open Field, and choose your duel rival." :
         atHome() && id === "teampicker" ? "Select the team card in the Garage to arrange the team picker." :
         atHome() && id === "quali" ? "In Race Settings, choose a qualifying grid, then start to arrange the qualifying sheet." :
-        id === "freecam" || id === "photo-controls" ? "Choose Free Camera in the Flyby editor to open these controls." :
+        id === "photo-controls" ? "Open Photo Studio on the paused race to edit the movement and look sticks." :
+        id === "freecam" ? "Choose Free Camera in the Flyby editor to arrange its window." :
+        id === "customize" ? "Open Team in Garage, then edit your team." :
+        id === "career-offers" || id === "career-history" || id === "career-guide" ? "Open the relevant page in Career. Its editor opens when the page appears." :
+        id === "share-card-preview" ? "After a race, open a share card from Results to arrange the preview." :
+        id === "results" ? "Finish a race to edit its actual Results screen." :
+        id === "spotifypanel" ? "Choose Open Player in Music & Sound with Spotify connected." :
         id === "bench" ? "Open the Benchmark dialog from Graphics to arrange its test choices and results." :
-        id === "campicker" ? "During a race, hold or right-click the camera button and choose Arrange this screen." :
+        id === "campicker" ? "Choose Resume, then hold or right-click the camera button. The editor opens with the view picker." :
         id === "pausemenu" ? "Edit the Pause menu. Apply or Cancel returns to Appearance." :
         id === "popups" ? "Shared appearance for popup sheets. Choose Results to arrange its individual regions." :
         id === "home-style" ? "Edit the title menu’s text and button dimensions." :
@@ -355,6 +374,7 @@ window.ScreenRegions = (function () {
       describe();
     }
     target.addEventListener("change", describe);
+    if (typeof SettingsNav !== "undefined") SettingsNav.onEnter(page => { if (page === "appearance") describe(); });
     go.addEventListener("click", async () => {
       pending = null;
       const id = target.value;
@@ -366,7 +386,14 @@ window.ScreenRegions = (function () {
         }
         return;
       }
-      if (id === "hud") { document.getElementById("pm-hud-arrange")?.click(); return; }
+      if (id === "hud" || id === "touch-controls") {
+        describe();
+        if (!go.disabled) {
+          const door = id === "hud" ? document.getElementById("pm-hud-arrange") : document.getElementById("pm-dock-reposition");
+          door?.click();
+        }
+        return;
+      }
       const settings = document.getElementById("pmsettings");
       if (separatePages[id]) {
         const url = new URL(separatePages[id], location.href);
@@ -376,8 +403,8 @@ window.ScreenRegions = (function () {
         return;
       }
       const fromHome = atHome();
-      const chooseCircuit = fromHome && visualDoors[id]?.()?.disabled;
-      if (id !== "home" && !chooseCircuit && !window.ScreenArranger) {
+      const chooseCircuit = needsCircuit(id);
+      if (id !== "home" && !window.ScreenArranger) {
         go.disabled = true;
         try {
           await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
@@ -422,6 +449,15 @@ window.ScreenRegions = (function () {
         });
         return;
       }
+      if (id === "spotifypanel") {
+        SettingsNav.show("audio", true, () => {
+          if (settings.hidden || SettingsNav.current() !== "audio") return;
+          const door = document.getElementById("as-sp-open");
+          pending = id;
+          if (door && !door.disabled) door.click();
+        });
+        return;
+      }
       if (id === "bench") {
         SettingsNav.show("graphics", true, () => {
           if (settings.hidden || SettingsNav.current() !== "graphics") return;
@@ -432,7 +468,7 @@ window.ScreenRegions = (function () {
         });
         return;
       }
-      const route = id === "cockpit-preview" ? "display" : screens[id]?.settingsPage;
+      const route = id === "pmsettings" ? "home" : id === "cockpit-preview" ? "display" : screens[id]?.settingsPage;
       if (route) {
         // The settings router owns each page's lazy content and availability.
         SettingsNav.show(route, true, () => {
@@ -460,17 +496,8 @@ window.ScreenRegions = (function () {
         return;
       }
       const back = document.getElementById("pm-settings-close");
-      if (id === "pmsettings") {
-        back.click();
-        requestAnimationFrame(() => window.ScreenArranger.open(id, document.getElementById("pm-open-appearance")));
-        return;
-      }
       for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
       if (!settings.hidden) return;
-      if (chooseCircuit) {
-        requestAnimationFrame(() => document.getElementById("mb-race")?.click());
-        return;
-      }
       if (id === "home") { TitleLayout.enter(document.getElementById("mb-settings")); return; }
       pending = id;
       // TopModal closes the native Settings dialog in a microtask. A lazy
@@ -478,8 +505,11 @@ window.ScreenRegions = (function () {
       // that owner changes while loading. Invoke it after the close settles.
       requestAnimationFrame(() => {
         if (pending !== id) return;
-        if (fromHome && launchers[id]) {
-          const door = document.getElementById(launchers[id]);
+        if (chooseCircuit) {
+          document.getElementById("mb-race")?.click();
+        } else {
+          const launcher = (fromHome ? launchers : pauseDoors)[id];
+          const door = launcher && document.getElementById(launcher);
           if (door && id === "telemetry-detail") door.dataset.openTab = "telemetry";
           door?.click();
         }
@@ -495,7 +525,10 @@ window.ScreenRegions = (function () {
     const existingPicker = document.querySelector('[data-as="preview-side"]');
     if (existingPicker) attachPicker(existingPicker);
     const query = new URLSearchParams(location.search);
-    if (query.has("arrange") && !document.getElementById("menu-buttons")) pending = query.get("arrange") || "broadcast";
+    if (query.has("arrange") && !document.getElementById("menu-buttons")) {
+      pending = query.get("arrange") || "broadcast";
+      if (pending === "wheel" || pending === "menupad") controllerOrientation = window.matchMedia("(orientation: portrait)");
+    }
     // A route may span several real screens (e.g. track selection into Race
     // Settings). Backing out or choosing a different Home destination drops it.
     document.addEventListener("keydown", event => {
@@ -505,17 +538,14 @@ window.ScreenRegions = (function () {
       if (!pending) return;
       const door = event.target.closest?.("#menu-buttons button");
       const back = event.target.closest?.("[data-esc-close]");
-      if (pending === "campicker" && event.target.closest("button")?.id === "pm-resume") return;
+      if ((pending === "campicker" || pending === "photo-controls" || visualDoors[pending]) && door?.id === "mb-race") return;
+      if ((pending === "campicker" || pending === "results" || pending === "share-card-preview") && event.target.closest("button")?.id === "pm-resume") return;
       if ((door && door.id !== launchers[pending]) ||
           (back && back.dataset.escClose === event.target.closest("button")?.id)) pending = null;
     }, true);
     const ids = new WeakMap();
     const reveal = (root) => {
       const id = ids.get(root);
-      if (root.hidden && reentry.has(root)) {
-        reentry.get(root).remove();
-        reentry.delete(root);
-      }
       if (!id || root.hidden || document.querySelector("#screen-arranger[open]")) return;
       if (id === pending) requestAnimationFrame(() => tryPending(id));
       if (window.ScreenPlacement) window.ScreenPlacement.restore(id);
@@ -536,15 +566,20 @@ window.ScreenRegions = (function () {
     const wheel = document.getElementById("ctl");
     if (wheel && (pending === "wheel" || pending === "menupad")) {
       const start = () => {
+        if (controllerOrientation.matches && pending) return;
         if (pending === "menupad") tryPending("menupad");
         else if (pending === "wheel" && wheel.getClientRects().length) {
           document.getElementById("lay-arrange").click();
           pending = null;
         }
-        if (!pending) observer.disconnect();
+        if (!pending) {
+          observer.disconnect();
+          controllerOrientation.removeEventListener("change", start);
+        }
       };
       const observer = new MutationObserver(start);
       observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      controllerOrientation.addEventListener("change", start);
       requestAnimationFrame(start);
     }
     if (!title) return;

@@ -308,12 +308,14 @@ test("Race Settings previews and saves a single button's width, height and text 
   expect(await geometry(start)).toEqual(edited);
   expect(await saved()).toEqual(stored);
 
-  // Change a real fold while the race controls are live, then edit that state.
-  await page.locator("#rs-fold-field-sum").click();
-  await page.locator("#race-settings").getByRole("button", { name: "Arrange again" }).click();
+  // Re-enter through Appearance, then open Field without activating game controls.
+  await page.reload();
+  await openFromHome();
+  const browse = editor.getByLabel("Browse section");
+  const field = await browse.locator("option").filter({ hasText: /^Open FIELD/i }).getAttribute("value");
+  await browse.selectOption(field);
   await editor.getByLabel("Region").selectOption("diff-next");
   const difficulty = await page.locator("#rs-diff-sel").inputValue();
-  await adjust("Controls");
   await adjust("Button height +");
   await adjust("Apply");
   expect(await page.locator("#rs-diff-sel").inputValue()).toBe(difficulty);
@@ -328,15 +330,17 @@ test("Garage animation tuner edits its window on first visit at the measured pho
     await page.goto(baseURL || "/");
     await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
     await page.locator("#mb-settings").tap();
-    await page.locator("#pm-open-visual").tap();
-    const advanced = page.locator("#pm-visual-tuners");
-    if (!(await advanced.evaluate(el => el.open))) await advanced.locator("summary").tap();
-    await page.locator("#pm-garrival").tap();
+    const launch = async () => {
+      await page.locator("#pm-open-appearance").tap();
+      await page.getByLabel("Screen to arrange").selectOption("garrival");
+      await page.locator(".arrange-route").tap();
+    };
+    await launch();
     const sheet = page.locator("#garrival-inner");
     const width = () => sheet.evaluate(el => el.getBoundingClientRect().width);
-    const launch = page.locator('#garrival [data-arrange-screen="garrival"]').first();
     const editor = page.locator('#screen-arranger[data-editing-screen="garrival"]');
     const action = name => editor.getByRole("button", { name, exact: true }).tap();
+    await expect(editor).toBeVisible();
     const shipped = await width();
     const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
     const capture = async state => {
@@ -344,7 +348,6 @@ test("Garage animation tuner edits its window on first visit at the measured pho
       await testInfo.attach(name, { body: await page.screenshot(), contentType: "image/png" });
     };
     await capture("shipped");
-    await launch.tap();
     await editor.getByLabel("Region", { exact: true }).selectOption("window");
     await action("Controls");
     await action("Width −");
@@ -355,7 +358,9 @@ test("Garage animation tuner edits its window on first visit at the measured pho
     await capture("preview");
     await action("Apply");
     expect(await width()).toBe(preview);
-    await launch.tap();
+    await page.locator("#ga-close").tap();
+    await page.locator("#pm-settings-close").tap();
+    await launch();
     await editor.getByLabel("Region", { exact: true }).selectOption("window");
     await action("Controls");
     await action("Reset region");

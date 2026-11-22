@@ -9594,6 +9594,7 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "flush": [
+        "tests/unit/phone-pad.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "hapticsSupported": [
@@ -10215,7 +10216,8 @@
         "tests/unit/phone-pad.test.mjs"
       ],
       "layout": [
-        "tests/unit/phone-input-improvements.test.mjs"
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
       ],
       "layoutPreset": [
         "tests/unit/phone-input-improvements.test.mjs"
@@ -10264,6 +10266,9 @@
       ],
       "event": [
         "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "flush": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "health": [
@@ -11209,6 +11214,9 @@
       ],
       "dash": [
         "tests/unit/phone-pad.test.mjs"
+      ],
+      "start": [
+        "tests/unit/phone-pad.test.mjs"
       ]
     },
     "js/net/qr.js": {
@@ -11309,7 +11317,8 @@
       "start": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/net-qr.test.mjs",
-        "tests/unit/phone-input-improvements.test.mjs"
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
       ],
       "stop": [
         "tests/unit/async-lifecycle.test.mjs",
@@ -19577,26 +19586,11 @@
       ]
     },
     "js/ui/editor-workspace.js": {
-      "arrangeDoor": [
-        "tests/unit/editor-workspace.test.mjs"
-      ],
       "attach": [
         "tests/unit/editor-workspace.test.mjs"
       ],
-      "init": [
-        "tests/unit/data-hub-picker.test.mjs",
-        "tests/unit/editor-workspace.test.mjs",
-        "tests/unit/track-designer-dom.test.mjs"
-      ],
       "setPreview": [
         "tests/unit/editor-workspace.test.mjs"
-      ],
-      "*": [
-        "tests/unit/bench-run.test.mjs",
-        "tests/unit/camera-defaults.test.mjs",
-        "tests/unit/cockpit-preview.test.mjs",
-        "tests/unit/photo-studio.test.mjs",
-        "tests/unit/telemetry-view-resize.test.mjs"
       ]
     },
     "js/ui/experience.js": {
@@ -21096,6 +21090,7 @@
         "tests/unit/layout-presets.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pause-hud-layout.test.mjs",
+        "tests/unit/phone-pad.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/screen-looks.test.mjs",
         "tests/unit/settings-export.test.mjs",
@@ -21461,6 +21456,7 @@
       "show": [
         "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
+        "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],

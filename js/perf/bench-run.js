@@ -574,7 +574,6 @@ const BenchRun = (function () {
     _covered.forEach((n) => { n.hidden = true; });
     if (!_ui) { const body = doc().getElementById("bench-body"); _ui = { body, status: el("p", "adv-help") }; _ui.status.setAttribute("role", "status"); }
     d.hidden = false; paint();
-    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(d, d.querySelector(".sheet-head"));
     return true;
   }
   function close() { const d = (doc() && doc().getElementById("bench")); if (d) d.hidden = true; _covered.forEach((n) => { n.hidden = false; }); _covered = []; const b = (doc() && doc().getElementById("pm-bench-open")); if (b && b.focus) b.focus(); }

@@ -55,6 +55,28 @@ test("accessibility searches reach the existing controls and BACK restores the q
     h.nav.back(); assert.equal(h.dom.document.activeElement, result); assert.equal(h.search.value, query);
   }
 });
+test("a cold layout search waits for the picker and respects a later navigation", async () => {
+  for (const leave of [false, true]) {
+    const h = boot();
+    let finish;
+    h.ctx.AppearanceStudio = { initUI: () => new Promise(resolve => { finish = resolve; }) };
+    const result = h.result("arrange screen");
+    assert.equal(result.dataset.settingResult, "appearance-arrange-screen");
+    result.onclick();
+    if (leave) h.nav.show("driving");
+    const picker = h.el("select", "appearance-arrange-screen", h.dom.document.querySelector("#pm-panel-appearance"));
+    finish(); await tick();
+    if (leave) {
+      assert.equal(h.nav.current(), "driving");
+      assert.notEqual(h.dom.document.activeElement, picker);
+    } else {
+      assert.equal(h.nav.current(), "appearance");
+      assert.equal(h.dom.document.activeElement, picker);
+      h.nav.back();
+      assert.equal(h.dom.document.activeElement, result);
+    }
+  }
+});
 test("search destinations use navigation titles instead of internal page ids", () => {
   const h = boot();
   for (const [query, title] of [["motion", "ACCESSIBILITY"], ["HUD size", "HUD & CAMERA"], ["braking beep", "DRIVING AIDS"], ["music volume", "MUSIC & SOUND"], ["deadzone", "ADVANCED INPUT & HANDLING"]]) {

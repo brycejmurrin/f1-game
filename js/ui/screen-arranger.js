@@ -225,7 +225,7 @@ window.ScreenArranger = (function () {
     }
     // Only measure a button when changing a dimension. A drag never needs its size.
     const styleRow = row();
-    const buttonSelector = "button:not(.screen-arrange-entry,[data-arrange-screen]), [role=button], input[type=button], input[type=submit], input[type=reset]";
+    const buttonSelector = "button, [role=button], input[type=button], input[type=submit], input[type=reset]";
     function firstButton() {
       const part = element(key);
       if (!part) return null;

@@ -896,14 +896,34 @@ test("the real picker scopes profile apply and reset to Results, shared popup st
     return el;
   };
   const registry = fs.readFileSync(absSrc("js/ui/screen-regions.js"), "utf8");
+  let racing = false;
   vm.runInNewContext(registry, {
-    window: {}, document: doc, location: { search: "" }, URLSearchParams, queueMicrotask: fn => fn(),
+    window: { UiLayers: { inRace: () => racing } }, document: doc, location: { search: "" }, URLSearchParams, queueMicrotask: fn => fn(),
     MutationObserver: class { observe() {} }, CustomEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
     Option: function (text, value) { return Object.assign(create("option"), { text, value }); }
   }, { filename: absSrc("js/ui/screen-regions.js") });
-  const picker = panel.querySelector('[aria-label="Screen to arrange"]');
+  const picker = panel.querySelector("#appearance-arrange-screen");
+  assert.equal(panel.querySelector("#appearance-studio").firstChild.id, "appearance-arrange");
+  assert.equal(picker.parentElement.querySelector("label").htmlFor, picker.id);
   const button = text => panel.querySelectorAll("button").find(el => el.textContent === text);
   const pick = id => { picker.value = id; dom.dispatch(picker, { type: "change" }); };
+  const hint = panel.querySelector("#appearance-arrange-help");
+  pick("hud");
+  assert.match(hint.textContent, /sample readouts/);
+  pick("touch-controls");
+  assert.equal(button("Arrange Touch controls").disabled, true);
+  racing = true;
+  const brake = dom.byId("btn-brake");
+  brake.hidden = true;
+  pick("touch-controls");
+  assert.equal(button("Arrange Touch controls").disabled, true);
+  brake.hidden = false;
+  let dockOpens = 0;
+  dom.byId("pm-dock-reposition").onclick = () => { dockOpens++; };
+  pick("touch-controls");
+  button("Arrange Touch controls").click();
+  assert.equal(dockOpens, 1);
+  racing = false;
   button("THIS SCREEN").click();
   pick("results");
   button("APPLY PROFILE").click();

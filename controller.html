@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-VMF6uP14Kg8GwtzOtyH82ERR+8x+fYM82m69FLVFliw=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-H3jM1cXo65kaB5BeVHiiu1pAYxxRxlhV8jz5xQsqoX8=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -276,7 +276,6 @@
   #ctl [data-wheel-shape="paddle-right"] { border-radius: 12% 50% 50% 12%; }
   #ctl [data-wheel-shape="leaf"] { border-radius: 50% 12% 50% 12%; }
   @media (pointer: coarse), (hover: none) { #arrange-bar :is(#arr-select, #arr-shape) { font-size: 16px; } }
-  body.arranging #ctl > .screen-arrange-entry { visibility: hidden; }
   body.arranging #ctl :is(#gas,#b-aero) { pointer-events: auto; }
   #lay-transfer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   #lay-transfer :is(button,input) { min-height: 44px; max-width: 100%; }
@@ -784,13 +783,15 @@ window.addEventListener("DOMContentLoaded", function () {
     var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
     var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
     var menu = /[?&]demo=menu\b/.test(location.search);
-    // A tap arms the real sensor (iOS asks inside the tap): the demo rim then
-    // follows the phone in the hand instead of the sine wave.
+    // The driving demo can follow real tilt. Layout previews and menu navigation
+    // use the sample dash and have no reason to request a motion permission.
     var live = false;
-    document.addEventListener("pointerdown", function () {
-      if (live) return;
-      ctl.armSensor().then(function (ok) { live = ok; if (ok) $("link").textContent = "DEMO · TILT THE PHONE"; });
-    }, { once: false });
+    if (!menu && !new URLSearchParams(location.search).has("arrange")) {
+      document.addEventListener("pointerdown", function (event) {
+        if (live || document.body.classList.contains("arranging") || event.target.closest("#b-layout, #layout-sheet, #arrange-bar")) return;
+        ctl.armSensor().then(function (ok) { live = ok; if (ok) $("link").textContent = "DEMO · TILT THE PHONE"; });
+      });
+    }
     var t0 = performance.now();
     var demo = function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;

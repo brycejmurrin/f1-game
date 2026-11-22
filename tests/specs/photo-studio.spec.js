@@ -404,17 +404,22 @@ test("Photo Studio sizes the actual movement and look sticks independently", asy
     __apex.go();
   });
   await clickLive(page, "pausebtn");
-  await clickLive(page, "pm-photo");
-  const launch = page.locator('#photo-studio [data-arrange-screen="photo-controls"]');
+  async function arrangeSticks() {
+    await expect(page.locator("#pm-settings")).toBeVisible();
+    await clickLive(page, "pm-settings");
+    await clickLive(page, "pm-open-appearance");
+    await page.getByLabel("Screen to arrange").selectOption("photo-controls");
+    await page.locator(".arrange-route").tap();
+    await expect(page.locator('#screen-arranger[data-editing-screen="photo-controls"]')).toBeVisible();
+  }
+  await arrangeSticks();
   const editor = page.locator('#screen-arranger[data-editing-screen="photo-controls"]');
   const region = editor.getByLabel("Region", { exact: true });
   const diameter = (id) => page.locator(id).evaluate(el => el.getBoundingClientRect().width);
   const move = () => diameter("#pc-move");
   const look = () => diameter("#pc-look");
   const action = name => editor.getByRole("button", { name, exact: true }).tap();
-  await expect(launch).toBeVisible();
   const shippedMove = await move(), shippedLook = await look();
-  await launch.tap();
   await region.selectOption("move");
   await action("Controls");
   await editor.getByRole("button", { name: /Diameter.*\+/i }).tap();
@@ -426,7 +431,7 @@ test("Photo Studio sizes the actual movement and look sticks independently", asy
   const narrower = await look();
   expect(narrower).toBeLessThan(shippedLook);
   await action("Apply");
-  await expect(launch).toHaveText("Arrange camera sticks");
+  await expect(editor).toHaveCount(0);
   expect(await move()).toBeCloseTo(wider, 1);
   expect(await look()).toBeCloseTo(narrower, 1);
   for (const id of ["pc-move", "pc-look"]) {
@@ -437,7 +442,8 @@ test("Photo Studio sizes the actual movement and look sticks independently", asy
     })).toBe(true);
   }
   await evidence(page, info, "photo-studio-custom-sticks");
-  await launch.tap();
+  await clickLive(page, "ps-close");
+  await arrangeSticks();
   await region.selectOption("move");
   await action("Controls");
   await action("Reset region");
