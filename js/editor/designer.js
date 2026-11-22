@@ -785,6 +785,7 @@ const TrackDesigner = (function () {
     const closeBtn = document.getElementById("td-close");
     if (closeBtn) { closeBtn.hidden = false; closeBtn.addEventListener("click", close); }
 
+    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, root.querySelector(".sheet-head"));
     const body = el("div", "td-body");
     // stage
     const stage = el("div", "td-stage");

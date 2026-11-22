@@ -21,6 +21,7 @@ function boot(withRail = false, withNested = false, withActions = false, withEnt
     observe(_, o) { if (o.attributeFilter.includes("data-density")) density = this.cb; else observe = this.cb; }
   } };
   const root = doc.createElement("div"), sheet = doc.createElement("div");
+  root.id = "camtune";
   sheet.className = "sheet"; root.append(sheet); root.hidden = true;
   const settings = doc.getElementById("pmsettings"), launcher = doc.getElementById("pm-camera");
   const nested = doc.getElementById("freecam"); nested.hidden = true;
@@ -35,10 +36,10 @@ function boot(withRail = false, withNested = false, withActions = false, withEnt
     const done = doc.createElement("button"); done.id = "ct-close";
     foot.append(action, done); sheet.append(foot);
   }
-  const ctx = vm.createContext({ document: doc });
+  const ctx = vm.createContext({ document: doc, SettingsNav: nav });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/editor-workspace.js", import.meta.url), "utf8") + "\nglobalThis.api = EditorWorkspace;", ctx);
   const api = ctx.api.attach(root, { entry: withEntry ? "pc-toggle" : null, title: "Camera", note: "Per camera", done: withActions ? "ct-close" : null, rail: withRail ? "ct-rail" : null, launcher: "pm-camera", nav, nested: withNested ? "freecam" : null });
-  return { foot, action, nested, doc, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media, density: () => density(), query: () => query };
+  return { foot, action, nested, doc, nav, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media, density: () => density(), query: () => query };
 }
 
 test("preview furniture changes without closing the editor or taking over Escape", () => {
@@ -263,4 +264,27 @@ test("stopping a toolbar-launched garage preview returns to visible edit control
   assert.equal(h.sheet.dataset.editorView, "edit");
   assert.equal(toggle.textContent, "Preview");
   assert.equal(toggle.getAttribute("aria-pressed"), "false");
+});
+
+test("a first visit offers arrangement in the live tuner and preserves its camera controls", async () => {
+  const h = boot(true, false, true, true);
+  const toolbar = h.sheet.querySelector(".ew-toolbar");
+  const button = toolbar.querySelectorAll("button").find(el => el.textContent === "Arrange this screen");
+  assert.ok(button);
+  assert.equal(h.workspace.arrangeDoor(h.root, toolbar), button);
+  h.root.hidden = false;
+  button.isConnected = true;
+  button.getClientRects = () => [{}];
+  let ready;
+  h.nav.arrangeScreen = (id, opener, stillOpen) => {
+    assert.equal(id, "camtune");
+    assert.equal(opener, button);
+    ready = stillOpen;
+  };
+  await button.onclick();
+  assert.equal(Boolean(ready()), true);
+  h.root.hidden = true;
+  assert.equal(Boolean(ready()), false, "leaving the tuner during loading cancels the edit");
+  assert.equal(h.sheet.dataset.editorView, "edit");
+  assert.equal(h.doc.getElementById("pc-toggle").parentNode, toolbar);
 });

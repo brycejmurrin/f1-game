@@ -320,3 +320,48 @@ test("Race Settings previews and saves a single button's width, height and text 
   expect((await saved()).landscape["diff-next"].buttonHeight).toBeGreaterThanOrEqual(44);
   expect((await saved()).landscape["diff-prev"]).toBeUndefined();
 });
+
+test("Garage animation tuner edits its window on first visit at the measured phone size", async ({ browser, baseURL }, testInfo) => {
+  const { context, page } = await openBrycePhone(browser, { window: "standalone", profile: false });
+  try {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(baseURL || "/");
+    await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-visual").tap();
+    const advanced = page.locator("#pm-visual-tuners");
+    if (!(await advanced.evaluate(el => el.open))) await advanced.locator("summary").tap();
+    await page.locator("#pm-garrival").tap();
+    const sheet = page.locator("#garrival-inner");
+    const width = () => sheet.evaluate(el => el.getBoundingClientRect().width);
+    const launch = page.locator('#garrival [data-arrange-screen="garrival"]').first();
+    const editor = page.locator('#screen-arranger[data-editing-screen="garrival"]');
+    const action = name => editor.getByRole("button", { name, exact: true }).tap();
+    const shipped = await width();
+    const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
+    const capture = async state => {
+      const name = ["garage-arrival", state, browser.version(), "852x393-DPR3-touch", build].join("-");
+      await testInfo.attach(name, { body: await page.screenshot(), contentType: "image/png" });
+    };
+    await capture("shipped");
+    await launch.tap();
+    await editor.getByLabel("Region", { exact: true }).selectOption("window");
+    await action("Controls");
+    await action("Width −");
+    await action("Left");
+    await action("Controls");
+    const preview = await width();
+    expect(preview).toBeLessThan(shipped);
+    await capture("preview");
+    await action("Apply");
+    expect(await width()).toBe(preview);
+    await launch.tap();
+    await editor.getByLabel("Region", { exact: true }).selectOption("window");
+    await action("Controls");
+    await action("Reset region");
+    await action("Apply");
+    expect(await width()).toBe(shipped);
+  } finally {
+    await context.close();
+  }
+});

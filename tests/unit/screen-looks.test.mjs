@@ -786,3 +786,23 @@ test("advanced region styles compose with orientation defaults and reject import
   model.save("garage", "landscape", { panel: { textAlign: "center;color:red", rowGap: "1rem", formWidth: Infinity } });
   assert.equal(sheets.size, 0, "malformed values remove overrides and restore the shipped stylesheet");
 });
+
+test("tuner windows reflow at zoom and reserve the same width for adjacent camera controls", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  for (const id of ["lighting", "camtune", "flyby", "freecam", "garrival"]) {
+    const screen = window.ScreenRegions[id];
+    assert.equal(screen.regions.window.selector, "#" + id + "-inner");
+    assert.equal(screen.regions.heading.selector, id === "freecam" ? "#fc-head" : ".ew-toolbar");
+    const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+    const custom = { window: { width: 40, x: -3 }, content: { textSize: 1.25 } };
+    model.save(id, "landscape", custom);
+    assert.deepEqual(plain(model.read(id, "landscape")), custom);
+    assert.deepEqual(plain(model.read(id, "portrait")), {});
+    const rules = cssRules([...sheets][0].textContent);
+    const windowRule = rules.find(({ decls }) => decls.has("width"));
+    assert.equal(windowRule.decls.get("width"), "20vw !important");
+    assert.equal(windowRule.decls.has("scale"), false);
+    assert.equal(rules.find(({ selector }) => selector === "body:has(> #" + id + ":not([hidden]))").decls.get("--dock-w"), "20vw !important");
+  }
+});

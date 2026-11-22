@@ -10,7 +10,7 @@ window.ScreenPlacement = (function () {
     textSize: [0.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104],
     formWidth: [10, 100], cornerRadius: [0, 40], rowGap: [0, 48], columnGap: [0, 48] };
   const fontSteps = ["micro", "1", "2", "3", "4", "5", "6"];
-  const buttons = ':is(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"])';
+  const buttons = ':is(button:not([data-arrange-screen]), [role="button"], input[type="button"], input[type="submit"], input[type="reset"])';
   const formControls = 'select, textarea, input:not([type]), input[type="text"], input[type="search"], input[type="range"]';
   const sheets = new Map();
   let garageRevision = 0, garagePanelMoved = false;
@@ -114,6 +114,9 @@ window.ScreenPlacement = (function () {
       if (fields.width) {
         const width = fields.width / z + 'vw';
         declarations.push('width:' + width);
+        if (region === "window" && config.tuner) {
+          rules.push('body:has(> ' + config.root + ':not([hidden])){--dock-w:' + width + ' !important}');
+        }
         // The adjacent camera controls consume the sheet's own width token.
         if (id === "carsetup" && region === "panel") rules.push('#carsetup{--cs-sheet-w:' + width + ' !important}');
         if (id === "career" && (region === "navigation" || region === "calendar")) {

@@ -4,7 +4,7 @@ Kind: design
 
 ## Implemented follow-up
 
-The shared registry now defines **52 screen targets and 479 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 15 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
+The shared registry now defines **54 screen targets and 553 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 15 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
 
 ### Adjust a menu
 
@@ -23,6 +23,22 @@ In the touch controls editor, open **Size & shape** and choose an individual con
 ### Coordinated colour presets
 
 In **Settings → Appearance**, choose **Global**, then **Endurance** for forest-green surfaces, rounded controls, cream serif headings and amber menu accents. **Drafting** uses blueprint-blue surfaces, squared controls, upright headings and cyan menu accents. Both tiles keep the HUD accent, team colours, cockpit profile, saved placements, text size, contrast and motion settings. To use either surface treatment with a custom accent, choose it in the **Theme** row. **Undo** restores the previous Studio choices.
+
+### Arrange a tuner window
+
+Open **Settings → Visual Studio**, open a tuner, then use **Arrange this screen** in its toolbar. **Whole window** moves or resizes the panel in front of the scene. Select **Toolbar**, **Controls**, **Actions**, or a visible tool group to change its layout independently. Compact phone layouts fold some tools. Open **Scope and tools** to reveal them. **Apply** returns to the tuner. **Reset region** on Whole window restores its shipped position and size for that orientation.
+
+| Window | Editable parts in addition to the panel |
+| --- | --- |
+| Lighting Tuner | Active profile, preview conditions, circuit copying, lighting categories and exported values |
+| Camera Tuner | Active camera profile, camera modes, corner previews and exported values |
+| Flyby Shot Editor | Shot list, selected shot, playback position, shot actions and exported shots |
+| Garage Enter & Leave | Animation previews, transport, garage angle, playback speed and animation settings |
+| Free Camera | Framing, lens, camera snaps, bookmarks, depth of field and copied view |
+
+Garage Enter & Leave works from Home. Lighting, Camera and Flyby use an active track session. The cockpit preview inside Settings, race camera picker and in-game Graphics Benchmark also have contextual arrangement. Opening the Benchmark arranger leaves the Run command under player control.
+
+In Chromium phone emulation at 852 × 393 CSS px, a first visit through Visual Studio opened all four primary tuners. On each tuner, Whole window width changed from 266 to 257.47 CSS px. The width after Apply matched the preview. Reset region restored 266 px. The track-only runs used a deterministic Monza race with rendering paused to measure the interface. On the same emulated screen, both Free Camera and its separate Photo Controls opened their own editors from Flyby and dismissed on Cancel. A second Lighting capture at DPR 3 held a rendered Monza cockpit frame behind the panel. Two Left taps moved the narrowed window from x = 527.53 to 510.49 CSS px. Apply retained that position and Reset returned it to x = 519.
 
 ### Interaction references
 

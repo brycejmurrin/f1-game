@@ -100,6 +100,19 @@ const SettingsNav = (function () {
   // a failed load logs and the next call retries. presets() resolves true once LayoutPresets exists.
   let presetsLoad = null;
   const presetsLoaded = new Set();
+  async function arrangeScreen(id, button, stillOpen) {
+    button.disabled = true;
+    try {
+      if (!window.ScreenArranger) {
+        await presets();
+        if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
+      }
+      if (stillOpen()) button.textContent = window.ScreenArranger?.open(id, button) ? "Arrange this screen" : "Retry layout editor";
+    } catch (error) {
+      Log.warn("ui", "Layout editor unavailable: " + error);
+      if (stillOpen()) button.textContent = "Retry layout editor";
+    } finally { button.disabled = false; }
+  }
   function presets() {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
     if (typeof LayoutPresets !== "undefined") return Promise.resolve(true);
@@ -389,23 +402,10 @@ const SettingsNav = (function () {
         arrange.textContent = "Arrange this screen";
         footer.appendChild(arrange);
       }
-      arrange.onclick = async () => {
+      arrange.onclick = () => {
         const request = generation;
-        arrange.disabled = true;
-        try {
-          if (!window.ScreenArranger) {
-            await presets();
-            if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
-          }
-          if (request !== generation || document.getElementById("pmsettings")?.hidden) return;
-          const screen = current === "home" ? "pmsettings" : "pm-panel-" + current;
-          if (window.ScreenArranger?.open(screen, arrange)) {
-            arrange.textContent = "Arrange this screen";
-            return;
-          }
-        } catch (error) { Log.warn("ui", "Layout editor unavailable: " + error); }
-        finally { arrange.disabled = false; }
-        if (request === generation) arrange.textContent = "Retry layout editor";
+        const screen = current === "home" ? "pmsettings" : "pm-panel-" + current;
+        return arrangeScreen(screen, arrange, () => request === generation && !document.getElementById("pmsettings")?.hidden);
       };
     }
     // Every open starts at the door index. Do not steal focus here: the dialog
@@ -454,7 +454,7 @@ const SettingsNav = (function () {
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
-    lazy, flushLazy, presets,
+    lazy, flushLazy, presets, arrangeScreen,
   };
 })();
 Object.freeze(SettingsNav);

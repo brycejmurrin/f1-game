@@ -27,8 +27,12 @@ const CamPicker = (function () {
           };
           el.appendChild(b);
         }
+        if (typeof EditorWorkspace !== "undefined") {
+          const arrange = EditorWorkspace.arrangeDoor(el, el);
+          if (arrange) { arrange.setAttribute("role", "menuitem"); arrange.tabIndex = -1; }
+        }
         el.addEventListener("keydown", (e) => {
-          const items = [...el.querySelectorAll('[role="menuitemradio"]')];
+          const items = [...el.querySelectorAll('[role="menuitemradio"],[role="menuitem"]')];
           const at = items.indexOf(document.activeElement);
           let next = -1;
           if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (at + 1) % items.length;
@@ -62,6 +66,7 @@ const CamPicker = (function () {
         syncAuto(r);
         const auto = !!(r && r.autoOn());
         for (const b of el.children) {
+          if (b.getAttribute("role") !== "menuitemradio") continue;
           const on = b === autoBtn ? auto : !auto && +b.dataset.idx === G.camMode;
           b.classList.toggle("active", on);
           b.setAttribute("aria-checked", on ? "true" : "false");

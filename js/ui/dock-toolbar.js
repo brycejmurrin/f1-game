@@ -1,7 +1,7 @@
 /* Live touch layout toolbar, loaded on the first edit. */
 const DockToolbar = (() => {
   "use strict";
-  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
+  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, boundedXY, paintDrag, fitNow, repaintDock, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
     const { $ } = G;
     const { sizeStep, SHAPES } = DockLayout;
     const labels = {
@@ -226,7 +226,60 @@ const DockToolbar = (() => {
       if (was.settings && settings) settings.hidden = false;
       if (was.pause && pause) pause.hidden = false;
     }
+    let drag = null;
+    function onPointerDown(e) {
+      if (!visible) return;
+      const t = e.target;
+      if (!t || !t.closest) return;
+      const left = $("dock-left"), right = $("dock-right");
+      const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
+      if (!side) return;
+      // The press is the drag's, not the button's: preventDefault alone let
+      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
+      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
+      // before the target, so stopping here means the button never sees it.
+      e.preventDefault();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if (drag || e.isPrimary === false) return;
+      const scheme = getScheme();
+      const hit = t.closest(".touchbtn")?.id;
+      const pad = measurePad(docks()), before = scheme[side];
+      drag = {
+        side, hit, buttons: buttonDrag(hit, side, pad), before, moved: false,
+        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
+        scheme, pid: e.pointerId, pad,
+      };
+      try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
+    }
+    function onPointerMove(e) {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const pad = drag.pad;
+      const sx = inboard(drag.side);
+      const dx = ((e.clientX - drag.startX) / pad.w) * sx;
+      const dy = -((e.clientY - drag.startY) / pad.h);
+      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
+      drag.moved = true;
+      if (drag.buttons) drag.buttons.move(dx, dy);
+      else drag.scheme[drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
+      paintDrag(pad);
+    }
+    function onPointerUp(e) {
+      if (!drag || e.pointerId !== drag.pid) return;
+      const finished = drag;
+      drag = null;
+      if (finished.moved) { remember(); paintBar(); }
+      else pick(finished.hit, true);
+      fitNow();
+    }
+    function cancelDrag(e) {
+      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
+      if (drag.buttons) drag.buttons.cancel();
+      else drag.scheme[drag.side] = drag.before;
+      drag = null;
+      repaintDock();
+    }
     function show(on, restore) {
+      if (!on) drag = null;
       visible = on;
       if (on) { initial = current = snapshot(); history.length = 0; target = "all"; expanded = false; ensureDone(); hideDialogs(); }
       else if (restore === false) shown = null;
@@ -302,7 +355,7 @@ const DockToolbar = (() => {
         commitLayout();
       }, true);
     }
-    return { show, paint: paintBar, pick, buttonDrag, remember, cancel: () => restore(initial),
+    return { show, paint: paintBar, onPointerDown, onPointerMove, onPointerUp, cancelDrag, dragging: () => !!drag, remember, cancel: () => restore(initial),
       shapeChanged: () => getShape() !== initial.shape, layoutChanged: () => !equal(readLayout(), initial.layout) };
   }
   return Object.freeze({ create });

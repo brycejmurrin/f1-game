@@ -139,6 +139,11 @@ window.ScreenRegions = (function () {
       garage: "Garage lighting", lighting: "Photo lighting", composition: "Composition", photo: "Your photo" }),
     ...parts("ps-", { album: "Photo library", preview: "Captured image", shots: "Shot presets" }),
     actions, capture: part("#ps-capture", "Capture"), done: part("#ps-close", "Done") });
+  screen("bench", "Benchmark", { heading, content: part("#bench-body", "Test and results panel"), tests: part('#bench-body [aria-label="Test"]', "Test choices"),
+    timings: part("#bench-summary", "Performance results"), scenes: part("#bench-scenes", "Scene results"),
+    export: part("#bench-export", "Result actions"), back: part("#bench-back", "Back") });
+  screen("cockpit-preview", "Cockpit preview", { picture: part("#ckpreview-frame", "3D cockpit"),
+    angles: part("#ckpreview-angles", "Preview angles"), status: part("#ckpreview-view [aria-live]", "Preview description") }, "#ckpreview-view");
   screen("campicker", "Camera view picker", { views: part("#campicker", "Camera buttons") });
   screen("photo-controls", "Photo controls", { move: part(".pc-move-wrap", "Movement stick"), look: part(".pc-look-wrap", "Look stick"), altitude: part(".pc-altcol", "Height controls"),
     actions: part("#pc-bar", "Camera controls"), lens: part(".pc-fovlab", "Field of view") });
@@ -173,17 +178,33 @@ window.ScreenRegions = (function () {
   screen("howtoplay", "How to play", { heading, navigation: part("#htp-contents", "Contents"), content, actions,
     ...parts("htp-", { controls: "Quick start", inputs: "Input guide", close: "Close" }) });
   const tunerRegions = {
-    lighting: parts("lt-", { rail: "Profile and lighting tools", preview: "Preview", tabs: "Lighting categories" }),
-    camtune: parts("ct-", { rail: "Camera scope", modes: "Camera modes", previews: "Corner previews" }),
-    flyby: parts("fb-", { rail: "Shot controls", scrub: "Playback position", shots: "Shot list", ops: "Shot actions" }),
-    freecam: parts("fc-", { status: "Camera status", shot: "Flyby framing" }),
-    garrival: { sequences: part("[data-editor-sequences]", "Animation previews"), transport: part("#ga-transport", "Preview playback") },
+    lighting: parts("lt-", { rail: "Profile and lighting tools", profile: "Active lighting profile", preview: "Preview conditions", spread: "Copy across circuits", tabs: "Lighting categories", json: "Exported lighting values" }),
+    camtune: parts("ct-", { rail: "Camera sidebar", scope: "Edit scope", presets: "Camera presets", copyrow: "Copy framing", profile: "Active camera profile", modes: "Camera modes", previews: "Corner previews", json: "Exported camera values" }),
+    flyby: parts("fb-", { rail: "Shot controls", profile: "Flyby profile", status: "Selected shot status", scrub: "Playback position", shots: "Shot list", ops: "Shot actions", json: "Exported shot list" }),
+    freecam: parts("fc-", { status: "Camera status", shot: "Flyby framing", snaps: "Snap camera", lens: "Lens", copies: "Copy view", kit: "Grid and bookmarks", "dof-focus-row": "Focus distance", "dof-blur-row": "Focus blur", out: "Copied view" }),
+    garrival: { sequences: part("[data-editor-sequences]", "Animation previews"), help: part("[data-editor-help]", "Help and reset"),
+      ...parts("ga-", { transport: "Preview playback", scrubber: "Playback timeline", time: "Playback time", phase: "Jump to phase",
+        play: "Play or pause", loop: "Loop", edit: "Edit frame", "preview-stop": "Stop preview" }),
+      ...Object.fromEntries(Object.entries({ enabled: "Animations", speed: "Playback speed", angle: "Garage angle", "crew-in": "Enter crew", "crew-out": "Leave crew", fov: "Field of view" })
+        .map(([key, label]) => [key, part('.set-row:has(#ga-' + key + ')', label)])) },
   };
+  Object.assign(tunerRegions.lighting, parts("lt-panel-", {
+    "sun-moon": "Sun and moon", "ambient-bounce": "Ambient and bounce", shadows: "Shadows",
+    "road-reflections": "Road and reflections", car: "Car lighting", "sky-weather": "Sky and weather",
+    atmosphere: "Atmosphere", lamps: "Lamps", "night-glow-bloom": "Night glow and bloom",
+    "image-colour": "Image and colour", fx: "Lighting effects",
+  }));
+  Object.assign(tunerRegions.flyby, parts("fb-row-", { dur: "Shot duration", ease: "Shot easing", fov0: "Starting field of view", fov1: "Ending field of view" }),
+    parts("fb-", { "ann-script": "Announcer script", "ann-play": "Play announcement" }));
   for (const [id, label, prefix] of [
     ["lighting", "Lighting", "lt"], ["camtune", "Camera tuning", "ct"], ["flyby", "Flyby", "fb"],
     ["freecam", "Free camera", "fc"], ["garrival", "Garage arrival", "ga"],
-  ]) screen(id, label, { heading: part(id === "freecam" ? "#fc-head" : ".ew-toolbar", "Toolbar"),
-    content: part("#" + prefix + "-rows", "Controls"), actions, ...tunerRegions[id] });
+  ]) {
+    screen(id, label, { window: part("#" + id + "-inner", "Whole window"), heading: part(id === "freecam" ? "#fc-head" : ".ew-toolbar", "Toolbar"),
+    content: part("#" + prefix + "-rows", "Controls"), actions, tools: part("details.ew-tools", "Scope and tools"),
+    editorActions: part('[role="group"][aria-label="Editor actions"]', "Editor actions"), ...tunerRegions[id] });
+    screens[id].tuner = true;
+  }
 
   // TitleLayout already owns the title's placement, group width and scale.
   const homePart = (selector, label) => ({
@@ -244,7 +265,7 @@ window.ScreenRegions = (function () {
     const focus = Array.from(root.querySelectorAll("button:enabled")).find(el => el.getClientRects().length);
     if (window.ScreenArranger?.open(id, focus || root)) {
       pending = null;
-      if (["race-settings", "vsfriend", "photo-studio", "trackdesigner"].includes(id)) addReentry(id, root);
+      if (["race-settings", "vsfriend"].includes(id)) addReentry(id, root);
     }
   }
   function attachPicker(host) {
@@ -271,9 +292,15 @@ window.ScreenRegions = (function () {
       host.dispatchEvent(new CustomEvent("apex:arrangement-target", {detail: {id, label}}));
       go.textContent = id === "popups" ? "Edit shared popup style" : "Arrange " + label;
       go.disabled = (id === "home" || id === "home-style") && !atHome();
-      if (visualDoors[id]?.()?.disabled) {
+      if (id === "campicker" && atHome()) {
         go.disabled = true;
-        note.textContent = "Pause on track to arrange " + label + ".";
+        note.textContent = "During a race, hold or right-click the camera button and choose Arrange this screen.";
+        return;
+      }
+      if (visualDoors[id]?.()?.disabled) {
+        go.disabled = !atHome();
+        if (!go.disabled) go.textContent = "Choose a circuit for " + label;
+        note.textContent = "Start a race, then open Pause → Settings → Visual Studio. Choose the tuner and select Arrange this screen.";
         return;
       }
       if (screens[id]?.settingsPage && typeof SettingsNav !== "undefined" && SettingsNav.routes[screens[id].settingsPage]?.scope === "session" && atHome()) {
@@ -286,6 +313,8 @@ window.ScreenRegions = (function () {
         atHome() && id === "teampicker" ? "Select the team card in the Garage to arrange the team picker." :
         atHome() && id === "quali" ? "In Race Settings, choose a qualifying grid, then start to arrange the qualifying sheet." :
         id === "freecam" || id === "photo-controls" ? "Choose Free Camera in the Flyby editor to open these controls." :
+        id === "bench" ? "Open the Benchmark dialog from Graphics to arrange its test choices and results." :
+        id === "campicker" ? "During a race, hold or right-click the camera button and choose Arrange this screen." :
         id === "pausemenu" ? "Edit the Pause menu. Apply or Cancel returns to Appearance." :
         id === "popups" ? "Shared appearance for popup sheets. Choose Results to arrange its individual regions." :
         id === "home-style" ? "Edit the title menu’s text and button dimensions." :
@@ -323,7 +352,8 @@ window.ScreenRegions = (function () {
         return;
       }
       const fromHome = atHome();
-      if (id !== "home" && !window.ScreenArranger) {
+      const chooseCircuit = fromHome && visualDoors[id]?.()?.disabled;
+      if (id !== "home" && !chooseCircuit && !window.ScreenArranger) {
         go.disabled = true;
         try {
           await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
@@ -358,7 +388,7 @@ window.ScreenRegions = (function () {
         });
         return;
       }
-      if (visualDoors[id]) {
+      if (visualDoors[id] && !chooseCircuit) {
         const door = visualDoors[id]();
         if (door && !door.disabled) SettingsNav.show("visual", false, () => {
           if (settings.hidden || SettingsNav.current() !== "visual") return;
@@ -368,14 +398,32 @@ window.ScreenRegions = (function () {
         });
         return;
       }
-      const route = screens[id]?.settingsPage;
+      if (id === "bench") {
+        SettingsNav.show("graphics", true, () => {
+          if (settings.hidden || SettingsNav.current() !== "graphics") return;
+          // Benchmark mounts its door after the profiling bundle loads. An
+          // early visit still arms the real dialog for a manual first open.
+          pending = id;
+          document.getElementById("pm-bench-open")?.click();
+        });
+        return;
+      }
+      const route = id === "cockpit-preview" ? "display" : screens[id]?.settingsPage;
       if (route) {
         // The settings router owns each page's lazy content and availability.
         SettingsNav.show(route, true, () => {
           requestAnimationFrame(() => {
             if (settings.hidden || SettingsNav.current() !== route) return;
+            const fold = id === "cockpit-preview" && document.getElementById("pm-cockpit");
+            const wasOpen = fold && fold.open;
+            if (fold) {
+              fold.open = true;
+              const preview = document.getElementById("pm-ckpreview");
+              if (preview?.getAttribute("aria-expanded") === "false") preview.click();
+            }
             const returnToPicker = () => {
               if (settings.hidden || SettingsNav.current() !== route) return;
+              if (fold && !wasOpen) fold.open = false;
               SettingsNav.show("appearance", false);
               go.focus({ preventScroll: true });
             };
@@ -395,6 +443,10 @@ window.ScreenRegions = (function () {
       }
       for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
       if (!settings.hidden) return;
+      if (chooseCircuit) {
+        requestAnimationFrame(() => document.getElementById("mb-race")?.click());
+        return;
+      }
       if (id === "home") { TitleLayout.enter(document.getElementById("mb-settings")); return; }
       pending = id;
       // TopModal closes the native Settings dialog in a microtask. A lazy
@@ -425,6 +477,7 @@ window.ScreenRegions = (function () {
       if (!pending) return;
       const door = event.target.closest?.("#menu-buttons button");
       const back = event.target.closest?.("[data-esc-close]");
+      if (pending === "campicker" && event.target.closest("button")?.id === "pm-resume") return;
       if ((door && door.id !== launchers[pending]) ||
           (back && back.dataset.escClose === event.target.closest("button")?.id)) pending = null;
     }, true);

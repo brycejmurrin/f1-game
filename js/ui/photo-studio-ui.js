@@ -422,6 +422,7 @@ function create(G, deps) {
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
   root.appendChild(guide); root.appendChild(panel);
+  if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(root, panel.querySelector(".sheet-head"));
   root.setAttribute("aria-label", "Photo Studio");
   root.setAttribute("data-esc-close", "ps-close");
   const say = (s) => { E["ps-message"].textContent = s; };

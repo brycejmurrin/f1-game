@@ -19492,11 +19492,19 @@
       ]
     },
     "js/ui/editor-workspace.js": {
+      "arrangeDoor": [
+        "tests/unit/editor-workspace.test.mjs"
+      ],
       "attach": [
         "tests/unit/editor-workspace.test.mjs"
       ],
       "setPreview": [
         "tests/unit/editor-workspace.test.mjs"
+      ],
+      "*": [
+        "tests/unit/bench-run.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/cockpit-preview.test.mjs"
       ]
     },
     "js/ui/experience.js": {

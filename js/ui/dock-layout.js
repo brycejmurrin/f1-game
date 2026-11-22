@@ -221,7 +221,6 @@ const DockLayout = (function () {
     let toolbar = null, pending = null;
     let bag = load(store);
     let editing = false;
-    let drag = null;   // { side, startX, startY, orig }
 
     function schemeOf() {
       const m = (G.getSteerMode && G.getSteerMode()) || "buttons";
@@ -270,7 +269,7 @@ const DockLayout = (function () {
       if (on && !toolbar) {
         if (typeof DockToolbar !== "undefined") {
           toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
-            docks, measurePad, inboard, boundedControlXY, getShape: () => shape, setShape, record,
+            docks, measurePad, inboard, boundedControlXY, boundedXY, paintDrag, fitNow, repaintDock: paint, getShape: () => shape, setShape, record,
             refreshScale: () => { uiScale?.applyHudScale(); uiScale?.applyBtnScale(); },
             readLayout: () => normalize(bag), restoreLayout: value => { bag = normalize(value); paint(); },
             close: accept => setEditing(false, true, accept) });
@@ -318,7 +317,6 @@ const DockLayout = (function () {
           if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
           fitRaf = 0;
         }
-        drag = null;
       }
       paint();
     }
@@ -391,64 +389,13 @@ const DockLayout = (function () {
       if (G.announce) G.announce("Dock layout reset for " + s.toUpperCase(), 2, "coach");
     };
 
-    function onPointerDown(e) {
-      if (!editing) return;
-      const t = e.target;
-      if (!t || !t.closest) return;
-      const left = $("dock-left"), right = $("dock-right");
-      const side = (left && left.contains(t)) ? "L" : (right && right.contains(t)) ? "R" : null;
-      if (!side) return;
-      // The press is the drag's, not the button's: preventDefault alone let
-      // GAS's own pointerdown run, which flips THROTTLE = LATCH (and fires
-      // BOOST/OT/AERO taps), so RESUME launched the car. Document capture runs
-      // before the target, so stopping here means the button never sees it.
-      e.preventDefault();
-      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-      if (drag || e.isPrimary === false) return;
-      const s = schemeOf();
-      const hit = t.closest(".touchbtn")?.id;
-      const pad = measurePad(docks()), before = bag[s][side];
-      drag = {
-        side, hit, buttons: toolbar.buttonDrag(hit, side, pad), before, moved: false,
-        startX: e.clientX, startY: e.clientY, orig: boundedXY(before, side, pad),
-        scheme: s, pid: e.pointerId, pad,
-      };
-      try { t.setPointerCapture && t.setPointerCapture(e.pointerId); } catch (_) { /* */ }
-    }
-    function onPointerMove(e) {
-      if (!drag || e.pointerId !== drag.pid) return;
-      const pad = drag.pad;
-      const sx = inboard(drag.side);
-      const dx = ((e.clientX - drag.startX) / pad.w) * sx;
-      const dy = -((e.clientY - drag.startY) / pad.h);
-      if (!drag.moved && Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 3) return;
-      drag.moved = true;
-      if (drag.buttons) drag.buttons.move(dx, dy);
-      else bag[drag.scheme][drag.side] = boundedXY({ x: drag.orig.x + dx, y: drag.orig.y + dy }, drag.side, pad);
-      paintDrag(pad);
-    }
-    function onPointerUp(e) {
-      if (!drag || e.pointerId !== drag.pid) return;
-      const finished = drag;
-      drag = null;
-      if (finished.moved) { toolbar.remember(); toolbar.paint(); }
-      else toolbar.pick(finished.hit, true);
-      fitNow();
-    }
-    function cancelDrag(e) {
-      if (!drag || (e?.pointerId != null && drag.pid !== e.pointerId)) return;
-      if (drag.buttons) drag.buttons.cancel();
-      else bag[drag.scheme][drag.side] = drag.before;
-      drag = null;
-      paint();
-    }
-    function viewportChanged() { if (drag) cancelDrag(); else paint(); }
+    function viewportChanged() { if (toolbar?.dragging()) toolbar.cancelDrag(); else paint(); }
     if (typeof document !== "undefined") {
-      document.addEventListener("pointerdown", onPointerDown, true);
-      document.addEventListener("pointermove", onPointerMove, true);
-      document.addEventListener("pointerup", onPointerUp, true);
-      document.addEventListener("pointercancel", cancelDrag, true);
-      document.addEventListener("lostpointercapture", cancelDrag, true);
+      document.addEventListener("pointerdown", e => toolbar?.onPointerDown(e), true);
+      document.addEventListener("pointermove", e => toolbar?.onPointerMove(e), true);
+      document.addEventListener("pointerup", e => toolbar?.onPointerUp(e), true);
+      document.addEventListener("pointercancel", e => toolbar?.cancelDrag(e), true);
+      document.addEventListener("lostpointercapture", e => toolbar?.cancelDrag(e), true);
       // Edit mode hides SETTINGS and PAUSED itself and ends on DONE or Escape.
       // What still ends it: ANY of them being opened by someone else (the pause
       // button, a key, QUIT), because a capture-phase drag left live would slide
@@ -468,7 +415,7 @@ const DockLayout = (function () {
     // rotation must repaint: a portrait offset kept its pixels in landscape and
     // pushed the dock off the top (the header promises relative placement).
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("blur", cancelDrag);
+      window.addEventListener("blur", e => toolbar?.cancelDrag(e));
       window.addEventListener("resize", viewportChanged, { passive: true });
       window.addEventListener("orientationchange", viewportChanged, { passive: true });
       if (window.visualViewport && window.visualViewport.addEventListener)
@@ -484,7 +431,7 @@ const DockLayout = (function () {
     }
     // The offset divides by the dock's zoom, which changes at race start with no resize.
     if (typeof ResizeObserver !== "undefined") {
-      const ro = new ResizeObserver(() => { if (!drag) paint(); });
+      const ro = new ResizeObserver(() => { if (!toolbar?.dragging()) paint(); });
       const d = docks();
       for (const side of SIDES) if (d[side]) ro.observe(d[side]);
     }
@@ -500,7 +447,7 @@ const DockLayout = (function () {
         }
         const hit = (k) => k === "steerMode" || k === KEY;
         if (hit(change.key) || change.keys?.some(hit)) {
-          cancelDrag();
+          toolbar?.cancelDrag();
           bag = load(store);
           paint();
           toolbar?.paint();
