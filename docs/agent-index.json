@@ -4907,7 +4907,7 @@
     },
     {
       "path": "js/ui/desktop-graphics.js",
-      "global": null,
+      "global": "DesktopGraphics",
       "roster": "LAZY_UI_PRESETS"
     },
     {
@@ -4969,6 +4969,11 @@
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/ui/hud-layout-editor.js",
+      "global": "HudLayoutEditor",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/hud-layout.js",

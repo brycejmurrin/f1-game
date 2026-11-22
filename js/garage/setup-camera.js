@@ -1319,7 +1319,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     fogColor: outside ? outside.fogColor : GarageScene.BACKDROP, fogDensity: outside ? outside.fogDensity : 0, lights: lightsRig,
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // keep the garage post path and exclude the race cube
-    garageProbe: gfx.garageProbeEnabled ? GarageScene.reflectionProbe(Teams.LIST[G.teamIdx], liv, getTeamParts, G.driverIdx, context) : null,
+    garageProbe: gfx.garageProbeEnabled === true ? GarageScene.reflectionProbe(Teams.LIST[G.teamIdx], liv, getTeamParts, G.driverIdx, context) : null,
   }) === false) return false;
   if (context.realExterior) exteriorDrawn = exterior.draw(context.showLaneBays);
   const spMat = carPaintMat(PAINT_DRY_DAY);

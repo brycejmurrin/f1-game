@@ -2059,7 +2059,9 @@
           const pixel = fwidth(trkA.xy).toVar();
           If(U.silverstoneSurface.greaterThan(0.5), () => {
             const s = trkA.x, x = trkA.y;
-            If(surfaceId.equal(16).and(trkA.z.greaterThan(0.5)).and(abs(x).lessThan(trkA.z)), () => {
+            // Use the track vertex material before the car finish remaps.
+            const terrainMaterial = floor(matA.add(0.5));
+            If(terrainMaterial.equal(16.0).and(trkA.z.greaterThan(0.5)).and(abs(x).lessThan(trkA.z)), () => {
               // Three stretches of newer binder in the older, pale aggregate. A skewed
               // end joint and a lateral joint describe each pass of the paving machine.
               const edge = max(float(0.14), max(pixel.x, pixel.y)).toVar();
@@ -2073,7 +2075,7 @@
               albedo.mulAssign(mix(wear.mul(0.16).add(1.06), float(0.74), repair));
               rough.assign(mix(rough.mul(0.9).add(wear.mul(0.10)), float(0.65), repair));
               filmRough.assign(mix(float(0.36), float(0.22), repair));
-            }).ElseIf(surfaceId.equal(0).and(trkA.z.equal(0)).and(abs(x).greaterThan(2.0)), () => {
+            }).ElseIf(terrainMaterial.equal(0.0).and(trkA.z.equal(0)).and(abs(x).greaterThan(2.0)), () => {
               // The flat, track-addressed paint includes the striped kerbs and pit hatching.
               // Leave the stripe boundaries intact; fade the paint scuffs as they minify.
               const fade = smoothstep(0.15, 0.65, max(pixel.x, pixel.y)).oneMinus();

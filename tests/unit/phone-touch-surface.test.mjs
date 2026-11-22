@@ -262,32 +262,34 @@ test("every anchor inside a --hud-z zoom divides its safe-area inset by --hud-z"
 /* ── touch policy across css/ ────────────────────────────────────────────── */
 
 test("every :hover rule in css/ is gated on (hover: hover) — a tap sticks :hover on iOS", () => {
-  const FOLLOW_UP = new Set(["css/race-setup.css", "css/dialogs.css"]);
   const ungated = [];
   const coarseHover = [];
   // Physical files only: readCssSource concatenates race-setup into select/menus.
-  for (const file of CSS_FILES) {
-    const rules = cssRules(read(file));
-    for (const r of rules) {
+  for (const file of [...CSS_FILES, "bench.html", "controller.html"]) {
+    const source = read(file);
+    const styles = file.endsWith(".html")
+      ? Array.from(source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi), match => match[1]).join("\n")
+      : source;
+    for (const r of cssRules(styles)) {
       if (!/:hover/.test(r.selector)) continue;
       if (!r.context.some((c) => /hover\s*:\s*hover/.test(c))) ungated.push(`${file} ${r.selector}`);
-      else if (!FOLLOW_UP.has(file) && !r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
+      else if (!r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
         coarseHover.push(`${file} ${r.selector}`);
       }
     }
   }
   assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and (pointer: fine); touch uses :active (css/tokens.css policy)");
-  assert.deepEqual(coarseHover, [], "non-follow-up :hover must also sit in (pointer: fine); skip css/race-setup.css + css/dialogs.css");
+  assert.deepEqual(coarseHover, [], "hover styles require a fine pointer");
 });
 
 test("JS hover-only UI skips touch / (hover: none) so a tap does not latch a tooltip", () => {
   const sheet = read("js/garage/setup-sheet.js");
   assert.match(sheet, /pointerenter[\s\S]{0,220}pointerType === ["']touch["']/,
     "garage part comparison must ignore touch pointerenter");
-  assert.match(sheet, /matchMedia\(["']\(hover: none\)["']\)/,
+  assert.match(sheet, /matchMedia\(["']\(hover: hover\) and \(pointer: fine\)["']\)/,
     "garage part comparison must skip when the device cannot hover");
   const sched = read("js/data/schedule.js");
-  assert.match(sched, /mouseenter[\s\S]{0,280}matchMedia\(["']\(hover: none\)["']\)/,
+  assert.match(sched, /pointerenter[\s\S]{0,280}matchMedia\(["']\(hover: hover\) and \(pointer: fine\)["']\)/,
     "schedule overflow title must not attach on (hover: none)");
 });
 
