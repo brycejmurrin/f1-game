@@ -537,7 +537,8 @@ async function reapFixtureProcess(marker) {
     await wait(20);
   }
 }
-test('fixture cleanup before PID publication targets only its own process', { skip: process.platform !== 'linux' }, async (t) => {
+const needsLinuxProcfs = process.platform !== 'linux' && 'Fixture teardown identifies its process through Linux procfs';
+test('fixture cleanup before PID publication targets only its own process', { skip: needsLinuxProcfs }, async (t) => {
   const marker = path.join(fixture(t), 'unpublished.json');
   const script = 'setInterval(()=>{},1000)';
   const child = spawn(process.execPath, ['-e', script, marker], { stdio: 'ignore' });
