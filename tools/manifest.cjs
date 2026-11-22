@@ -480,7 +480,7 @@ const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
   "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
-  "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
+  "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-button-colors.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/a11y-loading.css", "css/responsive.css", "css/menu-destinations.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
@@ -505,7 +505,7 @@ const CSS_PRELOAD = [
 // first paint — defer it. Keep every deferred file as rel=stylesheet (sw.js
 // essential-set). fonts-hud.css is Barlow + unused Titillium @font-face.
 const CSS_DEFERRED = [
-  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css",
+  "css/tuner.css", "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-button-colors.css", "css/touch-controls.css",
   "css/overlays.css", "css/loading.css", "css/a11y-loading.css",
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/screen-arranger.css", "css/watch-transport.css",

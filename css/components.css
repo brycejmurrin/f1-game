@@ -719,17 +719,3 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   }
 }
 } /* @layer components */
-
-/* Opt-in driver colors take precedence over the race and controller themes.
-   The idle rim leaves status and energy fills visible. */
-[data-custom-idle] { border-color: var(--touch-custom-idle) !important; }
-[data-custom-pressed]:is(:active, [data-slid="on"], .on) {
-  border-color: var(--touch-custom-pressed) !important;
-  --touch-fill: var(--touch-custom-pressed) !important;
-}
-[data-custom-pressed]:is(:active, [data-slid="on"], .on):not(:focus-visible) {
-  outline: 3px solid var(--touch-custom-pressed);
-}
-[data-custom-pressed]:is(:active, .on):not(.pedal, .steerbtn) {
-  background-image: linear-gradient(color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent), color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent)) !important;
-}
