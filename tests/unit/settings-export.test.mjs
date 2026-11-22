@@ -87,9 +87,15 @@ function boot(opts = {}) {
       }));
     } };
   }
+  if (opts.regions) {
+    sb.ScreenRegions = opts.regions;
+    vm.runInContext(read("js/ui/screen-placement.js"), ctx, { filename: absSrc("js/ui/screen-placement.js") });
+  }
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio-ui", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: absSrc("js/ui/" + file + ".js") });
   }
+  vm.runInContext(read("js/ui/dock-layout.js"), ctx, { filename: absSrc("js/ui/dock-layout.js") });
+  const pedals = opts.touch && vm.runInContext(read("js/input/pedal-travel.js") + "\nPedalTravel", ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: absSrc("js/input/controller-profiles.js") });
   vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
@@ -97,7 +103,7 @@ function boot(opts = {}) {
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
-  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb,
+  return { SettingsExport, GameStore: sb.GameStore, G, disk, sb, pedals,
     careerVersion: opts.career || opts.careerLazy ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
@@ -542,6 +548,22 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
   assert.deepEqual(all.changed, []);
 });
 
+test("changes-only backups restore complete solo race drafts and explicit HUD maps", () => {
+  const mobile = true;
+  const globals = { HudElements: { defaults: () => ({ speed: "off" }) } };
+  const draft = { weather: "storm", tod: "dusk", mixed: true, laps: "5" };
+  const disk = { "apex26.raceDraft": JSON.stringify(draft), "apex26.hudElements": "{}" };
+  const file = boot({ mobile, globals, disk }).collect("changes");
+  assert.deepEqual(file.settings.driving.raceDraft, draft);
+  assert.deepEqual(file.settings.hud.hudElements, {});
+  const target = boot({ mobile, globals });
+  assert.equal(target.loadSettings(file).ok, true);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.raceDraft")), draft);
+  assert.equal(target.disk.get("apex26.hudElements"), "{}");
+  target.loadSettings({ ...file, settings: { driving: { raceDraft: null } } });
+  assert.equal(target.disk.has("apex26.raceDraft"), false);
+});
+
 test("a changed key carries its value, the default it replaced and the source that owns it", () => {
   const { collect } = boot({ disk: {
     "apex26.volMusic": "0.8", "apex26.pace": "14", "apex26.difficulty": JSON.stringify("normal"),
@@ -558,7 +580,7 @@ test("a changed key carries its value, the default it replaced and the source th
   const f = collect("changes");
   assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camComfort", "camera.camTune", "camera.camTuneCar", "camera.camTuneGlobal", "camera.camTuneTrack", "camera.cockpitHalo", "camera.motionBlur", "camera.speedLines", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
-  assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
+  assert.equal(f.defaults.audio.volMusic, 0.7, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
   assert.equal(f.defaults.steering.pace, 11);
   // The halo SHIPS faired; "0" is what counts as a change now.
@@ -859,6 +881,71 @@ test("an ALL file carries an object key's whole effective value; CHANGES only it
   assert.deepEqual(boot({ disk }).collect("all").settings.a11y.holdMode, { throttle: "toggle", lookBack: "hold" },
     "ALL is every key's effective value: lookBack must not drop out");
   assert.deepEqual(boot({ disk }).collect("changes").settings.a11y.holdMode, { throttle: "toggle" }, "CHANGES keeps the diff");
+});
+
+test("touch response profiles keep each button independent across backups, imports and resets", () => {
+  const phone = () => boot({ touch: true, mobile: true });
+  const a = phone(), b = phone();
+  const unset = a.collect("all");
+  assert.equal(unset.settings.driving.touchButtonProfiles, null);
+  a.pedals.setButtonProfile("gas", { press: "progressive", travel: 160, slide: "ease" });
+  a.pedals.setButtonProfile("brake", { feedback: false });
+  a.pedals.setButtonProfile("left", { travel: 50, adaptive: 15 });
+  for (const mode of ["all", "changes"]) {
+    const saved = a.collect(mode);
+    assert.deepEqual(saved.settings.driving.touchButtonProfiles, {
+      v: 1, buttons: { left: { travel: 50, adaptive: 10 }, gas: { press: "progressive", travel: 160, slide: "ease" }, brake: { feedback: false } },
+    });
+    b.loadSettings(saved);
+    assert.equal(b.pedals.buttonProfile("right").travel, 90);
+    assert.equal(b.pedals.buttonProfile("left").travel, 50);
+    assert.equal(b.pedals.buttonProfile("left").adaptive, 10);
+    b.pedals.setButtonProfile("left", { adaptive: null });
+    assert.equal(b.pedals.buttonProfile("left").adaptive, undefined);
+    assert.equal(b.pedals.buttonProfile("left").travel, 50);
+    assert.equal(b.pedals.buttonProfile("brake").feedback, false);
+    assert.equal(b.pedals.level(b.pedals.buttonProfile("gas"), 80), 0.56);
+    b.pedals.resetButtonProfile("left");
+    assert.equal(b.pedals.buttonProfile("left").travel, 90);
+    assert.equal(b.pedals.buttonProfile("gas").press, "progressive");
+    const desktop = boot({ touch: true });
+    desktop.loadSettings(saved);
+    assert.equal(desktop.pedals.buttonProfile("gas").press, "instant");
+  }
+  b.loadSettings(unset);
+  assert.equal(b.disk.has("apex26.touchButtonProfiles"), false);
+  assert.equal(b.collect("changes").settings.driving?.touchButtonProfiles, undefined);
+});
+
+test("pedal response validation bounds finger travel, rejects unknown versions and inherits global slide", () => {
+  const { pedals, GameStore, loadSettings, collect } = boot({ touch: true, mobile: true });
+  GameStore.store.set("pedalSlide", "ease");
+  assert.equal(pedals.buttonProfile("brake").slide, "ease");
+  pedals.setButtonProfile("brake", { slide: "instant", travel: 250 });
+  assert.equal(pedals.buttonProfile("brake").travel, 160);
+  assert.equal(pedals.buttonProfile("brake").slide, "instant");
+  const bad = collect("changes");
+  bad.settings.driving.touchButtonProfiles = { v: 2, buttons: { gas: { travel: 50 } } };
+  assert.equal(loadSettings(bad).skipped, 1);
+  assert.equal(pedals.buttonProfile("brake").travel, 160);
+  const malformed = collect("all");
+  malformed.settings.driving.touchButtonProfiles = { v: 1, buttons: { gas: { travel: "fast" } } };
+  assert.ok(loadSettings(malformed).skipped >= 1);
+  assert.equal(pedals.buttonProfile("brake").travel, 160);
+  assert.equal(pedals.buttonProfile("left").slide, "instant");
+  pedals.setButtonProfile("brake", { slide: "inherit", travel: -100 });
+  assert.equal(pedals.buttonProfile("brake").slide, "ease");
+  assert.equal(pedals.buttonProfile("brake").travel, 40);
+  assert.equal(pedals.level(pedals.buttonProfile("brake"), 0), 1);
+  assert.equal(pedals.level(pedals.buttonProfile("brake"), 32), 0.5);
+  assert.equal(pedals.level(pedals.buttonProfile("brake"), 100), pedals.MIN);
+  pedals.setButtonProfile("gas", { press: "progressive", travel: 40 });
+  const gas = pedals.buttonProfile("gas");
+  assert.equal(pedals.level(gas, -20), pedals.MIN);
+  assert.equal(pedals.level(gas, 40), 1);
+  pedals.resetButtonProfile("brake");
+  pedals.resetButtonProfile("gas");
+  assert.equal(GameStore.store.get("touchButtonProfiles", null), null);
 });
 
 test("settings backups preserve the announcer switch and radio effects in both modes", () => {
@@ -1341,34 +1428,43 @@ test("steerMode / hudProfile / drivingLine rows carry oneOf allowlists", () => {
 // flyby shots / loading card) because nobody added their SPEC rows. Every
 // store key APPEARANCE owns must be allowlisted, and a changed one must
 // survive the round trip.
-test("dockLayout is in SPEC and round-trips a per-scheme bag", () => {
+test("touch layouts round-trip complete signed placement and independent control styling in both backup modes", () => {
   const bag = {
     tilt: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
-    buttons: { L: { x: 0.2, y: 0.1 }, R: { x: -0.1, y: 0 } },
+    buttons: { L: { x: -0.02, y: 0.1 }, R: { x: 0.4, y: -0.01 }, gap: 18, layout: "pedal-row",
+      controls: { "btn-throttle": { size: 130, shape: "round" }, "btn-brake": { shape: "square" } } },
     touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
   };
-  const { SettingsExport, collect } = boot({ disk: {
-    "apex26.dockLayout": JSON.stringify(bag),
-  } });
-  const row = SettingsExport.SPEC.find((r) => r.k === "dockLayout");
-  assert.ok(row, "dockLayout needs a SPEC row");
-  assert.equal(row.group, "driving");
-  const f = collect("changes");
-  assert.deepEqual(f.settings.driving.dockLayout.buttons.L, bag.buttons.L);
-  const b = boot();
-  const res = b.loadSettings(f);
-  assert.equal(res.ok, true);
-  assert.equal(res.skipped, 0);
-  assert.deepEqual(JSON.parse(b.disk.get("apex26.dockLayout")).buttons.L, bag.buttons.L);
+  const a = boot({ mobile: true, disk: { "apex26.dockLayout": JSON.stringify(bag) } });
+  for (const mode of ["all", "changes"]) {
+    const f = a.collect(mode), b = boot({ mobile: true });
+    assert.deepEqual(f.settings.driving.dockLayout, bag);
+    assert.equal(b.loadSettings(f).ok, true);
+    assert.deepEqual(b.collect(mode).settings.driving.dockLayout, bag);
+  }
+
+  const defaults = boot({ mobile: true });
+  assert.equal(defaults.collect("all").settings.driving.dockLayout, null);
+  assert.equal(defaults.collect("changes").settings.driving?.dockLayout, undefined);
+  const legacy = { buttons: { L: { x: 0.12, y: 0.15 } } };
+  const loadDock = raw => a.loadSettings({ ...defaults.collect("changes"), settings: { driving: { dockLayout: raw } } });
+  assert.equal(loadDock(legacy).applied, 1);
+  const imported = a.collect("all").settings.driving.dockLayout.buttons;
+  assert.deepEqual(imported, { L: legacy.buttons.L, R: { x: 0, y: 0 } });
+  for (const bad of [[], "broken", { retired: {} }, { v: 500, buttons: {} }]) assert.equal(loadDock(bad).skipped, 1);
+  assert.deepEqual(a.collect("all").settings.driving.dockLayout.buttons, imported);
+  assert.equal(loadDock(null).applied, 1);
+  assert.equal(a.collect("changes").settings.driving?.dockLayout, undefined);
 });
 
 test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const src = read("js/ui/appearance-opts.js");
   const keys = [...src.matchAll(/const K_[A-Z_]+ = "([A-Za-z]+)"/g)].map((m) => m[1]);
   assert.ok(keys.length >= 8, "found appearance-opts.js's K_* keys: " + keys.join(", "));
-  // Store non-default values so CHANGES includes them (shipped: large / high).
+  // Store non-default values so CHANGES includes them (shipped: normal / standard contrast).
   const { SettingsExport, collect } = boot({ disk: {
-    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("off"),
+    "apex26.textSize": JSON.stringify("larger"), "apex26.uiContrast": JSON.stringify("high"),
+    "apex26.titleArt": JSON.stringify("medium"), "apex26.menuWash": JSON.stringify("medium"),
     "apex26.speedUnits": JSON.stringify("mph"), "apex26.ldCard": JSON.stringify({ scale: 1.2, x: 4, y: -3 }),
     "apex26.flybyShots": JSON.stringify([{ id: "a" }]),
   } });
@@ -1376,7 +1472,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   for (const k of keys) assert.ok(inSpec.has(k), k + " (js/ui/appearance-opts.js) needs a SPEC row");
   const f = collect("changes");
   assert.equal(f.settings.appearance.textSize, "larger");
-  assert.equal(f.settings.appearance.uiContrast, "off");
+  assert.equal(f.settings.appearance.uiContrast, "high");
   assert.equal(f.settings.appearance.speedUnits, "mph");
   assert.deepEqual(f.settings.camera.ldCard, { scale: 1.2, x: 4, y: -3 });
   assert.equal(f.settings.camera.flybyShots.length, 1);
@@ -1384,6 +1480,7 @@ test("every APPEARANCE store key is in SPEC and round-trips", () => {
   const res = b.loadSettings(f);
   assert.equal(res.ok, true);
   assert.equal(res.skipped, 0, "every row passes its oneOf / type check");
+  for (const key of ["titleArt", "menuWash"]) assert.equal(JSON.parse(b.disk.get("apex26." + key)), "medium");
 });
 
 test("caption settings keys are in SPEC and round-trip", () => {
@@ -1425,6 +1522,7 @@ test("Home settings and bounded visual profiles survive settings backup without 
     assert.equal(JSON.parse(b.disk.get("apex26.homeCamera")), "front");
     const values = JSON.parse(b.disk.get("apex26.appearanceProfiles"))[0].values;
     assert.equal(values.uiScale, 109.25); assert.equal(values.homeCamera, "rear");
+    assert.equal(values.titleLayout.tall, undefined, "an unset orientation follows the destination device");
     assert.equal(values.titleLayout.wide.btns.x, 18); assert.equal(values.lookCareer.density, "roomy");
     assert.equal(values.steering, undefined); assert.equal(values.account, undefined);
   }
@@ -1442,7 +1540,7 @@ test("appearance import rejects malformed bags and enums and clamps profile cont
   const saved = JSON.parse(b.disk.get("apex26.appearanceProfiles"));
   assert.ok(saved.length <= 12); assert.equal(new Set(saved.map(p => p.id)).size, saved.length);
   assert.equal(saved[0].name.length, 40); assert.equal(saved[0].values.uiScale, 200);
-  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "photo");
+  assert.equal(saved[0].values.hudBtnOpacity, 20); assert.equal(saved[0].values.homeScene, "static");
   assert.equal(saved[0].values.lookCareer.density, "auto"); assert.equal(saved[0].values.career, undefined);
 });
 
@@ -2086,6 +2184,48 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
   }
 });
 
+test("relative placements and named profiles round-trip across devices without saving automatic dimensions", () => {
+  const regions = { carsetup: { regions: { panel: {} } } };
+  const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28 } } } } };
+  const controls = { "btn-throttle": { size: 125, shape: "round", x: -0.02 } };
+  const dock = { buttons: { gap: 20, layout: "pedal-row", controls } };
+  const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement, dockLayout: dock, hudBtnShape: "square" } }];
+  const source = boot({ mobile: true, appearance: true, realStore: true, denyWrites: true });
+  assert.equal(source.collect("all").settings.appearance.screenPlacement, null);
+  assert.equal(source.collect("changes").settings.appearance?.screenPlacement, undefined);
+  source.GameStore.store.set("screenPlacement", placement);
+  source.GameStore.store.set("dockLayout", dock);
+  source.GameStore.store.set("appearanceProfiles", profile);
+  for (const mode of ["all", "changes"]) for (const mobile of [true, false]) {
+    const backup = source.collect(mode), target = boot({ mobile, regions, appearance: true });
+    assert.deepEqual(backup.settings.appearance.screenPlacement, placement);
+    assert.equal(target.loadSettings(backup).failed, 0);
+    assert.deepEqual(target.GameStore.store.get("screenPlacement"), placement);
+    const restored = target.GameStore.store.get("appearanceProfiles")[0].values;
+    assert.deepEqual(restored.screenPlacement, placement);
+    assert.equal(restored.hudBtnShape, "square");
+    const restoredDock = target.GameStore.store.get("dockLayout");
+    assert.deepEqual(restoredDock.buttons.controls, controls);
+    assert.equal(restoredDock.buttons.gap, 20);
+    assert.equal(restoredDock.buttons.layout, "pedal-row");
+    assert.deepEqual(restored.dockLayout, restoredDock);
+  }
+});
+
+test("placement backup normalization bounds geometry and ignores removed regions", () => {
+  const regions = { carsetup: { regions: { panel: { maxWidth: 65, scale: false } } } };
+  const source = boot({ regions });
+  const saved = source.collect("changes");
+  saved.settings.appearance = { screenPlacement: { v: 1, screens: {
+    missing: { portrait: { gone: { y: 10 } } },
+    carsetup: { portrait: { panel: { width: 999, scale: 1.3, x: -1000, height: "45" }, retired: { x: 7 } } }
+  } } };
+  assert.equal(source.loadSettings(saved).failed, 0);
+  assert.deepEqual(source.GameStore.store.get("screenPlacement"), { v: 1, screens: {
+    carsetup: { portrait: { panel: { x: -50, width: 65 } } }
+  } });
+});
+
 // Clean-room fix 70: SAVE CAREER FILE carried only career slots, so a player with a standalone season,
 // licence badges or daily history but no career backed up nothing (count 0).
 // CareerBackup writes extras through store.write (the real store's structured set).
@@ -2123,10 +2263,15 @@ test("fix 70: a newer local season survives an older file's season", async () =>
 });
 
 // #5992: the settings file's `progress` section (js/ui/progress-backup.js rides LAZY_SAVES_DATA before the body).
+function loadProgressBackup(ctx) {
+  for (const path of ["js/race/race-insights.js", "js/ui/progress-backup.js"]) {
+    vm.runInContext(read(path), ctx, { filename: absSrc(path) });
+  }
+}
 test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it", () => {
   const withProgress = (disk) => {
     const b = boot({ realStore: true, disk });
-    vm.runInContext(read("js/ui/progress-backup.js"), b.sb, { filename: absSrc("js/ui/progress-backup.js") });
+    loadProgressBackup(b.sb);
     return b;
   };
   const a = withProgress({ "apex26.circuitMastery": JSON.stringify({ version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] }), "apex26.pitTaught": "1" });
@@ -2138,4 +2283,115 @@ test("#5992: SAVE ALL SETTINGS carries the progress section and LOAD merges it",
   assert.equal(r.ok, true); assert.equal(r.rejectedProgress, 0);
   assert.equal(JSON.parse(b.disk.get("apex26.circuitMastery")).entries[0].best, 81);
   assert.equal(b.disk.get("apex26.pitTaught"), "1");
+});
+
+test("practice mastery keeps signed scores through a Settings export and merge", () => {
+  function entry(mode, best, completed) {
+    return { key: "c2|monza|ferrari:" + mode + ":all", best, completed };
+  }
+  function device(entries) {
+    const b = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify({ version: 1, entries }) } });
+    loadProgressBackup(b.sb);
+    return b;
+  }
+  const incoming = [entry("slipstream", -24, 2), entry("start", -2, 3), entry("lap", 81, 1)];
+  const file = JSON.parse(JSON.stringify(device(incoming).collect("all")));
+  assert.deepEqual(file.progress.circuitMastery.entries, incoming);
+  file.progress.circuitMastery.entries.push(entry("launch", -1, 1));   // a negative launch time is invalid
+  const dst = device([entry("defend", -5, 2), entry("start", -4, 1)]);
+  assert.equal(dst.loadSettings(file).failed, 0);
+  assert.deepEqual(JSON.parse(dst.disk.get("apex26.circuitMastery")).entries, [
+    entry("defend", -5, 2), entry("start", -4, 3), entry("slipstream", -24, 2), entry("lap", 81, 1),
+  ]);
+});
+
+test("historical mastery classes add on one device and take the larger count across devices", () => {
+  const current = "c2|bahrain|ferrari:lap:all";
+  const historical = tune => JSON.stringify({ circuit: "bahrain", car: ["ferrari", 1], tune: [tune] }) + ":lap:all";
+  const entry = (key, best, completed) => ({ key, best, completed });
+  function device(entries) {
+    const b = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify({ version: 1, entries }) } });
+    loadProgressBackup(b.sb);
+    return b;
+  }
+  const oldEntries = [entry(historical(1), 90, 2), entry(historical(2), 88, 3)];
+  const file = JSON.parse(JSON.stringify(device(oldEntries).collect("all")));
+  assert.deepEqual(file.progress.circuitMastery.entries, [entry(current, 88, 5)]);
+  // A file exported before normalization still has one row per historical class.
+  file.progress.circuitMastery.entries = oldEntries;
+  const dst = device([entry(historical(3), 86, 1), entry(current, 89, 3)]);
+  assert.equal(dst.loadSettings(file).failed, 0);
+  const saved = () => JSON.parse(dst.disk.get("apex26.circuitMastery")).entries;
+  assert.deepEqual(saved(), [entry(current, 86, 5)]);
+  assert.equal(dst.loadSettings(file).skipped, 1);
+  assert.deepEqual(saved(), [entry(current, 86, 5)]);
+});
+
+test("a full legacy TT mastery key survives backup and repeated import, with bounded stored keys", () => {
+  // SessionRecords.config() from a fitted Monza/McLaren time trial, before #5888 shortened mastery keys.
+  const ttClass = {
+    car: ["mclaren", 0.9674, { accel: 0.991, braking: 0.9864999999999999, cornering: 0.994, speed: 0.9895 },
+      0.40740740740740733, 0.2173913043478263, 0.2857142857142857, 0, 0.56, 0],
+    circuit: "monza", controls: { aero: "manual", autoThrottle: false, gearsManual: false, steerMode: "buttons" },
+    difficulty: "hard", layout: [1, 1444, 5777.579011126656], physics: "2026-09-ai-mistakes-1", tod: "day",
+    tune: [0.8396192830323017, 0, 0.94, 1.15, 0, 2.111111111111111, 0.35, 55, 4.2, 1, 0.58, 0],
+    tyreWear: "off", weather: "dry", weatherPlan: null,
+  };
+  const key = JSON.stringify(ttClass) + ":lap:all";
+  assert.ok(key.length > 512);
+  const entry = (key, completed) => ({ key, best: 81, completed });
+  const old = { version: 1, entries: [entry(key, 6)] };
+  const expected = { version: 1, entries: [entry("c2|monza|mclaren:lap:all", 6)] };
+  const source = boot({ realStore: true, disk: { "apex26.circuitMastery": JSON.stringify(old) } });
+  loadProgressBackup(source.sb);
+  const file = JSON.parse(JSON.stringify(source.collect("all")));
+  assert.deepEqual(file.progress?.circuitMastery, expected);
+
+  const target = boot({ realStore: true });
+  loadProgressBackup(target.sb);
+  file.progress.circuitMastery = { version: 1, entries: [
+    ...old.entries, entry("x".repeat(513), 12),
+    entry(JSON.stringify({ ...ttClass, circuit: "x".repeat(512) }) + ":lap:all", 12),
+    entry(JSON.stringify({ ...ttClass, tune: ["x".repeat(4096)] }) + ":lap:all", 12),
+  ] };
+  assert.equal(target.loadSettings(file).failed, 0);
+  assert.equal(target.loadSettings(file).failed, 0);
+  assert.deepEqual(JSON.parse(target.disk.get("apex26.circuitMastery")), expected);
+});
+
+test("retrying a mixed settings and progress backup saves cache-only merges before reload", async () => {
+  const b = bootImportUI({ realStore: true });
+  loadProgressBackup(b.sb);
+  const samples = [0, 1, 2, 3, 4, 5, 6, 7];
+  const progress = {
+    circuitMastery: { version: 1, entries: [{ key: "monza:lap:all", best: 81, completed: 2 }] },
+    ghosts: { monza: { time: 80, t: samples, s: samples, x: samples.map(() => 0) } },
+    onboardRaces: 4,
+  };
+  const file = { format: b.SettingsExport.FORMAT, settings: { audio: { volMusic: 0.8 } }, progress };
+  const progressKeys = ["apex26.circuitMastery", "apex26.ghost.v1", "apex26.onboardRaces"];
+  const setItem = b.sb.localStorage.setItem;
+  let refuse = true, progressWrites = 0;
+  b.sb.localStorage.setItem = (k, v) => {
+    if (progressKeys.includes(k)) {
+      progressWrites++;
+      if (refuse) throw Object.assign(new Error("quota refused"), { name: "QuotaExceededError" });
+    }
+    return setItem(k, v);
+  };
+  const choose = async () => { b.choose(Promise.resolve(JSON.stringify(file))); await Promise.resolve(); b.flushReloads(); };
+  await choose();
+  assert.equal(b.reloads(), 0);
+  assert.equal(b.disk.get("apex26.volMusic"), "0.8");
+  assert.deepEqual(progressKeys.filter((k) => b.disk.has(k)), []);
+  await choose();
+  assert.equal(b.reloads(), 0, "retry still refuses to reload while the progress lives only in memory");
+  refuse = false;
+  await choose();
+  assert.equal(b.reloads(), 1);
+  assert.deepEqual(progressKeys.map((k) => JSON.parse(b.disk.get(k))), [progress.circuitMastery, progress.ghosts, 4]);
+  const before = progressWrites;
+  const again = b.loadSettings(file);
+  assert.deepEqual([again.applied, again.skipped, again.failed], [1, 3, 0]);
+  assert.equal(progressWrites, before, "already-durable progress is left alone");
 });

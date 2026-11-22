@@ -83,11 +83,14 @@ function bootTuner(weather = "wet", saved = null) {
     .map((d) => ({ ...d, group: "LAMPS", label: d.id, step: 0.1 }));
   const h = loadStore(weather, saved, defs), nodes = new Map(), storage = new Map();
   const element = () => ({ children: [], dataset: {}, textContent: "", hidden: false,
-    classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {},
+    classList: { toggle() {}, add() {}, remove() {} }, attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
     appendChild(child) { this.children.push(child); if (child.id) nodes.set(child.id, child); },
     scrollIntoView() {}, focus() {}, setSelectionRange() {} });
   const $ = (id) => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
   h.ctx.document = { createElement: element, getElementById: $, body: element() };
+  vm.runInContext(read("js/ui/setting-row.js"), h.ctx, { filename: absSrc("js/ui/setting-row.js") });
+  h.ctx.SettingRow = h.ctx.window.SettingRow;
   h.ctx.localStorage = { getItem: (k) => storage.get(k), removeItem: (k) => storage.delete(k) };
   h.ctx.PerfGov = { autoShed: () => h.tier || 0 };
   h.ctx.setTimeout = () => 1; h.ctx.clearTimeout = () => {};
@@ -98,6 +101,7 @@ function bootTuner(weather = "wet", saved = null) {
   vm.runInContext(symbolSource("function setLightTune(id, v)"), h.ctx);
   Object.assign(h.G, { $, els: {}, ltKey: h.store.key, setLightTune: h.ctx.setLightTune,
     persistLightTune: h.store.persist, applyLightTune: h.store.apply,
+    copyLightTune: h.store.copyToTracks, restoreLightTune: h.store.restore,
     setTimeOfDay: () => "dusk", weather: () => h.st.weather, gfx: h.ctx.gfx });
   h.G._ltStore = h.store.profiles;
   vm.runInContext(read("js/lighting/tuner-panel.js"), h.ctx, { filename: absSrc("js/lighting/tuner-panel.js") });
@@ -107,6 +111,29 @@ function bootTuner(weather = "wet", saved = null) {
   h.input = (id, value) => { const input = $("lt-in-" + id); input.value = String(value); input.oninput(); };
   return h;
 }
+
+test("the exact lighting field commits once through the knob setter and follows slider and profile resets", () => {
+  const h = bootTuner(), field = h.$("lt-num-sunElev"), slider = h.$("lt-in-sunElev");
+  assert.deepEqual([field.type, field.min, field.max, field.step, field.inputMode], ["number", -90, 90, 0.1, "text"]);
+  assert.equal(field.getAttribute("aria-label"), "sunElev exact value");
+  Object.defineProperty(field, "valueAsNumber", { get() { return Number(this.value); } });
+  field.validity = { valid: true };
+  field.value = "-4.2";
+  field.onchange();
+  assert.equal(h.LT.sunElev, -4.2);
+  assert.equal(+slider.value, -4.2);
+  field.onchange();
+  assert.equal(h.writes.length, 1);
+  assert.deepEqual(host(h.store.profiles), { "monaco|dusk|dry": { sunElev: -4.2 } });
+  field.value = "-4.256"; field.validity.valid = false;
+  field.onchange();
+  assert.equal(field.value, "-4.2", "an off-step edit restores the saved value");
+  h.input("sunElev", -1.1);
+  assert.equal(field.value, "-1.1");
+  assert.equal(h.writes.length, 1, "dragging does not persist on each tick");
+  h.$("lt-reset").onclick();
+  assert.equal(field.value, "0");
+});
 
 test("lighting-1: drag updates profile count and returning to baseline restores defaults without persistence", () => {
   const h = bootTuner();
@@ -118,6 +145,48 @@ test("lighting-1: drag updates profile count and returning to baseline restores 
   assert.deepEqual(h.writes, [], "input ticks do not persist");
   h.$("lt-in-lampLevel").onchange();
   assert.equal(h.writes.length, 1, "release persists once");
+});
+
+test("My Edits skips local reset values after reload, while Full Look copies them and Undo restores the target", () => {
+  const presets = {
+    "monaco|dusk|dry": { sunElev: 35 }, "spa|dusk|dry": { sunElev: 12 },
+    "monaco|dusk|wet": { lampLevel: 0.6 }, "spa|dusk|wet": { lampLevel: 0.3 },
+  };
+  const setup = (saved) => {
+    const h = bootTuner("wet", saved);
+    h.ctx.Tracks.LIST.push({ id: "spa" });
+    h.ctx.window.LightPresets = presets;
+    h.store.apply();
+    h.panel.refreshLightTunePanel();
+    return h;
+  };
+  const first = setup({ sunElev: 9, lampLevel: 0.8 });
+  first.$("lt-reset").onclick();
+  const h = setup(first.stored.lightTune);
+  const confirmCopy = (mode) => {
+    const button = h.$("lt-spread-" + mode);
+    button.onclick();
+    button.onclick();
+    return button.textContent;
+  };
+  assert.equal(h.$("lt-profile").textContent, "MONACO · DUSK · WET  (defaults)");
+  assert.equal(confirmCopy("edits"), "NOTHING TUNED");
+  assert.equal(h.writes.length, 0);
+
+  h.input("sunAzim", 42);
+  assert.equal(h.$("lt-profile").textContent, "MONACO · DUSK · WET  (1 tuned)");
+  assert.equal(confirmCopy("edits"), "COPIED 1 ✓");
+  assert.deepEqual(h.stored.lightTune["spa|dusk|dry"], { sunAzim: 42 });
+  assert.equal(h.stored.lightTune["spa|dusk|wet"], undefined);
+  h.$("lt-spread-undo").onclick();
+  const beforeLook = host(h.stored.lightTune);
+  assert.equal(beforeLook["spa|dusk|dry"], undefined);
+
+  assert.equal(confirmCopy("look"), "COPIED 1 ✓");
+  assert.equal(h.stored.lightTune["spa|dusk|dry"].sunElev, 35);
+  assert.equal(h.stored.lightTune["spa|dusk|wet"].lampLevel, 0.6);
+  h.$("lt-spread-undo").onclick();
+  assert.deepEqual(h.stored.lightTune, beforeLook);
 });
 
 test("lighting-2: shared sun slot exports next to wet edits, distinguishes dry knobs, and loads once per key", () => {

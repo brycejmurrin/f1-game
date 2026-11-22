@@ -15,11 +15,11 @@ import { reportLines } from "../../tools/ui/phone-shot-diff.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const run = (...a) => { try { return { code: 0, out: execFileSync(process.execPath, a, { cwd: ROOT, encoding: "utf8", stdio: "pipe" }) }; } catch (e) { return { code: e.status, out: `${e.stdout}${e.stderr}` }; } };
 
-test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/21, touch, his LIVE export seeded", () => {
+test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/20, touch, his LIVE export seeded", () => {
   const p = brycePhone();
   assert.deepEqual(p.viewport, { width: 852, height: 393 });
   assert.equal(p.deviceScaleFactor, 3);
-  assert.deepEqual(p.insets, { top: 0, left: 59, bottom: 21, right: 59 });
+  assert.deepEqual(p.insets, { top: 0, left: 59, bottom: 20, right: 59 });
   assert.equal(p.contextOptions.isMobile && p.contextOptions.hasTouch, true);
   assert.match(p.contextOptions.userAgent, /iPhone/);
   assert.equal(p.profile.file, OWNER_EXPORT);
@@ -47,6 +47,19 @@ test("the preset is his standalone window: 852x393, DPR 3, env() insets 59/0/59/
   assert.throws(() => brycePhone({ uiScale: 5 }), /uiScale/);
 });
 
+test("iPhone 15 keeps the full logical screen and native resolution when the viewport or capture DPR changes", () => {
+  for (const [window, width, height, viewportHeight] of [["portrait", 393, 852, 852], ["standalone", 852, 393, 393], ["safari", 852, 393, 368]]) {
+    for (const dpr of [1, 3]) {
+      const p = brycePhone({ window, dpr, profile: false });
+      assert.equal(p.model, "iPhone 15");
+      assert.deepEqual(p.contextOptions.screen, { width, height });
+      assert.deepEqual(p.contextOptions.viewport, { width, height: viewportHeight });
+      assert.deepEqual(p.nativeScreen, { width: width * 3, height: height * 3 });
+      assert.equal(p.contextOptions.deviceScaleFactor, dpr);
+    }
+  }
+});
+
 test("ownerStore splits the export into the json and raw lanes and drops unset keys", () => {
   const exp = { exportedAt: "t", device: { userAgent: "UA" }, settings: { a: { one: 1, two: "x", three: null }, b: { four: { k: 1 } } } };
   const o = ownerStore({ exportJson: exp, specSource: '{ k: "two", lane: "raw" }' });
@@ -57,10 +70,13 @@ test("ownerStore splits the export into the json and raw lanes and drops unset k
 
 test("mismatches: [] when the page reports the preset, one line per difference otherwise", () => {
   const p = brycePhone({ profile: "legacy" });
-  const got = { viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 21, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
+  const got = { screen: p.contextOptions.screen, viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, insets: { top: 0, left: 59, bottom: 20, right: 59 }, coarse: true, stored: { hudBtnScale: "245", uiScale: null } };
   assert.deepEqual(mismatches(brycePhone(), got), ["stored uiScale = null, seeded 70", "stored hudBtnScale = 245, seeded 143.25"],
     "the live profile seeds UI SIZE 70 and BUTTON SIZE 143.25");
   assert.deepEqual(mismatches(p, got), []);
+  const safari = brycePhone({ window: "safari", profile: "legacy" });
+  assert.deepEqual(mismatches(safari, { ...got, insets: safari.insets, viewport: safari.viewport, screen: safari.viewport }),
+    ["screen 852x368, wanted 852x393"], "a Safari toolbar reduces only the viewport");
   const bad = mismatches(p, { ...got, viewport: { width: 844, height: 390 }, insets: { top: 0, left: 0, bottom: 0, right: 0 }, stored: { hudBtnScale: "100" } });
   assert.equal(bad.length, 5, bad.join(" | "));
   assert.match(bad.join(" | "), /viewport 844x390, wanted 852x393/);
@@ -73,7 +89,7 @@ test("classifyShot: 2000x923 is the standalone window at 2.347 px per CSS px; ot
   assert.equal(classifyShot(2556, 1179).pxPerCss, 3);
   assert.equal(classifyShot(2556, 1104).window, "safari");
   assert.equal(classifyShot(2532, 1170).nearest, "standalone", "the 844x390 cell is not one of his windows");
-  assert.equal(classifyShot(923, 2000).orientation, "portrait");
+  assert.deepEqual(classifyShot(1179, 2556), { window: "portrait", orientation: "portrait", pxPerCss: 3, nearest: "portrait", aspectError: 0 });
   const crop43 = classifyShot(1600, 1200);
   assert.equal(crop43.window, null);
   assert.equal(crop43.pxPerCss, null);
@@ -81,7 +97,7 @@ test("classifyShot: 2000x923 is the standalone window at 2.347 px per CSS px; ot
 });
 
 test("bryce-phone CLI: prints the preset, refuses an unknown flag with exit 2", () => {
-  assert.match(describe(brycePhone()), /^bryce-standalone: 852x393 CSS px, DPR 3, env\(\) insets L59 T0 R59 B21\n/);
+  assert.match(describe(brycePhone()), /^bryce-standalone: 852x393 CSS px, DPR 3, env\(\) insets L59 T0 R59 B20\n/);
   const flags = (o) => ({ flag: (k, d) => (k in o ? o[k] : d), has: (k) => k in o });
   assert.deepEqual(presetOptions(flags({ "--window": "safari", "--dpr": "1", "--ui-scale": "51", "--no-profile": true })), { window: "safari", profile: false, dpr: 1, uiScale: 51 });
   assert.throws(() => presetOptions(flags({ "--dpr": "abc" })), /--dpr needs a number/);
@@ -211,7 +227,10 @@ test("phone windows: one record, the measured Safari tab, read by bryce-phone, t
     assert.ok(v, `menu-screens has the ${cell} cell`);
     assert.deepEqual([v[1].viewport, v[3]], [{ width: w.width, height: w.height }, { t: w.insets.top, r: w.insets.right, b: w.insets.bottom, l: w.insets.left }], `menu-screens ${cell} = the record's ${win}`);
   }
-  // The two guessed Safari heights (283, 344) are gone from every 852-wide cell of both tables.
+  const shorter = brycePhone({ window: "safari-short" });
+  assert.deepEqual(shorter.viewport, { width: 852, height: 283 });
+  assert.deepEqual(shorter.insets, { left: 59, right: 59, top: 0, bottom: 20 });
+  // Only 344 remains unsupported by either Safari reading.
   const heights = [...GEOS.filter((g) => g.w === 852).map((g) => g.h), ...VIEWPORTS.filter((e) => e[1].viewport.width === 852).map((e) => e[1].viewport.height)];
-  assert.deepEqual(heights.filter((h) => h === 283 || h === 344), [], "no guessed Safari height");
+  assert.deepEqual(heights.filter((h) => h === 344), [], "no guessed Safari height");
 });

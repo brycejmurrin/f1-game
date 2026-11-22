@@ -76,11 +76,12 @@ const BIN = `${ORIGIN}/assets/pack/models/x.bin`;
 
 // (b) the SW half
 test("a ?h=<md5> pack URL is answered from the cache with no network request", async () => {
+  const url = `${BIN}?h=${md5("cached")}`;
   const h = swHarness({
     net: () => { throw new Error("must not touch the network"); },
-    stores0: { "apex26-320": { [`${BIN}?h=${H1}`]: new Response("cached", { status: 200 }) } },
+    stores0: { "apex26-320": { [url]: new Response("cached", { status: 200 }) } },
   });
-  const ev = h.fetchEvent(`${BIN}?h=${H1}`);
+  const ev = h.fetchEvent(url);
   assert.equal(await (await ev.responsePromise).text(), "cached");
   await Promise.all(ev.lifetimes);
   assert.deepEqual(h.calls, []);

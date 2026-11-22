@@ -43,6 +43,7 @@ Root — the load-order truth and the car studio page; every consumer hardcodes 
 | **carview.html** | Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`. | playwright-probe |
 | **garage-angles-fetch.mjs** | Download garage-before-<sha> for a SHA (default merge-base with ship); nearest ancestor + compare staleness. | garage-parts-livery |
 | **manifest.cjs** | Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match. | check-changes |
+| **serve.mjs** | Local static server for the working tree on 127.0.0.1:3456 (replaces `npx serve`): no-store, no fd leak, pinned in-repo. | check-changes |
 
 ### `tools/agent/`
 
@@ -77,7 +78,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 |---|---|---|
 | **lib/ai-ratings-math.mjs** | Pure Pearson / means / style zero-mean helpers for `ai-ratings.mjs` (personality dial census). | — |
 | **lib/browser-workers.mjs** | GL-aware Playwright / capture worker defaults (llvmpipe vs SwiftShader). | — |
-| **lib/bryce-phone.mjs** | ONE "Bryce's phone" preset for every UI tool and spec: window, DPR, safe-area insets, UA, his settings export. | — |
+| **lib/bryce-phone.mjs** | Shared iPhone 15 screen and viewport sizes, native resolution, DPR, safe-area insets and saved settings. | — |
 | **lib/census-entry.mjs** | gpu-game-check's --entry api\|menu\|menu-full and --cam A>B parsing, its menu-prep wait and its race gate. | — |
 | **lib/centreline-kinks.cjs** | Centreline kink scan: nodes whose chord-to-chord turn radius is below the road half-width (#2209). | — |
 | **lib/changed-files.mjs** | `git diff` path lists naming BOTH ends of a rename, so a file moved out of a watched directory still routes its rules. | — |
@@ -258,7 +259,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/gen-circuit-meta.mjs** | Builds js/track/circuit-meta.js (circuit picker metadata; a gitignored build product, LAZY_CIRCUIT hydrates). | check-changes |
 | **gen/gen-cursor-rules.mjs** | Emit `.cursor/rules/*.mdc` from `.claude/rules` (`paths`→`globs`, else `alwaysApply`); `--check`. | agent-config |
 | **gen/gen-flags-table.mjs** | Regenerates the DevFlags table in `docs/DEBUG-HOOKS.md` from `js/core/dev-flags.js`; `--check`. | check-changes |
-| **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
+| **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index in `docs/DEBUG-HOOKS.md` from the live `__apex` keys (VM boot) + source; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
 | **gen/gen-locales.mjs** | Regenerate locales/en.json and manifest hashes from I18n.t / data-i18n call sites. | — |
@@ -390,6 +391,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 |---|---|---|
 | **gfx/batch-visible-probe.mjs** | Read-only probe: is one instanced scenery batch (cota yellow tecpro) submitted and lit-visible on software or hardware. | — |
 | **gfx/census-verdict.mjs** | Reads one image's census + four game-check JSONs, prints the Verdict rows and fails on what the game reported. | renderer-debug |
+| **gfx/chunk-merge-timing.mjs** | Measure Three.js chunk-merge factors on hardware with isolated boots and matched parked scenes. | mcp-probe |
 | **gfx/chunk-reach.cjs** | How much chunked scenery a pass reaches, counted headlessly: re-bins triangles into 72 m cells like `createChunkedMesh`. | — |
 | **gfx/chunk-share-census.mjs** | Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run. | renderer-debug / lighting-tuner |
 | **gfx/frame-hitch.mjs** | Measures per-rAF-callback main-thread cost and finds PERIODIC hitches (spike train + autocorrelation). | playwright-probe / renderer-debug |
@@ -508,7 +510,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/audit-diff.mjs** | Library behind `layout-audit --diff <before.json>`: added / fixed findings per screen\|viewport cell (no browser). | survey-ui-matrix |
 | **ui/audit-summary.mjs** | Bounded summary of a layout-audit audit.json: totals, worst cells, per-screen rollup, one cell expanded on request. | survey-ui-matrix |
 | **ui/bryce-paint.mjs** | Owner-phone acceptance: PAINTED text/tap sizes, safe box, page scroll per window × UI SIZE; measure or check. | — |
-| **ui/bryce-phone.mjs** | Print the shared "Bryce's phone" preset, or boot the page on it and prove the emulation took (--measure). | — |
+| **ui/bryce-phone.mjs** | Inspect the iPhone 15 viewport and native resolution, check emulation (--measure) or save a screenshot (--shot). | — |
 | **ui/circuit-axis.mjs** | The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools. | survey-ui-matrix |
 | **ui/css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
 | **ui/design-evidence.mjs** | Computed design tokens, axe accessibility evidence and standalone screenshot reviews. | css-play |
@@ -534,7 +536,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/look-diff/core.mjs** | Library for look-diff: knob catalog read in a vm, args, pixel/geometry diff, DEAD/SUBTLE/VISIBLE classes. | css-play |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
 | **ui/menu-fit.mjs** | DEPRECATED except `--safe=` (arbitrary notch insets); use `ui/layout-audit.mjs` for menu fit at a viewport. | survey-ui-matrix |
-| **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
+| **ui/menu-mock.mjs** | Menu layout shots (SCREENS x VIEWPORTS), 3D off: boxes, tap/overflow/text numbers, cell cache. | survey-ui-matrix |
 | **ui/menu-readiness.mjs** | Serializable menu readiness predicate, used with bounded Playwright polling. | — |
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
 | **ui/phone-shot-diff.mjs** | Compare a phone screenshot with the live page on the Bryce-phone preset: which elements are a different SIZE. | — |

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import net from "node:net";
 import { once } from "node:events";
-import { startBrowserMcp } from "../../tools/mcp/browser-http.mjs";
+import { spawnSync } from "node:child_process";
+import { startBrowserMcp, parseServerArgs, presentedToken, idleTimer } from "../../tools/mcp/browser-http.mjs";
 
 const init = {
   jsonrpc: "2.0",
@@ -32,7 +33,7 @@ async function partialUpload(mcp) {
   const socket = net.connect(Number(url.port), "127.0.0.1");
   socket.on("error", () => {}); // A shutdown deliberately destroys this upload.
   await once(socket, "connect");
-  socket.write(`POST /mcp?token=secret HTTP/1.1\r\nHost: ${url.host}\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{`);
+  socket.write(`POST /mcp HTTP/1.1\r\nHost: ${url.host}\r\nAuthorization: Bearer secret\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{`);
   // A second request is handled only after the earlier socket's data has
   // reached this process; this also proves the server remains responsive.
   await (await post(mcp.url, init, "secret")).arrayBuffer();
@@ -48,7 +49,7 @@ test("browser MCP rejects malformed envelopes and oversized uploads, then still 
       assert.equal((await response.json()).error.code, -32600);
     }
     for (const body of ["", "{"]) {
-      const response = await fetch(mcp.url + "?token=secret", { method: "POST", body });
+      const response = await fetch(mcp.url, { method: "POST", body, headers: { authorization: "Bearer secret" } });
       assert.equal(response.status, 400);
       assert.equal((await response.json()).error.code, -32700);
     }
@@ -87,9 +88,9 @@ test("browser MCP rejects a missing token and lists its tools", async () => {
     assert.equal(opened.status, 200);
     const hello = await opened.json();
     assert.equal(hello.result.serverInfo.name, "apex-browser");
-    const listed = await post(mcp.url + "?token=secret", {
+    const listed = await post(mcp.url, {
       jsonrpc: "2.0", id: 2, method: "tools/list", params: {},
-    });
+    }, "secret");
     const names = (await listed.json()).result.tools.map((tool) => tool.name).sort();
     assert.deepEqual(names, ["browser_eval", "browser_open", "browser_shot", "browser_status"]);
     const quiet = await post(mcp.url, { jsonrpc: "2.0", method: "notifications/initialized" }, "secret");
@@ -138,4 +139,59 @@ test("browser MCP answers ping, tools/call (status, unknown tool, no page yet) a
   } finally {
     await mcp.close();
   }
+});
+
+// W25: the token rides in the Authorization header only, unless the server was started with --allow-query-token;
+// strict argv; an idle server exits. No browser is launched (no browser_open call).
+test("a query-string token is refused by default and accepted only with allowQueryToken; a header always wins", async () => {
+  const strict = await startBrowserMcp({ port: 0, token: "secret" });
+  try {
+    assert.equal((await post(strict.url + "?token=secret", init)).status, 401, "query token refused by default");
+    assert.equal((await post(strict.url, init, "secret")).status, 200);
+  } finally { await strict.close(); }
+  const loose = await startBrowserMcp({ port: 0, token: "secret", allowQueryToken: true });
+  try {
+    assert.equal((await post(loose.url + "?token=secret", init)).status, 200, "opt-in query token");
+    assert.equal((await post(loose.url + "?token=secret", init, "wrong!")).status, 401, "a bad header is not rescued by the query");
+  } finally { await loose.close(); }
+  const req = (authorization) => ({ headers: authorization ? { authorization } : {} });
+  const u = new URL("http://127.0.0.1/mcp?token=q");
+  assert.equal(presentedToken(req(), u), "");
+  assert.equal(presentedToken(req(), u, { allowQueryToken: true }), "q");
+  assert.equal(presentedToken(req("Basic abc"), u, { allowQueryToken: true }), "", "a non-bearer header is not a token and blocks the query");
+  assert.equal(presentedToken(req("Bearer h"), u, { allowQueryToken: true }), "h");
+});
+
+test("server argv is strict: --help, unknown flags and bad values never start a server", () => {
+  assert.deepEqual(parseServerArgs([]), { port: 3001, idleMin: 30, allowQueryToken: false });
+  assert.deepEqual(parseServerArgs(["--port", "0", "--idle-min", "5", "--allow-query-token"]), { port: 0, idleMin: 5, allowQueryToken: true });
+  assert.deepEqual(parseServerArgs(["--port", "1", "-h"]), { help: true });
+  for (const bad of [["--prot", "1"], ["--port"], ["--port", "x"], ["--port", "70000"], ["--idle-min", "-1"], ["stop"]]) {
+    assert.ok(parseServerArgs(bad).error, JSON.stringify(bad));
+  }
+  const cli = (args) => spawnSync(process.execPath, ["tools/mcp/browser-http.mjs", ...args], { encoding: "utf8", timeout: 10000 });
+  assert.equal(cli(["--bogus"]).status, 2);
+  assert.equal(cli(["--help"]).status, 0);
+});
+
+test("idle shutdown: fires after the quiet period, a touch re-arms it, 0 disables it", async () => {
+  const timers = [];
+  const fake = { setT: (fn, ms) => { const t = { fn, ms, live: true }; timers.push(t); return t; }, clearT: (t) => { t.live = false; } };
+  let fired = 0;
+  const t = idleTimer(1000, () => fired++, fake);
+  t.touch();
+  assert.equal(timers.filter((x) => x.live).length, 1, "one armed timer");
+  timers.filter((x) => !x.live).forEach((x) => x.fn());   // a cleared timer firing late does nothing harmful
+  timers.at(-1).fn();
+  assert.equal(fired, 1, "only the latest arm fires");
+  idleTimer(0, () => fired++, fake);
+  assert.equal(timers.length, 2, "0 never arms");
+  // A real server closes itself after its idle period with no authenticated request.
+  let idled;
+  const gone = new Promise((r) => { idled = r; });
+  const mcp = await startBrowserMcp({ port: 0, token: "secret", idleMs: 150, onIdle: () => idled("idle") });
+  try {
+    await post(mcp.url, init);   // unauthenticated: does not keep it up
+    assert.equal(await gone, "idle");
+  } finally { await mcp.close(); }
 });

@@ -4,13 +4,13 @@
     "monza": {
       "detail0": {
         "road": 51394,
-        "props": 285079,
+        "props": 284611,
         "glass": 1356,
         "floor": 4
       },
       "detail2": {
         "road": 55882,
-        "props": 567361,
+        "props": 574322,
         "glass": 2184,
         "floor": 36864
       }
@@ -18,13 +18,13 @@
     "monaco": {
       "detail0": {
         "road": 31334,
-        "props": 255839,
+        "props": 255754,
         "glass": 48,
         "floor": 4
       },
       "detail2": {
         "road": 37882,
-        "props": 457854,
+        "props": 457557,
         "glass": 48,
         "floor": 4
       }

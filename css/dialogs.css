@@ -478,7 +478,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
    ~600px in one row, which clipped EXIT and the label on a 390px portrait
    phone. Plain tokens so the LIGHT theme and the text size follow.
    CENTRED BY MARGINS, NOT left:50% + translate: a fixed box at left:50% has
-   only half the viewport to shrink-fit into, so at 844x390 (Bryce's profile)
+   only half the viewport to shrink-fit into, so at 844x390 (compatibility viewport)
    it wrapped to 422px wide and 5 rows, 246px = 63% of the height (#5694 I1).
    UNZOOMED: the dock is a <body> child, outside the `zoom: var(--ui-scale)`
    sheets, so the inherited `52px / --ui-scale` paint tokens over-sized it
@@ -552,7 +552,7 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
     letter-spacing: var(--ls-1);
     box-shadow: none;
   }
-  @media (hover: hover) {
+  @media (hover: hover) and (pointer: fine) {
     #vsfriend :is(#vs-code-host, #vs-code-share, #vs-code-copy):hover,
     #vsfriend :is(#vs-share-invite, #vs-copy-invite, #vs-share-answer, #vs-copy-answer):hover,
     #vsfriend :is(#vs-scan-answer, #vs-scan-invite):hover {

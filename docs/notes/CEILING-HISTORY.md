@@ -6,7 +6,7 @@
 #6016). The game disqualifies a driver who finishes a dry race of eight laps or more on one compound
 (`SportingRegs.applyCompoundRule`), but HOW TO PLAY never said so. One `dt`/`dd` pair under PIT STOPS is the
 two nodes; `tests/unit/help-rules-facts.test.mjs` reads the figures in it from the code that enforces them.
-Fragment: `tests/data/ratchets.d/claude--port-cleanroom-46-53-5973.json`.
+Fragment: `ratchets.d/claude--port-cleanroom-46-53-5973.json (folded)`.
 ## 2026-11-20 — PR #6024 (claude/ratchet-pin-absorb): pin counts get a 5-pin absorb (Bryce's "Pin slack", D-037)
 
 `(tree) assertPins` ceiling **8140** and `(tree) assertPinsAll` ceiling **10366** are unchanged; each entry gains
@@ -25,7 +25,7 @@ The growth is this PR's eager `js/car/car-draw.js` and `js/car/car3d.js`. The co
 flag on the two depth-only builds (the team caster and the first-person caster), which lets TLX allocate
 position + index alone (about 8 to 10 MB of `carSh` geometry saved per race). The earlier `eagerBytes`
 +224 raise (2026-11-19) lapsed when the tip moved to `eagerCodeBytes`.
-Fragment: `tests/data/ratchets.d/claude--render-caster-position-only-1118.json`.
+Fragment: `ratchets.d/claude--render-caster-position-only-1118.json (folded)`.
 
 ## 2026-11-19 — PR #5782 (claude/perf-assets-flow-1118): Spa's baked pine fetched; offline note checks only on screen
 
@@ -54,7 +54,7 @@ call in `makeCars`; also `js/game.js` codeLines/lines +1). The repair-only stop 
 lazy `js/race/pit-lane.js`. #5954 (WIND OFF record class, per-circuit drill bests), folded in on the
 orchestrator's call (07:30Z), nets −146 in the eager `js/race/race-insights.js` (comments tightened);
 its own fragment is folded into this one. Fragment:
-`tests/data/ratchets.d/claude--batch-5896-5878-5877.json`.
+`ratchets.d/claude--batch-5896-5878-5877.json (folded)`.
 `(tree) eagerBytes` 8015286 → **8016541** (+1255). Deliberate raise of the exact boot-wall ceiling;
 it still needs Bryce's `ratchet-raise` label on the PR. The growth is this PR's eager
 `js/track/core/def.js`, `js/ui/platform-session.js`, `js/core/lazy-bundles.js` and `js/track/build-client.js`
@@ -74,6 +74,29 @@ were 2,847,130 B (35.7 %) of the old count. A branch's own growth up to 5000 B i
 label; past it, `ratchet-raise` as before. Open fragments' `eagerBytes` deltas are inert from here (applyFragments
 skips a metric ratchets.json no longer names). Evidence: docs/notes/RATCHET-REVIEW-2026-11-20.md.
 
+### PR #5296 (2026-11-20) (claude/audit-fix-hud-perf-covers): eagerCodeBytes for the same W22 growth
+
+`(tree) eagerCodeBytes` 4018312 → **4019863** (+1551), re-measured +1518 on the merge of tip eef0e45f (33 B now shared with the tip). The tip retired `eagerBytes` for
+`eagerCodeBytes` (stripped code, #5975), so this branch's `eagerBytes` +1225 fragment
+(the 2026-11-19 entry below) is dropped and replaced by this one. Same code, measured on
+the merge of tip 322c63a3: the W22 stall/readback covers (race-entry-profile, governor,
+loop-health), onboard `resetControls`, css-zoom's ancestor zoom product, tv-graphics and
+broadcast fastest-lap, sporting-regs `blueFlagCar`; no new eager module. Extraction was
+declined for a 142-file combined PR (orchestrator, 2026-11-20 12:59Z, option A).
+
+### PR #5296 (2026-11-19) (claude/audit-fix-hud-perf-covers): audit W22/W25/W32 fixes on eager scripts
+
+`(tree) eagerBytes` 8015286 → **8016511** (+1225). Deliberate raise past the absorb; the
+tree-wide ceiling still needs Bryce's `ratchet-raise` label on the PR. Measured on the
+sync merge c48f7b1e against tip dec94440, the growth is this PR's own net change to eager
+scripts: onboard +727 (REPEAT CONTROL REMINDERS keeps harvest and races), css-zoom +502
+(local-rect zoom product), race-entry-profile +473 (`bindGame` + `readbackCover`),
+tv-graphics +445 and broadcast +386 (fastest-lap banner), sporting-regs +180
+(`blueFlagCar` export), game +162, governor +112, loop-health +109,
+save-schema-registry +67; offset by hud −1081, announce-banner −391, hud-readouts −322,
+visor-optics −144. An earlier head had already trimmed the hud.js comment block
+(6bd07fa1: +2,693 → +1,225 B); the remaining added comments are short. Fragment:
+`ratchets.d/claude--audit-fix-hud-perf-covers.json`.
 ## 2026-11-19 — PR #5721 (claude/hunt4-fixes-5694): hunt #5694 season and replay fixes
 
 `(tree) eagerBytes` 8,015,286 → **8,017,013** (+1,727 B). Deliberate raise past the absorb; the
@@ -162,7 +185,7 @@ backend only when `GfxQuality.detail() >= 2`, never on a phone), `js/garage/hi-p
 `assertPins` +52 / `assertPinsAll` +64 come from the follow-up's tier tests (tier-record 15, tlx-mat-detail 12,
 assets-pack 8, tsl-gi 6, …): source pins on TSL shader wiring and the tier record's `ran:` fields, which no Node test
 can check by behaviour (no GPU). `vmSrcLoads` +8 are the new unit files' VM loads. Fragment:
-`tests/data/ratchets.d/claude--desktop-tiers-followup-5951.json`.
+`ratchets.d/claude--desktop-tiers-followup-5951.json (folded)`.
 
 ## 2026-11-20 — PR #6003 (claude/desktop-tiers-followup-5951): follow-ups to the desktop tiers, real-GPU tier gate
 
@@ -175,7 +198,7 @@ copy, the nearest-rival 2048 livery cycle: most of the growth), the tier record 
 `js/track/tracks.js`, one reset key in `js/perf/renderer-picker.js`. Shadows, motion vectors, temporal SSGI,
 AgX and the crowd shader are in lazy files. Other ceilings in the fragment: `js/car/car3d.js` lines +36,
 `js/track/tracks.js` lines +7, `assertPins` +21, `assertPinsAll` +27, `vmSrcLoads` +1. Fragment:
-`tests/data/ratchets.d/claude--desktop-tiers-followup-5951.json`.
+`ratchets.d/claude--desktop-tiers-followup-5951.json (folded)`.
 
 ## 2026-11-20 — PR #5951 (claude/trusting-clarke-01d9ui): desktop graphics tiers above ULTRA
 
@@ -192,7 +215,7 @@ the garage's dense-primitive scope (`js/garage/*`) and the car detail tiers (`js
 counts, the hero-car refine pass and the modelled parts, about +24 KB). Other ceilings in the same fragment:
 `js/car/car3d.js` lines +36, `js/track/tracks.js` lines +25, `js/game.js` lines +1 / codeLines +1 (one `setCinema` line),
 `assertPins` +28, `assertPinsAll` +34, `vmSrcLoads` +5 (the new unit files). Fragment:
-`tests/data/ratchets.d/claude--trusting-clarke-01d9ui.json`.
+`ratchets.d/claude--trusting-clarke-01d9ui.json (folded)`.
 
 `ratchets.d/claude--appearance-shapes-4529.json (folded)`.
 ## 2026-11-19 — PR #5576 (claude/pack-tier-follows-quality-5561): pack tier follows the GRAPHICS preset
@@ -3962,6 +3985,16 @@ const MAX_EAGER_SCRIPTS = 313;
 const MAX_EAGER_BYTES = 8_017_936;
 ```
 
+## 2026-11-20 — contextual screen arrangement (cursor/screen-arrangement-f8970a)
+
+PR #5976 (with #5977 folded in). The in-context region editor raises five tree ceilings past the absorb. Everything else was lowered back to the tip in the fold. The 9 assertion pins became a parsed-declaration check and live dialog checks in `appearance-orientation.spec.js`. The extra VM load is gone. The 13 theme colors are now `--endurance-*` / `--drafting-*` tokens in `css/tokens.css`. One dynamic id read is now literal `$()` calls. eagerCodeBytes is 2,475 B under the tip, because ARRANGE HUD now loads lazily.
+
+`(tree) cssClasses` 665 → **670** (+5). Deliberate raise past the absorb: the region editor's own classes `.screen-arranger`, `.arrange-selection`, `.arrange-tools`, `.arrange-row` and `.screen-arrange-entry` (the per-screen "Arrange this screen" door).
+`(tree) dynamicIdReads` 73 → **75** (+2). Deliberate raise past the absorb: `js/ui/screen-regions.js` opens each screen's editor through its registry row (`door`, `routes[key][1]`). The ids are data in `ScreenRegions`, one per registered screen, so a literal lookup would mean one branch per screen.
+`(tree) rawColor` 323 → **326** (+3). Deliberate raise past the absorb: `css/screen-arranger.css` maps the standalone OBS overlay's palette (`--bg`, `--surf-1`, `--surf-3`). `overlay.html` loads no `tokens.css`, so these three cannot be tokens.
+`(tree) rawColorDistinct` 179 → **182** (+3). Deliberate raise past the absorb: the same three overlay colors.
+`(tree) shellNodes` 2321 → **2322** (+1). Deliberate raise past the absorb: `#title-arrange-entry`, the title screen's "Arrange this screen" button, which the shell owns so it is there before first paint.
+Fragment: `ratchets.d/cursor--screen-arrangement-f8970a.json`.
 **Raise, 2026-11-19 — `eagerBytes` +3,894, re-snapped to +3,166 on 2026-11-20, then +2,980 when #5948 and #6009 were combined in (fragment `claude--ai-pace-calibration-5330.json`).**
 Retired with `eagerBytes` (#5975): on the sync onto 322c63a3 the branch's `eagerCodeBytes` growth is +3,448, inside its 5,000 B absorb (the commit hook's fragment).
 Cause: #5686 (#5330), so AI solo pace follows team tier and then driver skill. It adds `aiErs`,
@@ -3977,3 +4010,8 @@ Trim first, then raise:
 
 Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed `decision: A` on #5686
 (comment 7013079936, 15:09:10Z). The raise lands under his `ratchet-raise`.
+
+## 2026-11-21 — PR #6131 (codex/pitlane-neighbor-garages): pit workshop lighting
+
+`(tree) eagerCodeBytes` 3956234 → **3957854** (+1620). The fallback garage renders overhead fixtures, the lighting profile store resolves lamp settings for the selected circuit, and the setup camera supplies them to the exterior renderer on arrival and departure. The detached circuit lamp selection and mesh upload remain in the lazy exterior bundle.
+Fragment: `ratchets.d/codex--pitlane-neighbor-garages.json`.

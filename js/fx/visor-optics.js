@@ -7,7 +7,7 @@
  *   LIGHT   a <canvas id="fx-visor"> composited with mix-blend-mode: plus-lighter (screen where unsupported), so
  *           reflections are ADDED light and can never grey the scene — on WebGPU. On the WebGL2 path (TLX's WebGL2
  *           backend, GLX) the layer composites as plain "over" instead (blendMode(), #3657). Repainted at ~15 Hz
- *           from the scene lighting game.js publishes on G (sceneFromG; else window.__apex visorScene() / camState() + lightState()):
+ *           from the scene lighting game.js publishes on G (bind → sceneFromG; else window.__apex visorScene() / camState() + lightState()):
  *           the sun's glint and its double-reflection ghost, a Fresnel rim sheen on the sun's side, one glint per
  *           flood / street lamp / tail-light in view (projected through the camera, so they slide with heading),
  *           and a chromatic fringe along the rim that scales with VISOR REFRACTION. Every term is proportional to
@@ -462,7 +462,7 @@ const VisorOptics = (function () {
   /** The port image on body (--visor-port) for the current size and tint; rebuilt only when either changes. */
   function _port() {
     if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
-    const visor = _opt("visor", "off"), color = _opt("visorColor", "neutral"), strength = _opt("visorIntensity", "light");
+    const visor = _opt("visor", "off"), color = _opt("visorColor", "amber"), strength = _opt("visorIntensity", "medium");
     if (_portKey && _w === _portW && _h === _portH && visor === _portV && color === _portC && strength === _portS) return;   // no per-frame key string
     _portW = _w; _portH = _h; _portV = visor; _portC = color; _portS = strength;
     _portKey = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;

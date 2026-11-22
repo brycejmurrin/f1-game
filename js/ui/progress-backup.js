@@ -35,10 +35,16 @@ function ghostOk(g) {
   return true;
 }
 function masteryOk(e) {
-  return isObj(e) && typeof e.key === "string" && e.key.length <= 512 && Number.isFinite(e.best) && e.best >= 0;
+  // RaceInsights negates places gained, metres closed and seconds defended so lower is better.
+  // Historical keys include the serialized TT class. Bound that input before parsing it.
+  return isObj(e) && typeof e.key === "string" && e.key.length <= 4096 && Number.isFinite(e.best)
+    && (e.best >= 0 || /:(?:start|slipstream|defend):all$/.test(e.key));
 }
 function masteryEntries(raw) {
-  return isObj(raw) && raw.version === 1 && Array.isArray(raw.entries) ? raw.entries.filter(masteryOk) : [];
+  if (!isObj(raw) || raw.version !== 1 || !Array.isArray(raw.entries)) return [];
+  // Fold a single device's old tune classes before comparing devices by max completed.
+  return RaceInsights.normalizeMasteryEntries(raw.entries.filter(masteryOk).map(e =>
+    nonNegInt(e.completed) ? e : { ...e, completed: 0 })).filter(e => e.key.length <= 512);
 }
 
 function collect() {
@@ -72,6 +78,8 @@ function apply(bag) {
   const r = { applied: 0, skipped: 0, rejected: 0, failed: 0 };
   const s = store();
   if (!isObj(bag) || !s) return r;
+  // GameStore retains refused writes in memory. A matching merge must still reach disk before reload.
+  const pending = new Set(s.failedKeys ? s.failedKeys().map((f) => f.key) : []);
   const put = (k, v) => {
     let res;
     try { res = s.write ? s.write(k, v) : { durable: s.set(k, v) }; } catch (_) { res = null; }
@@ -100,7 +108,7 @@ function apply(bag) {
         const best = Math.min(have.best, e.best), done = Math.min(9999, Math.max(nonNegInt(have.completed) ? have.completed : 0, completed));
         if (best !== have.best || done !== have.completed) { have.best = best; have.completed = done; moved = true; }
       }
-      if (moved) put("circuitMastery", { version: 1, entries: Array.from(byKey.values()).slice(-MASTERY_MAX) });
+      if (moved || pending.has("circuitMastery")) put("circuitMastery", { version: 1, entries: Array.from(byKey.values()).slice(-MASTERY_MAX) });
       else r.skipped++;
     }
   }
@@ -114,7 +122,12 @@ function apply(bag) {
       for (const [id, g] of Object.entries(bag.ghosts)) {
         if (!ID_RE.test(id) || !ghostOk(g)) { r.rejected++; continue; }
         const have = merged[id];
-        if (ghostOk(have) && have.time <= g.time) { r.skipped++; continue; }
+        if (ghostOk(have) && have.time <= g.time) {
+          // Retry the merged map once, preserving the faster session lap.
+          if (!moved && pending.has(GHOST_KEY)) moved = true;
+          else r.skipped++;
+          continue;
+        }
         const next = Object.assign({}, merged, { [id]: clone(g) });
         if (JSON.stringify(next).length * 2 > GHOST_MAX_BYTES) { r.skipped++; continue; }   // local ghosts keep the budget
         merged[id] = next[id]; moved = true;
@@ -128,7 +141,7 @@ function apply(bag) {
     const v = bag[k];
     if (!nonNegInt(v)) { r.rejected++; return; }
     const have = s.get(k, 0), cur = nonNegInt(have) ? have : 0, next = merge(cur, v);
-    if (next === cur) r.skipped++; else put(k, next);
+    if (next === cur && !pending.has(k)) r.skipped++; else put(k, next);
   };
   flag("onboarded", (a, b) => (a | b) >>> 0);
   flag("onboardRaces", (a, b) => Math.max(a, b));
@@ -140,9 +153,9 @@ function apply(bag) {
       let res = null;
       try { res = CustomTracks.importCollection(bag.circuits); } catch (_) { res = null; }
       if (!res || !res.ok) r.rejected++;
-      else if (!res.added) r.skipped++;
-      else if (res.durable) r.applied++;
-      else r.failed++;
+      else if (!res.durable) r.failed++;
+      else if (res.added || res.retried) r.applied++;
+      else r.skipped++;
     }
   }
   return r;

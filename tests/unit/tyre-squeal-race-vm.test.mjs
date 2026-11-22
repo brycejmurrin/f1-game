@@ -33,7 +33,7 @@ function pin(obj, key, value) {
 }
 
 async function bootRaceAudio() {
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => install(sb) });
+  const g = await createGame({ carMeshes: false, storage: { sound: true }, onSandbox: (sb) => install(sb) });
   const sb = g.sandbox;
   const pd = { type: "pointerdown", pointerType: "mouse", target: sb.document.body };
   sb.dispatchEvent(pd);

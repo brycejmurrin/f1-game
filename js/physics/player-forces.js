@@ -403,7 +403,7 @@ const PlayerForces = (function () {
     // (the bicycle model carries no PACE term). Keyed to vStd (anchored at the
     // default notch so it stays bit-identical there), a lock-0.5 step at vStd 60
     // and pace 1.338 overshot 47 % against 16 % raw (VM, 2026-10-10); a plain
-    // vStdNow moves the dry characterization, which runs at the default 0.840.
+    // vStdNow moves the dry characterization, which is pinned to pace 0.840.
     const SPEED_YAW_LO = 50, SPEED_YAW_HI = 65, SPEED_YAW_EXTRA = 5;
     const _syT = clamp((vAbs - SPEED_YAW_LO) / (SPEED_YAW_HI - SPEED_YAW_LO), 0, 1);
     const speedYawDamp = 1 + SPEED_YAW_EXTRA * _syT * _syT * (3 - 2 * _syT);

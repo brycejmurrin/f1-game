@@ -48,7 +48,7 @@ defect was reached sideways, by flagging the speed window on the same line.
 
 **The slider is GEOMETRIC: `pace(n) = 1.06^(n - 14)` over 19 notches**, a uniform
 6 % per notch, defaulting to notch 11 (0.840) with the 1.0 reference exactly
-reachable on notch 14. It used to be piecewise linear with steps of 14-25 % below
+reachable on notch 14. The original piecewise-linear grid had steps of 14-25 % below
 the default and 4.8-6 % above, so the half of the slider a player wanting a
 calmer car had to use was the half with no resolution. Pace is a multiplicative
 scale, so a ratio is its natural unit — which is also why the v2→v3 store regrid

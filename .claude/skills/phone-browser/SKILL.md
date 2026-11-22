@@ -1,16 +1,15 @@
 ---
 name: phone-browser
-description: "Use when someone with only a phone wants to play the working tree in Chromium through the Grok connector, or its tunnel link won't open. Not for: the deployed site → deploy-research; an 844x390 UI review → survey-ui-matrix; VS FRIEND → multiplayer-debug."
+description: "Use when someone with only a phone wants to play the working tree in Chromium through the Grok connector, or its tunnel link won't open. Not for: the deployed site → deploy-research; an iPhone UI review → survey-ui-matrix; VS FRIEND → multiplayer-debug."
 ---
 
 # Phone browser
 
 The user has a phone and no computer. Grok, on their phone, is the MCP client: its custom connector calls this
 checkout's `tools/mcp/browser-http.mjs` through a tunnel. You never call those tools; you keep the server and tunnel up
-and hand over the URL. Do not tell them to install anything or run a command. This is NOT Bryce's route for "look at it
-on my phone": the page is this checkout's working tree on software GL in an emulated phone whose viewport is NOT the
-repo's 844×390 phone profile (sizes: `PHONE` in that file), never the live build — for what
-is live use agent `deploy-research`; for UI at phone size use survey-ui-matrix / ui-menu-a11y.
+and hand over the URL. Do not tell them to install anything or run a command. The connector uses software GL and the standard iPhone 15 preset in
+`tests/data/phone-windows.json`. Full-screen capture uses 852×393 CSS px in landscape or 393×852 in portrait at 3×.
+For the live build use `deploy-research`; for a UI audit use survey-ui-matrix / ui-menu-a11y.
 
 ## First, which route
 

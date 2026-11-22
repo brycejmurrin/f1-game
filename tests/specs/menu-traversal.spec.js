@@ -245,7 +245,9 @@ test.describe("Menu traversal — keyboard and controller", () => {
       await page.waitForFunction(() => window.__aud.top() === "race-settings", null, { polling: 100, timeout: BOOT_MS });
     };
     await open();
-    const { seed } = await walk(page, "race-settings");
+    await expect(page.locator("#race-settings-arrange-entry")).toHaveCount(0);
+    const { all, seed } = await walk(page, "race-settings");
+    expect(all).not.toContain("#race-settings-arrange-entry");
     await leaves(page, "race-settings", async () => { await toTitle(page); await open(); }, seed);
   });
 
@@ -268,16 +270,15 @@ test.describe("Menu traversal — keyboard and controller", () => {
             null, { polling: 100, timeout: BOOT_MS }
           );
         }
+        if (door === "#pm-open-visual") await expect(page.locator("#pmsettings-arrange-entry")).toHaveCount(0);
         await openFolds(page);
       };
       await open();
       const { all, seed } = await walk(page, "pmsettings");
       if (door === "#pm-open-visual") {
-        // Race-only tuners stay disabled on title; Garage arrival and Back
-        // remain reachable alongside the disclosure header.
-        expect(all).toContain("#pm-garrival");
-        expect(all).toContain("#pm-settings-close");
-        expect(all.length).toBe(3);
+        expect(all.slice().sort()).toEqual([
+          "#pm-visual-tuners-sum", "#pm-garrival", "#pm-settings-close",
+        ].sort());
         for (const id of ["pm-lighting", "pm-camtune", "pm-flyby"])
           await expect(page.locator("#" + id)).toBeDisabled();
       } else expect(all.length, `${name} shows its controls`).toBeGreaterThan(5);

@@ -886,6 +886,53 @@ test("departure exterior has supported lane ground and an open outward doorway",
   assert.ok(facade.every(([x, y]) => Math.abs(x) >= 2.7 - .001 || y >= 4.8 - .001), "central aperture stays clear");
 });
 
+// Nearest front-facing triangle at eye height along a ray from the lane
+// (x, 2, 12) in direction (slope, 0, -1). Project onto the plane of the door.
+function bayHitZ(meshes, x, slope = 0) {
+  let nearest = -Infinity;
+  for (const { pos, idx } of meshes) {
+    const point = i => [pos[i * 3] - x - slope * (12 - pos[i * 3 + 2]), pos[i * 3 + 1] - 2, pos[i * 3 + 2]];
+    for (let t = 0; t < idx.length; t += 3) {
+      const a = point(idx[t]), b = point(idx[t + 1]), c = point(idx[t + 2]);
+      const area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+      if (area <= 1e-8) continue;
+      const wa = (b[0] * c[1] - c[0] * b[1]) / area, wb = (c[0] * a[1] - a[0] * c[1]) / area, wc = 1 - wa - wb;
+      if (Math.min(wa, wb, wc) < -1e-8) continue;
+      const z = wa * a[2] + wb * b[2] + wc * c[2];
+      if (z < 12 && z > nearest) nearest = z;
+    }
+  }
+  return nearest;
+}
+
+function checkNeighborBays(meshes, pitch, label) {
+  for (const side of [-1, 1]) {
+    const x = side * pitch, back = bayHitZ(meshes, x);
+    assert.ok(back < -3 && back > -8, label + ': center ray reaches the back wall at ' + back);
+    for (const slope of [-.6, .6]) {
+      const wall = bayHitZ(meshes, x - 3 * slope, slope);
+      assert.ok(wall > back + 1 && wall < 5, label + ': oblique ray reaches the side wall at ' + wall);
+    }
+  }
+}
+
+test('fallback inspection keeps the cutaway while a lane view shows open neighboring interiors', () => {
+  const { GarageScene, meshes, draws } = harness();
+  const visible = ctx => {
+    draws.length = 0;
+    GarageScene.draw(TEAM, LIV, [0, 2, 12], null, 0, { ambient: false, ...ctx });
+    return draws.map(draw => meshes[draw.mesh.id - 1]);
+  };
+  const ordinary = visible({});
+  const lane = visible({ showLaneBays: true });
+  const neighbors = lane.filter(mesh => !ordinary.includes(mesh));
+  checkNeighborBays(lane, 11, 'fallback');
+  assert.equal(bayHitZ(neighbors, 0), -Infinity, 'neighbor geometry leaves the selected doorway clear');
+  const real = visible({ showLaneBays: true, realExterior: true });
+  assert.ok(neighbors.length > 0 && neighbors.every(mesh => !real.includes(mesh)), 'real exterior owns its own row');
+  assert.deepEqual(visible({}), ordinary, 'returning to inspection restores the original draw set');
+});
+
 function garageWheelHarness() {
   const draws = [], meshes = [], freed = [], recipes = [];
   const ctx = vm.createContext({
@@ -903,6 +950,26 @@ function garageWheelHarness() {
   return { ctx, gfx, draws, meshes, freed, recipes,
     Wheels: vm.runInContext("CarWheels", ctx), M4: vm.runInContext("M4", ctx) };
 }
+
+test("both garage axles receive every livery tyre, brake and wheel style with its catalog colours", () => {
+  const h = garageWheelHarness(), garage = h.Wheels.createGarage(h.gfx);
+  const { Parts, Teams, Car3D } = loadParts(), team = Teams.LIST[0];
+  const fitted = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  for (const [field, category] of Object.entries(Car3D.PART_STYLE_FIELDS)) {
+    if (!["tyres", "brakes", "wheels"].includes(category)) continue;
+    const options = Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE");
+    for (const id of [...options.map(o => o.id), "fitted"]) {
+      const liv = { [field]: id }, tiers = Car3D.appearanceParts(fitted, liv);
+      garage.prepare(field + ":" + id, liv, tiers);
+      const { tyres, brakes, wheels } = tiers._visual;
+      assert.deepEqual(h.recipes.map(args => args[0]), [.32, .38], id + " rebuilds both axles");
+      for (const args of h.recipes.splice(0)) {
+        assert.deepEqual(args.slice(5, 8), [tyres, brakes, wheels], id);
+        assert.deepEqual(args[3], wheels?.rim || brakes?.rim, id + " rim colour");
+      }
+    }
+  }
+});
 
 test("garage wheels are available before the legacy race-session shim and retain fitted layers", () => {
   const h = garageWheelHarness();
@@ -1014,7 +1081,7 @@ function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 
       if (track.def.palette) track.def.palette.grass[0] = .99;
       yield; return { out: dress ? raw : blank(), glass: dress ? raw : blank(), water: dress ? raw : blank() };
     } },
-    TrackSurface: { profile: () => ({}) }, SceneryPits: { build(opts) { assert.equal(opts.exteriorOnly, true); return {}; } } });
+    TrackSurface: { profile: () => ({}) }, SceneryPits: { *buildSteps(opts) { assert.equal(opts.exteriorOnly, true); return {}; } } });
   vm.runInContext(read('js/garage/exterior-geometry.js'), ctx, {filename:absSrc('js/garage/exterior-geometry.js')});
   const builder = vm.runInContext('GarageExteriorGeometry', ctx);
   return { builder, builds: () => builds, origin, yaw, raw };
@@ -1110,17 +1177,41 @@ test('circuit exterior surface samples an inclined raised road, excludes paint a
   assert.ok(Object.values(surface.cells).every(v => v.length <= 256 && v.every(i => i >= 0 && i * 9 < surface.triangles.length)));
 });
 
-test('circuit exterior surface retains actual Bahrain and Monaco departure wheel contact heights', async () => {
+test('Bahrain at night and Monaco by day retain departure contact heights and visible neighboring bays', async () => {
   const { createRequire } = await import('node:module');
   const require = createRequire(import.meta.url), h = require('../../tools/lib/track-build-vm.cjs').buildContext({ assets: false });
   const ctx = vm.createContext(h.sandbox);
+  if (vm.runInContext('typeof TrackLights', ctx) === 'undefined') {
+    for (const f of ['js/lighting/knobs.js', 'js/lighting/track-lights.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  }
   for (const f of ['js/garage/exterior-geometry.js', 'js/garage/exterior.js', 'js/data/garage-departure-motion.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Builder = vm.runInContext('GarageExteriorGeometry', ctx), Motion = vm.runInContext('GarageDepartureMotion', ctx), Exterior = vm.runInContext('GarageExterior', ctx);
   for (const id of ['bahrain', 'monaco']) {
     const def = h.Tracks.LIST.find(d => d.id === id);
-    const it = Builder.buildSteps(def, { teamId: 'ferrari' });
+    const it = Builder.buildSteps(def, { teamId: 'ferrari', night: id === 'bahrain' });
     let next; do { next = it.next(); } while (!next.done);
     const data = next.value; assert.equal(data.supported, true);
+    assert.ok(data.bayFixtures.idx.length > 0);
+    assert.ok(data.bayFixtures.col.every(v => v > 1));
+    assert.equal(data.lamps.length, id === 'bahrain' ? 12 : 0);
+    for (const lamp of data.lamps) assert.ok(lamp.length === 15 && lamp.every(Number.isFinite));
+    const row = [data.props, data.laneBays].filter(Boolean);
+    checkNeighborBays(row, h.TrackPit.PITCH, id);
+    assert.equal(bayHitZ(row, 0), -Infinity, id + ': the selected team still owns its doorway');
+    if (id === 'monaco') {
+      // Ferrari parks on the inside of a bend. The adjacent ground floors must
+      // leave its full-width cutaway clear, including the rear garage corners.
+      const g = data.laneBays, edges = [Infinity, Infinity];
+      for (let i = 0; i < g.pos.length; i += 3) {
+        if (g.nrm[i + 1] < .99 || Math.abs(g.pos[i + 1]) > .5 || g.mat[i / 3] !== h.TrackGeom.MAT.FLAT) continue;
+        const x = g.pos[i], side = x < 0 ? 0 : 1;
+        edges[side] = Math.min(edges[side], Math.abs(x));
+      }
+      for (const edge of edges) {
+        assert.ok(edge > h.TrackPit.BAY.w / 2 + .02 && edge < h.TrackPit.PITCH,
+          'neighbor floor must reach the seam without entering the selected garage: ' + edge);
+      }
+    }
     const pose = { side: 1, eye: [], aim: [] }; Motion.sample(1, 1, pose); Exterior.fitPose(pose, data.anchor, true);
     // Compare the clipped garage index to the race generator's unpainted ribbon
     // in world coordinates, including the current circuit elevation and bank.
@@ -1161,13 +1252,15 @@ test('circuit exterior surface retains actual Bahrain and Monaco departure wheel
 
 test("the ordinary garage selects articulated wheels before any departure or race-session load", () => {
   const builds = [], prepared = [], renderer = { prepare: (...args) => prepared.push(args) };
-  const team = { id: "test" }, tiers = { tyres: 1, brakes: 1 }, liv = { c1: [1, 0, 0], c2: [0, 0, 0] };
+  const { Car3D, Teams, Parts } = loadParts();
+  const team = Teams.LIST[0], tiers = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  const liv = { c1: team.color, c2: team.color2, wheelsShape: "style_wheels_ysplit", tyresShape: "style_tyres_whitewall" };
   const env = {
     Teams: { LIST: [team] }, G: { teamIdx: 0 }, gfx: {},
     garageSeat: () => ({ num: 1 }), previewKey: () => "car", resolveLivery: () => liv,
     partsVisualKey: () => "parts", seatTag: () => "1", hullKeyOf: () => "hull", getTeamParts: () => ({}),
     Parts: { getVisualTiers: () => tiers }, CarWheels: { createGarage: () => renderer },
-    Car3D: { FINISH_FIELDS: [], build: (_a, _b, opts) => { builds.push(opts); return { data: true }; } },
+    Car3D: { appearanceParts: Car3D.appearanceParts, FINISH_FIELDS: [], build: (_a, _b, opts) => { builds.push(opts); return { data: true }; } },
     GarageScene: { previewMesh: (_key, _hull, make) => ({ mesh: make(), hull: [] }) },
   };
   const make = new Function("env", `const {${Object.keys(env).join(",")}} = env;
@@ -1177,6 +1270,10 @@ test("the ordinary garage selects articulated wheels before any departure or rac
   const get = make(env), first = get();
   assert.equal(builds[0].noWheels, true, "an ordinary garage body must not bake stationary wheels");
   assert.equal(prepared.length, 1, "first visit prepares common wheel layers without the legacy shim");
+  const visual = prepared[0][2]._visual;
+  assert.equal(visual.wheels.spokeSplit, 1, "garage rims use the selected Y-split spokes");
+  assert.equal(visual.tyres.id, liv.tyresShape, "garage sidewalls use the selected tyre recipe");
+  assert.equal(visual.tyres.grooves, 4);
   assert.equal(get(), first);
   assert.equal(builds.length, 1, "successive preview frames reuse body geometry");
   assert.equal(prepared.length, 1, "successive preview frames reuse wheel geometry");

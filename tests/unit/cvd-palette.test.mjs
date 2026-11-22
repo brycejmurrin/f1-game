@@ -258,7 +258,7 @@ test("set persists through AppearanceOpts and paints the tokens", () => {
 
 test("minimap, DRS and ghost cues are shapes and read the palette", () => {
   const hud = read("css/hud.css");
-  assert.match(hud, /#minimap\s*\{[^}]*inset 0 0 0 2px var\(--you/);
+  assert.match(hud, /#minimap\s*\{[^}]*inset 0 0 0 2px var\(--map-frame-color, var\(--you\)\)/);
   assert.match(hud, /#hud-aero\s*\{[^}]*--aero-hue:\s*var\(--zone\)/);
   assert.match(hud, /#hud-aero\.ax-armed\s*\{[^}]*repeating-linear-gradient/);
   assert.match(hud, /#hud-delta\[data-ref="ghost"\] \.hud-label::after\s*\{[^}]*content:\s*"\\25CB"/);

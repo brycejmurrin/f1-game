@@ -1,13 +1,14 @@
 // apex-tools-mcp-surface.test.mjs — apex-tools MCP (local CLI wrap): status, job waits, compact descriptions, UI inspector, garage plan and server lifecycle.
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network. One of eight files split from the
 // original apex-tools-mcp.test.mjs (T1-16, #3043); shared fixtures: tests/helpers/apex-tools-mcp.mjs.
+import "../helpers/git-fixture-env.mjs";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ROOT, MCP, mkOutsideTemp, rpc, callCli, callTools, extrasCtx } from "../helpers/apex-tools-mcp.mjs";
+import { ROOT, MCP, mkOutsideTemp, rpc, callCli, callTools, extrasCtx, jid } from "../helpers/apex-tools-mcp.mjs";
 
 // 2026-10-10: "does the running server need a restart?" was a guess all session. apex_status now says: the server's start time, and
 // which of the files it loaded (tools/mcp/*.mjs and the tools/lib modules they import) changed after it.
@@ -579,11 +580,11 @@ test("a running browser job on disk is occupancy even after its one-shot `call` 
     assert.equal(ex.runningBrowserJob(), null);
     const manifest = (id, browser) => fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({ id, kind: browser ? "hud_shot" : "verify_all",
       state: "running", pid: process.pid, browser, started: Date.now(), log: `artifacts/logs/apex-jobs/${id}.log` }));
-    manifest("verify_all-x-1", false);
+    manifest(jid("verify_all", 1), false);
     assert.equal(ex.runningBrowserJob(), null, "a node-only job is not browser occupancy");
-    manifest("hud_shot-x-2", true);
-    assert.deepEqual(ex.runningBrowserJob(), { id: "hud_shot-x-2", kind: "hud_shot", pid: process.pid });
-    fs.writeFileSync(path.join(dir, "hud_shot-x-2.exit"), "0");
+    manifest(jid("hud_shot", 2), true);
+    assert.deepEqual(ex.runningBrowserJob(), { id: jid("hud_shot", 2), kind: "hud_shot", pid: process.pid });
+    fs.writeFileSync(path.join(dir, `${jid("hud_shot", 2)}.exit`), "0");
     assert.equal(ex.runningBrowserJob(), null, "the job's recorded exit frees it");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
   const src = fs.readFileSync(MCP, "utf8");
@@ -605,3 +606,137 @@ test("chrome-devtools-mcp.sh run tolerates a missing Chromium instead of exiting
 
 
 // ---- apex_cursor_agents: one tool, a verb argument, a four-property listing -------------------------------------------
+
+// W25 (2026-11-10): the instructions named 29 of 34 tools; apex_bump_cache_check advertised since (the CLI exits 2 on
+// --since) plus target/url that changed nothing; apex_graph_parity {base:"HEAD"} on a clean tree diffed the tree with itself.
+test("the server instructions name every tool in the table, and a tool the prose misses is appended", async () => {
+  const out = rpc([{ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" }]);
+  const instructions = out.find((m) => m.id === 1).result.instructions;
+  const names = out.find((m) => m.id === 2).result.tools.map((t) => t.name).filter((n) => n.startsWith("apex_"));
+  assert.ok(names.length >= 34, names.join(","));
+  const missing = names.filter((n) => !new RegExp(`\\b${n}\\b`).test(instructions));
+  assert.deepEqual(missing, [], "every registered apex_* tool appears in the instructions");
+  assert.ok(instructions.length <= 4096, `Claude Code keeps 4,096 chars of instructions (got ${instructions.length})`);
+  const { routesFor } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const extra = routesFor([{ name: "apex_status" }, { name: "apex_zz_new", description: "Tree (no browser) — does a new thing, briefly; more text." }]);
+  assert.equal(extra.split("\n").at(-1), "Also: apex_zz_new (does a new thing, briefly).");
+});
+
+test("apex_bump_cache_check: every schema field maps to a flag bump-cache.mjs accepts (dryRun is the wrapper's)", () => {
+  const usage = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/bump-cache.mjs"), "--bogus-flag"], { encoding: "utf8", cwd: ROOT });
+  assert.equal(usage.status, 2);
+  const accepted = new Set((usage.stderr.match(/accepts: (.*)/) || [])[1].trim().split(/\s+/));
+  assert.ok(accepted.has("--check") && accepted.has("--json"), usage.stderr);
+  const tools = rpc([{ jsonrpc: "2.0", id: 1, method: "tools/list" }]).find((m) => m.id === 1).result.tools;
+  const props = tools.find((t) => t.name === "apex_bump_cache_check").inputSchema.properties;
+  const flagsOf = (argv) => argv.slice(2).filter((a) => a.startsWith("-"));
+  const base = JSON.parse(callCli("apex_bump_cache_check", { dryRun: true }).stdout);
+  assert.equal(base.dryRun, true, "dryRun plans without running");
+  for (const f of flagsOf(base.argv)) assert.ok(accepted.has(f), `${f} is not a bump-cache flag`);
+  const sample = { string: "HEAD~1", boolean: true, number: 1, integer: 1 };
+  for (const [key, spec] of Object.entries(props)) {
+    if (key === "dryRun") continue;
+    const r = JSON.parse(callCli("apex_bump_cache_check", { dryRun: true, [key]: spec.enum ? spec.enum.at(-1) : sample[spec.type] }).stdout);
+    assert.notEqual(r.error, "bad_args", `${key}: ${r.message}`);
+    const added = flagsOf(r.argv || []).filter((f) => !flagsOf(base.argv).includes(f));
+    assert.ok(added.length, `${key} is advertised but changes nothing in the argv (${JSON.stringify(r.error || "")})`);
+    for (const f of added) assert.ok(accepted.has(f), `${key} maps to ${f}, which bump-cache.mjs rejects`);
+  }
+  const real = JSON.parse(callCli("apex_bump_cache_check", {}, { APEX_MCP_MOCK: "" }).stdout);
+  assert.notEqual(real.exit, 2, `the pinned argv is accepted by the CLI: ${real.stderr}`);
+});
+
+test("graph parity: selfParity spots a base that IS the working tree (tracked diff and untracked files count)", async () => {
+  const { selfParity } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const repo = fs.mkdtempSync(path.join(ROOT, "scratch", "graph-parity-self-"));
+  const git = (...a) => { const r = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: repo, encoding: "utf8" }); assert.equal(r.status, 0, r.stderr); };
+  try {
+    git("init", "-q");
+    const engine = path.join(repo, "js", "engine.js");
+    fs.mkdirSync(path.dirname(engine));
+    fs.writeFileSync(engine, "1\n");
+    fs.writeFileSync(path.join(repo, "README"), "x\n");
+    git("add", ".");
+    git("commit", "-qm", "base");
+    assert.equal(selfParity("HEAD", repo), true, "clean tree vs HEAD is a self-comparison");
+    fs.writeFileSync(path.join(repo, "README"), "y\n");
+    assert.equal(selfParity("HEAD", repo), true, "a change outside js/ and the manifest does not affect parity");
+    fs.writeFileSync(engine, "2\n");
+    assert.equal(selfParity("HEAD", repo), false, "a tracked js/ edit is a real diff");
+    fs.writeFileSync(engine, "1\n");
+    fs.writeFileSync(path.join(repo, "js", "added.js"), "new\n");
+    assert.equal(selfParity("HEAD", repo), false, "an untracked js/ file is a real diff");
+    assert.equal(selfParity("no-such-ref", repo), false, "an unknown ref is left to the CLI to report");
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test("apex_graph_parity refuses a base that is the working tree itself; dryRun still shows the plan", async (t) => {
+  const { selfParity } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  if (!selfParity("HEAD")) return t.skip("js/ or tools/manifest.cjs differs from HEAD in this checkout, so HEAD is a real base here");
+  for (const args of [{ base: "HEAD", id: "monza" }, { base: "HEAD", all: true }]) {
+    const r = callCli("apex_graph_parity", args, { APEX_MCP_MOCK: "" });
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.error, "bad_args", r.stdout.slice(0, 600));
+    assert.equal(body.message.startsWith('apex_graph_parity: base "HEAD" is the working tree itself'), true, body.message);
+    assert.equal(body.argv, undefined, "refused before graph-parity.cjs spawns");
+  }
+  assert.equal(JSON.parse(callCli("apex_graph_parity", { base: "HEAD", id: "monza", dryRun: true }, { APEX_MCP_MOCK: "" }).stdout).dryRun, true);
+});
+
+test("MCP concurrency: the first cancel marker is published whole; a concurrent reader never parses a partial file (#5695)", { timeout: 20000 }, async () => {
+  const { publishJobFileOnce } = await import("../../tools/mcp/job-admission.mjs");
+  const root = fs.mkdtempSync(path.join(ROOT, "artifacts", "mcp-cancel-marker-"));
+  const marker = path.join(root, "job.cancelled"), write = fs.writeFileSync;
+  // A marker big enough that a non-atomic write lands in several chunks.
+  const body = { state: "cancelled", ended: 1, exit: null, cleanup: { pids: Array.from({ length: 4000 }, (_, i) => i + 1), complete: false } };
+  let reader;
+  try {
+    // Deterministic half: while the bytes are being written the marker name does not exist yet.
+    let checked = false;
+    fs.writeFileSync = (file, ...rest) => {
+      if (String(file).startsWith(`${marker}.`)) { checked = true; assert.equal(fs.existsSync(marker), false, "marker name is visible before its bytes"); }
+      return write(file, ...rest);
+    };
+    assert.equal(publishJobFileOnce(marker, body), true);
+    fs.writeFileSync = write;
+    assert.ok(checked, "the marker is written through a sibling temp file");
+    assert.deepEqual(JSON.parse(fs.readFileSync(marker, "utf8")), body);
+    // A second canceller neither throws nor replaces the first marker, and leaves no temp file.
+    assert.equal(publishJobFileOnce(marker, { ...body, ended: 2 }), false);
+    assert.equal(JSON.parse(fs.readFileSync(marker, "utf8")).ended, 1, "first canceller wins");
+    assert.deepEqual(fs.readdirSync(root), ["job.cancelled"]);
+    fs.rmSync(marker);
+    // Loaded-reader half: another OS process polls the marker the way readCancellation does.
+    const done = path.join(root, "done");
+    reader = spawn(process.execPath, ["-e", `
+      const fs=require('node:fs'); let seen=0, torn=0;
+      while (!fs.existsSync(${JSON.stringify(done)})) {
+        let text; try { text = fs.readFileSync(${JSON.stringify(marker)}, 'utf8'); } catch { continue; }
+        seen++; try { JSON.parse(text); } catch { torn++; }
+      }
+      process.stdout.write(JSON.stringify({ seen, torn }));
+    `], { stdio: ["ignore", "pipe", "inherit"] });
+    let out = "";
+    reader.stdout.on("data", (d) => { out += d; });
+    const exited = new Promise((resolve) => reader.on("exit", resolve));
+    const deadline = Date.now() + 3000;
+    for (let i = 0; i < 400 && Date.now() < deadline; i++) {
+      assert.equal(publishJobFileOnce(marker, { ...body, ended: i }), true);
+      await new Promise((r) => setImmediate(r));
+      fs.rmSync(marker);
+    }
+    write(done, "");
+    await exited;
+    const { seen, torn } = JSON.parse(out);
+    assert.equal(torn, 0, `reader parsed ${torn} partial markers of ${seen} reads`);
+  } finally { fs.writeFileSync = write; if (reader?.exitCode === null) reader.kill(); fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("MCP concurrency: apex-extras writes no job marker or manifest in place (#5695)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-extras.mjs"), "utf8");
+  assert.doesNotMatch(src, /writeFileSync\(\s*(jobCancelPath|jobManifestPath|mf\b)/, "use publishJobFileOnce / publishJobManifest (tmp in the same dir, then link or rename)");
+});

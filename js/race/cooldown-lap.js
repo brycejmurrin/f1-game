@@ -1,15 +1,16 @@
 /* Apex 26 — COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony
-   flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). Pure exits,
-   AI cool/park policy, and a touch SKIP control (≥44 CSS px). RaceCeremony
+   flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). Pure exits
+   (skip, one lap, wall clock) and a touch SKIP control (≥44 CSS px). RaceCeremony
    (#4067) owns phase ownership and endRace wiring; this module never reaches
-   into game.js. One `create(G)`; optional deps inject pit/box probes. */
+   into game.js. One `create(G)`.
+   No "pit" exit: game.js cooldownDrive clamps the player to ±0.9·hw, inside the
+   road edge Tracks.inPitLane needs, so it could never fire; the AI cool/park
+   policy that went with it had no caller and compared raw m/s outside PACE. */
 "use strict";
 
 var CooldownLap = (function () {
   const WALL_S = 45;             // wall-clock budget (plan open Q1 default)
   const LAP_BUDGET = 1;          // one lap of progress (frac of track.total)
-  const PARK_SPEED = 2.5;        // m/s: "parked at box" crawl ceiling
-  const COOL_SPEED_FRAC = 0.55;  // AI cool pace vs session ref (no attack)
   const SKIP_LABEL = "SKIP TO PARC FERMÉ";
   const TAP_MIN_CSS_PX = 44;     // phone touch floor (AGENTS.md §Coordination)
 
@@ -34,38 +35,15 @@ var CooldownLap = (function () {
   /**
    * Pure exit classifier. `sample` may carry:
    *   progDelta — laps of progress since start (s-delta / track.total)
-   *   inPitLane — Tracks.inPitLane (or PitLane.inLane)
-   *   atBox — parked in box (in pit + speed ≤ PARK_SPEED)
    *   age — wall seconds since start (optional; st.age wins when omitted)
    */
   function exitReason(st, sample) {
     if (!st || !st.live) return null;
     if (st.skipRequested) return "skip";
     const age = (sample && Number.isFinite(sample.age)) ? sample.age : st.age;
-    if (sample) {
-      if (sample.atBox || sample.inPitLane) return "pit";
-      if (Number.isFinite(sample.progDelta) && sample.progDelta >= (st.lapBudget || LAP_BUDGET)) return "lap";
-    }
+    if (sample && Number.isFinite(sample.progDelta) && sample.progDelta >= (st.lapBudget || LAP_BUDGET)) return "lap";
     if (Number.isFinite(age) && age >= (st.wallBudget || WALL_S)) return "time";
     return null;
-  }
-
-  /**
-   * AI cool / park policy for the cooldown window. Never returns attack.
-   * sample: { inPitLane, nearPit, finished, speed, vRef }
-   */
-  function aiPolicy(car, sample) {
-    const s = sample || {};
-    const vRef = (s.vRef > 0 ? s.vRef : 0) || 0;
-    if (s.atBox || (s.inPitLane && (s.speed || 0) <= PARK_SPEED)) {
-      return { mode: "park", attack: false, targetSpeed: 0, targetSpeedFrac: 0 };
-    }
-    if (s.nearPit || s.inPitLane || s.finished) {
-      const crawl = Math.min(PARK_SPEED * 2, vRef > 0 ? vRef * 0.15 : PARK_SPEED * 2);
-      return { mode: "park", attack: false, targetSpeed: crawl, targetSpeedFrac: vRef > 0 ? crawl / vRef : 0 };
-    }
-    const cool = vRef > 0 ? vRef * COOL_SPEED_FRAC : 0;
-    return { mode: "cool", attack: false, targetSpeed: cool, targetSpeedFrac: COOL_SPEED_FRAC };
   }
 
   /** Pure: whether a mounted SKIP control meets the phone tap floor. */
@@ -75,8 +53,7 @@ var CooldownLap = (function () {
     return r.width >= TAP_MIN_CSS_PX && r.height >= TAP_MIN_CSS_PX;
   }
 
-  function create(G, deps) {
-    const d = deps || {};
+  function create(G) {
     let live = false;
     let age = 0;
     let startProg = 0;
@@ -98,18 +75,7 @@ var CooldownLap = (function () {
 
     function samplePlayer() {
       const c = G.player;
-      if (!c) return { progDelta: 0, inPitLane: false, atBox: false };
-      const inPit = d.inPitLane ? !!d.inPitLane(c) :
-        (typeof Tracks !== "undefined" && Tracks.inPitLane && G.track
-          ? Tracks.inPitLane(G.track, c.s, c.x) : false);
-      const speed = c.speed || 0;
-      const atBox = d.atBox ? !!d.atBox(c) : (inPit && speed <= PARK_SPEED);
-      return {
-        progDelta: progOf(c) - startProg,
-        inPitLane: inPit,
-        atBox,
-        age,
-      };
+      return { progDelta: c ? progOf(c) - startProg : 0, age };
     }
 
     function status() {
@@ -238,8 +204,8 @@ var CooldownLap = (function () {
   }
 
   return {
-    WALL_S, LAP_BUDGET, PARK_SPEED, COOL_SPEED_FRAC, SKIP_LABEL, TAP_MIN_CSS_PX,
-    sessionEligible, playerCanDrive, exitReason, aiPolicy, skipTargetOk, create,
+    WALL_S, LAP_BUDGET, SKIP_LABEL, TAP_MIN_CSS_PX,
+    sessionEligible, playerCanDrive, exitReason, skipTargetOk, create,
   };
 })();
 Object.freeze(CooldownLap);

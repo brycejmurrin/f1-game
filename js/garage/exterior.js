@@ -2,7 +2,7 @@
 const GarageExterior = (function () {
   "use strict";
   const IDENTITY = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  const MESHES = ["ground", "terrain", "road", "props", "scenery", "sceneryLights", "glass", "water"];
+  const MESHES = ["ground", "terrain", "road", "props", "laneBays", "bayFixtures", "scenery", "sceneryLights", "glass", "water"];
   const wetWeather = weather => /^(wet|rain|storm)$/.test(weather || "");
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
@@ -125,7 +125,7 @@ const GarageExterior = (function () {
     const yieldTask = deps.yieldTask || (() => new Promise(resolve => setTimeout(resolve, 0)));
     let selected = null, key = "", generation = 0, status = "idle", error = null, readySet = null, job = null;
     let queue = Promise.resolve(), attempts = 0, retryAt = 0;
-    const material = { ground: {}, terrain: {}, road: {}, props: {}, scenery: {}, sceneryLights: {},
+    const material = { ground: {}, terrain: {}, road: {}, props: {}, bayFixtures: { emissive: 1, roughness: .65 }, scenery: {}, sceneryLights: {},
       glass: { roughness: .13, specular: .82, metalness: .12, clearcoat: 1 }, water: {} };
     let rainMesh = null;
     const rainMatrix = new Float32Array(IDENTITY);
@@ -228,7 +228,7 @@ const GarageExterior = (function () {
             if (!current()) return false;
           }
           if (!current()) return false;
-          readySet = Object.assign({}, owned, { palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
+          readySet = Object.assign({}, owned, { lamps: data.lamps || [], palette: data.palette || null, surface: data.surface || null, stats: Object.assign({}, data.stats,
             { maxSliceMs, uploadMs, buildWallMs: Math.max(0, now() - buildAt) }), anchor: data.anchor || null });
           for (const name of MESHES) delete owned[name];
           status = "ready"; weatherMesh(); return ready();
@@ -244,9 +244,18 @@ const GarageExterior = (function () {
       queue = mine.promise;
       notify(); return mine.promise;
     }
-    function draw() {
+    function appendLights(rig, level, energy) {
+      if (!readySet || !selected.night || !(level > 0 && energy > 0)) return;
+      for (const lamp of readySet.lamps) {
+        if (rig.length + 15 > 48 * 15) break;
+        const at = rig.length;
+        rig.push(...lamp);
+        for (let k = 3; k <= 5; k++) rig[at + k] *= level * energy;
+      }
+    }
+    function draw(showLaneBays = false) {
       if (!ready()) return false;
-      for (const name of MESHES) if (readySet[name]) gfx.draw(readySet[name], IDENTITY, material[name]);
+      for (const name of MESHES) if (readySet[name] && ((name !== "laneBays" && name !== "bayFixtures") || showLaneBays)) gfx.draw(readySet[name], IDENTITY, name === "laneBays" ? material.props : material[name]);
       return true;
     }
     function drawWeather(sceneNow, reducedMotion) {
@@ -257,7 +266,7 @@ const GarageExterior = (function () {
       gfx.draw(rainMesh, rainMatrix, rainOpts);
       return true;
     }
-    return { request, ready, draw, drawWeather, lighting: viewLighting, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
+    return { request, ready, appendLights, draw, drawWeather, lighting: viewLighting, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
   }
   return Object.freeze({ create, lighting, fitPose, groundPose, poseMatrix });
 })();

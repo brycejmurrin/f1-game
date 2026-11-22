@@ -21,7 +21,8 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 let g = null, m = null;
 before(async () => {
-  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
+  // Keep the bench at its measured ground-speed scale.
+  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
   m = measure(g, 0);
 });

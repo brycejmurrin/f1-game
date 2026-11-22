@@ -130,8 +130,7 @@ async function snapForward(page, frac) {
     window.__apex.freeze(true);      // hold the scene for the screenshot
     window.__apex.hud(false);        // hide HUD overlay for cleaner track shots
   }, frac);
-  // A short settle ensures the compositor has flushed the latest frame.
-  await page.waitForTimeout(150);
+  // (No fixed settle here: awaitRenderedFrames below waits on the render clock.)
   // freeze() stops the PHYSICS, not the RENDER. uTime keeps advancing, so the
   // flag cloth wave and cloud drift repaint every frame and the canvas is never
   // pixel-stable — and toHaveScreenshot retries until two consecutive captures
@@ -159,8 +158,10 @@ async function snapForward(page, frac) {
   await page.evaluate(() => { window.__apex.snapCam(); window.__apex.renderClock(0); });
   await awaitRenderedFrames(page, 1);   // let that pose actually present (was a 1.8 s sleep)
   await awaitPresentedFrame(page);
+  // headless(true) is synchronous: no render() runs after it returns, and the
+  // frame awaitPresentedFrame confirmed stays on screen. toHaveScreenshot's own
+  // two-identical-captures check is the stability wait (this was a 120 ms sleep).
   await page.evaluate(() => window.__apex.headless(true));
-  await page.waitForTimeout(120);
 }
 
 async function resetScene(page) {

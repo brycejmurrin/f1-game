@@ -233,6 +233,7 @@ export const RULES = [
   [/^js\/share\//, ["state-unit"], "share-card data/layout/painter and Daily Challenge delivery hook"],
   [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
   [/^js\/ui\/dock-layout\.js/, ["steering-unit", "ui"], "dock-layout.test.mjs + ui-button-touch reposition"],
+  [/^js\/ui\/css-zoom\.js/, ["steering-unit", "ui"], "css-zoom.test.mjs (local-rect fallback) + the UI-scale menu specs"],
   [/^js\/ui\/hud-arrange\.js/, ["steering-unit", "ui"], "hud-arrange.test.mjs (pure drag / pinch / clash maths) + the pause-card editor"],
   [/^js\/ui\/share-code\.js/, ["steering-unit", "ui"], "share-code.test.mjs — APXS/APXL/APXD + Continue lastSession"],
   [/^js\/ui\//, ["ui"], "DOM screens"],
@@ -325,6 +326,7 @@ export const RULES = [
   [/^css\/career\.css$/, ["modes", "ui"], "career sheet: #cr-left phone overflow + hub still fit"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
   [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
+  [/^js\/ui\/touch-button-settings\.js$/, ["input", "steering-unit"], "per-button profiles in Controls and on the standalone wheel"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
   [/^js\/ui\/setting-deps\.js$/, ["steering-unit"], "settings grey-out dependency map: every rule greys with a reason"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of

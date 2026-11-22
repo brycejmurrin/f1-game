@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { bootEditor } from "../helpers/editor-vm.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";
+import { makeStorageFaults } from "../helpers/storage-faults.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { cssRules, ruleFor } from "../helpers/css-rules.mjs";
@@ -39,6 +41,7 @@ function boot(stored = {}, pre) {
     get: (k, d) => (k in data ? JSON.parse(JSON.stringify(data[k])) : d),
     set: (k, v) => { data[k] = v; },
     write: (k, v) => { data[k] = v; writes.push(k); return { ok: true, durable: true }; },
+    failedKeys: () => [],
     rawDel: (k) => { delete data[k]; },
   };
   ctx.GameStore = { store };
@@ -530,6 +533,34 @@ test("collection backup merges once, keeps local duplicate labels, and preserves
   ctx.GameStore.store.write = () => ({ ok: true, durable: false });
   assert.equal(C.importCollection({ format: C.COLLECTION_FORMAT, v: 1, items: [design({ seed: 9 })] }).durable, false);
 });
+
+for (const entry of ["backup", "designer"]) {
+  test(`${entry} duplicate-only import retries a session-only circuit and survives reload`, async () => {
+    const disk = makeStorageFaults({ quotaBytes: 0 });
+    const withDisk = (ctx) => { ctx.localStorage = disk.storage; seedStore(ctx); };
+    const { C } = boot({}, withDisk);
+    const env = { format: C.COLLECTION_FORMAT, v: 1, items: [design()] };
+    const apply = async (file) => entry === "backup" ? C.importCollection(file)
+      : C.commitCollectionPreflight(await C.preflightCollection(file, null, { yieldTask: async () => {} }));
+    const first = await apply(env);
+    assert.equal(first.added, 1);
+    assert.equal(first.durable, false);
+    assert.equal(C.list().length, 1);
+    const refused = await apply(env);
+    assert.equal(refused.durable, false, "a session-only duplicate still needs a write");
+    assert.equal(disk.storage.getItem("apex26.customTracks"), null);
+    disk.set({ quotaBytes: Infinity });
+    const empty = await apply({ ...env, items: [] });
+    assert.equal(empty.skipped, 0);
+    assert.equal(disk.storage.getItem("apex26.customTracks"), null, "an empty import must not flush a library");
+    assert.deepEqual(plain(await apply(env)), { ok: true, added: 0, skipped: 1, durable: true, retried: true });
+    assert.equal(boot({}, withDisk).C.list()[0].id, C.list()[0].id);
+    const puts = () => disk.events.filter((e) => e.op === "setItem" && e.key === "apex26.customTracks").length;
+    const before = puts();
+    assert.deepEqual(plain(await apply(env)), { ok: true, added: 0, skipped: 1, durable: true });
+    assert.equal(puts(), before, "a durable duplicate remains a no-op");
+  });
+}
 
 test("collection import preflights invalid entries, validator failures and capacity without partial writes", () => {
   const { C, writes } = boot();

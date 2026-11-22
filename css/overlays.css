@@ -789,6 +789,7 @@ body:has(> :where(#datahub) > dialog[open]) #save-warning { display: none; }
   text-indent: 0;
   overflow-wrap: anywhere;
 }
+#vsfriend .vs-codebox:not([maxlength="64"]) { --touch-field-size: 22px; }
 #vsfriend .vs-codebox {
   text-align: center;
   font-size: 22px;
@@ -1382,6 +1383,63 @@ body:is([data-density="compact"][data-shape="wide"], [data-pause-short]) #pausem
 :root[data-btn-shape="squircle"] .touchbtn { border-radius: 28%; }
 :root[data-btn-shape="square"] .touchbtn { border-radius: 12%; }
 :root[data-btn-shape="square"] #hud-dock #grp-steer { border-radius: var(--r-md); }
+
+/* Individual touch controls use layout zoom so neighbours move with their hit boxes. */
+#hud-dock .touchbtn[data-control-size] {
+  zoom: var(--control-scale);
+  min-width: calc(24px / var(--control-scale) / var(--touch-label-z, 1));
+  min-height: calc(24px / var(--control-scale) / var(--touch-label-z, 1));
+}
+:root #hud-dock .touchbtn[data-control-shape="round"] { border-radius: 50%; }
+:root #hud-dock .touchbtn[data-control-shape="squircle"] { border-radius: 28%; }
+:root #hud-dock .touchbtn[data-control-shape="square"] { border-radius: 12%; }
+/* A chosen gap is measured on the screen, after the dock zoom. */
+#hud-dock #grp-steer[data-steer-gap] { gap: calc(var(--steer-gap) / var(--touch-label-z, 1)); }
+
+/* In portrait, opting into custom sizing or a preset makes the groups real
+   layout boxes. Shipped portrait controls keep their fixed-position ladder. */
+@media (orientation: portrait) {
+  #hud-dock .dock[data-dock-custom] {
+    position: fixed; bottom: var(--safe-b); display: flex;
+    align-items: flex-end; gap: var(--gap); pointer-events: none;
+  }
+  #dock-left[data-dock-custom] { left: var(--safe-l); }
+  #dock-right[data-dock-custom] { right: var(--safe-r); }
+  .mirror-controls #dock-left[data-dock-custom] { left: auto; right: var(--safe-r); }
+  .mirror-controls #dock-right[data-dock-custom] { right: auto; left: var(--safe-l); }
+  #hud-dock [data-dock-custom] .dock-grp:not([hidden]) {
+    display: flex; flex-direction: column; align-items: center; gap: var(--btn-gap);
+  }
+  #hud-dock [data-dock-custom] #grp-steer { flex-direction: row; }
+  #hud-dock [data-dock-custom] .touchbtn { position: static; margin: 0; }
+}
+#hud-dock [data-drive-layout="pedal-row"] #grp-pedals,
+#hud-dock [data-drive-layout="tap-row"] #grp-taps,
+#hud-dock [data-drive-layout="stack"] :is(#grp-pedals, #grp-taps) {
+  flex-direction: row; align-items: flex-end;
+}
+#hud-dock .dock[data-drive-layout="stack"] { flex-direction: column; }
+#hud-dock #dock-right[data-drive-layout="stack"],
+.mirror-controls #hud-dock #dock-left[data-drive-layout="stack"] { align-items: flex-end; }
+#hud-dock #dock-left[data-drive-layout="stack"],
+.mirror-controls #hud-dock #dock-right[data-drive-layout="stack"] { align-items: flex-start; }
+
+/* Off the driving surface until expanded. The editor can scroll on a short
+   landscape viewport without swallowing the controls that the player moves. */
+#dock-edit-bar:not([hidden]) {
+  position: fixed; z-index: 9999; top: var(--safe-t); left: var(--safe-l); right: var(--safe-r);
+  margin-inline: auto; width: max-content; max-width: var(--safe-w); max-height: max(52px, 35svh);
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 3); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  background: var(--plate-opaque); color: var(--text); border-radius: var(--r-md);
+}
+#dock-edit-bar :is(button, select) {
+  min-height: 44px; min-width: 44px; max-width: 100%; padding-inline: var(--gap);
+  font: inherit; font-weight: 700; color: var(--text); background: var(--surf-1);
+  border: 1px solid var(--card-line); border-radius: var(--r-md);
+}
+#dock-edit-bar [data-k="size"] { padding-inline: calc(var(--gap) / 3); font-variant-numeric: tabular-nums; }
+body[data-dock-edit] [data-dock-selected] { outline: 2px solid var(--hud-ink-light); outline-offset: -2px; }
 
 } /* @layer overlays */
 

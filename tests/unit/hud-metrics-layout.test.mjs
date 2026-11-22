@@ -403,7 +403,7 @@ test("F-13 slice 4: RELATIVE, STRATEGY and INPUTS hide in plain rules that out-r
 });
 
 test("F-13 slice 5: the MAP and GAPS toggles hide in plain display:none", () => {
-  for (const [tok, sel] of [["minimap", "body.hud-hide-map #minimap"], [".hud-gaps", "body.hud-hide-gaps .hud-gaps"]]) {
+  for (const [tok, sel] of [["minimap", "body.hud-hide-map #minimap:not([data-hl-arr])"], [".hud-gaps", "body.hud-hide-gaps .hud-gaps:not([data-hl-arr])"]]) {
     const { hides } = assertPlainHidesWin(tok);
     const h = hides.find((r) => r.sel === sel);
     assert.ok(h, sel + " still hides");

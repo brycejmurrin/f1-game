@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-ythJjfRrXWl+2hj9vNtyGobV+7IBRmpEt28Izdmwnes=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-NsPmuNpdF4Lo0c45H4G3sVhlm0pYF7/xgx1tQLyfb/k=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -22,8 +22,7 @@
 // THE PLAYER'S LOOK, before first paint: the same apex26.* settings
 // js/ui/appearance-opts.js applies on the game (THEME, MENU ACCENT, TEXT SIZE,
 // CONTRAST), read straight from storage — this page loads no settings code.
-// A phone that has never opened the game gets the game's defaults (LARGE text,
-// HIGH contrast, the ember accent — appearance-opts.js; phone-pad.test.mjs pins the parity).
+// phone-pad.test.mjs checks these fallbacks against the game defaults.
 (function () {
   try {
     var get = function (k, d) {
@@ -33,12 +32,12 @@
     };
     var el = document.documentElement;
     var theme = get("uiTheme", "dark"), accent = get("menuAccent", "ember"), hex = String(get("menuAccentHex", "") || "");
-    if (/^(dark|light|system)$/.test(theme)) el.dataset.uiTheme = theme;
+    if (/^(dark|light|system|endurance|drafting)$/.test(theme)) el.dataset.uiTheme = theme;
     if (/^(ember|amber|cyan|violet|lime|team)$/.test(accent)) el.dataset.menuAccent = accent;
     else if (accent === "custom" && /^#[0-9a-f]{6}$/i.test(hex)) el.style.setProperty("--red", hex);
-    var size = get("textSize", "large");
+    var size = get("textSize", "normal");
     if (size === "large" || size === "larger") el.dataset.textSize = size;
-    if (get("uiContrast", "high") === "high") el.dataset.uiContrast = "high";
+    if (get("uiContrast", "off") === "high") el.dataset.uiContrast = "high";
   } catch (e) { /* storage blocked: the defaults stand */ }
 })();
 </script>
@@ -245,12 +244,20 @@
   body.arranging .clash { outline: 3px solid var(--bad); background-color: color-mix(in oklab, var(--bad) 18%, var(--plate-opaque)); }
   body.arranging .picked { outline: 3px solid var(--red) !important; z-index: 3; }
   body.arranging #ctl { touch-action: none; }
-  #arrange-bar { position: absolute; z-index: 6; top: calc(4px + var(--sat)); left: 50%; translate: -50% 0; display: flex; align-items: center; gap: 6px;
-                 padding: 4px; border-radius: 12px; background: var(--plate-opaque); border: 1px solid var(--plate-line); box-shadow: 0 6px 20px rgba(0,0,0,.5); max-width: calc(100vw - 16px); }
-  #arrange-bar[hidden] { display: none; }
-  #arrange-bar button { min-width: 44px; min-height: 44px; padding: 0 10px; font-weight: 800; letter-spacing: .06em; font-size: 13px; }
+  #arrange-bar { position: fixed; z-index: 6; top: calc(4px + var(--sat)); left: calc(4px + var(--sal)); right: calc(4px + var(--sar));
+    margin-inline: auto; width: max-content; max-width: calc(100% - 8px - var(--sal) - var(--sar)); max-height: 46dvh;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; padding: 4px; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+    touch-action: pan-y; border-radius: 12px; background: var(--plate-opaque); border: 1px solid var(--plate-line); }
+  #arrange-bar[data-bottom] { top: auto; bottom: calc(4px + var(--sab)); }
+  #arrange-bar[hidden], #arr-tools[hidden] { display: none; }
+  #arrange-bar :is(button,select) { min-width: 44px; min-height: 44px; padding: 0 8px; font-weight: 700; font-size: 14px; touch-action: manipulation; }
   #arrange-bar .bigbtn { margin: 0; width: auto; }
-  #arr-name { min-width: 0; padding: 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #arr-tools { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+  #arr-name { flex: 0 0 100%; text-align: center; font-size: 13px; }
+  #arr-select { max-width: 10em; }
+  @media (pointer: coarse), (hover: none) { #arrange-bar #arr-select { font-size: 16px; } }
+  body.arranging #ctl > .screen-arrange-entry { visibility: hidden; }
+  body.arranging #ctl :is(#gas,#b-aero) { pointer-events: auto; }
   #lay-arrange { border-color: var(--red); }
   /* TOUCH STRIP steering: its own row under the wheel only while chosen ([hidden] otherwise, so no row and no gap). */
   #steering-strip { grid-column: 1 / -1; height: 44px; line-height: 42px; text-align: center; font-size: 11px; letter-spacing: .08em;
@@ -277,11 +284,32 @@
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
   .pedal::before { content: ""; position: absolute; inset: 14px; border-radius: 18px; border: 1px dashed var(--card-line); }
-  .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
+  .pedal[data-touch-response="progressive"]:not(.grip-cue.on)::before {
+    inset: 10% auto auto 50%; width: 14px; height: 7px; transform: translateX(-50%);
+    border: 0; border-radius: 0; background: var(--text); pointer-events: none;
+    clip-path: polygon(0 100%, 0 65%, 26% 65%, 26% 100%, 37% 100%, 37% 32%, 63% 32%, 63% 100%, 74% 100%, 74% 0, 100% 0, 100% 100%);
+  }
+  body.throttle-auto #gas[data-touch-response]::before { display: none; }
   .pedal.on { color: var(--text); }
-  /* --travel: the pedal's live level (phone-pad.js hold): full on the touch, easing as the thumb slides up. */
-  #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(94,240,138,.16); }
-  #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(255,77,77,.16); }
+  #gas.on { --touch-fill: var(--ok); border-color: var(--ok); }
+  #brake.on { --touch-fill: var(--bad); border-color: var(--bad); }
+  .pedal.on:not(.feedback-off) { isolation: isolate; background: var(--hud-ink-dark); color: var(--hud-ink-light); }
+  .pedal.on:not(.feedback-off)::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+    background: color-mix(in srgb, var(--touch-fill) 46%, var(--hud-ink-dark));
+    opacity: var(--travel, 1);
+  }
+  .pedal.grip-cue.on:not(.feedback-off)::before { inset: .4rem 12% auto; height: .4rem; border: 0; }
+  #gas.grip-cue.on:not(.feedback-off)::before { background: repeating-linear-gradient(125deg, currentColor 0 .2rem, transparent .2rem .4rem); }
+  #brake.grip-cue.on:not(.feedback-off)::before { border-block: .15rem solid currentColor; border-radius: 0; }
+  #pedal-responses summary { min-height: 44px; cursor: pointer; font-weight: bold; }
+  #pedal-response-fields :is(.set-row, .tune-row) { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  #pedal-response-fields :is(select,input,button) { min-height: 44px; max-width: 100%; }
+  #pedal-response-fields .set-row { flex-wrap: wrap; }
+  #pedal-response-fields [hidden] { display: none; }
+  #pedal-response-fields .tune-label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  #pedal-response-fields .set-row > div { max-width: 100%; margin-inline-start: auto; }
+  #pedal-response-fields select { appearance: auto; width: max-content; }
   /* CONTROL MODES from the dash (PhonePad.paintHud → body classes): what the
      game drives itself the wheel does not offer. Gears AUTO: no paddles, the
      pedal takes the whole grip. Throttle AUTO: the GAS zone is an inert plate
@@ -451,6 +479,7 @@
   }, { capture: true, passive: false });
 })();
 </script>
+<link rel="stylesheet" href="css/screen-arranger.css?v=dev">
 </head>
 <body>
 <section id="pair" class="grain">
@@ -551,6 +580,7 @@
 </section>
 <div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
   <div id="lay-head"><h2 id="lay-title">WHEEL LAYOUT</h2><button id="lay-done" class="bigbtn" type="button">DONE</button></div>
+  <details id="pedal-responses"><summary>Pedal response</summary><div id="pedal-response-fields"></div></details>
   <div id="lay-presets" role="group" aria-label="Layout presets">
     <button type="button" data-preset="classic">CLASSIC</button>
     <button type="button" data-preset="right">RIGHT THUMB<small>OT · BOOST · AERO by the pedals</small></button>
@@ -567,12 +597,20 @@
   </div>
 </div>
 <div id="arrange-bar" role="toolbar" aria-label="Move and size buttons" hidden>
-  <span id="arr-name" role="status">TAP A CONTROL</span>
-  <button id="arr-minus" type="button" aria-label="Smaller">&minus;</button>
-  <button id="arr-plus" type="button" aria-label="Bigger">+</button>
-  <button id="arr-reset" type="button">RESET</button>
-  <button id="arr-reset-all" type="button">RESET ALL</button>
-  <button id="arr-done" class="bigbtn" type="button">DONE</button>
+  <select id="arr-select" aria-label="Wheel region"></select>
+  <button id="arr-adjust" type="button" aria-expanded="false" aria-controls="arr-tools">Controls</button>
+  <button id="arr-cancel" type="button">Cancel</button>
+  <button id="arr-done" class="bigbtn" type="button">Apply</button>
+  <div id="arr-tools" hidden>
+    <button id="arr-edge" type="button">Move bar</button>
+    <output id="arr-name" aria-live="polite"></output>
+    <button type="button" data-nudge="left">Left</button><button type="button" data-nudge="right">Right</button>
+    <button type="button" data-nudge="up">Up</button><button type="button" data-nudge="down">Down</button>
+    <button id="arr-step" type="button" aria-label="Coarse adjustment" aria-pressed="false">Fine</button>
+    <button id="arr-minus" type="button">Scale −</button><button id="arr-plus" type="button">Scale +</button>
+    <button id="arr-undo" type="button">Undo</button>
+    <button id="arr-reset" type="button">Reset region</button><button id="arr-reset-all" type="button">Reset wheel</button>
+  </div>
 </div>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
@@ -588,9 +626,15 @@
 <script defer crossorigin="anonymous" src="js/net/scan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/tilt-roll.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/touch-button-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-codec.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad-page.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/phone-pad.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/screen-regions.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/screen-placement.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/screen-arranger.js?v=dev"></script>
 <!-- /@gen-shell:controller -->
 <script>
 // Every element is handed to the module here; it looks nothing up itself.
@@ -615,7 +659,7 @@ window.addEventListener("DOMContentLoaded", function () {
     scan: $("scan"), scanBox: $("scan-box"), video: $("scan-video"),
     hud: { gear: $("h-gear"), speed: $("h-speed"), lap: $("h-lap"), pos: $("h-pos"), ers: $("h-ers"), flag: $("h-flag"),
            ot: $("h-ot"), aero: $("h-aero"), last: $("h-last"), leds: $("leds"), screen: $("screen"), team: document.documentElement,
-           mtitle: $("mp-title"),
+           mtitle: $("mp-title"), gas: $("gas"), brake: $("brake"),
            body: document.body },
   }, {
     onOpen: function () {
@@ -633,13 +677,15 @@ window.addEventListener("DOMContentLoaded", function () {
       body: document.body, home: $("keys"), grips: { L: $("left-keys"), R: $("right-keys") },
       keys: { overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"),
               look: $("b-look"), recover: $("b-recover"), pause: $("b-pause") },
-      sheet: $("layout-sheet"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
+      sheet: $("layout-sheet"), responses: $("pedal-response-fields"), open: $("b-layout"), done: $("lay-done"), rows: $("lay-rows"), swapBtn: $("lay-swap"), pedalsBtn: $("lay-pedals"), stripBtn: $("lay-strip"),
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
       stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
+      picker: $("arr-select"), adjust: $("arr-adjust"), tools: $("arr-tools"), edge: $("arr-edge"), step: $("arr-step"),
+      nudges: document.querySelectorAll("#arr-tools [data-nudge]"), undo: $("arr-undo"), cancel: $("arr-cancel"),
       resetOne: $("arr-reset"), resetAll: $("arr-reset-all"), arrangeDone: $("arr-done"),
       arrange: { screen: $("screen"), shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), otBig: $("b-ot-big"), boostBig: $("b-boost-big"),
                  overtake: $("b-overtake"), boost: $("b-boost"), aero: $("b-aero"), camera: $("b-camera"), radio: $("b-radio"), look: $("b-look"),
-                 recover: $("b-recover"), pause: $("b-pause"), brake: $("brake"), gas: $("gas") },
+                 recover: $("b-recover"), pause: $("b-pause"), brake: $("brake"), gas: $("gas"), steering: $("steering-strip") },
     }, { store: (function () { try { return window.localStorage; } catch (e) { return null; } })() });
   } catch (e) { /* the wheel works in its default layout */ }   // the console/test handle, mirroring window.__apex on the game
   // LANDSCAPE LOCK where the platform has one. Android needs fullscreen before

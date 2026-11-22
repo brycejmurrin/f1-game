@@ -10,7 +10,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, terrainYAt, modelGroup, waterSurface,
         floodMast, cameraTower, sponsorHoarding, signDigit, indexSolid,
-        bleacher, scaffoldStand, seat,
+        bleacher, scaffoldStand, seat, recordBarrier,
         addBox, addCyl, addFrustum } = api;
 
       const LEAF = [0.22, 0.44, 0.20], LEAF_D = [0.16, 0.36, 0.17];
@@ -380,13 +380,19 @@
       // Alternate slabs sit 3 cm apart radially: where the walk bunches on
       // the bend, neighbours' road faces would otherwise share one plane
       // (coplanar-audit, 3 pairs on the first outside pass, 2026-10-05).
+      // Collision (#6004): the slabs are raw addBox (visual only). Without
+      // recordBarrier the driving limit stays at the 9 m run-off default and
+      // the car centre can pass ~7.6 m behind the 1.4 m face. fence() below
+      // is geometry-only (indexBarrier) by design and must not tighten barL.
+      const OVAL_WALL_S0 = 0.765, OVAL_WALL_S1 = 0.140, OVAL_WALL_GAP = 1.4;
+      recordBarrier(OVAL_WALL_S0, OVAL_WALL_S1, OUT, OVAL_WALL_GAP);
       let slab = 0;
-      along(0.765, 0.140, 9, (k, spacing) => {
-        const a = anchor(k, OUT, 1.4 + (slab++ & 1) * 0.03);
+      along(OVAL_WALL_S0, OVAL_WALL_S1, 9, (k, spacing) => {
+        const a = anchor(k, OUT, OVAL_WALL_GAP + (slab++ & 1) * 0.03);
         addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, spacing], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
       });
       // Catch fence just behind it, in front of the stand bank (gap 18).
-      fence(0.765, 0.140, OUT, 4, 5, [0.74, 0.76, 0.80]);
+      fence(OVAL_WALL_S0, OVAL_WALL_S1, OUT, 4, 5, [0.74, 0.76, 0.80]);
       for (const s of [0.28, 0.36, 0.44, 0.58, 0.66, 0.74]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
@@ -535,12 +541,8 @@
           { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
       });
 
-      // Infield viewing on the run from T2 into T3: built window 0.190-0.232
-      // is the right-hand curve between the T2 left (0.1684) and the T3 right
-      // (0.2419), side +1 = the infield (the inside of that curve), 40 m
-      // short of the T3 apex. Bleachers, not grandstandEx, so crowdBank/rejBox
-      // cannot suppress the whole stand. (Was labelled "Turn 1 outside", 184 m
-      // past the T1 apex 0.1449 and on its inside; corner-frames 2026-11-18.)
+      // Infield bleachers from T3 toward T4. The first stand spans the T3
+      // apex (0.1925); the second ends 40 m before the T4 apex (0.2419).
       bleacher(0.190, 0.210, 1, 18, {
         rows: 8, step: 9, density: 0.42,
         plankCol: [0.72, 0.72, 0.74], frameCol: [0.58, 0.59, 0.62],
@@ -551,9 +553,7 @@
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });
-      // Infield mid-course bleacher (side +1 matches the gravel apron at 0.300).
-      // Authored rise/setback are positive; world-space "beyond" is contaminated
-      // here by the nearby oval ribbon, so do not flip side from a distance probe.
+      // T7 infield bleacher. Its 0.392–0.408 window straddles the apex at 0.3974.
       bleacher(0.392, 0.408, 1, 24, {
         rows: 7, step: 8, density: 0.40,
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],

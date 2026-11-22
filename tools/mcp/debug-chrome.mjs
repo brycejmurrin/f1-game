@@ -3,18 +3,23 @@
 // Usage: node tools/mcp/debug-chrome.mjs start [--port 9222] [--url <page>] [--webgpu] | status | stop
 // The debugger MCP never launches Chrome; the parent runs this, attaches, and stops it. Kills only its own PIDs.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromiumPath } from "../lib/chromium-path.mjs";
+import { BRYCE_DPR, BRYCE_WINDOWS } from "../lib/bryce-phone.mjs";
 import { liveSpecRun } from "../ci/test-bg.mjs";
+import { readLock, reapStaleLock, processBirth, compareBirth } from "./job-admission.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DIR = path.join(ROOT, "artifacts/debug-chrome");
 const PID_FILE = path.join(DIR, "pids.json");
 const PROFILE = path.join(ROOT, "scratch/debug-chrome");
 const SERVER_PORT = 3456;
+const LOCK_PATH = path.join(ROOT, "scratch", "apex-browser.lock");
+const JOB_DIR = path.join(ROOT, "artifacts", "logs", "apex-jobs");
+const JOB_ID_RE = /^[a-z][a-z0-9_]{0,39}-[0-9a-z]{1,12}-[1-9][0-9]{0,9}-[0-9a-f]{12}$/;
 
 // headless=new --window-size is the OUTER window: 844x390 gave an 844x198 viewport. The viewport is
 // therefore set by a small holder process (Emulation.setDeviceMetricsOverride lives only as long as
@@ -23,8 +28,9 @@ const SERVER_PORT = 3456;
 // viewport + touch alone stayed on the desktop tier (measured 2026-10-19: tier 0 vs 2,
 // docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md). --user-agent is process-wide, so new tabs get it too.
 export const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const phone = BRYCE_WINDOWS.standalone;
 export const DEVICES = {
-  "phone-landscape": { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, touch: true, ua: IPHONE_UA },
+  "phone-landscape": { width: phone.width, height: phone.height, deviceScaleFactor: BRYCE_DPR, insets: phone.insets, mobile: true, touch: true, ua: IPHONE_UA },
   desktop: { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, touch: false },
 };
 // The proven cloud-container flags (issue #2534). --webgpu only adds the WebGPU switch.
@@ -40,6 +46,28 @@ export function refusal({ load = os.loadavg()[0], live = liveRun() } = {}) {
   if (load >= 3) return `loadavg ${load.toFixed(2)} >= 3; the machine is busy — reap what is running first`;
   return null;
 }
+// One browser at a time, the apex-tools way: the browser lock (unless the apex_debug_chrome call that spawned this
+// CLI holds it: lock pid === our parent) and any running browser job from artifacts/logs/apex-jobs/.
+export function browserOccupant({ lockPath = LOCK_PATH, jobDir = JOB_DIR, ppid = process.ppid, alive = pidAlive, birthOf = processBirth } = {}) {
+  reapStaleLock(lockPath, { alive, birthOf });
+  const lock = readLock(lockPath, { alive, birthOf });
+  if (lock.held && lock.pid !== ppid) return `the browser lock (scratch/apex-browser.lock) is held by pid ${lock.pid ?? "?"}${lock.tool ? ` (${lock.tool})` : ""}`;
+  let files = [];
+  try { files = readdirSync(jobDir).filter(f => f.endsWith(".json") && JOB_ID_RE.test(f.slice(0, -5))); } catch { return null; }
+  for (const f of files) {
+    let m;
+    try { m = JSON.parse(readFileSync(path.join(jobDir, f), "utf8")); } catch { continue; }
+    if (!m || m.id !== f.slice(0, -5) || m.browser !== true || !["running", "starting"].includes(m.state)) continue;
+    if (existsSync(path.join(jobDir, `${m.id}.exit`))) continue;
+    const pid = Number(m.state === "starting" ? m.owner?.pid : m.pid);
+    if (!Number.isInteger(pid) || pid <= 0 || !alive(pid)) continue;
+    const birth = m.state === "starting" ? m.owner?.birth : m.birth;
+    if (compareBirth(birth, birthOf(pid)) === "different") continue;
+    return `browser job ${m.id} is running (pid ${pid}); apex_job_status / apex_job_cancel it first`;
+  }
+  return null;
+}
+function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } }
 function liveRun() {
   try { return liveSpecRun(); } catch (_) { return null; }
 }
@@ -124,7 +152,9 @@ async function runPlan(port, plan) {
 // The holder keeps its CDP session open so the override outlives this CLI.
 async function hold(port, device) {
   const d = DEVICES[device]; const { send, ws } = await pageSocket(port);
-  await send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+  await send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile,
+    ...(d.mobile ? { screenWidth: d.width, screenHeight: d.height, screenOrientation: { type: "landscapePrimary", angle: 90 } } : {}) });
+  if (d.insets) await send("Emulation.setSafeAreaInsetsOverride", { insets: d.insets });
   // A hidden/background tab gets no frames, so race() would wait forever: keep the page focused.
   await send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
   await send("Emulation.setTouchEmulationEnabled", { enabled: d.touch, maxTouchPoints: d.touch ? 5 : 0 });
@@ -165,7 +195,7 @@ export async function main(args = process.argv.slice(2)) {
     if (url) { const u = new URL(url); if (!["127.0.0.1", "localhost"].includes(u.hostname)) throw Error("--url must be a local page"); }
     const existing = readPids();
     if (existing?.procs.some(p => owns(p))) throw Error("already running; use status or stop first");
-    const why = refusal(); if (why) throw Error(`refusing to start: ${why}`);
+    const why = browserOccupant() || refusal(); if (why) throw Error(`refusing to start: ${why}`);
     if (!existsSync(".git") && !existsSync(path.join(ROOT, "index.html"))) throw Error("run from the repo checkout");
     mkdirSync(DIR, { recursive: true }); mkdirSync(PROFILE, { recursive: true });
     const procs = [];
@@ -202,7 +232,7 @@ export async function main(args = process.argv.slice(2)) {
   }
   console.log(`debug-chrome — own a headless Chromium for the js-debugger (a CLI, not an MCP tool; the debugger never launches Chrome)
   start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
-        phone-landscape = 844x390 touch + iPhone UA (mobile render tier); writes ~/.config/chromium/DevToolsActivePort so browser-use attaches;
+        phone-landscape = standard iPhone 15 full screen (${phone.width}x${phone.height} CSS px at ${BRYCE_DPR}x), touch + iPhone UA (mobile render tier); writes ~/.config/chromium/DevToolsActivePort so browser-use attaches;
         js-debugger and apex_status pick the endpoint up from the pid file; playwright/devtools attach with APEX_PW_CDP / APEX_CDT_BROWSER_URL
   status                                                           chromeAlive, viewport (innerWidth x innerHeight), PIDs, page targets
   stop                                                             kills exactly the PIDs in artifacts/debug-chrome/pids.json`);

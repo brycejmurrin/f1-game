@@ -156,7 +156,10 @@ var CrowdAudio = (function () {
     const d = dest || sfxBus();
     if (!c || !d || !ctxLive(c)) return false;
     if (bedSrc && actx === c && bus === d && ctxLive(actx)) return true;
-    detach();
+    // A muted cold start has no bed to silence. Allocate its five looping sources
+    // when the master and SFX bus can actually play them.
+    if (bedSrc) detach();
+    if (!sfxOk()) return false;
     actx = c;
     bus = d;
     const noise = noiseBuffer(c);
@@ -402,7 +405,7 @@ var CrowdAudio = (function () {
     };
     GameAudio.setEngine = function () {
       const r = _orig.setEngine.apply(this, arguments);
-      try { ensureAttached(); update(); } catch (e) { /* bed must not break the engine */ }
+      try { update(); } catch (e) { /* bed must not break the engine */ }
       return r;
     };
     GameAudio.stopEngine = function () {

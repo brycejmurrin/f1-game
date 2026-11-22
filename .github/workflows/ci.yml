@@ -781,7 +781,7 @@ jobs:
     # (#454 a9a805839: the expected check never appeared).
     name: Pure-node unit suites (${{ matrix.slice }})
     needs: [select]
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (vars.APEX_CI_NODE_RUNNER || 'ubicloud-standard-4') || 'ubuntu-latest' }}
     # NEVER skipped for any_node=false (2026-09-30, PR #522): a job skipped at
     # the job level never expands its matrix, so the one check it reports is
     # "Pure-node unit suites (${{ matrix.slice }})" and the six REQUIRED names
@@ -2850,6 +2850,14 @@ jobs:
           # index makes a repeat impossible even if that ever regresses.
           name: spec-timings-junit-selected-${{ matrix.name }}-${{ strategy.job-index }}
           path: artifacts/test-results-*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Arrangement journey screenshots
+        if: ${{ always() && contains(matrix.specs, 'appearance-orientation.spec.js') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: arrangement-evidence-${{ matrix.name }}-${{ strategy.job-index }}-${{ github.run_attempt }}
+          path: artifacts/test-results-*/**/arrangement-evidence/*.png
           if-no-files-found: ignore
           retention-days: 7
       # A CAP-KILLED LEG KEEPS ITS EVIDENCE TOO (R3-CI-HEALTH-6, 2026-10-10).

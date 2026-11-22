@@ -156,7 +156,7 @@ const LightStore = (() => {
     // presets' layers over the knob default, before any player layer. A knob's
     // `shippedMax` (knobs.js: carEnvCube on phones) caps what a preset may stamp
     // there; the player's own layers may still exceed it.
-    function shippedAt(k, d) {
+    function shippedAt(k, d, condition = condLayer(window.LightPresets)) {
       let v = d.def;
       const F = window.LightPresets || null;
       if (F && F["*"] && typeof F["*"][d.id] === "number") v = F["*"][d.id];
@@ -165,18 +165,16 @@ const LightStore = (() => {
       if (d.id === "perChunkLights") v = mergePerChunkShipped(k, v, F);
       else {
         if (F && k && F[k] && typeof F[k][d.id] === "number") v = F[k][d.id];
-        const c = condLayer(F);
-        if (c && typeof c[d.id] === "number") v = c[d.id];
+        if (condition && typeof condition[d.id] === "number") v = condition[d.id];
       }
       if (typeof d.shippedMax === "number") v = Math.min(v, d.shippedMax);
       return v;
     }
 
+    const shipVal = (k, d) => clamp(shippedAt(k, d), d.min, d.max);
     function base(k, d) {
-      k = keyFor(d.id, k);
-      let v = shippedAt(k, d);
-      if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
-      return clamp(v, d.min, d.max);
+      const globalValue = profiles["*"]?.[d.id];
+      return typeof globalValue === "number" ? clamp(globalValue, d.min, d.max) : shipVal(keyFor(d.id, k), d);
     }
 
     // The live condition's shipped value of `id` (clamped), without the player's
@@ -185,7 +183,7 @@ const LightStore = (() => {
     function shipped(id) {
       const d = TUNE_DEFS.find((t) => t.id === id);
       if (!d) return undefined;
-      return clamp(shippedAt(keyFor(id, key()), d), d.min, d.max);
+      return shipVal(keyFor(id, key()), d);
     }
 
     function put(prof, k, d, v) {
@@ -214,6 +212,23 @@ const LightStore = (() => {
     // track._lights; opts.heldOnly lands just those at the fade's end (#5990).
     const BAKE_IDS = new Set(["lampNearClamp", "lampBake", "tailLightEmit"]);
     const held = (d) => !!d.rebuild || BAKE_IDS.has(d.id);
+    function valueAt(k, d, condition = condLayer(window.LightPresets)) {
+      const kk = keyFor(d.id, k);
+      let v = shippedAt(kk, d, condition);
+      if (typeof profiles["*"]?.[d.id] === "number") v = profiles["*"][d.id];
+      if (typeof profiles[kk]?.[d.id] === "number") v = profiles[kk][d.id];
+      return clamp(v, d.min, d.max);
+    }
+
+    const lampKnobs = TUNE_DEFS.filter(d => d.id === "lampLevel" || d.id === "poolEnergy");
+    function garageLamps(selection, out) {
+      const tod = selection.tod === "default" ? (selection.night ? "night" : "day") : selection.tod;
+      const k = selection.trackId + "|" + tod + "|" + (selection.weather === "storm" ? "rain" : selection.weather);
+      const condition = window.LightPresets?.["*|" + tod] || null;
+      for (const d of lampKnobs) out[d.id] = valueAt(k, d, condition);
+      return out;
+    }
+
     function apply(fromApplyRace, opts) {
       if (Log.enabled("game", Log.DEBUG)) Log.debug("game", "LightStore.apply");
       const k = key();
@@ -222,11 +237,7 @@ const LightStore = (() => {
       for (const d of TUNE_DEFS) {
         if (hold && held(d)) continue;
         if (only && !held(d)) continue;
-        const kk = keyFor(d.id, k);
-        let v = shippedAt(kk, d);
-        if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
-        if (kk && profiles[kk] && typeof profiles[kk][d.id] === "number") v = profiles[kk][d.id];
-        v = clamp(v, d.min, d.max);
+        const v = valueAt(k, d);
         if (LT[d.id] === v) continue;
         LT[d.id] = v;
         if (d.rebuild) rebuilt = true;
@@ -289,8 +300,9 @@ const LightStore = (() => {
       // has is left behind rather than copied onto 39 more profiles.
       const from = [];
       for (const d of TUNE_DEFS) {
-        const v = mode === "look" ? LT[d.id] : (profiles[keyFor(d.id, src)] || {})[d.id];
-        if (typeof v === "number" && isFinite(v)) from.push([d, v]);
+        const k = keyFor(d.id, src);
+        const v = mode === "look" ? LT[d.id] : profiles[k]?.[d.id];
+        if (Number.isFinite(v) && (mode === "look" || !isMask(k, d.id))) from.push([d, v]);
       }
       if (!from.length) return { ok: false, error: "no-edits", mode, key: src, tod, weather, tracks: 0, changed: 0 };
       const out = { ok: true, mode, key: src, tod, weather, knobs: from.length, tracks: 0, changed: 0, undo: {} };
@@ -335,10 +347,10 @@ const LightStore = (() => {
     // a dry-weather edit of any other knob is a different condition's edit.
     function sunSlot(k) { const s = keyFor("sunElev", k); return s !== k ? s : null; }
     // A mask: reset() pins the shipped value where the global "*" layer reaches.
-    const shipVal = (kk, d) => clamp(shippedAt(kk, d), d.min, d.max);
     function isMask(kk, id) {
-      const g = profiles["*"], p = profiles[kk], d = TUNE_DEFS.find((t) => t.id === id);
-      return !!(g && d && typeof g[id] === "number" && p && p[id] === shipVal(kk, d));
+      if (typeof profiles["*"]?.[id] !== "number") return false;
+      const d = TUNE_DEFS.find((t) => t.id === id);
+      return !!d && profiles[kk][id] === shipVal(kk, d);
     }
     function tuned() {
       const k = key();
@@ -367,7 +379,7 @@ const LightStore = (() => {
     }
 
     const api = {
-      key, apply, set, persist, copyToTracks, restore, tuned, reset, shipped,
+      key, garageLamps, apply, set, persist, copyToTracks, restore, tuned, reset, shipped,
       get profiles() { return profiles; },
       set profiles(v) { profiles = v || {}; },
     };
@@ -382,5 +394,6 @@ const LightStore = (() => {
   function reset() { if (_live) _live.reset(); }
   function tuned() { return _live ? _live.tuned() : 0; }
   function shipped(id) { return _live ? _live.shipped(id) : undefined; }
-  return { create, reapply, reset, tuned, shipped };
+  function garageLamps(selection, out) { return _live ? _live.garageLamps(selection, out) : out; }
+  return { create, reapply, reset, tuned, shipped, garageLamps };
 })();

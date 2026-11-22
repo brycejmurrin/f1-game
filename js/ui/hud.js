@@ -49,20 +49,8 @@ function vpSync() {
 const vpW = () => { vpSync(); return _vp.w; };
 const vpH = () => { vpSync(); return _vp.h; };
 
-// ONE BLINK CLOCK. Each HUD `pulse` (css/hud.css: OT armed, ERS, VSC, pit cue,
-// limits, the 0.4 s redline) began its own phase when its class landed, so two
-// warnings on screen together blinked out of step (DEFECT-LEDGER item H). Pinning
-// every pulse's startTime to the document timeline's zero puts them on one
-// clock: the 0.8 s pulses share a phase and the redline is their harmonic.
-function syncPulse(e) {
-  const el = e.target;
-  if (e.animationName !== "pulse" || !el || typeof el.getAnimations !== "function") return;
-  for (const a of el.getAnimations()) if (a.animationName === "pulse" && a.startTime !== 0) a.startTime = 0;
-}
-if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
-
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
-let _invalidateFit = null, _syncPhoneFit = null;
+let _invalidateFit = null, _syncPhoneFit = null, _secFlashRead = null;
 function create(G) {
 Log.info("ui", "GameHud.create");
 
@@ -119,7 +107,7 @@ const teamCss = (c) => {
 // The minimap (#minimap) lives in js/ui/hud-minimap.js; fitKey is a getter because _fitKey moves.
 const _minimap = HudMinimap.create(G, { vpW, vpH, teamCss, replayGhost, motionReduced, fitKey: () => _fitKey });
 let _secRows = null;
-const _secFlash = [0, 0, 0];
+const _secFlash = [0, 0, 0], _secFlashLog = { last: -1, raceT: null, calls: 0, painted: 0 };
 // THE GAIN, not only the split: each sector row shows the split's delta to the
 // best it was chasing for SPLIT_DELTA_MS, then the absolute time again.
 // _secPrevBest is sectorBests as the last tick saw it — game.js writes the new
@@ -230,7 +218,7 @@ function syncHudCamClasses() {
 // A first-ever split has nothing to beat and keeps the absolute time.
 function flashSector(i) {
   if (!(i >= 0 && i < 3)) return;
-  _secFlash[i] = 0.35;
+  _secFlash[i] = 0.35; _secFlashLog.last = i; _secFlashLog.raceT = G.raceT ?? null; _secFlashLog.calls++;
   const t = G.sectorLast && G.sectorLast[i];
   const ok = t != null && isFinite(_secPrevBest[i]);
   _secDelta[i] = ok ? t - _secPrevBest[i] : 0;
@@ -315,41 +303,16 @@ function buildSecRows() {
   if (els.hudLimits) _limitsDots = els.hudLimits.querySelector("span");
 }
 
-// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT.
-//
-// `.hud-gaps` sits between the minimap and the CENTRED POS/LAP row, and that slot
-// CLOSES as HUD SIZE grows — the map pushes the widget right while `.hud-top`
-// grows left. Measured at 1000px wide: 266px of slot at 100%, 151 at 150%, 33 at
-// 200%, against a 117px readout in the full spelling.
-//
-// `innerWidth / scale` is the slot's proxy: halving the window and doubling the
-// HUD are the same squeeze, and the whole left cluster is in one `zoom` group so
-// the relationship is linear. Two responses, in order of what they cost:
-//
-//   1. SHORTEN. Drop the driver code and the "s" — the ARROW already says which
-//      side and the number is what a driver reads mid-corner. Full spelling is
-//      ~111px, short is ~70px.
-//   2. DROP. Below `.hud-top`'s bottom edge, still beside the map, where the
-//      strip runs clear to the far side of the screen. Costs the widget its
-//      alignment with the top of the minimap and nothing else.
-//
-// The thresholds are per BREAKPOINT because the >=1200px ladder makes both walls
-// of the slot worse at once: a 140px minimap (vs 96) starts the widget further
-// right, and fatter `.hud-box` padding starts `.hud-top` further left. MEASURED
-// slack, full spelling: 1000@150% (ratio 667) +27, 1000@175% (571) -38 but short
-// fits at +13, 1000@200% (500) short still -50; 1280@150% (853) +25, 1280@175%
-// (731) -64 and short would be -16 too, 1280@200% (640) -105. So narrow gets a
-// shorten band between 550 and 640 and drops below it; wide has no useful
-// shorten band at all and drops straight away at 800.
-//
-// Every read here is cheap. Both custom properties are
-// INLINE declarations this file's own passes write (applyScale writes
-// --hud-scale; the fit pass writes --hud-z-top when its cap binds) — string
-// reads, not getComputedStyle, so they force no style or layout pass — and
-// the width is the cached vpW() (innerWidth itself lays out on Android). The
-// gaps strip PAINTS at the capped --hud-z-top, so that is the divisor when present; the raw slider is only the fallback
-// before the first fit. Nothing here asks the layout engine anything, so it
-// can simply run every tick and follow a window resize for free.
+// THE AHEAD/BEHIND GAP READOUT SPELLS ITSELF TO FIT ITS SLOT. `.hud-gaps` sits
+// between the minimap and the centred POS/LAP row, a slot that closes as HUD SIZE
+// grows (1000px wide: 266px at 100%, 151 at 150%, 33 at 200%; full spelling ~111px,
+// short ~70px). `innerWidth / scale` is its proxy. Responses: SHORTEN (drop the
+// code and "s"), then DROP below `.hud-top`. Thresholds are per breakpoint: the
+// >=1200px ladder's 140px minimap and fatter padding squeeze both walls, so wide
+// has no useful shorten band (measured slack: 1000@150% +27, @175% short +13,
+// @200% short -50; 1280@150% +25, @175% -64). Every read is cheap: inline custom
+// properties this file writes (--hud-scale, --hud-z-top, the painted cap when
+// present) and the cached vpW(), never layout, so it runs every tick.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
 const GAP_DROP_AT  = { narrow: 550, wide: 800 };
 // Set by fitHud() from the real measured fit; null until it has run against a
@@ -651,6 +614,8 @@ function mirrorClear(root) {
 }
 /** Conservative rect overlap — same 0.5 px slack as hud-layout.spec.js probes. */
 const manualHud = (el) => !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
+// The cap passes measure the factory phone seed (data-hl-seed, js/ui/hud-layout.js) like an automatic piece.
+const capManual = (el) => manualHud(el) && !el.hasAttribute("data-hl-seed");
 function _hudRectsHit(a, b) {
   return !!(a && b && a.width > 0 && b.width > 0
     && a.left < b.right - 0.5 && b.left < a.right - 0.5
@@ -965,7 +930,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   let zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));   // #dock-left (steer) paints at its own cap
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
-    if (!el || manualHud(el)) return 0;
+    if (!el || capManual(el)) return 0;
     const r = layoutRect(el);
     if (!r.width) return 0;
     return r.width / zoomDiv(el, pub);
@@ -980,8 +945,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const span = (el, pub) => {
     if (!el) return 0;
     let lo = Infinity, hi = -Infinity;
-    for (const c of el.children) {
-      if (manualHud(c) || (c.id === "hud-tyre" && outOfFlow(c))) continue;
+    // A seed piece HudLayout lifted out of the bottom cluster still counts toward its width.
+    const kids = el === _hudBottom && document.querySelectorAll ? [...el.children, ...document.querySelectorAll("[data-hl-bottom][data-hl-seed]")] : el.children;
+    for (const c of kids) {
+      if (capManual(c) || (c.id === "hud-tyre" && outOfFlow(c))) continue;
       const r = layoutRect(c);
       if (!r.width) continue;
       if (r.left < lo) lo = r.left;
@@ -1038,8 +1005,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // rather than on the class, so any future hide rule is covered too; the
   // fallback is the other side's measurement, which is right on every phone
   // whose notch is symmetric in landscape and never worse than 0.
-  const mmR = els.minimap && !manualHud(els.minimap) ? layoutRect(els.minimap) : null;
-  const scR = els.hudSectors && !manualHud(els.hudSectors) ? layoutRect(els.hudSectors) : null;
+  const mmR = els.minimap && !capManual(els.minimap) ? layoutRect(els.minimap) : null;
+  const scR = els.hudSectors && !capManual(els.hudSectors) ? layoutRect(els.hudSectors) : null;
   const mz = zoomDiv(els.minimap, zTopPub), sz = zoomDiv(els.hudSectors, zTopPub);
   const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
   // THE RIGHT INSET IS THE TOKEN WHEN IT IS READABLE. On touch #hud-sectors is pushed inboard by
@@ -1312,12 +1279,12 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   const steerDock = _dockMir ? _dockR : _dockL;   // #dock-left wherever MIRROR paints it
   const groups = (d) => {
     if (!d) return { h: 0, w: 0, stack: 0 };
-    const z = zoomDiv(d, d === steerDock ? zDockPubS : zDockPub);
     let h = 0, w = 0, stack = 0, n = 0;
     for (const g of d.children) {
-      const r = g.getBoundingClientRect();
-      if (!r.width) continue;
-      h = Math.max(h, r.height / z); w += r.width / z; stack += r.height / z; n++;
+      // Painted bounds depend on the previous fit and can oscillate at fractional zoom.
+      const width = g.offsetWidth, height = g.offsetHeight;
+      if (!width) continue;
+      h = Math.max(h, height); w += width; stack += height; n++;
     }
     const cs = getComputedStyle(d);
     const gx = parseFloat(cs.columnGap) || 0, gy = parseFloat(cs.rowGap) || 0;
@@ -1356,14 +1323,14 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const kids = _hudBottom.children;
       for (let i = 0; i < kids.length; i++) {
         const c = kids[i];
-        if (!c || manualHud(c) || c.id === "hud-tyre") continue;
+        if (!c || capManual(c) || c.id === "hud-tyre") continue;
         const r = layoutRect(c);
         if (!r.width) continue;
         if (r.left < lo) lo = r.left;
         if (r.right > hi) hi = r.right;
       }
       const tyreEl = document.getElementById("hud-tyre");
-      const tyreR = tyreEl && !manualHud(tyreEl) && !tyreEl.hidden ? layoutRect(tyreEl) : null;
+      const tyreR = tyreEl && !capManual(tyreEl) && !tyreEl.hidden ? layoutRect(tyreEl) : null;
       if (hi > lo && tyreR && tyreR.width && zNow) {
         const cW = (hi - lo) / zNow, tW = tyreR.width / zNow, cMid = (lo + hi) / 2;
         const denom = cW / 2 + tW;
@@ -1403,7 +1370,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
     if (bcast && phone && vpW() > vpH()) {
       const stack = [_hudTop, els.minimap, gapsEl, els.flag, els.announce, els.tyre];
       const height = stack.reduce((sum, el) => {
-        if (!el || manualHud(el) || el.hidden) return sum;
+        if (!el || capManual(el) || el.hidden) return sum;
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
@@ -1446,7 +1413,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
       const mid = vpW() / 2, phoneBtns = document.body.classList.contains("steer-buttons") && vpW() < 744;
       let lo = mid, hi = mid, row = 0, capSide = Infinity;
       for (const c of _hudBottom.children) {
-        const r = c && !c.hidden && !manualHud(c) ? layoutRect(c) : null;
+        const r = c && !c.hidden && !capManual(c) ? layoutRect(c) : null;
         if (r && r.width) { lo = Math.min(lo, r.left); hi = Math.max(hi, r.right); }
       }
       for (const el of dockButtons()) {
@@ -1984,6 +1951,12 @@ function updateHud(force, dtMs) {
     hHidden(els.workBtn, true);
   }
   // toggle-button states
+  const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
+  if (_ro && (gasFeedback || brakeFeedback)) {
+    const cue = _ro.pedalGrip(player, typeof WheelState !== "undefined" && WheelState.enabled());
+    hData(els.btnThrottle, "gripCue", gasFeedback && (cue === "spin" || cue === "slip") ? cue : null);
+    hData(els.btnBrake, "gripCue", brakeFeedback && cue === "lock" ? cue : null);
+  }
   hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);
@@ -2014,6 +1987,7 @@ function updateHud(force, dtMs) {
       : leader && leader.lap > 1 ? "race-control"
       : leader ? "opening-lap" : "waiting-for-leader";
   }
+  hData(els.ot, "gate", otReason || null);
   const mjTxt = otMJ.toFixed(2) + " MJ";
   const otReady = !!player.otArmed || otHeld;
   const otUnavailable = (!(player.otT > 0) && !otReady) || otOff;
@@ -2062,9 +2036,11 @@ function updateHud(force, dtMs) {
     : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "CORNER MODE";
+  hData(els.aero, "zone", autoAero ? (xOpen ? "straight" : "auto") : (xOpen || noZones) ? null : dz === 0 ? "in" : dz < 900 ? "near" : null);
   hText(els.aero, aeroText);
   hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
     : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
+  let ghostSign = null;
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the
@@ -2078,6 +2054,7 @@ function updateHud(force, dtMs) {
       const ghostT = (player.lap | 0) >= 1 ? ghost.timeAt(player.s) : null;   // S4: not off the run-up clock
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
+        ghostSign = delta <= 0 ? "fast" : "slow";
         hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + signedFixed(delta) + "s");
         hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower-ink)");
       } else {
@@ -2118,6 +2095,7 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  hData(els.gapA, "ghost", ghostSign);
   gapsEmptySync();
   // THE LANE IS STALE UNTIL THE STRINGS LAND. fitHud (above) clips #announce
   // from the gaps box as it was at the start of this tick — empty, or the
@@ -2168,6 +2146,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      hData(_secRows[i].parentElement, "split", t == null ? null : sb ? "session" : pb ? "personal" : "slow");
       if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
       paintSectorFlash(i, pb, t != null);
@@ -2253,6 +2232,7 @@ function invalidateMap() { _minimap.invalidate(); }
 let _pitSideTrack = null, _pitSide = 1;
 function paintSectorFlash(i, personalBest, hasSplit) {
   const row = _secRows[i].parentElement, active = _secFlash[i] > 0;
+  if (active) _secFlashLog.painted++;
   hToggle(row, "sec-flash", active);
   hToggle(row, "sec-flash-pb", active && personalBest);
   hToggle(row, "sec-flash-slow", active && !personalBest && hasSplit);
@@ -2320,15 +2300,15 @@ function syncPhoneFit() {
   const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
   return !phonePaintedClash() && /^\d+$/.test(stamp);
 }
-_syncPhoneFit = syncPhoneFit;
+_syncPhoneFit = syncPhoneFit; _secFlashRead = () => ({ flash: _secFlash.slice(), ..._secFlashLog });
 return {
   updateHud, invalidateMap, flashSector, resetRace, invalidateFit, syncPhoneFit,
-  laneRectMisses, resetLaneRectMisses,   // PERF probe (js/ui/hud-radio-lane.js)
+  laneRectMisses, resetLaneRectMisses, secFlash: _secFlashRead,   // PERF probe (hud-radio-lane.js)
 };
 }
 
 return {
-  create,
+  create, secFlash: () => (_secFlashRead ? _secFlashRead() : null),   // __apex.hudSecFlash
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
   vp: () => [vpW(), vpH()],   // the layout viewport (ICB) every HUD rect is measured in; never inner* (#5201)

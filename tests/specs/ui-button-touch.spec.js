@@ -179,6 +179,16 @@ async function waitReady(page) {
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// Wait for the game to RENDER `n` more frames (cameraState().renderFrame is the
+// render loop's own counter). For a NEGATIVE check — "that input did not move
+// the view", "the menu survived the keyup" — this is the state to wait on: the
+// loop has had real frames in which to react, however slow the box is.
+async function awaitRenderFrames(page, n = 2) {
+  const f0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+  await page.waitForFunction(({ f0, n }) => window.__apex.cameraState().renderFrame >= f0 + n,
+    { f0, n }, { polling: 100, timeout: BOOT_MS });
+}
+
 async function openPauseMenu(page) {
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
@@ -390,12 +400,20 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40, 0); });
-    await page.waitForTimeout(400);
+    // PAUSE acts only in a running race with the pause door up (openPauseMenu's wait).
+    await page.waitForFunction(() => {
+      const b = document.getElementById("pausebtn");
+      return window.__apex.info().state === "race" && !!b && !b.hidden;
+    }, null, { polling: 100, timeout: BOOT_MS });
     // focus must be off the pause BUTTON, or this measures the button's own key
     // handling rather than the global one.
     await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
+    await expect(page.locator("#pausemenu")).toBeVisible();
+    // Then let the browser run two animation frames past the keyup (the bug closed
+    // the menu again on it). Browser frames, not render frames: a bare pause menu
+    // stops render(), so cameraState().renderFrame would never advance here.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     expect(await page.evaluate(() => document.getElementById("pausemenu").hidden)).toBe(false);
   });
 
@@ -522,7 +540,8 @@ test.describe("Lighting tuner — free camera touch controls", () => {
     // camState() is the observable: the fly-cam publishes through dbgCam, so
     // "did that pointer move the view" is answerable without reading privates.
     const eye = () => page.evaluate(() => window.__apex.camState().eye.slice());
-    const settle = () => page.waitForTimeout(250);
+    // Negative checks: give the fly-cam rendered frames in which it could move.
+    const settle = () => awaitRenderFrames(page, 2);
 
     const ev = (type, id, x, y, onCanvas) => page.evaluate(({ type, id, x, y, onCanvas }) => {
       const target = onCanvas ? document.getElementById("game") : window;
@@ -587,8 +606,7 @@ test.describe("Pause menu — tilt mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "tilt");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "tilt");   // waits on the select + #pm-calib state
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeVisible();
     await expect(calib).toBeEnabled();
@@ -603,8 +621,7 @@ test.describe("Pause menu — button mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "buttons");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "buttons");   // waits on the select + #pm-calib state
     // Disabled, NOT hidden — hiding it reflowed the settings grid so the next
     // tap landed on a different button (see setSteerMode in game.js).
     const calib = page.locator("#pm-calib");
@@ -621,8 +638,7 @@ test.describe("Pause menu — touch mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "touch");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "touch");   // waits on the select + #pm-calib state
     const calib = page.locator("#pm-calib");
     await expect(calib).toBeVisible();
     await expect(calib).toBeDisabled();
@@ -641,8 +657,7 @@ test.describe("Pause settings — stable layout", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "tilt");
-    await page.waitForTimeout(200);
+    await cycleToPauseSteerMode(page, "tilt");   // waits on the select + #pm-calib state
 
     const ids = ["pm-steer", "pm-calib", "adv-feel-details", "pm-advanced", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
@@ -656,7 +671,7 @@ test.describe("Pause settings — stable layout", () => {
 
     const before = await grab();
     await page.locator("#pm-steer-next").click();   // tilt -> buttons (hides nothing now)
-    await page.waitForTimeout(200);
+    await expect(page.locator("#pm-steer-sel")).not.toHaveValue("tilt");
     const after = await grab();
     expect(after).toEqual(before);
 
@@ -757,7 +772,6 @@ test.describe("Race settings — portrait layout", () => {
     // door beside it — this spec is about the settings sheet, not the garage.
     await page.locator("#sel-go").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
-    await page.waitForTimeout(300);
     // RACE! button must be visible without scrolling
     await expect(page.locator("#rs-go")).toBeVisible();
     await page.screenshot({ path: galleryPath("ui-button-touch", "race-settings-portrait.png") });
@@ -875,7 +889,9 @@ test.describe("Race settings — landscape layout", () => {
     // door beside it — this spec is about the settings sheet, not the garage.
     await page.locator("#sel-go").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
-    await page.waitForTimeout(300);
+    // The sheet's content is laid out once its last control is (reduced motion:
+    // the final layout lands on the first frame, see waitReady).
+    await expect(page.locator("#rs-go")).toBeVisible();
     // Panel must not overflow
     const scrollable = await page.evaluate(() => {
       const panel = document.getElementById("race-settings");
@@ -914,13 +930,14 @@ async function checkHudVisibilityEditors(page, testInfo) {
   await page.locator("#pm-hudlayout > summary").click();
   await page.locator("#pm-hud-arrange").click();
   await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+  await page.locator("#hud-arrange-move").click();
   for (const id of ["map", "gaps", "mirror"]) {
     await page.locator("#hud-arrange-element").selectOption(id);
     await expect(page.locator("#hud-arrange-vis")).toHaveValue("off");
     await page.locator("#hud-arrange-vis").selectOption(id === "mirror" ? "auto" : "on");
-    await expect(page.locator("#pm-hud" + id + "-sel")).toHaveValue(id === "mirror" ? "auto" : "on");
+    await expect(page.locator("#pm-hud" + id + "-sel")).toHaveValue("off");
   }
-  await expect(page.locator("body")).not.toHaveClass(/\bhud-hide-map\b|\bhud-hide-gaps\b/);
+  // Previewed pieces are revealed for editing while the saved values stay off.
   await expect(page.locator("#minimap")).toBeVisible();
   await page.locator("#hud-arrange-element").selectOption("map");
   const visibility = page.locator("#hud-arrange-vis");
@@ -931,7 +948,8 @@ async function checkHudVisibilityEditors(page, testInfo) {
   await expect(visibility).toHaveValue("off");
   await page.keyboard.press("ArrowUp");
   await expect(visibility).toHaveValue("on");
-  await expect(page.locator("#pm-hudmap-sel")).toHaveValue("on");
+  await expect(page.locator("#pm-hudmap-sel")).toHaveValue("off");
+  await page.locator("#hud-arrange-move").click();
   expect((await page.locator("#hud-arrange-bar").boundingBox()).height).toBeLessThan(80);
   await page.screenshot({ path: testInfo.outputPath("hud-controls-" + page.viewportSize().width + ".png") });
   await page.locator("#hud-arrange-done").click();
@@ -985,15 +1003,18 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
     await page.screenshot({ path: testInfo.outputPath("hud-adaptive-" + viewport.width + "x" + viewport.height + ".png") });
   }
   const sizeBefore = await page.evaluate(() => HudLayout.get("map").s);
+  await page.locator("#hud-arrange-move").click();
   await page.locator("#hud-arrange-larger").click();
   const sizeAfter = await page.evaluate(() => HudLayout.get("map").s);
   expect(sizeAfter, "Larger adds ten points to the adopted painted size").toBeCloseTo(sizeBefore + 10, 8);
   const sizeLabel = await page.locator("#hud-arrange-name").textContent();
-  expect(sizeLabel).toMatch(/^\d+(?:\.\d+)?%$/);
-  expect(sizeLabel.length, "the toolbar reports a readable percentage").toBeLessThanOrEqual(8);
-  // The label is the PAINTED size (#5256): the stored factor times the zoom the map paints under.
+  // "N%" (of the factory size, #5977) and, when the map paints under a zoom, " · M% painted" (#5256).
+  const parts = /^(\d+(?:\.\d+)?)%(?: · (\d+(?:\.\d+)?)% painted)?$/.exec(sizeLabel);
+  expect(parts, `the toolbar reports a readable percentage: "${sizeLabel}"`).not.toBeNull();
+  expect(parts[1].length, "each figure stays short").toBeLessThanOrEqual(7);
+  // The painted figure is the stored factor times the zoom the map paints under.
   const painted = sizeAfter * await page.evaluate(() => document.getElementById("minimap").currentCSSZoom || 1);
-  expect(Math.abs(parseFloat(sizeLabel) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
+  expect(Math.abs(parseFloat(parts[2] ?? parts[1]) - painted), "four significant digits keep relative rounding within 0.05%").toBeLessThanOrEqual(painted * .0005);
   await page.locator("#hud-arrange-done").click();
   await expect(page.locator("#pmsettings")).toBeVisible();
   await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
@@ -1022,8 +1043,7 @@ for (const shape of [
       await expect(bar).toBeVisible(); await expect(page.locator("#hud")).toBeVisible();
       await expect(page.locator("#overlay")).toBeHidden();
       for (const selector of [".hud-top", "#minimap", "#hud-limits", "#announce"]) await expect(page.locator(selector)).toBeVisible();
-      // The shared layer lifecycle remembers RESET when this toolbar reopens.
-      await expect(page.locator(door === "Escape" ? "#hud-arrange-element" : "#hud-arrange-reset")).toBeFocused();
+      await expect(page.locator("#hud-arrange-element")).toBeFocused();
       expect(await page.evaluate(() => UiLayers.top()?.id)).toBe("hud-arrange-bar");
       expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
       await page.locator("#hud-arrange-element").focus();
@@ -1038,6 +1058,7 @@ for (const shape of [
       await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
       expect(await page.evaluate(() => HudLayout.get("map").x)).toBe(before + 1);
       await expect(page.locator("#hud-arrange-move")).toBeFocused();
+      await page.locator("#hud-arrange-move").click();
       await page.locator("#hud-arrange-reset").click();
       if (door === "Escape") await page.screenshot({ path: testInfo.outputPath("title-hud-" + shape.name + ".png") });
       if (door === "Escape") await page.keyboard.press("Escape"); else await page.locator("#hud-arrange-done").click();
@@ -1115,6 +1136,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(page.locator("#pmsettings")).toBeHidden();
     await expect(page.locator("#pausemenu")).toBeHidden();
     await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+    // A fresh store: the map sits at this device's factory placement (on a phone, hud-layout.js PHONE_STANDARD).
+    const factory = await page.evaluate(() => HudLayout.get("map"));
     expect(await page.locator("[data-hl-arr]").count()).toBeGreaterThan(5);
     // The pieces the race hides until something happens show sample content while arranging.
     await expect(page.locator("#announce")).toBeVisible();
@@ -1134,6 +1157,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(page.locator("#hud-arrange-element")).toHaveValue("map");
 
     // − / + act on the piece last touched; RESET returns it to the shipped layout.
+    await page.locator("#hud-arrange-move").click();
     await page.locator("#hud-arrange-larger").click();
     expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s + 10, 8);
     await page.locator("#hud-arrange-smaller").click();
@@ -1141,7 +1165,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-smaller").click();
     expect((await page.evaluate(() => HudLayout.get("map"))).s).toBeCloseTo(moved.s - 10, 8);
     await page.locator("#hud-arrange-reset").click();
-    expect(await page.evaluate(() => HudLayout.get("map"))).toEqual({ x: 0, y: 0, s: 100 });
+    expect(await page.evaluate(() => HudLayout.get("map")), "RESET restores the factory placement").toEqual(factory);
 
     // The drag again, then DONE: the layout persists, every handle is released, the
     // sample content goes, and the pause card comes back.
@@ -1171,12 +1195,12 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#pm-hud-details > summary").click();
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    await page.locator("#hud-arrange-move").click();
     const vis = page.locator("#hud-arrange-vis");
     // Keyboard access starts with the first visible piece selected.
     await expect(page.locator("#hud-arrange-element")).toHaveValue("tower");
     await expect(vis).toBeEnabled();
     await vis.selectOption("off");
-    expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].filter(id => HudElements.isOn(id)))).toEqual([]);
     await expect(vis).toHaveValue("off");
     await vis.selectOption("on");
     expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].every(id => HudElements.isOn(id)))).toBe(true);
@@ -1190,8 +1214,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await expect(vis).toBeEnabled();
     await expect(vis).toHaveValue("on");
     await vis.selectOption("off");
-    // Stored as hidden, yet still on screen as a ghost so it can be touched again.
-    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(false);
+    // The draft shows a ghost; Apply commits its visibility.
+    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(true);
     await expect(page.locator("#hud-sectors")).toHaveAttribute("data-hl-off", "");
     await expect(page.locator("#hud-sectors")).toBeVisible();
     await expect(vis).toHaveValue("off");
@@ -1203,13 +1227,14 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     // Back in: SHOW restores it.
     await page.locator("#pm-hud-arrange").click();
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
-    const sec2 = await page.locator("#hud-sectors").boundingBox();
-    await page.mouse.move(sec2.x + sec2.width / 2, sec2.y + sec2.height / 2);
-    await page.mouse.down();
-    await page.mouse.up();
+    // By the picker this time: ARRANGE shows a piece's SAVED spot (hud-race-keep-5678), and the
+    // PHONE_STANDARD sectors seed, authored with 59 px insets, saves it at 838.9..873.6 on this
+    // inset-free 844 screen, so its centre is off the glass (measured 2026-11-20).
+    await page.locator("#hud-arrange-element").selectOption("sectors");
+    await page.locator("#hud-arrange-move").click();
     await expect(vis).toHaveValue("off");
     await vis.selectOption("on");
-    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(true);
+    expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(false);
     await page.locator("#hud-arrange-done").click();
     await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).not.toContain("sectors");
@@ -1236,16 +1261,20 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-move").focus();
     await page.keyboard.press("ArrowRight");
     const after = await page.locator("#announce").boundingBox();
-    // HudLayout persists whole percentages: the first placement snaps the
-    // visible origin to that existing grid, then adds the keyboard step.
-    const expectedX = LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
-    const expectedY = LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
+    // An automatic card: HudLayout persists whole percentages, so the first placement snaps the
+    // visible origin to that grid, then adds the step. A stored placement (the phone's
+    // PHONE_STANDARD seed, x -43.505 %) moves by exactly one step of the screen.
+    const seeded = await page.evaluate(() => document.getElementById("announce").hasAttribute("data-hl-user"));
+    const expectedX = seeded ? before.x + LANDSCAPE.width / 100
+      : LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
+    const expectedY = seeded ? before.y : LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
     expect(Math.abs(after.x - expectedX)).toBeLessThan(2);
     expect(Math.abs(after.y - expectedY)).toBeLessThan(2);
     await page.keyboard.press("Shift+ArrowDown");
     const shifted = await page.locator("#announce").boundingBox();
     expect(Math.abs(shifted.y - after.y - LANDSCAPE.height / 20)).toBeLessThan(2);
     await picker.selectOption("inputs");
+    await page.locator("#hud-arrange-move").click();
     await expect(page.locator("#hud-arrange-vis")).toHaveValue("off");
     await page.locator("#hud-arrange-vis").selectOption("on");
     await expect(page.locator("#hud-arrange-vis")).toHaveValue("on");
@@ -1292,6 +1321,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(toolbar.x + toolbar.width).toBeLessThanOrEqual(LANDSCAPE.width - 59);
     expect(toolbar.y).toBeGreaterThanOrEqual(0);
     expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(LANDSCAPE.height - 21);
+    await page.locator("#hud-arrange-move").click();
     const picker = page.locator("#hud-arrange-element");
     for (const id of ["rel", "strat", "inputs"]) {
       await picker.selectOption(id);
@@ -1343,6 +1373,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const card = page.locator("#announce");
     await expect(card).toBeVisible();
+    // The factory placement RESET returns to: automatic, or on a phone the PHONE_STANDARD seed.
+    const factory = await page.evaluate(() => ({ v: HudLayout.get("announce"), placed: document.body.hasAttribute("data-radio-placed") }));
     // Drop in the tower's row (the phone report, 2026-10-14). Leave half the
     // viewport for the card: this checks manual placement, not edge clamping.
     const tower = await page.locator(".hud-top").boundingBox();
@@ -1376,7 +1408,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(Math.abs(a2.x - tx), "message at the drop point (x)").toBeLessThanOrEqual(6);
     expect(Math.abs(a2.y - ty), "message at the drop point (y)").toBeLessThanOrEqual(6);
     await page.evaluate(() => HudLayout.resetEl("announce"));
-    await page.waitForFunction(() => !document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction((placed) => document.body.hasAttribute("data-radio-placed") === placed, factory.placed, { polling: 100, timeout: BOOT_MS });
+    expect(await page.evaluate(() => HudLayout.get("announce")), "RESET restores the factory placement").toEqual(factory.v);
   });
 
   test("rotation exits Arrange and keeps restored Settings interactive above Pause", async ({ page }) => {
@@ -1443,6 +1476,45 @@ test.describe("Touch dock — REPOSITION per scheme", () => {
     buttons: { L: { x: 0, y: 0 }, R: { x: 0.22, y: 0.08 } },
     touch: { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } },
   };
+
+  test("a driver can move the steering group outward and customize Gas separately", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseControls(page);
+    await page.locator("#pm-dock-reposition").click();
+    const bar = page.locator("#dock-edit-bar");
+    const control = key => bar.locator('[data-k="' + key + '"]');
+    await control("tools").click();
+    await control("target").selectOption("steer");
+    const left = page.locator("#btn-steer-left");
+    const origin = await left.boundingBox();
+    const x = origin.x + origin.width / 2, y = origin.y + origin.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x - 28, y, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(async () => (await left.boundingBox()).x).toBeLessThan(origin.x - 1);
+
+    await control("target").selectOption("drive");
+    await control("layout").selectOption("pedal-row");
+    await control("target").selectOption("btn-throttle");
+    await control("bigger").click();
+    await control("bigger").click();
+    await control("shape").click();
+    const gas = await page.locator("#btn-throttle").boundingBox();
+    const brake = await page.locator("#btn-brake").boundingBox();
+    expect(gas.width / brake.width).toBeGreaterThan(1.1);
+    await testInfo.attach("custom-touch-controls", { body: await page.screenshot(), contentType: "image/png" });
+    await control("done").click();
+    const saved = () => page.evaluate(() => GameStore.store.get("dockLayout", null).buttons);
+    const expected = await saved();
+    expect(expected.controls["btn-throttle"].size).toBeGreaterThan(100);
+    expect(expected.controls["btn-brake"]).toBeUndefined();
+    await page.reload();
+    await waitReady(page);
+    expect(await saved()).toEqual(expected);
+  });
 
   test("buttons offset persists across reload; tilt stays identity", async ({ page }) => {
     await page.addInitScript((bag) => {
@@ -1579,6 +1651,7 @@ test.describe("Arrange map clearance handoff", () => {
     expect(Math.abs(moved.y-before.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(moved.w-before.w)).toBeLessThanOrEqual(1);
     expect(Math.abs(moved.h-before.h)).toBeLessThanOrEqual(1);
+    await page.locator("#hud-arrange-move").click();
     await page.locator("#hud-arrange-reset").click();
     const reset=await snap(); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY)).toBeGreaterThan(1);
     await page.locator("#hud-arrange-larger").click(); const resized=await snap();

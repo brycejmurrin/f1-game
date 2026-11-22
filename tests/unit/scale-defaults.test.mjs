@@ -71,21 +71,19 @@ test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
   assert.ok(jsRatio, "independent button default exists");
   assert.equal(Number(ratio[1]), Number(jsRatio[1]));
 
-  const jsDefaults = scaleJs.match(/scaleDefault = \(k\) => \(coarseUi\(\) \? \(k === "hudScale" \? (\d+) : \(phoneUi\(\) \? PHONE_UI_DEFAULT : (\d+)\)\) : 100\)/);
-  assert.ok(jsDefaults, "js/ui/scale.js must declare the coarse scaleDefault pair");
-  assert.equal(Number(jsDefaults[1]) / 100, Number(css["--hud-scale"]),
-    "--hud-scale and scale.js's hudScale default must agree");
-  assert.equal(Number(jsDefaults[2]) / 100, Number(css["--ui-scale"]),
-    "--ui-scale and scale.js's ui default must agree");
+  const tablet = bootScale({}, { innerWidth: 1024, innerHeight: 768, matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) });
+  assert.equal(Number(tablet.el("pm-hudscale").value), Number(css["--hud-scale"]) * 100);
+  assert.equal(Number(tablet.el("pm-uiscale").value) / 100, Number(css["--ui-scale"]));
 });
 
 test("a phone's first-paint UI SIZE and scale.js's phone default agree (#5358)", () => {
   // The block right after the coarse one: touch AND a short side of at most 500 px, either orientation.
-  const m = tokens.match(/@media \(pointer: coarse\) and \(max-height: (\d+)px\), \(pointer: coarse\) and \(max-width: (\d+)px\)\s*\{\s*:root\s*\{\s*--ui-scale:\s*([\d.]+);\s*\}/);
+  const m = tokens.match(/@media \(pointer: coarse\) and \(max-height: (\d+)px\), \(pointer: coarse\) and \(max-width: (\d+)px\)\s*\{\s*:root\s*\{\s*--ui-scale:\s*([\d.]+);\s*--hud-btn-mult:\s*([\d.]+);\s*\}/);
   assert.ok(m, "css/tokens.css must declare the phone :root block");
   const js = scaleJs.match(/const PHONE_UI_DEFAULT = (\d+);/);
   assert.ok(js, "js/ui/scale.js must declare PHONE_UI_DEFAULT");
   assert.equal(Number(m[3]), Number(js[1]) / 100, "the CSS mirror and the JS default are one number");
+  assert.equal(Number(m[4]) * 100, Number(scaleJs.match(/const PHONE_BTN_DEFAULT = ([\d.]+);/)[1]));
   const side = scaleJs.match(/const phoneUi = \(\) => coarseUi\(\) && Math\.min\(window\.innerWidth, window\.innerHeight\) <= (\d+);/);
   assert.ok(side, "phoneUi() is touch and a short side");
   assert.deepEqual([Number(m[1]), Number(m[2])], [Number(side[1]), Number(side[1])], "the media query and phoneUi() test the same short side");
@@ -140,7 +138,10 @@ test("--hud-scale carries no blanket touch bump, and the old size stays reachabl
 // UiScale.create(G) run for real in node:vm over stub elements: the slider
 // writes --hud-panel-a on <html> only once moved, clamps to 20-100, and its
 // revert clears it — the same contract as BUTTON OPACITY beside it.
-function bootScale(stored = {}, { caps } = {}) {
+// The second argument is a viewport ({matchMedia}) or {caps, viewport} (an in-race HUD with --hud-cap).
+function bootScale(stored = {}, opts = {}) {
+  const viewport = opts.matchMedia ? opts : (opts.viewport || { matchMedia: () => ({ matches: false }) });
+  const caps = opts.matchMedia ? undefined : opts.caps;
   const rootStyle = new Map(caps ? [["--hud-cap", caps]] : []);
   const els = new Map();
   const el = (id) => {
@@ -166,7 +167,7 @@ function bootScale(stored = {}, { caps } = {}) {
     SettingRow: { wire() {}, paint() {}, labels: (v) => v.map((x) => [x, x]) },
     PerfGov: { setAutoRes() {} },
     requestAnimationFrame: () => 0,
-    window: { matchMedia: () => ({ matches: false }) },
+    window: viewport,
     document: { body: caps ? { classList: { contains: (c) => c === "in-race" } } : undefined, documentElement: { style: {
       setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k), getPropertyValue: (k) => rootStyle.get(k) ?? "",
     } } },
@@ -175,6 +176,58 @@ function bootScale(stored = {}, { caps } = {}) {
   const api = vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: {}, updateTrackPreview() {} });
   return { api, el, rootStyle, stored };
 }
+
+test("roomy desktop menus follow the viewport until UI SIZE is set and resume on reset", () => {
+  const query = "(pointer: fine) and (min-width: 1600px) and (min-height: 900px)";
+  const block = tokens.split("@media " + query)[1]?.split("}")[0];
+  assert.match(block || "", /--ui-scale: 1\.15;/);
+  let onChange;
+  const desktop = { matches: true, addEventListener(event, cb) { if (event === "change") onChange = cb; } };
+  const viewport = { matchMedia: (q) => q === query ? desktop : { matches: false } };
+  const { api, el, rootStyle, stored } = bootScale({}, viewport);
+  const label = () => el("pm-uiscale-v").textContent;
+  assert.equal(label(), "100%");
+  assert.equal(rootStyle.has("--ui-scale"), false);
+  assert.equal(el("pm-hudscale").value, "100");
+  assert.equal(el("pm-btnscale").value, "100");
+  desktop.matches = false;
+  onChange();
+  assert.equal(label(), "100%");
+  api.setScale("uiScale", "--ui-scale", 120);
+  desktop.matches = true;
+  onChange();
+  assert.equal(label(), "104.35%");
+  assert.equal(rootStyle.get("--ui-scale"), "1.2");
+  el("pm-uiscale-r").onclick({ preventDefault() {}, stopPropagation() {} });
+  assert.equal(stored.uiScale, undefined);
+  assert.equal(rootStyle.has("--ui-scale"), false);
+  assert.equal(label(), "100%");
+});
+
+test("device-relative labels preserve physical values, keyboard increments, and reset", () => {
+  const viewport = { innerWidth: 393, innerHeight: 852, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  const phone = bootScale({}, viewport);
+  for (const [key, id, baseline] of [["uiScale", "pm-uiscale", 70], ["hudScale", "pm-hudscale", 100], ["hudBtnScale", "pm-btnscale", 143.25]]) {
+    assert.equal(phone.el(id).value, String(baseline));
+    assert.equal(phone.el(id).ariaValueText, "100%");
+    assert.equal(phone.stored[key], undefined);
+    const input = phone.el(id);
+    const next = { target: { value: String(baseline + 0.25) } };
+    input.oninput(next);
+    if (input.onchange) input.onchange(next);
+    assert.equal(phone.stored[key], baseline + 0.25);
+    assert.equal(input.ariaValueText, Math.round((baseline + 0.25) * 10000 / baseline) / 100 + "%");
+    phone.el(id + "-r").onclick({ preventDefault() {}, stopPropagation() {} });
+    assert.equal(input.ariaValueText, "100%");
+  }
+  const old = bootScale({ uiScale: 50, hudBtnScale: 125 }, viewport);
+  assert.equal(old.el("pm-uiscale").ariaValueText, "71.43%");
+  assert.equal(old.el("pm-btnscale").ariaValueText, "87.26%");
+  assert.equal(old.rootStyle.get("--hud-btn-scale"), "1.25");
+  const tablet = bootScale({}, { ...viewport, innerWidth: 1024, innerHeight: 768 });
+  assert.equal(tablet.el("pm-btnscale").value, "125");
+  assert.equal(tablet.el("pm-btnscale").ariaValueText, "100%");
+});
 
 test("PANEL OPACITY: unset writes nothing; the slider clamps to 20-100 and reverts", () => {
   const { el, rootStyle, stored } = bootScale();
@@ -247,13 +300,14 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
 // boot APPLIES, not just what the helper says: an unset phone starts at 0.75 with the governor's
 // resolution stage ON under a 0.75 ceiling, a stored choice wins over the default, and a pointer device
 // is unchanged (AUTO, ceiling 1). `scale0` is the backend's scale when the boot reaches applyResMode.
-function bootRes({ coarse, stored = {}, scale0 = 1 }) {
+function bootRes({ coarse, iphone = false, stored = {}, scale0 = 1 }) {
   const calls = { scale: [], autoRes: [], painted: [], ceil: [], dpr: [] };
   let live = scale0;
   const ctx = vm.createContext({
     Math, Number, String, JSON, isFinite, Object, Array,
     Log: { info() {} },
     SettingRow: { wire() {}, paint: (el, v) => { if (el && el.id === "pm-res") calls.painted.push(v); }, labels: (v) => v.map((x) => [x, x]) },
+    GfxQuality: { isIPhone: () => iphone },
     PerfGov: { setAutoRes: (on) => calls.autoRes.push(on), setResCeil: (v) => calls.ceil.push(v) },
     requestAnimationFrame: () => 0,
     window: { matchMedia: (q) => ({ matches: q === "(pointer: coarse)" ? coarse : false }) },
@@ -268,12 +322,19 @@ function bootRes({ coarse, stored = {}, scale0 = 1 }) {
   return calls;
 }
 
-test("RESOLUTION: a phone with nothing stored boots on AUTO at MED's 0.75, governor-driven under a 0.75 ceiling (#5227)", () => {
+test("RESOLUTION: a non-iPhone touch device with nothing stored boots on AUTO at MED's 0.75, governor-driven under a 0.75 ceiling (#5227)", () => {
   const c = bootRes({ coarse: true });
   assert.deepEqual(c.painted, ["auto"]);
   assert.deepEqual(c.scale, [0.75], "the boot's 1.0 comes down to the phone ceiling: never sharper than MED");
   assert.deepEqual(c.ceil, [0.75]);
   assert.deepEqual(c.autoRes, [true], "the resolution stage is the governor's again");
+});
+
+test("fresh iPhone rendering pins HIGH while a saved AUTO still runs the governor", () => {
+  const fresh = bootRes({ iphone: true, coarse: true });
+  assert.deepEqual([fresh.painted, fresh.scale, fresh.autoRes], [["high"], [1], [false]]);
+  const saved = bootRes({ iphone: true, coarse: true, stored: { resMode: "auto", resSchema: 2 } });
+  assert.deepEqual([saved.painted, saved.scale, saved.autoRes], [["auto"], [0.75], [true]]);
 });
 
 test("RESOLUTION: a phone's AUTO never RAISES a scale that already sits under its ceiling", () => {
@@ -364,14 +425,11 @@ test("RESOLUTION: a pointer device with nothing stored is unchanged (AUTO, gover
   assert.deepEqual(c.autoRes, [true]);
 });
 
-test("UiScale.defaultResMode() answers from the primary pointer, without create(G)", () => {
-  const run = (matches, throws) => {
-    const ctx = vm.createContext({ window: { matchMedia: (q) => { if (throws) throw new Error("no mq"); assert.equal(q, "(pointer: coarse)"); return { matches }; } } });
-    return vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx);
-  };
-  assert.equal(run(true), "auto", "a phone ships AUTO since #5227; its 0.75 ceiling is applied at boot, not in the mode id");
-  assert.equal(run(false), "auto");
-  assert.equal(run(false, true), "auto", "a throwing matchMedia is a pointer device");
+test("UiScale.defaultResMode() follows the iPhone graphics profile without create(G)", () => {
+  for (const [iphone, expected] of [[true, "high"], [false, "auto"]]) {
+    const ctx = vm.createContext({ GfxQuality: { isIPhone: () => iphone } });
+    assert.equal(vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx), expected);
+  }
   assert.match(scaleJs, /store\.get\("resMode", defaultResMode\(\)\)/, "the live row reads the same helper SPEC consumes");
 });
 

@@ -360,6 +360,7 @@ const ExtraRigs = (function () {
     }
     if (_peDone || _pitIdx < 0 || typeof G.setCamMode !== "function" || peQuiet(store)) return;
     _peDone = true;
+    if (CamModes.CAM_MODES[G.camMode]?.id === "helmet") return;
     if (!_peHooked && typeof addEventListener === "function") {
       _peHooked = true;
       addEventListener("pointerdown", (e) => { if (_pe && e.target && e.target.tagName === "CANVAS") _peTap = true; }, true);

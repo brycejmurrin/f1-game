@@ -43,11 +43,13 @@ const PhonePadCodec = (function () {
   // STATE channel, desktop → phone: the dash, ["H", gear, kmh, rpmFrac, lap,
   // laps, pos, cars, ers, flags, caution, lastLapMs, state, teamHex]. Tagged
   // "H" so decodeSample's `a[0] !== PROTO` refuses it and vice versa.
-  function encodeHud(h) {
+  function encodeHud(h, gripFeedback) {
     if (!h) return null;
-    return JSON.stringify(["H", h.gear | 0, Math.round(+h.kmh || 0), round2(h.rpm), h.lap | 0, h.laps | 0,
+    const fields = ["H", h.gear | 0, Math.round(+h.kmh || 0), round2(h.rpm), h.lap | 0, h.laps | 0,
       h.pos | 0, h.cars | 0, round2(h.ers), h.flags | 0, h.caution | 0, Math.round(+h.lastLapMs || 0),
-      String(h.state || "").slice(0, 8), /^#[0-9a-f]{6}$/i.test(h.team || "") ? h.team : ""]);
+      String(h.state || "").slice(0, 8), /^#[0-9a-f]{6}$/i.test(h.team || "") ? h.team : ""];
+    if (gripFeedback && h.grip) fields.push(h.grip);
+    return JSON.stringify(fields);
   }
   function decodeHud(text) {
     let a;
@@ -56,13 +58,14 @@ const PhonePadCodec = (function () {
   }
   // The parsed half, so the session's STATE handler parses each packet once (audit4 UB5).
   function hudOf(a) {
-    if (!Array.isArray(a) || a.length !== 14 || a[0] !== "H") return null;
+    if (!Array.isArray(a) || (a.length !== 14 && a.length !== 15) || a[0] !== "H") return null;
     return {
       gear: num(a[1], -1, 9) | 0, kmh: num(a[2], 0, 999) | 0, rpm: num(a[3], 0, 1),
       lap: num(a[4], 0, 999) | 0, laps: num(a[5], 0, 999) | 0, pos: num(a[6], 0, 99) | 0, cars: num(a[7], 0, 99) | 0,
       ers: num(a[8], 0, 1), flags: num(a[9], 0, 65535) | 0, caution: num(a[10], 0, 4) | 0,
       lastLapMs: num(a[11], 0, 3.6e6) | 0, state: String(a[12] || "").slice(0, 8),
       team: /^#[0-9a-f]{6}$/i.test(a[13] || "") ? a[13] : "",
+      ...(["spin", "slip", "lock"].includes(a[14]) ? { grip: a[14] } : {}),
     };
   }
   // EVENT channel: {t:"ev", k} phone→desktop; {t:"hap", ms} desktop→phone;
@@ -79,7 +82,7 @@ const PhonePadCodec = (function () {
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
   function encodeHello(side, haptics, extended, id) {
     return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}),
-      ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
+      ...(extended && side === "pad" ? { grip: true } : {}), ...(typeof id === "string" && PEER_ID_RE.test(id) ? { id } : {}) });
   }
   // A fresh peer id: 128 random bits as hex (crypto where the page has it).
   function makePeerId() {
@@ -97,7 +100,7 @@ const PhonePadCodec = (function () {
     if (o.t === "sus") return { t: "sus" };
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
     if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}),
-      ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
+      ...(o.grip === true ? { grip: true } : {}), ...(typeof o.id === "string" && PEER_ID_RE.test(o.id) ? { id: o.id } : {}) };
     return null;
   }
   // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.

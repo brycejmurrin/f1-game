@@ -282,8 +282,13 @@ function buildLightTunePanel() {
         span.appendChild(document.createTextNode(" (DESKTOP ONLY)"));
         inp.setAttribute("aria-label", d.label + " (desktop only)");
       }
-      inp.oninput = () => {
-        if (!setLightTune(d.id, parseFloat(inp.value))) return;
+      const number = SettingRow.numberInput(inp, () => LT[d.id], (v) => {
+        if (update(v)) { inp.value = LT[d.id]; persistLightTune(); }
+      });
+      number.id = "lt-num-" + d.id;
+      function update(v) {
+        if (!setLightTune(d.id, v)) return false;
+        number.value = String(LT[d.id]);
         b.textContent = fmtTune(d, LT[d.id]);
         if (d.id === "perChunkLights" || d.id === "roadChunkLamps") {
           const other = TUNE_DEFS.find((t) => t.id === (d.id === "perChunkLights" ? "roadChunkLamps" : "perChunkLights"));
@@ -291,13 +296,15 @@ function buildLightTunePanel() {
           if (value) value.textContent = fmtTune(other, LT[other.id]);
         }
         updateLtProfileLabel();
-      };
+        return true;
+      }
+      inp.oninput = () => update(parseFloat(inp.value));
       // Persist on release (range "change" fires once), not on every drag tick —
       // persistLightTune() does a synchronous JSON.stringify + localStorage.setItem
       // of the whole profile store, which is too heavy to run on every oninput.
       inp.onchange = () => persistLightTune();
       lab.appendChild(span); lab.appendChild(inp);
-      item.appendChild(lab);
+      item.appendChild(lab); item.appendChild(number);
       if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
       wrap.appendChild(item);
     }
@@ -327,6 +334,8 @@ function refreshLightTunePanel() {
   for (const d of TUNE_DEFS) {
     const inp = $("lt-in-" + d.id), b = $("lt-v-" + d.id);
     if (inp) inp.value = LT[d.id];
+    const number = $("lt-num-" + d.id);
+    if (number) number.value = String(LT[d.id]);
     if (b) b.textContent = fmtTune(d, LT[d.id]);
   }
   updateLtProfileLabel();

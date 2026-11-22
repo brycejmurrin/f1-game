@@ -7,7 +7,7 @@
  * function handed to page.evaluate: no closure over this module.
  *
  * GEOS are Bryce's phone as the iOS home-screen app and as a Safari tab (852x393
- * and the MEASURED 852x368, both 59/21/59; tests/data/phone-windows.json is the one
+ * and 852x368; tests/data/phone-windows.json is the one
  * record, #5218), the 844x390 house geometry and a Pro Max. Insets land through CDP Emulation.setSafeAreaInsetsOverride, which
  * is what env(safe-area-inset-*) reads. PROFILES are what a phone BOOTS with:
  * a fresh profile, the legacy export (tools/lib/bryce-phone.mjs `legacy`, the
@@ -23,29 +23,16 @@ import { LEGACY_EXPORT, ownerStore } from "../../tools/lib/bryce-phone.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-// `rows` is the composition a TOUCH boot paints with CONTINUE shown (#5213: under a finger a door
-// is at least 44 px, so the eight rows re-flow where eight 44 px rows do not fit the box): seven
-// rows (CAREER joins the retention row) in a 353-356 px box, all eight at 430; `floor` is false
-// where no row count fits WITH EVERY WORD WHOLE and the fit wins. Safari's 254 px box (#5208's
-// max(inset, gutter) edge; it was 246) takes the five-row tier by door box, but PRACTICE's label
-// clips four-up (#5378: span 53 px in a 50 px box), so fits() rejects it and the unfloored eight
-// rows zoom down, as before the floor. judgeLabels holds the "every word whole" half.
-// The phone windows come from THE record (#5218): the Safari cell was 852x283 with 67/21/67 here, 852x344 in
-// tools/ui/menu-screens.mjs and 852x283 59/0/59 in the UI contract; his phone read 852x368. At 852x368 the touch
-// boot still composes eight rows with every label whole and misses the 44 px floor (poke 2026-11-11, fresh and
-// export profiles), so the cell kept ROWS8 / floor false until #5358 (next note).
+// A clean phone and the owner's legacy export both keep Career on its own row and Continue / Daily
+// together beneath it. The six play buttons share two or three columns, or join Watch / Data in
+// four columns on the shortest phones. These compositions include Continue and preserve the tap floor.
 const WIN = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/phone-windows.json"), "utf8")).windows;
 const cell = (name, w) => ({ name, w: w.width, h: w.height, insets: { ...w.insets } });
-// #5358: a phone ships UI SIZE 70 % and BUTTONS SIZE 123, and neither profile here stores a UI SIZE, so both boot
-// at 70 % (probe 2026-11-15, CONTINUE shown, every cell clear of judge / judgeLabels / judgeFloor). `rows` is the
-// export (stored WIDTH 20, SIZE 91: seven rows, eight at 430; Safari now holds the 44 px floor with seven);
-// `freshRows` is the clean profile, whose bigger doors take the five-row tier where the box has no side insets
-// to pay (844x390) or is short (Safari), and seven rows elsewhere.
-const ROWS5 = [3, 4, 4, 3, 4], ROWS7 = [3, 2, 2, 2, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
+const ROWS6 = [1, 2, 4, 4, 3, 4], ROWS7 = [1, 2, 3, 3, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
 export const GEOS = [
   { ...cell("852x393-standalone", WIN.standalone), rows: ROWS7, freshRows: ROWS7, floor: true },
-  { ...cell(`${WIN.safari.width}x${WIN.safari.height}-safari`, WIN.safari), rows: ROWS7, freshRows: ROWS5, floor: true },
-  { ...cell("844x390", WIN.w844), rows: ROWS7, freshRows: ROWS5, floor: true },
+  { ...cell(`${WIN.safari.width}x${WIN.safari.height}-safari`, WIN.safari), rows: ROWS7, freshRows: ROWS6, floor: true },
+  { ...cell("844x390", WIN.w844), rows: ROWS7, freshRows: ROWS7, floor: true },
   { name: "932x430", w: 932, h: 430, insets: { top: 0, left: 59, bottom: 21, right: 59 }, rows: ROWS8, freshRows: ROWS7, floor: true },
 ];
 
@@ -283,7 +270,12 @@ export function judgeStored(m) {
   if (!heightBound && m.raceFs < 12) bad.push(`RACE paints at ${m.raceFs}px (under 12 at fit ${fit})`);
   const door = (id) => m.doors.find((d) => d.id === id);
   const sameRow = (a, b) => { const x = door(a), y = door(b); if (!x || !y) return bad.push(`door ${!x ? a : b} missing`); if (Math.abs(x.t - y.t) > TOL) bad.push(`${a} (top ${Math.round(x.t)}) and ${b} (top ${Math.round(y.t)}) do not share a row`); };
-  sameRow("mb-race", "mb-tt"); sameRow("mb-vs", "mb-season"); sameRow("mb-practice", "mb-garage"); sameRow("mb-watch", "mb-data");
+  sameRow("mb-race", "mb-tt"); sameRow("mb-practice", "mb-garage"); sameRow("mb-watch", "mb-data");
+  // VS closes the RACE row in ROWS7 (three play doors a row, #5977) and opens the SEASON row in ROWS8;
+  // GEOS[].rows pins which composition each geometry paints.
+  { const vs = door("mb-vs"), a = door("mb-tt"), b = door("mb-season");
+    if (!vs || !a || !b) bad.push("door mb-vs, mb-tt or mb-season missing");
+    else if (Math.abs(vs.t - a.t) > TOL && Math.abs(vs.t - b.t) > TOL) bad.push(`mb-vs (top ${Math.round(vs.t)}) shares a row with neither mb-tt nor mb-season`); }
   sameRow("mb-settings", "mb-phonepad"); sameRow("mb-phonepad", "mb-help"); sameRow("mb-help", "mb-saves");
   if (!m.disc || m.disc.display === "none" || !(m.disc.h > 0)) bad.push("the disclaimer is hidden");
   else if (!inside(m.disc, m.ov.box, TOL)) bad.push(`disclaimer ${fmt(m.disc)} leaves the box ${fmt(m.ov.box)}`);

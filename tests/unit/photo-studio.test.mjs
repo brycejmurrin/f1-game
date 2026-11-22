@@ -60,7 +60,7 @@ function boot(options = {}) {
     Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
-    NativeDownload: options.nativeDownload,
+    NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
       TUNE_DEFS: options.tuneDefs || [
@@ -69,7 +69,7 @@ function boot(options = {}) {
         { id: "sunElev", group: "SUN & MOON", label: "Sun elevation", min: -20, max: 90, step: 1 },
       ],
     },
-    LightStore: { reapply: () => { order.push("lt-reapply"); } },
+    LightStore: { reapply: () => { Object.assign(LT, ltProfiles.value["test|day|dry"]); order.push("lt-reapply"); } },
     DrivingLine: { shown: () => true, setPhoto: () => {} },
     GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; },
       // js/core/store.js rawSet/rawDel: false (never a throw) when the write fails.
@@ -78,6 +78,11 @@ function boot(options = {}) {
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
+  if (options.withModalFocus) {
+    dom.document.readyState = "loading";
+    vm.runInContext(fs.readFileSync(new URL("../../js/ui/modal.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/modal.js") });
+    ctx.TopModal = ctx.window.TopModal;
+  }
   vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/photo-studio-ui.js") }); vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
   // LightStore.set's shape: the live LT plus whatever profiles object G._ltStore holds right now.
   const ltStore = { set: (id, v) => {
@@ -357,13 +362,12 @@ test("a delayed save retains its original photo and cannot clear a reopened capt
   b.api.open({ metadata: { title: "Old Monza photo" } }); await b.api.capture();
   const saved = b.api.savePhoto();
   b.api.close(false); b.api.open({ source: "garage", metadata: { title: "New garage" } }); await turn();
-  const libraryBefore = b.dom.byId("ps-library").children[0];
   b.G.gfx.capturePixels = () => new Promise((r) => { read = r; });
   const captured = b.api.capture();
   encode(new Blob(["old photo"], { type: "image/jpeg" })); await saved;
   assert.equal(b.api.state().busy, true, "old finally cannot enable a new operation's buttons");
   assert.match(b.dom.byId("ps-message").textContent, /Capturing/);
-  assert.equal(b.dom.byId("ps-library").children[0], libraryBefore, "old save cannot repaint the current library");
+  assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "current visit displays the completed save");
   read({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await captured;
   b.api.close(false); b.api.open({ source: "garage" }); await turn();
   assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "persisted entry retains its initiating context");
@@ -557,10 +561,79 @@ test("put, prune, and commit failures roll back all durable changes and retain a
   }
 });
 
+test("a visit-only save survives clock rollback, reopen, and a later durable save", async () => {
+  const future = Date.now() + 60_000;
+  const seed = seededPhotos(6).map((p) => ({ ...p, at: future + p.at }));
+  const db = photoDb(seed), b = boot({ indexedDB: db });
+  const titles = () => Array.from(b.dom.byId("ps-library").children, (row) => row.children[1].textContent);
+  b.api.open({ metadata: { title: "Visit photo" } });
+  await b.api.capture(); db.failNext("put"); await b.api.savePhoto();
+  assert.deepEqual([...db.rows.values()], seed);
+  assert.equal(titles()[0], "Visit photo");
+  b.api.close(false); b.api.open({ metadata: { title: "Durable photo" } });
+  assert.deepEqual(Array.from(await b.api.album(), (p) => p.title), titles());
+  assert.equal(titles()[0], "Visit photo");
+  await b.api.capture(); await b.api.savePhoto();
+  assert.deepEqual(titles().slice(0, 2), ["Durable photo", "Visit photo"]);
+  assert.equal(titles().length, 6);
+});
+
+test("a failed album deletion leaves a reopened Studio's notice alone", async () => {
+  const db = photoDb(seededPhotos(1)), b = boot({ indexedDB: db });
+  b.api.open(); await b.api.album();
+  const remove = () => b.dom.byId("ps-library").children[0].children[4].click();
+  db.failNext("delete"); remove();
+  b.api.close(false); b.api.open({ source: "garage" });
+  const notice = b.dom.byId("ps-message").textContent;
+  await b.api.album();
+  assert.equal(b.dom.byId("ps-message").textContent, notice);
+  db.failNext("delete"); remove(); await b.api.album();
+  assert.equal(b.dom.byId("ps-message").textContent, "Photo could not be deleted.");
+  assert.equal(db.rows.size, 1);
+});
+
 test("equal timestamps prune deterministically by ID instead of request or enumeration order", async () => {
   const seed = seededPhotos(8).map((row) => ({ ...row, at: 1 })).reverse(), idb = photoDb(seed), b = boot({ indexedDB: idb });
   b.api.open(); await b.api.capture(); await b.api.savePhoto();
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-3", "old-4", "old-5", "old-6", "old-7"]);
+});
+test("saving to a full album evicts the last displayed photo when legacy timestamps tie", async () => {
+  const db = photoDb(seededPhotos(6).map((row) => ({ ...row, at: 100 })));
+  const b = boot({ indexedDB: db });
+  const titles = () => Array.from(b.dom.byId("ps-library").children, (row) => row.children[1].textContent);
+  b.api.open({ metadata: { title: "New capture" } });
+  const before = Array.from(await b.api.album(), (photo) => photo.title);
+  assert.deepEqual(titles(), before);
+  await b.api.capture(); await b.api.savePhoto();
+  const expected = ["New capture", ...before.slice(0, 5)];
+  assert.deepEqual(titles(), expected);
+  assert.deepEqual(Array.from(await b.api.album(), (photo) => photo.title), expected);
+});
+for (const fallback of [false, true]) test(`a late ${fallback ? "visit-only" : "durable"} save appears in the reopened album with its original bytes`, async () => {
+  const db = photoDb(seededPhotos(1));
+  let finishEncode, downloaded;
+  const b = boot({ indexedDB: db, withModalFocus: true, encode: cb => { finishEncode = cb; },
+    nativeDownload: { viable: () => true, saveBlob: blob => { downloaded = blob; return Promise.resolve(); } } });
+  b.api.open({ metadata: { title: "Earlier shot" } }); await b.api.capture();
+  const saving = b.api.savePhoto();
+  b.api.close(false); b.api.open({ source: "garage", metadata: { title: "Current shot" } });
+  await b.api.album();   // the new visit's initial gallery read finishes before the JPEG is ready
+  let finishCapture;
+  b.G.gfx.capturePixels = () => new Promise(resolve => { finishCapture = resolve; });
+  const capturing = b.api.capture(), notice = b.dom.byId("ps-message").textContent;
+  b.dom.byId("ps-library").children[0].children[4].focus();
+  if (fallback) db.failNext("put");
+  finishEncode(new Blob(["original capture bytes"], { type: "image/jpeg" })); await saving;
+  assert.equal(b.api.state().busy, true);
+  assert.equal(b.dom.byId("ps-message").textContent, notice);
+  const row = b.dom.byId("ps-library").children[0];
+  assert.equal(row.children[1].textContent, "Earlier shot");
+  assert.equal(db.rows.size, fallback ? 1 : 2);
+  assert.equal(b.dom.document.activeElement.parentElement.children[1].textContent, "Old 0", "DELETE still targets the previously focused photo");
+  assert.equal(b.dom.document.activeElement.textContent, "DELETE");
+  row.children.find(el => el.textContent === "DOWNLOAD").click(); await turn();
+  assert.equal(await downloaded.text(), "original capture bytes");
+  finishCapture({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await capturing;
 });
 test("a committed save from a closed Studio retains its original metadata without touching a reopened session", async () => {
   const idb = photoDb(), b = boot({ indexedDB: idb });
@@ -743,6 +816,51 @@ test("Photo Lighting clones the profile store, writes via the light store, and r
   b.api.close(false);
   assert.equal(b.G._ltStore, original, "close restores the exact original profiles reference");
   assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
+});
+
+test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {
+  const original = { "test|day|dry": { exposureMul: 1 } };
+  const b = boot({ profiles: original });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-exposureMul"), exact = b.dom.byId("ps-lt-num-exposureMul");
+  const change = (value, valid = true) => {
+    exact.value = value;
+    exact.valueAsNumber = value === "" ? NaN : Number(value);
+    exact.validity = { valid }; // the mini DOM does not implement native range / step validation
+    exact.dispatchEvent({ type: "change" });
+  };
+  assert.equal(exact.type, "number");
+  assert.match(exact.getAttribute("aria-label"), /exposure/i);
+  assert.deepEqual([exact.min, exact.max, exact.step], [slider.min, slider.max, slider.step]);
+  exact.value = "1."; exact.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [], "typing an incomplete decimal does not edit the session");
+  change("1.35");
+  assert.equal(slider.value, "1.35");
+  assert.equal(b.dom.byId("ps-lt-v-exposureMul").textContent, "1.35");
+  for (const bad of ["", "3.5", "1.33"]) { change(bad, false); assert.equal(exact.value, "1.35"); }
+  slider.value = "1.55"; slider.dispatchEvent({ type: "input" });
+  assert.equal(exact.value, "1.55");
+  assert.deepEqual(b.ltWrites, [["exposureMul", 1.35], ["exposureMul", 1.55]]);
+  b.dom.byId("ps-lt-reset").click();
+  assert.equal(exact.value, "1"); assert.equal(slider.value, "1");
+  assert.equal(b.dom.byId("ps-lt-reset").disabled, true);
+  b.api.close(false);
+  change("2");
+  assert.equal(b.ltWrites.length, 2);
+  assert.equal(b.G._ltStore, original);
+});
+
+test("Photo Lighting locks both controls for desktop-only knobs on mobile", () => {
+  const b = boot({ mobile: true, LT: { carShadow: 1 }, tuneDefs: [
+    { id: "carShadow", label: "Car shadows", group: "Shadows", min: 0, max: 1, step: 1, desktopOnly: true },
+  ] });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-carShadow"), exact = b.dom.byId("ps-lt-num-carShadow");
+  assert.equal(slider.disabled, true);
+  assert.equal(exact.disabled, true);
+  assert.match(exact.getAttribute("aria-label"), /desktop only/i);
+  exact.value = "0"; exact.dispatchEvent({ type: "change" });
+  assert.deepEqual(b.ltWrites, []);
 });
 
 test("Photo Lighting stays out of the garage subject", () => {

@@ -2,6 +2,7 @@
 // while the browser form of the same call still is. Occupancy comes from APEX_MCP_PS only, so this file never touches
 // the shared scratch/apex-browser.lock other tests write.
 import { test } from "node:test";
+import { LOCK } from "../helpers/apex-tools-mcp.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -12,7 +13,7 @@ const MCP = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
 const LIVE_BROWSER = "88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless\n"
   + "91 /opt/pw-browsers/chromium --user-data-dir=/tmp/playwright-mcp-abc --headless\n";
 const call = (args) => spawnSync(process.execPath, [MCP, "call", "apex_eval", JSON.stringify(args)], {
-  encoding: "utf8", cwd: ROOT, timeout: 15000, env: { ...process.env, APEX_MCP_MOCK: "0", APEX_MCP_PS: LIVE_BROWSER },
+  encoding: "utf8", cwd: ROOT, timeout: 15000, env: { ...process.env, APEX_BROWSER_LOCK: LOCK, APEX_MCP_MOCK: "0", APEX_MCP_PS: LIVE_BROWSER },
 });
 
 test("apex_eval {vm:true} runs beside a live browser", () => {

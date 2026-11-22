@@ -53,22 +53,19 @@ const GhostShare = (function () {
     }
     return Object.keys(out).length ? out : null;
   }
-  // FNV-1a (32-bit) over the JSON of [time, t, s, x]: JSON numbers round-trip
-  // exactly, so the receiver hashes the same text the sender did.
-  function traceHash(g) {
-    const text = JSON.stringify([g.time, g.t, g.s, g.x]);
-    let h = 0x811c9dc5;
-    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-    return (h >>> 0).toString(36);
+  // FNV-1a (32-bit) over [track?, time, t, s, x]; legacy omits track. Hash32 is eager.
+  function traceHash(g, track) {
+    return Hash32.fnv1a(JSON.stringify(track ? [track, g.time, g.t, g.s, g.x] : [g.time, g.t, g.s, g.x])).toString(36);
   }
 
   function envelope(ghost, opts) {
     if (!validGhost(ghost)) return null;
     const o = opts || {};
+    const track = typeof o.track === "string" && o.track ? o.track : null;
     return {
       v: 1,
       kind: "ghost",
-      track: typeof o.track === "string" && o.track ? o.track : null,
+      track,
       context: typeof o.context === "string" && o.context ? o.context : null,
       day: typeof o.day === "string" && o.day ? o.day : null,
       time: ghost.time,
@@ -76,7 +73,7 @@ const GhostShare = (function () {
       t: ghost.t,
       s: ghost.s,
       x: ghost.x,
-      h: traceHash(ghost),
+      h: traceHash(ghost, track),
     };
   }
 
@@ -229,7 +226,8 @@ const GhostShare = (function () {
   function fromBody(body) {
     if (!body || body.v !== 1 || body.kind !== "ghost" || typeof body.track !== "string" || !body.track ||
         !validGhost(body, maxArc(body.track))) return CORRUPT;
-    if (body.h !== undefined && body.h !== traceHash(body)) return CORRUPT;   // time or trace edited after export
+    if (body.h !== undefined && body.h !== traceHash(body, body.track) &&
+        body.h !== traceHash(body)) return CORRUPT;   // track-aware; legacy ok
     if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
     const meta = cleanMeta(body.meta);
     return {

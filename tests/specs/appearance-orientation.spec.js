@@ -5,11 +5,11 @@
 //      key and no painted size (--ui-scale, --hud-btn-scale).
 //   2. SEPARATE (opt-in): a settled portrait boot loads the lazy LayoutPresets and swaps in portrait's copy once.
 // Chromium emulation: not WebKit, not his device (bryce-phone `limits`).
+import { rotateIPhone15 } from "../helpers/iphone15.mjs";
 import { test, expect } from "@playwright/test";
 import { openBrycePhone, brycePhone } from "../../tools/lib/bryce-phone.mjs";
 
 const BOOT = 60000;
-const PORTRAIT = { width: 393, height: 852 }, LANDSCAPE = { width: 852, height: 393 };
 
 /** In-page: every stored SETTING (the apex26.* keys SettingsExport.SPEC declares), the painted size tokens and
  *  the ICB shape. Caches outside the SPEC (e.g. the asset pack's `apex26.packIndex`, written async after boot,
@@ -25,8 +25,8 @@ function stateInPage() {
 /** Past AppearanceStudio's SHAPE_SETTLE_MS (2000) since the last shape answer, with margin. */
 const settled = (page) => page.waitForFunction(() => performance.now() - window.__shapeAt > 2600, null, { polling: 100, timeout: 15000 });
 
-async function boot(browser, baseURL, { extra = null, first = LANDSCAPE } = {}) {
-  const { context, page } = await openBrycePhone(browser, { window: "standalone", dpr: 1 });
+async function boot(browser, baseURL, { extra = null, first = "standalone" } = {}) {
+  const { context, page, cdp } = await openBrycePhone(browser, { window: first, dpr: 1 });
   await context.addInitScript((e) => {
     window.__TEST_MODE = true;
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); if (e) for (const [k, v] of Object.entries(e)) localStorage.setItem(k, v); } catch (_) { /* read-back fails loudly */ }
@@ -35,11 +35,10 @@ async function boot(browser, baseURL, { extra = null, first = LANDSCAPE } = {}) 
     document.addEventListener("DOMContentLoaded", () => new MutationObserver(() => { window.__shapeAt = performance.now(); })
       .observe(document.body, { attributes: true, attributeFilter: ["data-shape"] }));
   }, extra);
-  await page.setViewportSize(first);
   await page.goto(String(baseURL), { waitUntil: "domcontentloaded", timeout: 90000 });
   await page.waitForFunction(() => window.__apex && document.documentElement.hasAttribute("data-booted"), null, { polling: 100, timeout: BOOT });
   await page.evaluate(() => window.__apex.headless(true));
-  return { context, page };
+  return { context, page, cdp };
 }
 
 test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
@@ -47,27 +46,27 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
 
   test("SHARED: a rotation and a stale portrait launch change no stored key and no painted size", async ({ browser, baseURL }) => {
     let before;
-    const { context, page } = await boot(browser, baseURL);
+    const { context, page, cdp } = await boot(browser, baseURL);
     try {
       await settled(page);
       before = await page.evaluate(stateInPage);
       expect(before.shape).toBe("wide");
       expect(before.keys["apex26.appearanceShapes"], "SHARED is the absent key").toBeUndefined();
-      await page.setViewportSize(PORTRAIT);
+      await rotateIPhone15(page, cdp, "portrait");
       await page.waitForFunction(() => document.body.dataset.shape === "tall", null, { polling: 100, timeout: 10000 });
       await settled(page);
       const tall = await page.evaluate(stateInPage);
       expect(tall.keys).toEqual(before.keys);
       expect([tall.ui, tall.btn]).toEqual([before.ui, before.btn]);
-      await page.setViewportSize(LANDSCAPE);
+      await rotateIPhone15(page, cdp, "standalone");
       await settled(page);
       expect(await page.evaluate(stateInPage)).toEqual(before);
     } finally { await context.close(); }
 
     // A Home-Screen launch that reports the portrait pair first, then lays out landscape.
-    const stale = await boot(browser, baseURL, { first: PORTRAIT });
+    const stale = await boot(browser, baseURL, { first: "portrait" });
     try {
-      await stale.page.setViewportSize(LANDSCAPE);
+      await rotateIPhone15(stale.page, stale.cdp, "standalone");
       await stale.page.waitForFunction(() => document.body.dataset.shape === "wide", null, { polling: 100, timeout: 10000 });
       await settled(stale.page);
       const after = await stale.page.evaluate(stateInPage);
@@ -80,7 +79,7 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
 
   test("SEPARATE: a settled portrait boot swaps in portrait's copy once, through the lazy bundle", async ({ browser, baseURL }) => {
     const shapes = { v: 2, mode: "separate", live: "wide", park: { uiScale: 85 } };
-    const { context, page } = await boot(browser, baseURL, { first: PORTRAIT, extra: { "apex26.appearanceShapes": JSON.stringify(shapes) } });
+    const { context, page } = await boot(browser, baseURL, { first: "portrait", extra: { "apex26.appearanceShapes": JSON.stringify(shapes) } });
     try {
       await page.waitForFunction(() => JSON.parse(localStorage.getItem("apex26.appearanceShapes") || "{}").live === "tall", null, { polling: 200, timeout: 15000 });
       const s = await page.evaluate(stateInPage);
@@ -93,3 +92,124 @@ test.describe("PORTRAIT & LANDSCAPE on Bryce's phone (#4529)", () => {
     } finally { await context.close(); }
   });
 });
+
+for (const touch of [false, true]) {
+  const landscape = touch ? { width: 852, height: 393 } : { width: 1728, height: 1117 };
+  test.describe("Arrange a live screen with " + (touch ? "touch" : "mouse and keyboard"), () => {
+    test.use({ viewport: landscape, hasTouch: touch, deviceScaleFactor: 1, reducedMotion: "reduce" });
+    test("save title and Career independently through rotation, theme change, reload and reset", async ({ page, browser }, testInfo) => {
+      test.setTimeout(180000);
+      const activate = locator => touch ? locator.tap() : locator.click();
+      const button = name => page.locator("#screen-arranger").getByRole("button", { name, exact: true });
+      const career = page.locator("#cr-left");
+      const arrange = async id => {
+        await activate(page.locator("#mb-settings"));
+        await activate(page.locator("#pm-open-appearance"));
+        await page.getByLabel("Screen to arrange").selectOption(id);
+        await activate(page.locator(".arrange-route"));
+      };
+      const layout = () => career.evaluate(el => {
+        const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
+        return { x: rect.x, width: rect.width, scale: css.scale, font: css.fontSize };
+      });
+      const saved = () => page.evaluate(() => ({
+        career: JSON.parse(localStorage.getItem("apex26.screenPlacement"))?.screens?.career,
+        title: JSON.parse(localStorage.getItem("apex26.titleLayout")),
+      }));
+      const capture = async name => {
+        const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
+        const viewport = page.viewportSize();
+        const label = [name, browser.browserType().name(), browser.version(), viewport.width + "x" + viewport.height,
+          touch ? "touch" : "mouse-keyboard", build].join("-");
+        const path = testInfo.outputPath("arrangement-evidence", label + ".png");
+        await page.screenshot({ path });
+        await testInfo.attach(label, { path, contentType: "image/png" });
+      };
+      await page.goto("/");
+      await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+      await expect(page.locator(".screen-arrange-entry")).toHaveCount(0);
+      await arrange("home");
+      await activate(page.locator("#tl-adjust"));
+      await activate(page.locator("#tl-size-up"));
+      await activate(page.locator("#tl-done"));
+      const title = (await saved()).title;
+      expect(title.wide.btns.size).toBeGreaterThan(100);
+
+      await arrange("career");
+      const region = page.locator("#screen-arranger").getByLabel("Region");
+      expect(await page.locator("#screen-arranger").evaluate(el => {
+        // menu-a11y-audit's checks, on the live dialog: a <body> child, named by its title, Escape names a real Cancel.
+        const door = document.getElementById(el.getAttribute("data-esc-close") || "");
+        const title = document.getElementById(el.getAttribute("aria-labelledby") || "");
+        return { tag: el.tagName, bodyChild: el.parentElement === document.body, titled: !!title && el.contains(title) && !!title.textContent.trim(),
+          door: !!door && el.contains(door) && door.tagName === "BUTTON" && door.textContent.trim() === "Cancel" };
+      }), "the layout editor is a named <body> dialog whose Escape door is its Cancel button").toEqual({ tag: "DIALOG", bodyChild: true, titled: true, door: true });
+      await region.selectOption("navigation");
+      const initial = await layout();
+      const panel = page.locator("#screen-arranger .arrange-tools");
+      const compact = await panel.boundingBox();
+      expect(compact.width * compact.height).toBeLessThan(landscape.width * landscape.height * .1);
+      await capture("career-before");
+      await activate(button("Controls"));
+      // An expanded panel still leaves a hit-testable part of the navigation
+      // column. Starting there returns to the compact bar for the drag.
+      const column = await career.boundingBox(), drawer = await panel.boundingBox();
+      const point = [0.15, 0.5, 0.85].map(fraction => ({
+        x: column.x + column.width * fraction, y: column.y + 24,
+      })).find(({ x, y }) => x < drawer.x || x > drawer.x + drawer.width || y < drawer.y || y > drawer.y + drawer.height);
+      expect(point).toBeTruthy();
+      if (touch) await page.touchscreen.tap(point.x, point.y);
+      else {
+        await page.mouse.move(point.x, point.y);
+        await page.mouse.down();
+        await page.mouse.move(point.x + 20, point.y, { steps: 3 });
+        await page.mouse.up();
+        expect((await layout()).x).toBeGreaterThan(initial.x);
+      }
+      await expect(button("Controls")).toHaveAttribute("aria-expanded", "false");
+      await activate(button("Controls"));
+      if (touch) await activate(button("Right"));
+      else { await button("Right").focus(); await page.keyboard.press("Enter"); }
+      await activate(button("Width +"));
+      const changed = await layout();
+      expect(changed.x).toBeGreaterThan(initial.x);
+      expect(changed.width).toBeGreaterThan(initial.width);
+      expect([changed.font, changed.scale]).toEqual([initial.font, initial.scale]);
+      await capture("career-preview");
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.locator("#screen-arranger-title")).toContainText("portrait");
+      await expect(page.locator("#screen-arranger output")).toContainText("Width auto");
+      await capture("career-portrait");
+      await page.setViewportSize(landscape);
+      await expect(page.locator("#screen-arranger-title")).toContainText("landscape");
+      await activate(button("Apply"));
+      const applied = await saved();
+      expect(applied.career.landscape.navigation.x).toBeGreaterThan(0);
+      expect(applied.career.portrait).toBeUndefined();
+      expect(Math.abs((await layout()).width - changed.width)).toBeLessThan(2);
+
+      await activate(page.locator("#cr-back"));
+      await activate(page.locator("#mb-settings"));
+      await activate(page.locator("#pm-open-appearance"));
+      await page.locator("#pm-uitheme-sel").selectOption("endurance");
+      await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "endurance");
+      expect(await saved()).toEqual(applied);
+
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+      await arrange("career");
+      await region.selectOption("navigation");
+      expect(Math.abs((await layout()).width - changed.width)).toBeLessThan(2);
+      expect(await saved()).toEqual(applied);
+      await activate(button("Controls"));
+      await activate(button("Reset screen"));
+      await activate(button("Apply"));
+      await expect(page.locator("#career :focus")).toBeVisible();
+      expect((await saved()).career).toBeUndefined();
+      expect((await saved()).title).toEqual(title);
+      await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "endurance");
+      await capture("career-reset");
+    });
+  });
+}

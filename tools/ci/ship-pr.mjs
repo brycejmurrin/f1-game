@@ -4,8 +4,9 @@
 // @skill ship
 //
 // It never calls the ready or merge endpoints itself: the draft→ready flip stays the GitHub MCP `update_pull_request`
-// call the hooks gate on a fresh ready-gate receipt (10 min, tools/lib/gate-receipt.mjs), and `land` stays a label
-// (skill `steward` §Land). A receipt older than that: re-run this command.
+// call (no hook gates it on a receipt since the 2026-11-03 hook reset: github-mcp-guard.sh allows it, and the merge
+// gate's Plan and CI rows judge the PR), and `land` stays a label (skill `steward` §Land). A push or Plan edit after
+// the gate passed: re-run this command.
 // First it runs closing-refs (#5929): a body line like "fix #5800" naming an OPEN pull request would close that PR on
 // merge, so ship refuses until it is reworded (ready-gate is PROTECTED, so the check lives here, a routine path).
 //
@@ -25,7 +26,7 @@ const USAGE = "usage: node tools/ci/ship-pr.mjs --pr <n> [--repo owner/name]\n  
 /** The two calls after a passing ready-gate, as lines to print. Pure. */
 export function nextCalls(pr, repo = "brycejmurrin/f1-game") {
   return [
-    `1. GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${pr}  draft:false   (receipt good for ${MAX_AGE_MIN} min; older: re-run ready-gate)`,
+    `1. GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${pr}  draft:false   (now, on the head ready-gate just judged; receipt good for ${MAX_AGE_MIN} min; a later push: re-run ship-pr)`,
     `2. GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${pr}  labels=<the live list from issue_read get_labels, plus "land">   (after the flip: \`land\` on a draft does nothing; one label per call, skill steward references/labels.md)`,
     `then refresh the Hand-off block and subscribe_pr_activity (re-subscribe after the flip); GitHub merges it, not you.`,
   ];

@@ -203,16 +203,28 @@
       "summary": "probe() physState() obs() scan() inputState() cars() carAt(i)"
     },
     {
+      "name": "classification",
+      "group": "read",
+      "signature": "classification()",
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
+    },
+    {
       "name": "corners",
       "group": "read",
       "signature": "corners()",
       "summary": "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()"
     },
     {
+      "name": "fieldLaps",
+      "group": "read",
+      "signature": "fieldLaps()",
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
+    },
+    {
       "name": "fieldState",
       "group": "read",
       "signature": "fieldState()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "gpuTimer",
@@ -248,7 +260,7 @@
       "name": "lapHistory",
       "group": "read",
       "signature": "lapHistory()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "lifecycle",
@@ -308,7 +320,7 @@
       "name": "sectorState",
       "group": "read",
       "signature": "sectorState()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "teams",
@@ -320,7 +332,7 @@
       "name": "timing",
       "group": "read",
       "signature": "timing()",
-      "summary": "timing() sectorState() lapHistory() fieldState()"
+      "summary": "timing() sectorState() lapHistory() fieldState() fieldLaps() classification()"
     },
     {
       "name": "trackProfile",
@@ -355,8 +367,8 @@
     {
       "name": "act",
       "group": "control",
-      "signature": "act({steer,throttle,brake},dt,n)",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "signature": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)",
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "aiPlace",
@@ -365,22 +377,34 @@
       "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
     },
     {
+      "name": "caution",
+      "group": "control",
+      "signature": "caution(o)",
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
+    },
+    {
       "name": "ceremony",
       "group": "control",
       "signature": "ceremony(phase|skip)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "clearInput",
       "group": "control",
       "signature": "clearInput()",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
+    },
+    {
+      "name": "flagHold",
+      "group": "control",
+      "signature": "flagHold(on)",
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "go",
       "group": "control",
       "signature": "go()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "headless",
@@ -391,32 +415,32 @@
     {
       "name": "jump",
       "group": "control",
-      "signature": "jump(frac,speed,x)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "signature": "jump(f,v,x,{keepLap})",
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "park",
       "group": "control",
       "signature": "park(f)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "race",
       "group": "control",
       "signature": "race(id)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "reset",
       "group": "control",
       "signature": "reset(f,v,x,seed)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase|skip) flagHold(on) caution(o)"
     },
     {
       "name": "seed",
       "group": "control",
       "signature": "seed(n)",
-      "summary": "seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise"
+      "summary": "seed(n): same seed + inputs => same result; pin it before any A/B"
     },
     {
       "name": "setEnergy",
@@ -428,7 +452,7 @@
       "name": "setInput",
       "group": "control",
       "signature": "setInput(o)",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "setLap",
@@ -452,7 +476,7 @@
       "name": "step",
       "group": "control",
       "signature": "step(dt,n)",
-      "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
+      "summary": "act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
       "name": "weather",
@@ -470,7 +494,7 @@
       "name": "lean default, pull detail",
       "group": "model",
       "signature": "lean default, pull detail",
-      "summary": "the world is stored in FULL but never dumped — a flat serialisation is huge and reads worse. Keep the default lean and pull with describe(id)/query() where a decision needs it"
+      "summary": "the world is stored in FULL but never dumped; pull with describe(id)/query() where a decision needs it"
     },
     {
       "name": "per tick",
@@ -1614,7 +1638,8 @@
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/team-parts-conflict.test.mjs",
         "tests/unit/title-fx.test.mjs",
-        "tests/unit/title-layout.test.mjs"
+        "tests/unit/title-layout.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ],
       "twinned": false
     },
@@ -1625,12 +1650,14 @@
       "files": [
         "tests/unit/brake-cue.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/css-zoom.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/driving-cues.test.mjs",
         "tests/unit/editor-workspace.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/grip-steer.test.mjs",
+        "tests/unit/hud-arrange-door.test.mjs",
         "tests/unit/hud-arrange.test.mjs",
         "tests/unit/input-bindings.test.mjs",
         "tests/unit/input-clock-rotate.test.mjs",
@@ -1661,6 +1688,7 @@
         "tests/unit/steer-lock-taper.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-button-settings.test.mjs",
         "tests/unit/touch-drag-anchor.test.mjs",
         "tests/unit/touch-drag-speed.test.mjs",
         "tests/unit/xr-opts.test.mjs",
@@ -3813,6 +3841,11 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/phone-pairing-ui.js",
+      "global": "PhonePairingUI",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/qr.js",
       "global": "NetQr",
       "roster": "LAZY_NET"
@@ -4878,6 +4911,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/dock-toolbar.js",
+      "global": "DockToolbar",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/dom.js",
       "global": "Dom",
       "roster": "tag"
@@ -4910,7 +4948,7 @@
     {
       "path": "js/ui/hud-arrange.js",
       "global": "HudArrange",
-      "roster": "tag"
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/hud-damage.js",
@@ -4926,6 +4964,11 @@
       "path": "js/ui/hud-inputs.js",
       "global": "HudInputs",
       "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/ui/hud-layout-editor.js",
+      "global": "HudLayoutEditor",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/hud-layout.js",
@@ -5098,9 +5141,24 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/screen-arranger.js",
+      "global": "ScreenArranger",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/screen-looks.js",
       "global": "ScreenLooks",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/screen-placement.js",
+      "global": "ScreenPlacement",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
+      "path": "js/ui/screen-regions.js",
+      "global": "ScreenRegions",
+      "roster": "LAZY_UI_PRESETS"
     },
     {
       "path": "js/ui/scroll-fade.js",
@@ -5176,6 +5234,11 @@
       "path": "js/ui/title-menu.js",
       "global": "TitleMenu",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/touch-button-settings.js",
+      "global": "TouchButtonSettings",
+      "roster": "LAZY_NET"
     },
     {
       "path": "js/ui/track-maps.js",

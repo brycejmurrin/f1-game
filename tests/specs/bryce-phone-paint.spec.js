@@ -5,7 +5,7 @@
 // `fit-audit.mjs` reads the computed font size. At the UI SIZE he stored on 2026-11-09 (61 %) a "14 px" label painted
 // 8.5 px and a "48 px" button 29 px, and nothing said so. His live profile is the 2026-11-10 export (UI SIZE 70,
 // BUTTON SIZE 143.25; tools/lib/bryce-phone.mjs `live`, #5218). This spec boots the game the way his phone does — his window
-// (Home Screen app 852x393 with env() insets 59/21/59, the Safari tab 852x368 measured on the device, and the 844x390
+// (Home Screen app 852x393 with env() insets 59/20/59, the Safari tab 852x368 measured on the device, and the 844x390
 // cell older reports used), his live settings export — and judges the PAINTED result on title, select, garage,
 // settings, the race HUD, pause and results, at UI SIZE 50 (the phone floor since #5452), 70 (his stored value) and
 // 109 (the touch default):
@@ -23,13 +23,13 @@
 // the CLI that recorded the ceilings runs. Imported from @playwright/test, not the shared fixtures: this spec owns its
 // context (the preset's viewport, insets and storage), and the fixtures' page would boot a second game.
 import { test, expect } from "@playwright/test";
-import { BRYCE_WINDOWS, UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
-import { ACCEPT_SCREENS, cellKey, judgeCells, measureCell, readCeilings } from "../../tools/ui/bryce-paint.mjs";
+import { UI_SIZE_AXIS } from "../../tools/lib/bryce-phone.mjs";
+import { PAINT_WINDOWS, ACCEPT_SCREENS, cellKey, judgeCells, measureCell, readCeilings } from "../../tools/ui/bryce-paint.mjs";
 import { paintLine } from "../../tools/lib/paint-floor.mjs";
 
 const CEILINGS = readCeilings();
 
-for (const window of Object.keys(BRYCE_WINDOWS)) {
+for (const window of PAINT_WINDOWS) {
   for (const uiScale of UI_SIZE_AXIS) {
     const key = cellKey(window, uiScale);
     test(`${key}: painted text, taps, safe box and page scroll hold their recorded ceilings`, async ({ browser, baseURL }) => {

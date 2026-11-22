@@ -303,7 +303,7 @@ test("the live loop flags a lapped human on the same step as the winner in eithe
       await game.race("monza", "day", "dry", { laps: 3 });
       const p = G.player, lead = G.cars.find((c) => !c.human), L = G.track.total;
       for (const c of G.cars) if (c !== p && c !== lead) a.retire(G.cars.indexOf(c));
-      a.jump((L - 0.4) / L, 50, -4); a.aim(0);
+      a.jump((L - 0.4) / L, 50, -4, { keepLap: true }); a.aim(0);   // a fabricated lap: keep it
       p.lap = 2; p._prevS = p.s; p.prog = 2 * L - 0.4; p.lapTime = 70;
       Object.assign(lead, { lap: 3, s: L - 0.1, _prevS: L - 0.1, prog: 3 * L - 0.1, speed: 50, x: 4, lapTime: 60 });
       const rest = G.cars.filter((c) => c !== p && c !== lead);

@@ -374,11 +374,11 @@ async function ghostSaved(page, trackId) {
       // Run the real countdown from the grid, then cross once to begin the
       // flying lap. Sampling staged points makes the regression deterministic.
       window.__apex.step(1 / 60, 480);
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
 
       for (const frac of [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.999]) {
-        window.__apex.jump(frac, 80, 0);
+        window.__apex.jump(frac, 80, 0, { keepLap: true });
         window.__apex.step(1 / 60, frac === 0.999 ? 10 : 4);
       }
 
@@ -431,7 +431,7 @@ test.describe("Time Trial — sector splits", () => {
     await enterTT(page);
     const result = await page.evaluate(() => {
       window.__apex.go();
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
       return {
         timing: window.__apex.timing(),
@@ -451,7 +451,7 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.go();
       // Already on a flying lap — the S3→S1 wrap must stamp the split.
       window.__apex.setLap(1);
-      window.__apex.jump(0.999, 80, 0);
+      window.__apex.jump(0.999, 80, 0, { keepLap: true });
       window.__apex.step(1 / 60, 10);
       return {
         timing: window.__apex.timing(),
@@ -472,6 +472,14 @@ test.describe("Time Trial — sector splits", () => {
     // announces anything — the banner was removed as self-evident — but it still
     // teleports the car, which would move it off the boundary this test needs.)
     await page.evaluate(async () => {
+      // LATCH the flash: .sec-flash lives ~3 HUD ticks (~300 ms, _secFlash
+      // 0.35 at -0.1 a tick), short enough for a polled read to miss. A
+      // MutationObserver sees every class change on the strip.
+      window.__secFlashSeen = false;
+      const strip = document.getElementById("hud-sectors");
+      if (strip) new MutationObserver(() => {
+        if (strip.querySelector(".sec-flash, .sec-flash-pb, .sec-flash-slow")) window.__secFlashSeen = true;
+      }).observe(strip, { subtree: true, attributes: true, attributeFilter: ["class"] });
       window.__apex.headless(true);
       window.__apex.go();
       const sec = window.__apex.info().sectors || [1 / 3, 2 / 3];
@@ -486,13 +494,54 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.headless(false);
     });
 
-    const split = await page.evaluate(() => {
-      const last = window.__apex.sectorState().last;
-      const flash = document.querySelector("#hud-sectors .sec-flash, #hud-sectors .sec-flash-pb");
-      return { s1: last[0], flashed: !!flash };
-    });
+    const split = await page.evaluate(() => ({ s1: window.__apex.sectorState().last[0] }));
     expect(split.s1).not.toBeNull();
     expect(split.s1).toBeGreaterThan(0);
+    // The strip must FLASH for the crossing (`flashed` used to be computed and
+    // never asserted). game.js flashes a sector of >= 2 s on a flying lap
+    // (setLap(1) above; VM-measured S1 2.8 s). A first version polled for the
+    // class and missed its ~300 ms life on CI (run 42766757935); the observer
+    // latch installed before the crossing cannot.
+    expect(split.s1, "S1 under the 2 s flash gate — no flash is due").toBeGreaterThanOrEqual(2);
+    // The HUD paints only from the rAF loop, and updateHud returns early while
+    // G.frozen (js/ui/hud.js); act() steps physics without clearing it. So the
+    // page must be live for the flash to paint: record what the crossing left,
+    // unfreeze, and give rAF time with the observer armed.
+    const hudState = await page.evaluate(() => ({
+      frozen: window.__apex.freeze(),
+      hudHidden: !!(document.getElementById("hud") && document.getElementById("hud").hidden)
+        || document.body.classList.contains("hud-hidden"),
+      docHidden: document.hidden === true,
+      // The seam (#5296 GameHud.secFlash + #5339 __apex.hudSecFlash): calls = flashSector
+      // calls, painted = HUD ticks that set .sec-flash (asserted after the unfreeze below).
+      secFlash: typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
+    }));
+    // Gate on frames DRAWN, not wall time (as results-flow does, #5442): CI run
+    // 42981194015 saw calls 1 / painted 0 / flash still 0.35 after a 5 s wall
+    // window, i.e. no HUD tick at all. The HUD ticks once per drawn race frame
+    // and the flash lives 3 ticks (0.35 at -0.1), so 8 drawn frames with no
+    // paint is a real HUD miss; fewer means the box drew nothing (not a verdict).
+    const frame0 = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    await page.evaluate(() => window.__apex.freeze(false));
+    await page.waitForFunction((f0) => {
+      const s = window.__apex.hudSecFlash();
+      return (s && s.painted >= 1) || window.__apex.cameraState().renderFrame >= f0 + 8;
+    }, frame0, { polling: 100, timeout: 0 });
+    const flashed = await page.evaluate(() => window.__secFlashSeen === true);
+    const [secFlashAfter, frame1] = await page.evaluate(() => [
+      typeof window.__apex.hudSecFlash === "function" ? window.__apex.hudSecFlash() : "absent",
+      window.__apex.cameraState().renderFrame]);
+    test.info().annotations.push({ type: "sector-flash-latched", description: JSON.stringify({ flashed, hudState, secFlashAfter, frame0, frame1 }) });
+    // The flash is asserted on the seam (W32 row 10): GameHud.secFlash()
+    // counts flashSector() calls and the HUD ticks that set .sec-flash, in the
+    // same branch that toggles the class. calls 0 = game.js never flashed the
+    // crossing; painted 0 = flashed but the HUD never painted it (both game
+    // bugs). The DOM latch stays an annotation only: before the seam it latched
+    // nothing on CI (run 42827414372, job 129870057425), and a miss with
+    // painted > 0 points at the observer, not the game.
+    expect(secFlashAfter, "__apex.hudSecFlash() seam missing").toEqual(expect.objectContaining({ last: 0 }));
+    expect(secFlashAfter.calls, "game.js never called hud.flashSector for the S1 crossing").toBeGreaterThanOrEqual(1);
+    expect(secFlashAfter.painted, `flashSector ran but the HUD never painted .sec-flash in ${frame1 - frame0} drawn frames`).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -729,19 +778,22 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
           const zoom=sheet.currentCSSZoom || 1;
           const focusables=[...e.querySelectorAll('select,button,summary,a[href]')].filter(n => n.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
           const overflow=focusables.filter(n => { const b=n.getBoundingClientRect(); return b.left < pr.left-1 || b.right > pr.right+1; })
-            .filter(n=>!n.closest('.sheet-foot')).map(n=>n.id || n.tagName);
+            // The arranger's door sits after the sheet, not in its pane (css/screen-arranger.css): held to the viewport below.
+            .filter(n=>!n.closest('.sheet-foot') && !n.classList.contains('screen-arrange-entry')).map(n=>n.id || n.tagName);
+          const offscreen=focusables.filter(n=>n.classList.contains('screen-arrange-entry')).filter(n => { const b=n.getBoundingClientRect(); return b.left < -1 || b.right > innerWidth+1 || b.top < -1 || b.bottom > innerHeight+1; }).map(n=>n.id);
           return { root:selector,zoom,shape:sheet.dataset.shape,density:sheet.dataset.density,
             sheet:{x:r.x,y:r.y,w:r.width,h:r.height},paneHeight:pr.height,
             shortHelpChips:selector === '#howtoplay' && sheet.dataset.density === 'compact'
               ? [...e.querySelectorAll('#htp-contents a')].filter(n=>n.getBoundingClientRect().height<43.5).map(n=>n.textContent) : [],
             smallTargets:focusables.filter(n=>{const b=n.getBoundingClientRect();return b.width<23.5||b.height<23.5;}).map(n=>n.id||n.tagName),
-            overflow,docOverflow:document.documentElement.scrollWidth-innerWidth,
+            overflow,offscreen,docOverflow:document.documentElement.scrollWidth-innerWidth,
             paneOverflow:pane.scrollWidth-pane.clientWidth };
         },root);
         rows.push({pct,...await measure('#pmsettings')});
         const m=rows[rows.length-1];
         expect(m.smallTargets).toEqual([]);
         expect(m.overflow,`${device.name} at ${pct}%`).toEqual([]);
+        expect(m.offscreen,`${device.name} at ${pct}%: the arrange door on screen`).toEqual([]);
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});

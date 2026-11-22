@@ -142,6 +142,8 @@ const Input = (function () {
   let btnBrakeVal = 0;
   let btnSteerLeft = false;
   let btnSteerRight = false;
+  let leftCommand = 0, rightCommand = 0;  // Effective touch travel before the common steering ramp.
+  let leftSpeedMix, rightSpeedMix; // Unset follows the global Adaptive Buttons setting.
   let btnSteerLeftVal = 0; // 0..1 analog travel (adaptive buttons; tap = 1)
   let btnSteerRightVal = 0;
   let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
@@ -566,7 +568,7 @@ const Input = (function () {
    * the build rate rather than thrown away — otherwise the step quietly caps a
    * direction change at one rate per frame.
    */
-  function digitalStep(val, target, dt) {
+  function digitalStep(val, target, dt, speedMix) {
     // Work in shaped (road-wheel) space, return raw so game.js's expo undoes it.
     const v = toShaped(val), t = target;   // target is -1 / 0 / +1; shaping is identity there
     if (t === 0) return fromShaped(moveToward(v, 0, KEY_RAMP_OUT * dt));
@@ -575,16 +577,18 @@ const Input = (function () {
       const unwind = KEY_RAMP_OUT * dt;
       if (unwind < toCentre) return fromShaped(moveToward(v, 0, unwind));
       const spare = (unwind - toCentre) / KEY_RAMP_OUT;   // seconds still unspent
-      return fromShaped(moveToward(0, t, digitalRateIn() * spare));
+      return fromShaped(moveToward(0, t, digitalRateIn(speedMix) * spare));
     }
-    return fromShaped(moveToward(v, t, digitalRateIn() * dt));
+    // Easing a held arrow back to partial lock keeps the existing global return rate.
+    const buildMix = Math.abs(t) >= Math.abs(v) ? speedMix : undefined;
+    return fromShaped(moveToward(v, t, digitalRateIn(buildMix) * dt));
   }
 
-  function digitalRateIn() {
-    if (adaptiveMix <= 0) return KEY_RAMP_IN;
+  function digitalRateIn(mix = adaptiveMix) {
+    if (mix <= 0) return KEY_RAMP_IN;
     const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
     const full = KEY_RAMP_IN / (1 + currentSpeedStd() / ref);
-    return KEY_RAMP_IN + (full - KEY_RAMP_IN) * adaptiveMix;
+    return KEY_RAMP_IN + (full - KEY_RAMP_IN) * mix;
   }
 
   function keyboardSteer() {
@@ -1280,25 +1284,13 @@ const Input = (function () {
     return xHat;
   }
 
-  // "Most recent steering touch wins" is the rule, and it needs an explicit
-  // sequence number to be true. The obvious reading — take the last entry of the
-  // Map — is wrong: Map iterates in INSERTION order and `set()` on an existing
-  // key keeps that key where it was. So a finger placed FIRST and then dragged
-  // across the screen could never take the steering from a later finger that had
-  // not moved since. Stamping every start and every move gives the rule its
-  // literal meaning: whichever touch last SAID something is the one steering.
-  //
-  // A touch still resting inside its dead zone counts as steering-zero rather
-  // than as absent, so a second thumb parked on the glass does not silently hand
-  // control back to a finger the player stopped using.
+  // Steering and its indicator follow the same finger: the latest horizontal
+  // drag outside its dead zone, or the first resting touch before any drag.
   function recomputeTouchSteer() {
-    let best = -1;
-    touchActive = touches.size > 0;
-    touchSteer = 0;
-    for (const rec of touches.values()) {
-      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); }
-    }
-    updateDragAnchor();
+    const rec = steeringTouchRec();
+    touchActive = !!rec;
+    touchSteer = rec ? touchCmd(rec) : 0;
+    updateDragAnchor(rec);
   }
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
@@ -1334,9 +1326,8 @@ const Input = (function () {
     const mark = dragMarkEl();
     if (mark) mark.classList.remove("on");
   }
-  function updateDragAnchor() {
+  function updateDragAnchor(rec) {
     if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
-    const rec = steeringTouchRec();
     if (!rec) { hideDragAnchor(); return; }
     const mark = dragMarkEl();
     if (!mark) return;
@@ -1370,8 +1361,8 @@ const Input = (function () {
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
       if (!rec) continue;
+      if (rec.x !== t.clientX && Math.abs(t.clientX - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
       rec.x = t.clientX;
-      if (!rec.seq && Math.abs(rec.x - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
     }
     recomputeTouchSteer();
   }
@@ -1400,15 +1391,15 @@ const Input = (function () {
     const t = nowMs();
     const dt = rampDtSince(btnSteerT, t);
     btnSteerT = t;
-    const left = btnSteerLeft ? (1 + (btnSteerLeftVal - 1) * adaptiveMix) : 0;
-    const right = btnSteerRight ? (1 + (btnSteerRightVal - 1) * adaptiveMix) : 0;
+    const left = btnSteerLeft ? leftCommand : 0;
+    const right = btnSteerRight ? rightCommand : 0;
     // LAST PRESS WINS — mirrors keyboardSteer. right − left centred the wheel
     // whenever both arrows were down, which is every capacitive left→right
     // roll-over in a chicane (RIGHT down before LEFT comes up).
     const target = btnSteerLeft && btnSteerRight
       ? (btnSteerRightSeq > btnSteerLeftSeq ? right : -left)
       : right - left;
-    btnSteerVal = digitalStep(btnSteerVal, target, dt);
+    btnSteerVal = digitalStep(btnSteerVal, target, dt, target < 0 ? leftSpeedMix : rightSpeedMix);
     return btnSteerVal;
   }
 
@@ -1422,8 +1413,13 @@ const Input = (function () {
     if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
     else el.removeAttribute("aria-pressed");
   }
+  // Explicit touch response must reach the wheel even with ADAPTIVE BUTTONS off.
+  const arrowSpeedMix = profile => profile?.adaptive == null ? undefined : (profile.adaptive - 1) / 9;
+  function steerButtonCommand(travel, profile) {
+    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX) return travel;
+    return 1 + (travel - 1) * adaptiveMix;
+  }
   const holdButtons = InputHoldButtons.create({
-    clamp,
     beforeReleaseAll(keepLatch) { if (!keepLatch) { throttleLatched = false; paintLatch(); } },
     slideEase: () => pedalSlide === "ease",
   });
@@ -2106,8 +2102,10 @@ const Input = (function () {
     KEY_RAMP_OUT = KEY_RAMP_IN * 2;
   }
   function setAdaptiveButtons(v) {
-    if (typeof v === "boolean") { adaptiveMix = v ? 1 : 0; return; }
-    if (typeof v === "number" && isFinite(v)) adaptiveMix = clamp(v, 0, 1);
+    if (typeof v === "boolean") v = Number(v);
+    if (typeof v !== "number" || !isFinite(v)) return;
+    adaptiveMix = clamp(v, 0, 1);
+    holdButtons.refreshLevels();
   }
   /* RAMP IN SHAPED SPACE — the road-wheel angle, not the raw stick value.
    *
@@ -2322,8 +2320,8 @@ const Input = (function () {
       // latch outright rather than toggling it (see holdReleaseAll).
       if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
       else btnThrottle = v;
-    }, function (l) { btnThrottleVal = l; }, { sibling: "btn-brake", easeIn: true });
-    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { sibling: "btn-throttle", easeIn: true });
+    }, function (l) { btnThrottleVal = l; }, { button: "gas", sibling: "btn-brake" });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { button: "brake", sibling: "btn-throttle" });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -2332,11 +2330,11 @@ const Input = (function () {
     wireHold("btn-steer-left", function (v) {
       if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
       btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
-    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1, sibling: "btn-steer-right" });
+    }, function (l, command, p) { btnSteerLeftVal = l; leftCommand = command; leftSpeedMix = arrowSpeedMix(p); }, { button: "left", command: steerButtonCommand, axis: "x", dir: -1, sibling: "btn-steer-right" });
     wireHold("btn-steer-right", function (v) {
       if (v && !btnSteerRight) btnSteerRightSeq = ++btnSteerSeq;
       btnSteerRight = v; if (!v) btnSteerRightVal = 0;
-    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1, sibling: "btn-steer-left" });
+    }, function (l, command, p) { btnSteerRightVal = l; rightCommand = command; rightSpeedMix = arrowSpeedMix(p); }, { button: "right", command: steerButtonCommand, axis: "x", dir: 1, sibling: "btn-steer-left" });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
