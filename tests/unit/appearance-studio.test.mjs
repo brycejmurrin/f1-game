@@ -261,6 +261,24 @@ test("visual profiles and coordinated presets preserve driving, career, confirma
   assert.equal(values.steering, "rookie"); assert.equal(values.pauseConfirm, "off");
 });
 
+test("Endurance and Drafting coordinate theme and menu accent without changing the cockpit or session", () => {
+  for (const [id, accent] of [["endurance", "amber"], ["drafting", "cyan"]]) {
+    const { studio, values, writes, owners } = load({ uiTheme: "system", menuAccent: "violet",
+      hudAccent: "team", hudProfile: "broadcast", homeScene: "photo", uiContrast: "high", cvdMode: "deutan" });
+    assert.equal(studio.applyPreset(id, "screen"), false);
+    assert.deepEqual(writes, []);
+    assert.equal(studio.applyPreset(id, "global"), true);
+    assert.deepEqual(writes.sort(), ["menuAccent", "uiTheme"]);
+    assert.equal(owners.at(-1).uiTheme, id);
+    assert.equal(owners.at(-1).menuAccent, accent);
+    assert.equal(owners.at(-1).uiContrast, "high");
+    assert.equal(values.hudAccent, "team");
+    assert.equal(studio.undo(), true);
+    assert.equal(values.uiTheme, "system");
+    assert.equal(values.menuAccent, "violet");
+  }
+});
+
 test("hostile visual snapshots are clamped, normalized and stripped of unrelated keys", () => {
   const { studio } = load();
   const clean = studio.normalizeSnapshot({ uiTheme: {}, menuAccentHex: "javascript:alert(1)", hudScale: Infinity, uiScale: 999, hudBtnScale: -40,
@@ -571,7 +589,7 @@ test("one home (#2846): the Studio builds no second copy and jumps to HUD and mo
 
 test("cosmetic presets retain accessibility and units without writing those preferences", () => {
   const preferences = { motion: "reduce", textSize: "larger", uiScale: 137.5, uiContrast: "high", cvdMode: "tritan", speedUnits: "mph", cbCues: "on" };
-  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+  for (const {id: preset} of load().studio.PRESETS) {
     const { studio, values, writes } = load(preferences);
     const before = plain(studio.snapshot());
     studio.applyPreset(preset);
@@ -590,7 +608,7 @@ const LIVE = Object.freeze({ uiScale: 61, textSize: "large", uiContrast: "high",
   hudLayout: { v: 4, standard: { cockpit: {}, helmet: { tower: { x: 0, y: 0, s: 80 }, limits: { x: -73.97, y: -2.83, s: 70 } } } }, layoutPreset: "shipped" });
 
 test("preset tiles keep Bryce's live UI SIZE, main-menu layout and ARRANGE HUD layout (#5058)", () => {
-  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+  for (const {id: preset} of load().studio.PRESETS) {
     const { studio, values, writes } = load(structuredClone(LIVE));
     assert.equal(studio.applyPreset(preset), true);
     for (const key of ["uiScale", "titleLayout", "hudLayout", "layoutPreset", "textSize", "uiContrast"]) {
@@ -603,7 +621,7 @@ test("preset tiles keep Bryce's live UI SIZE, main-menu layout and ARRANGE HUD l
 test("preset tiles keep custom HUD sizes, opacities, the pause layout and screen looks; a named look is merged (#5058)", () => {
   const mine = { ...structuredClone(LIVE), hudScale: 155.25, hudBtnScale: 245, hudBtnOpacity: 65, hudPanelOpacity: 80,
     pauseLayout: "sidebar", pauseSide: "right", pauseDim: "soft", lookGarage: { btn: 125, pw: 135 }, lookCareer: { density: "tight", corners: "sharp" }, lookDesigner: { size: 150 } };
-  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+  for (const {id: preset} of load().studio.PRESETS) {
     const { studio, values, writes } = load(structuredClone(mine));
     studio.applyPreset(preset);
     for (const key of ["hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim", "lookGarage", "lookDesigner"]) {
@@ -853,4 +871,67 @@ test("combined profiles restore placement, touch docks and cockpit while earlier
   for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
   studio.undo();
   for (const key of Object.keys(mine)) assert.equal(values[key], null);
+});
+
+test("the real picker scopes profile apply and reset to Results, shared popup style or one Settings page", () => {
+  const dom = makeDom(), doc = dom.document, panel = dom.byId("pm-panel-appearance");
+  panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const screen = width => ({ portrait: { panel: { width } } });
+  const layouts = width => ({ v: 1, screens: { results: screen(width), "home-style": screen(width + 2), "pm-panel-graphics": screen(width + 4) } });
+  const { studio, values } = load({ screenPlacement: layouts(60), lookPopups: { dim: "solid" }, homeScene: "garage" }, true, false, doc, {
+    SettingsExport: { normalizePlacement: value => value }
+  });
+  studio.saveProfile("Earlier arrangements");
+  studio.applySnapshot({ ...studio.snapshot(), screenPlacement: layouts(70), lookPopups: { dim: "glass" }, homeScene: "night" });
+  // Supply the select/option and data-attribute reflection used by the real picker.
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  for (const el of descendants(panel)) if (el.dataset.as) el.setAttribute("data-as", el.dataset.as);
+  const create = doc.createElement;
+  doc.createElement = tag => {
+    const el = create(tag);
+    if (tag === "select") {
+      el.add = option => el.appendChild(option);
+      Object.defineProperty(el, "selectedOptions", { get: () => el.children.filter(option => option.value === el.value) });
+    }
+    return el;
+  };
+  const registry = fs.readFileSync(absSrc("js/ui/screen-regions.js"), "utf8");
+  vm.runInNewContext(registry, {
+    window: {}, document: doc, location: { search: "" }, URLSearchParams, queueMicrotask: fn => fn(),
+    MutationObserver: class { observe() {} }, CustomEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+    Option: function (text, value) { return Object.assign(create("option"), { text, value }); }
+  }, { filename: absSrc("js/ui/screen-regions.js") });
+  const picker = panel.querySelector('[aria-label="Screen to arrange"]');
+  const button = text => panel.querySelectorAll("button").find(el => el.textContent === text);
+  const pick = id => { picker.value = id; dom.dispatch(picker, { type: "change" }); };
+  button("THIS SCREEN").click();
+  pick("results");
+  button("APPLY PROFILE").click();
+  assert.deepEqual(plain(values.screenPlacement.screens), { ...layouts(70).screens, results: screen(60) });
+  assert.equal(values.lookPopups.dim, "glass");
+  button("RESET SCOPE").click();
+  const others = { "home-style": screen(72), "pm-panel-graphics": screen(74) };
+  assert.deepEqual(plain(values.screenPlacement.screens), others);
+  assert.equal(values.lookPopups.dim, "glass");
+  pick("popups");
+  const advanced = doc.createElement("details"), popupFold = doc.createElement("details"), summary = doc.createElement("summary");
+  popupFold.id = "pm-look-popups"; popupFold.appendChild(summary); advanced.appendChild(popupFold); panel.appendChild(advanced);
+  button("Edit shared popup style").click();
+  assert.equal(advanced.open, true); assert.equal(popupFold.open, true);
+  assert.equal(doc.activeElement, summary);
+  button("APPLY PROFILE").click();
+  assert.equal(values.lookPopups.dim, "solid");
+  button("RESET SCOPE").click();
+  assert.equal(values.lookPopups, null);
+  assert.deepEqual(plain(values.screenPlacement.screens), others);
+  pick("pm-panel-graphics");
+  button("APPLY PROFILE").click();
+  assert.deepEqual(plain(values.screenPlacement.screens), { ...others, "pm-panel-graphics": screen(64) });
+  button("RESET SCOPE").click();
+  assert.deepEqual(plain(values.screenPlacement.screens), { "home-style": screen(72) });
+  assert.equal(values.homeScene, "night");
+  pick("wheel");
+  for (const text of ["APPLY PROFILE", "RESET SCOPE"]) assert.equal(button(text).disabled, true, text);
+  button("GLOBAL").click();
+  for (const text of ["APPLY PROFILE", "RESET SCOPE"]) assert.equal(button(text).disabled, false, text);
 });

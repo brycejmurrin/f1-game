@@ -257,7 +257,11 @@ test("phone wheel edits Gas in each preset, cancels interrupted drags and writes
     stage.appendChild(gas);
     const parts = Object.fromEntries(["bar","picker","adjust","edge","tools","step","undo","arrangeDone","cancel","resetAll","open"].map(id => [id, ui.byId(id)]));
     const right = ui.makeElement("button"); right.dataset.nudge = "right";
-    const options = { ...parts, doc:ui.document, body:ui.body, stage, arrange:{gas}, nudges:[right] };
+    const widthUp = ui.makeElement("button"), heightUp = ui.makeElement("button"), shape = ui.makeElement("select");
+    widthUp.dataset.dimension = "w"; heightUp.dataset.dimension = "h";
+    widthUp.dataset.step = heightUp.dataset.step = "1";
+    gas.getBoundingClientRect = () => ({ width: 160, height: 80, x: 0, y: 0 });
+    const options = { ...parts, doc:ui.document, body:ui.body, stage, arrange:{gas}, nudges:[right], dimensions:[widthUp,heightUp], shape };
     const saved = [];
     const api = L.layout(options, {store:{getItem:() => JSON.stringify(layout), setItem:(k,v) => saved.push(JSON.parse(v))}});
     const send = (type, x) => {
@@ -280,7 +284,30 @@ test("phone wheel edits Gas in each preset, cancels interrupted drags and writes
     api.arrange(true); send("pointerdown", 100); send("pointermove", 180); send("pointerup", 180);
     parts.arrangeDone.click(); assert.equal(saved.length, 1);
     assert.deepEqual(saved[0], {...plain(layout), place:{gas:{x:10,y:0,s:100}}});
+    api.arrange(true);
+    widthUp.click(); heightUp.click(); shape.value = "rounded"; ui.dispatch(shape, {type:"change"});
+    right.click(); parts.arrangeDone.click();
+    const resized = saved[1].place.gas;
+    assert.deepEqual([resized.x, resized.y, resized.w, resized.h, resized.s, resized.shape], [15, 0, 25, 25, 100, "rounded"]);
     api.arrange(true); parts.resetAll.click(); parts.arrangeDone.click();
-    assert.deepEqual(saved[1], plain(L.LAYOUT_PRESETS.classic));
+    assert.deepEqual(saved[2], plain(L.LAYOUT_PRESETS.classic));
   }
+});
+
+test("wheel files round-trip per-control shape and independent dimensions, safely ignoring retired controls", () => {
+  const L = vm.runInContext("PhonePadPage", boot().ctx), ui = makeDom(), gas = ui.byId("gas");
+  const shape = { x: 0, y: 0, s: 100, w: 20, h: 30, shape: "pill" };
+  const layout = { ...plain(L.LAYOUT_PRESETS.phone), place: { gas: shape, retired: { x: 10 } } };
+  const file = { format: "apex26-wheel", v: 1, layout };
+  const imported = L.readWheelBackup(JSON.parse(JSON.stringify(file)));
+  assert.deepEqual(plain(imported.place), { gas: shape });
+  const api = L.layout({ body: ui.body, arrange: { gas } });
+  api.set(imported);
+  assert.deepEqual([gas.style.minWidth, gas.style.maxHeight, gas.style.borderRadius], ["max(44px,20vw)", "max(44px,30vh)", "999px"]);
+  api.sizeBy("gas", 1.1);
+  assert.deepEqual([api.get().place.gas.w, api.get().place.gas.h, api.get().place.gas.shape], [20, 30, "pill"]);
+  api.set(L.LAYOUT_PRESETS.classic);
+  assert.deepEqual([gas.style.maxWidth, gas.style.minHeight, gas.style.borderRadius], ["", "", ""]);
+  assert.throws(() => L.readWheelBackup({ ...file, v: 2 }), /Invalid wheel layout/);
+  assert.throws(() => L.readWheelBackup({ ...file, layout: {} }), /Invalid wheel layout/);
 });

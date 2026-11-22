@@ -275,13 +275,14 @@ function bootCreate(opts = {}) {
   vm.runInNewContext(SRC.replace(/^const\b/gm, "var"), ctx);
   const bag = ctx.DockLayout.normalize({});
   bag.buttons.L = { x: 0, y: 0.35 };
+  const persisted = { ...opts.scalePrefs, dockLayout: opts.saved || bag };
   const sets = [];
   const listeners = [];
   let mode = "buttons";
-  const store = { get(k, d) { return k === "dockLayout" ? bag : d; }, set(k, v) { sets.push([k, v]); } };
+  const store = { get(k, d) { return k in persisted ? persisted[k] : d; }, set(k, v) { persisted[k] = v; sets.push([k, v]); } };
   if (opts.subscribe) store.subscribe = (fn) => { listeners.push(fn); return () => {}; };
-  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode });
-  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, setMode: (m) => { mode = m; } };
+  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode }, opts.scaleUi);
+  return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, store, setMode: (m) => { mode = m; } };
 }
 
 test("a rotation repaints the dock offsets in the new viewport's pixels", () => {
@@ -369,6 +370,51 @@ test("independent Gas and Brake edits retain the other settings when a button is
   assert.equal(config.gap, 24);
   assert.equal(config.layout, "pedal-row");
   assert.equal(api.bag().tilt.controls, undefined);
+});
+
+test("dock Done persists independent dimensions, Undo reverses reset and Cancel preserves the saved layout", () => {
+  const saved = { buttons: { controls: { "btn-throttle": { size: 120 }, "btn-brake": { shape: "square" } } } };
+  const { api, made, sets } = bootCreate({ saved });
+  api.setEditing(true);
+  const field = key => made[0].querySelector("[data-k=" + key + "]");
+  const choose = (key, value) => { field(key).value = value; field(key).onchange(); };
+  choose("target", "btn-throttle");
+  choose("width", "125"); choose("height", "75");
+  assert.equal(sets.length, 0);
+  field("reset").onclick();
+  assert.equal(api.bag().buttons.controls["btn-throttle"], undefined);
+  field("undo").onclick();
+  assert.deepEqual({ ...api.bag().buttons.controls["btn-throttle"] }, { size: 120, width: 125, height: 75 });
+  field("done").onclick();
+  const record = sets.find(([key]) => key === "dockLayout")[1];
+  const reloaded = bootCreate({ saved: record });
+  assert.equal(reloaded.api.bag().buttons.controls["btn-throttle"].height, 75);
+  api.setEditing(true);
+  choose("target", "btn-throttle"); choose("height", "175"); field("reset").onclick();
+  field("cancel").onclick();
+  assert.equal(api.editing(), false);
+  assert.deepEqual({ ...api.bag().buttons.controls["btn-throttle"] }, { size: 120, width: 125, height: 75 });
+  assert.equal(api.bag().buttons.controls["btn-brake"].shape, "square");
+  assert.equal(sets.length, 1);
+});
+
+test("global size Undo restores adaptive preferences and repaints the shared scale owner", () => {
+  let repaints = 0;
+  const { api, ctx, els, made, store } = bootCreate({ scalePrefs: { hudScale: 105 },
+    scaleUi: { applyHudScale() { repaints++; }, applyBtnScale() { repaints++; } } });
+  ctx.Event = class {};
+  els["pm-btnscale"] = { value: "100", dispatchEvent() {
+    store.set("hudBtnScale", Number(this.value)); store.set("hudBotKeep", { hud: 105, bot: 91 });
+  } };
+  api.setEditing(true);
+  const field = key => made[0].querySelector("[data-k=" + key + "]");
+  field("bigger").onclick();
+  assert.equal(store.get("hudBtnScale", null), 110);
+  field("undo").onclick();
+  assert.equal(store.get("hudBtnScale", null), null);
+  assert.equal(store.get("hudBotKeep", null), null);
+  assert.equal(store.get("hudScale", null), 105);
+  assert.equal(repaints, 2);
 });
 
 test("Gas + Brake and Race actions move, resize and reset as independent subsets", () => {

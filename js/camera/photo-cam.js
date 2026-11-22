@@ -101,6 +101,7 @@ function enterPhotoMode() {
   window.addEventListener("keydown", photoKeyHandler, true);
   window.addEventListener("keyup", photoKeyHandler, true);
   window.addEventListener("blur", releasePhotoInput);
+  window.addEventListener("focusin", photoEditorFocus);
 }
 function exitPhotoMode() {
   if (!G.photoMode) return;
@@ -119,6 +120,7 @@ function exitPhotoMode() {
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
   window.removeEventListener("blur", releasePhotoInput);
+  window.removeEventListener("focusin", photoEditorFocus);
   if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
   applyResMode();
 }
@@ -146,8 +148,12 @@ function setPhotoUiHidden(hide) {
   if (G.soundOn) GameAudio.uiTick();
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
+function photoEditorFocus(e) {
+  if (e.target?.closest?.("#screen-arranger")) releasePhotoInput();
+}
 function photoKeyHandler(e) {
   const focused = document.activeElement, tag = (focused && focused.tagName) || "";
+  if (focused?.closest?.("#screen-arranger")) return;
   const down = e.type === "keydown";
   // Typing in a slider — but a key-UP always releases: W held while a click
   // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.

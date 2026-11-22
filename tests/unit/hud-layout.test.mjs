@@ -1856,3 +1856,26 @@ test("Arrange HUD event colors persist independently and reset one state at a ti
   assert.equal(restored.value("flag-yellow-fill"), undefined);
   assert.equal(restored.value("map-armed"), "#123456");
 });
+
+test("HUD panel dimensions and type round-trip independently in their profile and camera", () => {
+  const { H, written, els } = load();
+  const id = "rel";
+  H.set(id, { width: 45, textSize: 150, minHeight: 16 }, "other", "standard");
+  const card = els["#hud-rel"];
+  assert.equal(card.props["--hl-type"], "1.5");
+  assert.equal(card.props["--hl-width"], "calc(45vw / var(--hud-z, 1))");
+  assert.equal(card.props["--hl-height"], "calc(16vh / var(--hud-z, 1))");
+  const recovered = load(written).H;
+  assert.equal(recovered.get(id, "other", "standard").textSize, 150);
+  assert.equal(recovered.get(id, "other", "standard").s, 100);
+  assert.equal(recovered.get(id, "helmet", "standard").width, undefined);
+  assert.equal(recovered.get(id, "other", "broadcast").width, undefined);
+  assert.equal(H.set(id, {width: 10000}).width, 95);
+  assert.equal(H.set(id, {textSize: "broken"}).textSize, 150);
+  H.set("mirror", { width: 50 });
+  assert.equal(H.get("mirror").width, undefined);
+  H.resetEl(id, "other", "standard");
+  assert.equal(card.props["--hl-type"], undefined);
+  assert.equal(card.props["--hl-height"], undefined);
+  assert.equal(card.props["--hl-width"], undefined);
+});

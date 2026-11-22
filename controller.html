@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-NsPmuNpdF4Lo0c45H4G3sVhlm0pYF7/xgx1tQLyfb/k=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-X0qVXPUswSfE9BgahUtIPUNoe1wi3GUgVpErbNAqsuA=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -258,6 +258,8 @@
   @media (pointer: coarse), (hover: none) { #arrange-bar #arr-select { font-size: 16px; } }
   body.arranging #ctl > .screen-arrange-entry { visibility: hidden; }
   body.arranging #ctl :is(#gas,#b-aero) { pointer-events: auto; }
+  #lay-transfer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  #lay-transfer :is(button,input) { min-height: 44px; max-width: 100%; }
   #lay-arrange { border-color: var(--red); }
   /* TOUCH STRIP steering: its own row under the wheel only while chosen ([hidden] otherwise, so no row and no gap). */
   #steering-strip { grid-column: 1 / -1; height: 44px; line-height: 42px; text-align: center; font-size: 11px; letter-spacing: .08em;
@@ -588,6 +590,11 @@
     <button type="button" data-preset="mirror">MIRRORED<small>pedals left, paddles right</small></button>
     <button type="button" data-preset="phone">PHONE STYLE<small>tall BRAKE · GAS side by side, OT · BOOST · AERO column</small></button>
   </div>
+  <div id="lay-transfer">
+    <button id="lay-export" type="button">Export wheel layout</button>
+    <label>Import wheel layout <input id="lay-import" type="file" accept=".json,application/json"></label>
+    <output id="lay-file-status" aria-live="polite"></output>
+  </div>
   <div id="lay-rows" role="group" aria-label="Where each button sits"></div>
   <div id="lay-toggles">
     <button id="lay-pedals" type="button">PEDALS SIDE BY SIDE</button>
@@ -608,6 +615,9 @@
     <button type="button" data-nudge="up">Up</button><button type="button" data-nudge="down">Down</button>
     <button id="arr-step" type="button" aria-label="Coarse adjustment" aria-pressed="false">Fine</button>
     <button id="arr-minus" type="button">Scale −</button><button id="arr-plus" type="button">Scale +</button>
+    <button data-dimension="w" data-step="-1" type="button">Width −</button><button data-dimension="w" data-step="1" type="button">Width +</button>
+    <button data-dimension="h" data-step="-1" type="button">Height −</button><button data-dimension="h" data-step="1" type="button">Height +</button>
+    <select id="arr-shape" aria-label="Button shape"><option value="auto">Default shape</option><option value="square">Square</option><option value="rounded">Rounded</option><option value="pill">Pill</option></select>
     <button id="arr-undo" type="button">Undo</button>
     <button id="arr-reset" type="button">Reset region</button><button id="arr-reset-all" type="button">Reset wheel</button>
   </div>
@@ -681,6 +691,8 @@ window.addEventListener("DOMContentLoaded", function () {
       presets: Array.prototype.slice.call($("lay-presets").children), doc: document,
       stage: $("ctl"), arrangeBtn: $("lay-arrange"), bar: $("arrange-bar"), barName: $("arr-name"), minus: $("arr-minus"), plus: $("arr-plus"),
       picker: $("arr-select"), adjust: $("arr-adjust"), tools: $("arr-tools"), edge: $("arr-edge"), step: $("arr-step"),
+      dimensions: document.querySelectorAll("#arr-tools [data-dimension]"), shape: $("arr-shape"),
+      exportLayout: $("lay-export"), importLayout: $("lay-import"), fileStatus: $("lay-file-status"),
       nudges: document.querySelectorAll("#arr-tools [data-nudge]"), undo: $("arr-undo"), cancel: $("arr-cancel"),
       resetOne: $("arr-reset"), resetAll: $("arr-reset-all"), arrangeDone: $("arr-done"),
       arrange: { screen: $("screen"), shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), otBig: $("b-ot-big"), boostBig: $("b-boost-big"),

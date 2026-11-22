@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -640,7 +641,7 @@ test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height
   });
 });
 
-function bootPlacement(durable = true) {
+function bootPlacement(durable = true, regions) {
   const sheets = new Set();
   const store = {
     get: () => store.value,
@@ -650,7 +651,7 @@ function bootPlacement(durable = true) {
   const media = { matches: false, addEventListener: (_, fn) => { media.change = fn; } };
   const sb = {
     GameStore: { store }, matchMedia: () => media,
-    ScreenRegions: {
+    ScreenRegions: regions || {
       garage: { root: "#carsetup", regions: { panel: { selector: ".panel" } } },
       career: { root: "#career", regions: { calendar: { selector: ".calendar" } } },
     },
@@ -739,4 +740,49 @@ test("a Garage geometry reset previews shipped placement, preserves style and to
   M.resetGeometry("garage", keys, "save");
   assert.deepEqual(plain(data.lookGarage), { btn: 120, glass: "glass" });
   assert.deepEqual(data.lookCareer, { side: "swapped" });
+});
+
+test("all Race Settings steppers can save their own region without changing adjacent controls", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+  const regions = window.ScreenRegions["race-settings"].regions;
+  const dialog = SHELL.slice(SHELL.indexOf('<dialog id="race-settings"')).split("</dialog>")[0];
+  const controls = [...dialog.matchAll(/<(?:button|select) id="rs-([a-z]+-(?:prev|sel|next))"/g)].map(match => match[1]);
+  assert.ok(controls.length > 0);
+  const values = {};
+  for (const key of controls) {
+    assert.equal(regions[key].selector, "#rs-" + key);
+    values[key] = { textSize: key.endsWith("-sel") ? 1.25 : 1.1 };
+  }
+  assert.equal(model.save("race-settings", "portrait", values), true);
+  assert.deepEqual(plain(model.read("race-settings", "portrait")), values);
+  assert.deepEqual(plain(model.read("race-settings", "landscape")), {});
+  delete values["laps-next"];
+  model.apply("race-settings", values);
+  const css = [...sheets][0].textContent;
+  assert.ok(css.includes("#rs-laps-prev") && css.includes("#rs-laps-sel"));
+  assert.equal(css.includes("#rs-laps-next"), false);
+});
+
+test("advanced region styles compose with orientation defaults and reject imported CSS", () => {
+  const { model, sheets } = bootPlacement();
+  model.save("garage", "landscape", { panel: {
+    formWidth: 999, textAlign: "end", cornerRadius: 0, rowGap: -3, columnGap: 999,
+  } });
+  assert.deepEqual(plain(model.read("garage", "landscape").panel), {
+    formWidth: 100, textAlign: "end", cornerRadius: 0, rowGap: 0, columnGap: 48,
+  });
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+  const rules = cssRules([...sheets][0].textContent);
+  const region = rules.find(rule => rule.decls.has("column-gap"));
+  assert.equal(region.decls.get("column-gap"), "48px !important");
+  assert.equal(region.decls.get("text-align"), "end !important");
+  assert.equal(region.decls.get("border-radius"), "0px !important");
+  const controls = rules.find(rule => rule.decls.has("width") && rule.selector.includes('input[type="range"]'));
+  assert.equal(controls.decls.get("width"), "100% !important");
+  assert.equal(controls.selector.includes('input[type="checkbox"]'), false);
+  assert.equal(controls.selector.includes('input[type="radio"]'), false);
+  model.save("garage", "landscape", { panel: { textAlign: "center;color:red", rowGap: "1rem", formWidth: Infinity } });
+  assert.equal(sheets.size, 0, "malformed values remove overrides and restore the shipped stylesheet");
 });

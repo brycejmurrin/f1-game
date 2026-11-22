@@ -504,6 +504,15 @@ test("Studio uses canonical sheet regions and enumerated controls with a persist
   assert.equal(b.dom.byId("ps-capture").parentElement, panel.children[2]);
   assert.equal(b.dom.byId("ps-capture").classList.contains("bigbtn"), true);
   assert.equal(body.contains(b.dom.byId("ps-export")), true);
+  // Each saved region must resolve on the real, lazily constructed Studio
+  // DOM, including collapsed panels. The framing guide cannot be displaced.
+  const reg = { window: {} };
+  vm.runInNewContext(fs.readFileSync(new URL("../../js/ui/screen-regions.js", import.meta.url), "utf8"), reg, { filename: absSrc("js/ui/screen-regions.js") });
+  const studio = b.dom.byId("photo-studio"), guide = b.dom.byId("ps-guide");
+  for (const part of Object.values(reg.window.ScreenRegions["photo-studio"].regions)) {
+    const region = studio.querySelector(part.selector);
+    assert.ok(region && !region.contains(guide), part.label);
+  }
   const frame = b.dom.byId("ps-aspect"); frame.value = "portrait"; b.dom.dispatch(frame, { type: "change" });
   assert.equal(b.api.state().aspect, "portrait");
   b.dom.byId("ps-aspect-row-next").click(); assert.equal(b.api.state().aspect, "scene");

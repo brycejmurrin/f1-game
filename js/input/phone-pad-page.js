@@ -826,15 +826,21 @@ const PhonePadPage = (function () {
   // or RESET puts every control back.
   const ARRANGE_MIN_PX = 44;   // the touch floor: no control sizes below it
   const clampN = (v, lo, hi, d) => (typeof v === "number" && isFinite(v)) ? Math.min(hi, Math.max(lo, v)) : d;
+  const PLACE_IDS = new Set([...LAYOUT_KEYS, "screen", "shiftUp", "shiftDown", "otBig", "boostBig", "brake", "gas", "steering"]);
+  const wheelShapes = { square: "0", rounded: "14px", pill: "999px" };
   function normalisePlace(raw) {
     const out = {};
     if (!raw || typeof raw !== "object") return out;
     for (const id of Object.keys(raw).slice(0, 40)) {
       const p = raw[id];
-      if (!/^[\w-]{1,24}$/.test(id) || !p || typeof p !== "object") continue;
+      if (!PLACE_IDS.has(id) || !p || typeof p !== "object") continue;
       const r1 = (v) => Math.round(v * 10) / 10;
       const q = { x: r1(clampN(p.x, -90, 90, 0)), y: r1(clampN(p.y, -90, 90, 0)), s: Math.round(clampN(p.s, 40, 250, 100)) };
-      if (q.x || q.y || q.s !== 100) out[id] = q;
+      for (const axis of ["w", "h"]) {
+        if (Number.isFinite(p[axis])) q[axis] = r1(clampN(p[axis], 1, 90, 1));
+      }
+      if (typeof p.shape === "string" && Object.hasOwn(wheelShapes, p.shape)) q.shape = p.shape;
+      if (q.x || q.y || q.s !== 100 || q.w || q.h || q.shape) out[id] = q;
     }
     return out;
   }
@@ -849,6 +855,13 @@ const PhonePadPage = (function () {
     const r = raw && typeof raw === "object" ? raw : {}, z = r.zone && typeof r.zone === "object" ? r.zone : {};
     return { zone: Object.fromEntries(LAYOUT_KEYS.map((k) => [k, z[k] === "L" || z[k] === "R" ? z[k] : "C"])), swap: r.swap === true,
       pedals: r.pedals === "side" ? "side" : "stack", strip: r.strip === "column" ? "column" : "row", place: normalisePlace(r.place) };
+  }
+  function readWheelBackup(file) {
+    const layout = file?.layout;
+    if (file?.format !== "apex26-wheel" || file.v !== 1 || !layout || typeof layout !== "object" ||
+        !layout.zone || typeof layout.zone !== "object" || Array.isArray(layout.zone) ||
+        !layout.place || typeof layout.place !== "object" || Array.isArray(layout.place)) throw new Error("Invalid wheel layout");
+    return normaliseLayout(layout);
   }
   /** The preset a layout equals, or "custom". */
   function layoutPreset(lay) {
@@ -873,6 +886,14 @@ const PhonePadPage = (function () {
     if (!el || !el.style) return;
     el.style.translate = p ? p.x + "vw " + p.y + "vh" : "";
     el.style.scale = p && p.s !== 100 ? String(p.s / 100) : "";
+    // Equal bounds also resize controls that normally stretch in a flex or grid slot.
+    const floor = ARRANGE_MIN_PX / ((p?.s || 100) / 100);
+    for (const [key, axis, unit] of [["w", "Width", "vw"], ["h", "Height", "vh"]]) {
+      const size = p?.[key] ? "max(" + floor + "px," + p[key] + unit + ")" : "";
+      el.style["min" + axis] = size;
+      el.style["max" + axis] = size;
+    }
+    el.style.borderRadius = p?.shape ? wheelShapes[p.shape] : "";
     if (el.classList) el.classList.toggle("placed", !!p);
   }
   /** The smallest size (%) that keeps an element's shorter side at the touch floor. */
@@ -911,9 +932,33 @@ const PhonePadPage = (function () {
     }
     function set(lay) {
       cur = applyLayout(dom, lay);
-      try { if (store) store.setItem(LAYOUT_KEY, JSON.stringify(cur)); } catch (e) { /* storage blocked: this session keeps it */ }
+      let durable = false;
+      try { if (store) { store.setItem(LAYOUT_KEY, JSON.stringify(cur)); durable = true; } } catch (e) { /* session fallback */ }
       paint();
+      return durable;
     }
+    dom.exportLayout?.addEventListener("click", () => {
+      const data = JSON.stringify({ format: "apex26-wheel", v: 1, layout: cur }, null, 2);
+      const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+      const link = dom.doc.createElement("a");
+      link.href = url; link.download = "apex26-phone-wheel.json";
+      dom.doc.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+    let importSerial = 0;
+    dom.importLayout?.addEventListener("change", async () => {
+      const serial = ++importSerial;
+      const file = dom.importLayout.files[0];
+      dom.importLayout.value = "";
+      if (!file) return;
+      try {
+        if (file.size > 32768) throw new Error();
+        const next = readWheelBackup(JSON.parse(await file.text()));
+        if (serial !== importSerial) return;
+        const durable = set(next);
+        dom.fileStatus.textContent = durable ? "Wheel layout imported." : "Wheel layout imported for this session.";
+      } catch { if (serial === importSerial) dom.fileStatus.textContent = "Choose an Apex 26 wheel layout file."; }
+    });
     for (const el of dom.presets || []) el.addEventListener("click", () => set(LAYOUT_PRESETS[el.dataset.preset] || LAYOUT_PRESETS.classic));
     if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
     if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
@@ -951,7 +996,9 @@ const PhonePadPage = (function () {
       if (dom.picker && id) dom.picker.value = id;
       if (dom.undo) dom.undo.disabled = !history.length;
       const p = placeOf(id);
-      if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "%" : "Select a control";
+      if (dom.barName) dom.barName.textContent = id ? "X " + p.x + "% · Y " + p.y + "% · Scale " + p.s + "% · Width " +
+        (p.w ? p.w + "vw" : "auto") + " · Height " + (p.h ? p.h + "vh" : "auto") : "Select a control";
+      if (dom.shape) dom.shape.value = p.shape || "auto";
       markClashes();
     }
     function put(id, p, save) {
@@ -961,7 +1008,7 @@ const PhonePadPage = (function () {
     }
     function sizeBy(id, factor, save) {
       const el = A[id], p = placeOf(id), r = el && el.getBoundingClientRect ? el.getBoundingClientRect() : { width: 100, height: 100 };
-      put(id, { x: p.x, y: p.y, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
+      put(id, { ...p, s: Math.max(minScale(r.width, r.height, p.s), Math.min(250, Math.round(p.s * factor))) }, save);
     }
     const arranging = () => !!(dom.body && dom.body.classList && dom.body.classList.contains("arranging"));
     function restore(snapshot) { cur = applyLayout(dom, snapshot); paint(); pick(picked); }
@@ -1039,7 +1086,7 @@ const PhonePadPage = (function () {
           const [a, b] = [...pts.values()], f = Math.hypot(a.x - b.x, a.y - b.y) / drag.pinch.d0;
           drag.next = { ...placeOf(drag.id), s: Math.max(drag.pinch.floor, drag.pinch.s0 * f) };
         } else if (!drag.pinch) {
-          drag.next = { x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s };
+          drag.next = { ...drag.p, x: drag.p.x + (e.clientX - drag.x0) / W() * 100, y: drag.p.y + (e.clientY - drag.y0) / H() * 100, s: drag.p.s };
         }
         if (!frame && typeof requestAnimationFrame === "function") frame = requestAnimationFrame(paintDrag);
         else if (!frame) paintDrag();
@@ -1080,6 +1127,18 @@ const PhonePadPage = (function () {
     for (const [button, factor] of [[dom.minus, 0.9], [dom.plus, 1.1]]) button?.addEventListener("click", () => {
       if (picked) edit(() => sizeBy(picked, factor, false));
     });
+    for (const button of dom.dimensions || []) button.addEventListener("click", () => {
+      if (!picked) return;
+      const axis = button.dataset.dimension, width = axis === "w";
+      edit(() => {
+        const p = placeOf(picked), rect = A[picked].getBoundingClientRect();
+        const size = p[axis] ?? (width ? rect.width / W() : rect.height / H()) * 10000 / p.s;
+        put(picked, { ...p, [axis]: size + Number(button.dataset.step) * (coarse ? 5 : 1) }, false);
+      });
+    });
+    dom.shape?.addEventListener("change", () => {
+      if (picked) edit(() => put(picked, { ...placeOf(picked), shape: dom.shape.value }, false));
+    });
     dom.undo?.addEventListener("click", () => { stopDrag(true); if (history.length) restore(history.pop()); });
     dom.resetOne?.addEventListener("click", () => { if (picked) edit(() => put(picked, {x:0,y:0,s:100}, false)); });
     dom.resetAll?.addEventListener("click", () => edit(() => restore(LAYOUT_PRESETS.classic)));
@@ -1103,6 +1162,6 @@ const PhonePadPage = (function () {
     return { get: () => normaliseLayout(cur), set, show, arrange, sizeBy: (id, f) => sizeBy(id, f, true) };
   }
 
-  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, layoutPreset, applyLayout, layout };
+  return { HELD, DASH, paintHud, pad, LAYOUT_KEYS, LAYOUT_PRESETS, ARRANGE_MIN_PX, minScale, normaliseLayout, readWheelBackup, layoutPreset, applyLayout, layout };
 })();
 Object.freeze(PhonePadPage);

@@ -1805,6 +1805,17 @@ test("elevation: presets + node height undo/redo; strip selects a point; Escape 
     // Force a strip selection by dispatching after mode elev + selecting via canvas pick is heavy; call profileBack path by selecting through setNodeHeight which selects.
     // Profile select via evaluating: the strip's select is internal; Escape with no selection should not claim.
     for (const l of back) l.fn(esc);
+    const arranger = b.dom.document.body.appendChild(b.dom.makeElement("dialog", "screen-arranger"));
+    const filesMenu = walk(b.root).find((el) => el.dataset.role === "file-menu");
+    filesMenu.open = true;
+    const layoutEscape = {type:"keydown", key:"Escape", target:arranger, preventDefault(){this.defaultPrevented=true;}, stopPropagation(){}};
+    for (const listener of back) listener.fn(layoutEscape);
+    assert.equal(filesMenu.open, true, "Escape in the layout editor leaves the browsed disclosure open");
+    assert.equal(layoutEscape.defaultPrevented, undefined);
+    const layoutUndo = {type:"keydown", key:"z", ctrlKey:true, target:arranger, preventDefault(){this.defaultPrevented=true;}};
+    for (const listener of back) listener.fn(layoutUndo);
+    assert.equal(layoutUndo.defaultPrevented, undefined, "the layout editor owns its undo shortcut");
+    assert.equal(b.D.state().design.heights[pick], 5, "layout undo leaves the design intact");
     // Undo / redo the height edit.
     assert.equal(b.D.undo(), true);
     assert.notEqual(b.D.state().design.heights[pick], 5);

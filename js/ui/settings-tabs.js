@@ -368,6 +368,46 @@ const SettingsNav = (function () {
       if (search) search.cancel();
       enter(id, door);
     };
+    const index = document.getElementById("pm-settings-index");
+    if (index && !index.querySelector("h3")) {
+      for (const first of index.querySelectorAll("[data-settings-category]")) {
+        const heading = document.createElement("h3");
+        heading.className = "pm-group-h";
+        heading.textContent = first.dataset.settingsCategory;
+        index.insertBefore(heading, first);
+      }
+    }
+    const backDoor = document.getElementById("pm-settings-close");
+    if (backDoor?.parentElement) {
+      const footer = backDoor.parentElement;
+      let arrange = footer.querySelector("#pm-arrange-current");
+      if (!arrange) {
+        arrange = document.createElement("button");
+        arrange.type = "button";
+        arrange.id = "pm-arrange-current";
+        arrange.className = "bigbtn alt";
+        arrange.textContent = "Arrange this screen";
+        footer.appendChild(arrange);
+      }
+      arrange.onclick = async () => {
+        const request = generation;
+        arrange.disabled = true;
+        try {
+          if (!window.ScreenArranger) {
+            await presets();
+            if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
+          }
+          if (request !== generation || document.getElementById("pmsettings")?.hidden) return;
+          const screen = current === "home" ? "pmsettings" : "pm-panel-" + current;
+          if (window.ScreenArranger?.open(screen, arrange)) {
+            arrange.textContent = "Arrange this screen";
+            return;
+          }
+        } catch (error) { Log.warn("ui", "Layout editor unavailable: " + error); }
+        finally { arrange.disabled = false; }
+        if (request === generation) arrange.textContent = "Retry layout editor";
+      };
+    }
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;

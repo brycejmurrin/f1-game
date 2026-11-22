@@ -149,13 +149,24 @@ const HudLayout = (function () {
     const n = typeof v === "number" || (typeof v === "string" && v.trim()) ? Number(v) : NaN;
     return Number.isFinite(n) && (k !== "s" || n > 0) ? n : fallback;
   }
-  /** Finite offsets and a positive finite size; invalid edits keep prior values. */
-  function normEl(v, fallback = DEF) {
+  // Panel extents are pre-transform viewport shares. Type scales the widget font.
+  const cardFields = { width: [5, 95], minHeight: [2, 60], textSize: [75, 200] };
+  const cardKeys = Object.keys(cardFields);
+  const cardWidgets = new Set(["gaps", "sectors", "limits", "flag", "rel", "strat"]);
+  const cardSizing = id => cardWidgets.has(id);
+  function normEl(v, fallback = DEF, allowCard = true) {
     const o = v && typeof v === "object" ? v : {};
-    return { x: num(o.x, "x", fallback.x), y: num(o.y, "y", fallback.y), s: num(o.s, "s", fallback.s) };
+    const result = { x: num(o.x, "x", fallback.x), y: num(o.y, "y", fallback.y), s: num(o.s, "s", fallback.s) };
+    if (allowCard && ("width" in o || "minHeight" in o || "textSize" in o)) {
+      for (const key of cardKeys) {
+        const value = num(o[key], key, fallback[key]);
+        if (Number.isFinite(value)) result[key] = Math.min(cardFields[key][1], Math.max(cardFields[key][0], value));
+      }
+    }
+    return result;
   }
   const isDefEl = (e) => e.x === 0 && e.y === 0 && e.s === 100;
-  const sameEl = (a, b) => a.x === b.x && a.y === b.y && a.s === b.s;
+  const sameEl = (a, b) => a.x === b.x && a.y === b.y && a.s === b.s && cardKeys.every(key => a[key] === b[key]);
   const isSet = (s) => SETS.indexOf(s) >= 0;
   const isProf = (p) => PROFILES.indexOf(p) >= 0;
   /** A touch screen (no body.desktop — js/ui/platform-session.js keeps it live). */
@@ -172,7 +183,7 @@ const HudLayout = (function () {
     for (const id of IDS) {
       if (!(id in v)) continue;
       if (!v[id] || typeof v[id] !== "object" || Array.isArray(v[id])) continue;
-      out[id] = normEl(v[id]);
+      out[id] = normEl(v[id], DEF, cardSizing(id));
     }
     return out;
   }
@@ -325,6 +336,17 @@ const HudLayout = (function () {
       if (st[pn][sn][id]) el.setAttribute("data-hl-user", "");
       else if (el.hasAttribute("data-hl-user")) el.removeAttribute("data-hl-user");
       const entry = st[pn][sn][id];
+      if (cardSizing(id)) {
+        if (entry?.width != null) el.setAttribute("data-hl-width", "");
+        else el.removeAttribute("data-hl-width");
+        if (entry?.minHeight != null) el.setAttribute("data-hl-height", "");
+        else el.removeAttribute("data-hl-height");
+        for (const [key, property, unit] of [["width", "--hl-width", "vw"], ["minHeight", "--hl-height", "vh"], ["textSize", "--hl-type", ""]]) {
+          if (entry?.[key] != null) {
+            el.style.setProperty(property, unit ? "calc(" + entry[key] + unit + " / var(--hud-z, 1))" : String(entry[key] / 100));
+          } else el.style.removeProperty(property);
+        }
+      }
       if (entry) el.setAttribute("data-hl-v4", "");
       else el.removeAttribute("data-hl-v4");
       // Bryce 2026-11-20: the factory PHONE_STANDARD seed keeps the screen-fit caps (fitHud, js/ui/hud.js);
@@ -1032,8 +1054,8 @@ const HudLayout = (function () {
     const st = stored();
     const previous = effective(st, sn, p)[id];
     if (!v || typeof v !== "object" || Array.isArray(v)
-        || !["x", "y", "s"].some(k => Number.isFinite(num(v[k], k, NaN)))) return previous;
-    const e = normEl(Object.assign({}, previous, v || {}), previous);
+        || !Object.keys(v).some(k => (["x", "y", "s"].includes(k) || (cardSizing(id) && Object.hasOwn(cardFields, k))) && Number.isFinite(num(v[k], k, NaN)))) return previous;
+    const e = normEl(Object.assign({}, previous, v), previous, cardSizing(id));
     st[p][sn][id] = e;
     save(st, live);
     apply();
@@ -1321,7 +1343,7 @@ const HudLayout = (function () {
   // callers). Survey lockstep still parses the LIM const from source.
   return {
     get colors() { return colorPolicy(); }, ensureEditor, ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
-    PACK_AIR,
+    PACK_AIR, cardSizing,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, commit, resetEl, resetSet, arrangeSnapshot, restoreSnapshot, endArrangeDraft, isShipped, scaleOf, relativeSize, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,

@@ -1,5 +1,12 @@
 {
+  "files": {
+    "css/hud.css": {
+      "codeLines": 4,
+      "lines": 5
+    }
+  },
   "tree": {
-    "eagerCodeBytes": 154
+    "assertPinsAll": 1,
+    "eagerCodeBytes": 4395
   }
 }

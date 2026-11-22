@@ -2,9 +2,46 @@
 
 Kind: design
 
+## Implemented follow-up
+
+The shared registry now defines **52 screen targets and 479 region bindings**. The Settings index and all 15 Settings subpages have separate targets. Each subpage offers its page container and smaller parts. Race Settings has 61 bindings, including the previous choice, value and next choice for 12 rows. Career has 19, Garage 16, Data Hub 15 and Photo Studio 15. These counts include controls that appear only for a particular device, session or selected tab. [Region definitions](../../js/ui/screen-regions.js)
+
+### Adjust a menu
+
+1. Open **Settings** from Home or Pause. The index groups destinations under **Controls and driving**, **Display and sound**, and **Player and data**. Open the page you want, then choose **Arrange this screen** beside Back. For a menu outside Settings, use the **Screen to arrange** picker in Appearance.
+2. Select a visible region and move it with the direction buttons or by dragging. Use **Fine** for a small move and **Coarse** for a larger one. Move the toolbar if it covers the part you want. On longer screens use **Scroll up** and **Scroll down**. **Browse section** can open disclosures or switch supported tabs during editing.
+3. For a Race Settings preset such as **Quick race**, change **Button width** to reflow it, **Button height** to set its minimum height, or **Text size** to enlarge its label. **Scale** resizes the selected unit. Under **Advanced style**, adjust text alignment or corners, form width where a region contains a supported input, or row and column gaps on flex and grid containers. A blank numeric field restores automatic styling.
+4. Changes preview immediately. Rotate to edit the other orientation or use **Copy from** to replace the current orientation’s draft with the other one. **Apply** saves. **Cancel** returns to the page. **Reset region** clears just the selected region in the current orientation. **Reset screen** followed by **Apply** restores that screen in both orientations.
+5. In Appearance, **This screen** uses the selected arrangement target for profile apply and reset. A placement-only target disables colour presets in this scope. The phone wheel has its own size, shape and layout-file controls on the controller. Export there to move that layout to another phone. [Shared editor](../../js/ui/screen-arranger.js) · [Profile scope](../../js/ui/appearance-studio-ui.js) · [Controller wheel](../../js/input/phone-pad-page.js)
+
+### Adjust race readouts and touch buttons
+
+In **Arrange HUD**, pick a readout and expand **Controls**. Gap times, sector times, track limits, the race flag, relative standings and strategy offer four adjustments. **Width** sets the panel width as a percentage of the viewport. **Min height** reserves vertical space and lets the panel grow to fit its contents. **Text size** changes its type. **Scale** enlarges the whole widget, including the panel and its contents. Choose an adjustment and use **−** or **+**. The mirror and minimap keep their aspect ratios under Scale. **Reset** restores the selected widget. **Reset HUD** restores the current HUD profile and camera group. Use **Apply** to save or **Cancel** to discard the session. The HUD has separate cockpit, helmet and other camera layouts within each profile. [HUD layout](../../js/ui/hud-layout.js) · [HUD toolbar](../../js/ui/hud-arrange.js)
+
+In the touch controls editor, open **Size & shape** and choose an individual control, **Gas + Brake** or **Race actions**. **Width** and **Height** independently adjust each selected button’s footprint from 50% to 175%, subject to the minimum touch target. **Size** changes both dimensions together. Choose **Steering buttons** to set the arrow gap from Auto to a spacing up to 80 px. Choose **Driving buttons** to place pedals or actions side by side or use two rows. Collapse the toolbar with **Hide tools** while moving buttons. **Undo** reverses one change, **Cancel** discards the session and **Done** keeps it. These layouts follow the active steering scheme through rotation. [Touch layout](../../js/ui/dock-layout.js) · [Touch toolbar](../../js/ui/dock-toolbar.js)
+
+### Coordinated colour presets
+
+In **Settings → Appearance**, choose **Global**, then **Endurance** for forest-green surfaces, rounded controls, cream serif headings and amber menu accents. **Drafting** uses blueprint-blue surfaces, squared controls, upright headings and cyan menu accents. Both tiles keep the HUD accent, team colours, cockpit profile, saved placements, text size, contrast and motion settings. To use either surface treatment with a custom accent, choose it in the **Theme** row. **Undo** restores the previous Studio choices.
+
+### Interaction references
+
+- The region picker, live selection, and explicit Apply follow the select–adjust–save sequence in Final Fantasy XIV’s HUD Layout. The Settings footer gives normal menus the same direct edit entry that World of Warcraft provides through its game menu. [Final Fantasy XIV HUD Layout](https://na.finalfantasyxiv.com/uiguide/know/know-hud/hud-layout.html) · [World of Warcraft Edit Mode](https://worldofwarcraft.blizzard.com/en-us/news/23837944)
+- Directional buttons provide single-tap alternatives to dragging. Returning focus to the Settings footer after Cancel follows the native modal interaction pattern and is covered by the phone-emulation journey below. [WCAG 2.2 Dragging Movements](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html) · [WAI-ARIA modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
+
+### Verification and constraints
+
+One browser owner followed **Settings → Graphics → Arrange this screen → Cancel** on the follow-up working tree in Linux Chromium 154.0.8037.57, emulated touch, DPR 1 and reduced motion, at **393 × 852 CSS px portrait** and **852 × 393 CSS px landscape**. All three index headings appeared. The Graphics editor offered five visible regions. Cancel returned to Graphics with keyboard focus on the arrangement button. The registry defines six possible Graphics bindings. The focused Node 22 run passed all 89 title-layout, Settings router, search and source-integrity tests, including the grouping of all eleven index doors.
+
+In both emulated orientations, applying Endurance changed the surface token to `#16342b` and Drafting changed it to `#192e45`. At 852 × 393 the Track Designer editor and Photo Studio editor both dismissed with a touch on Cancel. Photo Studio hit the 30-second automation timeout on earlier attempts. The final interaction used the button’s rendered coordinates and a longer wait on software rendering.
+
+Tab and reading order still follow the owning menu. Photo crop guides, exported images and WebGL instruments have renderer-specific geometry. The local phone-wheel file is separate from a host settings backup. The Graphics journey used emulation. Physical Safari, assistive technologies, paired devices and a connected OBS source need separate verification.
+
+## Historical baseline
+
 The deployment branch at `b723dc5608` defines **35 shared-editor targets and 105 region bindings**. PR #6168 at `ef74872085` defines **52 targets and 174 bindings**. These are source counts. A target can be a Settings subpage, a companion surface, or a menu with just one adjustable group. A binding may appear only during a race, when data exists, or on particular devices. The branch comparison does not establish which version a cached installation is running. [Screen registry](../../js/ui/screen-regions.js) · [Placement owner](../../js/ui/screen-placement.js) · [PR #6168](https://github.com/brycejmurrin/f1-game/pull/6168)
 
-## What a player can change
+### Controls at the audited PR head
 
 | Choice | Available scope on #6168 | Remaining limit |
 | --- | --- | --- |
@@ -17,7 +54,7 @@ The deployment branch at `b723dc5608` defines **35 shared-editor targets and 105
 
 Sources for these distinctions include the [editor](../../js/ui/screen-arranger.js), [screen looks](../../js/ui/screen-looks.js), [Studio profile scoping](../../js/ui/appearance-studio-ui.js), [settings export](../../js/ui/settings-export.js) and [layout presets](../../js/ui/layout-presets.js).
 
-## Player journey inventory on #6168
+### Player journey inventory at ef74872085
 
 The editable column lists the actual selectable unit. For example, changing the width of “Actions” affects a footer, while selecting “Start race” allows one button to change independently. Rows grouping several targets name each one. Navigation listed here starts from the normal player door. Several contextual targets must be armed in Appearance and then reached in the relevant session.
 
@@ -47,7 +84,9 @@ The editable column lists the actual selectable unit. For example, changing the 
 
 Shell and dynamic owners: [game HTML](../../index.html), [settings routes](../../js/ui/settings-tabs.js), [Data Hub](../../js/data/hub.js), [Career](../../js/career/career-ui.js), [Results](../../js/ui/results-sheet.js), [Photo Studio](../../js/ui/photo-studio-ui.js), [Designer](../../js/editor/designer.js), [tuner workspace](../../js/ui/editor-workspace.js), [controller](../../controller.html) and [overlay](../../overlay.html).
 
-## Dedicated editors, transient screens and storage
+### Dedicated editors, transient screens and storage at ef74872085
+
+The following rows describe the audited commit. The HUD and touch controls added since then are described under **Adjust race readouts and touch buttons** above.
 
 | Surface | Current owner and scope | Missing capability or appropriate boundary |
 | --- | --- | --- |
@@ -62,7 +101,7 @@ Shell and dynamic owners: [game HTML](../../index.html), [settings routes](../..
 
 Pair/menu-pad/broadcast regions use `screenPlacement` in the browser that owns them. An export can include those records when made in the same origin and storage partition. Pairing does not transfer layout settings from a phone to the host or an OBS browser source. Overlay URL settings are separate from profile data. An explicit companion export/import or transfer action would make the ownership clear.
 
-## Completion checklist
+### Work identified by the original survey
 
 1. **Make destination and scope agree.** Use the same screen ID for Arrange, named-profile apply and scoped restore. Label “this screen” with the actual target. Cover Results versus Popups and a Settings subpage. Show how to reach contextual screens, allow cancellation of a pending editor, and clear stale requests when a player backs out.
 2. **Let players reach the part they want.** Support selecting an inner tab, opening a fold or scrolling a long page during safe editing. Add explicit state previews for active races, populated Results, music, connected phones and broadcast overlays. Prevent Pause, Capture, destructive actions or gameplay input from firing in preview. Confirm the actual visible heading is selected in the tuner workspace.
@@ -71,7 +110,7 @@ Pair/menu-pad/broadcast regions use `screenPlacement` in the browser that owns t
 5. **Make saving predictable across surfaces.** Preserve old sparse records, unset adaptive defaults, local accessibility choices, per-orientation isolation and per-screen recovery. Decide and expose phone-wheel backup explicitly. Verify a host export on a separate handset and an OBS browser source. Retain the option to leave the recipient's device-specific controls at their shipped values.
 6. **Verify function, as well as bounds.** In narrow portrait and short landscape, move and resize a region, change text independently, Apply, rotate, reload, cancel and reset. Test tab/fold transitions, narrow layouts with large text and visible focus. Check actual map hits, Garage car framing, mirror/PiP pixels, Photo export crop, Results Continue, pairing and broadcast with a feed. Include physical Safari/standalone safe areas, screen reader, paired phone, and gamepad where supported.
 
-## Evidence and limits
+### Evidence from the original survey
 
 Six subagents completed ten source assignments across two waves. The inventory reconciles the screen registry with shell markup, the layer registry, dynamic builders, navigation owners and tests. In the main HTML shell, 19 of 20 statically declared native dialogs match a registered screen. The exception is Benchmark. Of the 36 layer IDs, 29 match shared screen IDs directly. The others represent Home, three editor toolbars, two guard screens and Benchmark. Dynamic dialogs, non-dialog panels and companion pages use different owners and are accounted for separately above. [Layer registry](../../js/ui/layers.js) · [Game shell](../../index.html)
 

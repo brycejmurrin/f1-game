@@ -55,7 +55,9 @@ const DockLayout = (function () {
         const values = src.controls?.[id];
         if (!values || typeof values !== "object") continue;
         const control = {};
-        if (Number.isFinite(values.size) && values.size !== 100) control.size = clamp01(values.size, 50, 175);
+        for (const key of ["size", "width", "height"]) {
+          if (Number.isFinite(values[key]) && values[key] !== 100) control[key] = clamp01(values[key], 50, 175);
+        }
         const shape = shapeOf(values.shape);
         if (shape !== "auto") control.shape = shape;
         for (const axis of ["x", "y"]) {
@@ -213,7 +215,7 @@ const DockLayout = (function () {
     if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
   }
 
-  function create(G) {
+  function create(G, uiScale) {
     Log.info("ui", "DockLayout.create");
     const { $, store } = G;
     let toolbar = null, pending = null;
@@ -244,7 +246,7 @@ const DockLayout = (function () {
     let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
     function setShape(v) {
       shape = applyShape(v);
-      if (store && store.set) store.set(SHAPE_KEY, shape === "auto" ? null : shape);
+      if (!editing && store && store.set) store.set(SHAPE_KEY, shape === "auto" ? null : shape);
       if (typeof SettingRow !== "undefined" && SettingRow.paint && $("pm-btnshape")) SettingRow.paint("pm-btnshape", shape, SHAPES);
       toolbar?.paint();
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
@@ -256,18 +258,22 @@ const DockLayout = (function () {
       return scheme.controls[id] ||= {};
     }
     function commitLayout() {
-      save(store, bag);
+      if (editing) toolbar.remember();
+      else save(store, bag);
       paint();
       G.refreshHud?.(true);
       toolbar?.paint();
     }
     // restore=false when something else opened a dialog while we were editing:
     // stacking SETTINGS back on top of it would show two.
-    function setEditing(on, restore) {
+    function setEditing(on, restore, accept = restore !== false) {
       if (on && !toolbar) {
         if (typeof DockToolbar !== "undefined") {
           toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
-            docks, measurePad, inboard, boundedControlXY, getShape: () => shape, setShape, record, close: () => setEditing(false) });
+            docks, measurePad, inboard, boundedControlXY, getShape: () => shape, setShape, record,
+            refreshScale: () => { uiScale?.applyHudScale(); uiScale?.applyBtnScale(); },
+            readLayout: () => normalize(bag), restoreLayout: value => { bag = normalize(value); paint(); },
+            close: accept => setEditing(false, true, accept) });
         } else {
           if (pending || typeof ScriptLoader === "undefined") return;
           const door = $("pm-dock-reposition"), origin = [$("pmsettings"), $("pausemenu")].find(el => el && !el.hidden);
@@ -288,6 +294,12 @@ const DockLayout = (function () {
       }
       if (!on && pending) { pending = null; $("pm-dock-reposition")?.removeAttribute("aria-busy"); }
       const was = editing;
+      if (was && !on) {
+        if (accept) {
+          if (toolbar.shapeChanged()) store?.set?.(SHAPE_KEY, shape === "auto" ? null : shape);
+          if (toolbar.layoutChanged()) save(store, bag);
+        } else toolbar.cancel();
+      }
       editing = !!on;
       if (typeof document !== "undefined") {
         if (editing) document.body.setAttribute("data-dock-edit", "1");
@@ -306,7 +318,6 @@ const DockLayout = (function () {
           if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
           fitRaf = 0;
         }
-        if (drag) save(store, bag); // a drag cut short by DONE/Escape keeps its move
         drag = null;
       }
       paint();
@@ -326,7 +337,7 @@ const DockLayout = (function () {
       const tip = document.createElement("p");
       tip.className = "adv-help";
       tip.id = "pm-dock-reposition-help";
-      tip.textContent = "Drag a group, or tap a button to edit it on its own. In Size & shape, choose Steering buttons for arrow spacing or Driving buttons for layout. Select Gas + Brake or Race actions to move, size and shape that set together. Individual sizes are relative to Button Size. With a button focused, arrow keys move it 2 px. Hold Shift for 16 px. Reset Dock Layout restores the current steering mode.";
+      tip.textContent = "Drag a group, or tap a button to edit it on its own. In Size & shape, choose Steering buttons for arrow spacing or Driving buttons for layout. Select Gas + Brake or Race actions to move, size and shape that set together. Width and Height change the footprint independently. Size scales the whole control. Undo reverses one edit, Cancel restores this session, and Done keeps it. With a button focused, arrow keys move it 2 px. Hold Shift for 16 px. Reset Dock Layout restores the current steering mode.";
       const reset = document.createElement("button");
       reset.id = "pm-dock-reset";
       reset.type = "button";
@@ -420,7 +431,7 @@ const DockLayout = (function () {
       if (!drag || e.pointerId !== drag.pid) return;
       const finished = drag;
       drag = null;
-      if (finished.moved) save(store, bag);
+      if (finished.moved) { toolbar.remember(); toolbar.paint(); }
       else toolbar.pick(finished.hit, true);
       fitNow();
     }
@@ -534,6 +545,10 @@ const DockLayout = (function () {
     for (const el of document.querySelectorAll(".dock-grp .touchbtn")) {
       const control = scheme.controls?.[el.id];
       prop(el, "--control-scale", control?.size ? String(control.size / 100) : "");
+      for (const axis of ["width", "height"]) {
+        prop(el, "--control-" + axis, control?.[axis] ? String(control[axis] / 100) : "");
+      }
+      attr(el, "data-control-dimensions", control?.width || control?.height ? "" : null);
       attr(el, "data-control-size", control?.size ? "" : null);
       attr(el, "data-control-shape", control?.shape || null);
     }

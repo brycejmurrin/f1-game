@@ -164,12 +164,17 @@ test("Photo Studio buttons keep activation and arrows while WASD still flies and
 });
 
 test("#pc-restore and Studio buttons keep Space activation on keydown AND keyup (#3562)", () => {
-  for (const host of ["pc-restore", "ps-panel"]) {
+  for (const host of ["pc-restore", "ps-panel", "screen-arranger"]) {
     const { dom, G, api, key } = boot();
     api.enterPhotoMode();
     let button = dom.byId(host);
-    if (host === "ps-panel") { button = dom.document.createElement("button"); dom.byId(host).appendChild(button); }
+    if (host !== "pc-restore") { button = dom.document.createElement("button"); dom.byId(host).appendChild(button); }
     button.focus();
+    if (host === "screen-arranger") {
+      G.photoKeys.up = true; G.photoKeys.w = true;
+      key({type:"focusin", target:button});
+      assert.equal(G.photoKeys.w, false, "entering the layout editor releases a held camera key");
+    }
     for (const type of ["keydown", "keyup"]) {
       const e = { code: "Space", type, prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} };
       key(e);

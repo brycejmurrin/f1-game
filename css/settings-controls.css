@@ -286,6 +286,20 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   width: 100%;
   margin: 0 0 calc(var(--gap) * 0.25);
 }
+#pm-settings-index > h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-block-start: calc(var(--gap) * .35);
+  color: var(--dim);
+  font-size: var(--fs-2);
+  line-height: 1.15;
+}
+#pm-arrange-current {
+  flex: 0 1 auto;
+  font-size: var(--fs-2);
+  min-width: 0;
+  white-space: normal;
+}
 .pm-doors > button {
   flex: 1 1 var(--balance-basis);
   min-width: min(100%, var(--balance-min));

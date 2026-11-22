@@ -40,12 +40,16 @@ const AppearanceStudioBody = (function () {
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
     hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnShape", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
+  const regionalLooks = { carsetup: "garage", "race-settings": "race", pausemenu: "pause" };
+  let arrangementTarget = null;
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
     { id: "paddock", name: "TEAM PADDOCK", note: "Your team, your garage", values: { menuAccent: "team", hudAccent: "team", homeScene: "garage", backgroundMotion: "ambient", lookCareer: { density: "roomy" } } },
     { id: "broadcast", name: "BROADCAST", note: "Timing and race context", values: { menuAccent: "cyan", hudAccent: "cyan", hudProfile: "broadcast", homeScene: "night", backgroundMotion: "still", lookDatahub: { tabs: "underline", stripes: "on" } } },
     { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
     { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
+    { id: "endurance", name: "ENDURANCE", note: "Forest-green surfaces, cream headings and amber controls", paletteOnly: true, values: { uiTheme: "endurance", menuAccent: "amber" } },
+    { id: "drafting", name: "DRAFTING", note: "Blueprint-blue surfaces, ruled borders and cyan controls", paletteOnly: true, values: { uiTheme: "drafting", menuAccent: "cyan" } },
   ]);
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const isObject = (v) => !!v && typeof v === "object" && !Array.isArray(v);
@@ -112,12 +116,22 @@ const AppearanceStudioBody = (function () {
     invoke("applyVisuals", values);
     sceneChanged();
   }
-  function keysFor(chosenScope) { return chosenScope === "screen" ? SCREEN_KEYS[previewPage] : VISUAL_KEYS; }
+  function keysFor(chosenScope) {
+    if (chosenScope !== "screen") return VISUAL_KEYS;
+    if (!arrangementTarget) return SCREEN_KEYS[previewPage];
+    const id = arrangementTarget.id;
+    if (id === "trackdesigner") return ["lookDesigner"];
+    return SCREEN_KEYS[regionalLooks[id] || id] || [];
+  }
+  function placementTarget() {
+    if (arrangementTarget) return arrangementTarget.id === "home" ? "home-style" : arrangementTarget.id;
+    return { home: "home-style", garage: "carsetup", race: "race-settings", pause: "pausemenu" }[previewPage] || previewPage;
+  }
   function applySnapshot(value, options = {}) {
     const next = normalizeSnapshot(value), before = snapshot(), keys = keysFor(options.scope || "global");
     if (options.scope === "screen" && (next.screenPlacement || before.screenPlacement)) {
       const screens = { ...(before.screenPlacement && before.screenPlacement.screens) };
-      const id = ({ home: "home-style", garage: "carsetup", race: "race-settings", pause: "pausemenu" })[previewPage] || previewPage;
+      const id = placementTarget();
       const selected = next.screenPlacement && next.screenPlacement.screens[id];
       if (selected) screens[id] = selected;
       else delete screens[id];
@@ -141,8 +155,8 @@ const AppearanceStudioBody = (function () {
     return { ok: true, durable };
   }
   function applyPreset(id, chosenScope = scope) {
-    const p = PRESETS.find((v) => v.id === id); if (!p) return false;
-    const current = snapshot(), next = Object.assign({}, DEFAULTS, p.values);
+    const p = PRESETS.find((v) => v.id === id); if (!p || (p.paletteOnly && chosenScope === "screen")) return false;
+    const current = snapshot(), next = Object.assign({}, p.paletteOnly ? current : DEFAULTS, p.values);
     for (const key of PRESET_PRESERVE) next[key] = current[key];
     for (const key in LOOKS) next[key] = p.values[key] ? Object.assign({}, current[key], p.values[key]) : current[key];
     const result = applySnapshot(next, { scope: chosenScope, render: false });
@@ -186,7 +200,7 @@ const AppearanceStudioBody = (function () {
     if (!ui || typeof url !== "string" || !/^(data:image\/(png|jpeg|webp);base64,|blob:)/.test(url)) return false;
     ui.preview.style.setProperty("--studio-scene-image", 'url("' + url.replace(/["\\\n\r]/g, "") + '")'); return true;
   }
-  const pageLabel = () => ({ home: "Home", pause: "Pause Menu", datahub: "Data Hub", select: "Track Selector", career: "Career", race: "Race Setup", garage: "Garage", hud: "HUD", popups: "Popup" })[previewPage];
+  const pageLabel = () => arrangementTarget?.label || ({ home: "Home", pause: "Pause Menu", datahub: "Data Hub", select: "Track Selector", career: "Career", race: "Race Setup", garage: "Garage", hud: "HUD", popups: "Popup" })[previewPage];
   function node(tag, cls, text) { const e = document.createElement(tag); if (cls) e.dataset.as = cls.replace(/^as-/, ""); if (text != null) e.textContent = text; return e; }
   function button(text, fn, cls) { const e = node("button", cls, text); e.type = "button"; e.addEventListener("click", fn); return e; }
   function group(host, title) { const box = node("section", "as-box"); box.appendChild(node("h3", "as-heading", title)); host.appendChild(box); return box; }
@@ -225,6 +239,20 @@ const AppearanceStudioBody = (function () {
     body.style.setProperty("--preview-panel-opacity", s.uiContrast === "high" ? 1 : (s.hudPanelOpacity || 100) / 100);
     body.style.setProperty("--preview-hud-accent", typeof getComputedStyle === "function" ? getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "var(--accent)" : "var(--accent)");
   }
+  function renderScope() {
+    const regional = scope === "screen";
+    const wheel = regional && arrangementTarget?.id === "wheel";
+    const placementOnly = regional && !keysFor(scope).length;
+    ui.scopeGlobal.setAttribute("aria-pressed", String(!regional));
+    ui.scopeScreen.setAttribute("aria-pressed", String(regional));
+    ui.reset.disabled = wheel;
+    ui.load.disabled = !selectedProfile || wheel;
+    for (const {b, paletteOnly} of ui.presets) b.disabled = placementOnly || (regional && paletteOnly);
+    ui.scopeNote.textContent = !regional
+      ? "Global profiles and reset include menu layouts, cockpit controls and readability. Colour presets preserve placements and accessibility."
+      : wheel ? "The phone wheel saves on the controller. Open Arrange Phone wheel to manage its layout."
+      : (placementOnly ? "Apply profile and Reset scope change the saved arrangement for " : "Presets, Apply profile and Reset scope affect ") + pageLabel() + " only.";
+  }
   function render() {
     if (!ui) return; const s = snapshot();
     for (const c of ui.choices) for (const { id, b } of c.list) b.setAttribute("aria-pressed", String(s[c.key] === id));
@@ -233,8 +261,7 @@ const AppearanceStudioBody = (function () {
     for (const { id, b } of ui.shapes) b.setAttribute("aria-pressed", String(previewShape === id));
     ui.previewWrap.dataset.shape = previewShape;
     ui.undo.disabled = !undoStack.length; ui.delete.disabled = !selectedProfile; ui.load.disabled = !selectedProfile;
-    ui.scopeGlobal.setAttribute("aria-pressed", String(scope === "global")); ui.scopeScreen.setAttribute("aria-pressed", String(scope === "screen"));
-    ui.scopeNote.textContent = scope === "global" ? "Presets, profile application and reset apply across menus, HUD and scene. Presets keep your placements and accessibility choices. Global profiles and reset include screen placements, cockpit and touch controls, readability, and units." : "Presets, profile application and reset affect " + pageLabel() + " only. Global colours and other screens stay as they are.";
+    renderScope();
     const rows = profiles(); ui.profileSelect.replaceChildren(); const empty = node("option", "", "New profile"); empty.value = ""; ui.profileSelect.appendChild(empty);
     for (const row of rows) { const opt = node("option", "", row.name); opt.value = row.id; ui.profileSelect.appendChild(opt); }
     ui.profileSelect.value = selectedProfile;
@@ -298,11 +325,11 @@ const AppearanceStudioBody = (function () {
     const studio = node("div", "as-studio"), controls = node("div", "as-controls"), previewSide = node("section", "as-preview-side");
     studio.id = "appearance-studio"; studio.append(controls, previewSide); panel.prepend(studio); panel.dataset.appearanceStudio = "on";
     const gallery = group(controls, "APPLY APPEARANCE PRESET"), presets = node("div", "as-preset-list"); gallery.appendChild(presets);
-    for (const p of PRESETS) { const b = button("", () => applyPreset(p.id)); b.dataset.preset = p.id; b.append(node("span", "as-preset-art"), node("strong", "", p.name)); b.title = p.note; presets.appendChild(b); ui.presets.push({ id: p.id, b }); }
+    for (const p of PRESETS) { const b = button("", () => applyPreset(p.id)); b.dataset.preset = p.id; b.append(node("span", "as-preset-art"), node("strong", "", p.name)); b.title = p.note; presets.appendChild(b); ui.presets.push({ id: p.id, paletteOnly: !!p.paletteOnly, b }); }
     const profile = group(controls, "APPEARANCE PROFILE"), names = node("div", "as-profile-row"); ui.profileSelect = node("select"); ui.profileSelect.setAttribute("aria-label", "Saved appearance profiles"); ui.name = node("input"); ui.name.type = "text"; ui.name.maxLength = 40; ui.name.placeholder = "Name your appearance"; ui.name.setAttribute("aria-label", "Appearance profile name");
     ui.profileSelect.addEventListener("change", () => { selectedProfile = ui.profileSelect.value; const p = profiles().find((r) => r.id === selectedProfile); ui.name.value = p ? p.name : ""; render(); });
     ui.load = button("APPLY PROFILE", () => loadProfile(selectedProfile)); ui.load.id = "ap-profile-apply"; const save = button("SAVE PROFILE", () => saveProfile(ui.name.value, selectedProfile)); const newProfile = button("SAVE AS NEW", () => saveProfile(ui.name.value)); ui.delete = button("DELETE", () => deleteProfile(selectedProfile)); ui.delete.id = "ap-profile-delete"; names.append(ui.profileSelect, ui.name, ui.load, save, newProfile, ui.delete); profile.appendChild(names);
-    const scopeRow = node("div", "as-profile-row"); ui.scopeGlobal = button("GLOBAL", () => { scope = "global"; render(); }); ui.scopeScreen = button("THIS SCREEN", () => { scope = "screen"; render(); }); ui.undo = button("UNDO", undo); scopeRow.append(ui.scopeGlobal, ui.scopeScreen, ui.undo, button("RESET SCOPE", () => reset())); profile.appendChild(scopeRow); ui.scopeNote = node("p", "as-note"); profile.appendChild(ui.scopeNote);
+    const scopeRow = node("div", "as-profile-row"); ui.scopeGlobal = button("GLOBAL", () => { scope = "global"; render(); }); ui.scopeScreen = button("THIS SCREEN", () => { scope = "screen"; render(); }); ui.undo = button("UNDO", undo); ui.reset = button("RESET SCOPE", () => reset()); scopeRow.append(ui.scopeGlobal, ui.scopeScreen, ui.undo, ui.reset); profile.appendChild(scopeRow); ui.scopeNote = node("p", "as-note"); profile.appendChild(ui.scopeNote);
     // ONE HOME (#2846): the shell's own rows (index.html #pm-appearance-menu /
     // #pm-appearance-hud, wired by appearance-opts.js and scale.js) are the only
     // copy of theme, accents, sizes and contrast; the studio adopts them rather
@@ -336,6 +363,10 @@ const AppearanceStudioBody = (function () {
     for (const [id, name] of [["home", "HOME"], ["pause", "PAUSE"], ["datahub", "DATA HUB"], ["select", "TRACK SELECTOR"], ["career", "CAREER"], ["race", "RACE SETUP"], ["garage", "GARAGE"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
     const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
     tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Representative preview. Use the advanced screen controls below for exact layout and the real-screen preview."));
+    previewSide.addEventListener("apex:arrangement-target", event => {
+      arrangementTarget = event.detail;
+      renderScope();
+    });
     if (typeof CustomEvent === "function") previewSide.dispatchEvent(new CustomEvent("apex:appearance-picker", { bubbles: true }));
     ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
     const advanced = node("details", "as-advanced"), sum = node("summary", "", "ADVANCED · GLOBAL & PER-SCREEN CUSTOMISATION"), body = node("div"); advanced.append(sum, body); panel.appendChild(advanced);

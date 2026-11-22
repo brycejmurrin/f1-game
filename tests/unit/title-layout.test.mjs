@@ -674,9 +674,12 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
   const root = dom.byId("career");
   const region = root.appendChild(dom.makeElement("div", "calendar"));
   const rect = {left:10, top:10, right:210, bottom:110, width:200, height:100};
+  let rectReads = 0, frames = 0, paints = 0, writes = 0, selections = 0;
   root.matches = () => false;
+  const add = region.classList.add;
+  region.classList.add = name => { selections++; add(name); };
   region.getClientRects = () => [rect];
-  region.getBoundingClientRect = () => rect;
+  region.getBoundingClientRect = () => { rectReads++; return rect; };
   const invoker = root.appendChild(dom.makeElement("button"));
   const events = dom.makeElement("div");
   const stored = {landscape:{}, portrait:{}};
@@ -687,9 +690,9 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
     ScreenRegions: {career:{root:"#career", label:"Career", regions:{calendar:{selector:"#calendar", label:"Calendar"}}}},
     ScreenPlacement: {
       fieldValue:(_prop, value) => value,
-      orientation:() => side, read:(id, dir) => stored[dir], save:(id, dir, map) => { stored[dir] = plain(map); },
+      orientation:() => side, read:(id, dir) => stored[dir], save:(id, dir, map) => { writes++; stored[dir] = plain(map); },
       resetLegacy:(id, mode) => { legacy.push(mode); return true; },
-      apply:(id, map) => { live = plain(map); }
+      apply:(id, map) => { paints++; live = plain(map); }
     }
   };
   dom.document.createElement = tag => {
@@ -700,7 +703,7 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
   vm.runInNewContext(read("js/ui/screen-arranger.js"), {
     window:win, document:dom.document, innerWidth:1000, innerHeight:500,
     MutationObserver:class { observe(){} disconnect(){} },
-    requestAnimationFrame:fn => { frame = fn; return 1; }, cancelAnimationFrame:() => { frame = null; }
+    requestAnimationFrame:fn => { frames++; frame = fn; return 1; }, cancelAnimationFrame:() => { frame = null; }
   });
   function open() {
     assert.equal(win.ScreenArranger.open("career", invoker), true);
@@ -712,12 +715,27 @@ test("screen arrangement cancels a captured drag, isolates rotated drafts and re
     type, pointerId:7, isPrimary:true, button:0, clientX:px, clientY:50
   });
   pointer("pointerdown", 50);
-  pointer("pointermove", 150);
+  const before = { rectReads, frames, paints, selections };
+  for (let px = 51; px <= 150; px++) pointer("pointermove", px);
+  assert.equal(frames - before.frames, 1, "100 moves queue one frame");
+  assert.equal(paints, before.paints);
   frame();
   assert.equal(live.calendar.x, 10);
+  assert.equal(paints - before.paints, 1);
+  assert.equal(rectReads, before.rectReads, "drag paints reuse touchdown geometry");
+  assert.equal(selections, before.selections, "drag paints leave the selection outline in place");
+  assert.equal(writes, 0);
   pointer("pointercancel", 150);
   assert.deepEqual(live, {});
   assert.deepEqual(stored.landscape, {});
+  pointer("pointerdown", 50);
+  pointer("pointermove", 100);
+  frame();
+  const paintsAtRelease = paints;
+  pointer("pointerup", 100);
+  assert.equal(paints, paintsAtRelease, "a release at the painted position does not repaint");
+  button("Undo").click();
+  assert.deepEqual(live, {});
   dom.dispatch(events, {type:"keydown", key:"ArrowUp", altKey:true, shiftKey:true, target:button("Up"), stopImmediatePropagation(){}});
   assert.equal(live.calendar.y, -5);
   side = "portrait";
@@ -781,4 +799,129 @@ test("the title's arrange entry paints unzoomed, inside the safe box, clear of t
   assert.equal(decl(rules, base, "inset-inline-end"), "var(--safe-r)");
   assert.deepEqual([decl(rules, wide, "bottom"), decl(rules, wide, "inset-inline-start"), decl(rules, wide, "top")], ["var(--safe-b)", "var(--safe-l)", "auto"]);
   assert.equal(decl(rules, `:root[data-title-side="swap"] ${wide}`, "inset-inline-end"), "var(--safe-r)");
+});
+
+test("the arranger browses tabs, disclosures and scrollable regions without invoking gameplay actions", () => {
+  const dom = makeDom(), root = dom.byId("datahub");
+  const owningSheet = dom.document.body.appendChild(dom.makeElement("section"));
+  root.parentNode.removeChild(root); owningSheet.appendChild(root);
+  root.matches = selector => selector === "#datahub";
+  function child(tag, parent, id, title) {
+    const el = parent.appendChild(dom.makeElement(tag, id));
+    el.textContent = title;
+    el.getClientRects = () => [{}];
+    return el;
+  }
+  const pane = child("section", root, "panel", "");
+  pane._rect = {top:0, left:0, right:200, bottom:100, width:200, height:100};
+  pane.scrollHeight = 400;
+  const list = child("nav", pane, "tabs", "");
+  list.setAttribute("role", "tablist");
+  const first = child("button", list, "first", "Overview");
+  const next = child("button", list, "next", "Telemetry");
+  const locked = child("button", list, "locked", "Locked");
+  const quit = child("button", pane, "quit", "Quit");
+  let quitClicks = 0;
+  quit.addEventListener("click", () => { quitClicks++; });
+  for (const tab of [first, next, locked]) {
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-controls", "panel");
+    tab.addEventListener("click", () => {
+      for (const t of [first, next, locked]) t.setAttribute("aria-selected", String(t === tab));
+    });
+  }
+  first.click();
+  locked.disabled = true;
+  const details = child("details", pane, "fold", "");
+  details.open = false;
+  child("summary", details, "", "Drivers");
+  child("div", details, "roster", "");
+  const eventHost = dom.makeElement("div");
+  const win = {
+    addEventListener: eventHost.addEventListener, removeEventListener: eventHost.removeEventListener,
+    ScreenRegions: {datahub:{root:"#datahub", label:"Data Hub", regions:{
+      panel:{selector:"#panel", label:"Data"}, roster:{selector:"#roster", label:"Roster"}, lazy:{selector:"#lazy", label:"Loaded data"}
+    }}},
+    ScreenPlacement: {orientation:() => "portrait", read:() => ({}), apply(){}}
+  };
+  let changed, repaint;
+  dom.document.createElement = tag => {
+    const el = dom.makeElement(tag);
+    if (tag === "dialog") Object.assign(el, {showModal(){}, close(){}});
+    return el;
+  };
+  vm.runInNewContext(read("js/ui/screen-arranger.js"), {
+    window:win, document:dom.document, innerWidth:390, innerHeight:844,
+    getComputedStyle:() => ({overflowY:"auto"}),
+    MutationObserver:class { constructor(fn){changed=fn;} observe(){} disconnect(){} },
+    requestAnimationFrame:fn => {repaint=fn; return 1;}, cancelAnimationFrame(){}
+  }, { filename: absSrc("js/ui/screen-arranger.js") });
+  assert.equal(win.ScreenArranger.open("datahub", first), true);
+  const dialog = dom.document.querySelector("#screen-arranger");
+  const button = name => dialog.querySelectorAll("button").find(el => el.textContent === name);
+  button("Controls").click();
+  const selects = dialog.querySelectorAll("select");
+  const regions = selects.find(el => el.getAttribute("aria-label") === "Region");
+  const browse = selects.find(el => el.querySelectorAll("option").some(o => o.textContent === "Choose a section"));
+  const titles = select => select.querySelectorAll("option").map(o => o.textContent);
+  function choose(title) {
+    browse.value = browse.querySelectorAll("option").find(o => o.textContent === title).value;
+    dom.dispatch(browse, {type:"change"});
+  }
+  assert.deepEqual(titles(regions), ["Data"]);
+  assert.ok(!titles(browse).includes("Tab · Locked") && !titles(browse).includes("Quit"));
+  choose("Tab · Telemetry");
+  assert.equal(next.getAttribute("aria-selected"), "true");
+  choose("Open Drivers");
+  assert.deepEqual(titles(regions), ["Data", "Roster"]);
+  const lazy = child("section", pane, "lazy", "");
+  changed([{type:"childList",target:pane,addedNodes:[lazy],removedNodes:[]}]);
+  repaint();
+  assert.deepEqual(titles(regions), ["Data", "Roster", "Loaded data"]);
+  button("Scroll down").click();
+  assert.equal(pane.scrollTop, 75);
+  button("Cancel").click();
+  assert.equal(details.open, false);
+  assert.equal(first.getAttribute("aria-selected"), "true");
+  assert.equal(quitClicks, 0);
+  assert.equal(win.ScreenArranger.open("datahub", first), true);
+  owningSheet.setAttribute("hidden", "");
+  changed([{type:"attributes", target:owningSheet, attributeName:"hidden"}]);
+  assert.equal(dom.document.querySelector("#screen-arranger"), null, "hiding the owning sheet cancels its nested editor");
+  assert.equal(win.ScreenArranger.open("datahub", first), false, "a hidden page cannot reopen the editor");
+});
+
+test("the closed shared arranger leaves live race controls and telemetry outside its observers", () => {
+  const dom = makeDom();
+  const home = dom.byId("overlay");
+  const doors = home.appendChild(dom.makeElement("div", "menu-buttons"));
+  const hud = dom.byId("hud-dock");
+  const gas = hud.appendChild(dom.makeElement("button", "btn-throttle"));
+  const tower = dom.byId("timing-tower");
+  const lap = tower.appendChild(dom.makeElement("output", "lap-time"));
+  dom.document.getElementById = id => dom.document.querySelector("#" + id);
+  const query = dom.document.querySelector;
+  dom.document.querySelector = selector => selector === "#overlay #menu-buttons" ? doors : query(selector);
+  const watched = [];
+  let frames = 0, restores = 0;
+  const win = { ScreenPlacement: { restore() { restores++; } } };
+  vm.runInNewContext(read("js/ui/screen-regions.js"), {
+    document:dom.document, window:win, URLSearchParams, location:{search:""},
+    queueMicrotask:fn => fn(), requestAnimationFrame:() => ++frames,
+    MutationObserver:class { observe(node, options) { watched.push({node, options}); } }
+  }, { filename: absSrc("js/ui/screen-regions.js") });
+  assert.ok(watched.some(({node,options}) => node === dom.body && options.childList));
+  for (const {node,options} of watched) {
+    assert.ok(!(options.subtree && (node.contains(gas) || node.contains(lap))), "HUD descendants cannot trigger an arrangement scan");
+    assert.notEqual(node, gas);
+    assert.notEqual(node, lap);
+  }
+  const initialRestores = restores;
+  for (let i = 0; i < 100; i++) {
+    dom.dispatch(gas, {type:"pointermove", bubbles:true});
+    lap.textContent = String(i);
+  }
+  assert.equal(restores, initialRestores);
+  assert.equal(frames, 0);
+  assert.equal(win.ScreenArranger, undefined);
 });

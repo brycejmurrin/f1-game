@@ -1,7 +1,7 @@
 /* Live touch layout toolbar, loaded on the first edit. */
 const DockToolbar = (() => {
   "use strict";
-  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, getShape, setShape, record, close }) {
+  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
     const { $ } = G;
     const { sizeStep, SHAPES } = DockLayout;
     const labels = {
@@ -17,6 +17,28 @@ const DockToolbar = (() => {
     const byId = new Map(controls.filter(Boolean).map(node => [node.id, node]));
     let target = "all", shown = null;
     let editBar = null, doneBtn = null, toolsButton = null, expanded = false, visible = false;
+    let initial, current;
+    const history = [];
+    const scaleKeys = ["hudScale", "hudBtnScale", "hudBotKeep"];
+    const snapshot = () => ({ layout: readLayout(), shape: getShape(), scales: scaleKeys.map(key => G.store?.get(key, null)) });
+    const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    function remember() {
+      const next = snapshot();
+      if (equal(next, current)) return;
+      history.push(current);
+      if (history.length > 50) history.shift();
+      current = next;
+    }
+    function restore(state) {
+      restoreLayout(state.layout);
+      if (state.shape !== getShape()) setShape(state.shape);
+      const changed = scaleKeys.filter((key, i) => !equal(G.store?.get(key, null), state.scales[i]));
+      for (const key of changed) G.store?.set(key, state.scales[scaleKeys.indexOf(key)]);
+      if (changed.length) refreshScale();
+      current = state;
+      G.refreshHud?.(true);
+      paintBar();
+    }
     function targetButtons() { return targets[target] || (labels[target] ? [target] : []); }
     function stepSize(dir) {
       if (target !== "all") {
@@ -36,6 +58,7 @@ const DockToolbar = (() => {
       // then re-run the slider's paint so its "fits N%" reads the fresh cap.
       if (G.refreshHud) G.refreshHud(true);
       el.dispatchEvent(new Event("input", { bubbles: true }));
+      remember();
       paintBar();
     }
     function paintBar() {
@@ -53,6 +76,9 @@ const DockToolbar = (() => {
       if (Array.from(options).some(option => option.value === target && option.hidden)) target = "all";
       const ids = targetButtons();
       for (const k of ["smaller", "size", "bigger", "shape", "target"]) field(k).hidden = !expanded;
+      field("undo").hidden = !expanded;
+      field("undo").disabled = !history.length;
+      field("cancel").hidden = !expanded;
       field("gap").hidden = !expanded || target !== "steer";
       field("layout").hidden = !expanded || target !== "drive";
       field("reset").hidden = !expanded || target === "all";
@@ -68,6 +94,17 @@ const DockToolbar = (() => {
         const values = ids.map(id => scheme.controls?.[id]?.[key] || fallback);
         return values.every(value => value === values[0]) ? values[0] : null;
       };
+      for (const axis of ["width", "height"]) {
+        const selector = field(axis);
+        selector.hidden = !expanded || !ids.length;
+        const pct = same(axis, 100);
+        const value = pct == null ? "" : String(pct);
+        if (selector.options && !Array.from(selector.options).some(option => option.value === value)) {
+          const option = document.createElement("option");
+          option.value = value; option.textContent = axis + " " + pct + "%"; selector.appendChild(option);
+        }
+        selector.value = value;
+      }
       const size = same("size", 100), buttonShape = same("shape", "auto");
       const out = $("pm-btnscale-v");
       field("size").textContent = target === "all" ? "SIZE " + (out?.textContent || "") : size == null ? "Mixed sizes" : size + "%";
@@ -122,6 +159,17 @@ const DockToolbar = (() => {
         if (value) getScheme().layout = value; else delete getScheme().layout;
         commitLayout();
       });
+      for (const axis of ["width", "height"]) {
+        const label = axis === "width" ? "Width" : "Height";
+        const choices = [50, 60, 70, 75, 80, 90, 100, 110, 120, 125, 130, 140, 150, 160, 175];
+        select(axis, label + " of selected buttons", [["", label + " mixed"], ...choices.map(v => [String(v), label + " " + v + "%"])], value => {
+          if (!value) { paintBar(); return; }
+          for (const id of targetButtons()) record(id)[axis] = Number(value);
+          commitLayout();
+        });
+      }
+      mk("undo", "Undo", "Undo last touch layout edit", () => { if (history.length) restore(history.pop()); });
+      mk("cancel", "Cancel", "Discard touch layout edits", () => close(false));
       mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
       // The readout is text, not a control: a disabled button paints see-through
       // over the timing tower (measured 844x390), so it is an opaque span.
@@ -134,7 +182,7 @@ const DockToolbar = (() => {
         const ids = targetButtons();
         const current = target === "all" ? getShape() : getScheme().controls?.[ids[0]]?.shape || "auto";
         const next = SHAPES[(SHAPES.findIndex(([s]) => s === current) + 1) % SHAPES.length][0];
-        if (target === "all") return setShape(next);
+        if (target === "all") { setShape(next); remember(); paintBar(); return; }
         for (const id of ids) record(id).shape = next;
         commitLayout();
       });
@@ -180,7 +228,7 @@ const DockToolbar = (() => {
     }
     function show(on, restore) {
       visible = on;
-      if (on) { target = "all"; expanded = false; ensureDone(); hideDialogs(); }
+      if (on) { initial = current = snapshot(); history.length = 0; target = "all"; expanded = false; ensureDone(); hideDialogs(); }
       else if (restore === false) shown = null;
       else restoreDialogs();
       if (editBar) { editBar.hidden = !on; paintBar(); }
@@ -234,7 +282,7 @@ const DockToolbar = (() => {
       document.addEventListener("keydown", (e) => {
         if (!visible) return;
         if (e.key === "Escape") {
-          e.preventDefault(); e.stopPropagation(); close();
+          e.preventDefault(); e.stopPropagation(); close(false);
           return;
         }
         const el = e.target?.closest?.(".touchbtn");
@@ -254,7 +302,8 @@ const DockToolbar = (() => {
         commitLayout();
       }, true);
     }
-    return { show, paint: paintBar, pick, buttonDrag };
+    return { show, paint: paintBar, pick, buttonDrag, remember, cancel: () => restore(initial),
+      shapeChanged: () => getShape() !== initial.shape, layoutChanged: () => !equal(readLayout(), initial.layout) };
   }
   return Object.freeze({ create });
 })();

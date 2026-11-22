@@ -242,13 +242,20 @@ const OverlayRender = (function () {
   function boot() {
     const root = typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]');
     if (!root) return null;
-    const config = options(typeof location !== "undefined" ? location.search : "");
+    const search = typeof location !== "undefined" ? location.search : "";
+    const config = options(search);
     if (config.chroma) document.documentElement.dataset.chroma = config.chroma;
     else delete document.documentElement.dataset.chroma;
     document.body.dataset.side = config.side;
     document.body.dataset.only = config.only;
     root.style.setProperty("--ov-scale", String(config.scale));
     const painter = create(root, config);
+    // Paint one representative race frame so conditional panels remain
+    // selectable throughout arrangement even without a live game tab.
+    if (new URLSearchParams(search).get("arrange") === "broadcast") {
+      painter.paint(demoFrame(0));
+      return painter;
+    }
     if (!config.demo) {
       painter.paint(waitingFrame());
       // Same-browser feed: a game tab of this origin publishes once it hears us.

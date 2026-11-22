@@ -307,4 +307,16 @@ test("Race Settings previews and saves a single button's width, height and text 
   await adjust("Cancel");
   expect(await geometry(start)).toEqual(edited);
   expect(await saved()).toEqual(stored);
+
+  // Change a real fold while the race controls are live, then edit that state.
+  await page.locator("#rs-fold-field-sum").click();
+  await page.locator("#race-settings").getByRole("button", { name: "Arrange again" }).click();
+  await editor.getByLabel("Region").selectOption("diff-next");
+  const difficulty = await page.locator("#rs-diff-sel").inputValue();
+  await adjust("Controls");
+  await adjust("Button height +");
+  await adjust("Apply");
+  expect(await page.locator("#rs-diff-sel").inputValue()).toBe(difficulty);
+  expect((await saved()).landscape["diff-next"].buttonHeight).toBeGreaterThanOrEqual(44);
+  expect((await saved()).landscape["diff-prev"]).toBeUndefined();
 });

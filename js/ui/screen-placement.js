@@ -7,9 +7,11 @@ window.ScreenPlacement = (function () {
   const KEY = "screenPlacement";
   const SHAPES = ["portrait", "landscape"];
   const limits = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [0.5, 2],
-    textSize: [0.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104] };
+    textSize: [0.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104],
+    formWidth: [10, 100], cornerRadius: [0, 40], rowGap: [0, 48], columnGap: [0, 48] };
   const fontSteps = ["micro", "1", "2", "3", "4", "5", "6"];
   const buttons = ':is(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"])';
+  const formControls = 'select, textarea, input:not([type]), input[type="text"], input[type="search"], input[type="range"]';
   const sheets = new Map();
   let garageRevision = 0, garagePanelMoved = false;
   let editorZoom = new WeakMap();
@@ -39,6 +41,8 @@ window.ScreenPlacement = (function () {
         if ((key === "x" || key === "y") && !value || (key === "scale" || key === "textSize") && value === 1) continue;
         fields[key] = fieldValue(key, value, config);
       }
+      const align = raw[region].textAlign;
+      if (config.textAlign !== false && ["start", "center", "end"].includes(align)) fields.textAlign = align;
       if (Object.keys(fields).length) out[region] = fields;
     }
     return out;
@@ -136,6 +140,21 @@ window.ScreenPlacement = (function () {
         // font rule keeps that rule, including its relative size in the ladder.
         rules.push('@layer reset{:where(' + target + '){font-size:calc(1em * ' + fields.textSize + ')}}');
       }
+      if (fields.rowGap !== undefined) declarations.push('row-gap:' + fields.rowGap + 'px');
+      if (fields.columnGap !== undefined) declarations.push('column-gap:' + fields.columnGap + 'px');
+      if (fields.textAlign) {
+        declarations.push('text-align:' + fields.textAlign);
+        rules.push(scope + ' :is(h1,h2,h3,h4,h5,h6,p,label,button,select,textarea,input[type="text"],input[type="search"]){text-align:' + fields.textAlign + ' !important}');
+      }
+      if (fields.cornerRadius !== undefined) {
+        declarations.push('border-radius:' + fields.cornerRadius + 'px');
+        rules.push(scope + ' :is(' + buttons + ',' + formControls + '){border-radius:' + fields.cornerRadius + 'px !important}');
+      }
+      if (fields.formWidth) {
+        const form = ':is(' + formControls + ')';
+        rules.push(scope + form + ',' + scope + ' ' + form + '{width:' + fields.formWidth + '% !important;max-width:100% !important;' +
+          'min-width:min(100%,max(' + Math.max(44, 44 / z) + 'px,var(--tap-paint,44px))) !important;box-sizing:border-box !important;flex:0 1 auto !important}');
+      }
       if (declarations.length) rules.push(target + '{' + declarations.map(d => d + ' !important').join(';') + '}');
       if (fields.buttonWidth || fields.buttonHeight) {
         const style = [];
@@ -222,6 +241,6 @@ window.ScreenPlacement = (function () {
       else if (change.key === "uiScale") resized();
     });
   }
-  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue,
+  return Object.freeze({ read, save, apply, restore, restoreAll, normalize, orientation, resetLegacy, fieldValue, formControls,
     get garageRevision() { return garageRevision; }, get garagePanelMoved() { return garagePanelMoved; } });
 })();

@@ -240,20 +240,9 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   background: var(--grad-rule);
   pointer-events: none;
 }
-/* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
-   phone held sideways — a fixed 24px title costs the same as a row of the list
-   it is sitting above.
-   AND SO IT DOES NOT FOLLOW UI SIZE, WHICH IS THE POINT AND NOT A BUG. `--vhz`
-   is `1vh / --ui-scale` consumed inside `zoom: var(--ui-scale)`, so the scale
-   cancels and the heading is a constant fraction of the SCREEN. MEASURED on a
-   portrait iPhone: 24 / 18 / 13.2 own units at UI SIZE 80 / 100 / 150 — which
-   reads like type that shrinks as you ask for bigger type, and is ~19 PAINTED px
-   at all three. (The 100 -> 150 step also crosses into the compact tier, which
-   drops the ceiling from 24 to 18; that compounds it.)
-   Checked once and nearly "fixed". Do not: every unit given back to this
-   heading comes straight out of the list under it, on exactly the short screens
-   the rule exists for. The clamp's px bounds ARE in own units and do scale, so
-   the heading is never smaller than the floor at any setting. */
+/* The heading follows viewport height: --vhz cancels sheet zoom to leave
+   room for content on short screens. The clamp bounds still follow UI SIZE
+   and all three terms respect the region's text size. */
 .sheet-head h2 {
   /* White title + red leading rail (box-shadow on .sheet-head): brand keeps
      Warm Red scarce — rail/tick/P1 only, not headline ink. */
@@ -304,19 +293,10 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   pointer-events: none;
 }
 /* ---------- the SHORT sheet ---------- */
-/* `data-density` is written by js/game/sheetshape.js from the sheet's height in
-   its OWN units — the header there explains why neither a media query nor the
-   `sheet` container can answer this (one is blind to `zoom`, the other to
-   height). This is the tier that consumes it.
-
-   WHY IT EXISTS. Measured in the garage at 1000x462, head+foot as a share of the
-   sheet: 46% at UI SIZE 100%, 59% at 130%, 68% at 150% — because `zoom` scales
-   padding exactly as fast as it scales text while the sheet's height stays
-   pinned to the viewport. At 150% that left ONE option row on screen. Raising UI
-   SIZE is a request for bigger TEXT, not bigger chrome, so on a short sheet the
-   chrome gives its vertical padding back to the content. Horizontal padding is
-   untouched: width is not the axis that is scarce here, and taking it would
-   re-introduce the truncation this same session spent its time removing. */
+/* SheetShape measures height in the sheet's own units, accounting for zoom.
+   At 1000×462 and 150% UI SIZE the Garage header and footer consumed 68%
+   of the sheet. Compact mode returns vertical padding to the options list
+   while preserving horizontal room for long labels. */
 .sheet[data-density="compact"] .sheet-head {
   padding-top: calc(var(--pad) * 0.28); padding-bottom: calc(var(--pad) * 0.2);
   gap: calc(var(--gap) * 0.6);

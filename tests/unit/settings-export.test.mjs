@@ -2186,7 +2186,7 @@ test("#5743 S4: a file with no device block never pins renderer, resolution or q
 
 test("relative placements and named profiles round-trip across devices without saving automatic dimensions", () => {
   const regions = { carsetup: { regions: { panel: {} } } };
-  const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28, textSize: 1.25, buttonWidth: 60, buttonHeight: 52 } } } } };
+  const placement = { v: 1, screens: { carsetup: { landscape: { panel: { x: 5, width: 28, textSize: 1.25, buttonWidth: 60, buttonHeight: 52, formWidth: 75, textAlign: "start", cornerRadius: 0, rowGap: 3, columnGap: 6 } } } } };
   const controls = { "btn-throttle": { size: 125, shape: "round", x: -0.02 } };
   const dock = { buttons: { gap: 20, layout: "pedal-row", controls } };
   const profile = [{ id: "profile-1", name: "Pit", values: { screenPlacement: placement, dockLayout: dock, hudBtnShape: "square" } }];

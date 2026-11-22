@@ -267,6 +267,21 @@ body:has(> dialog#screen-arranger[open]) .screen-arrange-entry { visibility: hid
 @media (orientation: landscape) and (max-height: 32rem) {
   #screen-arranger .arrange-tools { width: min(24rem, var(--safe-w)); }
 }
+/* Some menus keep placement in a dedicated editor. */
+#screen-arranger .arrange-row[hidden], #screen-arranger #arrange-controls > label[hidden] { display: none; }
+
+#arrange-controls > details summary {
+  display: list-item;
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+}
+#arrange-controls > details label:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5em, 7em);
+  align-items: center;
+  gap: .4em;
+}
 } /* @layer layout */
 
 @layer base {
@@ -319,6 +334,3 @@ button[role="tab"][aria-selected="true"] {
   letter-spacing: .08em;
 }
 }
-
-/* Some menus keep placement in a dedicated editor. */
-#screen-arranger .arrange-row[hidden] { display: none; }
