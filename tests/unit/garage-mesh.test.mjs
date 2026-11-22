@@ -950,6 +950,26 @@ function garageWheelHarness() {
     Wheels: vm.runInContext("CarWheels", ctx), M4: vm.runInContext("M4", ctx) };
 }
 
+test("both garage axles receive every livery tyre, brake and wheel style with its catalog colours", () => {
+  const h = garageWheelHarness(), garage = h.Wheels.createGarage(h.gfx);
+  const { Parts, Teams, Car3D } = loadParts(), team = Teams.LIST[0];
+  const fitted = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  for (const [field, category] of Object.entries(Car3D.PART_STYLE_FIELDS)) {
+    if (!["tyres", "brakes", "wheels"].includes(category)) continue;
+    const options = Parts.CATALOG.find(c => c.id === category).options.filter(o => o.tag === "STYLE");
+    for (const id of [...options.map(o => o.id), "fitted"]) {
+      const liv = { [field]: id }, tiers = Car3D.appearanceParts(fitted, liv);
+      garage.prepare(field + ":" + id, liv, tiers);
+      const { tyres, brakes, wheels } = tiers._visual;
+      assert.deepEqual(h.recipes.map(args => args[0]), [.32, .38], id + " rebuilds both axles");
+      for (const args of h.recipes.splice(0)) {
+        assert.deepEqual(args.slice(5, 8), [tyres, brakes, wheels], id);
+        assert.deepEqual(args[3], wheels?.rim || brakes?.rim, id + " rim colour");
+      }
+    }
+  }
+});
+
 test("garage wheels are available before the legacy race-session shim and retain fitted layers", () => {
   const h = garageWheelHarness();
   assert.equal(vm.runInContext("typeof GarageDepartureWheels", h.ctx), "undefined", "first garage visit has not loaded the race-session shim");

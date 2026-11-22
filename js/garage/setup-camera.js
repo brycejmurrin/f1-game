@@ -835,8 +835,9 @@ function previewKey() {
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
   const seat = garageSeat();
-  const split = (typeof GarageDepartureWheels !== "undefined" && typeof GarageDepartureWheels.create === "function")
-    || (typeof CarWheels !== "undefined" && typeof CarWheels.createGarage === "function");
+  const createWheels = (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.create)
+    || (typeof CarWheels !== "undefined" && CarWheels.createGarage);
+  const split = typeof createWheels === "function";
   const key = previewKey() + (split ? "|wheels" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
@@ -859,10 +860,7 @@ function getSetupPreviewMesh() {
         ...(Car3D.garageDetail ? Car3D.garageDetail() : null),
       }) }).data));
     if (split) {
-      if (!departureWheels) {
-        departureWheels = (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.create)
-          ? GarageDepartureWheels.create(gfx) : CarWheels.createGarage(gfx);
-      }
+      if (!departureWheels) departureWheels = createWheels(gfx);
       departureWheels.prepare(key, liv, Car3D.appearanceParts(parts, liv));
     }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
