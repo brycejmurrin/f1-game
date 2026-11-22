@@ -1363,7 +1363,9 @@
       // gates the whole branch on probe-less paths (setup preview).
       const reflStr = o.reflect || 0;
       const haveRefl = !!(F.invProj && F.proj && F.upVS);
-      if (haveRefl) {
+      const drawRefl = haveRefl && (reflStr > 0.001 || C.carReflect.value > 0.001);
+      // Both reflection paths are shed on dry tier-2+ frames. Only their shader branches read this camera state.
+      if (drawRefl) {
         setPersp(C, F.invProj, F.proj);
         C.upVS.value.set(F.upVS[0], F.upVS[1], F.upVS[2]);
         const hi = F.skyHi || [0.05, 0.06, 0.09];
@@ -1451,7 +1453,7 @@
       _last.ssao = !!(haveAO || (aoFold && haveGR));
       _last.bloom = !!haveBloom;
       _last.shafts = !!haveGR;
-      _last.ssr = !!(haveRefl && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
+      _last.ssr = drawRefl;
       _last.fxaa = !viz && !_last.taa;
       _last.aoHi = haveAO ? aoHi : 0;
       _last.rays = haveGR && GRP !== P.godray ? 1 : 0;

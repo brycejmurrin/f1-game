@@ -159,15 +159,28 @@ test("post SSR diagnostics agree with uploaded road/car gates and required camer
   const proj = camera.projectionMatrix.toArray(), invProj = camera.projectionMatrixInverse.toArray();
   const F = { proj, invProj, invVP: invProj, viewProj: proj, upVS: [0, 1, 0], sunVS: [0, 0, -1], sunDir: [0, -1, 0], sunColor: [0.05, 0.05, 0.08], time: 0 };
   const base = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, flareMul: 0 };
+  const C = graph.composite.U;
+  let cameraWrites = 0;
+  for (const name of ["ipXY", "ipZW", "pXY", "upVS", "reflSkyHi", "reflSkyLo"]) {
+    const vector = C[name].value;
+    const set = vector.set;
+    vector.set = function (...args) { cameraWrites++; return set.apply(this, args); };
+  }
   for (const [extra, frame, expected] of [
     [{}, F, true], // default car .05 with road sheen explicitly disabled
     [{ carReflect: 0 }, F, false],
-    [{ carReflect: 0, reflect: 0.1 }, F, true],
+    [{ carReflect: 0.001, reflect: 0.001 }, F, false],
+    [{ carReflect: 0, reflect: 0.1 }, { ...F, upVS: [1, 0, 0], skyHi: [0.8, 0.4, 0.2] }, true],
     [{ carReflect: 0.1 }, { ...F, upVS: null }, false],
     [{ carReflect: 0.1 }, { ...F, proj: null }, false],
   ]) {
+    cameraWrites = 0;
     const opts = { ...base, ...extra }; post.present(opts, frame);
-    const C = graph.composite.U;
+    assert.equal(cameraWrites, expected ? 6 : 0);
+    if (expected) {
+      assert.deepEqual(C.upVS.value.toArray(), frame.upVS);
+      assert.deepEqual(C.reflSkyHi.value.toArray(), frame.skyHi || [0.05, 0.06, 0.09]);
+    }
     assert.equal(post.state().blocks.ssr, expected);
     assert.equal(post.state().blocks.ssr, C.ssrOk.value > 0.5 && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
     assert.equal(post.needsDepth(opts, frame), expected);
