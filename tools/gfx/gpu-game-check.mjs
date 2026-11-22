@@ -245,6 +245,9 @@ try {
   // an UNSAMPLED label + stack row per createBuffer / createTexture in the armed window. A no-op without a GPUDevice.
   await page.addInitScript(gpuMemInitSource({ armed: false }));
   await page.addInitScript(([be, p, ls, drainEvery, pick]) => {
+    localStorage.setItem("apex26.gfxFeatureOverrides", JSON.stringify({
+      garageProbeParallax: true, rainCurtains: true, rivalLiveryLod: true, circuitSurfaces: true, tyreWearVisual: true,
+    }));
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
     // Everything else this file measures is a SETTLED number: fps is an EMA,
@@ -898,7 +901,7 @@ try {
           if (fresh && fresh.error) throw new Error("Garage frame refresh failed: " + fresh.error);
           await page.screenshot({ path: shotAt, timeout: 15000 });
           m.garageEvidence.frames.push({ path: shotAt, at: Date.now(), observed: await page.evaluate(() => ({
-            phase: document.getElementById("loading").dataset.phase, state: __apex.info().state, exterior: __apex.garageCam().exterior })) });
+            probe: typeof GLX !== "undefined" ? GLX.__tlx?.envState?.() : null, phase: document.getElementById("loading").dataset.phase, state: __apex.info().state, exterior: __apex.garageCam().exterior })) });
           checkpoint("garage-capture", { menu: m });
           await page.waitForTimeout(1900);
         }
