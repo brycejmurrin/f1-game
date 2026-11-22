@@ -801,7 +801,10 @@
            stop, there is nothing to steer — and because it must be impossible
            to press by accident at 300 km/h, which is why it only exists for the
            two seconds the car is stationary. -->
-      <button id="hud-work" type="button" hidden>WORK ON CAR</button>
+      <div id="hud-pit-actions">
+        <button id="hud-work" type="button" hidden>WORK ON CAR</button>
+        <button id="hud-end-session" type="button" hidden>END SESSION</button>
+      </div>
       <div id="hud-ot" class="ot-off" role="img">OVERTAKE</div>
       <div id="hud-aero" class="ax-off" role="img">CORNER MODE</div>
       <!-- BRAKE BIAS, the set-up sheet's front share (c.brakeBias). -->
@@ -3405,7 +3408,7 @@
              carried over rather than lost to the restructure. -->
         <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
         <dd><span class="key">RACE SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">REAL</span>: tyres lose grip over a stint at the full rate, so pit stops matter and a stop is part of the race. <span class="key">LIGHT</span> wears at about half the real rate, so a set lasts nearly twice as long and stopping is a choice rather than a schedule.
-          <br>Turn it to <span class="key">OFF</span> and <b>a race has no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either. A time trial keeps its pit lane whatever the setting: stop in your box and tap END TIME TRIAL to finish the session (a lap through the pit lane does not count)</dd>
+          <br>Turn it to <span class="key">OFF</span> and <b>a race has no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either. A time trial keeps its pit lane whatever the setting: stop in your box and choose WORK ON CAR to edit parts and keep driving, or END SESSION to finish in the garage (a lap through the pit lane does not count)</dd>
         <dt>THERE IS NO PIT BUTTON</dt>
         <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
         <dt>FINDING THE LANE</dt>

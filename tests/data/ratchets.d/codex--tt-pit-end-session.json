@@ -1,15 +1,19 @@
 {
   "files": {
+    "css/hud.css": {
+      "lines": -1
+    },
     "js/game.js": {
-      "codeLines": 17,
-      "lines": 17
+      "codeLines": 18,
+      "lines": 18
     },
     "js/ui/hud.js": {
-      "codeLines": 1,
-      "lines": 1
+      "codeLines": 4,
+      "lines": 4
     }
   },
   "tree": {
-    "eagerCodeBytes": 258
+    "eagerCodeBytes": 365,
+    "shellNodes": 1
   }
 }

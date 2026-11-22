@@ -1957,11 +1957,14 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) { hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active())); hText(els.workBtn, G.timeTrial ? "END TIME TRIAL" : "WORK ON CAR"); }   // #5789
+    const canWork = pit && pit.canWork && pit.canWork(player) && !G.netPlay?.active?.();
+    hHidden(els.workBtn, !canWork);
+    hHidden(els.endSessionBtn, !canWork || !timeTrial);
   } else {
     // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
     hHidden(els.pitCue, true);
     hHidden(els.workBtn, true);
+    hHidden(els.endSessionBtn, true);
   }
   // toggle-button states
   const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
