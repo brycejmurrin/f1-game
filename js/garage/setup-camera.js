@@ -529,7 +529,7 @@ function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandof
 function startPitIn(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitIn") || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO RESULTS" });
+  endHome(); homeScene = null; arrival.start({ skip: "SKIP TO GARAGE" });
   return true;
 }
 const arrivalCar = new Float32Array(MAT_REFLECT_X);
