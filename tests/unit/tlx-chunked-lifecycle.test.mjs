@@ -621,6 +621,8 @@ test("fineCells: a merged record as its cells, each index a view of its block, m
   const fine = sys.fineCells(mesh);
   assert.equal(fine.chunks.length, 36, "3x3 draw blocks -> the 36 cells");
   assert.equal(sys.fineCells(mesh), fine, "built once per record");
+  assert.equal(fine.chunks.filter(c => c.geo instanceof BufferGeometry).length, 0, "CPU-only mirror cells allocate no THREE geometries");
+  assert.equal(fine.chunks.filter(c => c.geo.index instanceof BufferAttribute).length, 0, "cell index views need no THREE attributes");
   const blocks = new Set(mesh.chunks.map((c) => c.geo.index.array.buffer));
   let n = 0;
   const tris = [];
