@@ -1043,7 +1043,16 @@ test("P4 (TLX #2149): the fallbacks — async null and apex26.tlxPackAsync=0 tak
   const t = r.gfx.createTextureArray(size, tlxImages(size, 5), n);
   assert.equal(await t.ready, true);
   assert.equal(t.image.data[5 * page], 201, "the layer the scratch FBO refused came from the 2d round-trip");
-  assert.equal(t.image.data[0], 128, "an absent layer keeps the neutral grey");
+  for (const layer of [0, 3, 15]) {
+    for (let offset = layer * page; offset < (layer + 1) * page; offset += 4) {
+      assert.deepEqual([...t.image.data.subarray(offset, offset + 4)], [128, 128, 128, 255]);
+    }
+  }
+  // A supplied but truncated raw layer never overwrites its staging page.
+  // Publishing its zero-filled texels would suppress the loader's retry.
+  const partial = r.gfx.createTextureArray(size, [new Uint8Array(page).fill(13), new Uint8Array(1)], n);
+  assert.equal(await partial.ready, false);
+  assert.equal(partial.version, 0);
   // Nothing landed at all: ready false and the token freed — assets.js reads that as an upload failure.
   const none = await tlxPackRig(makeAsyncGl({ waitFails: true }));
   const e = none.gfx.createTextureArray(size, [, layerImage(1, size)], n);

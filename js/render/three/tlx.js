@@ -5655,9 +5655,16 @@ const TLX = (function () {
           if (!size || !images) return null;
           try {
             const n = layers || 17;
-            let data = new Uint8Array(size * size * 4 * n);
-            data.fill(128);
-            for (let i = 3; i < data.length; i += 4) data[i] = 255;
+            const page = size * size * 4;
+            let data = new Uint8Array(page * n);
+            // Readback overwrites every supplied page. Only absent material IDs need neutral RGBA.
+            let expected = 0;
+            for (let layer = 0; layer < n; layer++) {
+              if (images[layer]) { expected++; continue; }
+              const start = layer * page, end = start + page;
+              data.fill(128, start, end);
+              for (let i = start + 3; i < end; i += 4) data[i] = 255;
+            }
             // Async first (P4): the token comes back at once with `pending` and `ready` (true = filled and
             // uploadable; false = nothing landed, or freed in flight). needsUpdate waits for every layer, and
             // setMaterialMaps holds a pending token back, so no frame samples a half-filled array.
@@ -5694,7 +5701,7 @@ const TLX = (function () {
             const settle = () => {
               t.pending = false;
               if (t._freed) { letGo(); return false; }
-              if (!filled) { t.dispose(); letGo(); return false; }
+              if (!filled || filled !== expected) { t.dispose(); letGo(); return false; }
               t.needsUpdate = true;
               return true;
             };
