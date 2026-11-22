@@ -316,8 +316,8 @@ Other in-race roots are:
   drift), HANDHELD and FINAL SHOT ZOOM shape the shots; SHUTTER SHOT, HOLD BEAT,
   CAR SPEED and END BEAT set their lengths; SEQUENCE LIGHTING (a garage lighting
   mood held while it plays; AFTER-RACE LIGHTING picks one by result), DOOR GLOW,
-  CAPTIONS and CINEMA BARS (`body[data-ga-bars]`) set the look; REAR LIGHT, SLOW-MO AT THE DOOR and ENGINE SOUND ON ARRIVAL round it off. PREVIEW PIT STOP / RACE START / AFTER RACE
-  (`#ga-preview-in` / `#ga-preview-out` in the shell, `#ga-preview-home` built by `js/garage/arrival.js`) play the saved
+  CAPTIONS and CINEMA BARS (`body[data-ga-bars]`) set the look; REAR LIGHT, SLOW-MO AT THE DOOR and ENGINE SOUND ON ARRIVAL round it off. RACE START, PIT ENTRY, PIT EXIT and RACE END
+  (`#ga-preview-out`, `#ga-preview-in`, `#ga-preview-pit-exit` and `#ga-preview-home`) play the saved
   settings once in the garage room (`js/garage/setup-camera.js`
   startArrivalPreview) with `#garrival-inner` hidden; it ends by itself, on DONE
   or on Escape, and a paused race redraws its own frame after. Refused while the

@@ -161,7 +161,7 @@ const EditorWorkspace = (function () {
       entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
       rows: id === "garrival" ? "ga-rows" : null, first: "ga-angle", reset: "ga-reset",
       defaultPreview: id === "garrival" ? "ga-preview-out" : null, previewSession: id === "garrival" ? "ga-transport" : null,
-      sequences: [["ga-preview-in", "Pit stop"], ["ga-preview-out", "Race start"], ["ga-preview-home", "Return"]],
+      sequences: [["ga-preview-out", "Race start"], ["ga-preview-in", "Pit entry"], ["ga-preview-pit-exit", "Pit exit"], ["ga-preview-home", "Race end"]],
       launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
     }));
   }

@@ -4015,3 +4015,9 @@ Bryce chose "A, trim then raise" (orchestrator session, about 15:08Z) and typed 
 
 `(tree) eagerCodeBytes` 3956234 → **3957854** (+1620). The fallback garage renders overhead fixtures, the lighting profile store resolves lamp settings for the selected circuit, and the setup camera supplies them to the exterior renderer on arrival and departure. The detached circuit lamp selection and mesh upload remain in the lazy exterior bundle.
 Fragment: `ratchets.d/codex--pitlane-neighbor-garages.json`.
+
+## 2026-11-21 — PR #6157 (codex/tt-pit-end-session): Garage animation previews
+
+`(tree) eagerCodeBytes` 3962285 → **3962612** (+327). The editor selects the pit release camera and matches its playback speed, including after a settings edit.
+`(tree) shellNodes` 2325 → **2327** (+2). The Pit exit and Race end buttons are present when the editor mounts, before the garage data loads.
+Fragment: `ratchets.d/codex--tt-pit-end-session.json`.

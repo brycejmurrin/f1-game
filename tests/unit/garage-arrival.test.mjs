@@ -412,14 +412,41 @@ test('PREVIEW: Escape and DONE stop it; refused while the garage or the drive-ou
   const calls = [];
   Arrival.bindSettings($, { get: () => null, set() {} }, { preview: (dir, b) => { calls.push(dir); if (dir) return true; const was = playing; playing = false; return was; } });
   $('garrival').hidden = false;
-  $('ga-preview-in').onclick(); $('ga-preview-out').onclick(); $('ga-preview-home').onclick();
-  assert.deepEqual(calls, ['in', 'out', 'home']);
+  $('ga-preview-out').onclick(); $('ga-preview-in').onclick(); $('ga-preview-pit-exit').onclick(); $('ga-preview-home').onclick();
+  assert.deepEqual(calls, ['out', 'in', 'pitExit', 'home']);
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, false, 'DONE mid-playback stops it, the panel stays');
   $('ga-close').onclick();
   assert.equal($('garrival').hidden, true, 'the next DONE closes the tool');
   const shell = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
-  assert.match(shell, /<button id="ga-preview-in" type="button">PREVIEW PIT STOP<\/button>\s*<button id="ga-preview-out" type="button">PREVIEW RACE START<\/button>/);
+  assert.deepEqual([...shell.matchAll(/<button id="ga-preview-[^"]+" type="button">PREVIEW ([^<]+)<\/button>/g)].map(m => m[1]),
+    ['RACE START', 'PIT ENTRY', 'PIT EXIT', 'RACE END']);
+});
+
+test('Pit exit uses the pit release pose and pace, including after editing or switching previews', () => {
+  const h = previewHarness();
+  h.c.GarageDepartureWheels = { samplePose(p) { p.raceCamera = true; } };
+  h.start('out');
+  const race = h.step(.05);
+  assert.equal(race.raceCamera, true);
+  const t = h.playing().t;
+  h.fn('previewEdit')(true);
+  h.start('pitExit');
+  h.fn('refreshPreview')();
+  const exit = h.step(.05);
+  assert.equal(exit.raceCamera, undefined);
+  assert.equal(h.playing().dir, 'out');
+  assert.equal(h.playing().t, t * Arrival.PIT_EXIT_RATE);
+  h.fn('previewEdit')(true);
+  h.start('out');
+  assert.equal(h.step(.05).raceCamera, true);
+  assert.equal(h.playing().t, t);
+  h.fn('previewEdit')(true);
+  h.start('home');
+  const home = h.step(.05);
+  const expected = Arrival.poseHome(h.playing().t, h.playing().cfg);
+  assert.equal(home.raceCamera, undefined);
+  assert.deepEqual([home.x, home.z, home.yaw], [expected.x, expected.z, expected.yaw]);
 });
 
 test('a circuit already raced opens RACE! on the garage: its programs are not warmed a second time', () => {
@@ -1561,7 +1588,6 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   assert.deepEqual($('ga-light-home').children.map((o) => o.value).slice(0, 2), ['auto', 'asset']);
   for (const id of ['ga-move', 'ga-sway', 'ga-zoom', 'ga-swell']) assert.equal($(id).tagName, 'SELECT', id);
   for (const id of ['ga-captions', 'ga-bars']) assert.equal($(id).type, 'checkbox', id);
-  assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview-in', 'ga-preview-out', 'ga-preview-home', 'ga-reset'], 'PREVIEW AFTER RACE joins the other previews');
   assert.equal(rows.querySelector('label[for="ga-carspeed"]').textContent, 'CAR SPEED');
 });
 test('endRace notes the result; the next non-pit garage visit plays it once (gated, never for the harness)', () => {

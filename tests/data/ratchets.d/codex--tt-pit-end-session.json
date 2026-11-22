@@ -13,7 +13,9 @@
     }
   },
   "tree": {
-    "eagerCodeBytes": 365,
-    "shellNodes": 1
+    "assertPins": -1,
+    "assertPinsAll": -1,
+    "eagerCodeBytes": 692,
+    "shellNodes": 3
   }
 }

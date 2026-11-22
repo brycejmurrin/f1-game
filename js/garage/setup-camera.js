@@ -283,14 +283,19 @@ function driveOutSound(pose, gap) {
 // Safari draws no <datalist> ticks on a range, hence the drawn ones.
 const FRAME_S = 1 / 24;
 let preview = null;
-const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
+function previewCfg(sequence) {
+  const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
+  cfg.enabled = true;
+  if (sequence === "pitExit") cfg.speed = Math.min(4, cfg.speed * GarageArrival.PIT_EXIT_RATE);
+  return cfg;
+}
 const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
 function previewPose(p) {
   const t = Math.min(p.t, previewLen(p));
   const pose = GarageArrival.poseFor(p.dir)(t, p.cfg, reducedMotion());
   // PREVIEW OUT must apply the same CUT sampler as Start Race, including distance
   // for the split wheel layers — otherwise the body rolls and the spokes stay put.
-  if (p.dir === "out" || p.dir === "home") {
+  if (p.sequence === "out") {
     if (typeof GarageDepartureWheels !== "undefined" && GarageDepartureWheels.samplePose) {
       const motion = GarageDepartureWheels.samplePose(pose, t, p.cfg, p.motion || (p.motion = { eye: [0, 0, 0], aim: [0, 0, 0] }), { calm: reducedMotion() });
       if (motion) p.motion = motion;
@@ -402,16 +407,16 @@ function previewEdit(on) {
 /** bindSettings' `changed`: a setting edited mid-preview re-poses the held frame. */
 function refreshPreview() {
   if (!preview) return;
-  preview.cfg = previewCfg();
+  preview.cfg = previewCfg(preview.sequence);
   preview.t = Math.min(preview.t, previewLen(preview));
   previewSync();
 }
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
-  const d = dir === "out" || dir === "home" ? dir : "in";
+  const d = dir === "pitExit" || dir === "out" ? "out" : dir === "home" ? "home" : "in";
   // From EDIT, PREVIEW IN / OUT switch the running preview's direction.
   if (preview && preview.editing) {
-    Object.assign(preview, { dir: d, t: 0, btn: btn || preview.btn });
+    Object.assign(preview, { dir: d, sequence: dir, cfg: previewCfg(dir), motion: null, travel: null, t: 0, btn: btn || preview.btn });
     previewEdit(false); previewPause(false);
     return true;
   }
@@ -419,7 +424,7 @@ function startArrivalPreview(dir, btn) {
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
   transport();
-  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
+  preview = { t: 0, cfg: previewCfg(dir), sequence: dir, dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false, marked: null };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
@@ -521,7 +526,7 @@ function fireHandoff() { const p = handoff; handoff = null; if (p) p.done(); }
 function startPitOut(done) {
   handoff = { done };
   if (!GarageArrival.plays(GarageArrival.settings(G.store.get("garageArrival", null)), "pitOut") || reducedMotion() || auto()) { fireHandoff(); return false; }
-  endHome(); homeScene = null; arrival.start({ out: true, rate: 1.6 });
+  endHome(); homeScene = null; arrival.start({ out: true, rate: GarageArrival.PIT_EXIT_RATE });
   return true;
 }
 function skipPitOut() { if (!handoff) return false; arrival.finish(); fireHandoff(); return true; }
