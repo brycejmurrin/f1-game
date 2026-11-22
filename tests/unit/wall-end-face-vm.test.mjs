@@ -112,3 +112,73 @@ test("reversing into a wall end that tightens as s decreases is held at the face
   assert.equal(c.s, best.s + 0.5, "s restored");
   assert.equal(c.x, x0, "lateral position kept");
 });
+
+// D2 (2026-11-18): the guard `|x| > oldLim → ordinary pin` let a car that was SCRAPING the old wall
+// (pinned at it, integrating a few cm past it each tick) through: the pin carried it across the whole
+// step at speed (Baku s≈188, 1.65 m step: x 6.90 → 5.25 at 24 m/s, driven with steer only).
+test("a car scraping the old wall into a face stops at the old wall limit (#5775 R10)", () => {
+  const tr = g.G.track;
+  const face = widestFace(tr);
+  const CG = vm.runInContext("ContactGeometry", g.ctx), WEF = vm.runInContext("WallEndFace", g.ctx);
+  for (const over of [0.02, 0.18, 0.6]) {           // driven measurements: 0.017-0.034 m (steer), 0.18 m (aimed)
+    const c = { human: true, _prevS: face.s - 0.5, s: face.s, x: face.side * (face.prev + over), speed: 24, wasOnWall: true, vLat: 0.3 };
+    const lim = CG.wallLimits(tr, c.s, c.x, { r: 0, l: 0, laneMin: 0, side: 0 }, { r: 99, l: 99, minOut: 0, side: 0 });
+    assert.ok(Math.abs(c.x) > (face.side > 0 ? lim.r : lim.l), "anti-vacuity: outside the new limit");
+    assert.equal(WEF.apply(c, tr, lim, 1 / 60), true, "held at the face (over " + over + " m)");
+    assert.equal(c.s, face.s - 0.5, "s restored");
+    assert.ok(Math.abs(Math.abs(c.x) - face.prev) < 1e-9, "pinned to the OLD wall, not the new one: " + c.x);
+    assert.equal(c.vLat, 0, "slip into the wall killed, as the side pin does");
+    assert.ok(Math.abs(c.speed - 24 * 0.2) < 1e-9, "scrubbed: " + c.speed);
+  }
+});
+
+// D3 (2026-11-18): the LANE side of a pit-wall nose. wallLimits classes a car whose centre is past
+// face + 0.125 at the first wall node as lane-side and WallClamp pinned it out to laneMin — 1.6-2.5 m
+// in one step at Monaco/Baku, driven. The road side of the same nose already reached apply().
+test("a car striking the lane side of the pit-wall nose stops at the nose (#5775 R11)", () => {
+  const tr = g.G.track, p = tr.pit, L = tr.total;
+  const CG = vm.runInContext("ContactGeometry", g.ctx), WEF = vm.runInContext("WallEndFace", g.ctx);
+  const lim = { r: 0, l: 0, laneMin: 0, side: 0 }, post = { r: 99, l: 99, minOut: 0, side: 0 };
+  const x = p.side * 6.6;                            // the staged/driven Monaco row: centre on the nose
+  let sNose = null;                                  // first s (forward, within 400 m before sIn) with a lane pin at x
+  for (let s = p.sIn - 400; s < p.sIn + 20; s += 0.25) {
+    const ss = ((s % L) + L) % L;
+    CG.wallLimits(tr, ss, x, lim, post);
+    if (lim.laneMin > 0 && lim.side === p.side) { sNose = ss; break; }
+  }
+  assert.ok(sNose !== null, "anti-vacuity: Monaco's pit wall has a nose");
+  const mk = (ps, s, cx) => ({ human: true, _prevS: ps, s, x: cx, speed: 20, wasOnWall: false });
+  const c = mk(sNose - 0.25, sNose, x);
+  CG.wallLimits(tr, c.s, c.x, lim, post);
+  assert.ok(lim.laneMin - c.x * p.side > 1.5, "anti-vacuity: the lane pin would snap " + (lim.laneMin - c.x * p.side).toFixed(2) + " m");
+  assert.equal(WEF.apply(c, tr, lim, 1 / 60), true, "held at the nose");
+  assert.equal(c.s, sNose - 0.25, "s restored");
+  assert.equal(c.x, x, "x kept");
+  assert.ok(Math.abs(c.speed - 4) < 1e-9, "scrubbed: " + c.speed);
+  const wallClamp = vm.runInContext("WallClamp", g.ctx);
+  const driven = mk(sNose - 0.25, sNose, x);
+  wallClamp.apply(driven, { track: tr, dt: 1 / 60, postLim: post });
+  assert.equal(driven.s, c.s, "driving takes the end-face response before the lane pin");
+  assert.equal(driven.x, x, "the old lane limit cannot move a car held at its previous position");
+  assert.equal(driven.speed, c.speed);
+  // Beside the wall already (the lane pin existed at _prevS): the ordinary pin, untouched.
+  const d = mk(sNose + 5, sNose + 5.25, x);
+  CG.wallLimits(tr, d.s, d.x, lim, post);
+  assert.equal(WEF.apply(d, tr, lim, 1 / 60), false, "beside the wall: ordinary lane pin");
+  // A graze (centre within NOSE_GRAZE of the lane): the ordinary lane pin — driven rows 0.24/0.27 m
+  // pins entered the lane unchanged.
+  const gz = mk(sNose - 0.25, sNose, 0);
+  CG.wallLimits(tr, gz.s, p.side * 7.9, lim, post);
+  gz.x = p.side * (lim.laneMin - 0.3);
+  CG.wallLimits(tr, gz.s, gz.x, lim, post);
+  assert.ok(lim.laneMin > 0, "anti-vacuity: graze car is lane-side");
+  assert.equal(WEF.apply(gz, tr, lim, 1 / 60), false, "graze: ordinary lane pin");
+  // In the lane already: nothing to do.
+  const e = mk(sNose - 0.25, sNose, p.side * (lim.laneMin + 0.2));
+  CG.wallLimits(tr, e.s, e.x, lim, post);
+  assert.equal(WEF.apply(e, tr, lim, 1 / 60), false, "in the lane: no hold");
+  // AI cars are never held (WallEndFace is human-only; the AI keeps its pin).
+  const f = Object.assign(mk(sNose - 0.25, sNose, x), { human: false });
+  CG.wallLimits(tr, f.s, f.x, lim, post);
+  assert.equal(WEF.apply(f, tr, lim, 1 / 60), false, "AI: no hold");
+});

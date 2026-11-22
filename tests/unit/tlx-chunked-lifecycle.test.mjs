@@ -37,11 +37,11 @@ class Box3 {
 }
 const THREE = { BufferAttribute, Float16BufferAttribute, BufferGeometry, Vector3, Sphere, Box3 };
 
-function factory(released) {
+function factory(released, frustum = {}) {
   const sandbox = {
     window: {}, localStorage: { getItem: () => null },
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
-    Frustum: {},
+    Frustum: frustum,
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
@@ -52,6 +52,34 @@ function factory(released) {
     releaseGeometry: geo => released.push(geo),
   });
 }
+
+test("chunk culling reuses planes until the matrix changes and always applies this pass's budgets", () => {
+  const frustumSrc = fs.readFileSync(new URL("../../js/render/shared/frustum.js", import.meta.url), "utf8");
+  const real = vm.runInNewContext(frustumSrc + "; Frustum", {}, { filename: absSrc("js/render/shared/frustum.js") });
+  let extracts = 0, radial = 0;
+  const sys = factory([], {
+    ...real,
+    extractPlanes(...args) { extracts++; return real.extractPlanes(...args); },
+    radialCulled(...args) { radial++; return real.radialCulled(...args); },
+  });
+  const mesh = { chunks: [0, 0.8, 10].map(x => ({ min: [x, 0, 0], max: [x, 0, 0] })) };
+  const vp = Float64Array.of(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+  function visible(radius, fog) {
+    const count = sys.cull(mesh, vp, [0, 0, 0], radius, fog);
+    return Array.from(sys.visList.slice(0, count), c => c.min[0]);
+  }
+  assert.deepEqual(visible(0, null), [0, 0.8]);
+  assert.deepEqual(visible(0, [0, 0.1]), [0, 0.8]);
+  assert.equal(radial, 0);
+  assert.deepEqual(visible(0.5, null), [0]);
+  assert.deepEqual(visible(0, [10, 0]), [0]);
+  assert.equal(extracts, 1);
+  vp[12] = -10;
+  assert.deepEqual(visible(0, null), [10]);
+  vp[12] = 0;
+  assert.deepEqual(visible(0, null), [0, 0.8]);
+  assert.equal(extracts, 3);
+});
 
 test("free releases and disposes a plain geometry exactly once", () => {
   const released = [], sys = factory(released);

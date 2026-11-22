@@ -21,7 +21,7 @@ function ctx2d(calls) {
   return {
     globalAlpha: 1, globalCompositeOperation: "source-over", fillStyle: "", strokeStyle: "", lineWidth: 1,
     clearRect: () => { calls.clear++; }, fillRect() {}, fill() {}, stroke: () => { calls.stroke++; },
-    save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: () => { calls.arc++; },
+    setTransform(...args) { calls.transform = args; }, save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: () => { calls.arc++; },
     moveTo() {}, lineTo() {}, closePath() {},
     createRadialGradient: () => { calls.gradients++; return grad; }, createLinearGradient: () => { calls.gradients++; return grad; },
     createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
@@ -43,7 +43,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
   const document = {
     body,
     getElementById: (id) => (id === "game" ? game : null),
-    createElement: () => ({ width: 0, height: 0, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls), toDataURL: () => { calls.bendMaps++; return "data:,"; } }),
+    createElement: () => ({ width: 300, height: 150, hidden: false, setAttribute() {}, getContext: () => ctx2d(calls), toDataURL: () => { calls.bendMaps++; return "data:,"; } }),
     createElementNS: () => ({ setAttribute() {}, appendChild() {}, style: {}, querySelectorAll: () => [] }),
   };
   class Path2D { constructor(d) { this.d = d; } }
@@ -383,13 +383,14 @@ test("visor exit via Droplets (#4751 row 15): leaving the onboard cam in the dry
 });
 
 test("visor size (audit4 R2): turning the visor ON mid-helmet sizes the new canvas before its first paint", () => {
-  const { V, calls, listeners, live } = load({ apex: { visorScene: () => DAY }, visor: "off" });
+  const { V, calls, listeners, live } = load({ apex: { visorScene: () => DAY }, visor: "off", win: { innerWidth: 600, innerHeight: 300 } });
   V.tick(1 / 60, true, 0, false);                     // visor OFF: _size records the viewport, no canvas yet
   live.visor = "clear";
   for (const fn of listeners) fn("visor", "clear");
   V.tick(1 / 60, true, 0, false);
   assert.ok(calls.inserted, "the canvas is built");
-  assert.equal(calls.inserted.width, 844, "the first paint lands on a viewport-sized store, not 300x150");
+  assert.deepEqual([calls.inserted.width, calls.inserted.height], [300, 150], "the first paint uses the half-size light surface");
+  assert.deepEqual(calls.transform, [.5, 0, 0, .5, 0, 0], "geometry stays in CSS pixels");
   assert.ok(V.stats().paints >= 1, "and it paints at once");
 });
 
@@ -416,6 +417,33 @@ test("visor refraction builds and resizes with reflections OFF in a fresh helmet
   V.tick(0, true, 0, false);
   assert.equal(calls.bendMaps, 2, "paused resize rebuilds the map for the new aperture");
   assert.equal(V.stats().paints, 0, "reflections stay off after resize");
+});
+
+test("only visible optics fold into the final scene, with draining water above world refraction", () => {
+  const { V, ctx, calls } = load({ apex: { visorScene: () => DAY }, refraction: "medium" });
+  const hud = { hidden: false }, water = { hidden: true };
+  const lookup = ctx.document.getElementById;
+  ctx.document.getElementById = id => id === "hud" ? hud : id === "fx-droplets" ? water : lookup(id);
+  water.parentNode = lookup("game").parentNode;
+  ctx.document.body.matches = () => true;
+  ctx.document.body.toggleAttribute = (key, on) => { calls.attrs[key] = on; };
+  V.tick(1 / 60, true, 0, false);
+  const frame = V.frameLens();
+  assert.equal(frame.light, calls.inserted);
+  assert.equal(frame.bend.data.length, 128 * 128 * 4);
+  assert.equal(frame.bend.y, 32 / 390);
+  assert.equal(frame.revision, 1);
+  V.folded(2);
+  assert.equal(calls.attrs["data-visor-light-folded"], true);
+  water.hidden = false;
+  assert.equal(V.frameLens().light, null);
+  assert.equal(V.frameLens().bend, frame.bend);
+  V.folded(1);
+  assert.equal(calls.attrs["data-visor-light-folded"], false);
+  hud.hidden = true;
+  assert.equal(V.frameLens(), null);
+  V.clear();
+  assert.equal(calls.attrs["data-visor-folded"], false);
 });
 
 test("visor blend (#3657): plus-lighter on WebGPU only; WebGL2, GLX and an unknown backend composite as plain over", () => {

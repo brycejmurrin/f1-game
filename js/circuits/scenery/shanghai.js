@@ -417,7 +417,7 @@
         // Outer Yu / T1 red-roof houses — seat.box so feet stay on grade
         // (sheet-03 overview showed floating red roofs near T1).
         for (const [s, sd, d, w, h, len] of [
-          [sl(0.055), -1, 108, 11, 5.5, 9],
+          [sl(0.038), -1, 88, 11, 5.5, 9],
           [sl(0.075), -1, 122,  9, 5.0, 8],
           [sl(0.095), -1, 105,  8, 4.2, 7],
           [sl(0.115), -1, 128, 10, 5.5, 8],

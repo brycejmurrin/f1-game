@@ -44,6 +44,7 @@
   "hud.overtake.lowGrip": "Overtake off in low grip conditions",
   "hud.overtake.openingLap": "Overtake unavailable on lap 1",
   "hud.overtake.pending": "Overtake unavailable — be within one second at the detection line",
+  "hud.overtake.pitLane": "Overtake unavailable in the pit lane",
   "hud.overtake.ready": "Overtake ready, {time} — press to deploy",
   "hud.overtake.unavailable": "Overtake unavailable",
   "hud.overtake.waitingLeader": "Overtake waiting for the leader",

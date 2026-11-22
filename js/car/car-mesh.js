@@ -944,14 +944,17 @@ function getErsBar() {
   _ersBarMesh = _gfx.createMesh(out);
   return _ersBarMesh;
 }
-const _aeroLamps = {};
-function getAeroLamp(state) {                       // 0 unavailable, 1 armed, 2 open
-  if (_aeroLamps[state]) return _aeroLamps[state];
-  const out = { pos: [], nrm: [], col: [], idx: [] };
+function addAeroLamp(out, state) {
   const COL = state === 2 ? [0.30, 1.75, 2.20]      // X-MODE: the cyan the HUD chip uses
             : state === 1 ? [1.70, 1.05, 0.20]      // armed: amber, "press it"
             : [0.10, 0.10, 0.13];                   // dark: no zone here, or nothing to do
   CockpitRig.box(out, 0.082, 0.024, -0.031, 0.019, 0.019, 0.003, COL);
+}
+const _aeroLamps = {};
+function getAeroLamp(state) {                       // 0 unavailable, 1 armed, 2 open
+  if (_aeroLamps[state]) return _aeroLamps[state];
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  addAeroLamp(out, state);
   _aeroLamps[state] = _gfx.createMesh(out);
   return _aeroLamps[state];
 }
@@ -1024,8 +1027,8 @@ function drawRetroTelemetry(mat,c,kph,t) {
 // wheel-local x scale is the resolved demand, even on a light initial press.
 const _wheelStatus = [], _pedalFill = [];
 const PEDAL_X = [-0.049, -0.008], PEDAL_WIDTH = 0.028;
-function getWheelStatus(mph) {
-  const unit = mph ? 1 : 0;
+function getWheelStatus(mph, lamp = -1) {
+  const unit = (mph ? 1 : 0) + (lamp + 1) * 2;
   if (_wheelStatus[unit]) return _wheelStatus[unit];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   CockpitRig.label(out, mph ? "MPH" : "KPH", -.034, .001, -.037, .0013, [.35, .75, .78]);
@@ -1039,6 +1042,7 @@ function getWheelStatus(mph) {
       _pedalFill[i] = _gfx.createMesh(fill);
     }
   }
+  if (lamp >= 0) addAeroLamp(out, lamp);
   return (_wheelStatus[unit] = _gfx.createMesh(out));
 }
 function drawPedalFill(mat, i, demand) {
@@ -1052,12 +1056,10 @@ function drawPedalFill(mat, i, demand) {
 const _AX_PULSE = { emissive: 1.0, roughness: 0.9, specular: 0, noAlphaWrite: true, alpha: 1 };   // pooled: a fresh literal defeated TLX's matKeyFor memo
 function drawWheelExtras(mat, c, t) {
   const mph=typeof AppearanceOpts!=='undefined' && AppearanceOpts.units()==='mph';
-  _gfx.draw(getWheelStatus(mph), mat, _AX_FX);
+  const ax = Math.max(0, Math.min(1, c.aeroX || 0));
+  _gfx.draw(getWheelStatus(mph, ax > 0.05 ? 2 : c.xArmed ? 1 : 0), mat, _AX_FX);
   drawPedalFill(mat, 0, c.throttleDemand);
   drawPedalFill(mat, 1, c.brakeDemand);
-  const ax = Math.max(0, Math.min(1, c.aeroX || 0));
-  const open = ax > 0.05;
-  _gfx.draw(getAeroLamp(open ? 2 : c.xArmed ? 1 : 0), mat, _AX_FX);
   if (ax <= 0.02) return;
   _axT[12] = 0.067; _axT[13] = 0.004; _axT[14] = -0.0315;
   M4.mulTo(_axM, mat, _axT);
@@ -1069,9 +1071,8 @@ function drawWheelExtras(mat, c, t) {
 // #5387 primeRace: each wheel-extra mesh with its live opts, at the caller's zero matrix.
 function primeWheelExtras(m) {
   const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
-  _gfx.draw(getWheelStatus(mph), m, _AX_FX);
+  for (let s = 0; s <= 2; s++) _gfx.draw(getWheelStatus(mph, s), m, _AX_FX);
   for (const fill of _pedalFill) _gfx.draw(fill, m, _AX_FX);
-  for (let s = 0; s <= 2; s++) _gfx.draw(getAeroLamp(s), m, _AX_FX);
   _gfx.draw(getAeroBar(false), m, _AX_FX); _gfx.draw(getAeroBar(true), m, _AX_FX);
   _AX_PULSE.alpha = 0.65; _gfx.draw(getAeroBar(true), m, _AX_PULSE);
 }

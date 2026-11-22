@@ -295,6 +295,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `screen-regions.js` | `ScreenRegions` | LAZY_UI_PRESETS | IDs are part of exported profiles. |
 | `screen-placement.js` | `ScreenPlacement` | LAZY_UI_PRESETS | Region geometry is sparse. |
 | `screen-arranger.js` | `ScreenArranger` | LAZY_UI_PRESETS | A transparent native modal owns input while the actual screen renders each draft. |
+| `hud-layout-editor.js` | `HudLayoutEditor` | LAZY_UI_PRESETS | HUD customization controls and color stylesheet, loaded on demand. |
 | `dock-toolbar.js` | `DockToolbar` | LAZY_UI_PRESETS | Live touch layout toolbar, loaded on the first edit. |
 | `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
@@ -407,7 +408,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
 | `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 | `stopped-cars.js` | `StoppedCars` | LAZY_RACE_SESSION | STOPPED CARS (StoppedCars): race control's second hazard source (audit W34, 2026-11-10). |
-| `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | RETIRED CARD (RetiredCard). |
+| `retired-card.js` | `RetiredCard` | LAZY_RACE_SESSION | Solo post-finish shortcut. |
 | `driving-coach.js` | `DrivingCoachBody` | LAZY_RACE_SESSION | Read-only driving feedback and explicitly unscored solo practice: the BODY (DrivingCoachBody, LAZY_RACE_SESSION, #4748). |
 | `tv-graphics.js` | `TvGraphics` | LAZY_REAL_RACE | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `real-replay.js` | `RealReplay` | LAZY_REAL_RACE | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |

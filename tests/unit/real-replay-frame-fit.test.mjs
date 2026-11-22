@@ -11,7 +11,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
-import { ROOT, FIXTURE, TOTAL_REAL, host, line } from "../helpers/real-replay-fixtures.mjs";
+import { ROOT, FIXTURE, TOTAL_REAL, host, line, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 test("Russell's real lap lands on the game's Baku centreline: mirrored, turned, forward, 5.9 km", async () => {
@@ -199,4 +199,34 @@ test("a trace that joins mid-race takes its lap from the recorded lap starts, no
   // A trace from the grid keeps the lights-out convention.
   const grid = R.trackTrace(track, frame, Float32Array.from([-5, 980, 0, 0, 990, 0, 1, 1010, 0]), starts);
   assert.ok(Math.abs(grid.prog[1] + 10) < 1e-3, "on the grid, behind the line: " + grid.prog[1]);
+});
+
+test("WATCH reuses its position interval during playback and searches again on a seek", (t) => {
+  const trace = line(0, 50, 0, 0, 2048);
+  let reads = 0;
+  class Counted extends Float32Array {
+    static from(input) {
+      const values = Float32Array.from(input);
+      return input === trace.t ? new Proxy(values, { get(a, key) {
+        if (typeof key === "string" && /^\d+$/.test(key)) reads++;
+        return a[key];
+      } }) : values;
+    }
+  }
+  const { replay, options, cars } = transportReplay({ Float32Array: Counted });
+  options.traces.cars[1] = trace;
+  replay.start(options);
+  replay.seek(1200);
+  reads = 0;
+  for (let i = 1; i <= 600; i++) {
+    replay.tick(1 / 60);
+    assert.ok(Math.abs(cars[0].prog - (1200 + i / 60) * 50) < 1e-6);
+  }
+  t.diagnostic(reads + " timestamp reads for 600 frames of one 4097-position trace");
+  assert.ok(reads < 4200, "a frame inside its known interval avoids a full binary search");
+  for (const time of [8, 1800.5, 1800, 0, 2048, 1200]) {
+    replay.seek(time);
+    assert.equal(cars[0].prog, time * 50, "exact trace position after seeking to " + time);
+  }
+  replay.stop();
 });

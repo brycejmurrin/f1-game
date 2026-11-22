@@ -1149,21 +1149,36 @@
     // mir 1: the mirror inset is drawn INSIDE this pass (hunt D8; mirrorU's
     // rect / hdr / flip, its own texture node on the same mirror target).
     const fxaaMirTex = texture(ctx.blackTex);
-    const fxaaU = { texel: uniform(new THREE.Vector2()), mir: uniform(0) };
+    // Three shares sampler uniforms by texture UUID at first compile. Each lens
+    // slot needs its own filterable placeholder when the race warms without a visor.
+    function lensSampler() {
+      const lensPlaceholder = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+      lensPlaceholder.minFilter = lensPlaceholder.magFilter = THREE.LinearFilter;
+      lensPlaceholder.needsUpdate = true;
+      if (ctx.ownTexture) ctx.ownTexture(lensPlaceholder);
+      return texture(lensPlaceholder);
+    }
+    const bendTex = lensSampler(), lightTex = lensSampler();
+    const fxaaU = { lightBlend: uniform(0), bend: uniform(new THREE.Vector2()), texel: uniform(new THREE.Vector2()), mir: uniform(0) };
     const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
     const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
     const FXAA_SUBPIX = labFxaaSubpix();
     const fxaa = {
-      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex,
+      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex, bendTex, lightTex,
       mat: passMaterial(Fn(() => {
         const suv = vec2(VP.uv(fxaaV)).toVar();
+        const mf = vec2(screenCoordinate).toVar();
+        If(fxaaU.bend.x.greaterThan(0), () => {
+          const delta = bendTex.sample(suv).level(0).rg.sub(0.5).mul(fxaaU.bend).toVar();
+          suv.addAssign(delta);
+          mf.addAssign(delta.mul(TSL.screenSize));
+        });
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(fxaaU.texel).toVar();
         const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
         // The mipmapped mirror RT has identity UV mapping. Analytic gradients
         // preserve its LOD inside a varying inset guard; dFdx/dFdy nodes can
         // be emitted lazily inside that guard and would be nonuniform.
-        const mf = vec2(screenCoordinate).toVar();
         const mp = mf.sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
         const mu = vec2(mix(mp.x, mp.x.oneMinus(), mirrorU.flip), mp.y).toVar();
         const mx = vec2(mix(float(1), float(-1), mirrorU.flip).div(mirrorU.rect.z), 0).toVar();
@@ -1242,6 +1257,11 @@
             const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
             res.assign(fxaaTex.sample(TL(pos)).rgb);
           });
+        });
+        If(fxaaU.lightBlend.greaterThan(0), () => {
+          const light = lightTex.sample(VP.uv(fxaaV)).level(0).toVar();
+          // The canvas upload carries premultiplied light in display colour space.
+          res.assign(res.mul(select(fxaaU.lightBlend.greaterThan(1), float(1), light.a.oneMinus())).add(light.rgb));
         });
         return vec4(res, 1.0);
       })(), "tlx-post-fxaa"),

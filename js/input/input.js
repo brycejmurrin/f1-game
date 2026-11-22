@@ -747,6 +747,7 @@ const Input = (function () {
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
     padPedalSignature = JSON.stringify(padAxisMap);
+    padMapIsDefault = padPedalSignature === defaultPadAxisSignature;
     if (owner) invalidateAxisRest(padIdOf(owner), previous);
     profileChanged();
     return getPadAxisMap();
@@ -789,17 +790,7 @@ const Input = (function () {
     return true;
   }
 
-  // PAD_AXIS_DEF's keys never change. Object.keys of it allocated an array on every
-  // poll (wheelFirst), including for a pad that is only plugged in.
-  let padAxisDefKeys = null;
-  function padAxesAreDefault() {
-    if (!padAxisDefKeys) padAxisDefKeys = Object.keys(PAD_AXIS_DEF);
-    for (let i = 0; i < padAxisDefKeys.length; i++) {
-      const k = padAxisDefKeys[i];
-      if (padAxisMap[k] !== PAD_AXIS_DEF[k]) return false;
-    }
-    return true;
-  }
+  function padAxesAreDefault() { return padMapIsDefault; }
   /* Capture where the steering axis RESTS and subtract it forever after. This
      is the honest answer to stick drift: a worn potentiometer's wiper no longer
      reads zero at centre, and the alternative — one big dead zone for everyone
@@ -865,7 +856,9 @@ const Input = (function () {
   const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1,
     throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
-  let padPedalSignature = JSON.stringify(padAxisMap);
+  const defaultPadAxisSignature = JSON.stringify(PAD_AXIS_DEF);
+  let padPedalSignature = defaultPadAxisSignature;
+  let padMapIsDefault = true;
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
   let axisCaptureOwner = null;   // after first wheel answer, ignore other physical devices
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them

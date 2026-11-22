@@ -49,18 +49,6 @@ function vpSync() {
 const vpW = () => { vpSync(); return _vp.w; };
 const vpH = () => { vpSync(); return _vp.h; };
 
-// ONE BLINK CLOCK. Each HUD `pulse` (css/hud.css: OT armed, ERS, VSC, pit cue,
-// limits, the 0.4 s redline) began its own phase when its class landed, so two
-// warnings on screen together blinked out of step (DEFECT-LEDGER item H). Pinning
-// every pulse's startTime to the document timeline's zero puts them on one
-// clock: the 0.8 s pulses share a phase and the redline is their harmonic.
-function syncPulse(e) {
-  const el = e.target;
-  if (e.animationName !== "pulse" || !el || typeof el.getAnimations !== "function") return;
-  for (const a of el.getAnimations()) if (a.animationName === "pulse" && a.startTime !== 0) a.startTime = 0;
-}
-if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("animationstart", syncPulse, true);
-
 // GameHud.invalidateFit(): the live instance's re-fit trigger (null until create).
 let _invalidateFit = null, _syncPhoneFit = null, _secFlashRead = null;
 function create(G) {
@@ -1954,7 +1942,7 @@ function updateHud(force, dtMs) {
     // anyone the hue does not reach — and the chip's aria-label (role="img")
     // says compound, heat, laps left and the plan in words.
     if (typeof HudTyres !== "undefined") {
-      HudTyres.paint(els.tyre, tyres.info ? tyres.info(player) : null,
+      HudTyres.paint(els.tyre, tyres.temperatureInfo?.(player),
         { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
     }
   } else {
@@ -1980,7 +1968,8 @@ function updateHud(force, dtMs) {
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
   const caution = G.cautionInfo ? G.cautionInfo() : null;
   const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const otOff = G.state === "race" && !gateOpen && !(player.otT > 0);
+  const pitHeld = G.pits?.held?.(player);
+  const otOff = G.state === "race" && (!gateOpen || pitHeld) && !(player.otT > 0);
   // The class follows the GATE like the text does: a held lap-0 grant (or one
   // under a safety car) used to pulse the yellow "ready" plate while the text
   // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
@@ -1994,16 +1983,19 @@ function updateHud(force, dtMs) {
     // to pass; the input path still checks c.otArmed in game.js. Only the
     // Safety Car / red flag (B7.2.2c) and LOW GRIP (B7.2.2d) close it; a
     // yellow or VSC flying on lap 1 must not be named as the reason.
-    otReason = caution && caution.level >= 3 ? "caution"
+    otReason = pitHeld ? "pit-lane"
+      : caution && caution.level >= 3 ? "caution"
       : caution && caution.lowGrip ? "low-grip"
       : leader && leader.lap > 1 ? "race-control"
       : leader ? "opening-lap" : "waiting-for-leader";
   }
+  hData(els.ot, "gate", otReason || null);
   const mjTxt = otMJ.toFixed(2) + " MJ";
   const otReady = !!player.otArmed || otHeld;
   const otUnavailable = (!(player.otT > 0) && !otReady) || otOff;
   const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
-                : otOff ? (otReason === "caution" ? "OT · CAUTION"
+                : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
+                  : otReason === "caution" ? "OT · CAUTION"
                   : otReason === "low-grip" ? "OT · LOW GRIP"
                   : otReason === "opening-lap" ? "OT · LAP 1"
                   : otReason === "waiting-for-leader" ? "OT · GRID"
@@ -2012,7 +2004,8 @@ function updateHud(force, dtMs) {
                 : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
   hText(els.ot, otText);
   hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
-    : otOff ? (otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+    : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
+      : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
       : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
       : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
       : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
@@ -2047,9 +2040,11 @@ function updateHud(force, dtMs) {
     : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "CORNER MODE";
+  hData(els.aero, "zone", autoAero ? (xOpen ? "straight" : "auto") : (xOpen || noZones) ? null : dz === 0 ? "in" : dz < 900 ? "near" : null);
   hText(els.aero, aeroText);
   hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
     : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
+  let ghostSign = null;
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the
@@ -2063,6 +2058,7 @@ function updateHud(force, dtMs) {
       const ghostT = (player.lap | 0) >= 1 ? ghost.timeAt(player.s) : null;   // S4: not off the run-up clock
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
+        ghostSign = delta <= 0 ? "fast" : "slow";
         hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + signedFixed(delta) + "s");
         hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower-ink)");
       } else {
@@ -2103,6 +2099,7 @@ function updateHud(force, dtMs) {
     };
     win(els.gapA, a); win(els.gapB, b);
   }
+  hData(els.gapA, "ghost", ghostSign);
   gapsEmptySync();
   // THE LANE IS STALE UNTIL THE STRINGS LAND. fitHud (above) clips #announce
   // from the gaps box as it was at the start of this tick — empty, or the
@@ -2153,6 +2150,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      hData(_secRows[i].parentElement, "split", t == null ? null : sb ? "session" : pb ? "personal" : "slow");
       if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
       paintSectorFlash(i, pb, t != null);

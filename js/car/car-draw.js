@@ -34,7 +34,7 @@ const CarDraw = (function () {
     Log.info("game", "CarDraw.create");
     FieldLod.init(G.store);   // apex26.fieldLod, read once at boot (0 = no rival LOD)
     const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getSpinDisc, getCompoundRing, getCrewMesh, getCockpitWheel, getCockpitDash, getCockpitCabin, getCockpitGlass, getMirrorFallback, getMirrorGlass,
-            getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroLamp, getAeroBar,
+            getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, getWheelStatus, getAeroBar,
             drawWheelExtras } = CarMesh;
 
     // Paired with an already-warmed rival body; never built by mirror rendering.
@@ -1160,8 +1160,7 @@ const CarDraw = (function () {
           // calls during race warm (before the first clean present) and trip
           // INVALID_OPERATION on later baked-material frames (assets-api).
           const mph = typeof AppearanceOpts !== "undefined" && AppearanceOpts.units() === "mph";
-          getWheelStatus(mph);   // unit plate and the two continuous pedal fills
-          getAeroLamp(0); getAeroLamp(1); getAeroLamp(2);
+          for (let lamp = 0; lamp <= 2; lamp++) getWheelStatus(mph, lamp);
           getAeroBar(false); getAeroBar(true);
         } catch (e) { Log.warn("gfx", "cockpit/LCD mesh warm failed", e); }
       }

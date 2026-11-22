@@ -350,7 +350,10 @@ body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > butto
   gap: 0; padding: 0 0 calc(var(--gap) * 0.5); border-bottom: 0;
 }
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label { font-size: 0; gap: 0; }
-#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label > input { font-size: var(--fs-3); }
+/* Keep the search text at least 16 painted pixels when the settings sheet scales down. */
+#pm-settings-index [data-settings-search] input {
+  font-size: max(var(--fs-3), calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
+}
 #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search]:has(input:placeholder-shown) > p { display: none; }
 /* TWO-COLUMN SETTINGS PAGES — BY WIDTH, NOT BY ASPECT (UI contract 2026-11-06
    §4.2, gap 3). This grid used to key on data-shape="wide", which is the
@@ -857,4 +860,18 @@ body.desktop #pm-calib-help { display: none !important; }
    63 px out of the 320 px Driving pane at UI SIZE 50 %, whose text rung is 12px / --ui-scale). */
 [data-dep-reason="label"] { display: inline-block; max-width: 100%; white-space: normal; }
 [data-dep-reason="line"] { display: block; margin: 0.25em 0 0.5em; }
+}
+
+@layer layout {
+/* A native field can open Safari's keyboard or picker at any game UI size.
+   Use the compact sheet cap, ordinary sheet scale, or the designer's own zoom. */
+@media (pointer: coarse), (hover: none) {
+  :where(input:not([type]), textarea, select, [contenteditable]:not([contenteditable="false"])) {
+    font-size: max(16px, var(--touch-field-size, var(--fs-3)), calc(16px / var(--_sheet-z, var(--sheet-scale, var(--td-zoom, var(--ui-scale, 1))))));
+  }
+  :where(input:is([type=text], [type=search], [type=url], [type=email], [type=tel], [type=number],
+                  [type=password], [type=date], [type=time], [type=datetime-local], [type=month], [type=week])) {
+    font-size: max(16px, var(--touch-field-size, var(--fs-3)), calc(16px / var(--_sheet-z, var(--sheet-scale, var(--td-zoom, var(--ui-scale, 1))))));
+  }
+}
 }

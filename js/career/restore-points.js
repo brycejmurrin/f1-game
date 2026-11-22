@@ -111,21 +111,26 @@ const CareerRestorePoints = (function () {
         let result = null;
         const tx = db.transaction("slots", "readwrite"), os = tx.objectStore("slots"), req = os.get(key);
         req.onsuccess = () => {
-          const items = validItems(req.result && req.result.items, flavour);
+          const items = validItems(req.result && req.result.items, flavour, LIMIT - 1);
           if (items[0] && items[0].json === json) { result = { ok: true, durable: true, id: items[0].id, duplicate: true }; return; }
           const at = now(), id = at.toString(36) + "-" + (++sequence).toString(36) + "-" + Math.random().toString(36).slice(2, 8);
           items.unshift({ id, at, reason, json });
-          os.put({ k: key, items: items.slice(0, LIMIT) }); result = { ok: true, durable: true, id };
+          os.put({ k: key, items }); result = { ok: true, durable: true, id };
         };
         tx.oncomplete = () => resolve(result || refused("history-write-failed"));
         tx.onerror = tx.onabort = (ev) => resolve(ended(tx, ev) ? LOST : refused("history-write-failed"));
       }, refused("history-unavailable"), refused("history-write-failed")));
     }
-    function validItems(items, flavour) {
+    function validItems(items, flavour, capacity = LIMIT) {
       if (!Array.isArray(items)) return [];
-      return items.slice(0, LIMIT).filter((x) => x && typeof x.id === "string" && x.id.length <= 96 &&
-        Number.isFinite(x.at) && typeof x.json === "string" && x.json.length * 2 <= SNAPSHOT_BYTES &&
-        clean(parse(x.json), flavour) !== null);
+      let remaining = capacity;
+      return items.slice(0, LIMIT).filter((x) => {
+        if (!remaining || !x || typeof x.id !== "string" || x.id.length > 96 ||
+            !Number.isFinite(x.at) || typeof x.json !== "string" || x.json.length * 2 > SNAPSHOT_BYTES ||
+            clean(parse(x.json), flavour) === null) return false;
+        remaining--;
+        return true;
+      });
     }
     function parse(json) { try { return JSON.parse(json); } catch (_) { return null; } }
     async function read(flavour, i) {

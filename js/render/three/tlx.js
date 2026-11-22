@@ -2440,10 +2440,15 @@ const TLX = (function () {
         im.parent = null;
       }
       // What three may walk this pass: exactly the registry members that are visible now.
-      function _instShow() {
-        if (!_instRootOn) return;
+      function _instShow(hideUndrawn = false) {
+        if (!_instRootOn && !hideUndrawn) return;
         let n = 0;
-        for (let i = 0; i < _instRegistry.length; i++) { const im = _instRegistry[i]; if (im.visible) _instKids[n++] = im; }
+        for (let i = 0; i < _instRegistry.length; i++) {
+          const im = _instRegistry[i];
+          if (hideUndrawn && im.__tlxShown !== _instStamp) im.visible = false;
+          else if (_instRootOn && im.visible) _instKids[n++] = im;
+        }
+        if (!_instRootOn) return;
         if (_instKids.length !== n) _instKids.length = n;
         instRoot.children = _instKids;
       }
@@ -2860,11 +2865,7 @@ const TLX = (function () {
       }
 
       function _hideUndrawnInstanced() {
-        for (let i = 0; i < _instRegistry.length; i++) {
-          const im = _instRegistry[i];
-          if (im.__tlxShown !== _instStamp) im.visible = false;
-        }
-        _instShow();
+        _instShow(true);
         _instStamp++;   // the next flush starts clean (pass starts bump it too)
       }
       // the mesh pool is keyed on (geometry, material), NOT on draw order
@@ -5623,14 +5624,7 @@ const TLX = (function () {
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
         flushTexPool,
-        // texCensus: GLX-only. Declared ABSENT rather than left off, because
-        // game.js installs a backend by descriptor-copy onto GLX and an absent
-        // NAME would keep GLX's own function — which would then run against a
-        // null gl. This makes `if (gfx.texCensus)` answer honestly, and
-        // __apex.texCensus() report supported:false instead of a measured zero.
-        // three tracks its own retained counts through __tlx.memState();
-        // reconciling the two is follow-up work, not a silencer to remove.
-        texCensus: undefined,
+        texCensus: function () { return TLXShaders.memCensus(this.__tlx); },
 
         // Baked material arrays — the GLX.createTextureArray counterpart
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
@@ -6984,6 +6978,7 @@ const TLX = (function () {
           // Post-only death: same materials, canvas (the 1269 intent). The chain is
           // rebuilt at the next render-target realloc (<= 3 times a session).
           if (!painted && post) {
+            if (opts && opts.visorFolded) opts.visorFolded = false;
             const deadPost = post;
             post = null;
             _cancelSoftBlits();

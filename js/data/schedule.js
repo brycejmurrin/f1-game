@@ -92,12 +92,13 @@ const DataSchedule = (function () {
 
   function bindOverflowTitle(node, text) {
     if (!node || !node.addEventListener) return;
-    node.addEventListener("mouseenter", function () {
-      if (typeof matchMedia === "function" && matchMedia("(hover: none)").matches) return;
+    node.addEventListener("pointerenter", function (ev) {
+      if (ev.pointerType === "touch") return;
+      if (typeof matchMedia === "function" && !matchMedia("(hover: hover) and (pointer: fine)").matches) return;
       if (node.scrollWidth > node.clientWidth + 1) node.title = text;
       else if (node.removeAttribute) node.removeAttribute("title");
     });
-    node.addEventListener("mouseleave", function () {
+    node.addEventListener("pointerleave", function () {
       if (node.removeAttribute) node.removeAttribute("title");
     });
   }

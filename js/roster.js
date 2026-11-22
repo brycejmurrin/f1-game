@@ -839,6 +839,7 @@
     "js/ui/screen-regions.js",
     "js/ui/screen-placement.js",
     "js/ui/screen-arranger.js",
+    "js/ui/hud-layout-editor.js",
     "js/ui/dock-toolbar.js",
     "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",

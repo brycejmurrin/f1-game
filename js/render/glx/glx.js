@@ -780,6 +780,7 @@ const GLXBackend = (function () {
     LightBudget.setSlots(litSlots);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
       "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
+    _decalVPToken = -1; _lastDecalGlow = NaN;
     if (!litProg || !skyProg || !markProg || !blobBatchProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
@@ -903,6 +904,7 @@ const GLXBackend = (function () {
       markBatchVAO = gl.createVertexArray();
       gl.bindVertexArray(markBatchVAO);
       markBatchVBO = gl.createBuffer();
+      markBatchCap = 0;
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       const mst = 5 * 4;   // 5 floats per vertex
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, mst, 0);
@@ -1418,7 +1420,7 @@ const GLXBackend = (function () {
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
   // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
   // the alpha channel is NOT written (the car's SSR paint tag underneath survives).
-  let _decalVPToken = -1;
+  let _decalVPToken = -1, _lastDecalGlow = NaN;
   function drawDecal(mesh, modelMat, tex, opts) {
     if (ctxGone() || !decalProg || !mesh || !tex) return;
     useProg(decalProg);
@@ -1426,6 +1428,11 @@ const GLXBackend = (function () {
     // Frame-constant uniforms once per frame (same token pattern as
     // drawShadow/drawMark) — this runs once per car livery, ~22x/frame.
     if (_decalVPToken !== _frameToken) {
+      // Sampler unit assignments belong to the linked program. The bound atlas can change on every car.
+      if (_decalVPToken === -1) {
+        gl.uniform1i(decalU.uTex, 5); gl.uniform1i(decalU.uShadowMap, 0);
+        gl.uniform1i(decalU.uLampBake, 12); gl.uniform1i(decalU.uLampBakeIdx, 13);
+      }
       _decalVPToken = _frameToken;
       gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
       gl.uniform3fv(decalU.uSunDir, frameSunDir);
@@ -1433,7 +1440,6 @@ const GLXBackend = (function () {
       gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
       gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
       // Sun map stays on unit 0, the lamp bake (or its dummy) on 12 + 13 — begin() bound both.
-      gl.uniform1i(decalU.uShadowMap, 0); gl.uniform1i(decalU.uLampBake, 12); gl.uniform1i(decalU.uLampBakeIdx, 13);
       if (SHD && SHD.lightVP) gl.uniformMatrix4fv(decalU.uLightVP, false, SHD.lightVP);
       gl.uniform4fv(decalU.uShadowP, _decalSh);
       gl.uniform3fv(decalU.uShadowCtr, _decalShCtr || ZERO3);
@@ -1447,14 +1453,14 @@ const GLXBackend = (function () {
         gl.uniform2f(decalU.uBakeAtlas, lb.atlasW, lb.atlasH * 2);
       }
     }
-    gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
+    const glow = (opts && opts.glow) || 0;
+    if (glow !== _lastDecalGlow) { gl.uniform1f(decalU.uGlow, glow); _lastDecalGlow = glow; }
     // Bind the decal texture to a SPARE unit (5), NOT unit 0 — the lit pass keeps
     // the shadow map bound to TEXTURE0 for the whole frame, so clobbering unit 0
     // here would make every later lit draw (e.g. the player's wheels, drawn right
     // after these decals) sample this RGBA image as the shadow map → broken/black.
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.uniform1i(decalU.uTex, 5);
     gl.activeTexture(gl.TEXTURE0);   // leave unit 0 active + still bound to the shadow map
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);   // premultiplied atlas (createTexture)
@@ -2524,11 +2530,12 @@ const GLXBackend = (function () {
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
-    if (dirty) {
+    const nF = vertCount * 5;
+    if (dirty || nF > markBatchCap) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
-      const nF = vertCount * 5;
       if (nF > markBatchCap) {
-        markBatchCap = nF;
+        // The trail supplies its bounded ring storage; only the live prefix needs an upload.
+        markBatchCap = verts.length;
         gl.bufferData(gl.ARRAY_BUFFER, markBatchCap * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
