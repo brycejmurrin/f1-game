@@ -801,7 +801,10 @@
            stop, there is nothing to steer — and because it must be impossible
            to press by accident at 300 km/h, which is why it only exists for the
            two seconds the car is stationary. -->
-      <button id="hud-work" type="button" hidden>WORK ON CAR</button>
+      <div id="hud-pit-actions">
+        <button id="hud-work" type="button" hidden>WORK ON CAR</button>
+        <button id="hud-end-session" type="button" hidden>END SESSION</button>
+      </div>
       <div id="hud-ot" class="ot-off" role="img">OVERTAKE</div>
       <div id="hud-aero" class="ax-off" role="img">CORNER MODE</div>
       <!-- BRAKE BIAS, the set-up sheet's front share (c.brakeBias). -->
@@ -3405,7 +3408,7 @@
              carried over rather than lost to the restructure. -->
         <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
         <dd><span class="key">RACE SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">REAL</span>: tyres lose grip over a stint at the full rate, so pit stops matter and a stop is part of the race. <span class="key">LIGHT</span> wears at about half the real rate, so a set lasts nearly twice as long and stopping is a choice rather than a schedule.
-          <br>Turn it to <span class="key">OFF</span> and <b>a race has no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either. A time trial keeps its pit lane whatever the setting: stop in your box and tap END TIME TRIAL to finish the session (a lap through the pit lane does not count)</dd>
+          <br>Turn it to <span class="key">OFF</span> and <b>a race has no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either. A time trial keeps its pit lane whatever the setting: stop in your box and choose WORK ON CAR to edit parts and keep driving, or END SESSION to finish in the garage (a lap through the pit lane does not count)</dd>
         <dt>THERE IS NO PIT BUTTON</dt>
         <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
         <dt>FINDING THE LANE</dt>
@@ -3710,9 +3713,12 @@
 <div id="garrival" role="region" aria-label="Garage enter and leave tuner" data-esc-close="ga-close" hidden>
   <button id="ga-preview-stop" class="bigbtn" type="button" data-i18n="garage.preview.stop" hidden>STOP PREVIEW</button>
   <div id="garrival-inner" class="sheet">
-    <div id="ga-head"><h2>GARAGE ENTER &amp; LEAVE</h2></div>
+    <h2 id="ga-head">GARAGE ENTER &amp; LEAVE</h2>
     <div id="ga-rows" class="pane">
       <p class="adv-help">Four moments: RACE START (the drive-out every RACE! opens on), PIT IN (WORK ON CAR brings the car in), PIT OUT (DONE sends it back out) and RACE END (your next garage visit brings the car home, flavoured by how the race ended), each with its own switch under PLAY ANIMATIONS. Reduced motion skips the arrivals and removes camera sway. PREVIEW plays any of them here, even with animations off: pause, scrub or step it frame by frame (Space, arrow keys), LOOP it, or EDIT to hold the frame, JUMP TO a phase (the ticks under the scrub) and change a setting on it; Escape stops it.</p>
+      <div class="set-row"><label class="tune-label" for="ga-edit-moment">EDIT ANIMATION</label><div><select id="ga-edit-moment">
+        <option value="raceStart">Race start</option><option value="pitIn">Pit entry</option><option value="pitOut">Pit exit</option><option value="afterRace">Race end</option>
+      </select></div></div>
       <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ANIMATIONS</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
       <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
         <select id="ga-speed"><option value="0.5">SLOW · 0.5×</option><option value="1" selected>NORMAL · 1×</option><option value="2">FAST · 2×</option></select>
@@ -3732,9 +3738,11 @@
       </div></div>
     </div>
     <div class="sheet-foot balanced-row">
-      <button id="ga-preview-in" type="button">PREVIEW PIT STOP</button>
       <button id="ga-preview-out" type="button">PREVIEW RACE START</button>
-      <button id="ga-reset" type="button">RESET</button>
+      <button id="ga-preview-in" type="button">PREVIEW PIT ENTRY</button>
+      <button id="ga-preview-pit-exit" type="button">PREVIEW PIT EXIT</button>
+      <button id="ga-preview-home" type="button">PREVIEW RACE END</button>
+      <button id="ga-reset" type="button">RESET SELECTED ANIMATION</button>
       <button id="ga-close" class="bigbtn" type="button">DONE</button>
     </div>
   </div>

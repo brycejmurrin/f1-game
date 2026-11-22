@@ -8573,6 +8573,7 @@
         "tests/unit/garage-mesh.test.mjs"
       ],
       "samplePose": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs"
       ],
       "spinRadians": [

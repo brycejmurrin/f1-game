@@ -13,7 +13,7 @@ const els = {
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
   tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
-  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"), workBtn: $("hud-work"),
+  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"), workBtn: $("hud-work"), endSessionBtn: $("hud-end-session"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -9085,7 +9085,7 @@ function openGarage(from) {
   else if (soundOn) GameAudio.uiSelect();
   garageReturn = from;
   $("cs-done").textContent = from === "select" ? "RACE SETUP" :
-    from === "pit" ? "RETURN TO RACE" : from === "career" ? "RETURN TO CAREER" :
+    from === "pit" ? (isTimeTrial() ? "RETURN TO TIME TRIAL" : "RETURN TO RACE") : from === "career" ? "RETURN TO CAREER" :
     from === "vsfriend" ? "RETURN TO LOBBY" : "CLOSE GARAGE";
   // Fresh camera every visit: a garage that reopened on the last angle someone
   // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
@@ -9131,7 +9131,7 @@ function carSpecKey() {
   try { return JSON.stringify([getTeamParts(team.id), SetupTune.get(team.id)]); } catch (e) { return null; }
 }
 function openPitWork() {
-  if (!pits || !pits.canWork(player)) return;
+  if (state !== "race" || paused || netPlay.active() || !pits.canWork(player)) return;
   pitWorkSpec = carSpecKey();
   paused = true;
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();   // no pause card here, so RadioVoice's #pausemenu halt never fires (radio-voice.js halt)
@@ -9180,7 +9180,11 @@ function garageBack() {
   if (soundOn) GameAudio.uiTick();
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
-  if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
+  if (garageReturn === "tt-results") {
+    els.results.hidden = false;
+    setTimeout(() => { if (!setupPreviewOn) garagePre.release(); }, 0);
+  }
+  else if (garageReturn === "vsfriend") { $("vsfriend").hidden = false; netLobby.roomChanged("car"); }
   else if (garageReturn === "career") careerUi.openHub();
   else if (garageReturn === "select") { buildSelect(); $("select").hidden = false; }
   else {
@@ -9192,6 +9196,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
+  if (garageReturn === "tt-results") { garageBack(); return; }
   if (garageReturn === "pit") { if (!setupCam.skipPitOut()) setupCam.startPitOut(closePitWork); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
@@ -9316,10 +9321,23 @@ function postFinishWait() { return soloPlayerDone() && !RaceControl.finishPendin
 function skipToResults() { if (!postFinishWait()) return false; resultT = 0; G.endRace(); return true; }   // G.endRace: RealRace's wrap
 $("pm-skip-results").onclick = () => skipToResults();
 addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.repeat && !paused && postFinishWait() && !/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test((e.target && e.target.tagName) || "")) skipToResults(); });
-// END TIME TRIAL (#5789): the box WORK ON CAR slot; the drive-in, then the TT sheet.
-function endTimeTrialFromBox() { if (!isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return; paused = true; GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
-  openGarage("pit"); setupCam.startPitIn(() => { leaveGarage(); G.endRace(); setTimeout(() => { if ($("carsetup").hidden && !setupPreviewOn) garagePre.release(); }, 0); }); }
-els.workBtn.onclick = () => (isTimeTrial() ? endTimeTrialFromBox() : openPitWork());
+// Finish the run after the pit drive-in and keep the garage open until the driver asks for the lap sheet.
+function endTimeTrialFromBox() {
+  if (state !== "race" || !isTimeTrial() || !pits.canWork(player) || paused || netPlay.active()) return;
+  paused = true;
+  GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain(); radioVoice.halt();
+  openGarage("pit");
+  setupCam.startPitIn(() => {
+    setupCam.cancelArrival();
+    G.endRace();
+    els.results.hidden = true;
+    garageReturn = "tt-results";
+    $("cs-done").textContent = "VIEW RESULTS";
+    buildSetup();
+  });
+}
+els.workBtn.onclick = openPitWork;
+els.endSessionBtn.onclick = endTimeTrialFromBox;
 
 // ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class
