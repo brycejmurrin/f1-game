@@ -156,13 +156,12 @@ const PedalTravel = (function () {
   function bindControl(el, id) {
     if (!el || !allButtons.has(id)) return;
     let mode, pointer = null, began = 0, previous = -Infinity, touchClick = false;
-    const controlKind = BUTTONS.includes(id) ? "analog" : "action";
     watchButtonProfile(id, profile => {
       for (const [field, attribute] of [["idleColor", "idle"], ["pressedColor", "pressed"]]) {
         const color = profile[field], name = "--touch-custom-" + attribute;
         if (color) {
           el.style?.setProperty?.(name, "var(" + colors[color] + ")");
-          el.setAttribute("data-custom-" + attribute, controlKind);
+          el.setAttribute("data-custom-" + attribute, id);
         } else {
           el.style?.removeProperty?.(name);
           el.removeAttribute?.("data-custom-" + attribute);

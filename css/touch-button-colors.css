@@ -9,7 +9,11 @@
 [data-custom-pressed]:is(:active, [data-slid="on"], .on):not(:focus-visible) {
   outline: 3px solid var(--touch-custom-pressed);
 }
-[data-custom-pressed="action"]:is(:active, .on) {
+/* Analog controls already paint a variable-strength fill. */
+[data-custom-pressed]:is(:active, .on):not(
+  [data-custom-pressed="left"], [data-custom-pressed="right"],
+  [data-custom-pressed="gas"], [data-custom-pressed="brake"]
+) {
   background-image: linear-gradient(color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent), color-mix(in srgb, var(--touch-custom-pressed) 35%, transparent)) !important;
 }
 }
