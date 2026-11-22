@@ -19,6 +19,7 @@ const Particles = (function () {
   let _cr, _cg, _cb;          // tint (HDR allowed for additive)
   let _a0;                    // base alpha
   let _drg, _grv;             // drag rate (1/s) + downward gravity (m/s²)
+  let _stoneFloor = null;      // allocated on first gravel event, NaN for airborne-only effects
   let _add;                   // Uint8: 1 = additive (spark) group
   let _n = 0;                 // live count
   let _mobile = false;        // gfx.mobileTier at init — the spray plume shrinks with the pool
@@ -78,6 +79,7 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
+    _stoneFloor = null;
     // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
     // A second init (tests, a future gfx-recreate path) must DROP any armed
     // shower: rainFill writes wetCap quads into _vertA, and reallocating only
@@ -155,7 +157,7 @@ const Particles = (function () {
     return best;
   }
 
-  function spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, alpha, drag, grav, additive) {
+  function spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, alpha, drag, grav, additive, floor = NaN) {
     if (!MAX) return;                   // never allocate
     const i = _n < MAX ? _n++ : oldest();
     _px[i] = x; _py[i] = y; _pz[i] = z;
@@ -166,6 +168,7 @@ const Particles = (function () {
     _a0[i] = alpha;
     _drg[i] = drag; _grv[i] = grav;
     _add[i] = additive ? 1 : 0;
+    if (_stoneFloor) _stoneFloor[i] = floor;
     _dirty = true;
   }
 
@@ -244,6 +247,19 @@ const Particles = (function () {
           0.38,
           1.6, 0.6, 0);
       }
+    }
+  }
+
+  // Short-lived stones bounce on the local contact plane. Reserve most of the
+  // shared pool for primary effects and stop emitting as soon as the governor sheds.
+  function gravel(x, y, z, vx, vz, tint, count) {
+    if (!MAX || _mobile || shedDiv() > 1 || _n >= MAX * 0.4) return;
+    for (let n = nOf(count * Math.min(mul(), 2)); n > 0 && _n < MAX * 0.4; n--) {
+      if (!_stoneFloor) { _stoneFloor = new Float32Array(MAX); _stoneFloor.fill(NaN); }
+      const tone = 0.55 + Math.random() * 0.55;
+      spawn(x, y + 0.08, z, vx * 0.12 + rnd(2), 1.1 + Math.random() * 1.5, vz * 0.12 + rnd(2),
+        0.95 + Math.random() * 0.4, 0.045 + Math.random() * 0.035, 0,
+        tint[0] * tone, tint[1] * tone, tint[2] * tone, 1, 0.8, 9.81, 0, y + 0.03);
     }
   }
 
@@ -358,6 +374,7 @@ const Particles = (function () {
           _cr[i] = _cr[l]; _cg[i] = _cg[l]; _cb[i] = _cb[l];
           _a0[i] = _a0[l]; _drg[i] = _drg[l]; _grv[i] = _grv[l];
           _add[i] = _add[l];
+          if (_stoneFloor) _stoneFloor[i] = _stoneFloor[l];
         }
         continue;
       }
@@ -365,6 +382,11 @@ const Particles = (function () {
       _vx[i] *= d; _vz[i] *= d;
       _vy[i] = (_vy[i] - _grv[i] * dt) * d;
       _px[i] += _vx[i] * dt; _py[i] += _vy[i] * dt; _pz[i] += _vz[i] * dt;
+      if (_stoneFloor && _py[i] < _stoneFloor[i]) {
+        _py[i] = _stoneFloor[i];
+        _vy[i] = -_vy[i] * 0.42;
+        _vx[i] *= 0.65; _vz[i] *= 0.65;
+      }
       i++;
     }
   }
@@ -756,7 +778,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, capacity, update, draw, armPrime, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
+  return { init, clear, count, capacity, update, draw, armPrime, tyreSmoke, sparks, scrape, kickup, gravel, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
            flare, flareCount, rainCurtain, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats };
 })();
 Object.freeze(Particles);

@@ -1432,6 +1432,7 @@ const api = {
       sunColor: G.frame.sunColor && G.frame.sunColor.slice(),
       exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       numLights: L ? L.length / 15 : 0,
+      brakeSpillLights: G.frame.brakeSpillCount || 0,
       meanLampRGB,
       // The per-chunk twin of meanLampRGB: the mean colour of the lamp set the
       // CHUNKED meshes are lit from. It tracks LAMP LEVEL, TEMPERATURE,

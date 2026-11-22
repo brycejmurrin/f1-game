@@ -3420,6 +3420,7 @@ const WGX = (function () {
       const _hasLB = typeof LampBake !== "undefined";
       if (nL > 0) {
         const ld = lightData;
+        const spillStart = L.length / 15 - (f.brakeSpillCount || 0);
         for (let i = 0; i < nL; i++) {
           const o = i * 15, b = i * 16, q = i * 4;
           if (snap[q] !== L[o] || snap[q+1] !== L[o+1] || snap[q+2] !== L[o+2] || snap[q+3] !== L[o+6]) {
@@ -3429,7 +3430,7 @@ const WGX = (function () {
           ld[b+4]  = L[o+3];  ld[b+5]  = L[o+4];  ld[b+6]  = L[o+5];  ld[b+7]  = L[o+12]; // col.rgb, bleed
           ld[b+8]  = L[o+7];  ld[b+9]  = L[o+8];  ld[b+10] = L[o+9];  ld[b+11] = L[o+13]; // dir.xyz, volW
           ld[b+12] = L[o+10]; ld[b+13] = L[o+11]; ld[b+14] = L[o+14];                    // cosIn, cosOut, glareW
-          ld[b+15] = _hasLB ? LampBake.liveOnlyAt(L, o) : 0;                               // LIVE-ONLY (not baked)
+          ld[b+15] = i >= spillStart ? 1 : _hasLB ? LampBake.liveOnlyAt(L, o) : 0;                               // LIVE-ONLY (not baked)
         }
         device.queue.writeBuffer(lightSBO, 0, lightData, 0, nL * 16);
       }

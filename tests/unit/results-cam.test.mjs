@@ -349,7 +349,7 @@ function highlightsRig({ sound = true } = {}) {
   const tickCtx = vm.createContext({
     ...renderRateStubs(),
     Math, performance: { now: () => 0 }, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: false, state: "results",
-    gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
+    FieldLod: { updateModelBudget: noop }, gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
     netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
     director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, RaceCeremony: { get: () => null }, raceT: 3,
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
@@ -649,7 +649,7 @@ function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
   const ctx = vm.createContext({
     Math, performance: { now: () => 0 }, localStorage: { getItem: () => mode },
     PerfSpans: { begin: noop, end: noop }, lastFrame: 0, _poseAt: null, paused: true, state: "race",
-    gfx: { warming: () => false }, Input: { poll: () => calls.poll++, clearEdges: noop },
+    FieldLod: { updateModelBudget: noop }, gfx: { warming: () => false }, Input: { poll: () => calls.poll++, clearEdges: noop },
     BrakeCue: { tick: noop }, onboard: { tick: noop }, netPlay: { tick: noop, active: () => false },
     UiExperience: { resumeHolding: () => false }, director: { tick: noop }, mirrorPass: { preparing: () => false },
     replayBuf: { isScrubbing: () => preview === "scrub", tickScrub: noop },

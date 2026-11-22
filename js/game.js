@@ -6701,7 +6701,7 @@ function setFrameLights(eye, scale, fwd, srcSet) {
   LightTune.setFrameLights(frame, track, cars, eye, scale, fwd, gfx.mobileTier, srcSet);
 }
 function appendCarTailLights() {
-  LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
+  LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier, currentCarGroundMat, carDraw.WHEELS);
 }
 
 // ---------- cameras ----------
@@ -7055,7 +7055,10 @@ function renderLightingPrep(dt, hasLivePlayerShadow) {
   // Cleared every frame, set only by the flood branch: `frame` outlives a
   // night->day time-of-day flip (rebuilt only in loadTrack), and a stale
   // allLights kept chunked geometry binding per-chunk night lamps in daylight.
-  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0;
+  frame.allLights = null; frame.lampBake = null; frame.perChunkLights = 0; frame.roadChunkLamps = 0; frame.tailStart = 0; frame.tailCount = 0; frame.brakeSpillCount = 0;
+  frame.brakeSpillEnabled = _floodActive && !_studioRig && player && !gfx.isMobile && !gfx.mobileTier &&
+    GfxQuality.feature("brakeLightSpill") && PerfGov.autoTier() === 0
+    ? clamp((0.8 - Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2])) / 0.65, 0, 1) : 0;
   if (_floodActive || _floodDayLvl > 0) {
     // Rebuild if empty (not just undefined): a light set built before the track
     // centreline finished is empty; retry until it yields lights. Tracks always
@@ -8047,6 +8050,18 @@ function render(dt) {
         // Gravel/grass kickup: any off-track car at speed throws surface bits.
         if (c.offroad && c.speed > 10) {
           const wd = carDraw.WHEELS[2 + ((Math.random() * 2) | 0)];
+          if (GfxQuality.feature("gravelDebris") && !motionReduced()) {
+            const k = Math.floor(wrapS(cS) / track.total * track.n);
+            const wheelLat = cX + (_groundMat[0] * wd.x + _groundMat[8] * wd.z) * smp2.r[0]
+              + (_groundMat[2] * wd.x + _groundMat[10] * wd.z) * smp2.r[2];
+            if (track.surface.gravelAt(k, wheelLat)) {
+              Particles.gravel(
+                _groundMat[12] + _groundMat[0] * wd.x + _groundMat[8] * wd.z,
+                _groundMat[13] + _groundMat[1] * wd.x + _groundMat[9] * wd.z,
+                _groundMat[14] + _groundMat[2] * wd.x + _groundMat[10] * wd.z,
+                -tmpF[0] * c.speed, -tmpF[2] * c.speed, track.def.palette.runoff, dt * Math.min(28, vStd(c.speed) * 0.5));
+            }
+          }
           const dirt = Math.random() < 0.5;   // mix dusty-earth and grass tints
           Particles.kickup(
             tmpMat[12] + tmpMat[0] * wd.x + tmpMat[8] * wd.z,
@@ -8514,7 +8529,11 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race. RenderRate.drew(): an interval after a skipped rAF carries no draw, so it is not evidence.
-  if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs, RenderRate.drew());
+  if (!paused && !raceRestarting && !mirrorPass.preparing() && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) {
+    const drew = RenderRate.drew();
+    PerfGov.tick(_dtMs, drew);
+    if (drew) FieldLod.updateModelBudget(_dtMs, gfx.height, PerfGov);
+  }
   if (typeof GfxQuality !== "undefined") GfxQuality.setCinema(setupPreviewOn || photoMode || replayBuf.isScrubbing());   // CINEMA: garage / photo / replay (EXTREME only)
   PerfSpans.begin("input"); Input.poll(); BrakeCue.tick(); if (typeof DrivingCues !== "undefined") DrivingCues.tick(); PerfSpans.end("input");
   onboard.tick(dt);   // coach marks; the TV director ticks after the physics step (below)
