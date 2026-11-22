@@ -7948,6 +7948,10 @@
         "tests/unit/race-flow-vm.test.mjs",
         "tests/unit/vstd-invariant.test.mjs"
       ],
+      "outsideFieldRange": [
+        "tests/unit/director.test.mjs",
+        "tests/unit/field-lod.test.mjs"
+      ],
       "paceVmax": [
         "tests/unit/ai-racecraft-vm.test.mjs"
       ],
@@ -8988,9 +8992,6 @@
       ]
     },
     "js/garage/scene.js": {
-      "buildPitLane": [
-        "tests/unit/garage-mesh.test.mjs"
-      ],
       "buildStatic": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs"
@@ -17623,6 +17624,7 @@
       ],
       "resolve": [
         "tests/unit/tlx-aa.test.mjs",
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tsl-gi.test.mjs"
       ],
       "ssCeil": [
@@ -17803,6 +17805,9 @@
       ],
       "ssaoKernel": [
         "tests/unit/tsl-gi.test.mjs"
+      ],
+      "*": [
+        "tests/unit/tlx-hunt4b.test.mjs"
       ]
     },
     "js/render/three/tsl-lit.js": {
@@ -17964,6 +17969,7 @@
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "sync": [
+        "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-viewport.test.mjs"
       ],
       "view": [

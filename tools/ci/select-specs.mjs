@@ -216,15 +216,17 @@ function constEnv(ast, dir, depth = 0) {
  *  argument that is NOT constant (a variable, a call) is unknown, and unknown
  *  is billed as `test.slow()` — over the cap — never as free. */
 export function maxDeclaredTimeout(file, scope = null) {
+  const abs = path.join(ROOT, file);
   let ast, env;
   try {
-    const abs = path.join(ROOT, file);
     ast = espree.parse(fs.readFileSync(abs, "utf8"), { ecmaVersion: "latest", sourceType: "module" });
-    env = constEnv(ast, path.dirname(abs));
   } catch { return 0; }
   const UNKNOWN = 3 * SELECTED_GATE.perTestTimeoutSec * 1000;
   let max = 0;
   const declared = (arg) => {
+    if (arg.type === "Literal") return typeof arg.value === "number" ? arg.value : UNKNOWN;
+    // Most specs use literal timeouts. Resolve imported constants only for expressions.
+    env ??= constEnv(ast, path.dirname(abs));
     const v = foldNum(arg, env);
     return v === null ? UNKNOWN : v;
   };
@@ -1712,8 +1714,9 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // The specs pick-tests names that its group RULES cannot (a spec loading a
   // module standalone, the shared UI layer): ONE function, pick-tests'
   // extraSpecs(), so the local answer and CI's plan cannot disagree (W31 row 7).
-  const extras = extraSpecs(routing).map((r) => r.spec);
-  const standalone = extraSpecs(routing).filter((r) => r.kind === "loads-module-standalone").map((r) => r.spec);
+  const extraRows = extraSpecs(routing);
+  const extras = extraRows.map((r) => r.spec);
+  const standalone = extraRows.filter((r) => r.kind === "loads-module-standalone").map((r) => r.spec);
   // Paths no rule claims. All of them: fail closed ("unmatched"). Some of them:
   // "partial" — the floor runs and the paths are named (W31 row 2).
   const unmatched = changed.filter((f) => !pickAll([f]).size && !TRACKED.some((re) => re.test(f))

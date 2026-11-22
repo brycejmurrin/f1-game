@@ -74,12 +74,15 @@ Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
 Draft pushes run the fast tier and defer the selected browser legs. The structural
 guards A–D run `tooling-fast` and feed the check `ready-gate` reads. They run
 the whole floor when the diff touches `tools/`, `tests/`, `.github/` or
-`package.json`, and use `--changed` otherwise (see `guardsScope` in
-`tools/ci/tooling-fast.mjs`). Marking a PR ready starts the full tier on that
+`package.json`, and use `--changed` otherwise. Ratchet delta JSON files, the generated
+impact map, and listed unit tests that share a basename with and directly
+reference a changed game source also qualify for changed-file selection. See
+`guardsScope` in `tools/ci/tooling-fast.mjs`. Marking a PR ready starts the full tier on that
 head. The browser exemption applies only when every changed path qualifies as
 documentation or an audited Node-only path. A mixed diff containing a runtime
 change or an unknown path takes the normal browser route. Draft deferral
 provides no execution evidence for the ready verdict.
+
 `land.yml`'s `gate` check judges the merge result. A ready plan that DROPS a
 routed spec (the over-budget pool is full) is red unless every dropped spec ran
 green in a `remote-group.mjs <group>` run on the same head and base, first

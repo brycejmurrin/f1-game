@@ -46,12 +46,14 @@ function carPoseRig() {
   const render = symbolSource("function render(dt)");
   const start = render.indexOf("for (const c of cars)", render.indexOf("const _fxCullR2"));
   const end = render.indexOf("let bankC;", start);
+  const heading = render.slice(render.indexOf("let _camFwdX"), render.indexOf("const _carCullPlanes"));
   assert.ok(start > 0 && end > start, "render car-pose boundary exists");
   const projected = [], prepared = [];
   const ctx = vm.createContext({
     Math, cars: [], player: { s: 100 }, track: { total: 5000 },
     state: "race", dbgCam: null, renderAlpha: 1,
-    camEye: [0, 1, 0], _camFwdX: 0, _camFwdZ: 1,
+    camEye: [0, 1, 0], camTgt: [0, 1, 10],
+    _mProj: { 0: 1, 5: 1.5, 8: 0, 9: 0 },
     _plOk: false, _plCS: 100, _plCX: 0,
     _rp: {}, _pa: {},
     lerpS: (prev, cur, alpha) => prev === undefined ? cur : prev + (cur - prev) * alpha,
@@ -59,8 +61,8 @@ function carPoseRig() {
     loadingScreen: { active: () => false }, photoStudio: null,
     prepared,
   });
-  vm.runInContext(symbolSource("function renderPosOf(c)") + "\n" + symbolSource("function playerAnchor(c)"), ctx, { filename: absSrc("js/game.js") });
-  const run = vm.runInContext(`(function () { ${render.slice(start, end)}
+  vm.runInContext([symbolSource("function renderPosOf(c)"), symbolSource("function outsideFieldRange(c, dx, dz)"), symbolSource("function playerAnchor(c)")].join("\n"), ctx, { filename: absSrc("js/game.js") });
+  const run = vm.runInContext(`(function () { ${heading} ${render.slice(start, end)}
     prepared.push({ car: c, x: rp.x, z: rp.z, world: rp.world, cS, cX }); } })`, ctx, { filename: absSrc("js/game.js") });
   return { ctx, projected, prepared, run };
 }
@@ -90,18 +92,19 @@ test("behind-eye world rivals skip road projection, including interpolated and r
 
 test("the early car gate follows the current camera and preserves player, menu and distance guards", () => {
   const r = carPoseRig();
-  r.ctx.camEye = [10, 2, 20]; r.ctx._camFwdX = -1; r.ctx._camFwdZ = 0;
+  r.ctx.camEye = [10, 2, 20]; r.ctx.camTgt = [0, 2, 20];
   r.ctx.cars = [
     { id: "behind-x", s: 100, px: 17, pz: 20 },
     { id: "boundary-x", s: 100, px: 16, pz: 20 },
     { id: "ahead-x", s: 100, px: 0, pz: 20 },
-    { id: "far-arc", s: 800, px: 0, pz: 20 },
+    { id: "far-arc", s: 800, px: -600, pz: 20 },
+    { id: "upper-deck", s: 2519, px: -51, pz: 24 },
     { id: "player", isPlayer: true, s: 100, px: 50, pz: 20 },
   ];
   r.ctx._plOk = true;
   r.run();
-  assert.deepEqual(r.prepared.map(p => p.car.id), ["boundary-x", "ahead-x", "player"]);
-  assert.equal(r.projected.length, 2, "the player still reuses the frame anchor");
+  assert.deepEqual(r.prepared.map(p => p.car.id), ["boundary-x", "ahead-x", "upper-deck", "player"]);
+  assert.equal(r.projected.length, 3, "the player still reuses the frame anchor");
   r.ctx.dbgCam = {}; r.projected.length = r.prepared.length = 0;
   r.run();
   assert.ok(r.prepared.some(p => p.car.id === "far-arc"), "camera overrides still bypass the player-arc distance gate");
@@ -109,6 +112,19 @@ test("the early car gate follows the current camera and preserves player, menu a
   r.run();
   assert.equal(r.projected.length, 0, "an inactive menu never projects the old grid");
   assert.equal(r.prepared.length, 0);
+});
+
+test("wide overhead view keeps a visible rival behind the eye's horizontal heading", () => {
+  const r = carPoseRig();
+  // Stationary overhead rig, on a flat straight, with the supported +35° FOV.
+  r.ctx.camEye = [0, 34, -9]; r.ctx.camTgt = [0, 0, 8];
+  const halfFov = 81 * Math.PI / 360;
+  r.ctx._mProj = { 0: 1 / Math.tan(halfFov), 5: 1 / Math.tan(halfFov), 8: 0, 9: 0 };
+  r.ctx.cars = [{ id: "rival", s: 84, px: 0, pz: -16 }];
+  const aimPitch = Math.atan2(34, 17), rivalPitch = Math.atan2(34, -7);
+  assert.ok(rivalPitch - aimPitch < halfFov, "the rival is inside the actual vertical FOV");
+  r.run();
+  assert.equal(r.prepared.length, 1);
 });
 
 test("the table: a rival's parts by camera distance; the player is never reduced", () => {

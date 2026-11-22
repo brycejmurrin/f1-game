@@ -1104,6 +1104,7 @@ const { seatDriverAt, boardInfo, boardKey, paintDress, paintBoards, buildDress, 
 const { LIVE, paintLive, paintTrace } = GarageLive;
 let liveTex = null, liveCanvas = null, liveFail = 0, liveRetryAt = 0;
 const liveMesh = {};
+let liveMeshesReady = false;
 const LIVE_OPTS = { glow: 0.62 }, FLOOR_DECAL_OPTS = { glow: 0 };
 
 // The custom team's uploaded emblem arrives asynchronously. Bump a generation
@@ -1128,6 +1129,7 @@ const DRESS_OPTS = { glow: 0.62 };
 // preview mesh key). A slot that any future dressing reads MUST be added here too.
 let fallbackBaysMesh = null, fallbackFixtures = null, exteriorFallbackMesh = null, floorMesh = null, trussMesh = null, trussLook = "", cacheKey = "";
 const dressMesh = {};
+let dressMeshesReady = false;
 let dressTex = null, dressFail = 0, dressRetryAt = 0;
 // TWO keys, not one. Everything above is GEOMETRY and depends on the team and
 // its body colours; the dress atlas additionally carries the crest (logo,
@@ -1260,6 +1262,14 @@ function reuploadTex(old, canvas) {
   if (old && _gfx.freeTexture) _gfx.freeTexture(old);
   return _gfx.createTexture(canvas);
 }
+function uploadAtlasMeshes(geometry, handles) {
+  for (const side of Object.keys(geometry)) {
+    if (!geometry[side].idx.length || handles[side]) continue;
+    const handle = _gfx.createTexMesh(geometry[side]);
+    if (!handle || handle._phase === 4) throw new Error("atlas mesh upload failed for " + side);
+    handles[side] = handle;
+  }
+}
 function uploadLive(team, liv, ctx, now) {
   if (!_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined") return;
   try {
@@ -1277,9 +1287,9 @@ function uploadLive(team, liv, ctx, now) {
     liveTex = null;
     liveTex = reuploadTex(prev, liveCanvas);
     if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
-    if (!liveMesh.mid) {
-      const lg = GarageLive.build(FIXTURES);
-      for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
+    if (!liveMeshesReady) {
+      uploadAtlasMeshes(GarageLive.build(FIXTURES), liveMesh);
+      liveMeshesReady = true;
     }
     liveFail = 0; liveRetryAt = 0;
   } catch (e) {
@@ -1359,19 +1369,16 @@ function rebuild(team, liv, info, ctx) {
   if (dressFull === dressFullKey && dressTex) { cacheKey = key; return; }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
-  const prevDress = dressTex;
-  dressTex = null;
-  if (!(dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") &&
-      prevDress && _gfx.freeTexture) _gfx.freeTexture(prevDress);
-  if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
+  if (dressFail < 3 && uploads) {
     try {
       if (!dressCanvas) dressCanvas = paintDress(team, liv).canvas;
       paintBoards(dressCanvas, team, liv, info);
+      const prevDress = dressTex;
+      dressTex = null;
       dressTex = reuploadTex(prevDress, dressCanvas);
-      if (!dressMesh.back) {
-        const dg = buildDress(SIDES);
-        for (let i = 0; i < SIDES.length; i++)
-          if (dg[SIDES[i]].idx.length) dressMesh[SIDES[i]] = _gfx.createTexMesh(dg[SIDES[i]]);
+      if (!dressMeshesReady) {
+        uploadAtlasMeshes(buildDress(SIDES), dressMesh);
+        dressMeshesReady = true;
       }
       if (!dressTex || dressTex._phase === 4) throw new Error("dress texture upload returned no handle");
       dressFail = 0; dressRetryAt = 0;
@@ -1381,6 +1388,9 @@ function rebuild(team, liv, info, ctx) {
       dressFail++; dressRetryAt = now + 1000; dressTex = null; dressCanvas = null;
       Log.warn("game", `GarageScene dress failed: ${e && e.message}`);
     }
+  } else if (dressTex) {
+    if (_gfx.freeTexture) _gfx.freeTexture(dressTex);
+    dressTex = null;
   }
   cacheKey = key;
 }
@@ -1738,6 +1748,7 @@ function release() {
   fallbackBaysMesh = fm(fallbackBaysMesh);
   fallbackFixtures = fm(fallbackFixtures);
   shellMesh = fm(shellMesh); floorMesh = fm(floorMesh); exteriorFallbackMesh = fm(exteriorFallbackMesh); trussMesh = fm(trussMesh);
+  liveMeshesReady = dressMeshesReady = false;
   for (const tbl of [ledMesh, propMesh, dressMesh, liveMesh]) for (const k of Object.keys(tbl)) { fm(tbl[k]); delete tbl[k]; }
   fanMesh = fm(fanMesh); lampMesh = fm(lampMesh); lampFace = fm(lampFace); passMesh = fm(passMesh); mirrorFadeMesh = fm(mirrorFadeMesh);
   dressTex = ft(dressTex); liveTex = ft(liveTex);
