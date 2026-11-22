@@ -37,7 +37,7 @@ import {
 } from "../lib/harness.mjs";
 import sharp from "sharp";
 import { pixelEvidence, rendererEvidence } from "./capture-contract.mjs";
-import { loadAllModels, reportCaptureFallbacks } from "./capture-fallbacks.mjs";
+import { prefetchCaptureModels, reportCaptureFallbacks } from "./capture-fallbacks.mjs";
 import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPresentedCanvas, requireHardwareWebGpu } from "./probe-page.mjs";
 import {
   SHOT_USAGE,
@@ -283,11 +283,15 @@ try {
         diagnostics.webgpuAdapter = await requireHardwareWebGpu(page);
       }
       await applyCaptureProfile(page, first.capture);
-      modelInfo = await loadAllModels(page);
+      // #6037 §2: default = models a player's page loads for this track; --all-models opts into the whole pack.
+      modelInfo = await prefetchCaptureModels(page, { trackId: group.trackId, allModels: plan.allModels });
     }
     if (currentTrack !== group.trackId) {
       await raceTrack(page, group.trackId, plan.waitMs);
       currentTrack = group.trackId;
+      if (!plan.allModels) {
+        modelInfo = await prefetchCaptureModels(page, { trackId: group.trackId, allModels: false });
+      }
     }
     for (const job of group.jobs) {
       try { await captureJob(page, job, plan.waitMs, modelInfo, diagnostics); }

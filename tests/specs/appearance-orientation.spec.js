@@ -102,7 +102,12 @@ for (const touch of [false, true]) {
       const activate = locator => touch ? locator.tap() : locator.click();
       const button = name => page.locator("#screen-arranger").getByRole("button", { name, exact: true });
       const career = page.locator("#cr-left");
-      const entry = page.locator("#career .screen-arrange-entry");
+      const arrange = async id => {
+        await activate(page.locator("#mb-settings"));
+        await activate(page.locator("#pm-open-appearance"));
+        await page.getByLabel("Screen to arrange").selectOption(id);
+        await activate(page.locator(".arrange-route"));
+      };
       const layout = () => career.evaluate(el => {
         const rect = el.getBoundingClientRect(), css = getComputedStyle(el);
         return { x: rect.x, width: rect.width, scale: css.scale, font: css.fontSize };
@@ -122,18 +127,15 @@ for (const touch of [false, true]) {
       };
       await page.goto("/");
       await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
-      await activate(page.locator("#title-arrange-entry"));
+      await expect(page.locator(".screen-arrange-entry")).toHaveCount(0);
+      await arrange("home");
       await activate(page.locator("#tl-adjust"));
       await activate(page.locator("#tl-size-up"));
       await activate(page.locator("#tl-done"));
       const title = (await saved()).title;
       expect(title.wide.btns.size).toBeGreaterThan(100);
 
-      await activate(page.locator("#mb-settings"));
-      await activate(page.locator("#pm-open-appearance"));
-      await activate(page.getByRole("group", { name: "Preview screen" }).getByRole("button", { name: "CAREER", exact: true }));
-      await activate(page.getByRole("button", { name: "Open Career", exact: true }));
-      await activate(entry);
+      await arrange("career");
       const region = page.locator("#screen-arranger").getByLabel("Region");
       expect(await page.locator("#screen-arranger").evaluate(el => {
         // menu-a11y-audit's checks, on the live dialog: a <body> child, named by its title, Escape names a real Cancel.
@@ -196,15 +198,14 @@ for (const touch of [false, true]) {
 
       await page.reload();
       await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
-      await activate(page.locator("#mb-career"));
-      await activate(entry);
+      await arrange("career");
       await region.selectOption("navigation");
       expect(Math.abs((await layout()).width - changed.width)).toBeLessThan(2);
       expect(await saved()).toEqual(applied);
       await activate(button("Controls"));
       await activate(button("Reset screen"));
       await activate(button("Apply"));
-      await expect(entry).toBeFocused();
+      await expect(page.locator("#career :focus")).toBeVisible();
       expect((await saved()).career).toBeUndefined();
       expect((await saved()).title).toEqual(title);
       await expect(page.locator("html")).toHaveAttribute("data-ui-theme", "endurance");

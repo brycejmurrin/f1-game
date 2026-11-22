@@ -8,7 +8,8 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 import {
-  FALLBACKS, formatCaptureFallbacks, loadAllModels, readCaptureFallbacks, reportCaptureFallbacks, summarizeCaptureFallbacks,
+  FALLBACKS, formatCaptureFallbacks, loadAllModels, loadPlayerModels, prefetchCaptureModels,
+  readCaptureFallbacks, reportCaptureFallbacks, summarizeCaptureFallbacks,
 } from "../../tools/shot/capture-fallbacks.mjs";
 
 const LACKS = FALLBACKS.map(([, why]) => why);
@@ -82,6 +83,31 @@ test("reportCaptureFallbacks and loadAllModels print their line through the give
   assert.equal(lines[0], formatCaptureFallbacks(sum));
   assert.equal(lines[1], "models: this tool prefetched the WHOLE pack (3 resident); a player's page loads only the models its circuit's scenery names, "
     + "so a frame can show a model a player never gets (the capture-state line names the extras)");
+});
+
+test("loadPlayerModels / prefetchCaptureModels default to the circuit set (#6037 §2, offline)", async () => {
+  const lines = [];
+  const ctx = softwarePage({ resident: ["pine"] });
+  ctx.TrackDef = { scenerySource: (def) => String(def.scenery) + ' "pine"' };
+  ctx.Assets = Object.assign(ctx.Assets, {
+    loadModels: async () => 9,
+    loadModelsFor: async (src) => (src.includes("pine") ? 1 : 0),
+    modelIds: (src) => (src.includes("pine") ? ["pine"] : []),
+  });
+  const page = { evaluate: async (fn, arg) => vm.runInNewContext(
+    `(${fn.toString()})(${JSON.stringify(arg ?? null)})`, ctx, { filename: absSrc("tools/shot/capture-fallbacks.mjs") },
+  ) };
+  const player = await loadPlayerModels(page, "spa", { log: (l) => lines.push(l) });
+  assert.equal(player.scope, "player");
+  assert.equal(player.n, 1);
+  assert.deepEqual(player.ids, ["pine"]);
+  assert.deepEqual(lines, ["models: this tool loaded the PLAYER set for spa (1 resident, ids: pine); pass --all-models to prefetch the whole pack"]);
+  const viaDefault = await prefetchCaptureModels(page, { trackId: "spa", log: () => {} });
+  assert.equal(viaDefault.scope, "player");
+  assert.equal(viaDefault.n, 1);
+  const viaAll = await prefetchCaptureModels(page, { trackId: "spa", allModels: true, quiet: true });
+  assert.equal(viaAll.n, 9);
+  assert.equal(viaAll.pack, true);
 });
 
 test("every capture tool that prefetches the whole pack goes through loadAllModels (no raw Assets.loadModels() call)", () => {
