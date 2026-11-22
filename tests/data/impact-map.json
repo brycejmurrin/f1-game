@@ -16248,6 +16248,7 @@
         "tests/unit/tlx-inst-cells.test.mjs"
       ],
       "extractPlanes": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
       "radialCulled": [
@@ -16630,6 +16631,7 @@
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
       "cull": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs"
       ],
       "disposeShared": [
@@ -19757,6 +19759,7 @@
         "tests/unit/hud-radio-slot.test.mjs"
       ],
       "announceLaneTick": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs"
       ],
       "create": [
@@ -19779,6 +19782,7 @@
         "tests/unit/hud-status-stack.test.mjs"
       ],
       "radioTopSlot": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
@@ -20017,6 +20021,7 @@
         "tests/unit/race-radio.test.mjs"
       ],
       "hStyle": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs"
@@ -20025,9 +20030,13 @@
         "tests/unit/hud-feel.test.mjs"
       ],
       "hToggle": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs",
         "tests/unit/hud-speed-parity.test.mjs",
         "tests/unit/hud-status-stack.test.mjs"
+      ],
+      "hUnstyle": [
+        "tests/unit/hud-announce-lane-cache.test.mjs"
       ],
       "hlKey": [
         "tests/unit/hud-dock-btn-cache.test.mjs"
