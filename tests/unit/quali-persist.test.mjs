@@ -105,6 +105,32 @@ test("clear() keeps a driven persist; clear(true) forgets it", () => {
   assert.equal(G.season.qualiOrder, undefined);
 });
 
+test("a pending deletion is limited to its circuit, stage, season, seat and solo mode", () => {
+  const { q, G, ctx } = loadQuali({ season: { round: 0, stage: "sprint", seed: 17 } });
+  ctx.SeasonCal = { drawRound: (s) => s.round + (s.stage === "sprint" ? 1000 : 0) };
+  const original = { ...G.cars[0], lap: 1 };
+  q.markDeletedLap(original, false);
+  const replacement = { ...original, qualiCut: false };
+
+  assert.equal(q.hasDeletedLap(replacement, false), true, "a replacement car inherits the pending deletion");
+  assert.equal(q.hasDeletedLap(replacement, true), false, "a friend room does not inherit a solo result");
+  assert.equal(q.hasDeletedLap({ ...replacement, driverId: "p2" }, false), false);
+  G.season.stage = "race";
+  assert.equal(q.hasDeletedLap(replacement, false), false, "GP qualifying is a separate session from sprint qualifying");
+  G.season.stage = "sprint";
+  G.season.seed = 18;
+  assert.equal(q.hasDeletedLap(replacement, false), false, "a new championship gets a fresh attempt");
+  G.season.seed = 17;
+  G.track = { def: { id: "spa" } };
+  assert.equal(q.hasDeletedLap(replacement, false), false);
+  G.track = { def: { id: "monza" } };
+  G.seasonMode = false;
+  assert.equal(q.hasDeletedLap(replacement, false), false);
+  G.seasonMode = true;
+  q.clearDeletedLap(replacement, false);
+  assert.equal(q.hasDeletedLap(replacement, false), false);
+});
+
 test("restore fills names, gaps, and isPlayer from live cars", () => {
   const { q } = loadQuali({
     season: {
@@ -300,8 +326,8 @@ test("friend-race title quit cancels the lobby instead of aborting back into it"
   // 2026-09-02: quitToMenu grew and netLobby.cancel() moved to +2605, so this
   // assertion failed for a call that was still there. See tests/helpers/fn-source.mjs.
   const quit = symbolSource("function quitToMenu()");
-  assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(\)/);
-  assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel()"), /netLobby\.cancel\(\)/);
+  assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(isQuali\(\) && state === "race"\)/);
+  assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel(unfinished)"), /netLobby\.cancel\(\)/);
   assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);
 });
 

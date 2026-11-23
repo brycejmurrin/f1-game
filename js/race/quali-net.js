@@ -234,8 +234,12 @@ const QualiNet = (function () {
       return go;
     }
 
-    function resetOnQuitWithCancel() {
+    function resetOnQuitWithCancel(unfinished) {
       const netLobby = getNetLobby();
+      const player = getPlayer();
+      if (unfinished && player?.qualiCut && !(player.lastLap > 0 || player.best < Infinity)) {
+        reportQuali(player.driverId, Infinity);
+      }
       qualiNetDone = null;
       qualiHadRivals = false;
       qualiLive.clear();
