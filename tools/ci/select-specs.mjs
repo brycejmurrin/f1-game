@@ -33,7 +33,7 @@ import { loadDb, TIMINGS_FILE } from "./spec-timings.mjs";
 import { ADAPTED, ADAPTED_RUNNER, isTwinned, twinOf } from "./twinned-specs.mjs";
 import { FAT_UI_SPEC } from "./fat-shard.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
-import { specsAffectedByImpact } from "../lib/impact-map.mjs";
+import { readImpactPins, specsAffectedByImpact } from "../lib/impact-map.mjs";
 import { changeKind, readyBrowserExempt } from "./change-kind.mjs";
 import { expandScript } from "../gen/gen-test-groups.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
@@ -1403,13 +1403,14 @@ export function nodeTestsNaming(file, root = ROOT) {
  *  nor a unit test naming one of its touched files. selected-verdict reds a
  *  pull request on any (ci-7d C7: a dir that reaches only the boot specs ships
  *  with no evidence about itself). `routeOf(file)` is injectable for tests. */
-export function jsCoverageGaps(changed, { root = ROOT, routeOf = null } = {}) {
+export function jsCoverageGaps(changed, { root = ROOT, routeOf = null, impactPins = null } = {}) {
   const scripts = routeOf ? null : JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).scripts;
   const browserOf = routeOf || ((f) => {
     const g = pick([f]);
     stripSpecOwner(g);
     const groups = [...g.keys()].map((n) => `test:${n}`).filter((sc) => scripts[sc] && scripts[sc].includes("run-playwright"));
-    return [...specsOf(groups, scripts), ...specsAffectedBySource([f], root), ...specsAffectedByImpact([f], root)];
+    impactPins ??= readImpactPins(root);
+    return [...specsOf(groups, scripts), ...specsAffectedBySource([f], root), ...specsAffectedByImpact([f], root, impactPins)];
   });
   const dirs = new Map();
   for (const f of changed) {
@@ -1711,7 +1712,8 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   // Source modules whose browser gate is over-budget when merely routed (see
   // SOURCE_AFFECTED) — same rank-2 elevation as an import / own foundation.
   const sourceAffected = specsAffectedBySource(routing);
-  const impactAffected = specsAffectedByImpact(changed);
+  const impactPins = readImpactPins();
+  const impactAffected = specsAffectedByImpact(changed, ROOT, impactPins);
   // The specs pick-tests names that its group RULES cannot (a spec loading a
   // module standalone, the shared UI layer): ONE function, pick-tests'
   // extraSpecs(), so the local answer and CI's plan cannot disagree (W31 row 7).
@@ -1781,7 +1783,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
   if (trainHead()) for (const j of r.shards) j.lane = NO_LANE; // a merge train never queues in the PR lanes (PR #5809)
-  r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed);
+  r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed, { impactPins });
   // AGENTS.md rule 3's pre-push floor is ONE spec. Name it only when the diff evidences one (edited, failed before,
   // imports or is pinned to a changed file: rank <= 2); a routed-only group member is no better than its peers.
   const best = [...r.selected, ...r.oversize].filter((x) => x.rank <= 2).sort((a, b) => a.rank - b.rank)[0];
