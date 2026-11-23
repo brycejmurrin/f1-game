@@ -16702,6 +16702,7 @@
         "tests/unit/menu-a11y-audit.test.mjs"
       ],
       "*": [
+        "tests/unit/css-has-scope.test.mjs",
         "tests/unit/title-menu-even.test.mjs"
       ]
     },

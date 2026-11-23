@@ -25,8 +25,7 @@ const LearnDoor = (function () {
     });
 
     function build() {
-      dialog = document.createElement("dialog");
-      dialog.className = "screen dim";
+      dialog = Dom.el("dialog", "screen dim");
       dialog.id = "learn";
       dialog.hidden = true;
       dialog.setAttribute("aria-labelledby", "learn-title");
