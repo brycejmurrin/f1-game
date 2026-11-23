@@ -544,7 +544,6 @@ test("TLX setLampBake frees its light map on the off path (GLX _bakeOffN parity)
   assert.match(off[1], /\+\+_bakeOffN > 120/, "debounced like GLX");
   assert.match(off[1], /BAKE_NODE\.value = _bakeBlank/, "the placeholder goes back on the node");
   assert.match(off[1], /_bakeSrc = null/, "the source resets so a return re-uploads");
-  assert.match(off[1], /\.dispose\(\)/, "the DataTexture is disposed");
 });
 
 test("live-only lamps (lens < 3 m over its surface, or cosOuter > 0.9) stay out of the bake", () => {

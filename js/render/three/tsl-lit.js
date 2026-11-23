@@ -1079,6 +1079,13 @@
       t.needsUpdate = true;
       return t;
     }
+    function retireBakeTexture(texture, blank) {
+      if (texture === blank) return;
+      try { texture.dispose(); } catch (_) { /* already gone */ }
+      // A compiled TSL sample can retain its original DataTexture after the base
+      // node switches tracks. Drop that retired texture's CPU atlas as well.
+      texture.image = blank.image;
+    }
     let _bakeSrc = null, _bakeOffN = 0;
     function setLampBake(b, scale) {
       if (!b || !scale) {
@@ -1090,8 +1097,8 @@
           BAKE_NODE.value = _bakeBlank;
           BAKE_IDX_NODE.value = _bakeIdxBlank;
           _bakeSrc = null;
-          try { old.dispose(); } catch (_) { /* already gone */ }
-          if (oldIdx !== _bakeIdxBlank) { try { oldIdx.dispose(); } catch (_) { /* already gone */ } }
+          retireBakeTexture(old, _bakeBlank);
+          retireBakeTexture(oldIdx, _bakeIdxBlank);
         }
         return false;
       }
@@ -1102,8 +1109,8 @@
         const old = BAKE_NODE.value, oldIdx = BAKE_IDX_NODE.value;
         BAKE_NODE.value = t;
         BAKE_IDX_NODE.value = ti;
-        if (old && old !== _bakeBlank) { try { old.dispose(); } catch (_) { /* already gone */ } }
-        if (oldIdx && oldIdx !== _bakeIdxBlank) { try { oldIdx.dispose(); } catch (_) { /* already gone */ } }
+        retireBakeTexture(old, _bakeBlank);
+        retireBakeTexture(oldIdx, _bakeIdxBlank);
         _bakeSrc = b;
         U.bakeOrigin.value.set(b.x0, b.z0);
         U.bakeSize.value.set(b.tilesX * b.T * b.cell, b.tilesY * b.T * b.cell);
