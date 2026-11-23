@@ -3410,13 +3410,13 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
 
 test("the garage floor reflection depth-resolves after the room on all backends", () => {
   // noDepthTest + alpha drew the mirrored car into empty pixels below the bay
-  // slab (a duplicate under the floor). Room-first + MIRROR_RESOLVE depth bias
-  // clips to floor/props; mirrorSheen + ensureMirrorFade keep contact sheen.
+  // slab (a duplicate under the floor). The projected footprint fits it
+  // to the slab and the floor composites over the opaque reflection.
   const scene = code("js/garage/scene.js");
   assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
-    "garage mirror resolves opaque with depth bias");
-  assert.match(scene, /depthBias: MIRROR_BIAS/,
-    "bias pulls the under-floor mesh past the slab for a planar clip");
+    "garage mirror resolves opaque");
+  assert.match(scene, /if \(sheen <= 0\.02\) _gfx\.draw\(floorMesh/,
+    "the opaque floor cannot occlude the reflection before compositing");
   assert.match(scene, /mirrorSheen\(/, "contact sheen scales with camera distance");
   assert.match(scene, /ensureMirrorFade/, "bay fade quad restores floor sheen");
   assert.doesNotMatch(scene, /MIRROR_OPTS.*noDepthTest/,
