@@ -352,6 +352,43 @@ test.describe("pit lane", () => {
       .toBeGreaterThan(0.7);
   });
 
+  test("work on car hides the helmet visor until the driving view returns", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("apex26.helmetVisor", "clear"));
+    await armedAt(page, { track: "bahrain", solo: true });
+    const view = await page.evaluate(() => {
+      const A = window.__apex;
+      const total = A.info().total;
+      const pit = A.pit();
+      const f = ((A.physState().s + pit.boxM - pit.atM - 18) / total + 1) % 1;
+      A.jump(f, 2.5, 0);
+      const lane = A.pit().laneX;
+      A.jump(f, 2.5, lane); A.pit({ arm: true });
+      for (let i = 0; i < 60 * 12 && A.pit().state !== "box"; i++) {
+        const p = A.pit(), car = A.physState(), near = p.atM >= p.boxM - 3;
+        A.aim(0);
+        A.setInput({ steer: Math.max(-1, Math.min(1, (lane - car.x) * 0.5)),
+          throttle: !near && car.speed < 5, brake: near && car.speed > 0.2 });
+        A.step(1 / 60, 1);
+      }
+      A.clearInput();
+      A.camera("helmet");
+      const work = document.getElementById("hud-work");
+      const garage = document.getElementById("carsetup");
+      const visor = () => getComputedStyle(document.getElementById("hud"), "::before").content !== "none";
+      if (A.pit().state !== "box" || work.hidden) return { error: "WORK ON CAR is unavailable" };
+      const before = visor();
+      work.click();
+      const during = { garage: !garage.hidden, helmet: document.body.hasAttribute("data-helmet-cam"), visor: visor() };
+      document.getElementById("cs-arrival-skip").click();
+      const done = document.getElementById("cs-done");
+      done.click();
+      if (!garage.hidden) done.click(); // Skip the rollout when that animation is enabled.
+      return { before, during, after: { garage: !garage.hidden, visor: visor() } };
+    });
+    expect(view).toEqual({ before: true, during: { garage: true, helmet: true, visor: false },
+      after: { garage: false, visor: true } });
+  });
+
   test("during a stop the crew draws and the tyres visibly swap", async ({ page }) => {
     // Root cause this pins: cockpit/visor skipped drawPitCrew, the kit had no
     // people, and serviceCar fitted at latch so the axle slide never showed a
