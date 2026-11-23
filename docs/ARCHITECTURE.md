@@ -310,6 +310,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |
 | `quali-sheet.js` | `QualiSheet` | LAZY_RESULTS_SHEET | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `watch-transport.js` | `WatchTransport` | LAZY_REAL_RACE | Visible controls for the real-race replay. |
+| `learn-door.js` | `LearnDoor` | LAZY_LEARN | Learn title door and the lesson modal. |
 
 **`js/track/core/`**
 

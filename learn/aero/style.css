@@ -1,0 +1,284 @@
+/* The lesson loads the game token sheet and adopts the open Learn sheet's palette. */
+:root {
+  font: var(--fs-3, 16px)/1.4 var(--font-ui, system-ui);
+  --car-b: color-mix(in oklab, var(--red) 75%, var(--text));
+}
+html, body {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  color: var(--text);
+  background: var(--bg);
+}
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: var(--pad);
+}
+
+#learn-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+#learn-studio [data-as="preview-side"] {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+  padding: var(--pad);
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+}
+@media (max-width: 900px) {
+  #learn-studio { grid-template-columns: minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"] { position: static; order: -1; }
+}
+
+h1, h2, p { margin: 0; }
+
+.settings label[for="gap"], .reading div, .limits, .instrument, .legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5em;
+}
+
+.instrument {
+  background: var(--surf-3);
+}
+
+button,fieldset label {
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  color: inherit;
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: clamp(150px,20vw,250px);
+  touch-action: pan-y;
+  background: var(--bg);
+}
+
+.legend {
+  justify-content: flex-start;
+  gap: 1.4em;
+  font-size: .85rem;
+  padding-block: 9px;
+  border-block: 1px solid var(--card-line);
+}
+
+i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--text);
+  border-radius: 50%;
+}
+
+.legend span:last-child i {
+  background: var(--car-b);
+}
+
+input {
+  accent-color: var(--red);
+}
+
+input[type=range] {
+  width: 100%;
+  height: 28px;
+  margin: 4px 0;
+}
+
+.limits {
+  font-size: .8rem;
+  color: var(--dim);
+}
+
+output,.reading strong {
+  color: var(--text);
+}
+
+fieldset {
+  border: 0;
+  margin: 18px 0 12px;
+  padding: 0;
+}
+
+legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+fieldset div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+fieldset label:has(:checked) {
+  border-color: var(--red);
+  background: color-mix(in oklab, var(--red) 15%, var(--surf-1));
+  color: var(--text);
+}
+
+input[type=radio] {
+  margin: 0 4px 0 0;
+}
+
+.check {
+  cursor: pointer;
+}
+
+.results h2 {
+  letter-spacing: -.04em;
+  font-size: 1.8rem;
+}
+
+.reading {
+  margin-top: 14px;
+}
+
+.reading strong {
+  font-size: 1.55rem;
+}
+
+meter {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--dim);
+}
+
+aside {
+  border-left: 3px solid var(--red);
+  padding-left: 12px;
+  margin: 18px 0;
+}
+
+details {
+  border-top: 1px solid var(--card-line);
+  padding-top: 12px;
+  font-size: .88rem;
+}
+
+summary {
+  cursor: pointer;
+}
+
+a {
+  color: var(--dim);
+}
+
+.legend span:first-child {
+  margin-right: auto;
+}
+
+.instrument strong, .results h2 {
+  font-style: italic;
+  font-weight: 700;
+}
+.instrument {
+  border-inline-start: 3px solid var(--red);
+}
+
+.legend i {
+  margin-inline-end: .3em;
+}
+canvas {
+  color: var(--dim);
+}
+meter {
+  appearance: none;
+  height: 6px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--surf-3);
+}
+meter::-webkit-meter-bar {
+  background: var(--surf-3);
+  border: 0;
+}
+meter::-webkit-meter-optimum-value {
+  background: var(--car-b);
+}
+meter::-moz-meter-bar {
+  background: var(--car-b);
+}
+button:hover, fieldset label:hover {
+  background: var(--plate-hover);
+}
+
+.instrument, .legend { padding: .4rem .65rem; }
+.legend { font: 600 .85rem var(--font-hud); }
+.results { padding-top: var(--gap); }
+.results h2 { font-size: var(--fs-5); }
+.reading { margin-top: .4rem; }
+#effect, details p { margin-top: .6em; color: var(--dim); }
+details {
+  margin-top: var(--gap);
+  padding: var(--pad);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+  background: var(--surf-1);
+}
+@media (max-width: 640px) {
+  #learn-studio [data-as="controls"] { order: -2; }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  #learn-studio { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"] {
+    order: 0;
+    position: sticky;
+    padding: calc(var(--pad) * .5);
+  }
+  canvas { height: 86px; }
+  main { padding: .45rem; }
+  .instrument button { padding: .15rem .5rem; }
+}
+
+.hint, .flow-key {
+  color: var(--dim);
+  font-size: var(--fs-micro);
+}
+.flow-key { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: calc(var(--gap) / 2); }
+#flow { cursor: grab; }
+#flow[data-dragging] { cursor: grabbing; }
+#prediction fieldset { display: grid; gap: calc(var(--gap) / 2); }
+#feedback:not(:empty) { margin-top: calc(var(--gap) / 2); }
+.physics-note {
+  margin-top: var(--gap);
+  padding: var(--pad);
+  border: 1px solid var(--plate-line);
+  border-inline-start: 3px solid var(--red);
+  border-radius: var(--r-md);
+  background: var(--surf-1);
+}
+.physics-note p { margin-top: calc(var(--gap) / 2); }
+.active-aero p { margin-top: calc(var(--gap) / 2); }
+.pressure-label {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: var(--gap);
+}

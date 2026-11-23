@@ -1411,3 +1411,39 @@ test("garage tyre wear preview replaces wheel layers and restores fitted fresh t
   assert.deepEqual(h.recipes.map(args => args[11]), [0, 0, 1, 1, 0, 0]);
   assert.equal(h.freed.length, 8);
 });
+
+
+test("garage probe keys stable inspection and gantry lighting without following animation", () => {
+  const { GarageScene: scene } = harness();
+  const ctx = { spin: true, night: false };
+  scene.spot("hero");
+  const probe = scene.reflectionProbe(TEAM, LIV, null, 0, ctx);
+  assert.equal(probe.inspection, "");
+  ctx.spin = false;
+  scene.spot("side");
+  assert.equal(scene.reflectionProbe(TEAM, LIV, null, 0, ctx), probe, "reuses probe object");
+  assert.equal(probe.inspection, "side");
+  scene.spot("front");
+  scene.reflectionProbe(TEAM, LIV, null, 0, ctx);
+  assert.equal(probe.inspection, "front");
+  ctx.spin = true;
+  scene.reflectionProbe(TEAM, LIV, null, 0, ctx);
+  assert.equal(probe.inspection, "", "spinning parks the inspection lamp");
+  ctx.spin = false;
+  scene.spot("top");
+  ctx.night = true;
+  scene.reflectionProbe(TEAM, LIV, null, 0, ctx);
+  assert.equal(probe.inspection, "", "presets without a work lamp share the off state");
+  assert.equal(probe.night, true);
+  ctx.realExterior = true;
+  scene.reflectionProbe(TEAM, LIV, null, 0, ctx);
+  assert.equal(probe.night, false, "real exterior suppresses the fallback gantry rig");
+  const room = probe.room;
+  for (const t of [100, 500, 1200]) {
+    scene.live(LIV, t, { ...ctx, door: t / 1500 });
+    scene.reflectionProbe(TEAM, LIV, null, 0, ctx);
+    assert.equal(probe.room, room);
+    assert.equal(probe.inspection, "");
+    assert.equal(probe.night, false);
+  }
+});

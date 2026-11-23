@@ -51,7 +51,7 @@ function boot(options = {}) {
     close: (_pause, keep) => { closed++; order.push("close"); if (!keep) G.photoMode = false; },
     cmd: (v) => { current = v; restored = v; },
   };
-  const garage = { snapshot: () => ({ az: 1, spin: options.garageSpin ?? true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
+  const garage = { prepareCapture: options.prepareCapture, snapshot: () => ({ az: 1, spin: options.garageSpin ?? true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
     looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
   const ltWrites = [], latchWrites = [];
@@ -620,6 +620,43 @@ for (const [resolution, width, height] of [["normal", 1920, 1080], ["4k", 3840, 
   assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [width,height,null]);
   assert.deepEqual([b.api.state().width,b.api.state().height], [width,height]);
   await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
+});
+
+for (const initialScale of [1, 0.6]) test(`first Home capture transfers the garage scale owner before rendering (${initialScale})`, async () => {
+  let garageOwner, scale = initialScale, size = null;
+  const b = boot({ prepareCapture: () => garageOwner.endGarageRes(), renderSample: () => garageOwner.endGarageRes() });
+  Object.assign(b.G.gfx, {
+    isMobile: true, getRenderScale: () => scale, setRenderScale: value => { scale = value; },
+    setPhotoCaptureSize: value => { size = value; },
+    capturePixels: () => ({ width: b.G.gfx.width, height: b.G.gfx.height,
+      data: new Uint8ClampedArray(b.G.gfx.width * b.G.gfx.height * 4) }),
+  });
+  Object.defineProperties(b.G.gfx, {
+    width: { get: () => Math.round((size?.width || 852) * scale) },
+    height: { get: () => Math.round((size?.height || 393) * scale) },
+  });
+  // Execute the real garage owner, including its saved pre-garage scale.
+  const cameraSource = fs.readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8");
+  garageOwner = vm.createContext({ gfx: b.G.gfx });
+  const ownerStart = cameraSource.indexOf("const GARAGE_PHONE_SCALE");
+  vm.runInContext(cameraSource.slice(ownerStart, cameraSource.indexOf("// Panel coverage")), garageOwner,
+    { filename: absSrc("js/garage/setup-camera.js"), lineOffset: cameraSource.slice(0, ownerStart).split("\n").length - 1 });
+  garageOwner.pinGarageRes();
+  b.api.open({ source: "home" });
+  for (const [id, value] of [["ps-resolution", "4k"], ["ps-aspect", "scene"]]) {
+    const row = b.dom.byId(id); row.value = value; b.dom.dispatch(row, { type: "change" });
+  }
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual([b.api.state().width, b.api.state().height], [3840, 1771]);
+  assert.equal(size, null, "capture releases its backing override");
+  assert.equal(scale, initialScale, "restore the pre-garage scale, not the discarded garage pin");
+  garageOwner.endGarageRes(); // the following ordinary Home photo frame
+  assert.equal(scale, initialScale, "the released owner cannot change the following frame");
+  b.api.close(false);
+  garageOwner.pinGarageRes(); // ordinary Home garage resumes its own budget
+  assert.equal(scale, Math.min(initialScale, 0.72));
+  garageOwner.endGarageRes();
+  assert.equal(scale, initialScale);
 });
 
 test("Home photo uses the same native framing at full and half render scale", async () => {

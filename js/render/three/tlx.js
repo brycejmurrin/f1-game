@@ -4236,16 +4236,20 @@ const TLX = (function () {
       const _envVPArr = new Float32Array(16);
       const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
       let garageProbeRoom = null, garageProbeMood = "", garageProbeFace = 0;
+      let garageProbeInspection = "", garageProbeNight = false;
       function leaveGarageProbe() {
         if (!garageProbeRoom) return;
         garageProbeRoom = null;
         backend.envProbeReset();
       }
       function captureGarageFace(probe, frame) {
-        if (garageProbeRoom !== probe.room || garageProbeMood !== probe.mood) {
+        if (garageProbeRoom !== probe.room || garageProbeMood !== probe.mood
+            || garageProbeInspection !== probe.inspection || garageProbeNight !== probe.night) {
           backend.envProbeReset();
           garageProbeRoom = probe.room;
           garageProbeMood = probe.mood;
+          garageProbeInspection = probe.inspection;
+          garageProbeNight = probe.night;
         }
         // Delay captures until an in-flight pipeline warm releases the renderer.
         if (envReady || _envGaveUp || _warmPending) return;

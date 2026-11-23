@@ -609,7 +609,19 @@ test("no preset sets a condition-gated knob where its gate is shut (dead entries
   // 2026-10-04 (review-wgx-lighting item 16), and 70 per-weather sun offsets
   // with the track x tod sun (item 2).
   const src = read("js/race/storm-flash.js");
-  assert.match(src, /if \(raining && s\._ltBase && LT\.lightning > 0\)/, "the lightning gate moved — re-check this test");
+  let strikeChecks = 0;
+  const StormFlash = vm.runInNewContext(src + ";StormFlash", {
+    Storm: { strikeIn() { strikeChecks++; return null; } },
+  }, { filename: absSrc("js/race/storm-flash.js") });
+  for (const raining of [false, true]) for (const hasBase of [false, true]) for (const lightning of [0, 1]) {
+    const flash = StormFlash.create();
+    if (hasBase) flash._ltBase = { ambientSky: [0, 0, 0], ambientGround: [0, 0, 0], exposure: 1 };
+    strikeChecks = 0;
+    flash.step(0, { raining, state: "race", raceT: 1, LT: { lightning },
+      frame: { ambientSky: [0, 0, 0], ambientGround: [0, 0, 0], exposure: 1 } });
+    assert.equal(strikeChecks, raining && hasBase && lightning > 0 ? 1 : 0,
+      `lightning strike eligibility: rain=${raining}, base=${hasBase}, frequency=${lightning}`);
+  }
   assert.match(read("js/lighting/atmosphere.js"), /if \(isNightSession\) _nightAmbientBand\(\);/, "the night-band gate moved — re-check this test");
   assert.match(read("js/lighting/profiles.js"), /const TOD_KEYED = new Set\(\["sunElev", "sunAzim"\]\);/, "the sun keying moved — re-check this test");
   const P = presets(), dead = [];

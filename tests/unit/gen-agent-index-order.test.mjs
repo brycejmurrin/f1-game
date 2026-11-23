@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { rosterOf } from "../../tools/gen/gen-arch-table.mjs";
+import { specsAffectedByImpact } from "../../tools/lib/impact-map.mjs";
 import {
   agentHelpFromSource,
   buildImpactMap,
@@ -208,6 +209,39 @@ function mergeBothWays(t, base, a, b) {
   };
   return { ab: merge("a", "b"), ba: merge("b", "a") };
 }
+
+test("branches with independent impact pins merge in either order without a generated map", (t) => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "impact-merge-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const git = (...args) => cp.execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "-q", "-b", "base");
+  git("config", "user.email", "t@example.invalid");
+  git("config", "user.name", "t");
+  git("config", "commit.gpgsign", "false");
+  const report = "tests/data/impact-map.json";
+  fs.writeFileSync(path.join(dir, ".gitignore"), `/${report}\n`);
+  git("add", ".gitignore");
+  git("commit", "-qm", "base");
+  const source = path.posix.join("js", "impact-probe.js");
+  const fragments = path.join(dir, "tests/data/impact-map.d");
+  const specs = ["impact-a.spec.js", "impact-b.spec.js"].map((name) => path.posix.join("tests/specs", name));
+  for (const [index, branch] of ["a", "b"].entries()) {
+    git("checkout", "-qb", branch, "base");
+    fs.mkdirSync(fragments, { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests/specs"), { recursive: true });
+    fs.writeFileSync(path.join(dir, specs[index]), "");
+    fs.writeFileSync(path.join(fragments, `${branch}.json`), JSON.stringify({ [source]: { narrow: [specs[index]] } }));
+    fs.writeFileSync(path.join(dir, report), JSON.stringify({ [source]: specs[index] }));
+    git("add", "-A");
+    git("commit", "-qm", branch);
+  }
+  const merged = git("merge-tree", "--write-tree", "a", "b");
+  assert.equal(git("merge-tree", "--write-tree", "b", "a"), merged);
+  assert.equal(git("ls-tree", "-r", merged, "--", report), "");
+  git("read-tree", "-u", "-m", merged);
+  assert.deepEqual(specsAffectedByImpact([source], dir), specs);
+});
 
 /** Two picks far apart in sorted order (never adjacent rows), preferring `wanted` when present. */
 function pickPair(all, wanted) {

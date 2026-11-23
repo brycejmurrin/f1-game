@@ -135,6 +135,49 @@ const Quali = (function () {
       return G.seasonMode ? "season" : "gp";
     }
 
+    // A pending deletion belongs to this tab's weekend, not to a disposable
+    // car or a completed grid. Keep one per mode/slot across reloads.
+    const deletedLaps = new Map();
+    function deletedLapScope(c) {
+      const mode = modeId(), s = G.season;
+      const day = mode !== "gp" && s ? SeasonCal.drawRound(s) : 0;
+      const seed = mode === "season" ? s && s.seed : mode === "gp" ? 0 : Career.seasonSeed();
+      return ["apex26.qualiDeleted." + mode, JSON.stringify([hereId(), day, seed, seatKey(c.driverId, c.team)])];
+    }
+
+    function pendingDeletion(key) {
+      if (deletedLaps.has(key)) return deletedLaps.get(key);
+      let value = null;
+      try { value = sessionStorage.getItem(key); } catch (_) { /* tab storage unavailable */ }
+      deletedLaps.set(key, value);
+      return value;
+    }
+
+    function markDeletedLap(c, friend) {
+      c.qualiCut = true;
+      if (friend || c.lap < 1) return;
+      const [key, stamp] = deletedLapScope(c);
+      if (pendingDeletion(key) === stamp) return;
+      deletedLaps.set(key, stamp);
+      try { sessionStorage.setItem(key, stamp); } catch (_) { /* memory still covers a quit */ }
+    }
+
+    function hasDeletedLap(c, friend) {
+      if (!c) return false;
+      if (c.qualiCut) return true;
+      if (friend) return false;
+      const [key, stamp] = deletedLapScope(c);
+      return pendingDeletion(key) === stamp;
+    }
+
+    function clearDeletedLap(c, friend) {
+      if (!c || friend) return;
+      const [key, stamp] = deletedLapScope(c);
+      if (pendingDeletion(key) !== stamp) return;
+      deletedLaps.set(key, null);
+      try { sessionStorage.removeItem(key); } catch (_) { /* memory still covers a quit */ }
+    }
+
     // `shape` (carLap): { pace, free, corner } — integrate at that PACE
     // with the car's drag curve to `free` and corner caps scaled by `corner`.
     function lapTime(track, vCap, grip, shape) {
@@ -501,7 +544,8 @@ const Quali = (function () {
 
     // forgetOrder / lapTime stay create()-local — begin() and the
     // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
-    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
+    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole,
+      markDeletedLap, hasDeletedLap, clearDeletedLap };
   }
 
   // STEP / QUALI_TRIM / EXEC_SPREAD stay module-local — only create() and the

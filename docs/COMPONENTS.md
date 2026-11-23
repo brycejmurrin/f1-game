@@ -176,7 +176,7 @@ not tabled: they move with every edit and nothing reads them.
 | `set-` | `settings-controls.css` | `appearance-studio.css`, `experience.css`, `race-setup.css`, `select.css`, `settings.css`, `tuner.css` |  |
 | `settings-` | `player-tools.css` | — |  |
 | `sf-` | `components.css` | `data.css`, `menu-destinations.css`, `photo-studio.css`, `race-setup.css`, `tuner.css` |  |
-| `sheet-` | `overlays.css` | `appearance-studio.css`, `career.css`, `carsetup.css`, `components.css`, `data.css`, `dialogs.css`, `editor.css`, `hud.css`, `photo-studio.css`, `player-tools.css`, `race-setup.css`, `screen-arranger.css`, `select.css`, `settings.css`, `tuner.css` | the shared sheet head / body / foot |
+| `sheet-` | `overlays.css` | `appearance-studio.css`, `career.css`, `carsetup.css`, `components.css`, `data.css`, `dialog-platform.css`, `dialogs.css`, `editor.css`, `hud.css`, `photo-studio.css`, `player-tools.css`, `race-setup.css`, `screen-arranger.css`, `select.css`, `settings.css`, `tuner.css` | the shared sheet head / body / foot |
 | `sp-` | `tuner.css` | — |  |
 | `steer-` | `touch-controls.css` | — |  |
 | `sur-` | `race-setup.css` | `select.css` |  |
@@ -244,7 +244,7 @@ missing class, a file that left, or a file that joined.
 - `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `select` + `settings` + `settings-controls` + `tokens`
 - `.sheet-head` — `career` + `carsetup` + `components` + `data` + `dialogs` + `editor` + `overlays` + `photo-studio` + `race-setup` + `screen-arranger` + `select` + `settings`
 - `.sheet-foot` — `appearance-studio` + `career` + `carsetup` + `components` + `dialogs` + `overlays` + `photo-studio` + `race-setup` + `select` + `settings` + `tuner`. The most-shared component class in the project.
-- `.sheet-body` — `career` + `components` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.
+- `.sheet-body` — `career` + `components` + `dialog-platform` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.
 - `.pane` — `components` + `race-setup` + `select`
 - `.pair-side` / `.pair-main` — `overlays` + `race-setup`
 - `.balanced-row` — `components` + `menus` + `photo-studio` + `race-setup` + `settings-controls` + `tuner`. Flex wrap that derives its column count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
