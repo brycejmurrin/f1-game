@@ -51,7 +51,7 @@ function boot(options = {}) {
     close: (_pause, keep) => { closed++; order.push("close"); if (!keep) G.photoMode = false; },
     cmd: (v) => { current = v; restored = v; },
   };
-  const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
+  const garage = { snapshot: () => ({ az: 1, spin: options.garageSpin ?? true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
     looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
   const ltWrites = [], latchWrites = [];
@@ -61,6 +61,7 @@ function boot(options = {}) {
     Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    AppearanceStudio: { setScene(mode) { scene.value = mode; return { durable: true }; } },
     NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
@@ -101,6 +102,19 @@ function boot(options = {}) {
   return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("a garage still waits for a fresh capture draw even when a previous photo exists", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  assert.equal(await b.api.capture(), true);
+  b.G.gfx.renderCaptureFrame = () => false;
+  assert.equal(await b.api.capture(), false);
+  assert.equal(b.dom.byId("ps-message").textContent,
+    "Capture failed: The scene is still getting ready. Try again once the scene is ready.");
+  assert.equal(b.order.filter(action => action === "read").length, 1);
+  b.G.gfx.renderCaptureFrame = draw => { draw(); return true; };
+  assert.equal(await b.api.capture(), true);
+});
 
 function chooseSamples(b, count) {
   const row = b.dom.byId("ps-samples");
@@ -481,7 +495,10 @@ test("a delayed save retains its original photo and cannot clear a reopened capt
   assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "persisted entry retains its initiating context");
 });
 test("garage camera snapshot is restored and a borrowed FreeCam returns only on normal exit", () => {
-  const garage = boot(); garage.api.open({ source: "garage" }); garage.api.close(true);
+  const manual = boot({ garageSpin: false }); manual.api.open({ source: "garage" });
+  assert.equal(manual.order.includes("shot:hero"), false);
+  const garage = boot(); garage.api.open({ source: "garage" });
+  assert.ok(garage.order.includes("shot:hero")); garage.api.close(true);
   assert.deepEqual(plain(garage.restored()), { az: 1, spin: true }); assert.equal(garage.closed(), 0);
   const prior = { open: true, speed: 25, roll: 5, lens: "flyby", eye: [1, 2, 3], target: [4, 5, 6], fov: 40 };
   const b = boot({ priorCamera: prior }); b.api.open(); b.api.close(true);
@@ -578,27 +595,99 @@ test("the menu background goes through GameStore's raw lane and reads back the s
   assert.equal(b.storage.has("apex26.photoBackground"), false);
 });
 
-// #2848: USE AS MENU BACKGROUND / library tiles stay inert unless Appearance Scene is My photo.
-test("menu background stays inert unless Appearance Scene is My photo", async () => {
-  const b = boot({ homeScene: "garage", storageFull: true });
-  b.api.open({ source: "garage" });
-  await b.api.capture();
-  await b.api.savePhoto();
-  b.dom.byId("ps-background").click();
-  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
-  const bg = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
-  assert.ok(bg, "library MENU BACKGROUND carries .ps-use-bg for SettingDeps");
-  assert.equal(bg.disabled, true);
-  bg.click();
-  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
-  b.scene.value = "photo";
-  b.api.close(false);
-  b.api.open({ source: "garage" });
-  await turn();
-  const live = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
-  assert.ok(live, "saved visit photo still listed after reopen");
-  assert.equal(live.disabled, false);
+test("a captured or saved photo selects its own Home scene after the image is stored", async () => {
+  for (const full of [false, true]) {
+    const b = boot({homeScene: "garage", storageFull: full});
+    b.api.open({source: "garage"}); await b.api.capture();
+    b.dom.byId("ps-background").click();
+    assert.equal(b.scene.value, full ? "garage" : "photo");
+    assert.equal(!!b.PS.background(), !full);
+    b.scene.value = "garage";
+    await b.api.savePhoto();
+    const bg = b.dom.byId("ps-library").children[0].children.find(el => el.textContent === "MENU BACKGROUND");
+    bg.click();
+    assert.equal(b.scene.value, full ? "garage" : "photo");
+  }
 });
+
+for (const [resolution, width, height] of [["normal", 1920, 1080], ["4k", 3840, 2160]]) test(`${resolution} garage capture renders at the selected size and releases it before export`, async () => {
+  const b = boot(), sizes = [];
+  Object.assign(b.G.gfx, {width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
+    capturePixels() { const size = sizes.at(-1); return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) }; }});
+  b.api.open({source: "garage"});
+  const select = b.dom.byId("ps-resolution"); select.value = resolution; b.dom.dispatch(select, {type:"change"});
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [width,height,null]);
+  assert.deepEqual([b.api.state().width,b.api.state().height], [width,height]);
+  await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
+});
+
+test("Home photo uses the same native framing at full and half render scale", async () => {
+  const b = boot();
+  let scale = 1, captureSize;
+  Object.defineProperties(b.G.gfx, {
+    width: { get: () => Math.round(390 * scale) },
+    height: { get: () => Math.round(845 * scale) },
+  });
+  Object.assign(b.G.gfx, {
+    getRenderScale: () => scale,
+    setRenderScale: value => { scale = value; },
+    setPhotoCaptureSize: size => { captureSize = size; },
+    capturePixels() {
+      const { width, height } = captureSize;
+      return { width, height, data: new Uint8ClampedArray(width * height * 4) };
+    },
+  });
+  b.api.open({ source: "home" });
+  const dimensions = () => [b.api.state().width, b.api.state().height];
+  assert.equal(await b.api.capture(), true);
+  const native = dimensions();
+  scale = 0.5;
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual(dimensions(), native);
+  assert.equal(scale, 0.5);
+  assert.equal(captureSize, null);
+});
+
+test("multi-sample 4K captures use a fresh draw for each sample and retain the selected resolution", async () => {
+  const sizes = [];
+  let freshDraws = 0;
+  const b = boot({
+    setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },
+    renderSample(pass) { pass.project(new Float32Array(16), new Float32Array(16), 3840, 2); },
+  });
+  Object.assign(b.G.gfx, {
+    width: 1920, height: 1, setPhotoCaptureSize(size) { sizes.push(size); },
+    renderCaptureFrame(draw) { freshDraws++; draw(); return true; },
+    capturePixels() {
+      const size = sizes.at(-1);
+      return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) };
+    },
+  });
+  b.api.open({ source: "garage" });
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, { type: "change" });
+  const frame = b.dom.byId("ps-aspect"); frame.value = "scene"; b.dom.dispatch(frame, { type: "change" });
+  chooseSamples(b, 8);
+  assert.equal(await b.api.capture(), true);
+  assert.equal(b.api.state().width, 3840);
+  assert.equal(freshDraws, 8);
+  assert.equal(sizes.at(-1), null);
+});
+
+test("closing an unfinished 4K capture releases its backing size once", async () => {
+  const b = boot(), sizes = [];
+  let finish;
+  Object.assign(b.G.gfx, { width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
+    capturePixels() { return new Promise(resolve => { finish = resolve; }); } });
+  b.api.open();
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, { type: "change" });
+  const pending = b.api.capture();
+  b.api.close(false);
+  assert.equal(sizes.at(-1), null);
+  finish({ width: 1, height: 1, data: new Uint8ClampedArray(4) });
+  assert.equal(await pending, false); assert.equal(sizes.length, 2);
+});
+
 test("failed PNG encoding reports a recoverable error instead of creating a bogus download", async () => {
   const b = boot({ nullBlob: true }); b.api.open(); await b.api.capture(); await b.api.exportPhoto();
   assert.equal(b.downloads.length, 0); assert.match(b.dom.byId("ps-message").textContent, /could not be encoded/);
@@ -824,7 +913,7 @@ test("coaching is optional DOM content; presets cannot move a pending capture", 
   let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
   b.api.open({ source: "garage" }); const pending = b.api.capture();
   b.dom.byId("ps-shots").children[1].click();
-  assert.equal(b.order.some((s) => s.startsWith("shot:")), false);
+  assert.deepEqual(b.order.filter((s) => s.startsWith("shot:")), ["shot:hero"]);
   const coach = b.dom.byId("ps-coach"); coach.children[coach.children.length - 1].click();
   assert.equal(coach.hidden, true);
   resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await pending;

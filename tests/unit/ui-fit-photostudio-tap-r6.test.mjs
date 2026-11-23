@@ -10,12 +10,12 @@ import { cssRules, decl } from "../helpers/css-rules.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const css = fs.readFileSync(path.join(ROOT, "css/photo-studio.css"), "utf8");
 const rules = cssRules(css);
-const SELECTS = "#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood)";
+const SELECTS = "#ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood, #ps-resolution)";
 
 test("Photo Studio setting-row selects floor at max(--tap, --tap-paint)", () => {
   assert.match(
     css,
-    /#ps-panel :is\(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood\)\s*\{[^}]*min-height:\s*max\(var\(--tap\), var\(--tap-paint\)\)/s,
+    /#ps-panel :is\(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood, #ps-resolution\)\s*\{[^}]*min-height:\s*max\(var\(--tap\), var\(--tap-paint\)\)/s,
     "#ps-subject / #ps-aspect / #ps-grid-select / #ps-postcard / #ps-tod / #ps-weather / #ps-look-* must paint at max(--tap, --tap-paint) (#3337), not --chip-h",
   );
   assert.equal(decl(rules, SELECTS, "min-height"), "max(var(--tap), var(--tap-paint))");

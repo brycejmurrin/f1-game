@@ -37,10 +37,10 @@ function crop(width, height, aspect) {
   return { x: (w - cw) / 2, y: (h - ch) / 2, width: cw, height: ch };
 }
 function background() {
-  try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 240000 ? v : ""; } catch (_) { return ""; }
+  try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; }
 }
 function setBackground(value) {
-  if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 240000)) return false;
+  if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 1.5e6)) return false;
   try {
     const S = GameStore.store;   // raw lane: setRoomy's quota sweep, failedKeys (#5023)
     if (!(value ? S.rawSet(KEY, value) : S.rawDel(KEY))) return false;
@@ -154,7 +154,7 @@ function create(G, deps) {
       }
     }
   }
-  const st = { open: false, source: "race", aspect: "wide", samples: 1, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
+  const st = { open: false, source: "race", aspect: "wide", highRes: false, samples: 1, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0, releaseCar = null, downloading = false;
   const mk = (tag, props, kids) => {
@@ -433,6 +433,12 @@ function create(G, deps) {
         select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
       group("photo", "YOUR PHOTO", [
+        select("Capture resolution", [["normal", "Standard HD"], ["4k", "Up to 4K"]], () => st.highRes ? "4k" : "normal",
+          v => {
+            if (st.busy) return;
+            st.highRes = v === "4k";
+            if (last) say("Press Capture again to use the new resolution.");
+          }, "ps-resolution"),
         sampleRow, mk("p", { className: "adv-help", textContent: "More samples smooth edges on a frozen scene. Online sessions use Instant." }),
         mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
         mk("div", { className: "balanced-row" }, [button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
@@ -510,6 +516,8 @@ function create(G, deps) {
     if (isGarage()) {
       if (!deps.garage) return false;
       st.snapshot = deps.garage.snapshot ? deps.garage.snapshot() : null;
+      // Park the garage turntable for a still. Keep a manually composed view.
+      if (st.source === "garage" && st.snapshot?.spin) deps.garage.shot?.("hero");
     } else {
       const fc = camera();
       const prior = fc && (fc.state ? fc.state() : fc.cmd ? fc.cmd() : null);
@@ -605,7 +613,7 @@ function create(G, deps) {
     // display:none, so setPaused → syncRotateBlocker would miss the portrait
     // gate and leave the pause card up (photo-studio.spec.js race close).
     const target = focus, generation = st.generation;
-    // Release the composed canvas (up to 2048 px, ~17 MB RGBA) and its preview data URL; open() rebuilds both.
+    // Release the composed canvas and its preview data URL; open() rebuilds both.
     last = null; raw = null; capturedOptions = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
     // ...and the library rows: each held a thumbnail data URL and a DOWNLOAD closure over its photo blob. open() repaints them.
     if (E["ps-library"]) E["ps-library"].replaceChildren();
@@ -635,7 +643,9 @@ function create(G, deps) {
     // capture needs to copy the software canvas.
     const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
     const draws = pass ? pass.draws : 0;
-    if (deps.renderFrame) deps.renderFrame();
+    if (gfx && gfx.renderCaptureFrame && deps.renderFrame) {
+      if (!gfx.renderCaptureFrame(deps.renderFrame)) throw new Error("The scene is still getting ready");
+    } else if (deps.renderFrame) deps.renderFrame();
     if (pass && pass.draws === draws) throw new Error("The scene is not ready to sample");
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
@@ -697,14 +707,16 @@ function create(G, deps) {
     }
     return canvas;
   }
-  function options() { return { aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
+  function options() { return { maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
   function recompose() {
     if (!raw || !capturedOptions) return;
     last = compose(raw, { ...capturedOptions, aspect: st.aspect, postcard: st.postcard });
     E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
   }
   function keepSource(source, opts) {
-    const scale = Math.min(1, 2048 / source.width, 2048 / source.height), copy = mk("canvas");
+    const scale = Math.min(1, opts.maxEdge / source.width, opts.maxEdge / source.height);
+    if (scale === 1 && source.tagName === "CANVAS") { raw = source; capturedOptions = opts; return; }
+    const copy = mk("canvas");
     copy.width = Math.max(1, Math.round(source.width * scale)); copy.height = Math.max(1, Math.round(source.height * scale));
     copy.getContext("2d").drawImage(source, 0, 0, copy.width, copy.height); raw = copy; capturedOptions = opts;
   }
@@ -717,7 +729,7 @@ function create(G, deps) {
     box.appendChild(button("DISMISS TIPS", () => { box.hidden = true; })); return box;
   }
   function compose(source, opts = options()) {
-    const box = crop(source.width, source.height, opts.aspect), scale = Math.min(1, 2048 / box.width, 2048 / box.height), out = mk("canvas");
+    const box = crop(source.width, source.height, opts.aspect), scale = Math.min(1, opts.maxEdge / box.width, opts.maxEdge / box.height), out = mk("canvas");
     out.width = Math.round(box.width * scale); out.height = Math.round(box.height * scale);
     const ctx = out.getContext("2d"); if (!ctx) throw new Error("Image composition is unavailable");
     ctx.drawImage(source, box.x, box.y, box.width, box.height, 0, 0, out.width, out.height);
@@ -731,30 +743,55 @@ function create(G, deps) {
     }
     return out;
   }
-  function thumbnail(canvas) {
-    const thumb = mk("canvas"), scale = Math.min(1, 640 / canvas.width, 360 / canvas.height);
+  function thumbnail(canvas, maxWidth = 640, maxHeight = 360, quality = 0.7) {
+    const thumb = mk("canvas"), scale = Math.min(1, maxWidth / canvas.width, maxHeight / canvas.height);
     thumb.width = Math.max(1, Math.round(canvas.width * scale)); thumb.height = Math.max(1, Math.round(canvas.height * scale));
     thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
-    return thumb.toDataURL("image/jpeg", 0.7);
+    return thumb.toDataURL("image/jpeg", quality);
+  }
+  function homeImage(canvas) {
+    // One selected image lives in localStorage. Bound the encoded size as well as the dimensions.
+    let edge = Math.min(3840, Math.max(canvas.width, canvas.height));
+    while (edge > 640) {
+      const image = thumbnail(canvas, edge, edge, 0.9);
+      if (image.length < 1.5e6) return image;
+      edge = Math.floor(edge * 0.75);
+    }
+    return thumbnail(canvas);
   }
   // #3656: the live view may run below native resolution (the governor, a
   // phone's title scene), and the photo copied that backing store: 217 x 122 px
   // on an iPhone 14. The shot renders at renderScale 1 (the native backing
-  // size, still under the backend's DPR cap and texture limit; keepSource and
-  // compose bound it at 2048 px), then the live scale comes back unchanged.
-  async function fullRes(run) {
+  // size). Small garage views target Full HD. The optional 4K draw applies in any scene.
+  async function fullRes(run, highRes) {
     const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
-    const raised = prev < 1 && !!gfx.setRenderScale(1);
-    if (!raised) return run();
+    let size = null;
     const release = () => {
       if (releaseCaptureScale !== release) return;
       releaseCaptureScale = null;
-      if (gfx.getRenderScale() === 1) gfx.setRenderScale(prev);
+      try { if (size) gfx.setPhotoCaptureSize(null); }
+      finally { if (prev !== 1 && gfx.getRenderScale() === 1) gfx.setRenderScale(prev); }
     };
     releaseCaptureScale = release;
-    try { return await run(); } finally { release(); }
+    try {
+      if (prev !== 1) gfx.setRenderScale(1);
+      // Capture backing dimensions are measured at native scale.
+      // Using the live buffer before restoring scale rounds the aspect twice.
+      const width = gfx?.width, height = gfx?.height;
+      const canSize = gfx?.setPhotoCaptureSize && width > 0 && height > 0;
+      if (highRes || (isGarage() && canSize && Math.max(width, height) < 1920)) {
+        if (!canSize) throw new Error("High-resolution capture is unavailable");
+        const edge = highRes ? 3840 : 1920;
+        const factor = Math.min(edge / Math.max(width, height), Math.sqrt((edge * edge * 9 / 16) / (width * height)));
+        if (highRes || factor > 1) {
+          size = { width: Math.max(1, Math.round(width * factor)), height: Math.max(1, Math.round(height * factor)) };
+          gfx.setPhotoCaptureSize(size);
+        }
+      }
+      return await run();
+    } finally { release(); }
   }
-  async function sampledFrame(count) {
+  async function sampledFrame(count, maxEdge) {
     if (count === 1) return frame();
     const pass = capturePass(count);
     activePass = samplePass = pass;
@@ -769,7 +806,7 @@ function create(G, deps) {
         if (activePass !== pass) throw new Error("Capture cancelled");
         if (!out) {
           sourceWidth = src.width; sourceHeight = src.height;
-          const scale = Math.min(1, 2048 / src.width, 2048 / src.height);
+          const scale = Math.min(1, maxEdge / src.width, maxEdge / src.height);
           out = mk("canvas"); out.width = Math.max(1, Math.round(src.width * scale)); out.height = Math.max(1, Math.round(src.height * scale));
           ctx = out.getContext("2d", { willReadFrequently: true });
           if (!ctx) throw new Error("Image composition is unavailable");
@@ -795,7 +832,7 @@ function create(G, deps) {
     if (!st.open || st.busy) return false;
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
-      const source = await fullRes(() => sampledFrame(G.netPlay?.active?.() ? 1 : st.samples)); if (gen !== st.generation) return false;
+      const source = await fullRes(() => sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge), st.highRes); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }
@@ -816,7 +853,7 @@ function create(G, deps) {
     try {
       const blob = await blobOf(canvas, "image/jpeg", 0.88);
       if (blob.size > 3 * 1024 * 1024) throw new Error("This photo is too large. Download the PNG instead");
-      const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, thumb: thumbnail(canvas) };
+      const entry = { id: Date.now() + "-" + Math.random().toString(36).slice(2, 7), at: Date.now(), title, blob, background: homeImage(canvas), thumb: thumbnail(canvas) };
       try {
         await library("save", entry, session);
         if (gen === st.generation) say("Saved to My Photos on this device.");
@@ -829,15 +866,12 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("Save failed: " + text(e.message)); }
     finally { if (gen === st.generation) busy(false); }
   }
-  function sceneIsPhoto() {
-    return typeof GameStore !== "undefined" && GameStore.store
-      ? GameStore.store.get("homeScene", "static") === "photo" : false;
+  function chooseBackground(image) {
+    if (!setBackground(image)) { say("Background could not be saved. Device storage may be full."); return; }
+    const result = AppearanceStudio.setScene("photo");
+    say(result?.durable === false ? "Menu background selected for this visit." : "Personal photo set as menu background.");
   }
-  function useBackground() {
-    if (!last) return;
-    if (!sceneIsPhoto()) { say("Set Appearance Scene to My photo first."); return; }
-    say(setBackground(thumbnail(last)) ? "Personal photo set as menu background." : "Device storage is full. Download the photo to keep it.");
-  }
+  function useBackground() { if (last) chooseBackground(homeImage(last)); }
   async function paintLibrary() {
     const gen = st.generation, paint = ++libraryPaint;
     let photos; try { photos = await library("list", null, session); } catch (_) { photos = []; }
@@ -851,15 +885,8 @@ function create(G, deps) {
   function paintPhotos(box, photos) {
     photos = photos.concat(session).sort(newestPhotoFirst).slice(0, LIMIT);
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
-    const bgOk = sceneIsPhoto();
     for (const p of photos) {
-      const bg = button("MENU BACKGROUND", () => {
-        if (!sceneIsPhoto()) { say("Set Appearance Scene to My photo first."); return; }
-        say(setBackground(p.thumb) ? "Personal menu background selected." : "Device storage is unavailable.");
-      });
-      bg.classList.add("ps-use-bg");
-      bg.disabled = !bgOk;
-      if (!bgOk) bg.setAttribute("aria-disabled", "true");
+      const bg = button("MENU BACKGROUND", () => chooseBackground(p.background || p.thumb));
       const row = mk("div", { className: "pane" }, [mk("img", { src: p.thumb, alt: p.title || "Saved photo" }), mk("span", { textContent: p.title || "Photo" }),
         button("DOWNLOAD", async () => {
           if (downloading) return;
@@ -909,7 +936,7 @@ function create(G, deps) {
     const seen = new Set();
     return photos.concat(session).sort(newestPhotoFirst)
       .filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return /^data:image\/(jpeg|png);base64,/.test(p.thumb || "") && p.thumb.length < 240000; })
-      .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, at: +p.at || 0 }));
+      .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, ...(p.background && { background: p.background }), at: +p.at || 0 }));
   }
   async function contactSheet(times, seek, cancelled) {
     const out = mk("canvas"); out.width = 1536; out.height = 342;

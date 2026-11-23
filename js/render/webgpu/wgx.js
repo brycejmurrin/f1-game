@@ -2128,6 +2128,7 @@ const WGX = (function () {
       const css = _cssSizeCache.read();
       let pw = Math.max(1, Math.round(css.width * dpr));
       let ph = Math.max(1, Math.round(css.height * dpr));
+      if (_cssSizeCache?.photoSize) { pw = _cssSizeCache.photoSize.width; ph = _cssSizeCache.photoSize.height; }
       // CLAMP UNIFORMLY. Clamping each axis on its own changed the RATIO, not
       // just the resolution, and `aspect = w / h` below feeds every projection
       // matrix and the frustum cull distance. The ceiling is lower than it
@@ -5916,6 +5917,7 @@ const WGX = (function () {
     return {
       init() { return true; },
       resize,
+      setPhotoCaptureSize(size) { _cssSizeCache.photoSize = size; resize(); },
       setRenderScale,
       getRenderScale() { return renderScale; },
       setSpatialUpscale,

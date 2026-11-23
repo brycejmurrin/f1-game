@@ -707,6 +707,7 @@ const photoTick = () => new Promise(resolve => setImmediate(resolve));
 
 test("saved photo picker previews only on selection and persists only on explicit Choose", async () => {
   const saved = [], rows = Array.from({ length: 8 }, (_, i) => ({ id: String(i), title: "Photo " + i, thumb: "data:image/jpeg;base64,AAAA" }));
+  rows[2].background = "data:image/jpeg;base64,SE9NRQ==";
   const h = photoPickerHarness(async () => rows, thumb => { saved.push(thumb); return true; });
   await photoTick();
   assert.equal(h.select.tagName, "SELECT"); assert.equal(h.select.children.length, 7, "six photos plus prompt");
@@ -714,7 +715,7 @@ test("saved photo picker previews only on selection and persists only on explici
   h.select.value = "2"; h.dom.dispatch(h.select, { type: "change" });
   assert.equal(h.preview.src, rows[2].thumb); assert.equal(h.preview.alt, "Preview: Photo 2");
   assert.equal(h.choose.disabled, false); assert.deepEqual(saved, []);
-  h.choose.click(); assert.deepEqual(saved, [rows[2].thumb]); assert.equal(h.studio.scene().mode, "photo");
+  h.choose.click(); assert.deepEqual(saved, [rows[2].background]); assert.equal(h.studio.scene().mode, "photo");
   assert.equal(h.note.textContent, "Photo 2 chosen as your menu background.");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "PHOTO STUDIO & MY BACKGROUND"), "import door retained");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "RESET SCOPE"), "reset retained");

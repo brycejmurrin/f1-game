@@ -16,10 +16,10 @@ const PhotoStudio = (function () {
     return { x: (w - cw) / 2, y: (h - ch) / 2, width: cw, height: ch };
   }
   function background() {
-    try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 240000 ? v : ""; } catch (_) { return ""; }
+    try { const v = localStorage.getItem(KEY); return v && /^data:image\/(jpeg|png);base64,/.test(v) && v.length < 1.5e6 ? v : ""; } catch (_) { return ""; }
   }
   function setBackground(value) {
-    if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 240000)) return false;
+    if (value && (!/^data:image\/(jpeg|png);base64,/.test(value) || value.length >= 1.5e6)) return false;
     try {
       const S = GameStore.store;
       if (!(value ? S.rawSet(KEY, value) : S.rawDel(KEY))) return false;

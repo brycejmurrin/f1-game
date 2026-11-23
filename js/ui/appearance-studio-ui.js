@@ -299,7 +299,7 @@ const AppearanceStudioBody = (function () {
       const seen = new Set();
       photoRows = (Array.isArray(rows) ? rows : []).filter((p) => p && typeof p.id === "string" && !seen.has(p.id)
         && typeof p.thumb === "string" && /^data:image\/(jpeg|png);base64,/.test(p.thumb) && p.thumb.length < 240000 && seen.add(p.id))
-        .slice(0, 6).map((p) => ({ id: p.id, title: String(p.title || "Saved photo").slice(0, 80), thumb: p.thumb }));
+        .slice(0, 6).map((p) => ({ id: p.id, title: String(p.title || "Saved photo").slice(0, 80), thumb: p.thumb, background: p.background }));
       ui.photoSelect.replaceChildren();
       const placeholder = node("option", "", "Select a saved photo"); placeholder.value = ""; ui.photoSelect.appendChild(placeholder);
       for (const row of photoRows) { const option = node("option", "", row.title); option.value = row.id; ui.photoSelect.appendChild(option); }
@@ -316,7 +316,7 @@ const AppearanceStudioBody = (function () {
     const row = photoRows.find((p) => p.id === ui.photoSelect.value);
     if (!row || !photoPickerOpen() || ui.photoChoose.disabled) return;
     let saved = false;
-    try { saved = typeof PhotoStudio !== "undefined" && PhotoStudio.setBackground(row.thumb); } catch (_) { /* Preserve the current scene on storage failure. */ }
+    try { saved = typeof PhotoStudio !== "undefined" && PhotoStudio.setBackground(row.background || row.thumb); } catch (_) { /* Preserve the current scene on storage failure. */ }
     if (!saved) { ui.photoNote.textContent = "Background could not be saved. Your current background stays in place; try again or import through Photo Studio."; return; }
     setScene("photo"); sceneChanged(true);
     ui.photoNote.textContent = row.title + " chosen as your menu background.";
