@@ -1347,6 +1347,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (context.realExterior && arriving) GarageExterior.poseMatrix(arriving, arrivalCar);
   const team = Teams.LIST[G.teamIdx];
   const carMesh = getSetupPreviewMesh();
+  context.reflectionHull = _spHull;
   context.departureWheels = departureWheels ? drawDepartureReflection : null;
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);

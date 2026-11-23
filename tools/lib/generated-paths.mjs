@@ -16,7 +16,6 @@ export const GENERATED_PATHS = Object.freeze([
   "tools/README.md",
   "docs/agent-index.json",
   "docs/AGENT-HOOKS.md",
-  "tests/data/impact-map.json",
   "tests/data/ratchets.json",
 ]);
 
@@ -44,6 +43,7 @@ export const BUILT_PATHS = Object.freeze([
 // a modify/delete conflict in one cures by taking the deletion, exactly as a BUILT path (deploy.mjs).
 export const ON_DEMAND_PATHS = Object.freeze([
   "docs/agent-output/catalog.json",
+  "tests/data/impact-map.json",
   "tools/shot/scenery-locations.json",
 ]);
 
