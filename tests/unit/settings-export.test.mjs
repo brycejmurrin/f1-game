@@ -2129,7 +2129,7 @@ test("SAVE/LOAD SETTINGS carries a calibrated stick rest map to a fresh device (
 test("helmet vibration backups omit restored defaults and import legacy strengths as percentages", () => {
   for (const value of ["normal", "100"]) {
     const file = boot({ disk: { "apex26.helmetShake": value } }).collect("changes");
-    assert.ok(!file.changed.includes("camera.helmetShake"));
+    assert.equal(file.settings.camera?.helmetShake, undefined);
   }
   const dst = boot();
   for (const [saved, expected] of [["off", "0"], ["soft", "40"], ["medium", "70"], ["normal", "100"], ["125", "125"]]) {
