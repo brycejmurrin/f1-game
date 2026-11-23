@@ -19,7 +19,7 @@ const setups = {
 };
 
 for (const [id, setup] of Object.entries(setups)) {
-  test("Learn challenge starts open and accepts a reachable " + id + " setup", () => {
+  test(`Learn challenge starts open and accepts a reachable ${id} setup`, () => {
     const path = new URL("../../learn/" + id + "/lab.js", import.meta.url);
     let lesson;
     vm.runInNewContext(readFileSync(path, "utf8"), {LearnSandbox: {mount(value) { lesson = value; }}}, {filename: fileURLToPath(path)});
