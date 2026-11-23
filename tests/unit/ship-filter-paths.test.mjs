@@ -24,7 +24,7 @@ const CI = readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8");
 const PAGES = readFileSync(join(ROOT, ".github/workflows/pages.yml"), "utf8");
 const EXPECTED_STAGED_NAMES = [
   ".nojekyll", "assets", "bench.html", "cockpit-view.html", "controller.html",
-  "css", "icons", "index.html", "js", "locales", "manifest.json", "overlay.html",
+  "css", "icons", "index.html", "js", "learn", "locales", "manifest.json", "overlay.html",
   "sw.js", "vendor", "version.json",
 ];
 

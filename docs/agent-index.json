@@ -5063,6 +5063,11 @@
       "roster": "LAZY_UI_PRESETS"
     },
     {
+      "path": "js/ui/learn-door.js",
+      "global": "LearnDoor",
+      "roster": "LAZY_LEARN"
+    },
+    {
       "path": "js/ui/live-region.js",
       "global": "LiveRegion",
       "roster": "tag"

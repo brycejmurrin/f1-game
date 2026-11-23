@@ -77,6 +77,12 @@ test("loading circuits one after another keeps one world in memory and does not 
   expect(backend, "this spec measures the shipped TLX backend").toBe("three");
 
   const heap = {}, readings = [];
+  // The gfx runner launches several Playwright processes on one outputDir.
+  // Keep the census outside it so later suites and retries preserve each attempt.
+  const censusDir = "artifacts/test-results-track-switch-memory";
+  mkdirSync(censusDir, { recursive: true });
+  const censusPath = `${censusDir}/${test.info().project.name}-${test.info().repeatEachIndex}-retry${test.info().retry}.json`;
+
   for (let visit = 1; visit <= VISITS; visit++) {
     for (const id of CIRCUITS) {
       await pickTrack(page, id);
@@ -91,14 +97,13 @@ test("loading circuits one after another keeps one world in memory and does not 
       await waitFrames(page, 15);
       await settle(page, SETTLE_MS);
       const c = await censusAfterGc(page, cdp);
+      const nbc = await page.evaluate(() => { const n = window.renderer && window.renderer._nodes; let zero = 0; if (n) for (const st of n.nodeBuilderCache.values()) if (st.usedTimes <= 0) zero++; return n ? { size: n.nodeBuilderCache.size, zero } : null; });
+      readings.push({ visit, id, ...c, renderObjects: c.three?.renderObjects, nodeBuilderCache: nbc });
+      writeFileSync(censusPath, JSON.stringify(readings, null, 1));
       expect(c.aliveTracks, `visit ${visit} to ${id}: built tracks still reachable after GC`).toEqual([id]);
       expect(c.three && c.three.renderObjects, `visit ${visit} to ${id}: the world must have drawn for this reading to mean anything`)
         .toBeGreaterThanOrEqual(MIN_RENDER_OBJECTS);
       (heap[id] = heap[id] || [])[visit] = c.heapBytes / 1048576;
-      const nbc = await page.evaluate(() => { const n = window.renderer && window.renderer._nodes; let zero = 0; if (n) for (const st of n.nodeBuilderCache.values()) if (st.usedTimes <= 0) zero++; return n ? { size: n.nodeBuilderCache.size, zero } : null; });
-      readings.push({ visit, id, heapBytes: c.heapBytes, heapMB: c.heapMB, renderObjects: c.three && c.three.renderObjects, nodeBuilderCache: nbc });
-      mkdirSync("artifacts/logs", { recursive: true });
-      writeFileSync("artifacts/logs/track-switch-memory.json", JSON.stringify(readings, null, 1));
       expect(nbc, "three r186 keeps renderer._nodes.nodeBuilderCache; a three upgrade that moves it must move this read").not.toBeNull();
       expect(nbc.zero, `visit ${visit} to ${id}: node-builder states orphaned at usedTimes 0 (of ${nbc.size})`).toBe(0);
     }

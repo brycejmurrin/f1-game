@@ -165,7 +165,7 @@ test("an install where controller.html 404s still completes (optional, not essen
 // often-held service-worker.test.mjs; overlay.html was not. Install does not
 // seed overlay/bench/cockpit (SW_ROOT_PAGES is controller only), so the offline
 // uncached path must fail honestly — not open the race.
-for (const page of ["overlay.html", "bench.html", "cockpit-view.html"]) {
+for (const page of ["overlay.html", "bench.html", "cockpit-view.html", "learn/aero/index.html"]) {
   test(`offline, an uncached ${page} fails honestly instead of opening the game`, async () => {
     const h = harness({ seed: { "index.html": GAME }, fetchImpl: () => Promise.reject(new TypeError("offline")) });
     const res = await h.nav("/" + page);

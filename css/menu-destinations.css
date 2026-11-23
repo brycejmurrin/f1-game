@@ -473,6 +473,9 @@ body[data-shape="wide"] #overlay #menu-buttons:not([data-home-floor="off"]) #men
 body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="7"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="6"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="6"] #menu-explore { display: contents; }
+/* The flattened Learn door takes one cell beside the three Create doors. */
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="6"] #mb-learn { grid-column: 1; }
+body[data-shape="wide"] #overlay #menu-buttons[data-home-rows="6"] #menu-create { grid-column: 2 / -1; }
 }
 }
 }

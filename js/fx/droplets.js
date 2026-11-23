@@ -30,7 +30,7 @@ const Droplets = (function () {
   // True while the canvas may hold paint: with rain on and no drop alive, a
   // full-DPR clearRect every frame cleared an already-clear canvas (#4532 note).
   let _painted = false;
-  let _lens;
+  let _lens, _reduced = false;
   const WATER_SIZE = 128, WATER_HZ = 30;
   const WATER_LEVEL = { light: 1.2, medium: 2.4, strong: 4 }, DARK_LIGHT = [0, 0, 0];
   const waterField = { data: null, size: WATER_SIZE, x: 0, y: 0, revision: 0 };
@@ -322,6 +322,8 @@ const Droplets = (function () {
   function tick(dt, on, rain, storm, vs, reduced, lens) {
     // The shield's own optics ride this heartbeat: the eye-port, the added light and the rim bend (js/fx/visor-optics.js).
     if (typeof VisorOptics !== "undefined") VisorOptics.tick(dt, on, vs, reduced);
+    const motionChanged = _reduced !== !!reduced;
+    _reduced = !!reduced;
     // Dry frames still tick shield optics above. No water can move or spawn.
     const falling = rain >= RAIN_MIN;
     if (!on || (!falling && !_n)) { _show(false); return; }
@@ -342,21 +344,26 @@ const Droplets = (function () {
     const scale = helmet && typeof CockpitOpts.visorDropSize === "function" ? CockpitOpts.visorDropSize() : 1;
     const sizeChanged = scale !== _dropScale;
     _dropScale = scale;
+    // A lower motion budget applies to collected water too, including while paused.
+    const c = cap(_mob(), _reduced);
+    _n = Math.min(_n, c);
     const waterStrength = _waterLevel(helmet), waterChanged = waterStrength !== _waterStrength;
     _waterStrength = waterStrength;
     if (!waterStrength) _waterOn = false;
     _light = helmet && typeof VisorOptics !== "undefined" && VisorOptics.lightField ? VisorOptics.lightField() : null;
     const lightChanged = (_light ? _light.revision : -1) !== _lightRevision;
     _lightRevision = _light ? _light.revision : -1;
-    if (!(dt > 0)) { if (resized || changed || sizeChanged || waterChanged || lightChanged) _draw(!!reduced, helmet); return; }   // paused: size edits repaint existing water
+    if (!(dt > 0)) {
+      if (resized || changed || sizeChanged || waterChanged || lightChanged || motionChanged) _draw(_reduced, helmet);
+      return;
+    }
     if (dt > 0.1) dt = 0.1;
     const runoff = helmet ? CockpitOpts.visorRunoff() : "normal";
     _step(dt, vs || 0, !!reduced, runoff === "slow" ? 0.45 : runoff === "fast" ? 2.1 : 1, helmet, rain);
-    const c = cap(_mob(), !!reduced);
     _acc += rate(rain, storm, !!reduced) * dt * (amount === "light" ? 0.4 : amount === "heavy" ? 1.8 : 1);
     while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced, helmet); }
     _waterAcc += dt;
-    if (!_waterStrength || _waterAcc >= 1 / (reduced ? 15 : WATER_HZ) || resized || changed || sizeChanged || waterChanged) {
+    if (!_waterStrength || _waterAcc >= 1 / (reduced ? 15 : WATER_HZ) || resized || changed || sizeChanged || waterChanged || motionChanged) {
       _draw(!!reduced, helmet); _waterAcc = 0;
     }
     if (!_n && rain < RAIN_MIN) _show(false);
@@ -364,7 +371,7 @@ const Droplets = (function () {
 
   // Race exit / results entry: the visor's light layer goes down with the water (render() stops ticking it off-race).
   function clear() { if (typeof VisorOptics !== "undefined") VisorOptics.clear(); _show(false); }
-  function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), false), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], hitAge: _hit[0], vx: _vx[0], vy: _vy[0] } : null }; }
+  function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), _reduced), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], hitAge: _hit[0], vx: _vx[0], vy: _vy[0] } : null }; }
 
   return { tick, clear, stats, rate, cap, waterLens };
 })();

@@ -80,9 +80,9 @@ function isRuntimeOnlyOptional(u) {
     || /^js\/xr\//.test(u)
     || /^js\/camera\/(tuner-panel|flyby-editor)\.js$/.test(u);
 }
-// Is this navigation the game's own shell? Any *.html page other than
-// index.html is a different document and must never be answered with the game.
+// Each Learn lesson has its own index.html; it must never boot the game as a fallback.
 function isShellDocument(url) {
+  if (/\/learn\/[^/]+\/index\.html$/.test(url.pathname)) return false;
   return /\/index\.html$/.test(url.pathname) || !/\.[A-Za-z0-9]+$/.test(url.pathname);
 }
 function isBackgroundOptional(u) {
@@ -730,6 +730,11 @@ async function precacheAssetLists() {
     "js/race/real-replay.js",
     "js/race/real-race-pace.js",
     "js/race/real-race.js",
+    // LEARN — the Learn modal and bare Aero Lab assets
+    "js/ui/learn-door.js",
+    "learn/aero/index.html",
+    "learn/aero/style.css",
+    "learn/aero/lab.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional
@@ -1052,7 +1057,7 @@ self.addEventListener("install", (event) => {
     // manifest or relying on the first online boot loses the pack after an update.
     const packManifest = PACK_MANIFEST_KEY_PREFIX + build;
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/fx\/visor-optics\.js$|^js\/data\/|^js\/render\/shared\/(?:mesh-detail|gfx-hi)\.js$|^js\/car\/car-hero\.js$|^js\/garage\/(departure-wheels|entrance-motion|arrival-rows|hi-prims|exterior(?:-geometry)?)\.js$|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui|backup)\.js$|^js\/perf\/(soak-run|gpu-test-run|phone-recorder|bench-capture|bench-run|metrics-panel)\.js$|^js\/input\/(?:phone-pad(?:-codec|-page)?|touch-button-actions)\.js$|^js\/ui\/(podium-beat|layout-presets|look-avail|touch-button-settings|appearance-(?:studio-ui|arrangement-picker)|companion-return|photo-studio-ui|results-sheet|quali-sheet|watch-transport|progress-backup|save-health|settings-export-body|learn-door|hud-inputs|screen-(regions|placement|arranger)|hud-arrange|hud-layout-editor|desktop-graphics|dock-toolbar)\.js$|^js\/share\/share-card(?:-chips|-data|-layout)?\.js$|^js\/lighting\/(presets|tuner-panel)\.js$|^js\/garage\/garage-data\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
