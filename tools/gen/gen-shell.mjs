@@ -279,7 +279,7 @@ function swOptionalBlock() {
     ["LAZY_GFX_HI — desktop EXTREME / CINEMA detail, fetched beside the backend when GfxQuality.detail() >= 2", MANIFEST.LAZY_GFX_HI || []],
     ["LAZY_PERF — BENCHMARK / PHONE TEST rig, idle-loaded after boot", MANIFEST.LAZY_PERF || []],
     ["LAZY_REAL_RACE — the Data Hub real-race engine (JUMP IN / WATCH / HIGHLIGHTS)", MANIFEST.LAZY_REAL_RACE || []],
-    ["LEARN — the Learn modal and bare Aero Lab assets", [...MANIFEST.LAZY_LEARN, ...MANIFEST.SW_LEARN]],
+    ["LEARN — the Learn modal and bare lesson assets", [...MANIFEST.LAZY_LEARN, ...MANIFEST.SW_LEARN]],
     ["LOCALES — manifest only until a non-English language ships", MANIFEST.SW_LOCALES || []],
   ];
   const out = [];

@@ -169,11 +169,15 @@ function postChain(webgpu) {
   const T = { DataTexture: Texture, DepthTexture: Texture, RenderTarget, Texture, QuadMesh: class { render() {} },
     NoColorSpace: "none", HalfFloatType: "f16", UnsignedByteType: "u8", RGBAFormat: "rgba", RedFormat: "r", LinearFilter: "linear" };
   const bag = () => new Proxy({}, { get: (t, k) => (typeof k !== "string" ? undefined : (t[k] ||= { value: { set() {}, fromArray() {} } })) });
-  const TS = { post: () => ({ composite: { mat: {}, U: bag(), tex: {} } }) };
+  const waterUV = uv => uv;
+  const TS = { post: () => ({ composite: { mat: {}, U: bag(), tex: {} }, fxaa: { waterUV } }) };
   const sb = { TLXShaders: TS, document: { createElement: () => ({ getContext: () => null }) }, Log: { info() {}, warn() {} }, performance: { now: () => 0 } };
   if (webgpu) {
     TS.gi = { gfxEnv: (e) => e, buildPlan: () => ({ gtao: true }), anyBuilt: (p) => !!(p && p.gtao), livePlan: (p) => p, gfxFeature: () => true };
-    sb.TLXAA = { taa: () => ({ state: () => ({ velocity: false }) }) };
+    sb.TLXAA = { taa: (_T, _TSL, ctx) => {
+      assert.equal(ctx.waterUV, waterUV, "the TAA final resolve receives the shared wet-surface transform");
+      return { state: () => ({ velocity: false }) };
+    } };
   }
   sb.window = sb;
   vm.runInNewContext(read("js/render/shared/post-common.js"), sb, { filename: absSrc("js/render/shared/post-common.js") });

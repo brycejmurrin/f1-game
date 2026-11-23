@@ -28,6 +28,7 @@ let raceSessionLoad = null;
 // (PitLane) called a group whose later file failed complete: the retry saw the
 // real PitLane, loaded nothing, and the race ran on stub engineer / radio.
 const RACE_SESSION_READY = {
+  "js/fx/visor-optics.js": () => typeof VisorOptics !== "undefined" && typeof VisorOptics.bind === "function",
   "js/input/touch-button-actions.js": () => typeof TouchButtonActions !== "undefined",
   "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
   "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
@@ -76,12 +77,17 @@ async function loadRaceSessionSerial(opts) {
   }
   return true;
 }
+function bindRaceOptics() {
+  const ctx = ctxOrNull();
+  if (ctx && typeof VisorOptics !== "undefined") VisorOptics.bind(ctx);
+}
 function ensureRaceSession() {
   if (raceSessionLoad) return raceSessionLoad;
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
   // Real before THIS loader ran anything (an eager shell / a spec that evaluated
   // the group itself): nothing to fetch and nobody to notify.
   if (!raceSessionLoaded.size && RACE_SESSION_FILES.every((f) => !RACE_SESSION_READY[f] || RACE_SESSION_READY[f]())) {
+    bindRaceOptics();
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
@@ -100,6 +106,7 @@ function ensureRaceSession() {
       // here would latch a REJECTED memo and RACE! would fail until reload. Count
       // it as fired only once it returns, so the next call retries it.
       try {
+        bindRaceOptics();
         if (typeof deps.onRaceSessionReady === "function") deps.onRaceSessionReady();
         raceSessionHooked = true;
       } catch (e) {

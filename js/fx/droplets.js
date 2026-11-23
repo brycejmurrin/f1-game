@@ -4,7 +4,8 @@
  * no backend pays a pass for it. game.js calls tick() once per rendered frame; everything else is here.
  *
  * Water uses a cached atlas of three asymmetric, translucent menisci rather than bright rings.
- * This is illustrative water shading, not scene-sampled droplet refraction. The shield itself — its eye-port,
+ * Helmet beads also publish a small displacement field from the same simulated surface for Three.js final-pass refraction.
+ * Other renderers retain the scene-lit surface overlay. The shield itself — its eye-port,
  * the light it adds and its rim bend — is js/fx/visor-optics.js, ticked from here. No per-drop gradients or
  * WebGL back-buffer reads.
  *
@@ -30,6 +31,70 @@ const Droplets = (function () {
   // full-DPR clearRect every frame cleared an already-clear canvas (#4532 note).
   let _painted = false;
   let _lens, _reduced = false;
+  const WATER_SIZE = 128, WATER_HZ = 30;
+  const WATER_LEVEL = { light: 1.2, medium: 2.4, strong: 4 }, DARK_LIGHT = [0, 0, 0];
+  const waterField = { data: null, size: WATER_SIZE, x: 0, y: 0, revision: 0 };
+  let _waterOn = false, _waterStrength = 0, _waterAcc = 1, _lightRevision = -1;
+  let _light = null;
+  function _waterLevel(helmet) {
+    // Only the Three final resolves consume this field; other backends keep the lit surface overlay.
+    if (typeof RendererPicker === "undefined" || (RendererPicker.liveBackend
+      ? RendererPicker.liveBackend() !== "three" : !RendererPicker.liveThreeApi || !RendererPicker.liveThreeApi())) return 0;
+    if (!helmet || _low() || (typeof CockpitOpts.visorQuality === "function" && CockpitOpts.visorQuality() === "low")) return 0;
+    const body = document.body;
+    if (body.hasAttribute("data-visor-shed") || (body.getAttribute && +body.getAttribute("data-visor-budget") >= 2)) return 0;
+    return WATER_LEVEL[CockpitOpts.visorRefraction()] || 0;
+  }
+  // No world readback: the same bead centres, envelope and stretched footprint produce a packed normal field.
+  function _waterBegin() {
+    _waterOn = false;
+    if (!_waterStrength || !_n) return;
+    if (!waterField.data) waterField.data = new Uint8Array(WATER_SIZE * WATER_SIZE * 4);
+    const data = waterField.data;
+    for (let p = 0; p < data.length; p += 4) { data[p] = data[p + 1] = 128; data[p + 2] = data[p + 3] = 0; }
+    waterField.x = (255 / 127) * _waterStrength * _dpr / _w;
+    waterField.y = (255 / 127) * _waterStrength * _dpr / _h;
+    _waterOn = true;
+  }
+  function _waterDrop(cx, cy, rx, ry, angle, alpha) {
+    if (!_waterOn) return;
+    const N = WATER_SIZE, data = waterField.data, cs = Math.cos(angle), sn = Math.sin(angle);
+    const ex = Math.abs(rx * cs) + Math.abs(ry * sn), ey = Math.abs(rx * sn) + Math.abs(ry * cs);
+    const x0 = Math.max(0, Math.floor((cx - ex) / _w * N)), x1 = Math.min(N - 1, Math.ceil((cx + ex) / _w * N));
+    const y0 = Math.max(0, Math.floor((cy - ey) / _h * N)), y1 = Math.min(N - 1, Math.ceil((cy + ey) / _h * N));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const dx = (x + 0.5) * _w / N - cx, dy = (y + 0.5) * _h / N - cy;
+      const nx = (dx * cs + dy * sn) / rx, ny = (-dx * sn + dy * cs) / ry, q = nx * nx + ny * ny;
+      if (q >= 1) continue;
+      const k = 2.598 * (1 - q) * alpha, vx = (nx * cs - ny * sn) * k, vy = (nx * sn + ny * cs) * k;
+      const p = (y * N + x) * 4;
+      data[p] = Math.max(1, Math.min(255, Math.round(data[p] + 127 * vx)));
+      data[p + 1] = Math.max(1, Math.min(255, Math.round(data[p + 1] + 127 * vy)));
+      data[p + 3] = 255;
+    }
+  }
+  function _highlight(g, cx, cy, rx, ry, angle, alpha) {
+    if (!_light || !_light.active || !(_spriteReflection > 0)) return;
+    const amb = _light.ambient || DARK_LIGHT, strength = _light.ambientStrength || 0;
+    let red = amb[0] * strength, green = amb[1] * strength, blue = amb[2] * strength;
+    let vx = -0.25 * strength, vy = -0.6 * strength, weight = strength;
+    for (let j = 0; j < _light.count; j++) {
+      const s = _light.sources[j], dx = s.x - cx / _w, dy = s.y - cy / _h;
+      const k = Math.max(0, s.k) / (1 + 12 * (dx * dx + dy * dy));
+      red += s.rgb[0] * k; green += s.rgb[1] * k; blue += s.rgb[2] * k;
+      vx += dx * k; vy += dy * k; weight += k;
+    }
+    if (!(weight > 0.002)) return;
+    const peak = Math.max(red, green, blue, 1e-6), a = Math.min(0.55, weight * 0.3 * _spriteReflection) * alpha;
+    if (a < 0.002) return;
+    const direction = Math.atan2(vy, vx) - angle;
+    g.save(); g.translate(cx, cy); g.rotate(angle); g.scale(rx, ry);
+    g.globalAlpha = a; g.strokeStyle = "rgb(" + Math.round(red / peak * 255) + "," + Math.round(green / peak * 255) + "," + Math.round(blue / peak * 255) + ")";
+    g.lineWidth = Math.min(0.18, 1.2 * _dpr / Math.max(1, Math.min(rx, ry)));
+    g.beginPath(); g.arc(0, 0, 1, direction - 0.45, direction + 0.45); g.stroke(); g.restore();
+  }
+  function waterLens() { return _waterOn && _shown && _n ? waterField : null; }
+
   let _n = 0, _acc = 0, _spriteReflection = -1, _spriteHelmet = false, _dropScale = 1;
   // Struct-of-arrays, sized for the desktop cap once.
   const _x = new Float32Array(CAP_DESK), _y = new Float32Array(CAP_DESK);    // 0..1 of the viewport
@@ -140,7 +205,7 @@ const Droplets = (function () {
     if (on === _shown) return;
     _shown = on;
     if (_cv) _cv.hidden = !on;
-    if (!on) { _n = 0; _acc = 0; if (_ctx && _w) _ctx.clearRect(0, 0, _w, _h); _painted = false; }
+    if (!on) { _waterOn = false; _waterAcc = 1; _n = 0; _acc = 0; if (_ctx && _w) _ctx.clearRect(0, 0, _w, _h); _painted = false; }
   }
 
   function _spawn(reduced, helmet) {
@@ -202,6 +267,7 @@ const Droplets = (function () {
 
   function _draw(reduced, helmet) {
     const g = _ctx;
+    _waterBegin();
     if (!_n) { if (_painted) { g.clearRect(0, 0, _w, _h); _painted = false; } return; }
     g.clearRect(0, 0, _w, _h);
     _painted = true;
@@ -217,6 +283,9 @@ const Droplets = (function () {
       const swell = impact > 0 ? 1 + 0.65 * Math.sin(Math.PI * (1 - impact)) : 1;
       const rad = _r[i] * m * (helmet ? _dropScale : 1) * swell, cx = _x[i] * _w, cy = _y[i] * _h;
       const st = reduced ? 1 : Math.min(STRETCH_MAX, 1 + Math.hypot(_vx[i], _vy[i]) * 11);
+      const rx = rad * 0.65 / Math.sqrt(st), ry = rad * 0.65 * st;
+      const angle = st > 1.05 ? Math.atan2(_vy[i] * _h, _vx[i] * _w) - Math.PI / 2 : 0;
+      _waterDrop(cx, cy, rx, ry, angle, a);
       g.globalAlpha = a;
       if (_sprite) {
         // Short asymmetric satellite beads mark a strike ON the shield, not a white ring in the world.
@@ -225,6 +294,7 @@ const Droplets = (function () {
           g.globalAlpha = a * impact * 0.65;
           for (let s = 0; s < 3; s++) {
             const dir = SATELLITE_DIRECTIONS[_variant[i] * 3 + s];
+            _waterDrop(cx + dir[0] * spread, cy + dir[1] * spread * 0.65, bead * 0.65, bead * 0.65, 0, a * impact * 0.65);
             g.drawImage(_sprite, ((s + _variant[i]) % 3) * 64, 0, 64, 64,
               cx + dir[0] * spread - bead, cy + dir[1] * spread * 0.65 - bead, bead * 2, bead * 2);
           }
@@ -237,10 +307,12 @@ const Droplets = (function () {
           g.resetTransform();
         } else g.drawImage(_sprite, _variant[i] * 64, 0, 64, 64, cx - rad, cy - rad, rad * 2, rad * 2);
       } else {
-        g.fillStyle = "rgba(160,178,194,0.09)";
+        g.fillStyle = "rgba(10,18,26,0.09)";
         g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.fill();
       }
+      if (helmet) _highlight(g, cx, cy, rx, ry, angle, a);
     }
+    if (_waterOn) waterField.revision++;
     g.globalAlpha = 1;
   }
 
@@ -268,20 +340,32 @@ const Droplets = (function () {
     const reflection = helmet ? CockpitOpts.visorReflections() : "light";
     const strength = reflection === "off" ? 0 : reflection === "medium" ? 1.4 : reflection === "strong" ? 1.8 : 1;
     const changed = strength !== _spriteReflection || helmet !== _spriteHelmet;
-    if (changed) { _spriteReflection = strength; _spriteHelmet = helmet; _sprite = _paintSprite(strength, helmet); }
+    if (changed) { _spriteReflection = strength; _spriteHelmet = helmet; _sprite = _paintSprite(helmet ? 0 : strength, helmet); }
     const scale = helmet && typeof CockpitOpts.visorDropSize === "function" ? CockpitOpts.visorDropSize() : 1;
     const sizeChanged = scale !== _dropScale;
     _dropScale = scale;
     // A lower motion budget applies to collected water too, including while paused.
     const c = cap(_mob(), _reduced);
     _n = Math.min(_n, c);
-    if (!(dt > 0)) { if (resized || changed || sizeChanged || motionChanged) _draw(!!reduced, helmet); return; }   // paused: size edits repaint existing water
+    const waterStrength = _waterLevel(helmet), waterChanged = waterStrength !== _waterStrength;
+    _waterStrength = waterStrength;
+    if (!waterStrength) _waterOn = false;
+    _light = helmet && typeof VisorOptics !== "undefined" && VisorOptics.lightField ? VisorOptics.lightField() : null;
+    const lightChanged = (_light ? _light.revision : -1) !== _lightRevision;
+    _lightRevision = _light ? _light.revision : -1;
+    if (!(dt > 0)) {
+      if (resized || changed || sizeChanged || waterChanged || lightChanged || motionChanged) _draw(_reduced, helmet);
+      return;
+    }
     if (dt > 0.1) dt = 0.1;
     const runoff = helmet ? CockpitOpts.visorRunoff() : "normal";
     _step(dt, vs || 0, !!reduced, runoff === "slow" ? 0.45 : runoff === "fast" ? 2.1 : 1, helmet, rain);
     _acc += rate(rain, storm, !!reduced) * dt * (amount === "light" ? 0.4 : amount === "heavy" ? 1.8 : 1);
     while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced, helmet); }
-    _draw(!!reduced, helmet);
+    _waterAcc += dt;
+    if (!_waterStrength || _waterAcc >= 1 / (reduced ? 15 : WATER_HZ) || resized || changed || sizeChanged || waterChanged || motionChanged) {
+      _draw(!!reduced, helmet); _waterAcc = 0;
+    }
     if (!_n && rain < RAIN_MIN) _show(false);
   }
 
@@ -289,6 +373,6 @@ const Droplets = (function () {
   function clear() { if (typeof VisorOptics !== "undefined") VisorOptics.clear(); _show(false); }
   function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), _reduced), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], hitAge: _hit[0], vx: _vx[0], vy: _vy[0] } : null }; }
 
-  return { tick, clear, stats, rate, cap };
+  return { tick, clear, stats, rate, cap, waterLens };
 })();
 Object.freeze(Droplets);

@@ -160,6 +160,40 @@ test("GGX, Smith and Schlick compile once per lit program", async () => {
   }
 });
 
+test("switching or disabling a lamp bake releases retired texture pixels", () => {
+  const textures = [];
+  class ObservedTexture extends THREE.DataTexture {
+    constructor(...args) {
+      super(...args);
+      textures.push(this);
+    }
+  }
+  const lit = globalThis.TLXShaders.lit({ ...THREE, DataTexture: ObservedTexture }, TSL, {
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), maxLights: 16,
+  });
+  const makeBake = () => ({ data: new Uint16Array(8), indir: new Uint16Array(4),
+    atlasW: 1, atlasH: 1, tilesX: 1, tilesY: 1, T: 16, cell: 1, x0: 0, z0: 0 });
+  const first = makeBake(), second = makeBake(), scale = [1, 1, 1];
+  lit.setLampBake(first, scale);
+  const old = textures.slice(-2);
+  let disposals = 0;
+  for (const t of old) t.addEventListener("dispose", () => disposals++);
+  lit.setLampBake(second, scale);
+  assert.equal(disposals, 2);
+  assert.notEqual(old[0].image.data, first.data);
+  assert.notEqual(old[1].image.data, first.indir);
+  const live = textures.slice(-2);
+  for (let i = 0; i < 120; i++) lit.setLampBake(null, null);
+  assert.equal(live[0].image.data, second.data);
+  assert.equal(live[1].image.data, second.indir);
+  lit.setLampBake(null, null);
+  assert.notEqual(live[0].image.data, second.data);
+  assert.notEqual(live[1].image.data, second.indir);
+  lit.setLampBake(first, scale);
+  assert.equal(textures.at(-2).image.data, first.data);
+  assert.equal(textures.at(-1).image.data, first.indir);
+});
+
 test("decal bake reads stay behind the enabled/extent and occupied-tile gates in WGSL and GLSL", () => {
   // Compile the production pool graph with the vendored builders. This checks
   // generated control flow, not source indentation; no GPU timing is implied.
