@@ -216,12 +216,12 @@ const VisorOptics = (function () {
         if (fade > 0.01) {
           const k = clampTo(2.0 * key * sunUp * gain * fade, 0, 1.4);
           const x = clampTo(p.x, -0.08 * w, 1.08 * w), y = clampTo(p.y, -0.08 * h, 1.08 * h);
-          out.sun = { x, y, k, r: base * 0.22 * (1 + 0.9 * (1 - fade)), rgb };
+          out.sun = { x, y, k, r: base * 0.12 * (1 + 0.5 * (1 - fade)), rgb };
           // The double-reflection ghost: mirrored through the centre, larger and fainter (lens-flare geometry).
-          if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.4, r: base * 0.3, rgb };
+          if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.15, r: base * 0.18, rgb };
           // God rays: a sun in the frame streaks across the shield's micro-scratches and the tear-off film —
           // radial, longest when the sun sits low in the frame (a low sun ahead is what blinds a driver).
-          if (over === 0 && bm > 0) out.rays = { x, y, k: k * bm, len: Math.hypot(w, h) * 0.75 * (0.7 + 0.3 * bm), rgb };
+          if (over === 0 && bm > 0) out.rays = { x, y, k: k * bm * 0.35, len: Math.hypot(w, h) * 0.35 * (0.7 + 0.3 * bm), rgb };
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
@@ -237,7 +237,7 @@ const VisorOptics = (function () {
 
     // Sky haze on the brow: the sky reflected in the top of the shield; only a daylight sky is bright enough.
     const amb = clampTo(lum(scene.ambientSky) * exp, 0, 2);
-    out.haze = clampTo(0.3 * amb * gain, 0, 0.32);
+    out.haze = clampTo(0.12 * amb * gain, 0, 0.16);
     const lampVis = lampAdapt(key * sunUp + amb);
     sceneLight += amb * 0.5;
 
@@ -281,18 +281,18 @@ const VisorOptics = (function () {
         const g = _glintBuf[i];
         const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
         // Nearer fixtures smear wider across the curved shield; far ones stay small.
-        const r = base * clampTo(0.14 + 8 / Math.max(8, g.d), 0.14, 0.36) * (0.8 + 0.2 * out.bloom);
+        const r = base * clampTo(0.035 + 1.5 / Math.max(8, g.d), 0.035, 0.10) * (0.8 + 0.2 * out.bloom);
         out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb,
           // The fixture's beam, seen in the air and on the shield: longer and brighter the harder the lamp hits the eye.
-          beam: bm > 0 && k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.45 + 0.55 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.5 * bm } : null,
+          beam: bm > 0 && k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.16 + 0.24 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.24 * bm } : null,
           // A star flare on the brightest three: the shield's micro-scratches split a hard point source into spokes.
-          star: bm > 0 && i < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.4 * bm } : null });
+          star: bm > 0 && i < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.2 * bm } : null });
         sceneLight += g.k * 0.6;
       }
     }
 
     // Chromatic fringe: a lens property, but ADDED colour, so it needs light in the scene to show.
-    out.fringe = clampTo(fringe * clampTo(sceneLight, 0, 1) * 0.55 * level, 0, 0.6);
+    out.fringe = clampTo(fringe * clampTo(sceneLight, 0, 1) * 0.22 * level, 0, 0.28);
     if (tint && out.sun) { const t = tint; out.sun.rgb = [(out.sun.rgb[0] * 2 + t[0]) / 3, (out.sun.rgb[1] * 2 + t[1]) / 3, (out.sun.rgb[2] * 2 + t[2]) / 3]; }
     return out;
   }
@@ -602,7 +602,7 @@ const VisorOptics = (function () {
     g.save(); g.translate(x, y); g.scale(sx, 1); g.fillStyle = grad;
     g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
     // The smear: the shield's horizontal curvature drags every bright source into a faint streak across it.
-    g.scale(3.2, 0.32); g.globalAlpha = 0.35;
+    g.scale(2.0, 0.22); g.globalAlpha = 0.16;
     g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
     g.globalAlpha = 1; g.restore();
   }

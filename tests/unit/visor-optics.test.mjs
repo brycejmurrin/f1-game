@@ -698,3 +698,18 @@ test("#5018 visor projects through the lens the world was drawn with: the fitted
   assert.equal(V.sceneFromG({ ...G, camRoll: 0.2 }).roll, 0.2);
 });
 
+
+test("maximum visor effects keep flood halos and beams local to their sources", () => {
+  const { V } = load();
+  const lights = new Float32Array(Array.from({ length: 8 }, (_, i) => lamp(i * 2 - 7, -12)).flat());
+  const m = V.lightMap({ ...NIGHT, lights }, 852, 393, { level: 1.6, beams: 2, bloom: 2.5, fringe: 1 });
+  assert.ok(m.glints.length > 0);
+  for (const glint of m.glints) {
+    assert.ok(glint.r < 393 * 0.14, "a nearby flood halo stays below 14% of viewport height");
+    if (glint.beam) assert.ok(glint.beam.len < 393 * 0.5, "a beam stays within half the viewport height");
+  }
+  assert.ok(m.fringe <= 0.28, "the strongest chromatic rim stays translucent");
+  const sun = V.lightMap({ ...DAY, sunDir: [0, 0.1, -0.995] }, 852, 393, { level: 1.6, beams: 2 });
+  assert.ok(sun.rays && sun.rays.len < Math.hypot(852, 393) * 0.5);
+  assert.ok(sun.ghost.k < sun.sun.k * 0.2);
+});
