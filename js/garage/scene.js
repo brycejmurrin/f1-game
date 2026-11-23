@@ -1728,13 +1728,7 @@ const roomProbe = {
   half: [HALF_W, CEIL_Y / 2, (Z_DOOR - Z_BACK) / 2],
   room: null, mood: "",
   draw() {
-    let sheen = 0;
-  if (carMesh) {
-    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
-    else arrivalMirror.set(MAT_MIRROR);
-    sheen = mirrorSheen(eye, carMat) * mirrorFloorCoverage(eye, ctx?.reflectionHull, arrivalMirror);
-  }
-  if (sheen <= 0.02) _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+    _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
     _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
     if (trussMesh) _gfx.draw(trussMesh, MAT_I, SHELL_OPTS);
     for (const side of SIDES) {
