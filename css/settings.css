@@ -94,6 +94,7 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
 }
 /* Action rows grow with their labels; the tap ladder remains their floor. */
 #pmsettings-inner .pm-group button,
+#learn .pm-doors button,
 #pmsettings-inner .pm-doors button {
   height: auto;
   min-height: var(--tap);
@@ -360,6 +361,7 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
 }
 /* Navigation doors are quiet, solid panels. Opaque semantic surfaces keep
    the same hierarchy over a live background and in the light theme. */
+#learn .pm-doors button,
 #pmsettings-inner .pm-doors button {
   width: auto;
   height: auto;
@@ -378,6 +380,7 @@ body:not(.desktop) #pmsettings-inner:not([data-shape="tall"]) { --compact-at: 62
   border-color: var(--plate-line);
   box-shadow: none;
 }
+#learn .pm-doors small,
 #pm-settings-index small {
   display: block;
   font-size: var(--fs-micro); font-weight: 400; letter-spacing: normal;

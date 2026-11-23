@@ -54,6 +54,35 @@ dialog.screen.dim::backdrop {
   :root:not([data-motion="reduce"]) dialog.screen.dim[open]::backdrop { animation: scrim-in 0.16s ease-out; }
 }
 
+/* The header stays reachable while the lesson scrolls inside its own frame. */
+#learn > .sheet {
+  /* Keep the embedded document and its pointer hit targets in one pixel space. */
+  --sheet-scale: 1;
+  zoom: 1;
+  --sheet-w: 720px;
+  --fit-at: 340px;
+}
+#learn > .sheet[data-lesson] {
+  --sheet-w: 1120px;
+  height: min(100%, 840px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#learn [data-lesson] > .sheet-body {
+  padding: 0;
+  overflow: hidden;
+}
+#learn [hidden] {
+  display: none;
+}
+#learn-lab:not([hidden]) {
+  display: block;
+  border: 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
 /* ---------- foldables: a guard, not a layout ----------
    A `.screen` centres its sheet in the viewport. On a dual-screen or folded
    device the viewport spans BOTH panels, so a centred sheet lands on the hinge —

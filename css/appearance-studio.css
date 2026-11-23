@@ -43,8 +43,11 @@
 #appearance-studio [data-as="photo-picker"] select { flex: 1 1 12ch; width: 100%; min-width: 0; max-width: 100%; }
 #appearance-studio [data-as="photo-preview"] { display: block; max-width: 100%; width: min(100%, 320px); max-height: 180px; object-fit: contain; margin-block: var(--gap); border-radius: var(--r-sm); }
 #appearance-studio [data-as="photo-picker"][hidden], #appearance-studio [data-as="photo-preview"][hidden] { display: none; }
+#learn-studio [data-as="controls"],
 #appearance-studio [data-as="controls"] { display: grid; gap: var(--gap); min-width: 0; }
+#learn-studio [data-as="box"],
 #appearance-studio [data-as="box"] { padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); min-width: 0; }
+#learn-studio [data-as="heading"],
 #appearance-studio [data-as="heading"] { margin: 0 0 var(--gap); font-size: var(--fs-2); color: var(--dim); letter-spacing: var(--ls-2); }
 #appearance-studio [data-as="row"] { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .5); margin-block: calc(var(--gap) * .6); min-width: 0; }
 #appearance-studio [data-as="label"] { flex: 0 0 28%; font-size: var(--fs-2); }
@@ -253,6 +256,7 @@
   --sheet-w: min(calc(var(--tap) * 25), calc(100 * var(--vwz) - var(--pad)));
   max-width: min(calc(var(--tap) * 31), calc(100 * var(--vwz) - var(--pad)));
 }
+#learn-studio,
 #appearance-studio { width: 100%; min-width: 0; }
 #pmsettings-inner[data-shape="tall"] #appearance-studio {
   grid-template-columns: minmax(0, 1fr);

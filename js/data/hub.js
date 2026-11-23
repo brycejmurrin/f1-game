@@ -66,7 +66,7 @@ const DataHub = (function () {
   const BLOCKING_SEL = (
     "#howtoplay,#pmsettings,#career,#career-offers,#career-history,#career-guide,#select," +
     "#teampicker,#vsfriend,#carsetup,#photo-studio,#season-setup,#track-detail," +
-    "#race-settings,#customize,#trackdesigner,#standings,#quali,#spotifypanel," +
+    "#race-settings,#customize,#trackdesigner,#learn,#standings,#quali,#spotifypanel," +
     "#lighting,#camtune,#flyby,#freecam,#garrival,#duel-picker"
   );
 

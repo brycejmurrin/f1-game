@@ -256,6 +256,9 @@
       "js/race/real-race.js"
     ]
   ],
+    LAZY_LEARN: [
+    "js/ui/learn-door.js"
+  ],
     LAZY_RACE: [
     "js/data/garage-entrance-motion.js",
     "js/garage/entrance-motion.js",

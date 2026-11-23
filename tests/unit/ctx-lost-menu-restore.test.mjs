@@ -38,8 +38,8 @@ test("TitleMenu.repairDestinations remounts orphaned play doors", () => {
   const roots = [menu, orphan];
   const doc = { documentElement: { dataset: {} }, getElementById: (id) => roots.map((r) => walk(r, id)).find(Boolean), createElement: (tag) => new Node(tag), body: { appendChild() {} } };
   doc.getElementById = (id) => { if (id === "menu-buttons") return menu; return roots.map((r) => walk(r, id)).find(Boolean); };
-  for (const id of ["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-vs", "mb-season", "mb-practice", "mb-garage", "mb-photo", "mb-designer", "mb-standings", "mb-settings", "mb-phonepad", "mb-help", "menu-explore", "menu-garage", "menu-create", "menu-secondary", "menu-hero"]) {
-    const n = new Node("button"); n.id = id; if (["mb-race", "mb-tt", "mb-watch", "mb-data"].includes(id)) orphan.appendChild(n);
+  for (const id of ["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-learn", "mb-vs", "mb-season", "mb-practice", "mb-garage", "mb-photo", "mb-designer", "mb-standings", "mb-settings", "mb-phonepad", "mb-help", "menu-explore", "menu-garage", "menu-create", "menu-secondary", "menu-hero"]) {
+    const n = new Node("button"); n.id = id; if (["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-learn"].includes(id)) orphan.appendChild(n);
     else menu.appendChild(n);
   }
   const ctx = vm.createContext({ document: doc, Log: { info() {} }, SettingsNav: null });

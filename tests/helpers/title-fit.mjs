@@ -25,10 +25,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 // A clean phone and the owner's legacy export both keep Career on its own row and Continue / Daily
 // together beneath it. The six play buttons share two or three columns, or join Watch / Data in
-// four columns on the shortest phones. These compositions include Continue and preserve the tap floor.
+// four columns in the shortest tier. Learn shares the Create row in that tier. Every composition
+// includes Continue and keeps the tap floor.
 const WIN = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/phone-windows.json"), "utf8")).windows;
 const cell = (name, w) => ({ name, w: w.width, h: w.height, insets: { ...w.insets } });
-const ROWS6 = [1, 2, 4, 4, 3, 4], ROWS7 = [1, 2, 3, 3, 2, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 2, 3, 4];
+const ROWS6 = [1, 2, 4, 4, 4, 4], ROWS7 = [1, 2, 3, 3, 3, 3, 4], ROWS8 = [1, 2, 2, 2, 2, 3, 3, 4];
 export const GEOS = [
   { ...cell("852x393-standalone", WIN.standalone), rows: ROWS7, freshRows: ROWS7, floor: true },
   { ...cell(`${WIN.safari.width}x${WIN.safari.height}-safari`, WIN.safari), rows: ROWS7, freshRows: ROWS6, floor: true },

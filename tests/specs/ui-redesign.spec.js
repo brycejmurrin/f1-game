@@ -972,10 +972,10 @@ test("balanced control rows derive their shape from local room", async ({ page }
   expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
-  // Watch and Data Hub share the Explore group.
+  // Watch, Data Hub and Learn share the Explore group.
   const explore = await report("#menu-explore");
   expect(explore.display).toBe("flex");
-  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(2);
+  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(3);
   expect(explore.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full
@@ -1202,4 +1202,62 @@ test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked fo
   expect(fit.left, "CLOSE's skewed left corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
   expect(fit.right, "CLOSE's skewed right corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
 });
+});
+
+test("Learn opens the wake lesson and returns keyboard focus to its title door", async ({ page }) => {
+  await waitReady(page);
+  const door = page.locator("#mb-learn");
+  await door.click();
+  const lesson = page.locator("#learn-open-aero");
+  await lesson.click();
+  const lab = page.frameLocator("#learn-lab");
+  await expect(lab.locator("#wake")).toHaveText("86%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.locator("#tow")).toHaveText("86%");
+  await lab.getByRole("slider", { name: "Following gap", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#gap")).toHaveValue("11");
+  const flow = lab.locator("#flow");
+  await flow.scrollIntoViewIfNeeded();
+  const box = await flow.boundingBox();
+  if (!box) throw new Error("missing airflow diagram");
+  const followerX = box.x + box.width * (0.68 - 0.57 * (11 - 5) / 40);
+  const followerY = box.y + box.height * 0.52;
+  await page.mouse.move(followerX, followerY);
+  await page.mouse.down();
+  await page.mouse.move(followerX - box.width * 0.57, followerY);
+  await page.mouse.up();
+  await expect(lab.locator("#gap")).toHaveValue("45");
+  await expect(lab.locator("#wake")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("100%");
+
+  await lab.getByLabel("The tow goes away. The wake still reduces grip.").check();
+  await lab.getByRole("button", { name: "Check prediction" }).click();
+  await expect(lab.locator("#feedback")).toHaveText("Correct. The usable tow drops from 86% to 0%. Grip stays at 88% of clean air.");
+  await expect(lab.locator("#gap")).toHaveValue("10");
+  await expect(lab.locator("#tow")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.getByRole("heading", { name: "2026 F1 ACTIVE AERO" })).toBeVisible();
+  await expect(lab.locator("#local-pressure")).toHaveText("64%");
+  await lab.getByRole("slider", { name: "Local flow speed", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#local-pressure")).toHaveText("66%");
+  await expect(lab.locator("#pressure-ratio")).toHaveText("0.81² = 0.66 of the clean-air pressure and force.");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  // Appearance changes must reach the iframe without resetting the lesson.
+  await page.evaluate(() => {
+    AppearanceOpts.setTheme("light");
+    AppearanceOpts.setMenuAccent("cyan");
+  });
+  await expect(lab.locator("body")).toHaveCSS("background-color", "rgb(240, 240, 244)");
+  await expect(lab.locator("#gap")).toHaveCSS("accent-color", "rgb(0, 163, 224)");
+  await lab.getByLabel("Fast corner").check();
+  await expect(lab.locator("#state")).toHaveText("Cornering in wake");
+  await lab.getByLabel("Move follower 4 m off-line").check();
+  await expect(lab.locator("#grip")).toHaveText("100%");
+  await lab.locator("#gap").press("Escape");
+  await expect(lesson).toBeFocused();
+  await page.locator("#learn-close").click();
+  await expect(door).toBeFocused();
+  await door.click();
+  await lesson.click();
+  await expect(lab.locator("#state")).toHaveText("Tow available");
 });

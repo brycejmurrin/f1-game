@@ -1902,12 +1902,17 @@ const MOVED = {
   "js/game/quali.js": "js/race/quali-model.js",
 };
 
+// Learn's modal loads only after the title door is used. The iframe requests
+// its standalone page and lesson assets without a ScriptLoader version query.
+const LAZY_LEARN = ["js/ui/learn-door.js"];
+const SW_LEARN = ["learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js"];
+
 /** Locale manifest only (English players need no locale JSON fetch). */
 const SW_LOCALES = ["locales/manifest.json"];
 
 module.exports = {
   MOVED,
-  SW_LOCALES,
+  SW_LOCALES, SW_LEARN, LAZY_LEARN,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, CSS_ROUTE, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, LAZY_REAL_RACE, LAZY_REAL_RACE_EDGES, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,

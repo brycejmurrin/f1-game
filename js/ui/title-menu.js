@@ -6,11 +6,11 @@ const TitleMenu = (function () {
   const DESTINATION_GROUPS = [
     ["menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice"]],
     ["menu-garage", "Garage", ["mb-garage"]],
-    ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]],
+    ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data", "mb-learn"]],
     ["menu-create", "Create", ["mb-photo", "mb-designer"]],
     ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-steerphone", "mb-help"]],
   ];
-  const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data"];
+  const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-learn"];
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
@@ -180,9 +180,41 @@ const TitleMenu = (function () {
     }, 0);
   }
 
+  function wireLearn(G) {
+    const menu = G.$("menu-buttons");
+    if (!menu) return;
+    const door = document.createElement("button");
+    door.className = "bigbtn alt minibtn";
+    door.textContent = "LEARN";
+    door.id = "mb-learn";
+    door.type = "button";
+    door.setAttribute("aria-haspopup", "dialog");
+    (G.$("menu-explore") || menu).appendChild(door);
+    let loading = false;
+    const titleReady = () => G.state === "menu" && UiLayers.top()?.id === "overlay";
+    door.addEventListener("click", async () => {
+      if (loading || !titleReady()) return;
+      if (G.soundOn) GameAudio.uiSelect();
+      if (typeof LearnDoor === "undefined") {
+        loading = true;
+        door.setAttribute("aria-busy", "true");
+        const ok = await ScriptLoader.create().load(ApexRoster.LAZY_LEARN, [], { strict: true }).catch(() => false);
+        loading = false;
+        door.removeAttribute("aria-busy");
+        if (!titleReady()) return;
+        if (!ok || typeof LearnDoor === "undefined") {
+          G.announce("COULD NOT LOAD LEARN — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
+          return;
+        }
+      }
+      LearnDoor.open(door);
+    });
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
+    wireLearn(G);
     organize(typeof document !== "undefined" ? document : null);
     // The doors paint from the shell seconds before game.js wires them (Slow 4G:
     // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
