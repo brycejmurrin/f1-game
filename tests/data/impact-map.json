@@ -1690,7 +1690,8 @@
     },
     "js/camera/director.js": {
       "create": [
-        "tests/unit/director.test.mjs"
+        "tests/unit/director.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "decideCut": [
         "tests/unit/director.test.mjs"
@@ -1701,8 +1702,12 @@
       "reset": [
         "tests/unit/director.test.mjs"
       ],
+      "shotFor": [
+        "tests/unit/real-race-lazy.test.mjs"
+      ],
       "status": [
-        "tests/unit/director.test.mjs"
+        "tests/unit/director.test.mjs",
+        "tests/unit/real-race-lazy.test.mjs"
       ],
       "tick": [
         "tests/unit/cam-round2.test.mjs",
@@ -13626,83 +13631,23 @@
       ]
     },
     "js/race/broadcast.js": {
-      "autoOn": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
       "battles": [
         "tests/unit/extra-rigs.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
-      "create": [
-        "tests/unit/director.test.mjs",
-        "tests/unit/extra-rigs.test.mjs",
-        "tests/unit/overlay-feed.test.mjs",
-        "tests/unit/overlay-render.test.mjs",
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs",
-        "tests/unit/tv-graphics.test.mjs"
-      ],
-      "fmtGap": [
-        "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "manual": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "nextEvent": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "pipPick": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "refresh": [
-        "tests/unit/extra-rigs.test.mjs"
-      ],
-      "resetTiming": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "setAuto": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "setLocked": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
       "shotFor": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "start": [
-        "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs",
-        "tests/unit/tv-graphics.test.mjs"
-      ],
-      "status": [
-        "tests/unit/director.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "stop": [
-        "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/overlay-render.test.mjs",
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs",
-        "tests/unit/tv-graphics.test.mjs"
-      ],
-      "tick": [
-        "tests/unit/director.test.mjs",
-        "tests/unit/extra-rigs.test.mjs",
-        "tests/unit/overlay-feed.test.mjs",
-        "tests/unit/overlay-publisher.test.mjs",
-        "tests/unit/real-replay-broadcast.test.mjs",
-        "tests/unit/tv-graphics.test.mjs"
-      ],
-      "towerAt": [
-        "tests/unit/real-replay-broadcast.test.mjs"
-      ],
-      "towerSample": [
+        "tests/unit/real-race-lazy.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "*": [
         "tests/specs/hud-mirror.spec.js",
-        "tests/unit/mirror-pass.test.mjs"
+        "tests/unit/director.test.mjs",
+        "tests/unit/mirror-pass.test.mjs",
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
+        "tests/unit/real-race-script.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
       ]
     },
     "js/race/car-fields.js": {
@@ -15275,6 +15220,61 @@
         "tests/specs/career-season.spec.js",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/damage.test.mjs"
+      ]
+    },
+    "js/race/replay-broadcast.js": {
+      "autoOn": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "create": [
+        "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
+      ],
+      "fmtGap": [
+        "tests/unit/hud-gap-decimals.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "manual": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "nextEvent": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "pipPick": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "resetTiming": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "setAuto": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "setLocked": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "start": [
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
+      ],
+      "status": [
+        "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "stop": [
+        "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/real-replay-broadcast.test.mjs",
+        "tests/unit/tv-graphics.test.mjs"
+      ],
+      "towerAt": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
+      "towerSample": [
+        "tests/unit/real-replay-broadcast.test.mjs"
       ]
     },
     "js/race/retired-card.js": {
