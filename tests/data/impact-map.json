@@ -14467,6 +14467,9 @@
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/season-cal.test.mjs"
       ],
+      "clearDeletedLap": [
+        "tests/unit/quali-persist.test.mjs"
+      ],
       "compute": [
         "tests/unit/quali-persist.test.mjs"
       ],
@@ -14480,6 +14483,12 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/session-records-medal-keep.test.mjs",
         "tests/unit/source-pin-hygiene.test.mjs"
+      ],
+      "hasDeletedLap": [
+        "tests/unit/quali-persist.test.mjs"
+      ],
+      "markDeletedLap": [
+        "tests/unit/quali-persist.test.mjs"
       ],
       "medalFor": [
         "tests/unit/quali-pace-parity-vm.test.mjs",
@@ -14530,6 +14539,9 @@
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs"
       ],
+      "hasArmed": [
+        "tests/unit/net-lobby-friend-quali.test.mjs"
+      ],
       "markDone": [
         "tests/unit/net-lobby-friend-quali.test.mjs"
       ],
@@ -14555,6 +14567,7 @@
         "tests/unit/net-authority.test.mjs"
       ],
       "resetOnQuitWithCancel": [
+        "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ],
       "resetSoft": [
