@@ -10,12 +10,59 @@
   const model = constants.DirtyAir;
   const tow = {range: constants.TOW_RANGE, fade: constants.TOW_FADE, halfW: constants.TOW_HALF_W};
   const preference = matchMedia("(prefers-reduced-motion: reduce)");
-  let animate = !preference.matches;
+  // frameElement is null for standalone and cross-origin embeds.
+  const host = window.frameElement;
+  const hostRoot = host?.ownerDocument.documentElement;
+  const root = document.documentElement;
+  const scheme = matchMedia("(prefers-color-scheme: light)");
+  const tokens = ["--red", "--bg", "--text", "--dim", "--surf-1", "--surf-3",
+    "--plate", "--plate-hover", "--card-line", "--plate-line", "--edge", "--focus",
+    "--r-lg", "--r-sm", "--fs-3", "--font-ui", "--font-hud"];
+  let palette;
+  let reduceMotion;
+  let animate = false;
   let frame = 0;
   let previousTime = 0;
   let phase = 0;
   let drag = null;
   let onStraight = true;
+
+  function syncAppearance() {
+    if (hostRoot) {
+      const style = getComputedStyle(host);
+      for (const token of tokens) root.style.setProperty(token, style.getPropertyValue(token));
+      root.style.colorScheme = style.colorScheme;
+    } else {
+      root.dataset.uiTheme = "system";
+    }
+    // Resolve swatches once per appearance change; Canvas cannot inherit CSS colours.
+    palette = {
+      leader: getComputedStyle(get("leaderKey")).backgroundColor,
+      follower: getComputedStyle(get("followerKey")).backgroundColor,
+      flow: getComputedStyle(canvas).color,
+      cockpit: getComputedStyle(canvas).backgroundColor,
+      label: getComputedStyle(document.body).color,
+    };
+    const reduced = hostRoot ? hostRoot.dataset.motion === "reduce" : preference.matches;
+    if (reduced !== reduceMotion) {
+      reduceMotion = reduced;
+      animate = !reduced;
+      updateMotion();
+    } else {
+      draw();
+    }
+  }
+
+  // Use the shell's exact stylesheet URLs, including deployed offline cache keys.
+  for (const name of ["tokens", "fonts-hud"]) {
+    const sheet = document.createElement("link");
+    sheet.rel = "stylesheet";
+    const parentSheet = host?.ownerDocument.querySelector(
+      'link[rel="stylesheet"][href*="css/' + name + '.css"]');
+    sheet.href = parentSheet?.href || "../../css/" + name + ".css";
+    sheet.addEventListener("load", syncAppearance);
+    document.head.prepend(sheet);
+  }
 
   // Coordinates are schematic so both cars stay legible at the smallest gap.
   function scene() {
@@ -32,7 +79,7 @@
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(scale, scale);
-    ctx.fillStyle = "#090d0c";
+    ctx.fillStyle = palette.label;
     for (const axle of [-14, 11]) {
       for (const side of [-1, 1]) ctx.fillRect(axle, side * 10 - 3, 8, 6);
     }
@@ -47,12 +94,12 @@
     }
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#26352e";
+    ctx.fillStyle = palette.cockpit;
     ctx.beginPath();
     ctx.ellipse(2, 0, 5, 3, 0, 0, 2 * Math.PI);
     ctx.fill();
     ctx.restore();
-    ctx.fillStyle = colour;
+    ctx.fillStyle = palette.label;
     ctx.font = "bold 13px monospace";
     ctx.textAlign = "center";
     ctx.fillText(letter, x, y - scale * 15 - 4);
@@ -70,7 +117,8 @@
     ctx.clearRect(0, 0, width, height);
     for (let row = -8; row <= 8; row++) {
       const base = mid + row * height / 19;
-      ctx.strokeStyle = Math.abs(row) < 3 ? "#87caa4" : "#48695b";
+      ctx.strokeStyle = palette.flow;
+      ctx.globalAlpha = Math.abs(row) < 3 ? 0.75 : 0.4;
       ctx.lineWidth = Math.abs(row) < 3 ? 1.4 : 1;
       ctx.setLineDash([9, 8]);
       ctx.lineDashOffset = phase * 20 + row * 0.8;
@@ -84,10 +132,11 @@
       }
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
     ctx.setLineDash([]);
     const scale = Math.min(1.7, width / 340);
-    car(leader, mid, scale, "#75d7ba", "A");
-    car(follower, mid + lateral, scale, "#d5ff79", "B");
+    car(leader, mid, scale, palette.leader, "A");
+    car(follower, mid + lateral, scale, palette.follower, "B");
   }
 
   function tick(time) {
@@ -143,13 +192,23 @@
   canvas.addEventListener("lostpointercapture", () => { drag = null; });
   document.querySelector(".settings").addEventListener("input", update);
   motion.addEventListener("click", () => { animate = !animate; updateMotion(); });
-  preference.addEventListener("change", () => { animate = !preference.matches; updateMotion(); });
+  preference.addEventListener("change", syncAppearance);
+  scheme.addEventListener("change", syncAppearance);
+  if (hostRoot) {
+    const observer = new MutationObserver(syncAppearance);
+    observer.observe(hostRoot, {
+      attributeFilter: ["style", "class", "data-ui-theme", "data-menu-accent", "data-team",
+        "data-ui-contrast", "data-text-size", "data-cvd", "data-motion", "data-look-popups-corners"],
+    });
+    window.addEventListener("pagehide", () => observer.disconnect(), {once: true});
+  }
   document.addEventListener("visibilitychange", updateMotion);
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && window.parent !== window) {
       window.parent.postMessage({type: "apex-learn-close"}, window.location.origin);
     }
   });
+  syncAppearance();
   new ResizeObserver(draw).observe(canvas);
   update();
   updateMotion();

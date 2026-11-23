@@ -1175,6 +1175,13 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await door.click();
   const lab = page.frameLocator("#learn-lab");
   await expect(lab.locator("#wake")).toHaveText("86%");
+  // Appearance changes must reach the iframe without resetting the lesson.
+  await page.evaluate(() => {
+    AppearanceOpts.setTheme("light");
+    AppearanceOpts.setMenuAccent("cyan");
+  });
+  await expect(lab.locator("body")).toHaveCSS("background-color", "rgb(240, 240, 244)");
+  await expect(lab.locator("#gap")).toHaveCSS("accent-color", "rgb(0, 163, 224)");
   await lab.getByLabel("Fast corner").check();
   await expect(lab.locator("#state")).toHaveText("Cornering in wake");
   await lab.getByLabel("Move follower 4 m off-line").check();

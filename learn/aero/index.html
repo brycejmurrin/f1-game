@@ -10,12 +10,12 @@
 </head>
 <body>
 <main>
-<header><p class="kicker">APEX 26 &nbsp;/&nbsp; LEARN</p><h1>Aero Lab<span>.</span></h1><p>Move the following car through the leader’s wake. Where does a tow help?</p></header>
+<header><h1>Aero Lab</h1><p>Move the following car through the leader’s wake. Where does a tow help?</p></header>
 <div class="layout">
 <section class="tunnel" aria-label="Wind tunnel">
 <div class="instrument"><strong>Wind tunnel</strong><button id="motion" type="button">Pause flow</button></div>
 <canvas id="flow" width="720" height="276" aria-label="Top-down airflow diagram. Adjust the following gap using the control below."></canvas>
-<div class="legend"><span>← Airflow</span> <span><i></i> A · Leader</span><span><i></i> B · Follower</span></div>
+<div class="legend"><span>← Airflow</span> <span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
 <p class="wing" id="wing"></p>
 <div class="settings">
 <label for="gap">Following gap <output id="gapValue" for="gap"></output></label>
