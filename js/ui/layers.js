@@ -68,7 +68,7 @@ window.UiLayers = (function () {
     { id: "photo-controls" },
     { id: "photo-studio" },
     { id: "datahub" },
-    { id: "learn" },
+    { id: "learn", transient: true }, // LearnDoor builds and wires the dialog on first open.
     /* The TRACK DESIGNER (js/editor/designer.js): a <dialog> like #datahub,
        built on first open behind #mb-designer. */
     { id: "trackdesigner" },
