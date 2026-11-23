@@ -9398,7 +9398,7 @@ function setSteerMode(mode) {
   // DISABLE (don't hide): hiding reflowed the settings grid mid-tap, so the
   // next tap landed on whatever button slid under the finger (worst case
   // HIDE HUD, which closes the whole menu). Same for the GEARS toggle below.
-  $("pm-calib").disabled = mode !== "tilt";
+  platformSession.paintTiltCalibration();
   refreshGearsBtn();   // manual is tilt-only, so the GEARS toggle disables off-tilt
   // Only refresh touch buttons when in an active race — don't bleed controls onto
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
@@ -9425,9 +9425,6 @@ SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
 platformSession.wireInstall();
 applyMirrorControls();
-// The zero is taken a beat after the tap (thumb off the glass, phone settled), still behind the pause card.
-// ONE handle (#5027): a double tap re-arms it, a newer pause clears it, and it never resumes a hidden tab.
-$("pm-calib").onclick = () => { const b = $("pm-calib"); clearTimeout(b._t); b._t = setTimeout(() => { if (!paused || document.hidden) return; Input.calibrate(); setPaused(false, "recalibrate"); }, 300); };
 platformSession.wirePhone();
 keyBinds = KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 window.addEventListener("apexcontrollerprofilechange", () => { if (keyBinds) keyBinds.render(); if (controllerProfileUi) controllerProfileUi.refresh(); });
@@ -9541,7 +9538,7 @@ platformSession.initInput({ steerMode, throttleLatchOpt });
 paintSteer();
 paintHudDetailsSummary();
 syncMetricsOverlayCompact();
-$("pm-calib").disabled = steerMode !== "tilt";
+platformSession.paintTiltCalibration();
 refreshGearsBtn();
 audioPanel.init();
 // THE BOOT BUILDS NO WORLD. This was a synchronous Tracks.build() inside

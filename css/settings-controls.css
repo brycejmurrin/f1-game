@@ -847,10 +847,10 @@ button:has(> [data-fold]) {
   background: var(--plate-hover); border-radius: var(--r-xs); padding: 2px;
 }
 
-/* Desktop / mouse: hide phone-only tilt chrome (moved from css/responsive.css). */
+/* Desktop keeps its input mode, and can centre an active phone tilt source. */
 body.desktop #pm-steer-item,
-body.desktop #pm-calib,
-body.desktop #pm-calib-help { display: none !important; }
+body.desktop:not([data-phone-tilt]) #pm-calib,
+body.desktop:not([data-phone-tilt]) #pm-calib-help { display: none !important; }
 } /* @layer components */
 
 @layer components {
