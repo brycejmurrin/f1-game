@@ -559,6 +559,21 @@ test('editor: first cleared-map edits adopt its painted origin on the whole-perc
   }
 });
 
+test("a second touch on the race surface resizes a small HUD piece", () => {
+  const e = editor("sectors");
+  e.api.setEditing(true);
+  e.fire("pointerdown", { pointerType: "touch" });
+  e.fire("pointerdown", { pointerType: "touch", pointerId: 2, clientX: 200, target: e.ids.get("hud") });
+  e.fire("pointermove", { pointerId: 2, clientX: 250 });
+  e.tick();
+  assert.equal(e.get("sectors").s, 150);
+  e.fire("pointerup", { pointerId: 2, clientX: 250 });
+  e.fire("pointermove", { clientX: 110 });
+  e.tick();
+  assert.equal(e.get("sectors").s, 150);
+  assert.ok(e.get("sectors").x > 0);
+});
+
 test('editor: explicit custom maps never adopt stale automatic clearance', () => {
   const e=editor('map',{snap:true}),map=e.ids.get('map');
   map.setAttribute('data-hl-user','');map.setAttribute('data-hl-v4','');map.style.setProperty('--hud-clear-x','117px');
