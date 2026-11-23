@@ -9,12 +9,19 @@ html, body { min-height: 100%; height: auto; overflow: visible; }
 body { margin: 0; }
 main { margin-inline: auto; max-width: 1100px; padding: var(--pad, 14px); }
 h1, h2, p, dl, dd { margin: 0; }
-#question { font-size: var(--fs-5, 20px); line-height: 1.12; margin-block-end: .6em; }
+.lesson-intro { margin-block-end: var(--gap); }
+.lesson-intro p { color: var(--dim); }
+fieldset { margin: 0 0 .7rem; padding: 0; border: 0; }
+.surface { display: flex; flex-wrap: wrap; gap: .35rem .75rem; }
+.surface label { display: flex; min-height: var(--tap, 44px); align-items: center; gap: .35em; cursor: pointer; }
+.surface input { accent-color: var(--red); }
+.scale-note { margin-block-start: .6rem; color: var(--dim); font-size: .85em; }
+#question { font-size: var(--fs-5, 20px); line-height: 1.12; margin-block-end: .25em; }
 label[for] { display: flex; justify-content: space-between; gap: .5em; }
-input[type=range] { display: block; width: 100%; min-height: 36px; margin: 0 0 .42rem; accent-color: var(--red); }
+input[type=range] { display: block; width: 100%; min-height: max(36px, var(--tap, 36px)); margin: 0 0 .42rem; accent-color: var(--red); }
 .actions, .stages, .legend { display: flex; flex-wrap: wrap; gap: .4rem; }
 button {
-  min-height: 36px;
+  min-height: max(36px, var(--tap, 36px));
   background: var(--plate);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
@@ -36,7 +43,7 @@ button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visibl
   gap: var(--gap);
   align-items: center;
 }
-.chart { display: grid; padding: 2px 8px 0 0; grid-template: auto auto / auto minmax(0, 1fr); gap: 4px; }
+.chart { display: grid; padding: .65em .8em 0 0; grid-template: auto auto / auto minmax(0, 1fr); gap: 1.6em; }
 .axis-y { grid-area: 1 / 1; writing-mode: vertical-rl; rotate: 180deg; text-align: center; }
 .axis-x { grid-area: 2 / 2; text-align: center; }
 .plot {
@@ -44,21 +51,35 @@ button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visibl
   position: relative;
   width: 100%;
   aspect-ratio: 1;
+  cursor: crosshair;
+  touch-action: none;
   border: 1px solid var(--edge);
   background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), var(--card-line) calc(25% - 1px) 25%),
     repeating-linear-gradient(to right, transparent 0 calc(25% - 1px), var(--card-line) calc(25% - 1px) 25%),
     var(--bg);
 }
-.envelope {
+.envelope,
+.dry-reference {
   position: absolute;
-  inset: 0;
+  inset: auto auto 0 0;
+  pointer-events: none;
   border: 1px solid var(--dim);
   border-bottom: 0;
   border-left: 0;
   border-radius: 0 100% 0 0;
-  background: color-mix(in oklab, var(--text) 9%, transparent);
 }
-.ray, .point { position: absolute; }
+.envelope { width: var(--capacity, 100%); height: var(--capacity, 100%); background: color-mix(in oklab, var(--red) 14%, var(--bg)); }
+.dry-reference { width: 100%; height: 100%; border-style: dashed; }
+.guide { position: absolute; left: 0; border-block-start: 1px dotted var(--text); }
+.tick { position: absolute; pointer-events: none; font: .82em var(--font-hud); }
+.x-start, .x-mid, .x-end { top: calc(100% + 2px); transform: translateX(-50%); }
+.x-start { left: 0; }
+.x-mid { left: 50%; }
+.x-end { left: 100%; }
+.y-mid, .y-end { right: calc(100% + 2px); transform: translateY(50%); }
+.y-mid { bottom: 50%; }
+.y-end { bottom: 100%; }
+.ray, .point { position: absolute; pointer-events: none; }
 .ray { left: 0; bottom: 0; height: 0; transform-origin: left center; border-block-start: 2px solid; }
 .point { width: .55rem; height: .55rem; transform: translate(-50%, 50%); }
 .requested { color: var(--text); }
@@ -66,9 +87,25 @@ button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visibl
 .point.requested { border: 2px solid; border-radius: 50%; background: var(--bg); z-index: 1; }
 .achieved { color: var(--red); }
 .point.achieved { rotate: 45deg; background: currentColor; }
+.point.limit { width: .75rem; height: .75rem; border: 1px dotted var(--text); }
 .plot[data-over="false"] .requested { display: none; }
 
 .readings { min-width: 0; }
+.budget { display: grid; gap: .22em; margin-block-end: .65rem; color: var(--dim); }
+.budget strong { color: var(--text); font: 800 1.5em var(--font-hud); }
+meter { width: 100%; height: .8em; accent-color: var(--red); }
+.unit { color: var(--dim); font-size: .85em; }
+#collision-explanation { margin-block-start: .3rem; color: var(--dim); }
+.trace { margin: .55em 0 0; padding: 0; list-style: none; font-size: .85em; }
+.trace li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0 .5em; border-inline-start: 2px solid transparent; padding-inline-start: .4em; }
+.trace .current { border-color: var(--red); }
+.trace strong { font-family: var(--font-hud); }
+.scenario { margin-block-start: var(--gap); padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); background: var(--surf-1); }
+.scenario h2 { margin-block-end: .3em; }
+.scenario p { margin-block: .5em; }
+.case-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14em), 1fr)); gap: .4rem; }
+.case-list button { text-align: start; }
+.case-list span { display: block; color: var(--dim); font-size: .85em; }
 dl { display: grid; gap: .4em; }
 dd, label span { font: 700 1em var(--font-hud, monospace); font-variant-numeric: tabular-nums; }
 dt, .legend, .chart, #phase-tip, details { font-size: .85em; color: var(--dim); }
