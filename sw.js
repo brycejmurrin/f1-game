@@ -739,6 +739,10 @@ async function precacheAssetLists() {
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",
+    "learn/vsc/index.html",
+    "learn/vsc/style.css",
+    "learn/vsc/model.js",
+    "learn/vsc/lab.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional

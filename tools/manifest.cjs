@@ -1910,6 +1910,7 @@ const SW_LEARN = [
   "learn/appearance.js",
   "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",
   "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js",
+  "learn/vsc/index.html", "learn/vsc/style.css", "learn/vsc/model.js", "learn/vsc/lab.js",
 ];
 
 /** Locale manifest only (English players need no locale JSON fetch). */

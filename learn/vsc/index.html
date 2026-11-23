@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSC Pit Strategy · Apex 26 Learn</title>
+<link rel="stylesheet" href="style.css">
+<script src="../appearance.js" defer></script>
+<script src="model.js" defer></script>
+<script src="lab.js" defer></script>
+</head>
+<body>
+<main>
+<h1 id="lessonTitle">VSC Pit Strategy</h1>
+<h2>When is a pit stop cheaper?</h2>
+<div id="learn-studio">
+<div data-as="controls">
+<section data-as="box" aria-labelledby="decision-heading">
+<h3 id="decision-heading" data-as="heading">Your pit call</h3>
+<p><strong>Lap 12 of 58 · Medium tyres</strong></p>
+<p id="conditions"></p>
+<label for="fixture">Scenario</label>
+<select id="fixture">
+<option value="default">Long stint · Full VSC</option>
+<option value="hardLife">Durable Hards · Full VSC</option>
+<option value="earlyGreen">Durable Hards · Early green</option>
+<option value="traffic">Durable Hards · Early green and traffic</option>
+</select>
+<div class="actions" id="choices"><button id="box" type="button" aria-pressed="false">Box now</button><button id="stay" type="button" aria-pressed="false">Stay out</button></div>
+<label for="prediction">If you box now, where will you rejoin?</label>
+<select id="prediction">
+<option value="">Choose a prediction</option>
+<option value="ahead">Ahead of the reference car</option>
+<option value="level">Level with the reference car</option>
+<option value="behind">Behind the reference car</option>
+</select>
+<button id="reveal" type="button" disabled>Reveal strategy</button>
+<p id="feedback" role="status"></p>
+</section>
+<details id="setup" data-as="box">
+<summary>Change the conditions</summary>
+<label for="green-speed">Green track speed <span class="readout" id="green-speed-value" aria-hidden="true"></span></label>
+<input id="green-speed" type="range" min="130" max="250" step="5">
+<label for="vsc-speed">VSC track speed <span class="readout" id="vsc-speed-value" aria-hidden="true"></span></label>
+<input id="vsc-speed" type="range" min="50" max="120" step="5">
+<label for="vsc-duration">Green resumes after <span class="readout" id="vsc-duration-value" aria-hidden="true"></span></label>
+<input id="vsc-duration" type="range" min="0" max="22" step=".5">
+<label for="service">Service time for either stop <span class="readout" id="service-value" aria-hidden="true"></span></label>
+<input id="service" type="range" min="1" max="6" step=".1">
+<label for="gap">Gap to reference car <span class="readout" id="gap-value" aria-hidden="true"></span></label>
+<input id="gap" type="range" min="0" max="30" step=".5">
+<button id="reset" type="button">Reset scenario</button>
+</details>
+</div>
+<section class="timing" data-as="preview-side" aria-labelledby="timing-heading">
+<h3 id="timing-heading" data-as="heading">Compare the same timing markers</h3>
+<p class="muted">Illustrative circuit sector · 400 m on track</p>
+<div class="markers" aria-hidden="true"><span>Start marker</span><span>End marker</span></div>
+<div class="lane">
+<span>Pit lane</span><strong id="pit-clock"></strong>
+<div class="track pit-track" aria-hidden="true"><i id="pit-car"></i></div>
+</div>
+<div class="lane">
+<span id="track-label">Track · VSC scenario</span><strong id="track-clock"></strong>
+<div class="track" aria-hidden="true"><b id="vsc-zone"></b><i id="track-car"></i></div>
+</div>
+<div class="lane">
+<span>Track · Green comparison</span><strong id="green-clock"></strong>
+<div class="track" aria-hidden="true"><i id="green-car"></i></div>
+</div>
+<div class="transport">
+<label for="timeline">Replay time <span class="readout" id="elapsed" aria-hidden="true"></span></label>
+<input id="timeline" type="range" min="0" max="30" step=".1" value="0">
+<div class="actions">
+<button id="play" type="button">Play replay</button>
+<button id="next" type="button">Next marker</button>
+<button id="replay" type="button">Rewind</button>
+</div>
+</div>
+<dl class="math">
+<dt>Pit path</dt><dd id="pit-math"></dd>
+<dt>Track · VSC scenario</dt><dd id="track-math"></dd>
+<dt>Track · Green comparison</dt><dd id="green-math"></dd>
+</dl>
+<p id="loss" class="callout"></p>
+<div id="projection">
+<h3 id="projection-heading" tabindex="-1">Which call pays off?</h3>
+<p id="rejoin" hidden></p>
+<dl class="math" id="finish" hidden><dt>Box now</dt><dd id="box-total"></dd><dt>Stay out</dt><dd id="stay-total"></dd></dl>
+<p id="verdict">Make a pit call and predict the rejoin to compare projected race time.</p>
+</div>
+</section>
+</div>
+<details id="history">
+<summary>What happened in Australia?</summary>
+<p>At the 2026 Australian Grand Prix, Mercedes switched Russell and Antonelli from Mediums to Hards on lap 12 under VSC. Ferrari kept Leclerc and Hamilton out until laps 25 and 28. Mercedes finished first and second, ahead of both Ferraris.</p>
+<p>Timing recorded Russell and Antonelli’s pit sequences at 17.794 s and 20.985 s. Relative pit loss also depends on the time taken by a car on track.</p>
+<p><a href="https://www.formula1.com/en/results/2026/races/1279/australia/pit-stop-summary" target="_blank" rel="noopener">Pit-stop summary</a> · <a href="https://www.formula1.com/en/results/2026/races/1279/australia/race-result" target="_blank" rel="noopener">Race result</a></p>
+</details>
+<details>
+<summary>Model and rules</summary>
+<p>The replay uses constant speeds over a fictional 400 m sector. Markers in the pit lane show schematic progress through entry, transit, service and exit. The projections add stop losses, tyre pace and traffic against a shared reference race pace. The rejoin comparison models one reference car. Traffic in the last preset adds time only when you rejoin behind it. Apex’s live race strategy uses its own timing, tyre wear and track data.</p>
+<p>Under VSC, the FIA sets minimum reference times through sectors. Overtaking is generally restricted, with stated exceptions. The race pit lane can be entered during VSC for tyre changes. A physical Safety Car forms a queue instead. The lesson's speed controls illustrate elapsed time, with no universal VSC speed limit implied.</p>
+<p>Both dry plans here use Medium and Hard, with Hard a mandatory specification for this fixture. The real race requirement uses at least two slick specifications when intermediate or wet tyres haven’t been used, with at least one mandatory race specification.</p>
+<p><a href="https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_09_-_2026-10-01.pdf" target="_blank" rel="noopener">2026 FIA Sporting Regulations, B5.12–13 and B6.3.6</a></p>
+</details>
+</main>
+</body>
+</html>

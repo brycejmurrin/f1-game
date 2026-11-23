@@ -349,11 +349,17 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
-test("Grip & Braking frame and its local dependencies stage with bare offline URLs", () => {
-  const entry = "learn/braking/index.html";
-  const assets = [entry, ...Array.from(read(entry).matchAll(/(?:href|src)="([^":]+)"/g),
-    ([, rel]) => path.posix.join("learn/braking", rel))];
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "grip-stage-"));
+test("All Learn lesson frames and local dependencies stage with bare offline URLs", () => {
+  const assets = new Set();
+  for (const id of ["aero", "braking", "vsc"]) {
+    const dir = "learn/" + id;
+    const entry = dir + "/index.html";
+    assets.add(entry);
+    for (const [, rel] of read(entry).matchAll(/(?:href|src)="([^":]+)"/g)) {
+      assets.add(path.posix.join(dir, rel));
+    }
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "learn-stage-"));
   const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
   try {
     for (const dir of STAGE_DIRS) fs.mkdirSync(path.join(root, dir), { recursive: true });
@@ -367,7 +373,7 @@ test("Grip & Braking frame and its local dependencies stage with bare offline UR
       assert.equal(fs.readFileSync(path.join(dest, asset), "utf8"), read(asset), asset);
     }
     const cacheEntries = new Set(Array.from(sw.matchAll(/^\s*"([^"\n]+)",$/gm), ([, url]) => url));
-    assert.deepEqual(assets.filter(asset => !SW_LEARN.includes(asset) || !cacheEntries.has(asset)), []);
+    assert.deepEqual([...assets].filter(asset => !SW_LEARN.includes(asset) || !cacheEntries.has(asset)), []);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

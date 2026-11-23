@@ -686,13 +686,15 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   assert.equal(dialog.hidden, false);
   assert.equal(dom.document.activeElement, lesson);
   assert.equal(frame.getAttribute("src"), null);
-  const braking = dom.byId("learn-open-braking");
-  braking.click();
-  assert.equal(frame.title, "Grip & Braking");
-  assert.equal(frame.getAttribute("src"), "learn/braking/index.html");
-  close.click();
-  assert.equal(dom.document.activeElement, braking);
-  assert.equal(frame.getAttribute("src"), null);
+  for (const [id, title] of [["braking", "Grip & Braking"], ["vsc", "VSC Pit Strategy"]]) {
+    const button = dom.byId("learn-open-" + id);
+    button.click();
+    assert.equal(frame.title, title);
+    assert.equal(frame.getAttribute("src"), "learn/" + id + "/index.html");
+    close.click();
+    assert.equal(dom.document.activeElement, button);
+    assert.equal(frame.getAttribute("src"), null);
+  }
   close.click();
   assert.equal(dialog.hidden, true);
   queue.shift()();
