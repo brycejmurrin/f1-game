@@ -57,7 +57,6 @@ const WGXChunked = (function () {
       if (data.trk && data.trk.length >= vCount * 3) {
         const b = core.interleave(data);
         const pulled = core.expandPull(b.vert, b.attr, b.idx);
-        const lut = core.makeRoadLUT(data.pos, data.trk, data.mat);
         const buckets = new Map();
         const pv = pulled.vert, VF = core.VERTEX_FLOATS;
         // Float view for the centroid reads (position is still float32 at word
@@ -91,8 +90,9 @@ const WGXChunked = (function () {
         // queue.writeBuffer at a byte offset — never mappedAtCreation, and
         // never one big CPU copy: bounded staging is what fixed the mappable
         // pool exhaustion, and the peak here matches the per-piece shape.
-        let cv = null;
+        let cv = null, lut = null;
         try {
+          lut = core.makeRoadLUT(data.pos, data.trk, data.mat);
           cv = core.device.createBuffer({
             size: pulled.count * VF * 4,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
