@@ -54,6 +54,7 @@ const InputPadMenu = (function () {
         const t = el.tagName;
         const ty = t === "INPUT" ? String(el.type || "text").toLowerCase() : "";
         if (t === "SELECT" && horizontal) {
+          if (el._srLive) { padDispatchKey(key); return; }
           const opts = el.options || [];
           const n = opts.length;
           const d = dir === "right" ? 1 : -1;
@@ -61,12 +62,8 @@ const InputPadMenu = (function () {
           // Match the row chevrons: wrap and skip sentinels such as CUSTOM,
           // which describe a slider-made state but are deliberately unpickable.
           // Assigning selectedIndex directly does not honour `option.disabled`.
-          // A wrap:false row (LAPS — js/ui/setting-row.js `_srLive.wrap`) stops
-          // at its ends like its chevrons do, instead of 3 ↔ FULL.
-          const wrap = !(el._srLive && el._srLive.wrap === false);
           for (let seen = 0; seen < n; seen++) {
             const k = j + d;
-            if (!wrap && (k < 0 || k >= n)) { j = el.selectedIndex; break; }
             j = ((k % n) + n) % n;
             if (!opts[j].disabled) break;
           }
