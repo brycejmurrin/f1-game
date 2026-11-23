@@ -5890,6 +5890,7 @@
         "tests/unit/day-sky-palette-storm-deck.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/delta-sign-colour.test.mjs",
+        "tests/unit/deploy-staging.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/driver-ratings-personality.test.mjs",
         "tests/unit/duel-row.test.mjs",
@@ -5968,6 +5969,7 @@
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/storm-weather.test.mjs",
+        "tests/unit/sw-build-meta.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs",
         "tests/unit/throttle-latch.test.mjs",
@@ -6749,6 +6751,10 @@
       "timeAtDist": [
         "tests/unit/delta-sign-colour.test.mjs",
         "tests/unit/telemetry-trace.test.mjs"
+      ],
+      "*": [
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/sw-build-meta.test.mjs"
       ]
     },
     "js/data/telemetry-player.js": {

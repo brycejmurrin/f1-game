@@ -343,6 +343,30 @@ test("open() still works when How to Play is hidden", async () => {
   assert.equal(h.DataHub.isOpen(), true);
 });
 
+test("Telemetry can stack over its Learn source and returns only after closing", async () => {
+  const h = harness();
+  const from = h.place("learn", false);
+  let returned = 0;
+  const onClose = () => { returned++; };
+  h.root.hidden = true;
+  assert.equal(h.DataHub.open("telemetry"), false, "an unrelated open must respect Learn");
+  assert.equal(h.DataHub.open("telemetry", { from: { id: "learn" } }), false, "the exemption requires the source node");
+  h.place("pmsettings", false);
+  assert.equal(h.DataHub.open("telemetry", { from, onClose }), false, "it must still respect other visible layers");
+  h.byId.pmsettings.hidden = true;
+  assert.equal(h.DataHub.open("telemetry", { from, onClose }), true);
+  assert.equal(from.hidden, false);
+  assert.equal(h.root.find((node) => node.id === "dh-tab-telemetry").getAttribute("aria-selected"), "true");
+  h.DataHub.close();
+  assert.equal(returned, 0, "the modal close is still queued");
+  await h.drain();
+  assert.equal(returned, 1);
+  assert.equal(from.hidden, false);
+  h.DataHub.close();
+  await h.drain();
+  assert.equal(returned, 1);
+});
+
 test("a How to Play door click closes an open hub", async () => {
   const h = harness();
   const help = h.place("mb-help");

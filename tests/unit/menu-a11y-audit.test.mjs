@@ -630,6 +630,8 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   let onMessage;
   let wired;
   let loads = 0;
+  const launches = [];
+  const replies = [];
   const queue = [];
   const origin = "https://apex.example";
   const sb = sandbox(dom, {
@@ -640,7 +642,7 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
       vm.runInNewContext(src("js/ui/learn-door.js"), sb, { filename: absSrc("js/ui/learn-door.js") });
       return true;
     } }) },
-    UiLayers: { top: () => ({ id: top }) },
+    UiLayers: { top: () => dom.byId(top) },
     TopModal: { wire: (dialog) => {
       wired = dialog;
       dialog.addEventListener("cancel", () => dom.byId(dialog.getAttribute("data-esc-close")).click());
@@ -652,7 +654,8 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   vm.runInNewContext(src("js/ui/dom.js"), sb, { filename: absSrc("js/ui/dom.js") });
   dom.byId("menu-buttons").dataset.destinations = "true";
   vm.runInNewContext(src("js/ui/title-menu.js"), sb, { filename: absSrc("js/ui/title-menu.js") });
-  sb.TitleMenu.create({ $: dom.byId, state: "menu", soundOn: false, store: {} });
+  sb.TitleMenu.create({ $: dom.byId, state: "menu", soundOn: false, store: {} }, (tab, options) =>
+    new Promise(resolve => launches.push({ tab, options, resolve })));
   const door = dom.byId("mb-learn");
   assert.equal(door.parentNode.id, "menu-explore");
   door.click();
@@ -664,7 +667,8 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
   assert.equal(loads, 1);
   const dialog = dom.byId("learn");
   const frame = dom.byId("learn-lab");
-  frame.contentWindow = {};
+  frame.contentWindow = { postMessage: (msg, target) => replies.push([msg.type, target]) };
+  top = "learn";
   assert.equal(wired, dialog);
   assert.equal(dialog.tagName, "DIALOG");
   assert.equal(dialog.hidden, false);
@@ -694,8 +698,46 @@ test("Learn opens a named modal and returns focus to the selected lesson after u
     assert.equal(dom.document.activeElement, button);
     assert.equal(frame.getAttribute("src"), null);
   }
+  dom.byId("learn-open-telemetry").click();
+  assert.equal(frame.title, "Telemetry Detective");
+  assert.equal(frame.getAttribute("src"), "learn/telemetry/index.html");
+  const transfer = { type: "apex-learn-telemetry" };
+  const send = () => onMessage({ origin, source: frame.contentWindow, data: transfer });
+  await onMessage({ origin, source: {}, data: transfer });
+  assert.equal(launches.length, 0);
+  const opening = send();
+  await send();
+  assert.equal(launches.length, 1, "pending handoff is shared");
+  const handoff = launches.shift();
+  assert.equal(handoff.tab, "telemetry");
+  assert.equal(handoff.options.from, dialog);
+  assert.equal(handoff.options.isCurrent(), true);
+  top = "datahub";
+  handoff.resolve(true);
+  await opening;
+  assert.equal(dialog.hidden, false);
+  assert.equal(frame.getAttribute("src"), "learn/telemetry/index.html");
+  top = "learn";
+  handoff.options.onClose();
+  assert.equal(dom.document.activeElement, frame);
+  assert.deepEqual(replies, [["apex-learn-telemetry-return", origin]]);
+
+  const failed = send();
+  launches.shift().resolve(false);
+  await failed;
+  assert.deepEqual(replies.pop(), ["apex-learn-telemetry-unavailable", origin]);
+
+  const stale = send();
+  close.click();
+  const abandoned = launches.shift();
+  assert.equal(abandoned.options.isCurrent(), false);
+  abandoned.resolve(false);
+  await stale;
+  assert.equal(replies.length, 1, "stale lesson receives no reply");
+
   close.click();
   assert.equal(dialog.hidden, true);
+  top = "overlay";
   queue.shift()();
   assert.equal(dom.document.activeElement, door);
   door.click();

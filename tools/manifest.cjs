@@ -1907,6 +1907,7 @@ const SW_LEARN = [
   "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",
   "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js",
   "learn/vsc/index.html", "learn/vsc/style.css", "learn/vsc/model.js", "learn/vsc/lab.js",
+  "learn/telemetry/index.html", "learn/telemetry/style.css", "learn/telemetry/model.js", "learn/telemetry/lab.js",
 ];
 
 /** Locale manifest only (English players need no locale JSON fetch). */

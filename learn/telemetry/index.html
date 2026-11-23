@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telemetry Detective · Apex 26 Learn</title>
+<link rel="stylesheet" href="style.css">
+<script src="../../js/core/mat4.js" defer></script>
+<script src="../../js/data/telemetry-model.js" defer></script>
+<script src="model.js" defer></script>
+<script src="../appearance.js" defer></script>
+<script src="lab.js" defer></script>
+</head>
+<body>
+<main>
+<h1 id="lessonTitle">Telemetry Detective</h1>
+<header class="intro">
+  <h2>Where did the time go?</h2>
+  <p>Compare two synthetic runs through the same braking zone.</p>
+</header>
+<div class="workspace">
+  <section class="panel instrument" aria-labelledby="chart-title">
+    <header class="panel-head">
+      <h3 id="chart-title">Corner traces</h3>
+      <div class="legend"><span class="lane-a">A · solid</span><span class="lane-b">B · dashed</span></div>
+    </header>
+    <canvas id="chart" aria-hidden="true"></canvas>
+    <p class="caption" id="axis-note"></p>
+    <div class="ghosts" aria-hidden="true">
+      <div class="road"><span>0 m</span><div class="course"><i data-ghost="0">A</i><i data-ghost="1">B</i></div><span>100 m</span></div>
+      <p class="caption" id="ghost-note">Schematic distance along the same section.</p>
+    </div>
+  </section>
+  <div class="sidebar">
+    <section class="panel controls" aria-labelledby="cursor-title">
+      <h3 id="cursor-title">Inspect a checkpoint</h3>
+      <fieldset><legend>Horizontal axis</legend>
+        <label><input type="radio" name="axis" value="time" checked> Time (s)</label>
+        <label><input type="radio" name="axis" value="distance"> Distance (m)</label>
+      </fieldset>
+      <label class="scrub-label" for="scrub"><span id="scrub-label">Time</span><span id="cursor" aria-hidden="true"></span></label>
+      <input type="range" id="scrub" min="0" max="2" step=".001" value="0">
+      <div class="buttons">
+        <button type="button" data-checkpoint="start">Start</button>
+        <button type="button" data-checkpoint="brake">Brake on</button>
+        <button type="button" data-checkpoint="minSpeed">Min. speed</button>
+        <button type="button" data-checkpoint="throttle">Throttle returns</button>
+        <button type="button" data-checkpoint="exit">Exit gate</button>
+      </div>
+      <label class="reference" for="reference">Reference driver
+        <select id="reference"><option value="0">Driver A</option><option value="1">Driver B</option></select>
+      </label>
+    </section>
+    <section class="panel" aria-labelledby="values-title">
+      <h3 id="values-title">At the cursor</h3>
+      <table>
+        <thead><tr><th scope="col">Channel</th><th scope="col">A</th><th scope="col">B</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Elapsed time (s)</th><td id="time-a"></td><td id="time-b"></td></tr>
+          <tr><th scope="row">Est. distance (m)</th><td id="distance-a"></td><td id="distance-b"></td></tr>
+          <tr><th scope="row">Speed (km/h)</th><td id="speed-a"></td><td id="speed-b"></td></tr>
+          <tr><th scope="row">Brake state</th><td id="brake-a"></td><td id="brake-b"></td></tr>
+          <tr><th scope="row">Reported throttle</th><td id="throttle-a"></td><td id="throttle-b"></td></tr>
+        </tbody>
+      </table>
+      <p id="delta" class="delta"></p>
+      <p id="announcement" class="sr-only" role="status"></p>
+    </section>
+  </div>
+</div>
+<section class="panel exercise" aria-labelledby="prediction-title">
+  <h3 id="prediction-title">Make a prediction</h3>
+  <p>B first reports brake on at 0.75 s, a quarter-second after A. Who reaches 90 m first?</p>
+  <div class="buttons">
+    <button type="button" data-answer="a" aria-pressed="false">Driver A</button>
+    <button type="button" data-answer="b" aria-pressed="false">Driver B</button>
+    <button type="button" data-answer="tie" aria-pressed="false">They tie</button>
+  </div>
+  <p id="prediction" role="status"></p>
+  <button type="button" id="show-exit" hidden>Inspect the 90 m gate</button>
+</section>
+<section class="panel exercise" aria-labelledby="transfer-title">
+  <h3 id="transfer-title">Engineer Challenge</h3>
+  <p>Try to check the gap 5 m farther along. Then identify what a brake-on sample tells you.</p>
+  <div class="buttons">
+    <button type="button" id="extend">Check the 95 m gate</button>
+    <button type="button" id="restore" hidden>Restore the 90 m gate</button>
+  </div>
+  <p id="coverage" role="status"></p>
+  <div class="buttons">
+    <button type="button" data-brake-answer="pressure" aria-pressed="false">Pedal pressure</button>
+    <button type="button" data-brake-answer="state" aria-pressed="false">Pressed or released</button>
+    <button type="button" data-brake-answer="force" aria-pressed="false">Braking force</button>
+  </div>
+  <p id="brake-answer" role="status"></p>
+  <button type="button" id="open-data" hidden>Open Data Hub Telemetry</button>
+  <p id="hub-status" role="status"></p>
+</section>
+<details class="panel">
+  <summary>Model and sources</summary>
+  <p>The lesson uses authored samples spaced 0.25 s apart, with no real driver identities. Estimated distance is integrated from sample speeds. Equal-distance arrival times are interpolated. Speed, brake and throttle in the table are nearby samples. The brake and throttle step traces switch halfway between sample times so the cursor and table use the same nearest-sample rule. The speed line connects observed samples.</p>
+  <p>Brake onset and throttle return are estimated threshold markers from the game’s Braking Duel model. Minimum observed speed is a sampled quantity. The distance strip is schematic and carries no GPS or steering data.</p>
+  <p><a href="https://openf1.org/docs/#car-data" target="_blank" rel="noopener">OpenF1 channel definitions</a> · <a href="https://www.motec.com.au/products/I2" target="_blank" rel="noopener">MoTeC time comparison tools</a></p>
+</details>
+</main>
+</body>
+</html>

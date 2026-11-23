@@ -32,7 +32,7 @@ import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
 
-const { SW_LEARN, SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
+const { LAZY_DATA, SW_LEARN, SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
@@ -351,7 +351,7 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
 
 test("All Learn lesson frames and local dependencies stage with bare offline URLs", () => {
   const assets = new Set();
-  for (const id of ["aero", "braking", "vsc"]) {
+  for (const id of ["aero", "braking", "vsc", "telemetry"]) {
     const dir = "learn/" + id;
     const entry = dir + "/index.html";
     assets.add(entry);
@@ -373,7 +373,14 @@ test("All Learn lesson frames and local dependencies stage with bare offline URL
       assert.equal(fs.readFileSync(path.join(dest, asset), "utf8"), read(asset), asset);
     }
     const cacheEntries = new Set(Array.from(sw.matchAll(/^\s*"([^"\n]+)",$/gm), ([, url]) => url));
-    assert.deepEqual([...assets].filter(asset => !SW_LEARN.includes(asset) || !cacheEntries.has(asset)), []);
+    const shared = ["js/core/mat4.js", "js/data/telemetry-model.js"];
+    for (const asset of shared) assert.ok(assets.has(asset), asset + " is loaded by a lesson");
+    const shellScripts = new Set(Array.from(read("index.html").matchAll(/<script[^>]* src="([^"?]+)\?v=[^"]+"/g), ([, src]) => src));
+    assert.ok(shellScripts.has(shared[0]), "the shell loads a versioned copy of mat4");
+    const cachedData = LAZY_DATA.filter(asset => cacheEntries.has(asset));
+    assert.ok(new Set(cachedData).has(shared[1]), "Data Hub precaches the shared telemetry model");
+    const bare = [...assets].filter(asset => !shared.includes(asset));
+    assert.deepEqual(bare.filter(asset => !SW_LEARN.includes(asset) || !cacheEntries.has(asset)), []);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
