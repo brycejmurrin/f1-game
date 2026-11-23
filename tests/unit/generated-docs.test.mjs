@@ -78,6 +78,27 @@ for (const g of GENERATORS) {
   });
 }
 
+test("qualifying factors use a complete sample of the current flying-lap method", async () => {
+  const { METHOD } = await import("../../tools/check/quali-calibrate.mjs");
+  const { method, cells } = JSON.parse(read("tests/data/quali-calibration.json"));
+  assert.deepEqual(method, METHOD);
+  for (const [circuit, levels] of Object.entries(cells)) {
+    let samples;
+    for (const level of METHOD.levels) {
+      const rows = levels[level];
+      const slots = rows.map(([slot]) => slot);
+      assert.ok(rows.length >= 10, `${circuit} ${level}: the grid sample is complete`);
+      assert.equal(new Set(slots).size, slots.length, `${circuit} ${level}: every slot occurs once`);
+      assert.ok(slots.every(slot => METHOD.slots.includes(slot % 4)), `${circuit} ${level}: no held-out slots`);
+      assert.ok(rows.every(([, , frames, ms]) => Number.isInteger(frames) && frames > 0 && Number.isInteger(ms) && ms > 0),
+        `${circuit} ${level}: every lap carries both measured frames and model time`);
+      const identities = rows.map(([slot, driver]) => [slot, driver]);
+      if (samples) assert.deepEqual(identities, samples, `${circuit}: matched works cars across difficulties`);
+      samples = identities;
+    }
+  }
+});
+
 test("tools/README.md: one row per tool, every row within the @doc cap, no undefined", () => {
   const index = read("tools/README.md");
   // The data-files table is derived ("read by" lists), not @doc text — cap only the tool rows.

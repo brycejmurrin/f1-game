@@ -240,11 +240,11 @@
       mixedWood(0.2250, 0.3050, -1, 15, 24, 11);
       marshalPost(K(0.2800), 1, 16);
 
-      // 9. s 0.3117 -1 12 — QUEBEC CORNER (T3)
-      //    Armco then tyres, marshal post, wood hard behind, one billboard on
-      //    the exit fence.
-      guardrail(0.2950, 0.3600, -1, 11, ARMCO);
-      tyreWall(0.3050, 0.3220, -1, 12.0, TYRE_Y);
+      // 9. QUEBEC CORNER (T3) at 0.2787, with protection through the exit.
+      //    Armco and tyres near the apex, then a marshal post, wood,
+      //    and a billboard on the exit fence.
+      guardrail(0.2760, 0.3600, -1, 11, ARMCO);
+      tyreWall(0.2760, 0.2930, -1, 12.0, TYRE_Y);
       marshalPost(K(0.3117), -1, 14);
       mixedWood(0.2980, 0.3700, -1, 14, 22, 10);
       fence(0.3000, 0.3500, -1, 15, 2.8, FENCE_C);

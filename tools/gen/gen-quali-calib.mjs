@@ -7,10 +7,10 @@
  *   node tools/gen/gen-quali-calib.mjs            # write
  *   node tools/gen/gen-quali-calib.mjs --check    # exit 1 when committed ≠ generated
  *
- * Arithmetic only (milliseconds): the slow part, driving the AI field, is the tool run
+ * Arithmetic only (milliseconds): the slow part, driving the solo qualifying laps, is the tool run
  * `node tools/check/quali-calibrate.mjs --update`, whose output is the committed SOURCE. One
  * factor per circuit: the median, over every measured car at easy, normal and hard, of its
- * best driven lap over the model's uncalibrated lap, to 4 decimals. CALIB_DEFAULT is the
+ * qualifying flying lap over the model's uncalibrated lap, to 4 decimals. CALIB_DEFAULT is the
  * median of the factors (a circuit with no row).
  */
 import fs from "node:fs";
