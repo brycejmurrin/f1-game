@@ -9,16 +9,6 @@
   const constants = window.PhysicsConsts;
   const model = constants.DirtyAir;
   const tow = {range: constants.TOW_RANGE, fade: constants.TOW_FADE, halfW: constants.TOW_HALF_W};
-  const preference = matchMedia("(prefers-reduced-motion: reduce)");
-  // frameElement is null for standalone and cross-origin embeds.
-  const host = window.frameElement;
-  const hostRoot = host?.ownerDocument.documentElement;
-  get("lessonTitle").hidden = Boolean(host);
-  const root = document.documentElement;
-  const scheme = matchMedia("(prefers-color-scheme: light)");
-  const tokens = ["--red", "--bg", "--text", "--dim", "--surf-1", "--surf-3",
-    "--plate", "--plate-hover", "--card-line", "--plate-line", "--edge", "--focus",
-    "--r-lg", "--r-sm", "--fs-3", "--font-ui", "--font-hud"];
   let palette;
   let reduceMotion;
   let animate = false;
@@ -28,14 +18,7 @@
   let drag = null;
   let onStraight = true;
 
-  function syncAppearance() {
-    if (hostRoot) {
-      const style = getComputedStyle(host);
-      for (const token of tokens) root.style.setProperty(token, style.getPropertyValue(token));
-      root.style.colorScheme = style.colorScheme;
-    } else {
-      root.dataset.uiTheme = "system";
-    }
+  function syncAppearance(reduced) {
     // Resolve swatches once per appearance change; Canvas cannot inherit CSS colours.
     palette = {
       leader: getComputedStyle(get("leaderKey")).backgroundColor,
@@ -44,7 +27,6 @@
       cockpit: getComputedStyle(canvas).backgroundColor,
       label: getComputedStyle(document.body).color,
     };
-    const reduced = hostRoot ? hostRoot.dataset.motion === "reduce" : preference.matches;
     if (reduced !== reduceMotion) {
       reduceMotion = reduced;
       animate = !reduced;
@@ -52,17 +34,6 @@
     } else {
       draw();
     }
-  }
-
-  // Use the shell's exact stylesheet URLs, including deployed offline cache keys.
-  for (const name of ["tokens", "fonts-hud", "appearance-studio"]) {
-    const sheet = document.createElement("link");
-    sheet.rel = "stylesheet";
-    const parentSheet = host?.ownerDocument.querySelector(
-      'link[rel="stylesheet"][href*="css/' + name + '.css"]');
-    sheet.href = parentSheet?.href || "../../css/" + name + ".css";
-    sheet.addEventListener("load", syncAppearance);
-    document.head.insertBefore(sheet, document.querySelector('link[href="style.css"]'));
   }
 
   // Coordinates are schematic so both cars stay legible at the smallest gap.
@@ -193,23 +164,8 @@
   canvas.addEventListener("lostpointercapture", () => { drag = null; });
   document.querySelector(".settings").addEventListener("input", update);
   motion.addEventListener("click", () => { animate = !animate; updateMotion(); });
-  preference.addEventListener("change", syncAppearance);
-  scheme.addEventListener("change", syncAppearance);
-  if (hostRoot) {
-    const observer = new MutationObserver(syncAppearance);
-    observer.observe(hostRoot, {
-      attributeFilter: ["style", "class", "data-ui-theme", "data-menu-accent", "data-team",
-        "data-ui-contrast", "data-text-size", "data-cvd", "data-motion", "data-look-popups-corners"],
-    });
-    window.addEventListener("pagehide", () => observer.disconnect(), {once: true});
-  }
   document.addEventListener("visibilitychange", updateMotion);
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && window.parent !== window) {
-      window.parent.postMessage({type: "apex-learn-close"}, window.location.origin);
-    }
-  });
-  syncAppearance();
+  LearnAppearance.mount(syncAppearance);
   new ResizeObserver(draw).observe(canvas);
   update();
   updateMotion();

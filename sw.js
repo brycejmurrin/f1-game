@@ -566,7 +566,11 @@ async function precacheAssetLists() {
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
-    // LEARN — Aero Lab iframe and its bare dependencies
+    // LEARN — lesson frames and their bare dependencies
+    "learn/appearance.js",
+    "learn/braking/index.html",
+    "learn/braking/style.css",
+    "learn/braking/lab.js",
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",

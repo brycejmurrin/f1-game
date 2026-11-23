@@ -611,7 +611,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   assert.match(tm, /function onEscape[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
 });
 
-test("Learn opens a named modal from the title and unloads Aero Lab on dismissal", () => {
+test("Learn opens a named modal and returns focus to the selected lesson after unloading", () => {
   const dom = makeDom();
   let top = "settings";
   let onMessage;
@@ -658,6 +658,13 @@ test("Learn opens a named modal from the title and unloads Aero Lab on dismissal
   onMessage({ origin, source: frame.contentWindow, data });
   assert.equal(dialog.hidden, false);
   assert.equal(dom.document.activeElement, lesson);
+  assert.equal(frame.getAttribute("src"), null);
+  const braking = dom.byId("learn-open-braking");
+  braking.click();
+  assert.equal(frame.title, "Grip & Braking");
+  assert.equal(frame.getAttribute("src"), "learn/braking/index.html");
+  close.click();
+  assert.equal(dom.document.activeElement, braking);
   assert.equal(frame.getAttribute("src"), null);
   close.click();
   assert.equal(dialog.hidden, true);

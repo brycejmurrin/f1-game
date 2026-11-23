@@ -1,6 +1,11 @@
-/* Apex 26 — Learn title door and the Aero Lab's modal frame. */
+/* Apex 26 — Learn title door, lesson index and shared modal frame. */
 const LearnDoor = (function () {
   "use strict";
+
+  const LESSONS = [
+    {id: "aero", title: "Aero Lab", summary: "Following distance, slipstream & cornering grip"},
+    {id: "braking", title: "Grip & Braking", summary: "Share tyre grip between braking and turning"},
+  ];
 
   function create(G) {
     const menu = G.$("menu-buttons");
@@ -39,15 +44,27 @@ const LearnDoor = (function () {
       const body = Dom.el("div", "sheet-body pane");
       const index = Dom.el("nav", "pm-doors");
       index.setAttribute("aria-label", "Lessons");
-      const aero = Dom.el("button", "", "AERO LAB…");
-      aero.id = "learn-open-aero";
-      aero.type = "button";
-      aero.autofocus = true;
-      aero.appendChild(Dom.el("small", "", "Following distance, slipstream & cornering grip"));
-      index.appendChild(aero);
+      let activeButton;
+      for (const lesson of LESSONS) {
+        const button = Dom.el("button", "", lesson.title.toUpperCase() + "…");
+        button.id = "learn-open-" + lesson.id;
+        button.type = "button";
+        button.autofocus = !index.firstElementChild;
+        button.appendChild(Dom.el("small", "", lesson.summary));
+        button.addEventListener("click", () => {
+          activeButton = button;
+          heading.textContent = "LEARN / " + lesson.title.toUpperCase();
+          index.hidden = true;
+          sheet.dataset.lesson = lesson.id;
+          frame.title = lesson.title;
+          frame.hidden = false;
+          frame.setAttribute("src", "learn/" + lesson.id + "/index.html");
+          heading.focus();
+        });
+        index.appendChild(button);
+      }
       frame = document.createElement("iframe");
       frame.id = "learn-lab";
-      frame.title = "Aero Lab";
       frame.hidden = true;
       body.append(index, frame);
 
@@ -61,14 +78,6 @@ const LearnDoor = (function () {
       document.body.appendChild(dialog);
       window.TopModal.wire(dialog);
 
-      aero.addEventListener("click", () => {
-        heading.textContent = "LEARN / AERO LAB";
-        index.hidden = true;
-        sheet.dataset.lesson = "aero";
-        frame.hidden = false;
-        frame.setAttribute("src", "learn/aero/index.html");
-        heading.focus();
-      });
       close.addEventListener("click", () => {
         if (!frame.hidden) {
           frame.hidden = true;
@@ -76,7 +85,7 @@ const LearnDoor = (function () {
           delete sheet.dataset.lesson;
           index.hidden = false;
           heading.textContent = "LEARN";
-          aero.focus();
+          activeButton?.focus();
           return;
         }
         dialog.hidden = true;
