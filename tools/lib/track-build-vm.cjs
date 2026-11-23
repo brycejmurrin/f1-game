@@ -190,7 +190,7 @@ function buildContext(opts) {
     // masked this one, because deleting either alone left the other holding
     // every buffer alive on its own.
     trim: (from) => { prims.length = from; liveBufs.clear(); },
-    // RELEASE A FINISHED BUILD'S VERTEX BUFFERS. The companion to trim():
+    // RELEASE A FINISHED BUILD'S RENDER GEOMETRY. The companion to trim():
     // trim() drops the primitive records, this drops the finished GEOMETRY —
     // which trim() cannot reach, because it hangs off the returned track, not
     // off this context.
@@ -205,12 +205,12 @@ function buildContext(opts) {
     // over the 4088 MB that has already OOM-killed an audit child on CI.
     // Dropped instead, the same 52 builds peak at 611 MB.
     //
-    // Every object survives with its scalars and its nested objects — only
-    // ARRAY-valued own properties are emptied in place, so `track.propsGeo.uv
+    // Drop the render-only light occluder index and empty ARRAY-valued own
+    // properties in the geometry and mesh captures, so `track.propsGeo.uv
     // === undefined`, `track.meshes.pitSigns === null` and a mesh's `verts`
     // still read true, and `track.graph`, `track.pit`, `track.surface` and the
     // centreline are untouched. So call it once nothing will read that build's
-    // BUFFERS, and read the buffers from a build you did not release.
+    // BUFFERS or query light occlusion.
     release: (track) => {
       const empty = (obj) => {
         if (!obj || typeof obj !== "object") return;
@@ -224,6 +224,7 @@ function buildContext(opts) {
       for (const k of Object.keys(track)) if (/Geo$/.test(k)) empty(track[k]);
       const meshes = track.meshes || {};
       for (const k of Object.keys(meshes)) if (meshes[k] && meshes[k].__cap) empty(meshes[k].__cap);
+      delete track._lightOccluders;
       return track;
     },
   };
