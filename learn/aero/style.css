@@ -189,12 +189,6 @@ a {
   color: var(--dim);
 }
 
-.wing {
-  padding: 8px 20px 0;
-  color: var(--dim);
-  font-size: .85rem;
-}
-
 .legend span:first-child {
   margin-right: auto;
 }
@@ -261,3 +255,22 @@ details {
   main { padding: .45rem; }
   .instrument button { padding: .15rem .5rem; }
 }
+
+.hint, .flow-key {
+  color: var(--dim);
+  font-size: var(--fs-micro);
+}
+.flow-key { display: flex; flex-wrap: wrap; gap: var(--gap); margin-top: calc(var(--gap) / 2); }
+#flow { cursor: grab; }
+#flow[data-dragging] { cursor: grabbing; }
+#prediction fieldset { display: grid; gap: calc(var(--gap) / 2); }
+#feedback:not(:empty) { margin-top: calc(var(--gap) / 2); }
+.physics-note {
+  margin-top: var(--gap);
+  padding: var(--pad);
+  border: 1px solid var(--plate-line);
+  border-inline-start: 3px solid var(--red);
+  border-radius: var(--r-md);
+  background: var(--surf-1);
+}
+.physics-note p { margin-top: calc(var(--gap) / 2); }

@@ -14,25 +14,44 @@
 <div data-as="controls">
 <section class="settings" data-as="box"><h2 data-as="heading">CAR B SETUP</h2>
 <label for="gap">Following gap <output id="gapValue" for="gap"></output></label>
-<input id="gap" type="range" min="5" max="45" step="1" value="10">
-<div class="limits"><span>5 m · Close</span><span>45 m · Clear</span></div>
+<input id="gap" type="range" min="5" max="45" step="1" value="10" aria-describedby="gap-instructions">
+<p id="gap-instructions" class="hint">Drag car B along the diagram, or use this slider with your arrow keys.</p>
+<div class="limits"><span>5 m</span><span>45 m</span></div>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
 <label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
 
 </section>
-<section data-as="box"><h2 data-as="heading">TRY IT</h2>
-<p>Stay 10 m behind the leader. Switch to the corner, then move off-line. Which change restores grip?</p></section>
 </div>
 <section data-as="preview-side" aria-label="Live wind tunnel">
-<div class="instrument"><strong>Wind tunnel</strong><button id="motion" type="button">Pause flow</button></div>
-<canvas id="flow" width="720" height="276" aria-label="Top-down airflow diagram. Adjust the following gap using the control below."></canvas>
-<div class="legend"><span>← Airflow</span> <span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
-<p class="wing" id="wing"></p>
-<div class="results" aria-label="Follower measurements">
+<div class="instrument"><strong>Airflow schematic</strong><button id="motion" type="button">Pause flow</button></div>
+<canvas id="flow" width="720" height="276" role="img" aria-label="Top-down airflow schematic" aria-describedby="gap-instructions state effect">Use the gap slider to change the follower position. The model readouts describe the airflow at that position.</canvas>
+<div class="legend"><span>← Airflow</span><span><i id="leaderKey"></i> A · Leader</span><span><i id="followerKey"></i> B · Follower</span></div>
+<div class="flow-key"><span>— Clean air</span><span>~ Disturbed wake</span></div>
+<div class="results" aria-label="Apex classic model estimates">
 <h2 id="state" aria-live="polite"></h2>
+<p class="hint">Apex classic model · clean-air grip baseline 100%</p>
 <div class="reading"><div>Wake exposure <strong id="wake"></strong></div><meter aria-label="Wake exposure" id="wakeMeter" min="0" max="1"></meter></div>
-<div class="reading"><div>Grip retained <strong id="grip"></strong></div><meter aria-label="Grip retained" id="gripMeter" min="0" max="1"></meter></div>
+<div class="reading"><div>Grip vs. clean air <strong id="grip"></strong></div><meter aria-label="Grip relative to clean air" id="gripMeter" min="0" max="1"></meter></div>
+<div class="reading"><div>Usable tow <strong id="tow"></strong></div><meter aria-label="Usable tow strength" id="towMeter" min="0" max="1"></meter></div>
 <p id="effect"></p></div></section></div>
-<details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The straight assumes steady steering and no braking; the corner assumes enough steering to lose the tow.</p><p>Car positions are schematic. Tracers illustrate airflow. The 34 m centreline cutoff belongs to this game model.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details>
+<section class="physics-note" aria-labelledby="prediction-title">
+<h2 id="prediction-title">MAKE A PREDICTION</h2>
+<form id="prediction">
+<fieldset><legend>At 10 m directly behind car A, what changes when B enters the fast corner?</legend>
+<label><input type="radio" name="answer" value="clear"> The wake clears and grip returns.</label>
+<label><input type="radio" name="answer" value="tow"> The tow goes away. The wake still reduces grip.</label>
+<label><input type="radio" name="answer" value="gain"> The tow gets stronger.</label>
+</fieldset>
+<button type="submit">Check prediction</button>
+<p id="feedback" role="status"></p>
+</form>
+</section>
+<section class="physics-note" aria-labelledby="force-title">
+<h2 id="force-title">Why the force changes</h2>
+<p>A wing or floor gets its aerodynamic load from the air moving past it. Dynamic pressure is <strong>q = ½ρv²</strong>, where ρ is air density and v is the local air speed relative to the car. Aero force is dynamic pressure × reference area × a force coefficient.</p>
+<p><strong>Illustrative example.</strong> If local flow speed in the wake is 80% of the clean-air value, dynamic pressure is 0.8² = 0.64 of clean air. With area and coefficient held constant, that gives 36% less force.</p>
+<p>Disturbed flow can also change the effective lift coefficient. Changes in flow angle and turbulence alter the way air follows the wing and floor, including where it separates. A loss of downforce leaves the tyres with less vertical load for cornering.</p>
+</section>
+<details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The lab holds speed, gap and offset constant when you switch track sections. On the straight the tow is eligible. In the corner, the game’s tow condition is treated as unmet. The wake and grip formulas stay the same in both cases.</p><p>Car positions and flow lines are schematic. The lines illustrate the game’s estimated wake. Clean air here means outside car A’s wake. The 34 m centreline cutoff is an Apex setting. Usable tow shows a percentage of the game’s maximum tow strength.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details>
 </main>
 </body></html>
