@@ -65,7 +65,7 @@ test('task doors retain canonical close and settings destinations', () => {
   assert.match(code,/sub && sub\.parentNode/,
     "setDoorLabel must tolerate game-vm's detached querySelector stub");
   assert.doesNotMatch(code,/photoButton\.textContent\s*=/);
-  assert.match(html,/id="photo-studio"[^>]*data-esc-close="ps-close"/);
+  assert.match(html,/id="photo-studio"[^>]*\bhidden>/);
   assert.match(code,/openSettingsPage\("strategy", "pm-pit-panel"\)/);
   assert.match(code,/openSettingsPage\("review", "pm-session-review"\)/);
 });
