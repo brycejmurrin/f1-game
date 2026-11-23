@@ -284,7 +284,7 @@ const FULL = [
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
-  "js/fx/visor-optics.js",     // VisorOptics: HELMET eye-port, additive shield light, rim bend (Droplets.tick calls it; reads window.__apex)
+  // VisorOptics loads with LAZY_RACE_SESSION; title/garage consumers are guarded.
   "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
@@ -1138,6 +1138,7 @@ const LAZY_RACE = [
 // Optional selected-circuit pit slice for every garage view. Never gates a race.
 const LAZY_GARAGE_EXTERIOR = ["js/garage/exterior-geometry.js", "js/garage/exterior.js"];
 const LAZY_RACE_SESSION = [
+  "js/fx/visor-optics.js",     // Helmet optics bind to the live context before race entry; no title parse/compile cost.
   "js/input/touch-button-actions.js",
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",

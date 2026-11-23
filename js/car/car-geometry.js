@@ -475,7 +475,65 @@ const CarGeometry = (function () {
     return out;
   }
 
-  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
+  // Indexed opaque cockpit body, captured AFTER hero refinement. Leaves hold at
+  // most 16 triangles; build-time partitioning keeps light queries off the full mesh.
+  function cockpitOccluder(data) {
+    const kept = [], centres = [], boxes = [], P = Float32Array.from(data.pos), I = data.idx, M = data.mat;
+    const glass = CarMaterials.SURFACES.glass, visor = CarMaterials.SURFACES.visor;
+    for (let i = 0; i < I.length; i += 3) {
+      if (M && [I[i], I[i + 1], I[i + 2]].some(v => M[v] === glass || M[v] === visor)) continue;
+      kept.push(i);
+      const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (let a = 0; a < 3; a++) {
+        let sum = 0;
+        for (let v = 0; v < 3; v++) {
+          const p = P[I[i + v] * 3 + a]; sum += p;
+          if (p < box[a]) box[a] = p;
+          if (p > box[a + 3]) box[a + 3] = p;
+        }
+        centres.push(sum / 3);
+      }
+      boxes.push(...box);
+    }
+    if (!kept.length) return null;
+    const order = Uint32Array.from(kept, (_, i) => i), nodes = [];
+    function partition(start, count) {
+      const node = nodes.length / 10, bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      const cb = bounds.slice();
+      for (let j = start; j < start + count; j++) {
+        const t = order[j];
+        for (let a = 0; a < 3; a++) {
+          const c = centres[t * 3 + a], lo = boxes[t * 6 + a], hi = boxes[t * 6 + a + 3];
+          if (c < cb[a]) cb[a] = c;
+          if (c > cb[a + 3]) cb[a + 3] = c;
+          if (lo < bounds[a]) bounds[a] = lo;
+          if (hi > bounds[a + 3]) bounds[a + 3] = hi;
+        }
+      }
+      nodes.push(...bounds, -1, -1, start, count);
+      if (count <= 16) return node;
+      let axis = 0;
+      for (let a = 1; a < 3; a++) if (cb[a + 3] - cb[a] > cb[axis + 3] - cb[axis]) axis = a;
+      const mid = (cb[axis] + cb[axis + 3]) / 2;
+      let split = start;
+      for (let j = start; j < start + count; j++) if (centres[order[j] * 3 + axis] < mid) {
+        const t = order[split]; order[split++] = order[j]; order[j] = t;
+      }
+      // Coincident centroids still need bounded leaves. An index split is exact,
+      // though overlapping bounds reduce its culling benefit for degenerate input.
+      if (split === start || split === start + count) split = start + (count >> 1);
+      nodes[node * 10 + 6] = partition(start, split - start);
+      nodes[node * 10 + 7] = partition(split, start + count - split);
+      nodes[node * 10 + 9] = 0;
+      return node;
+    }
+    partition(0, order.length);
+    const indices = new Uint32Array(kept.length * 3);
+    for (let j = 0; j < order.length; j++) for (let v = 0; v < 3; v++) indices[j * 3 + v] = I[kept[order[j]] + v];
+    return { positions: P, indices, bounds: nodes.slice(0, 6), nodes: Float32Array.from(nodes) };
+  }
+
+  return { create, weld, decimate, cockpitOccluder, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
            withDetail, level: () => _lvl, hero: () => _hero, clampDetail, detailFor, heroOn,
            // hero-build hooks (CarBodyGeom, CarShade): loft UVs while one records them, a bevelled part
            loftUv: (o, v, r) => _luv && CarHero.loftUv(o, v, r), heroBevel: (o, w, n, e) => _hero ? CarHero.bevel(o, w, n, e) : e(o) };

@@ -9,7 +9,7 @@ const TrackModels = (function () {
   const finiteArray = (v, length) =>
     Array.isArray(v) && (!length || v.length === length) && v.every(__isFinite);
   const validSize = (v) => finiteArray(v, 3) && v.every((n) => n > 0);
-  const emptyBuffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0 });
+  const emptyBuffer = () => ({ pos: [], nrm: [], col: [], idx: [], mat: [], _mat: 0, _lightBoxRecords: null });
 
   // Growable typed accumulators for the props/glass/water fuse (PERF-FINDINGS).
   // Named-arity push — a rest/arguments shim measured slower than Array.push.
@@ -71,7 +71,7 @@ const TrackModels = (function () {
       col: makeAccum(Float64Array, v * 3),
       mat: makeAccum(Float64Array, v),
       idx: makeAccum(Uint32Array, v * 3),
-      _mat: 0,
+      _mat: 0, _lightBoxRecords: null,
     };
   }
   function sealGeometry(geo) {
@@ -90,6 +90,8 @@ const TrackModels = (function () {
   }
 
   function appendBuffer(target, source, id) {
+    // Only published geometry contributes visor blockers; rejected staged models leave no phantom walls.
+    if (source._lightBoxRecords) appendAll(target._lightBoxRecords || (target._lightBoxRecords=[]), source._lightBoxRecords);
     const base = target.pos.length / 3;
     (target.__blocks || (target.__blocks = []))
       .push({ base, from: source, count: source.pos.length / 3, id: id || null });

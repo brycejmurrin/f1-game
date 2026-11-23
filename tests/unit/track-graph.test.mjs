@@ -727,3 +727,69 @@ test("stats().matInherit counts nodes whose inline replay inherited a non-zero o
   assert.equal(mi.nodes, 1);
   assert.deepEqual(mi.byModel, { bare: 1 });
 });
+
+test("visor world obstruction uses exact rotated solid boxes and finite source segments", () => {
+  const records=[], b=buf(), c=Math.SQRT1_2;
+  TrackGeom.lightBox(records,b,[0,2,10],[8,4,1],[[c,0,c],[0,1,0],[-c,0,c]]);
+  const track={_lightOccluders:TrackGeom.lightIndex(records)};
+  assert.equal(TrackGeom.lightBlocked(track,[0,2,0],0,0,1,Infinity),true);
+  assert.equal(TrackGeom.lightBlocked(track,[0,2,0],0,0,5,1),false,"lamp before wall remains visible");
+  assert.equal(TrackGeom.lightBlocked(track,[0,2,0],0,0,20,1),true);
+  assert.equal(TrackGeom.lightBlocked(track,[3,2,7],0,0,-1,Infinity),false,"empty corner of rotated AABB remains sky");
+  assert.equal(TrackGeom.lightBlocked(track,[0,10,10],0,-1,0,Infinity),true,"vertical rays query the containing cell");
+  assert.equal(TrackGeom.lightBlocked(track,[0,10,10],0,1,0,Infinity),false);
+  assert.equal(TrackGeom.lightBlocked(null,[0,0,0],0,0,1,Infinity),false);
+  const transfer=structuredClone(track);
+  assert.equal(TrackGeom.lightBlocked(transfer,[0,2,0],0,0,20,1),true,"worker-transfer data keeps the same index");
+});
+
+test("visor world index skips glass, vegetation, cloth, tiny decoration and dry-run guard probes", () => {
+  const records=[];
+  for(const mat of [TrackGeom.MAT.GLASS,TrackGeom.MAT.FOLIAGE,TrackGeom.MAT.FLAG,TrackGeom.MAT.FABRIC])
+    TrackGeom.lightBox(records,{_mat:mat},[0,2,10],[8,4,1]);
+  TrackGeom.lightBox(records,{_dryRun:true},[0,2,10],[8,4,1]);
+  TrackGeom.lightBox(records,{},[0,2,10],[0.2,0.2,0.2]);
+  assert.equal(records.length,0);
+  TrackGeom.lightBox(records,{_mat:TrackGeom.MAT.ROOF},[0,4,10],[8,0.2,8]);
+  assert.equal(TrackGeom.lightBlocked({_lightOccluders:TrackGeom.lightIndex(records)},[0,2,10],0,1,0,Infinity),true);
+});
+
+test("visor world spatial queries do not visit distant architecture or duplicate spanning boxes", () => {
+  const records=[];
+  for(let i=0;i<1000;i++)TrackGeom.lightBox(records,{},[200+i*10,3,10],[4,6,4]);
+  TrackGeom.lightBox(records,{},[0,3,100],[4,6,150]);
+  const index=TrackGeom.lightIndex(records), track={_lightOccluders:index};
+  assert.equal(TrackGeom.lightBlocked(track,[0,3,0],0,0,1,200),true);
+  assert.equal(index.tests,1,"only the crossed cell's actual blocker is tested");
+  assert.equal(TrackGeom.lightBlocked(track,[0,8,0],0,0,1,200),false);
+  assert.equal(index.tests,1,"vertical broad bounds reject above-roof rays");
+});
+
+test("published world blockers match fused and instanced boxes without prism hulls or rejected stages", async () => {
+  const { createRequire } = await import("node:module");
+  const { buildContext } = createRequire(import.meta.url)("../../tools/track/verify-track.cjs");
+  const summaries=[];
+  for(const instancing of [false,true]){
+    const Tracks=buildContext(undefined,{instancing}), def={...Tracks.LIST.find(d=>d.id==='monaco')};
+    def.scenery=api=>{
+      const emit={addBox:api.addBox,addPrism:api.addPrism,addPyramid:api.addPyramid};
+      api.out._preferInstance=instancing;
+      for(const [i,kind] of ['box','prism','pyramid'].entries())
+        api.track.graph.instance('visor-'+kind,AT([10000+i*20,20,10000]),rec=>rec[kind]([0,0,0],[8,8,8],[.3,.3,.3]),{},emit,api.out);
+      api.out._preferInstance=false;
+      for(const [i,accept] of [[3,false],[4,true]]){
+        const center=[10000+i*20,20,10000];
+        api.modelGroup('visor-stage-'+i,{center,size:[8,8,8]},stage=>{api.addBox(stage,center,[8,8,8],[.3,.3,.3]);return accept;});
+      }
+    };
+    const track=Tracks.build(def), geom=Tracks._vmContext.TrackGeom, index=track._lightOccluders;
+    for(const i of [0,1,2,3,4]){
+      const blocked=geom.lightBlocked(track,[10000+i*20,23,9980],0,0,1,40);
+      assert.equal(blocked,i===0||i===4,`${instancing?'instanced':'fused'} primitive ${i}: only published exact boxes block`);
+    }
+    const selected=[];for(let n=0;n<index.boxes.length;n+=18)if(index.boxes[n]>9000)selected.push(Array.from(index.boxes.slice(n,n+18)));
+    assert.equal(selected.length,2,"only the emitted box and accepted staged box were retained");
+    summaries.push(selected);
+  }
+  assert.deepEqual(summaries[0],summaries[1]);
+});
