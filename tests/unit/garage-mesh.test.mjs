@@ -895,6 +895,19 @@ test("reflection fade preserves each room's authored floor colours and markings"
   }
 });
 
+test("the fallback apron leaves the entire bay open for the floor reflection", () => {
+  const { GarageScene, ctx, meshes, draws } = harness();
+  const { HALF_W, Z_BACK, Z_DOOR } = vm.runInContext("GaragePrims", ctx);
+  GarageScene.draw(TEAM, LIV, [0, 2, 0], null, 0, { ambient: false });
+  const apron = meshes[draws[1].mesh.id - 1];
+  for (let i = 0; i < apron.idx.length; i += 3) {
+    const points = apron.idx.slice(i, i + 3).map(index => index * 3);
+    const axisOutside = (axis, sign, limit) => points.every(index => sign * apron.pos[index + axis] >= limit - 1e-5);
+    assert.ok(axisOutside(0, 1, HALF_W) || axisOutside(0, -1, HALF_W) ||
+      axisOutside(2, 1, Z_DOOR) || axisOutside(2, -1, -Z_BACK), "apron triangles stay outside the slab");
+  }
+});
+
 test("departure exterior has supported lane ground and an open outward doorway", () => {
   const { GarageScene, meshes, draws } = harness();
   GarageScene.draw(TEAM, LIV, [0, 2, 12], null, 0, { ambient: false });

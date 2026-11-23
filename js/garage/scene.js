@@ -1034,25 +1034,33 @@ function buildApron(out) {
                  HOT[2] + (BACKDROP[2] - HOT[2]) * k);
     pushMat(out, 1, MAT.ASPHALT);
   };
-  const base = out.pos.length / 3;
-  push(0, 0, 0);
-  for (let r = 1; r <= RINGS; r++) {
-    const t = r / RINGS, rad = R * t * t;
-    for (let i = 0; i < SEG; i++) {
-      const a = (i / SEG) * Math.PI * 2;
-      push(Math.cos(a) * rad, Math.sin(a) * rad, t);
+  // The opaque apron sits below the floor. Stop it at the slab edges so it
+  // cannot cover the mirrored car before the floor is blended over it.
+  const angles = Array.from({ length: SEG }, (_, i) => i / SEG * Math.PI * 2);
+  for (const x of [-HALF_W, HALF_W]) for (const z of [Z_BACK, Z_DOOR]) {
+    const angle = Math.atan2(z, x);
+    angles.push(angle < 0 ? angle + Math.PI * 2 : angle);
+  }
+  angles.sort((a, b) => a - b);
+  const rays = angles.map(a => {
+    const x = Math.cos(a), z = Math.sin(a);
+    const edge = Math.min(HALF_W / Math.abs(x), (z < 0 ? Z_BACK : Z_DOOR) / z);
+    return { x, z, edge };
+  });
+  const base = out.pos.length / 3, count = rays.length;
+  for (let ring = 0; ring <= RINGS; ring++) {
+    const t = ring / RINGS;
+    for (const { x, z, edge } of rays) {
+      const radius = edge + (R - edge) * t * t;
+      push(x * radius, z * radius, Math.sqrt(radius / R));
     }
   }
-  // CCW seen from ABOVE (gl.frontFace(CCW) + cull BACK): the ring walks +a =
-  // (cos a, sin a) in (x, z), and a downward-looking camera maps world z to
-  // SCREEN-DOWN, so the naive order comes out clockwise and the whole disc is
-  // culled — an invisible floor that still passes every mesh assertion.
-  for (let i = 0; i < SEG; i++) out.idx.push(base, base + 1 + ((i + 1) % SEG), base + 1 + i);
-  for (let r = 0; r < RINGS - 1; r++) {
-    const a0 = base + 1 + r * SEG, b0 = a0 + SEG;
-    for (let i = 0; i < SEG; i++) {
-      const j = (i + 1) % SEG;
-      out.idx.push(a0 + i, b0 + j, b0 + i, a0 + i, a0 + j, b0 + j);
+  // Counter-clockwise from above, with no triangles inside the bay.
+  for (let ring = 0; ring < RINGS; ring++) {
+    const inner = base + ring * count, outer = inner + count;
+    for (let i = 0; i < count; i++) {
+      const j = (i + 1) % count;
+      out.idx.push(inner + i, outer + j, outer + i, inner + i, inner + j, outer + j);
     }
   }
 }
