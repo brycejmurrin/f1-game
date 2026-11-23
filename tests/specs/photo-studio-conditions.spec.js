@@ -94,6 +94,22 @@ test("Paused race photo changes time of day and weather live, resets, and leaves
   await expect(page.locator("#photo-studio")).toBeHidden();
   expect(await page.evaluate(() => [__apex.setTimeOfDay(), __apex.weather()])).toEqual(["day", "dry"]);
   expect(await phys(page)).toEqual(before);
+  // A second visit must retain the same full lighting panel, with fresh session values.
+  await clickLive(page, "pm-photo");
+  await expect(page.locator("#ps-lt-tabs")).toBeVisible();
+  const controls = await page.evaluate(() => LightTune.TUNE_DEFS.map(d => d.id));
+  for (const id of controls) await expect(page.locator("#ps-lt-in-" + id)).toHaveCount(1);
+  await page.locator("#ps-lt-tab-sun-moon").click();
+  await expect(page.locator("#ps-lt-in-sunElev")).toHaveValue(String(beforeSun));
+  await page.locator("#ps-lt-in-sunElev").evaluate(el => {
+    el.value = String(Math.min(+el.max, +el.value + 5));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(await page.evaluate(() => LightTune.LT.sunElev)).not.toBe(beforeSun);
+  await clickLive(page, "ps-close");
+  await expect(page.locator("#photo-studio")).toBeHidden();
+  expect(await page.evaluate(() => LightTune.LT.sunElev)).toBe(beforeSun);
+  expect(await phys(page)).toEqual(before);
   expect(pageErrors).toEqual([]);
 });
 

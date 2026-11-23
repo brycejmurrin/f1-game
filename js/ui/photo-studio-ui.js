@@ -283,7 +283,9 @@ function create(G, deps) {
     }
   }
   function buildLight() {
-    if (lightSess.built || typeof LightTune === "undefined" || !LightTune.TUNE_DEFS || !LightTune.LT) return false;
+    // Reuse the controls on every visit; an existing panel is ready, not a failed build.
+    if (lightSess.built) return true;
+    if (typeof LightTune === "undefined" || !LightTune.TUNE_DEFS || !LightTune.LT) return false;
     lightSess.built = true;
     const defs = LightTune.TUNE_DEFS, LT = LightTune.LT, groups = [];
     let cur = null, section = null, wrap = null;

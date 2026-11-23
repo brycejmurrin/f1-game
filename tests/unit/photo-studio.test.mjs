@@ -1061,6 +1061,40 @@ test("Photo Lighting clones the profile store, writes via the light store, and r
   assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
 });
 
+test("every lighting-tuner control stays available across race, garage and circuit Studio visits", () => {
+  const knobs = vm.runInNewContext(fs.readFileSync(new URL("../../js/lighting/knobs.js", import.meta.url), "utf8") + "\nLightKnobs;", {}, { filename: absSrc("js/lighting/knobs.js") });
+  const original = { "test|day|dry": { ...knobs.LT } };
+  const b = boot({ profiles: original, LT: { ...knobs.LT }, tuneDefs: knobs.TUNE_DEFS });
+  let firstSlider, firstClone;
+  for (const source of ["race", "race", "garage", "home-track", "race"]) {
+    assert.equal(b.api.open({ source }), true);
+    const group = b.dom.byId("ps-group-lighting");
+    assert.equal(group.hidden, source === "garage", source + " lighting visibility");
+    if (source !== "garage") {
+      assert.notEqual(b.G._ltStore, original);
+      assert.notEqual(b.G._ltStore, firstClone, "each visit gets a fresh isolated profile");
+      firstClone = b.G._ltStore;
+      for (const d of knobs.TUNE_DEFS) {
+        const slider = b.dom.byId("ps-lt-in-" + d.id), exact = b.dom.byId("ps-lt-num-" + d.id);
+        assert.ok(slider && exact, d.id + " has range and exact-value controls");
+        assert.deepEqual([slider.min, slider.max, slider.step], [String(d.min), String(d.max), String(d.step)]);
+        assert.equal(+slider.value, d.def, d.id + " returns to race baseline");
+        const value = d.def === d.max ? d.min : d.max;
+        slider.value = String(value); slider.dispatchEvent({ type: "input" });
+        assert.equal(b.LT[d.id], value, d.id + " is editable");
+        assert.equal(original["test|day|dry"][d.id], d.def, d.id + " leaves saved lighting alone");
+      }
+      const slider = b.dom.byId("ps-lt-in-keyMul");
+      if (firstSlider) assert.equal(slider, firstSlider, "reuse the panel without duplicate controls");
+      firstSlider = slider;
+    }
+    b.api.close(false);
+    assert.equal(b.G._ltStore, original);
+    assert.deepEqual(b.LT, original["test|day|dry"], "every knob restores on close");
+    assert.deepEqual(b.latchWrites, [], "photo edits never change renderer recovery settings");
+  }
+});
+
 test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {
   const original = { "test|day|dry": { exposureMul: 1 } };
   const b = boot({ profiles: original });
