@@ -18,8 +18,8 @@ const XrBoot = (function () {
   let _tickBody = null;
   let _windowRaf = null;       // the window tick; bind() sets it, VR or not (recover(), #5875)
   let _windowRequest = null;
-  let _windowGeneration = 0;
-  let _windowPending = false;  // true while a window tick is queued
+  let _windowDispatch = null;   // reused until XR takes the clock
+  let _pendingTick = null;      // window tick queued for the next frame
   let _cockpitIdx = -1;
   let _savedCam = -1;
   let _cameraOwner = null;
@@ -152,17 +152,20 @@ const XrBoot = (function () {
    */
   function chainWindowRaf(tickFn) {
     if (_loopByXr) return false;
-    if (_windowPending) return false;
+    if (_pendingTick) return false;
     const fn = tickFn || _windowRaf;
     if (typeof fn !== "function") return false;
-    _windowPending = true;
-    const generation = _windowGeneration;
-    _windowRequest = requestAnimationFrame((t) => {
-      if (_loopByXr || generation !== _windowGeneration) return;
-      _windowRequest = null;
-      _windowPending = false;
-      fn(t);
-    });
+    _pendingTick = fn;
+    if (!_windowDispatch) {
+      _windowDispatch = function dispatch(t) {
+        if (dispatch !== _windowDispatch || !_pendingTick) return;
+        const tick = _pendingTick;
+        _windowRequest = null;
+        _pendingTick = null;
+        tick(t);
+      };
+    }
+    _windowRequest = requestAnimationFrame(_windowDispatch);
     return true;
   }
 
@@ -221,12 +224,12 @@ const XrBoot = (function () {
       onStart: () => {
         _loopByXr = true;
         _presentCount = 0;
-        // Cancellation saves work; generation also rejects a callback already
+        // Cancellation saves work; retiring the dispatcher rejects a callback already
         // dispatched (or suspended by the browser until after XR ends).
-        _windowGeneration++;
+        _windowDispatch = null;
         if (_windowRequest !== null) cancelAnimationFrame(_windowRequest);
         _windowRequest = null;
-        _windowPending = false;
+        _pendingTick = null;
         saveAndForceCockpit();
       },
       onEnd: () => {
@@ -388,7 +391,7 @@ const XrBoot = (function () {
     return {
       presenting: presenting,
       loopByXr: _loopByXr,
-      windowPending: _windowPending,
+      windowPending: !!_pendingTick,
       canAttach: canAttach(),
       backend: session && session.backend ? session.backend() : null,
       features: session && session.enabledFeatures ? session.enabledFeatures() : [],

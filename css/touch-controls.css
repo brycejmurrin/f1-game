@@ -149,6 +149,7 @@
    changes opacity; a light press stays dim and full travel is brightest. */
 :is(#btn-steer-left, #btn-steer-right, #btn-throttle, #btn-brake)[data-touch-feedback="on"]:not([aria-pressed]) {
   background: var(--hud-ink-dark); color: var(--hud-ink-light);
+  opacity: 1; /* A secondary finger can hold a pedal without matching :active. */
 }
 .touchbtn[data-touch-feedback="on"]::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
@@ -258,9 +259,9 @@
    An outside ring costs no layout (box-shadow draws outside the border box and
    does not reflow the dock) and reads at a glance in peripheral vision, which
    is all a driver has to spare. */
-.touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+.touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
 @media (prefers-reduced-transparency: reduce) {
-  .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+  .touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
 }
 
 /* WHERE THE FINGER LANDED, in TOUCH mode. Drag-to-steer is an invisible

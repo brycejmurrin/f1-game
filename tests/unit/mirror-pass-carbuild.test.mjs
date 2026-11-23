@@ -308,7 +308,7 @@ test("a frozen mirror frame replays the MIRROR pass's pack, never the main camer
   const a = src.indexOf("const _pb = track.meshes.propBatches;");
   const z = src.indexOf("if (!envProbe) gfx.drawChunked(track.meshes.props", a);
   assert.ok(a > 0 && z > a, "the instanced-batch block is still where the test slices it");
-  const run = new Function("frame", "gfx", "track", "_pbPlanes", "m", "envProbe", src.slice(a, z));
+  const run = new Function("frame", "gfx", "track", "_pbPlanes", "m", "envProbe", "viewPlanes", src.slice(a, z));
   const updates = [];
   const gfx = {
     drawInstanced() {},
@@ -326,7 +326,11 @@ test("a frozen mirror frame replays the MIRROR pass's pack, never the main camer
   const mirrorFrame = (freeze) => ({ viewProj: [MIRROR], mirrorLite: false, mirrorFreezeInstanced: freeze });
   const mainFrame = () => ({ viewProj: [MAIN] });   // mirror-pass leaves both flags undefined here
   run(mirrorFrame(false), gfx, track, [], {}, false);   // frame 1: mirror refreshes its pack
-  run(mainFrame(), gfx, track, [], {}, false);          //          then the main camera culls
+  const mainPlanes = { tag: MAIN };
+  const makePlanes = gfx.makeFrustumPlanes;
+  gfx.makeFrustumPlanes = () => { throw new Error("main props rebuilt the car frustum"); };
+  run(mainFrame(), gfx, track, [], {}, false, mainPlanes);
+  gfx.makeFrustumPlanes = makePlanes;
   assert.equal(b._mirMats[0], MIRROR, "the main pass must not overwrite the mirror's recorded pack");
   assert.equal(b._mirCols[0], MIRROR, "per-instance colours are frozen with the matrices");
   run(mirrorFrame(true), gfx, track, [], {}, false);    // frame 2: the mirror is frozen

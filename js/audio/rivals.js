@@ -377,9 +377,9 @@ var RivalAudio = (() => {
         const lock = +c.wheelLock || 0;
         const skid = +c.skidIntensity || 0;
         const inten = Math.max(lock, skid > 0.45 ? skid : 0);
-        // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
         if (!(inten > 0.35)) continue;
-        if (top === undefined) top = (G.vTop && G.vTop()) || 1;
+        // Pace-safe crawl gate: fraction of vTop, not a raw m/s literal (vstd-lint).
+        top ??= (G.vTop && G.vTop()) || 1;
         if (Math.abs(+c.speed || 0) / top < 0.08) continue;
         let wx = c.px, wz = c.pz;
         if (wx == null || wz == null) {

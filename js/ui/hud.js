@@ -1755,7 +1755,7 @@ function speakHud(player, cars, timeTrial) {
   return { cn, caution, blueCar, txt };
 }
 
-function syncDriveControls(player, canService, timeTrial, showReadouts, caution) {
+function syncDriveControls(player, canService, timeTrial, showReadouts, spokenFlag) {
   // The touch dock and the pit actions remain operable when HIDE HUD is on.
   const pit = G.pits;
   const canWork = canService && pit?.canWork?.(player) && !G.netPlay?.active?.();
@@ -1774,12 +1774,12 @@ function syncDriveControls(player, canService, timeTrial, showReadouts, caution)
   // that lap. The chip reads the allowance in MJ, the rule's own unit.
   const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
-  const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const pitHeld = pit?.held?.(player);
-  const otOff = G.state === "race" && (!gateOpen || pitHeld) && !(player.otT > 0);
-  const leader = G.ranked && G.ranked[0];
+  const pitHeld = G.state === "race" && !(player.otT > 0) && pit?.held?.(player);
+  const otOff = G.state === "race" && !(player.otT > 0) && (pitHeld || (typeof G.otEnabled === "function" && !G.otEnabled()));
   let otReason = "";
   if (otOff) {
+    const caution = spokenFlag ? spokenFlag.cn : G.cautionInfo?.();
+    const leader = G.ranked && G.ranked[0];
     // RaceControl has independent gates. Keep the reason in the HUD so a
     // player knows whether to wait for green, a dry track or the opening lap
     // to pass; the input path still checks c.otArmed in game.js. Only the
@@ -1894,7 +1894,7 @@ function updateHud(force, dtMs) {
     if (tick) {
       const spoken = speakHud(player, cars, timeTrial);
       if (!hudLayerHidden() && !document.body.classList.contains("desktop")) {
-        syncDriveControls(player, timeTrial || G.tyres?.on(), timeTrial, false, spoken?.cn);
+        syncDriveControls(player, timeTrial || G.tyres?.on(), timeTrial, false, spoken);
       }
       if (G.sectorBests) for (let i = 0; i < 3; i++) _secPrevBest[i] = G.sectorBests[i];
     }
@@ -1986,7 +1986,7 @@ function updateHud(force, dtMs) {
   // radio: fine, think about a stop, you are past it.
   const tyres = G.tyres, pit = G.pits;
   const tyreOn = !!(tyres && tyres.on());
-  syncDriveControls(player, tyreOn || timeTrial, timeTrial, true, spokenFlag?.cn);
+  syncDriveControls(player, tyreOn || timeTrial, timeTrial, true, spokenFlag);
   hHidden(els.tyre, !tyreOn);
   let pitReadouts;   // synchronous HUD tick only; never retained on a car
   if (tyreOn) {

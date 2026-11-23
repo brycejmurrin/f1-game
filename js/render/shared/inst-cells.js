@@ -63,10 +63,10 @@ const InstCells = (function () {
 
   /** Record the cell set that produced the bytes now resident. */
   function recordKey(batch, ks, kN) {
-    const cn = batch.cells.length;
-    let res = batch._cellKey;
-    if (!res || res.length < kN) res = batch._cellKey = new Int32Array(cn);
-    for (let i = 0; i < kN; i++) res[i] = ks[i];
+    // Each caller has finished packing from scratchKeys. Keep those indices as
+    // the resident snapshot and reuse the previous snapshot for the next sweep.
+    batch._cellKeyScratch = batch._cellKey;
+    batch._cellKey = ks;
     batch._cellKeyN = kN;
   }
 
