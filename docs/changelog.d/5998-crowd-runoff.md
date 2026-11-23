@@ -1,3 +1,0 @@
-Fixed: On 17 circuits the main-straight crowd stood inside the run-off, so a car running wide drove through the spectators. The crowd now stands behind the run-off edge. Where the circuit has its own main grandstand there, that stand is the crowd (#5998).
-Fixed: Marshal huts on 32 circuits stopped a car at the hut's middle, so cars drove 1–1.5 m into the hut; a car now stops at its face (#5998).
-Fixed: The main-straight catch fence on seven circuits (Estoril, Watkins Glen, Buenos Aires, Jacarepaguá, Magny-Cours, Nürburgring, Hockenheim) sits just behind the run-off edge instead of 1.1 m inside it (#5998).

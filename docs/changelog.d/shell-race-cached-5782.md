@@ -1,1 +1,0 @@
-Fixed: on a connection that is up but not answering, the installed app no longer opens to three seconds of nothing — once a copy of the game is on the phone it starts from that copy after one second. On a slow connection right after an update, the game may start on the previous version and restart itself once onto the new one.

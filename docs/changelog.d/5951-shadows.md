@@ -1,1 +1,0 @@
-New: GRAPHICS: EXTREME on a desktop now draws sun shadows far down the straights (two extra shadow cascades out to about 500 m) and at night lets the three nearest floodlights throw car and wall shadows instead of one (#5951).

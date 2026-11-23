@@ -1,1 +1,0 @@
-New: on GRAPHICS: EXTREME (desktop), track surfaces lose their repeating tile pattern, walls blend smoothly round corners, gravel gets real depth up close, fine surface detail shows within a few metres, texture detail reaches twice as far, and barriers, glass and wet tarmac reflect the real surroundings.
