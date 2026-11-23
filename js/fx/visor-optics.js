@@ -51,7 +51,7 @@ const VisorOptics = (function () {
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
-  let _budget = 0, _paintHz = HZ;
+  let _budget = 0, _paintHz = HZ, _lastHaze = null;
   let _portKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
   // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
@@ -297,20 +297,7 @@ const VisorOptics = (function () {
     return out;
   }
 
-  // ---------- scene reader (window.__apex, read-only) ----------
-
-  let _knobs = { bloom: 1, glare: 0.12 }, _knobsAt = -1e9;
-  function readKnobs(now) {
-    if (now - _knobsAt < 2000) return _knobs;
-    _knobsAt = now;
-    try {
-      const A = typeof window !== "undefined" ? window.__apex : null;
-      const t = A && typeof A.lightTune === "function" ? A.lightTune() : null;
-      const b = t ? +t.bloomMul : NaN, gl = t ? +t.glareStr : NaN;
-      _knobs = { bloom: Number.isFinite(b) ? b : 1, glare: Number.isFinite(gl) ? gl : 0.12 };
-    } catch (_) { /* no tuner: shipped defaults */ }
-    return _knobs;
-  }
+  // ---------- scene reader ----------
 
   // The scene comes from game.js's G façade, handed in by bind(G) at boot — NOT only through window.__apex: the
   // agent surface is LAZY_AGENT, absent on a player's Pages build, and gating on it left the visor glint unpainted
@@ -458,7 +445,7 @@ const VisorOptics = (function () {
       _bendW = 0;
     }
     if (!geometryChanged && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
-    _w = w; _h = h;
+    _w = w; _h = h; _lastHaze = null;
     if (_cv && (resized || _cv.width !== lightW || _cv.height !== lightH)) {
       // The broad reflected light is low-frequency. Keep projection, stroke widths
       // and paths in CSS pixels, and leave the bezel and scene at full resolution.
@@ -547,13 +534,17 @@ const VisorOptics = (function () {
     const px = g.createImageData(N, N);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       const i = y * N + x;
+      px.data[i * 4 + 2] = 128; px.data[i * 4 + 3] = 255;
+      if (F[i] === 0 || F[i] === 1) {    // fully clear or opaque: the displacement has zero amplitude
+        px.data[i * 4] = px.data[i * 4 + 1] = 128;
+        continue;
+      }
       const gx = (F[y * N + Math.min(N - 1, x + 1)] - F[y * N + Math.max(0, x - 1)]) * 0.5;
       const gy = (F[Math.min(N - 1, y + 1) * N + x] - F[Math.max(0, y - 1) * N + x]) * 0.5;
       const gl = Math.hypot(gx, gy) || 1, edge = 4 * F[i] * (1 - F[i]);      // 0 in the clear centre and deep bezel, 1 at the rim
       const amt = clampTo(edge * 1.35, 0, 1);
       px.data[i * 4] = Math.round(clampTo(128 + (gx / gl) * amt * 110, 0, 255));       // +R = sample toward +x: along the inward gradient
       px.data[i * 4 + 1] = Math.round(clampTo(128 + (gy / gl) * amt * 110, 0, 255));
-      px.data[i * 4 + 2] = 128; px.data[i * 4 + 3] = 255;
     }
     g.putImageData(px, 0, 0);
     const uri = map.toDataURL(), ns = "http://www.w3.org/2000/svg";
@@ -582,6 +573,7 @@ const VisorOptics = (function () {
   function _show(on) {
     if (on === _shown) return;
     _shown = on;
+    _lastHaze = null;
     if (_cv) _cv.hidden = !on;
     if (!on && _ctx && _w) _ctx.clearRect(0, 0, _w, _h);
   }
@@ -617,52 +609,59 @@ const VisorOptics = (function () {
 
   // Fixed ray table: eleven uneven spokes (angle, relative length, relative strength), so the rays read as the
   // scratch pattern of one shield and never spin or shimmer as the sun moves.
-  const RAYS = [[0.12, 1.0, 1], [0.71, 0.7, 0.6], [1.33, 0.9, 0.8], [1.9, 0.55, 0.5], [2.47, 0.95, 0.9], [3.05, 0.6, 0.5], [3.6, 1.0, 1], [4.2, 0.65, 0.6], [4.75, 0.85, 0.7], [5.3, 0.5, 0.4], [5.85, 0.9, 0.8]];
+  const RAYS = [[0.12, 1.0, 1], [0.71, 0.7, 0.6], [1.33, 0.9, 0.8], [1.9, 0.55, 0.5], [2.47, 0.95, 0.9], [3.05, 0.6, 0.5], [3.6, 1.0, 1], [4.2, 0.65, 0.6], [4.75, 0.85, 0.7], [5.3, 0.5, 0.4], [5.85, 0.9, 0.8]].map(([angle, length, strength]) => ({
+    length, strength, dx: Math.cos(angle), dy: Math.sin(angle),
+    leftX: Math.cos(angle - 0.035), leftY: Math.sin(angle - 0.035),
+    rightX: Math.cos(angle + 0.035), rightY: Math.sin(angle + 0.035),
+  }));
   function _rays(g, r) {
     const c = Math.round(r.rgb[0]) + "," + Math.round(r.rgb[1]) + "," + Math.round(r.rgb[2]);
-    for (const [ang, lenF, kF] of RAYS) {
-      const a = Math.min(1, r.k * kF * 0.7);
+    for (const ray of RAYS) {
+      const a = Math.min(1, r.k * ray.strength * 0.7);
       if (a < 0.004) continue;
-      const len = r.len * lenF, ex = r.x + Math.cos(ang) * len, ey = r.y + Math.sin(ang) * len;
+      const len = r.len * ray.length, ex = r.x + ray.dx * len, ey = r.y + ray.dy * len;
       const grad = g.createLinearGradient(r.x, r.y, ex, ey);
       grad.addColorStop(0, "rgba(" + c + "," + a.toFixed(3) + ")");
       grad.addColorStop(0.3, "rgba(" + c + "," + (a * 0.35).toFixed(3) + ")");
       grad.addColorStop(1, "rgba(" + c + ",0)");
-      const hw = 0.035;   // half-angle of each spoke (radians)
       g.fillStyle = grad; g.beginPath(); g.moveTo(r.x, r.y);
-      g.lineTo(r.x + Math.cos(ang - hw) * len, r.y + Math.sin(ang - hw) * len);
-      g.lineTo(r.x + Math.cos(ang + hw) * len, r.y + Math.sin(ang + hw) * len);
+      g.lineTo(r.x + ray.leftX * len, r.y + ray.leftY * len);
+      g.lineTo(r.x + ray.rightX * len, r.y + ray.rightY * len);
       g.closePath(); g.fill();
     }
   }
   // A lamp's beam: a soft wedge leaving the glint along the fixture's aim, fading with length.
+  const BEAM_WEDGES = [[0.42, 0.25], [0.24, 0.45], [0.1, 0.6]].map(([angle, alpha]) => ({
+    cos: Math.cos(angle), sin: Math.sin(angle), alpha,
+  }));
   function _beam(g, s) {
     const b = s.beam, c = Math.round(s.rgb[0]) + "," + Math.round(s.rgb[1]) + "," + Math.round(s.rgb[2]);
     const ex = s.x + b.dx * b.len, ey = s.y + b.dy * b.len;
-    const ang = Math.atan2(b.dy, b.dx);
     const grad = g.createLinearGradient(s.x, s.y, ex, ey);
     grad.addColorStop(0, "rgba(" + c + "," + Math.min(1, b.k).toFixed(3) + ")");
     grad.addColorStop(0.45, "rgba(" + c + "," + (Math.min(1, b.k) * 0.35).toFixed(3) + ")");
     grad.addColorStop(1, "rgba(" + c + ",0)");
     g.fillStyle = grad;
     // Three nested wedges: a wide faint skirt, the body, a narrow bright core — soft across the beam, not a hard cone.
-    for (const [hw, al] of [[0.42, 0.25], [0.24, 0.45], [0.1, 0.6]]) {
-      g.globalAlpha = al;
+    for (const wedge of BEAM_WEDGES) {
+      g.globalAlpha = wedge.alpha;
       g.beginPath(); g.moveTo(s.x, s.y);
-      g.lineTo(s.x + Math.cos(ang - hw) * b.len, s.y + Math.sin(ang - hw) * b.len);
-      g.lineTo(s.x + Math.cos(ang + hw) * b.len, s.y + Math.sin(ang + hw) * b.len);
+      g.lineTo(s.x + (b.dx * wedge.cos + b.dy * wedge.sin) * b.len, s.y + (b.dy * wedge.cos - b.dx * wedge.sin) * b.len);
+      g.lineTo(s.x + (b.dx * wedge.cos - b.dy * wedge.sin) * b.len, s.y + (b.dy * wedge.cos + b.dx * wedge.sin) * b.len);
       g.closePath(); g.fill();
     }
     g.globalAlpha = 1;
   }
   // The star flare of a hard point source: six fixed spokes through the glint, the longest horizontal (the
   // shield's curvature stretches that way), fading to nothing at their tips.
-  const STAR = [[0, 1], [Math.PI, 1], [0.52, 0.55], [0.52 + Math.PI, 0.55], [2.62, 0.55], [2.62 + Math.PI, 0.55]];
+  const STAR = [[0, 1], [Math.PI, 1], [0.52, 0.55], [0.52 + Math.PI, 0.55], [2.62, 0.55], [2.62 + Math.PI, 0.55]].map(([angle, length]) => ({
+    dx: Math.cos(angle), dy: Math.sin(angle), length,
+  }));
   function _star(g, s) {
     const c = Math.round(s.rgb[0]) + "," + Math.round(s.rgb[1]) + "," + Math.round(s.rgb[2]);
     const a = Math.min(1, s.star.k);
-    for (const [ang, lf] of STAR) {
-      const len = s.star.len * lf, ex = s.x + Math.cos(ang) * len, ey = s.y + Math.sin(ang) * len;
+    for (const spoke of STAR) {
+      const len = s.star.len * spoke.length, ex = s.x + spoke.dx * len, ey = s.y + spoke.dy * len;
       const grad = g.createLinearGradient(s.x, s.y, ex, ey);
       grad.addColorStop(0, "rgba(" + c + "," + a.toFixed(3) + ")");
       grad.addColorStop(1, "rgba(" + c + ",0)");
@@ -742,13 +741,21 @@ const VisorOptics = (function () {
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
     if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden
-    _show(true);
     const fringe = FRINGE[refraction] || 0;
     const beams = budget.beams ? _beams() : 0;
-    const kn = readKnobs(t0 || 0);
+    const tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams, glintLimit: budget.glints });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null,
+        bloom: Number.isFinite(tune?.bloomMul) ? tune.bloomMul : 1, glare: Number.isFinite(tune?.glareStr) ? tune.glareStr : 0.12, beams, glintLimit: budget.glints });
+      // With the sun behind the driver and no visible lamps, only the sky gradient remains.
+      // Its pixels depend on sky brightness and viewport size, even as the helmet moves.
+      const hazeOnly = !m.sun && !m.rim && !m.glints.length && m.fringe <= 0.004;
+      if (hazeOnly && m.haze <= 0.004) { _show(false); return; }
+      _show(true);
+      const hazeAlpha = hazeOnly ? m.haze.toFixed(3) : null;
+      if (hazeOnly && hazeAlpha === _lastHaze && _lightValid) return;
+      _lastHaze = hazeAlpha;
       _paint(m);
       _lightValid = true;
     } catch (e) {
