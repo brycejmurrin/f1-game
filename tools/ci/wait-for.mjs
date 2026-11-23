@@ -5,18 +5,26 @@
 // were killed with their worker and whose exit codes were misread (issue #2386). Run it as ONE background
 // task (AGENTS.md rule 4), never a foreground wait. Conditions combine with AND; polling is in-process.
 //
-//   node tools/ci/wait-for.mjs --load-below 2.8 --timeout 40
-//   node tools/ci/wait-for.mjs --file-nonempty artifacts/logs/x.log --timeout 10
-//   node tools/ci/wait-for.mjs --pid-gone 12345 --timeout 30
-//   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45
+// --timeout is in MINUTES and defaults to DEFAULT_TIMEOUT_MIN (9 = 540 s, under the 590 s foreground cap), so a
+// bare call is never refused; a longer wait is a run_in_background task and says --background:
+//
+//   node tools/ci/wait-for.mjs --load-below 2.8 --timeout 40 --background
+//   node tools/ci/wait-for.mjs --file-nonempty artifacts/logs/x.log --timeout 9
+//   node tools/ci/wait-for.mjs --pid-gone 12345 --timeout 30 --background
+//   node tools/ci/wait-for.mjs --log-matches artifacts/logs/x.log '^= (run|bg exit)' --timeout 45 --background
 //   node tools/ci/wait-for.mjs --merged <sha> --timeout 240 --background   # the sanctioned merge watch (steward §7)
 //
-// Exit 0 every condition held · 124 timeout (nothing is killed) · 2 usage error (an unknown flag included).
+// Exit 0 every condition held · 124 timeout (nothing is killed) · 2 usage error (an unknown flag, or a foreground --timeout over the cap).
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { pidAlive } from "../lib/deploy-status.mjs";
+
+/** Repo root — `--merged` must not inherit a foreign `process.cwd()` (from /tmp it
+ *  falsely answered "not yet on deploy" because git had no repository). */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** The deploy branch a `--merged` wait reads (fetched each poll). */
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
@@ -24,9 +32,12 @@ export const MERGED_POLL_MIN_SEC = 30;
 
 /** Bash kills a foreground command at 600 s; a waiter that outlives that is killed with a confusing exit. */
 export const FOREGROUND_CAP_SEC = 590;
+/** The --timeout default, in minutes: foreground-safe (9 min = 540 s ≤ the cap). It was 30, so a bare call
+ *  — and every header example without --background — was refused with exit 2 (W25 row 13). */
+export const DEFAULT_TIMEOUT_MIN = 9;
 
 export const FLAGS = ["--load-below", "--file-nonempty", "--log-matches", "--pid-gone", "--merged", "--timeout", "--poll", "--background", "--help"];
-export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeout <min>] [--poll <sec>]
+export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeout <min, default ${DEFAULT_TIMEOUT_MIN}>] [--poll <sec>] [--background]
   --load-below <n>        1-min loadavg < n
   --file-nonempty <path>  file exists with size > 0
   --log-matches <path> <re>  a line of <path> matches the regex (the verdict line; never pgrep -f, which matches its own shell)
@@ -34,16 +45,17 @@ export const USAGE = `usage: node tools/ci/wait-for.mjs <condition>... [--timeou
   --merged <sha>          <sha> is an ancestor of origin/claude/f1-game-project-26h3ng (fetched each poll, ≥ 30 s apart):
                           the one sanctioned merge watch — never a hand-rolled 'while … sleep' loop (AGENTS.md rules 4, 13)
   --background            this waiter IS the run_in_background task: no cap on --timeout
-  a foreground wait is capped at ${FOREGROUND_CAP_SEC} s (Bash's own limit is 600 s); longer ones belong in run_in_background.
+  a foreground --timeout over ${FOREGROUND_CAP_SEC} s exits 2 (Bash's own limit is 600 s); longer ones belong in run_in_background with --background.
   conditions combine with AND; exit 0 held / 124 timeout / 2 usage. Run it as one background task.`;
 
-/** Clamp a foreground --timeout (minutes) to the cap; `background` lifts it. Pure. */
+/** A foreground --timeout over the cap is REFUSED, never silently shortened (the clamp let a caller wait ~8 times
+ *  as long as it asked for, believing one wait held). `background` lifts the cap. Pure. */
 export function capForeground(timeoutMin, background) {
   if (background || timeoutMin * 60 <= FOREGROUND_CAP_SEC) return { timeoutMin, note: "" };
   return {
-    timeoutMin: FOREGROUND_CAP_SEC / 60,
-    note: `= wait-for: --timeout ${timeoutMin} min (${Math.round(timeoutMin * 60)} s) exceeds the ${FOREGROUND_CAP_SEC} s foreground cap — capped; ` +
-      "for a longer wait start this command with Bash run_in_background and add --background",
+    timeoutMin,
+    error: `wait-for: --timeout ${timeoutMin} min (${Math.round(timeoutMin * 60)} s) exceeds the ${FOREGROUND_CAP_SEC} s foreground cap — refused, nothing waited; ` +
+      "use --background / run_in_background: start this command with Bash run_in_background and add --background",
   };
 }
 
@@ -51,7 +63,7 @@ export class UsageError extends Error {}
 
 export function parseArgs(argv) {
   const conds = [];
-  let timeoutMin = 30, pollSec = 3, background = false;
+  let timeoutMin = DEFAULT_TIMEOUT_MIN, pollSec = 3, background = false;
   const num = (name, v, { positive = true } = {}) => {
     const n = Number(v);
     if (v === undefined || v.startsWith?.("-") || !Number.isFinite(n) || (positive && n <= 0)) throw new UsageError(`${name} needs a positive number, got ${JSON.stringify(v)}`);
@@ -96,9 +108,20 @@ export function parseArgs(argv) {
 }
 
 /** Is `sha` on the deploy tip? Fetches first so a stale clone never answers "no" forever. */
-export function mergedOnDeploy(sha, { cwd = process.cwd(), run = spawnSync } = {}) {
+export function mergedOnDeploy(sha, { cwd = ROOT, run = spawnSync } = {}) {
   run("git", ["fetch", "-q", "origin", DEPLOY_BRANCH], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   return run("git", ["merge-base", "--is-ancestor", sha, `origin/${DEPLOY_BRANCH}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).status === 0;
+}
+
+/** Resolve relative `--file-nonempty` / `--log-matches` paths against the repo root
+ *  so a waiter started from another cwd still sees `artifacts/logs/…`. Absolute paths stay. */
+export function resolveCondPaths(conds, root = ROOT) {
+  return conds.map((c) => {
+    if ((c.kind === "file" || c.kind === "log") && c.path && !path.isAbsolute(c.path)) {
+      return { ...c, path: path.resolve(root, c.path) };
+    }
+    return c;
+  });
 }
 
 export const load1 = () => {
@@ -137,8 +160,8 @@ async function main() {
   catch (e) { if (!(e instanceof UsageError)) throw e; console.error(`wait-for: ${e.message}\n${USAGE}`); return 2; }
   if (a.help) { console.log(USAGE); return 0; }
   const cap = capForeground(a.timeoutMin, a.background || process.env.APEX_WAIT_BACKGROUND === "1");
-  if (cap.note) console.error(cap.note);
-  const r = await waitFor(a.conds, { ...a, timeoutMin: cap.timeoutMin });
+  if (cap.error) { console.error(cap.error); return 2; }
+  const r = await waitFor(resolveCondPaths(a.conds), a);
   console.log(r.text);
   return r.code;
 }

@@ -19,7 +19,10 @@
 //   node tools/ci/remote-group.mjs ui --no-wait         # dispatch, print the run URL, exit
 //   node tools/ci/remote-group.mjs --watch <run-id>     # watch a run already dispatched
 //   node tools/ci/remote-group.mjs ui --force           # dispatch even when this sha already has a live or green run
+//   APEX_GROUP_LANES=24 node tools/ci/remote-group.mjs ui   # more lanes, ONLY when its shards run on APEX_BROWSER_RUNNER (D-LANES)
+//   (an open PR on the branch: the run tests its merge ref and its ready verdict can count a dropped spec, #5480)
 //   GROUP=ui PLAN='{…}' SHARD=1 TOTAL=4 node tools/ci/remote-group.mjs --run-shard   # the workflow's shard step
+//   GROUP=ui PLAN='{…}' SHARD=1 TOTAL=4 node tools/ci/remote-group.mjs --plan-record # its plan record, before any spec runs
 //
 // SHARDS ARE PACKED BY TIME, NOT COUNT (2026-10-14). `--shard=i/n` splits a
 // group by file count, so one shard drew the mega-sweep spec plus the 6-minute
@@ -54,12 +57,43 @@ import { gitTry } from "../lib/git-run.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
 import { specsOf } from "./select-specs.mjs";
+import { expandScript } from "../gen/gen-test-groups.mjs";
+import { GROUP_RECORD_TITLE, GROUP_PLAN_TITLE, groupRecordLine, passedSpecFiles } from "./dropped-group-runs.mjs";
 import { inBuckets, loadDb, median, TIMINGS_FILE } from "./spec-timings.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const REPO = "brycejmurrin/f1-game";
 export const WORKFLOW = "browser-group.yml";
 export const SHARD_CHOICES = [1, 2, 4, 6, 8];   // browser-group.yml's `shards` options
+/** GROUP LANES (#5848, 2026-11-19). browser-group.yml's shard job joins one of GROUP_LANES fleet-wide concurrency
+ *  groups (`browser-group-lane-<n>`, `queue: max`), so at most GROUP_LANES group shards hold runners at once across
+ *  every dispatch, and the rest wait without holding one. Measured by tools/ci/pool-share.mjs: on 11-19 nine group
+ *  runs held up to the whole 40-slot pool while land.yml's seconds-long gate jobs queued behind them; ci.yml's
+ *  selected legs already have LANES (select-specs.mjs, 28 since D-038), so 28 + 8 leaves 4 slots that neither can take.
+ *  Lanes are 1..GROUP_LANES (a plan without `lane`, e.g. a hand dispatch of the default plan, falls back to its
+ *  shard number in the workflow, so 0 is never a lane). */
+export const GROUP_LANES = 8;
+/** THE GROUP LANE COUNT FROM THE DISPATCHER (D-LANES, 2026-11-20): `--group-lanes <n>`, else env `APEX_GROUP_LANES`,
+ *  else GROUP_LANES; an integer in [1, MAX_GROUP_LANES], anything else is GROUP_LANES. The dispatcher sets it ONLY when
+ *  the shards will not take GitHub-hosted slots: the target branch's browser-group.yml reads `vars.APEX_BROWSER_RUNNER`
+ *  for its runs-on (branches synced past 0575bc45, #6033) AND that variable is set. Otherwise the default 8 keeps the
+ *  28 + 8 budget above. browser-group.yml's group is `browser-group-lane-<lane>`, so a lane above 8 is simply a new
+ *  group. Bryce's value with Ubicloud: 24 (docs/TESTING.md §CI runners). Pure. */
+export const MAX_GROUP_LANES = 128;
+export function groupLanes(env = process.env, args = []) {
+  const i = args.indexOf("--group-lanes");
+  const s = String(i >= 0 ? args[i + 1] ?? "" : env.APEX_GROUP_LANES ?? "").trim();
+  if (!/^\d+$/.test(s)) return GROUP_LANES;
+  const n = Number(s);
+  return n >= 1 && n <= MAX_GROUP_LANES ? n : GROUP_LANES;
+}
+/** The matrix with a lane per shard: consecutive lanes 1..`lanes` from `base`, so one run's shards never queue behind
+ *  each other and runs dispatched at different minutes start on different lanes. Pure. */
+export function withLanes(matrix, base = 0, lanes = GROUP_LANES) {
+  const L = Number.isInteger(lanes) && lanes >= 1 ? lanes : GROUP_LANES;
+  const b = ((Math.floor(Number(base)) || 0) % L + L) % L;
+  return (matrix || []).map((m, i) => ({ ...m, lane: ((b + i) % L) + 1 }));
+}
 const say = (...a) => console.log("[remote-group]", ...a);
 
 /** Resolve workers for a group: explicit request, else GL + render-heavy heuristic. */
@@ -107,7 +141,8 @@ export const MIN_PIECE_SEC = 120;
  *  expanded) — what a packed plan can split; null when it is not: `--project=…`,
  *  an env prefix, no files, and the count shard (`--shard=i/n`) must stay. */
 export function groupFiles(group, scripts) {
-  const cmd = String((scripts || {})[`test:${group}`] || "");
+  // A wrapper line (#5427) is read as its tests/groups.json flags + files.
+  const cmd = String(expandScript((scripts || {})[`test:${group}`] || ""));
   const toks = cmd.split(/\s+/).filter(Boolean);
   if (toks[0] !== "node" || toks[1] !== "tools/ci/run-playwright.mjs") return null;
   const files = toks.slice(2);
@@ -195,7 +230,9 @@ export function runShardArgs({ group, plan, shard, total, workers, timeoutMs = 9
     try { parsed = JSON.parse(String(plan)); } catch { return { error: "plan is not JSON" }; }
   }
   if (!parsed || !Array.isArray(parsed.shards)) {
-    return { runs: [{ cmd: "npm", args: ["run", `test:${g}`, "--", ...flags, `--shard=${i}/${n}`] }], mode: "count" };
+    // A count shard runs test i/n of the whole group: its units are every group file's i/n piece (all n cover it).
+    const all = (groupFiles(g, scripts) || []).map((f) => `${f}#${i}/${n}`);
+    return { runs: [{ cmd: "npm", args: ["run", `test:${g}`, "--", ...flags, `--shard=${i}/${n}`], units: all }], mode: "count", units: all };
   }
   const files = groupFiles(g, scripts);
   if (!files) return { error: `test:${g} is not a plain file list; a packed plan cannot drive it` };
@@ -209,11 +246,11 @@ export function runShardArgs({ group, plan, shard, total, workers, timeoutMs = 9
     if (m && SPEC_RE.test(u.file) && files.includes(u.file) && Number(m[1]) <= Number(m[2]) && Number(m[2]) <= MAX_PIECES) { pieces.push(u); continue; }
     return { error: `shard ${i} lists a unit outside test:${g}: ${JSON.stringify(u).slice(0, 80)}` };
   }
-  if (!plain.length && !pieces.length) return { empty: true, mode: "time" };
+  if (!plain.length && !pieces.length) return { empty: true, mode: "time", units: [] };
   const runs = [];
-  if (plain.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...plain, ...flags] });
-  for (const u of pieces) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", u.file, ...flags, `--shard=${u.shard}`] });
-  return { runs, mode: "time" };
+  if (plain.length) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", ...plain, ...flags], units: [...plain] });
+  for (const u of pieces) runs.push({ cmd: "node", args: ["tools/ci/run-playwright.mjs", u.file, ...flags, `--shard=${u.shard}`], units: [`${u.file}#${u.shard}`] });
+  return { runs, mode: "time", units: [...plain, ...pieces.map((u) => `${u.file}#${u.shard}`)] };
 }
 
 /** A run of THIS group on THIS branch for THIS sha that makes a new dispatch
@@ -317,13 +354,81 @@ async function watch(runId, { interval, deadline }) {
 }
 
 /** Printed for `--help` / a missing group — never `not a group name: undefined`. */
-export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--force] [--timeout <min>]
+export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N] [--gl llvmpipe|swiftshader] [--workers N] [--ref <branch>] [--no-wait] [--force] [--timeout <min>] [--group-lanes N]
        node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env: print the shard plan JSON (what the dispatch sends)
        node tools/ci/remote-group.mjs --run-shard     # GROUP=/PLAN=/SHARD=/TOTAL=/WORKERS= env (the workflow's shard step)
        node tools/ci/remote-group.mjs --watch <run-id>
        node tools/ci/remote-group.mjs --help
+  --group-lanes <n> lane count for the shards (env APEX_GROUP_LANES; default 8): set only when the branch's browser-group.yml
+                 reads APEX_BROWSER_RUNNER (synced past 0575bc45) and that variable is set (D-LANES).
   --interval <s> poll period (min 10, default 30). An unknown flag prints this usage and exits 2, before any dispatch.`;
-export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--watch"];
+/**
+ * The dispatch is a GitHub WRITE made with the gh token, which GitHub records as the repository owner's own act (no
+ * app marker), so an agent's dispatch cannot be told from Bryce's. Owner decision 2026-11-11: agents do not write to
+ * GitHub with that token; whether this tool dispatches at all is Bryce's open call (named on the PR that added this).
+ * Until then it dispatches only when APEX_GH_OWNER_WRITE=1 is in the environment, set by Bryce himself; the Bash
+ * guard refuses an agent that sets it. Reusing a live or green run (a read) needs no opt-in.
+ */
+export const OWNER_OPT_IN = "APEX_GH_OWNER_WRITE";
+export function ownerWriteGate(env = process.env) {
+  const ok = env[OWNER_OPT_IN] === "1";
+  const lines = [`this dispatch is a GitHub write made with the gh token, recorded as the repository owner's own act (no app marker).`];
+  if (!ok) lines.push(`refused: only the owner opts in (${OWNER_OPT_IN}=1 in his own environment; an agent never sets it). An agent asks on its PR with needs-decision, and the PR's own CI runs the browser shard.`);
+  return { ok, lines };
+}
+
+export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--plan-record", "--watch", "--group-lanes"];
+
+/** The open PR whose head is `branch`, as the dispatch's `pr` input: "" when there is none, the lookup fails, or
+ *  the branch's browser-group.yml predates the input (a dispatch with an unknown input is a 422). */
+export function prInput(branch, { get = (q) => api("GET", q), show = (ref) => gitTry(["show", ref], { cwd: ROOT }) } = {}) {
+  if (!/\bpr:\s*\n\s+description:/.test(String(show(`origin/${branch}:.github/workflows/${WORKFLOW}`) || ""))) return "";
+  const r = get(`pulls?state=open&head=${encodeURIComponent(`${REPO.split("/")[0]}:${branch}`)}&per_page=5`);
+  const n = Array.isArray(r?.json) && r.json.length === 1 ? r.json[0]?.number : null;
+  return Number.isInteger(n) && n > 0 ? String(n) : "";
+}
+
+/** Every artifacts/test-results-* /junit.xml as one string ("" when none): one per Playwright process (#5560). */
+export function readJunits(dir) {
+  let out = "";
+  let ents = [];
+  try { ents = fs.readdirSync(dir); } catch { return ""; }
+  for (const d of ents) {
+    if (!d.startsWith("test-results")) continue;
+    try { out += fs.readFileSync(path.join(dir, d, "junit.xml"), "utf8"); } catch { /* none */ }
+  }
+  return out;
+}
+
+/** The units one run-playwright invocation may claim: none unless it exited 0, then those whose file the junit
+ *  shows with a passed test and no failure (a spec that failed, or that no process ran, is never claimed). */
+export function claimedUnits(units, status, xml) {
+  if (status !== 0) return [];
+  const ok = passedSpecFiles(xml);
+  return (units || []).filter((unit) => ok.has(unit.split("#")[0]));
+}
+
+/** The commit pair this shard tested: on a PR merge ref (APEX_PR_MERGE=1, browser-group.yml's `pr` input) the
+ *  merge commit's parents (base, head); on a branch head, head only (base=none, never counted for a PR verdict). */
+export function testedPair(catFile, prMerge) {
+  const parents = [...String(catFile || "").matchAll(/^parent ([0-9a-f]{40})$/gm)].map((m) => m[1]);
+  if (prMerge) return parents.length === 2 ? { base: parents[0], head: parents[1] } : { base: "", head: "" };
+  return null;
+}
+
+/** The shard's `apex-group` record (tools/ci/dropped-group-runs.mjs reads it): one annotation, written from what
+ *  this checkout and this plan actually ran, never from a dispatch input. */
+function shardRecord(title, gl, units, code) {
+  // Plain spawnSync, not tools/lib (review N4): the record's commit pair depends on tools/ci code alone (a config path).
+  const g = (a) => { const r = spawnSync("git", a, { cwd: ROOT, encoding: "utf8" }); return r.status === 0 ? r.stdout : ""; };
+  let pair = testedPair(g(["cat-file", "-p", "HEAD"]), process.env.APEX_PR_MERGE === "1");
+  if (!pair) pair = { base: "", head: g(["rev-parse", "HEAD"]).trim() };
+  const line = groupRecordLine({
+    head: pair.head, base: pair.base, gl, flaky: process.env.APEX_FAIL_ON_FLAKY === "1",
+    group: String(process.env.GROUP || "").trim(), ok: code === 0, units,
+  });
+  console.log(`::notice title=${title}::${line}`);
+}
 
 async function main() {
   if (argv.includes("--help") || argv.includes("-h")) {
@@ -336,29 +441,42 @@ async function main() {
     console.log(JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) }));
     return 0;
   }
-  if (argv.includes("--run-shard")) {   // the workflow's shard step
+  if (argv.includes("--run-shard") || argv.includes("--plan-record")) {   // the workflow's shard step / its plan record
     const allScripts = scripts();
     const gl = process.env.GL || process.env.APEX_GL || "llvmpipe";
     const w = resolveWorkers(process.env.GROUP, gl, process.env.WORKERS, allScripts);
     if (w.error) { console.error("remote-group --run-shard: " + w.error); return 3; }
     const r = runShardArgs({ group: process.env.GROUP, plan: process.env.PLAN, shard: process.env.SHARD, total: process.env.TOTAL, workers: w.workers }, allScripts);
     if (r.error) { console.error("remote-group --run-shard: " + r.error); return 3; }
-    if (r.empty) { say(`shard ${process.env.SHARD}/${process.env.TOTAL}: the plan gave it no specs (fewer specs than shards) — nothing to run`); return 0; }
+    // THE PLAN RECORD (#5480 review): what this shard WILL run, written by its own step BEFORE any spec or test
+    // helper executes, so nothing a test prints can widen it. The end record below may only claim units in it.
+    if (argv.includes("--plan-record")) { shardRecord(GROUP_PLAN_TITLE, gl, r.units || [], 0); return 0; }
+    if (r.empty) {
+      say(`shard ${process.env.SHARD}/${process.env.TOTAL}: the plan gave it no specs (fewer specs than shards) — nothing to run`);
+      shardRecord(GROUP_RECORD_TITLE, gl, [], 0);
+      return 0;
+    }
     let code = 0;
+    const passed = [];
     for (const u of r.runs) {   // every unit runs even after a red, so one shard reports all its failures
       say(`shard ${process.env.SHARD}/${process.env.TOTAL} (${r.mode}): ${u.cmd} ${u.args.join(" ")}`);
       const run = spawnSync(u.cmd, u.args, { cwd: ROOT, stdio: "inherit", env: process.env });
       const st = run.status == null ? 1 : run.status;
       if (st !== 0 && code === 0) code = st;
+      // JUNIT IS THE EVIDENCE: a unit is claimed only when a junit shows its file with a passed test and no failure.
+      // run-playwright leaves one junit per Playwright process (#5560), so every process of the invocation counts.
+      passed.push(...claimedUnits(u.units, st, readJunits(path.join(ROOT, "artifacts"))));
     }
+    shardRecord(GROUP_RECORD_TITLE, gl, passed, code);
     return code;
   }
+
   const interval = Math.max(10, +opt("--interval", 30)) * 1000;
   const tmin = +opt("--timeout", 0);
   const deadline = tmin > 0 ? Date.now() + tmin * 60_000 : Infinity;
   if (argv.includes("--watch")) return watch(opt("--watch"), { interval, deadline });
 
-  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers"].includes(argv[i - 1]));
+  const group = argv.find((a, i) => !a.startsWith("--") && !["--shards", "--gl", "--ref", "--interval", "--timeout", "--workers", "--group-lanes"].includes(argv[i - 1]));
   // Bare invoke used to fall through to planMatrix(undefined) → "not a group name: undefined".
   if (!group) {
     console.error(USAGE);
@@ -390,6 +508,11 @@ async function main() {
   }
   // A live or green run of this group on this exact sha answers the question already.
   const sha = git("rev-parse", "--verify", "-q", `origin/${branch}`) || git("rev-parse", "HEAD");
+  // THE PR'S MERGE REF (#5480). With an open PR on the branch (and a browser-group.yml there that takes `pr`), the
+  // run tests refs/pull/<n>/merge and records the commit pair, so a ready verdict whose plan dropped one of this
+  // group's specs can count it (tools/ci/dropped-group-runs.mjs). A green branch-head run does not count for that.
+  const pr = prInput(branch);
+  if (pr) say(`testing PR #${pr}'s merge ref (a dropped spec of its ready plan counts this run when it is green on attempt 1)`);
   if (!argv.includes("--force")) {
     const r = api("GET", `actions/workflows/${WORKFLOW}/runs?event=workflow_dispatch&branch=${encodeURIComponent(branch)}&per_page=20`);
     const have = liveRun(r.json?.workflow_runs, { branch, group: p.group, sha });
@@ -398,14 +521,19 @@ async function main() {
       if (argv.includes("--no-wait")) { say(`watch: node tools/ci/remote-group.mjs --watch ${have.run.id}`); return 0; }
       return watch(have.run.id, { interval, deadline });
     }
-    if (have?.kind === "green") { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
+    if (have?.kind === "green" && !pr) { say(`= group passed — ${p.group} on ${branch} @${sha.slice(0, 9)} is already green: ${have.run.html_url} (--force to re-run)`); return 0; }
   }
+  const gate = ownerWriteGate();
+  for (const l of gate.lines) say(l);
+  if (!gate.ok) return 3;
   const since = Date.now();
-  const plan = JSON.stringify({ matrix: p.matrix, ...(p.shards ? { shards: p.shards } : {}) });
+  const lanes = groupLanes(process.env, argv);
+  if (lanes !== GROUP_LANES) say(`group lanes: ${lanes} (APEX_GROUP_LANES / --group-lanes; default ${GROUP_LANES})`);
+  const plan = JSON.stringify({ matrix: withLanes(p.matrix, Math.floor(since / 60000), lanes), ...(p.shards ? { shards: p.shards } : {}) });
   const d = api("POST", `actions/workflows/${WORKFLOW}/dispatches`, {
     ref: branch,
     // Always pass resolved workers (GL + group aware) so empty UI input still gets the plan default.
-    inputs: { group: p.group, plan, gl, workers: w.workers },
+    inputs: { group: p.group, plan, gl, workers: w.workers, ...(pr ? { pr } : {}) },
   });
   if (d.error) { say(`= group unknown — dispatch failed: ${d.error}`); return 3; }
   let runId = d.json?.workflow_run_id || null;

@@ -16,8 +16,11 @@ import {
   BASELINE_PATH,
   STRICT,
   compareToBaseline,
+  envOf,
+  readPageEnv,
   writeArtifact,
   loadBaseline,
+  runnerCpu,
 } from "../helpers/perf-frametime.mjs";
 import { blessing } from "../helpers/baseline-blessing.mjs";
 
@@ -32,7 +35,7 @@ if (!UPDATING && !fs.existsSync(BASELINE_PATH)) {
 test.describe("perf frametime — SwiftShader race regression", () => {
   test.use({ viewport: SCENARIO.viewport });
 
-  test("records p50/p95/p99, long tasks, and heap vs baseline", async ({ page }) => {
+  test("records p50/p95/p99, long tasks, and heap vs baseline", async ({ page, browser }) => {
     test.setTimeout(600_000);
 
     await pinFactorySeat(page);
@@ -160,15 +163,19 @@ test.describe("perf frametime — SwiftShader race regression", () => {
       heapTotalMB: prep.snap.heapTotalMB,
     };
 
-    const env = await page.evaluate(() => ({
-      build: (document.querySelector('meta[name="apex-build"]') || {}).content || null,
-      sha: (document.querySelector('meta[name="apex-sha"]') || {}).content || null,
-    }));
+    const env = await page.evaluate(readPageEnv);
+    env.browser = browser.browserType().name();
+    env.browserVersion = browser.version();
+    env.cpu = runnerCpu();
+    const compared = envOf(env);
+    // Logged on every run, green included, so the job log names the runner class it measured (#5903).
+    console.log(`[perf-frametime env] cpu=${compared.cpu} p50=${measured.p50} p95=${measured.p95} p99=${measured.p99}`);
 
     const payload = {
       at: new Date().toISOString(),
       scenario: { ...SCENARIO, cars: prep.cars, trackBuilt: prep.track },
       env,
+      compared,
       metrics: measured,
       perfSnapshot: prep.perf,
     };
@@ -191,8 +198,9 @@ test.describe("perf frametime — SwiftShader race regression", () => {
       }
       const body = {
         scenario: payload.scenario,
+        env: compared,
         metrics: measured,
-        _blessed: blessing({ scenario: payload.scenario, metrics: measured }, reason),
+        _blessed: blessing({ scenario: payload.scenario, env: compared, metrics: measured }, reason),
       };
       fs.writeFileSync(BASELINE_PATH, JSON.stringify(body, null, 2) + "\n");
       test.info().annotations.push({ type: "baseline", description: `wrote ${BASELINE_PATH}` });
@@ -201,7 +209,14 @@ test.describe("perf frametime — SwiftShader race regression", () => {
 
     const baseline = loadBaseline();
     expect(baseline).toBeTruthy();
-    const report = compareToBaseline(measured, baseline);
+    const report = compareToBaseline(measured, baseline, compared);
+    if (report.outcome === "not-comparable") {
+      // Neither a pass nor a fail: a different machine measured nothing about the code.
+      const msg = report.mismatches.join("; ");
+      test.info().annotations.push({ type: "perf-not-comparable", description: msg });
+      console.log(`[perf-frametime not comparable] ${msg}`);
+      return;
+    }
     test.info().annotations.push({
       type: "perf-regression-report",
       description: JSON.stringify(report.deltas),

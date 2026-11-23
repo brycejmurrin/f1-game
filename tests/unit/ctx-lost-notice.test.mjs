@@ -7,6 +7,11 @@ import vm from "node:vm";
 import { bootGlx } from "../helpers/glx-mock.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+const ID = "monza", KEY = "apex26.ctxLostReloads";
 
 const TLX_FILE = { filename: absSrc("js/render/three/tlx.js") };
 
@@ -105,19 +110,41 @@ test("select-screen consumes apex26.ctxLostNotice and wires RETRY to startRace",
   const menus = read("js/ui/select-screen.js");
   assert.ok(menus.includes('sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1"'));
   assert.ok(menus.includes("sessionStorage.removeItem(CTX_LOST_NOTICE_KEY)"));
-  assert.ok(menus.includes("if (G.startRace) G.startRace()"));
+  assert.ok(menus.includes("location.reload()"));
+  assert.ok(menus.includes("CTX_LOST_NEED_RELOAD_KEY"));
   const game = read("js/game.js");
   assert.ok(game.includes("function quitToMenuAfterCtxLost()"));
   assert.ok(game.includes("stashCtxLostNotice()"));
+  assert.ok(game.includes("GfxEscalation.stashInPageRecoverFlags"));
+  assert.ok(read("js/perf/gfx-escalation.js").includes("apex26.ctxLostNeedReload"));
   assert.ok(game.includes("Graphics reset — retrying with lighter settings"));
 });
 
-test("lights-out and goRolling clear apex26.ctxLostReloads", () => {
-  const game = read("js/game.js");
-  const lights = game.indexOf('setState("race", feel.restartPending ? "restart-green" : "lights-out")');
-  assert.ok(lights > 0);
-  assert.ok(game.slice(lights, lights + 220).includes('GfxEscalation.resetReloadBudget()'));
-  assert.ok(game.includes('goRolling: () => { if (state !== "count") return false; GfxEscalation.resetReloadBudget()'));
+test("lights-out and goRolling clear apex26.ctxLostReloads", async () => {
+  // Behaviour in the real game VM: a reload budget left in sessionStorage by an
+  // earlier context loss must be gone once the start lights go out (and once a
+  // rolling start goes green), so a later loss gets the full reload budget.
+  const g = await createGame({ carMeshes: false });
+  try {
+    const A = g.apex, ss = g.sandbox.sessionStorage;
+    const raceTo = async () => {
+      const r = A.race(ID, "day", "dry");
+      assert.ok(r, "race() accepted " + ID);
+      assert.ok(await g.settle(() => { const i = A.info(); return i && i.track === r.track && g.G.state === "count"; }, 4000), "the grid is on the countdown");
+    };
+    await raceTo();
+    ss.setItem(KEY, "2");
+    assert.equal(ss.getItem(KEY), "2", "still counted while the lights are lit");
+    const green = await g.stepUntil(() => g.G.state === "race", { maxSteps: 60 * 15 });
+    assert.ok(green.ok, "lights out within 15 s of countdown");
+    assert.equal(ss.getItem(KEY), null, "lights-out cleared the reload budget");
+
+    await raceTo();
+    ss.setItem(KEY, "2");
+    assert.equal(g.G.goRolling(), true, "goRolling from the countdown goes green");
+    assert.equal(g.G.state, "race");
+    assert.equal(ss.getItem(KEY), null, "goRolling cleared the reload budget");
+  } finally { g.close(); }
 });
 
 test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
@@ -125,4 +152,27 @@ test("endRace still clears apex26.ctxLostReloads (radio-voice pin)", () => {
   const i = game.indexOf("function endRace(forcedOrder)");
   assert.ok(i >= 0);
   assert.ok(game.slice(i, i + 400).includes('GfxEscalation.resetReloadBudget()'));
+});
+
+// #5699 row 16: a restore that lands while the tab is hidden reloaded at once (no document.hidden test) and uncounted.
+// It now shares the hidden loss's one deferred reload: nothing while hidden, one reload on the way back.
+test("GLX: a restore while hidden waits for the hidden loss's visibility reload — one reload, on return (#5699 row 16)", () => {
+  const h = bootGlx();
+  const doc = h.sandbox.document, vis = [];
+  let reloads = 0;
+  h.sandbox.location.reload = () => { reloads++; };
+  doc.hidden = true;
+  doc.addEventListener = (t, fn) => { if (t === "visibilitychange") vis.push(fn); };
+  doc.removeEventListener = (t, fn) => { const i = vis.indexOf(fn); if (i >= 0) vis.splice(i, 1); };
+  h.sandbox.sessionStorage.removeItem("apex26.ctxLostReloads");
+  h.loseContext();
+  h.restoreContext();
+  for (const timer of h.sandbox.__timers.splice(0)) timer();
+  assert.equal(reloads, 0, "nothing reloads behind a hidden tab");
+  assert.equal(vis.length, 1, "loss and restore share one visibility listener");
+  assert.equal(h.sandbox.sessionStorage.getItem("apex26.ctxLostReloads"), null, "a hidden loss spends no reload budget");
+  doc.hidden = false;
+  vis[0]();
+  assert.equal(reloads, 1, "the tab reloads once when it is visible again");
+  assert.equal(vis.length, 0);
 });

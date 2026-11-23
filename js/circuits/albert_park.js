@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "albert_park",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 2.5 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -37,24 +38,31 @@
     bankZones: [
       // Racing-lap fracs, re-keyed +0.10212 (arc) when the bogus
       // sceneryStartFrac 0.0925 was removed, so every bank stays on the corner
-      // it sat on; five of six land on a curated apex.
+      // it sat on; all six land on an FIA 2026 apex in `turns` (T8 = 0.4205).
       { frac: 0.0762, angleDeg: 3.0, widthM: 90 },    // T1
       { frac: 0.2146, angleDeg: 3.0, widthM: 90 },    // T3
       { frac: 0.2831, angleDeg: 3.0, widthM: 90 },    // T5
-      { frac: 0.4207, angleDeg: 2.5, widthM: 200 },   // the long lakeside right
+      { frac: 0.4207, angleDeg: 2.5, widthM: 200 },   // T8, the long lakeside right
       { frac: 0.6321, angleDeg: 3.5, widthM: 130 },   // T9, fast left past the lake
       { frac: 0.8352, angleDeg: 3.0, widthM: 110 },   // T12
     ],
-    // Arc fracs of the racing lap (were 0.2125/0.6425 through the removed
-    // 0.0925 authoring origin; + shift 0.10212 - 0.0925 keeps the road put).
-    elevations: [{ s: 0.22212, halfM: 340, rise: 0.6 }, { s: 0.65212, halfM: 300, rise: -0.4 }],
+    // OpenF1 Melbourne qualifying 2024, session 9484: Verstappen lap 20, checked
+    // against Sainz lap 17. Both traces span 2.5 m with a crest ahead of T11.
+    elevations: [-0.494, -0.007, -0.693, 0.71, -0.397, 1.155, -0.292, 0.16, 0.472, -0.078,
+      0.606, 0.826, 0.707, 0.098, 0.606, -0.069, 1.217, -0.502, 1.682, -0.478,
+      1.323, -0.522, 1.424, -0.538, 1.458, -0.426, 1.144, 0.259, 0.38, 1.623,
+      -0.184, 1.282, 0.441, 0.386, -0.625, 1.269, -0.931, 0.933, -0.497, 1.263]
+      .map((rise, i) => ({ s: i / 40, halfM: 263.07, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // sectors: sector splits; turns: one apex per corner of the FIA 2026 event map
+    // (2026 Australian GP "Circuit Map, Pit Lane Drawing, Emergency Exits Map and
+    // Quarantine Zone", T1-T14; T7 = the left kink after T6, T8 = the long right
+    // sweep; the unnumbered S-bend in the A4 run carries no number), as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
-    turns: [0.0762, 0.1021, 0.2146, 0.2413, 0.2831, 0.3652, 0.4770, 0.5029, 0.6321, 0.6588, 0.7880, 0.8352, 0.8861, 0.9150],
+    turns: [0.0762, 0.1021, 0.2146, 0.2413, 0.2831, 0.3652, 0.3787, 0.4205, 0.6321, 0.6588, 0.7880, 0.8352, 0.8861, 0.9150],
     furniture: { tree: "broad", fol: [0.28, 0.46, 0.22], lamp: "none", treeCrown: "vase" },  // tidy Melbourne parkland
     kit: { marshal: "container", rail: "jersey",      fence: "chainlink", tyre: "tecpro",  board: "panel",     gantry: "box",        camera: "scaffold",  hoarding: "panel" },
     standSet: ["steel", "pastel", "alu"],  // temporary park build, pale Melbourne palette

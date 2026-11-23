@@ -1,7 +1,9 @@
 /* agent-indexes.test.mjs — generated hook index, coverage page, impact map, per-hook help.
  *
- * Both generators are deterministic: a fresh render matches the committed
- * file, and a one-byte drift is not "identical". `help <hook>` prints one
+ * Both generators are deterministic: a fresh render of the index matches the
+ * committed file, and a one-byte drift is not "identical". The coverage page is
+ * built on demand into artifacts/ (never committed since 2026-11-10), so it is
+ * pinned by determinism and by its write path, not against a committed copy. `help <hook>` prints one
  * index row and does not boot. Hook names are a bijection with a live
  * agentHelp() from the game VM.
  *
@@ -24,8 +26,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const node = process.execPath;
 
-test("coverage page and agent index match a fresh render", () => {
-  assert.equal(firstDiff(read("docs/TESTING-COVERAGE.md"), renderCoverage()), "identical");
+test("coverage page renders the same twice, and the agent index matches a fresh render", () => {
+  assert.equal(firstDiff(renderCoverage(), renderCoverage()), "identical");
   const index = buildIndex();
   assert.equal(firstDiff(read("docs/agent-index.json"), renderIndex(index)), "identical");
   assert.equal(firstDiff(read("docs/AGENT-HOOKS.md"), renderHookPage(index)), "identical");
@@ -40,16 +42,23 @@ test("a drifted generated page fails the staleness comparison", () => {
   assert.notEqual(firstDiff(impact.replace('"narrowOnly": true', '"narrowOnly": false'), impact), "identical");
 });
 
-test("generator --check is clean, and an unknown flag does not write", () => {
-  for (const tool of ["tools/docs/gen-coverage-table.mjs", "tools/docs/gen-agent-index.mjs"]) {
-    const ok = spawnSync(node, [path.join(ROOT, tool), "--check"], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
-    assert.equal(ok.status, 0, `${tool} --check\n${ok.stdout}${ok.stderr}`);
-  }
-  const page = path.join(ROOT, "docs/TESTING-COVERAGE.md");
-  const before = fs.readFileSync(page);
-  const bad = spawnSync(node, [path.join(ROOT, "tools/docs/gen-coverage-table.mjs"), "--chek"], { cwd: ROOT, encoding: "utf8" });
+test("agent-index --check is clean; the coverage page builds into artifacts/ only, and an unknown flag writes nothing", () => {
+  const ok = spawnSync(node, [path.join(ROOT, "tools/docs/gen-agent-index.mjs"), "--check"], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
+  assert.equal(ok.status, 0, `gen-agent-index --check\n${ok.stdout}${ok.stderr}`);
+  const cov = path.join(ROOT, "tools/docs/gen-coverage-table.mjs");
+  const built = spawnSync(node, [cov], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
+  assert.equal(built.status, 0, built.stdout + built.stderr);
+  const page = path.join(ROOT, "artifacts/TESTING-COVERAGE.md");
+  assert.equal(firstDiff(fs.readFileSync(page, "utf8"), renderCoverage()), "identical");
+  assert.equal(spawnSync("git", ["ls-files", "--", "docs/TESTING-COVERAGE.md"], { cwd: ROOT, encoding: "utf8" }).stdout.trim(), "",
+    "the retired committed copy must not come back");
+  fs.writeFileSync(page, "stale\n");
+  const check = spawnSync(node, [cov, "--check"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(check.status, 0, "--check renders the page and passes: there is no committed copy to drift\n" + check.stdout + check.stderr);
+  const bad = spawnSync(node, [cov, "--chek"], { cwd: ROOT, encoding: "utf8" });
   assert.equal(bad.status, 2);
-  assert.deepEqual(fs.readFileSync(page), before);
+  assert.equal(fs.readFileSync(page, "utf8"), "stale\n", "neither --check nor an unknown flag writes");
+  assert.equal(spawnSync(node, [cov], { cwd: ROOT, encoding: "utf8" }).status, 0, "rebuild the page");
 });
 
 test("help physState prints that hook and no other", () => {
@@ -58,12 +67,12 @@ test("help physState prints that hook and no other", () => {
   const row = JSON.parse(r.stdout);
   assert.equal(row.name, "physState");
   assert.equal(row.group, "read");
-  assert.match(row.signature, /^physState\(/);
+  assert.equal(row.signature, "physState()");
   assert.doesNotMatch(r.stdout, /"apiVersion"/);
   assert.doesNotMatch(r.stdout, /"perceive"/);
   const missing = spawnSync(node, [path.join(ROOT, "tools/shot/agent.mjs"), "help", "notARealHook"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /no hook named/);
+  assert.equal(missing.stderr, "agent: no hook named \"notARealHook\" in docs/agent-index.json\n");
 });
 
 test("index hook rows are a bijection with agentHelp()", async () => {

@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkTmpDir } from "../helpers/tmp-dir.mjs";
+import { requireTool } from "../helpers/require-tool.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -132,9 +133,12 @@ function hasViewDeps() {
   });
   return r.status === 0;
 }
+// Absent: skip loudly and count it (`# skipped N: Pillow/numpy missing` at exit); a FAILURE when the
+// job opted in with APEX_REQUIRE_TOOLS=1 or a list naming pillow / numpy.
+const VIEW_DEPS = requireTool("Pillow/numpy", hasViewDeps(), { ids: ["pillow", "numpy"], hint: "pip install pillow numpy" });
 
 test("slider-effect-view.py isolates changed pixels on a synthetic pair", {
-  skip: hasViewDeps() ? false : "Pillow/numpy not installed (GitHub-hosted CI)",
+  skip: VIEW_DEPS.skip(),
 }, () => {
   const dir = mkTmpDir("slider-effect-");
   try {
@@ -332,9 +336,8 @@ test("glareStr recipe uses night + full 0→max range", async () => {
 
 /* The view pipeline tests build their OWN image pair, so they depend on neither the
    gitignored artifacts/ tree nor a prior live batch run. Pillow/numpy are the only
-   requirement (absent on GitHub-hosted CI runners, where these skip loudly). */
+   requirement (absent on GitHub-hosted CI runners, where these skip loudly unless APEX_REQUIRE_TOOLS opts in). */
 const VIEW = path.join(ROOT, "tools/lighting/slider-effect-view.py");
-const NO_VIEW_DEPS = hasViewDeps() ? false : "Pillow/numpy not installed (GitHub-hosted CI)";
 function synthPair(dir, name = "") {
   const mk = spawnSync("python3", ["-c", `
 from pathlib import Path
@@ -349,7 +352,7 @@ a.save(d / (n + "a.png")); b.save(d / (n + "b.png"))
   assert.equal(mk.status, 0, mk.stderr);
 }
 
-test("slider-effect-view.py --batch-summary produces summary.png from a synthetic batch", { skip: NO_VIEW_DEPS }, () => {
+test("slider-effect-view.py --batch-summary produces summary.png from a synthetic batch", { skip: VIEW_DEPS.skip() }, () => {
   const dir = mkTmpDir("se-batch-");
   try {
     synthPair(dir);
@@ -373,7 +376,7 @@ test("slider-effect-view.py --batch-summary produces summary.png from a syntheti
   }
 });
 
-test("slider-effect-view.py writes filter/heat/diff/sheet/view.json and signs the diff", { skip: NO_VIEW_DEPS }, () => {
+test("slider-effect-view.py writes filter/heat/diff/sheet/view.json and signs the diff", { skip: VIEW_DEPS.skip() }, () => {
   const tmp = mkTmpDir("se-view-");
   try {
     synthPair(tmp);

@@ -46,10 +46,6 @@ test.describe("Livery atlas — ink contrast", () => {
     const result = await page.evaluate(`(() => {
       ${CONTRAST_FN}
       const D = [0.06,0.06,0.08], L = [0.97,0.97,0.98];
-      const inkOn = (bgs) => {
-        const ink = LiveryTex.inkOn(bgs);
-        return { ink: ink[0] < 0.5 ? D : L, worst: ink.worst };
-      };
       const bad = [];
       let scored = 0;
       for (const team of Teams.LIST) {
@@ -66,21 +62,26 @@ test.describe("Livery atlas — ink contrast", () => {
           ];
           for (const [name, bgs] of panels) {
             scored++;
-            // A mark can straddle TWO paints (body + pod panel), and when those
-            // sit either side of mid-grey no single ink serves both — that is
-            // what the halo is for. The guarantee is therefore about the PAIR:
-            // for every background, the ink or its halo must be legible. The
-            // inks are near-black and near-white rather than pure, so the proven
-            // floor is 4.23:1 (at background luminance 0.183), not the 4.58:1
-            // pure black/white would give. 4.2 is the real bound; anything below
-            // it means an ink constant moved.
-            const { ink } = inkOn(bgs);
-            const halo = ink === D ? L : D;
+            // The ink the game ACTUALLY chose (LiveryTex.inkOn, not a local
+            // near-black/near-white pair) must be legible on every paint it
+            // lands on. Only a mark that straddles TWO paints either side of
+            // mid-grey may lean on the halo, and then only on the paint the
+            // ink loses: the halo is haloFor(ink), the opposite ink. Taking
+            // max(ink, halo) for every panel could not fail (>= 4.23 for any
+            // background), so a wrong pick on a single paint went unseen.
+            const ink = LiveryTex.inkOn(bgs);
+            const halo = lum(ink) < 0.5 ? L : D;
             for (const bg of bgs) {
-              const covered = Math.max(ratio(ink, bg), ratio(halo, bg));
-              if (covered < 4.2) {
-                bad.push(team.id + "/" + liv.id + ":" + name + ":" + covered.toFixed(2));
+              const byInk = ratio(ink, bg);
+              if (byInk >= 4.2) continue;
+              const straddle = bgs.length > 1 && ratio(halo, bg) >= 4.2;
+              if (!straddle) {
+                bad.push(team.id + "/" + liv.id + ":" + name + ":" + byInk.toFixed(2));
               }
+            }
+            // And the pick is the better of the two inks for its worst paint.
+            if (ink.worst + 1e-9 < Math.min(...bgs.map((b) => ratio(ink[0] < 0.5 ? L : D, b)))) {
+              bad.push(team.id + "/" + liv.id + ":" + name + ":wrong-ink");
             }
           }
         }

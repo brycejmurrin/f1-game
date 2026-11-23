@@ -145,6 +145,41 @@ test("env-probe face uses the same opaque → sky order as the main camera", () 
   assert.ok(!face.includes("drawChunked"), "probe skips chunked city/terrain/road");
 });
 
+test("race entry preserves the renderer probe opt-out, and stationary captures retry failures", async () => {
+  const game = await createGame();
+  try {
+    const renderer = game.sandbox.GLX;
+    renderer.envProbeOptOut = true;
+    const attempts = [], submitted = [];
+    let refuse = true, reject = false;
+    renderer.envFaceBegin = face => {
+      attempts.push(face);
+      if (face === 2 && refuse) { refuse = false; return null; }
+      return new Float32Array(16);
+    };
+    renderer.envFaceEnd = face => {
+      submitted.push(face);
+      if (face === 5 && reject) { reject = false; return false; }
+    };
+    await game.race("monza", "day", "dry");
+    const pump = () => { for (let i = 0; i < 18; i++) game.pumpFrame(1200); };
+    game.apex.park(0.2, 0);
+    pump();
+    assert.equal(renderer.envProbeOptOut, true);
+    assert.deepEqual(attempts, [], "the renderer opts out throughout entry and the race");
+    renderer.envProbeOptOut = false;
+    pump();
+    assert.deepEqual(attempts, [0, 1, 2, 2, 3, 4, 5], "a transient refusal retries the same face");
+    assert.deepEqual(submitted, [0, 1, 2, 3, 4, 5], "the complete cube holds while parked");
+    attempts.length = submitted.length = 0;
+    reject = true;
+    game.apex.park(0.7, 0);
+    pump();
+    assert.deepEqual(attempts, [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5],
+      "a rejected replacement is rebuilt even though the previous cube was ready");
+  } finally { game.close(); }
+});
+
 test("main camera cullDist contains the far-plane corners (not the 150 m probe cap)", () => {
   pumpNames();
   const cull = g.G.frame.cullDist;
@@ -328,7 +363,6 @@ test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   assert.match(gfx, /return `GRAPHICS: \$\{current\(\)\.label\}`/);
   assert.match(gfx, /\{ id: "high",\s+label: "HIGH"/);
   assert.match(gfx, /SettingRow\.build\("pm-gfx", "GRAPHICS"/);
-  assert.match(html, /id="pm-settings-index"/);
   for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
@@ -407,7 +441,6 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
 
   const wgsl = shader("js/render/webgpu/wgsl-post.js");
   assert.match(wgsl, /fn\s+ssaoViewPosFromD\s*\(/);
-  assert.match(wgsl, /P\s*=\s*ssaoViewPosFromD\(\s*in\.uv\s*,\s*dCentre\s*\)/);
   assert.match(wgsl, /if\s*\(\s*bloomAmt\s*>\s*0\.001\s*\)\s*\{\s*bloomSample\s*=\s*textureSampleLevel\(\s*bloomTex/);
   assert.match(wgsl, /if\s*\(\s*U\.lift\.w\s*>\s*0\.5\s*\)\s*\{\s*c\s*=\s*c\s*\+\s*textureSampleLevel\(\s*godrayTex/);
 

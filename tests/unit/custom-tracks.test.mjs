@@ -16,6 +16,12 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { bootEditor } from "../helpers/editor-vm.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";
+import { makeStorageFaults } from "../helpers/storage-faults.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { cssRules, ruleFor } from "../helpers/css-rules.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -35,6 +41,7 @@ function boot(stored = {}, pre) {
     get: (k, d) => (k in data ? JSON.parse(JSON.stringify(data[k])) : d),
     set: (k, v) => { data[k] = v; },
     write: (k, v) => { data[k] = v; writes.push(k); return { ok: true, durable: true }; },
+    failedKeys: () => [],
     rawDel: (k) => { delete data[k]; },
   };
   ctx.GameStore = { store };
@@ -172,6 +179,30 @@ test("fractional hill lengths keep the saved id through registration and reload"
   assert.equal(reloaded.C.list().length, 1, "re-saving the input never duplicates the circuit");
 });
 
+test("non-flat node heights drop legacy cosine elevations (no stack on the built road)", () => {
+  const { C, Tracks } = boot();
+  const pts = ellipse();
+  const heights = pts.map((_, i) => (i === 10 ? 15 : 0));
+  const elev = [{ s: 0.25, halfM: 250, rise: 20 }];
+  const elevOnly = C.sanitize(design({ pts, elevations: elev }));
+  const both = C.sanitize(design({ pts, heights, elevations: elev }));
+  assert.ok(elevOnly.elevations && elevOnly.elevations.length === 1, "flat heights keep cosine hills");
+  assert.equal(both.elevations, null, "sanitize drops elevations when heights move a node");
+  assert.ok(both.heights[10] > 0);
+  const range = (tr) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < tr.n; i++) { lo = Math.min(lo, tr.py[i]); hi = Math.max(hi, tr.py[i]); }
+    return hi - lo;
+  };
+  const rawBoth = C.toRaw(both);
+  assert.equal(rawBoth.elevations, null, "toRaw also refuses to stack");
+  const hOnly = C.sanitize(design({ pts, heights }));
+  const from = (raw) => Tracks.buildCenterline(Tracks._vmContext.TrackDef.fromRaw(raw), { line: false });
+  const trH = from(C.toRaw(hOnly));
+  const trBoth = from(rawBoth);
+  assert.ok(Math.abs(range(trBoth) - range(trH)) < 0.05, "built relief matches heights-only, not heights+cosine");
+});
+
 test("hill canonicalization preserves stable legacy geometry and sampled identities", () => {
   const { C } = boot();
   const legacy = design({ elevations: [{ s: 0.5, halfM: 23, rise: 1.25 }],
@@ -225,6 +256,7 @@ test("toRaw hands the factory what a circuit file would author", () => {
   assert.ok(Math.abs(raw.hwZones[0].s0 - 18 / 36) < 1e-4, "arc 0.5 → index 18/36: " + raw.hwZones[0].s0);
   assert.ok(Math.abs(raw.hwZones[0].s1 - C.arcToIndexFrac(it.pts, it.hwZones[0].s1)) < 1e-12);
   assert.equal(raw.hwZones[0].hw, 5); assert.equal(raw.hwZones[0].ease, 0.025);
+  assert.equal(raw.undulate, true, "saved custom tracks retain their seeded road ripple");
   assert.equal(raw.turns, null, "no turns stored → the engine's curvature peaks");
   assert.equal(typeof raw.scenery, "function");
   for (const id of T.ORDER) {
@@ -235,23 +267,47 @@ test("toRaw hands the factory what a circuit file would author", () => {
   assert.equal(T.get("nope"), T.PRESETS.parkland, "unknown preset → parkland");
 });
 
-test("the picker knows the custom tail (source contract)", () => {
-  const src = read("js/ui/select-screen.js");
-  assert.match(src, /\["custom", "MY CIRCUITS"\]/, "a MY CIRCUITS chip");
-  assert.match(src, /filter === "season"\) return !\(t\.classic \|\| t\.custom\)/, "SEASON hides customs");
-  assert.match(src, /filter === "custom"\) return !!t\.custom/, "MY CIRCUITS shows only customs");
-  assert.match(src, /trb trb-custom/, "the CUSTOM badge");
-  assert.match(read("css/race-setup.css"), /\.trb-custom \{/, "…styled");
-  assert.match(read("js/career/season-ui.js"), /!t\.custom && !used\.has/, "the season shelf never offers a custom");
-  assert.match(read("js/net/lobby-settings.js"), /Tracks\.LIST\[d\.track\]\.custom\) return null/, "the guest refuses a custom index without a circuit body");
-  assert.match(read("js/core/lazy-bundles.js"), /!def\.scenery && !sceneryResident/, "ensureScenery fetches nothing for an inline closure");
+// The custom tail of the picker, run as behaviour over the real registry (a
+// saved design installed by CustomTracks into the engine's Tracks.LIST). The
+// other three surfaces that once rode a source regex here are behaviour tests
+// beside their modules: the season shelf (setup-screens-state "never offers a
+// custom circuit"), the VS FRIEND guest (lobby-settings "a custom LIST index
+// without a circuit body is refused") and ensureScenery (lazy-bundles-prefetch
+// "inline scenery closure fetches nothing").
+test("the picker's filters and tile know a custom circuit (select-screen trackInFilter / trackTile over the real LIST)", () => {
+  const ev = bootEditor({ customTracks: { v: 1, items: [design()] } });
+  const sel = read("js/ui/select-screen.js");
+  const dom = makeDom();
+  const sb = { document: dom.document, G: { daily: null }, favList: () => [], Flags: { svg: () => "" }, A11yOpts: undefined };
+  const filters = /^const trackFilters = .*;$/m.exec(sel);
+  assert.ok(filters, "the chip table");
+  // SEASON / CLASSICS go through calendarGroup over SeasonCal's id set (W34); no SeasonCal here,
+  // so the `classic` flag decides, as calendarGroup's fallback does.
+  const calendar = ["const seasonIds = ", "const classicBadge = "].map((h) => {
+    const m = new RegExp("^" + h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ".*;$", "m").exec(sel);
+    assert.ok(m, h);
+    return m[0].replace(/^const/, "var");
+  }).join("\n") + "\n" + fnSource(sel, "function calendarIdSet(") + "\n" + fnSource(sel, "function calendarGroup(");
+  vm.runInNewContext(filters[0].replace(/^const/, "var") + "\n" + calendar + "\n" + fnSource(sel, "function trackInFilter(") + "\n" + fnSource(sel, "function trackTile("), sb, { filename: absSrc("js/ui/select-screen.js") });
+  assert.ok(sb.trackFilters.some(([id, label]) => id === "custom" && label === "MY CIRCUITS"), "a MY CIRCUITS chip");
+  const L = ev.Tracks.LIST, custom = L.filter((t) => t.custom), classic = L.find((t) => t.classic && !t.custom);
+  assert.equal(custom.length, 1, "the saved design is on the LIST");
+  const ids = (f) => [...L.filter((t) => sb.trackInFilter(t, f, [])).map((t) => t.id)];
+  assert.deepEqual(ids("custom"), [custom[0].id], "MY CIRCUITS shows only customs");
+  assert.equal(ids("season").includes(custom[0].id), false, "SEASON hides customs…");
+  assert.equal(ids("season").includes(classic.id), false, "…and classics");
+  assert.ok(ids("all").includes(custom[0].id), "ALL keeps it");
+  const tile = sb.trackTile(custom[0], L.indexOf(custom[0]));
+  assert.equal(tile.dataset.kind, "custom");
+  const badges = [...tile.querySelectorAll(".trb")].map((b) => b.textContent);
+  assert.deepEqual(badges, ["CUSTOM"], "the CUSTOM badge, alone");
+  assert.ok(ruleFor(cssRules(read("css/race-setup.css")), ".trb-custom"), "…styled");
 });
 
-test("sanitize: bank angle in [1, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
+test("sanitize: bank angle in [-30, 30], hwZone width ≥ the 5 m floor, ease always stored and > 0", () => {
   const { C } = boot();
   const banks = C.sanitize(design({ bankZones: [{ frac: 0.1, angleDeg: 0, widthM: 100 }, { frac: 0.2, angleDeg: -12, widthM: 100 }, { frac: 0.3, angleDeg: 45, widthM: 100 }, { frac: 0.4, angleDeg: 12.3, widthM: 100 }] })).bankZones;
-  // mesh.js reads (angleDeg || 18): 0 would build 18°, a negative adverse camber.
-  assert.deepEqual(plain(banks.map((z) => z.angleDeg)), [1, 1, 30, 12.25]);
+  assert.deepEqual(plain(banks.map((z) => z.angleDeg)), [0, -12, 30, 12.25]);
   const hz = C.sanitize(design({ hwZones: [{ s0: 0.1, s1: 0.2, hw: 2 }, { s0: 0.3, s1: 0.4, hw: 6, ease: 0 }, { s0: 0.5, s1: 0.6, hw: 6.5, ease: 0.04 }] })).hwZones;
   assert.deepEqual(plain(hz.map((z) => [z.hw, z.ease])), [[5, 0.025], [6, 0.005], [6.5, 0.04]], "hw floors at LIMITS.hwMin; a zero ease (a step) floors at 0.005; absent → the engine's 0.025");
   // The id must not depend on whether the author wrote the default ease: the
@@ -478,6 +534,34 @@ test("collection backup merges once, keeps local duplicate labels, and preserves
   assert.equal(C.importCollection({ format: C.COLLECTION_FORMAT, v: 1, items: [design({ seed: 9 })] }).durable, false);
 });
 
+for (const entry of ["backup", "designer"]) {
+  test(`${entry} duplicate-only import retries a session-only circuit and survives reload`, async () => {
+    const disk = makeStorageFaults({ quotaBytes: 0 });
+    const withDisk = (ctx) => { ctx.localStorage = disk.storage; seedStore(ctx); };
+    const { C } = boot({}, withDisk);
+    const env = { format: C.COLLECTION_FORMAT, v: 1, items: [design()] };
+    const apply = async (file) => entry === "backup" ? C.importCollection(file)
+      : C.commitCollectionPreflight(await C.preflightCollection(file, null, { yieldTask: async () => {} }));
+    const first = await apply(env);
+    assert.equal(first.added, 1);
+    assert.equal(first.durable, false);
+    assert.equal(C.list().length, 1);
+    const refused = await apply(env);
+    assert.equal(refused.durable, false, "a session-only duplicate still needs a write");
+    assert.equal(disk.storage.getItem("apex26.customTracks"), null);
+    disk.set({ quotaBytes: Infinity });
+    const empty = await apply({ ...env, items: [] });
+    assert.equal(empty.skipped, 0);
+    assert.equal(disk.storage.getItem("apex26.customTracks"), null, "an empty import must not flush a library");
+    assert.deepEqual(plain(await apply(env)), { ok: true, added: 0, skipped: 1, durable: true, retried: true });
+    assert.equal(boot({}, withDisk).C.list()[0].id, C.list()[0].id);
+    const puts = () => disk.events.filter((e) => e.op === "setItem" && e.key === "apex26.customTracks").length;
+    const before = puts();
+    assert.deepEqual(plain(await apply(env)), { ok: true, added: 0, skipped: 1, durable: true });
+    assert.equal(puts(), before, "a durable duplicate remains a no-op");
+  });
+}
+
 test("collection import preflights invalid entries, validator failures and capacity without partial writes", () => {
   const { C, writes } = boot();
   const envelope = (items) => ({ format: C.COLLECTION_FORMAT, v: 1, items });
@@ -562,6 +646,15 @@ test("a TRACK DESIGNER retry after a partial load failure injects only the files
   assert.equal(evaluated.size, LAZY_EDITOR.length, "every file ran exactly once in the end");
 });
 
+test("a rejected editor load is not cached: the next ensureEditor retries", async () => {
+  const { ctx, C } = boot(); let calls = 0;
+  ctx.ApexRoster = { LAZY_EDITOR: ["js/editor/shape.js"], LAZY_EDITOR_EDGES: [] };
+  const api = C.create({ soundOn: false }, { load: () => (++calls === 1 ? Promise.reject(new Error("net")) : Promise.resolve(false)) });
+  await assert.rejects(api.ensureEditor(), /net/);
+  assert.equal(await api.ensureEditor(), false);
+  assert.equal(calls, 2, "the second call asked the loader again");
+});
+
 test("overlapping share-link decodes only open and strip the latest fragment", async () => {
   const b = boot(); const pending = new Map(), opened = [], stripped = [];
   b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"], LAZY_EDITOR_EDGES: [] };
@@ -605,6 +698,28 @@ test("share-link decode that finishes mid-race keeps the fragment for a later ti
   pending.get("SAME")({ ok: true, id: "SAME", design: { name: "SAME" } });
   assert.equal(await again, true);
   assert.deepEqual(opened, ["SAME"]);
+});
+
+// #5881: a #track= link that does not decode (truncated by a chat app, or
+// garbage) is stripped AND said aloud, not stripped in silence.
+test("a share link that fails to decode is stripped and announced", async () => {
+  for (const [hash, decoded] of [["#track=APXT1trunc", { ok: false, reason: "checksum" }], ["#track=%E0%A4%A", null]]) {
+    const b = boot(); const said = [], stripped = [], opened = [];
+    b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"], LAZY_EDITOR_EDGES: [] };
+    b.ctx.TrackDesigner = { init() {}, open: (opts) => opened.push(opts) };
+    b.ctx.TrackCodec = {
+      fromHash: (h) => { if (!decoded) throw new URIError("malformed"); return h.slice(7); },
+      decode: async () => decoded,
+      withoutTrack: () => "",
+    };
+    b.ctx.location = { hash, pathname: "/", search: "" };
+    b.ctx.history = { replaceState: (...args) => stripped.push(args) };
+    b.C.create({ announce: (msg) => { said.push(msg); } }, { load: async () => true });
+    assert.equal(await b.C.consumeTrackHash(), false, hash + ": refused");
+    assert.equal(stripped.length, 1, hash + ": the fragment is stripped");
+    assert.deepEqual(opened, [], hash + ": the designer stays shut");
+    assert.deepEqual(said, ["THAT TRACK LINK IS INCOMPLETE OR CORRUPT"], hash + ": the player is told");
+  }
 });
 
 

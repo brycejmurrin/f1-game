@@ -1,0 +1,12 @@
+{
+  "version": 1, "root": "#datahub", "provenance": { "screen": "datahub" },
+  "viewport": { "width": 844, "height": 390, "textScale": 100 },
+  "layoutContexts": [ { "selector": "#datahub", "box": { "x": 0, "y": 0, "width": 844, "height": 390 } } ],
+  "focus": { "selector": "#dh-close", "name": "Close", "tag": "BUTTON" },
+  "controls": [
+    { "selector": "#dh-close", "role": "button", "name": "Close", "disabled": false, "box": { "x": 790, "y": 4, "width": 48, "height": 48 } },
+    { "selector": "#dh-tab-schedule", "role": "tab", "name": "Schedule", "disabled": false, "box": { "x": 300, "y": 4, "width": 120, "height": 44 } },
+    { "selector": "#dh-tab-results", "role": "tab", "name": "Results", "disabled": false, "box": { "x": 430, "y": 4, "width": 120, "height": 44 } },
+    { "selector": "#dh-zero", "role": "button", "name": "Gone", "disabled": false, "box": { "x": 0, "y": 0, "width": 0, "height": 0 } }
+  ]
+}

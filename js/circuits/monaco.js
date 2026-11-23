@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "monaco",
+    revision: 2,
     name: "MONACO",
     gp: "Monaco GP",
     country: "Monaco",
@@ -23,6 +24,8 @@
     // lane in F1. Racing-space side, like every def.pit.
     pit: { mode: "street", side: 1, limitKph: 60 },
     terrainOuter: 28,
+    // Racing-space portals and inner bore dimensions, shared by the roof mesh and falling rain.
+    rainShelter: { start: 0.449, end: 0.524, shoulderWidth: 2.5, clearance: 6.45 },
     sceneryCoordinates: "source",
     barrierGap: 2.0,
     // SOURCE-trace fractions + source sides, like every range call in this
@@ -36,6 +39,9 @@
       { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
       // (racing 0.108-0.178: the Beau Rivage climb, kept as it ships.)
       { kind: "city", s0: 0.0116, s1: 0.0816 },
+      // The lower terrace at Beau Rivage has a retaining slope within the
+      // generic palm's crown. Its replacement stands on the upper shelf.
+      { kind: "foliage", s0: 0.036, s1: 0.044, side: 1 },
       // Casino Square as BUILT (racing 0.205-0.285, both sides): the Massenet
       // bust, the Hôtel de Paris, the Café, the fountain and the Casino were
       // re-seated here 2026-10-05 (scenery/monaco.js KRACE); the landmarks
@@ -63,43 +69,45 @@
     startFrac: 0.2516,
     sceneryStartFrac: 0.28,
     pal: { horizon: [0.55, 0.68, 0.82], grass: [0.36, 0.35, 0.34], runoff: [0.42, 0.41, 0.4], fogDensity: 0.0014, sunDir: [0.22008805283522467, 0.8803522113408987, 0.4201681008672471], sun: [1, 0.98, 0.93], sunColor: [1, 0.97, 0.9] },
-    // Elevation, re-authored 2026-10-04 against THIS centreline (the old +30 m
-    // crest sat at arc 0.12, before Massenet, with Casino back at datum). The
-    // shape: the line at harbour level, the Beau Rivage climb from Ste Devote,
-    // the crest at Massenet/Casino (~+40 m — SRTM 30 m via Open Topo Data puts
-    // Casino Square ~45 m above the harbour), down Mirabeau and the Loews
-    // hairpin to Portier, the tunnel, and the harbour low through the chicane,
-    // Tabac and the pool. `s` is authored in the REVERSED source frame about
-    // sceneryStartFrac: racing arc = 0.2180 - s (mod 1; the comments give it).
+    // Heights fitted to Leclerc's 2024 qualifying lap (OpenF1 session 9519,
+    // lap 25), registering horizontal positions against this centreline.
+    // Piastri's lap 23 independently reproduces the climb, tunnel shelf and
+    // harbour low. Stations below use racing arc = 0.2180 - s (mod 1).
     elevations: [
-      { s: 0.0880, halfM: 250, rise: 7 },   // arc 0.130 Beau Rivage climb
-      { s: 0.9530, halfM: 600, rise: 41 },  // arc 0.265 Massenet / Casino crest
-      { s: 0.8180, halfM: 200, rise: 11 },  // arc 0.400 Mirabeau - Loews shoulder
-      { s: 0.5750, halfM: 360, rise: -4 },  // arc 0.643 tunnel exit / harbour chicane / Tabac
+      { s: 0.0732, halfM: 375, rise: 14.1 },   // Beau Rivage
+      { s: 0.9537, halfM: 597, rise: 38.4 },   // Casino
+      { s: 0.8122, halfM: 313, rise: 5.6 },    // hairpin to Portier
+      { s: 0.6813, halfM: 400, rise: 4.7 },    // tunnel road deck
+      { s: 0.5587, halfM: 223, rise: -1.6 },   // harbour chicane
+      { s: 0.4190, halfM: 463, rise: -2.9 },   // pool
     ],
     // hwZones are SOURCE index fractions (TrackSpace.range "source": racing
     // index = 0.2516 - s), then interpolated by arc; the arc windows below are
-    // MEASURED on the built hw (scratch/monaco-hw.cjs, 2026-10-05).
+    // MEASURED on the built hw (full-narrow span, re-measured 2026-11-10 after
+    // the start-line move left them ~0.06 of a lap stale; the data was right).
     hwZones: [
       // Casino Square: Massenet's apex (0.2124) through Casino corner
       // (0.2743) — racing index 0.167-0.280 -> source 0.9712 / 0.0844, a
       // wrap-through-zero zone (applyHwZones handles s1 < s0). The old
       // 0.1524-0.2131 narrowed arc 0.044-0.114, Ste Devote / Beau Rivage.
       { s0: 0.9712, s1: 0.0844, hw: 4.6, ease: 0.012 },  // arc 0.205-0.285 Massenet/Casino
-      { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.432-0.462 Loews hairpin
-      { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.485-0.510 Portier
-      { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.770-0.792 Tabac
-      { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.815-0.855 swimming pool
-      { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.930-0.955 Rascasse
+      { s0: 0.8217, s1: 0.8864, hw: 4.1, ease: 0.012 },  // arc 0.371-0.402 Loews hairpin
+      { s0: 0.7430, s1: 0.7741, hw: 4.3, ease: 0.012 },  // arc 0.425-0.460 Portier
+      { s0: 0.5579, s1: 0.5879, hw: 4.5, ease: 0.012 },  // arc 0.711-0.732 Tabac
+      { s0: 0.4848, s1: 0.5349, hw: 4.4, ease: 0.012 },  // arc 0.757-0.803 swimming pool
+      { s0: 0.3488, s1: 0.3918, hw: 4.3, ease: 0.012 },  // arc 0.871-0.896 Rascasse
     ],
     // Massenet and Mirabeau are TURN anchors (1-based into `turns` below): as
     // fracs (0.1286 / 0.2961) the _sceneryShift compensation landed them on
-    // T1 Ste Devote and T4 (mid-Massenet). T3 0.2135 is Massenet's first apex
-    // (long left, +k), T7 0.3433 Mirabeau Haute (right, -k). The other three
-    // fracs measure onto T13 Tabac, T16 the pool and T18 Rascasse.
+    // T1 Ste Devote and mid-Massenet. T3 0.2135 is Massenet's FIRST apex
+    // (long left, +k; the official T3 marker fits nearer its second apex,
+    // 0.2341, but seating T3 there moved this bank 68 m and slowed the driven
+    // lap 9 % at PACE 1.34: quali-pace-parity-vm), T5 0.3433 Mirabeau Haute
+    // (right, -k). The other three fracs measure onto T12 Tabac, T16 the pool
+    // exit and T18 (the tight 0.8799 right, see turns below).
     bankZones: [
-      { turn: 3, angleDeg: 3.0, widthM: 60 },         // Massenet
-      { turn: 7, angleDeg: 3.0, widthM: 160 },        // Mirabeau/descent
+      { turn: 3, angleDeg: 3.0, widthM: 60 },         // Massenet (official T3)
+      { turn: 5, angleDeg: 3.0, widthM: 160 },        // Mirabeau Haute (official T5)/descent
       { frac: 0.7791, angleDeg: 3.0, widthM: 120 },   // Tabac
       { frac: 0.8847, angleDeg: 2.5, widthM: 140 },   // swimming pool
       { frac: 0.9417, angleDeg: 2.5, widthM: 100 },   // Rascasse
@@ -109,8 +117,21 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
+    // S1 matches the FIA 2026 Monaco GP circuit map (~0.315); S2 does NOT: the
+    // FIA line is after Tabac (~0.740), this one before it (#5316 CIRC3-05).
     sectors: [0.32, 0.68],
-    turns: [0.0666, 0.1516, 0.2135, 0.2341, 0.2535, 0.2742, 0.3433, 0.3615, 0.3834, 0.4077, 0.4344, 0.6407, 0.7171, 0.7378, 0.7645, 0.8227, 0.8640, 0.8797, 0.9064],
+    // turns = the OFFICIAL F1 numbering (FIA 2026 Monaco GP circuit map; F1
+    // live-timing corner markers, api.multiviewer.app circuits/22/2026,
+    // similarity-fitted onto this centreline, rms 5.6 m), each seated on the
+    // built curvature peak nearest its marker (2026-11-11):
+    // T1 Ste Devote | T2 Beau Rivage | T3 Massenet (first apex, see bankZones) | T4 Casino | T5 Mirabeau
+    // Haute | T6 Grand Hotel hairpin | T7 Mirabeau Bas | T8 Portier | T9 the
+    // tunnel (gentle long right, its -k extremum 28 m past the marker) |
+    // T10-T11 Nouvelle chicane | T12 Tabac | T13-T16 Swimming Pool | T17
+    // Rascasse (FIA map label; its marker sits on the 0.8459 left kink) |
+    // T18-T19 Anthony Noghes. The tight 0.8799 right (T18) is the corner the
+    // scenery's Rascasse bar and the "Rascasse" bank zone stand on.
+    turns: [0.0666, 0.1820, 0.2135, 0.2742, 0.3433, 0.3834, 0.4077, 0.4344, 0.5413, 0.6323, 0.6408, 0.7171, 0.7633, 0.7755, 0.8143, 0.8227, 0.8459, 0.8797, 0.9064],
     barrier: { a: [0.95, 0.95, 0.96], b: [0.86, 0.16, 0.15], c: [0.13, 0.28, 0.55], night: [0.20, 0.20, 0.24], tyre: [0.86, 0.16, 0.15] },  // red/white + Riviera navy
     furniture: { tree: "palm",  fol: [0.25, 0.45, 0.22], lamp: "globe", lc: [1.0, 0.92, 0.70] },  // Riviera palms
     kit: { marshal: "tent",      rail: "armco",       fence: "hoarding",  tyre: "tecpro",  board: "fascia",    gantry: "cantilever", camera: "scaffold",  hoarding: "barrierTop" },

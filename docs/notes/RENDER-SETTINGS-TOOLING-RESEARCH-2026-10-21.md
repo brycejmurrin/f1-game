@@ -1,5 +1,7 @@
 # Render settings and real-device GPU timing: tooling research (B·H10, 2026-10-21)
 
+Summary: Render settings and real-device GPU timing tooling research (B·H10).
+
 Fleet B, Bryce via OrchB 24 (2026-10-21): "Hunters should use subagents to come up with new ideas to test or
 holes also do a hunch of web research on how to help profile debug test this stuff". The biggest hole is GPU
 time on a real phone. The only real-GPU runner, macos-latest, is an Apple Paravirtual device with no

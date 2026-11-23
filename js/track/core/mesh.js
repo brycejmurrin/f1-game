@@ -112,7 +112,10 @@ const TrackMesh = (function () {
       }
     }
 
-    function paint(kc, lo, hi, tanA, peak) {
+    // Fractional increase in crossfall from the centre of the road to the high edge.
+    const varying = zones && zones.some(z => Number.isFinite(z.insideAngleDeg)) ? new Float32Array(n) : null;
+
+    function paint(kc, lo, hi, tanA, peak, variation = 0) {
       lo = Math.max(1, lo); hi = Math.max(1, hi);
       const span = lo + hi + 1;
       let dom = 0;
@@ -143,7 +146,11 @@ const TrackMesh = (function () {
       }
       for (let i = -lo; i <= hi; i++) {
         const k = (kc + i + n) % n, v = signed[i + lo], a = Math.abs(v);
-        if (a > lift[k]) { lift[k] = a; bsign[k] = v >= 0 ? 1 : -1; }
+        if (a > lift[k]) {
+          lift[k] = a;
+          bsign[k] = v >= 0 ? 1 : -1;
+          if (varying) varying[k] = variation;
+        }
       }
     }
 
@@ -226,6 +233,11 @@ const TrackMesh = (function () {
       // rather than apex, and re-seating it can only make it worse. It does
       // CLAIM its nearest apex, though, so a loose zone cannot be re-seated
       // onto a corner it already banks (strongest-wins would merge the two).
+      // A LOOSE zone that stays put (≤ BANK_RESEAT_M from an apex) must NOT
+      // claim that apex: it is banking the straight, not the corner, and a
+      // farther loose zone that should re-seat there would be pushed onto the
+      // wrong apex (measured: 50 m approach + far zone → far zone landed on
+      // the opposite corner while the intended apex stayed flat).
       const loose = [];
       const apexGap = (tf, f) => { const d = Math.abs(wrap01(tf) - f); return d > 0.5 ? 1 - d : d; };
       zones.forEach((z, i) => {
@@ -247,18 +259,24 @@ const TrackMesh = (function () {
         const seated = new Set();
         for (const c of cand) {
           if (seated.has(c.i) || taken.has(c.ti)) continue;
-          seated.add(c.i); taken.add(c.ti);
-          if (c.d * track.total > BANK_RESEAT_M) centre[c.i] = wrap01(turns[c.ti]);
+          seated.add(c.i);
+          // Claim the apex only when we actually move onto it.
+          if (c.d * track.total > BANK_RESEAT_M) {
+            taken.add(c.ti);
+            centre[c.i] = wrap01(turns[c.ti]);
+          }
         }
       }
 
       zones.forEach((z, i) => {
         const half = Math.max(1, Math.round((z.widthM || 40) / ds / 2));
-        paint(Math.round(centre[i] * n) % n, half, half,
-              Math.tan((z.angleDeg || 18) * Math.PI / 180), null);
+        const outer = Math.tan((z.angleDeg ?? 18) * Math.PI / 180);
+        const inner = Number.isFinite(z.insideAngleDeg) ? Math.tan(z.insideAngleDeg * Math.PI / 180) : outer;
+        const mean = (inner + outer) / 2;
+        paint(Math.round(centre[i] * n) % n, half, half, mean, null, mean ? (outer - inner) / (2 * mean) : 0);
       });
       relaxSignSteps();
-      return { lift, bsign };
+      return { lift, bsign, varying };
     }
 
     // Legacy auto-pick: the two highest-curvature corners, banked at 18°.
@@ -278,12 +296,10 @@ const TrackMesh = (function () {
 
   // Cross-track banking offset (metres along the node's up axis) at lateral
   // offset `o` from the centreline. THE single source of truth for the pivot:
-  // the section rotates about its own centreline, so the inner edge drops
-  // lift/2 and the outer edge rises lift/2, and anything past the tarmac clamps
-  // to the corresponding edge height.
+  // The centreline stays fixed. Beyond the tarmac the height holds at its edge.
   //
   // Everything laid alongside the road must use this. buildRoad applied the
-  // pivot inline while buildKerbs did not, so on Zandvoort's banked corners the
+  // pivot inline while buildKerbSteps did not, so on Zandvoort's banked corners the
   // road edge moved +/-2.4 m while the kerb ribbon stayed at the unbanked
   // height — the tarmac fell away from its own kerb into a cliff on the low
   // side and swallowed it on the high side.
@@ -293,14 +309,15 @@ const TrackMesh = (function () {
     const lift = bp.lift[k];
     if (!(lift > 0)) return 0;
     const w = track.hw[k];
-    let frac = (bp.bsign[k] * o + w) / (2 * w);
-    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-    return lift * (frac - 0.5);
+    const x = Math.max(-w, Math.min(w, o));
+    // Integrate a linear change in crossfall across the width. The centreline
+    // remains at its surveyed height; a bowl's two edges can have unequal offsets.
+    return lift * x / (2 * w) * (bp.bsign[k] + (bp.varying ? bp.varying[k] * x / (2 * w) : 0));
   }
 
   // The banked running surface's NORMAL at node k, lateral offset `o`.
-  // Across the lap the surface leans: bankOffsetAt is linear in o over the
-  // tarmac (slope g = bsign·lift / 2w), so it runs along r + u·g — the roll
+  // Across the lap the surface leans; its local derivative g yields the
+  // tangent r + u·g, including a progressive bowl. This is the roll
   // banking() reports. Along the lap it twists wherever the bank ramps in and
   // out, so the along-lap tangent is THIS column's own chord through the two
   // neighbouring banked points (not t: on the inside of a hairpin the rail at
@@ -317,7 +334,7 @@ const TrackMesh = (function () {
     const n = track.n, kp = (k - 1 + n) % n, kn = (k + 1) % n, lift = bp.lift;
     if (!(lift[k] > 0) && !(lift[kp] > 0) && !(lift[kn] > 0)) return u;
     const w = track.hw[k];
-    const g = (lift[k] > 0 && w > 0 && __M.abs(o) <= w) ? bp.bsign[k] * lift[k] / (2 * w) : 0;
+    const g = (lift[k] > 0 && w > 0 && __M.abs(o) <= w) ? lift[k] / (2 * w) * (bp.bsign[k] + (bp.varying ? bp.varying[k] * o / w : 0)) : 0;
     const { px, py, pz, rx, ry, rz } = track;
     const at = (j) => {
       const uj = upOf(track, j), b = bankOffsetAt(track, j, o);
@@ -333,7 +350,9 @@ const TrackMesh = (function () {
     return [nx * sg, ny * sg, nz * sg];
   }
 
-  function buildKerbs(track, out) {
+  function* buildKerbSteps(track, out) {
+    // EXTREME kerbProfile's strip hook (js/track/scenery/detail.js attach; it mirrors KW / KH0 / STRIPE_M below).
+    const kp = track._kerb && track._kerb(out);
     const { n, px, py, pz, hw } = track;
     const pal = track.def.palette, ka = pal.kerbA, kb = pal.kerbB;
     const ds = track.total / n;
@@ -495,7 +514,9 @@ const TrackMesh = (function () {
         let len = 1;
         while (len < n - m && joins((i + len) % n)) len++;
         ribbon(U(i), U(i) + len, side);
+        kp && kp(U(i), U(i) + len, side);   // kerbProfile: the same strip, profiled, into a drawn-only buffer
         m += len;
+        yield;
       }
     }
   }
@@ -526,7 +547,7 @@ const TrackMesh = (function () {
   // monza / zandvoort (fixed seed, 200k node-aligned samples): ~7.6× less
   // time in bankAngle; ~10–13 % less wall time per physics step. Early-out
   // on !signedLift keeps flat nodes (almost all of monza) off atan2.
-  function bankAngle(track, s) {
+  function bankAngle(track, s, x = 0) {
     const bp = track.bankP;
     if (!bp) return 0;
     const n = track.n, L = track.total;
@@ -536,7 +557,13 @@ const TrackMesh = (function () {
     const signedLift = sl0 + (sl1 - sl0) * f;
     if (!signedLift) return 0;
     const w0 = track.hw[k], w1 = track.hw[j];
-    return Math.atan2(signedLift, 2 * (w0 + (w1 - w0) * f));
+    const w = w0 + (w1 - w0) * f;
+    if (x < -w || x > w) return 0;
+    if (x && bp.varying) {
+      const change = lerp(bp.varying[k] * bp.lift[k], bp.varying[j] * bp.lift[j], f);
+      return Math.atan2(signedLift + change * (x / w), 2 * w);
+    }
+    return Math.atan2(signedLift, 2 * w);
   }
 
   // `out` (optional): a reusable { dy, roll } scratch. When supplied it's written
@@ -553,6 +580,7 @@ const TrackMesh = (function () {
   // the elevation was smoothed. Camera call sites opt in; nothing else changes.
   // Signed cross-track lift at node i. Hoisted out of banking() — see the call.
   function _signedLift(bp, i) { return bp.lift[i] * bp.bsign[i]; }
+  function _variationLift(bp, i) { return bp.varying[i] * bp.lift[i]; }
   function banking(track, s, x, out, smooth) {
     const bp = track.bankP;
     if (!bp) return null;
@@ -576,8 +604,16 @@ const TrackMesh = (function () {
       : lerp(track.hw[k], track.hw[j], f);
     const cx = x < -w ? -w : x > w ? w : x;
     const o = out || {};
-    o.dy = signedLift * cx / (2 * w);
-    o.roll = Math.atan2(signedLift, 2 * w);
+    let laneLift = 0;
+    if (bp.varying) {
+      const change = smooth
+        ? catmull(_variationLift(bp, (k - 1 + n) % n), _variationLift(bp, k), _variationLift(bp, j), _variationLift(bp, (k + 2) % n), f)
+        : lerp(_variationLift(bp, k), _variationLift(bp, j), f);
+      laneLift = change * cx / w;
+    }
+    o.dy = (signedLift + laneLift / 2) * cx / (2 * w);
+    // Beyond the asphalt the kerb and verge carry the edge lift across their width.
+    o.roll = x === cx ? Math.atan2(signedLift + laneLift, 2 * w) : 0;
     return o;
   }
 
@@ -602,25 +638,34 @@ const TrackMesh = (function () {
   function nodeGrid(track) {
     if (track._nodeGrid) return track._nodeGrid;
     const n = track.n, px = track.px, pz = track.pz, hw = track.hw;
-    const CELL = 10, OFFSET = 2048, STRIDE = 4096;   // numeric packed key, cf. glx.createChunkedMesh
-    const map = new Map();
-    let maxHw = 0;
+    const CELL = 10;
+    // Dense CSR over the centreline's own cell box (start[cell] .. start[cell + 1] into items, nodes ascending
+    // = the insertion order a per-cell array had): a wide query (a mountain's reach, a backdrop's margin) sweeps
+    // thousands of cells that hold nothing, and each was a Map miss (Monaco: 129 ms of a 925 ms build on that
+    // one lookup). Cells outside the box are empty by construction, so a query clamps to it.
+    let maxHw = 0, cx0 = Infinity, cx1 = -Infinity, cz0 = Infinity, cz1 = -Infinity;
     for (let k = 0; k < n; k++) {
       if (hw[k] > maxHw) maxHw = hw[k];
-      const key = (__M.floor(px[k] / CELL) + OFFSET) * STRIDE + (__M.floor(pz[k] / CELL) + OFFSET);
-      let arr = map.get(key); if (!arr) { arr = []; map.set(key, arr); } arr.push(k);
+      const cx = __M.floor(px[k] / CELL), cz = __M.floor(pz[k] / CELL);
+      if (cx < cx0) cx0 = cx; if (cx > cx1) cx1 = cx; if (cz < cz0) cz0 = cz; if (cz > cz1) cz1 = cz;
     }
+    if (!(cx1 >= cx0 && cz1 >= cz0)) { cx0 = cz0 = 0; cx1 = cz1 = -1; }   // no finite node: an empty box
+    const GH = cz1 - cz0 + 1, start = new Int32Array((cx1 - cx0 + 1) * GH + 1), items = new Int32Array(n);
+    const cellOf = (k) => (__M.floor(px[k] / CELL) - cx0) * GH + (__M.floor(pz[k] / CELL) - cz0);
+    for (let k = 0; k < n; k++) { const c = cellOf(k); if (c === c) start[c + 1]++; }
+    for (let c = 0; c < start.length - 1; c++) start[c + 1] += start[c];
+    { const fill = start.slice(); for (let k = 0; k < n; k++) { const c = cellOf(k); if (c === c) items[fill[c]++] = k; } }
     const grid = { maxHw };
     grid.query = (x, z, R, out, doSort) => {
       let cnt = 0;
       const x0 = __M.floor((x - R) / CELL), x1 = __M.floor((x + R) / CELL);
       const z0 = __M.floor((z - R) / CELL), z1 = __M.floor((z + R) / CELL);
-      for (let cx = x0; cx <= x1; cx++)
-        for (let cz = z0; cz <= z1; cz++) {
-          const arr = map.get((cx + OFFSET) * STRIDE + (cz + OFFSET));
-          if (!arr) continue;
-          for (let a = 0; a < arr.length; a++) out[cnt++] = arr[a];
-        }
+      const xa = x0 > cx0 ? x0 : cx0, xb = x1 < cx1 ? x1 : cx1, za = z0 > cz0 ? z0 : cz0, zb = z1 < cz1 ? z1 : cz1;
+      if (za > zb) return 0;
+      for (let cx = xa; cx <= xb; cx++) {
+        const row = (cx - cx0) * GH - cz0;
+        for (let a = start[row + za], e = start[row + zb + 1]; a < e; a++) out[cnt++] = items[a];
+      }
       if (doSort) for (let a = 1; a < cnt; a++) { const v = out[a]; let b = a - 1; while (b >= 0 && out[b] > v) { out[b + 1] = out[b]; b--; } out[b + 1] = v; }
       return cnt;
     };
@@ -644,8 +689,8 @@ const TrackMesh = (function () {
       }
       const aOk = ax0 <= ax1 && az0 <= az1, bOk = bx0 <= bx1 && bz0 <= bz1;
       if (!aOk && !bOk) return 0;
-      const cx0 = aOk ? (bOk ? __M.min(ax0, bx0) : ax0) : bx0, cx1 = aOk ? (bOk ? __M.max(ax1, bx1) : ax1) : bx1;
-      for (let cx = cx0; cx <= cx1; cx++) {
+      const qx0 = __M.max(cx0, aOk ? (bOk ? __M.min(ax0, bx0) : ax0) : bx0), qx1 = __M.min(cx1, aOk ? (bOk ? __M.max(ax1, bx1) : ax1) : bx1);
+      for (let cx = qx0; cx <= qx1; cx++) {
         const inA = aOk && cx >= ax0 && cx <= ax1, inB = bOk && cx >= bx0 && cx <= bx1;
         if (!inA && !inB) continue;
         // One cz interval, or two ascending ones (merged when they touch).
@@ -655,17 +700,12 @@ const TrackMesh = (function () {
           lo0 = fa ? az0 : bz0; hi0 = fa ? az1 : bz1; lo1 = fa ? bz0 : az0; hi1 = fa ? bz1 : az1;
           if (lo1 <= hi0 + 1) { if (hi1 > hi0) hi0 = hi1; lo1 = 1; hi1 = 0; }
         } else if (inA) { lo0 = az0; hi0 = az1; } else { lo0 = bz0; hi0 = bz1; }
-        const key0 = (cx + OFFSET) * STRIDE + OFFSET;
-        for (let cz = lo0; cz <= hi0; cz++) {
-          const arr = map.get(key0 + cz);
-          if (!arr) continue;
-          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
-        }
-        for (let cz = lo1; cz <= hi1; cz++) {
-          const arr = map.get(key0 + cz);
-          if (!arr) continue;
-          for (let i = 0; i < arr.length; i++) out[cnt++] = arr[i];
-        }
+        // Each cz interval clamped to the box; a row's cells are contiguous in items, so an interval is one run.
+        const row = (cx - cx0) * GH - cz0;
+        if (lo0 < cz0) lo0 = cz0; if (hi0 > cz1) hi0 = cz1;
+        if (lo0 <= hi0) for (let i = start[row + lo0], e = start[row + hi0 + 1]; i < e; i++) out[cnt++] = items[i];
+        if (lo1 < cz0) lo1 = cz0; if (hi1 > cz1) hi1 = cz1;
+        if (lo1 <= hi1) for (let i = start[row + lo1], e = start[row + hi1 + 1]; i < e; i++) out[cnt++] = items[i];
       }
       return cnt;
     };
@@ -674,6 +714,10 @@ const TrackMesh = (function () {
   }
 
   function buildRoad(track) {
+    return finishSteps(buildRoadSteps(track));
+  }
+
+  function* buildRoadSteps(track) {
     Log.info("track", "buildRoad start " + (track.def && track.def.id));
     const { n, px, py, pz, hw } = track;
     const pos = [], nrm = [], col = [], mat = [], trk = [];
@@ -714,7 +758,8 @@ const TrackMesh = (function () {
     // mesh.js surface row). A strip decal along the line is the finer follow-up.
     const lineX = track.line && track.line.length === n ? track.line : null;
     const wearF = (v, k, o) => {
-      const f = (v === 4 || v === 9) ? 1.07 : 1.0;
+      const dustColumn = (v === 4 || v === 9) && hw[k] - Math.abs(o) <= 0.3;
+      const f = dustColumn ? 1.07 : 1.0;
       if (!lineX) return (v >= 5 && v <= 8) ? f * 0.86 : f;
       const d = __M.abs(o - lineX[k]);
       const band = d < 1.2 ? 1 : d > 4.0 ? 0 : (4.0 - d) / 2.8;
@@ -732,6 +777,7 @@ const TrackMesh = (function () {
     const ds = track.total / n;
     const V = 14;
     for (let k = 0; k < n; k++) {
+      if (k && k % 32 === 0) yield;
       const u = upOf(track, k);
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const w = hw[k];
@@ -741,6 +787,11 @@ const TrackMesh = (function () {
                     0.30, 0.35,                      // centre line (right half)
                     w - 0.25, w - 0.2, w,            // right step + edge line
                     w + 0.4, w + 2.2];
+      // Reuse the ten asphalt columns for the curved cross-section. Markings
+      // use the lateral coordinate in the shader, independent of column index.
+      if (track.bankP && track.bankP.varying && track.bankP.varying[k]) {
+        for (let v = 2; v <= 11; v++) offs[v] = w * ((v - 2) * 2 / 9 - 1);
+      }
       // VERGE FOLD CLAMP. A rail at offset o runs BACKWARDS over a node span when
       // o·dot(r[k+1]-r[k], t) < -|dP| (turn radius < |o|); its quads then fold
       // back over the neighbouring strip. On the fold side only, pull the verge
@@ -774,7 +825,7 @@ const TrackMesh = (function () {
       const rise = [-0.05, -0.02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.02, -0.05];
       for (let v = 0; v < V; v++) {
         const o = offs[v];
-        // Shared with buildKerbs so the two can never disagree about where the
+        // Shared with buildKerbSteps so the two can never disagree about where the
         // banked surface is — see bankOffsetAt().
         const by = bankOffsetAt(track, k, o);
         // …AND THE VERGE DOES NOT DIP INTO THE PIT APRON. Those outer columns
@@ -812,10 +863,10 @@ const TrackMesh = (function () {
         // smooth, and giving it aggregate relief makes the lines look gritty.
         // The painted markings are NO LONGER vertex colour — roadMarkings() in
         // the lit fragment shader draws the edge lines and the dashed centre
-        // line analytically from the (s, x, hw) in `trk`. Columns 2/3/10/11 and
-        // 6/7 still exist geometrically (they are removed in a follow-up) but
-        // now carry plain asphalt, so the shader owns the paint outright and
-        // the two cannot disagree.
+        // line analytically from the (s, x, hw) in `trk`. The edge-step columns
+        // (2..4 / 9..11) and the centre pair (5..8) stay in the ribbon as plain
+        // asphalt geometry so the shader owns the paint outright and the two
+        // cannot disagree.
         let c, m;
         if (v <= 1 || v >= 12) {
           if (pitPaved(k, v <= 1 ? -1 : 1)) {
@@ -825,7 +876,7 @@ const TrackMesh = (function () {
             c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
             m = MAT.ASPHALT;
           } else {
-            // kerb ribbons added separately by buildKerbs; a def that names its
+            // kerb ribbons added separately by buildKerbSteps; a def that names its
             // ground material (terrainMat) carries it onto these edge columns too
             c = grass; m = edgeMat;
           }
@@ -857,6 +908,7 @@ const TrackMesh = (function () {
       trk.push(track.total, trk[v * 3 + 1], trk[v * 3 + 2]);
     }
     for (let k = 0; k < n; k++) {
+      if (k && k % 128 === 0) yield;
       const a = k * V, b = k === n - 1 ? seam : (k + 1) * V;
       for (let v = 0; v < V - 1; v++) {
         idxArr.push(a + v, a + v + 1, b + v, a + v + 1, b + v + 1, b + v);
@@ -869,10 +921,11 @@ const TrackMesh = (function () {
         const innerLat = surf.rails[0];
         const topC = [grass[0] * 0.72, grass[1] * 0.72, grass[2] * 0.72];
         const botC = [grass[0] * 0.42, grass[1] * 0.42, grass[2] * 0.42];
-        const skirt = (v) => {
+        function* skirt(v) {
           const base = pos.length / 3;
           const sgn = v === 0 ? -1 : 1;
           for (let k = 0; k < n; k++) {
+            if (k && k % 128 === 0) yield;
             const i3 = (k * V + v) * 3;
             const ex = pos[i3], ey = pos[i3 + 1], ez = pos[i3 + 2];
             // Deep enough for both the seam drop and the clip trench…
@@ -892,17 +945,20 @@ const TrackMesh = (function () {
             idxArr.push(a, a + 1, b, a + 1, b + 1, b);
             idxArr.push(a, b, a + 1, a + 1, b, b + 1);
           }
-        };
-        skirt(0); skirt(13);
+        }
+        yield* skirt(0); yield* skirt(13);
       }
     }
-    buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    yield* buildKerbSteps(track, { pos, nrm, col, mat, trk, idx: idxArr });
     buildPitHatch(track, { pos, nrm, col, mat, trk, idx: idxArr });
     return { pos, nrm, col, mat, trk, idx: idxArr };
   }
 
   function buildTerrain(track) {
-    const it = buildTerrainSteps(track);
+    return finishSteps(buildTerrainSteps(track));
+  }
+
+  function finishSteps(it) {
     for (;;) { const r = it.next(); if (r.done) return r.value; }
   }
 
@@ -952,18 +1008,11 @@ const TrackMesh = (function () {
         const r = [track.rx[k], track.ry[k], track.rz[k]];
         const u = upOf(track, k);
         const w = hw[k];
-        const bankLift = bp ? bp.lift[k] : 0;
-        const bankSide = bp ? bp.bsign[k] : 0;
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const t = NTV <= 1 ? 1 : v / (NTV - 1);
           const yBase = surface.heightAt(k, __M.abs(lats[v]), lats[v] < 0 ? -1 : 1);
-          let by = 0;
-          if (bankLift > 0) {
-            let frac = (bankSide * o + w) / (2 * w);
-            frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
-            by = bankLift * (frac - 0.5) * (1 - t);
-          }
+          const by = bp ? bankOffsetAt(track, k, o) * (1 - t) : 0;
           const wx = px[k] + r[0] * o + u[0] * by;
           const wz = pz[k] + r[2] * o + u[2] * by;
           let wy = yBase + u[1] * by;
@@ -1066,7 +1115,7 @@ const TrackMesh = (function () {
           const gt = NTV <= 1 ? 1 : v / (NTV - 1);          // 0 inner edge → 1 far (same 1-rail guard as the position path)
           const tc = [lerp(runoff[0], grass[0], gt), lerp(runoff[1], grass[1], gt), lerp(runoff[2], grass[2], gt)];
           col.push(tc[0] + nz, tc[1] + nz, tc[2] + nz);
-          mat.push(gt < 0.22 ? runoffMat : groundMat);
+          mat.push(v < surface.gravelRails ? runoffMat : groundMat);
         }
         if ((k + 1) % 32 === 0 || k + 1 === n) yield;
       }
@@ -1347,6 +1396,10 @@ const TrackMesh = (function () {
   // This is only the fallback for a track built without a road mesh.
   const PIT_TARMAC = [0.135, 0.145, 0.165];
   function buildPitLane(track, out) {
+    return finishSteps(buildPitLaneSteps(track, out));
+  }
+
+  function* buildPitLaneSteps(track, out) {
     const p = track.pit;
     if (!p) return out;
     const { hw, n, total: L } = track;
@@ -1399,6 +1452,7 @@ const TrackMesh = (function () {
     const lat = (k, off) => sd * (hw[k] + off);
     for (let k = 0; k < n; k++) {
       const k2 = (k + 1) % n;
+      if (k && k % 64 === 0) yield;
       const a = bands(k), b = bands(k2);
       if (!a || !b) continue;
       const ua = upOf(track, k), ub = upOf(track, k2);
@@ -1567,9 +1621,9 @@ const TrackMesh = (function () {
 
   // The garages are js/track/scenery/pits.js's, built into the props mesh from
   // the same row the boxes are painted from.
-  // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
+  // buildKerbSteps stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
-           nodeGrid, buildRoad, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
-           buildPitLane, buildPitMarks, buildPitBoxes, pitHatch, buildPitHatch, GRID_SLOTS };
+           nodeGrid, buildRoad, buildRoadSteps, buildTerrain, buildTerrainSteps, buildFloor, gridSlot, buildGridBoxes,
+           buildPitLane, buildPitLaneSteps, buildPitMarks, buildPitBoxes, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

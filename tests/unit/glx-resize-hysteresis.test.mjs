@@ -61,3 +61,14 @@ test("#3311 equal-pixel orientation swap does not rebuild post targets on mobile
   setCss(h, 800, 400);
   assert.equal(fbos(h), after, "flip back rebuilt the cover again");
 });
+
+test("a 4K photo renders at the requested backing size and restores the current viewport", () => {
+  const h = bootGlx();
+  setCss(h, 800, 450);
+  h.GLX.setPhotoCaptureSize({ width: 3840, height: 2160 });
+  assert.deepEqual(sizeOf(h), { width: 3840, height: 2160 });
+  setCss(h, 450, 800);
+  assert.deepEqual(sizeOf(h), { width: 3840, height: 2160 });
+  h.GLX.setPhotoCaptureSize(null);
+  assert.deepEqual(sizeOf(h), { width: 450, height: 800 });
+});

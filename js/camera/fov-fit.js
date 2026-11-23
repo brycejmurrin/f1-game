@@ -17,6 +17,14 @@
  * fisheye. At aspect 0.46 the floor wants ~103° VFOV for a full 60° HFOV; the
  * ceiling soft-limits HFOV a few degrees under the floor there.
  *
+ * opts.boost (#5015) — the DYNAMIC part of the authored FOV (speed widen, deploy
+ * boost, lens deltas; GameCams.vantage publishes it as `fovBoost`). Every onboard
+ * base (64°) and chase/far (57/61°) already sit over the landscape cap, so a cap
+ * on base+boost returned the cap for the whole speed range: the camera was static
+ * at speed on every wide screen. Landscape now caps the BASE and adds the boost
+ * back on top, up to HFOV_BOOST_MAX (110°, about what the authored 78° onboard
+ * lens gives at 16:9). The rest framing is unchanged; no boost = the old formula.
+ *
  * cine: return the authored VFOV untouched (crane/editor framing stays as framed).
  * Square and landscape (aspect >= 1) keep the old cap-only path.
  */
@@ -25,6 +33,7 @@ const CamFovFit = (function () {
 
   const HFOV_MAX = 86 * Math.PI / 180;
   const HFOV_MIN = 60 * Math.PI / 180;
+  const HFOV_BOOST_MAX = 110 * Math.PI / 180;
   const FOVY_MAX = 100 * Math.PI / 180;
   const ASPECT_EPS = 0.0001;
 
@@ -46,7 +55,7 @@ const CamFovFit = (function () {
   /**
    * @param {number} fovYRad  authored / damped vertical FOV (radians)
    * @param {number} aspect   width/height (gfx.aspect)
-   * @param {{cine?: boolean}} [opts]
+   * @param {{cine?: boolean, boost?: number}} [opts]  boost: the dynamic share of fovYRad (radians, may be negative)
    * @returns {number} fitted vertical FOV (radians)
    */
   function fitFovY(fovYRad, aspect, opts) {
@@ -61,6 +70,11 @@ const CamFovFit = (function () {
     // Cap: landscape — same formula as the former game.js inline block.
     const fovYCap = vfovForHfov(HFOV_MAX, a);
     fovY = Math.min(fovY, fovYCap);
+    // Landscape with a dynamic share: cap the base, keep the boost (see the header).
+    const boost = opts && typeof opts.boost === "number" && isFinite(opts.boost) ? opts.boost : 0;
+    if (boost && a >= 1 && authored - boost > 0) {
+      fovY = Math.min(Math.min(authored - boost, fovYCap) + boost, Math.max(fovY, vfovForHfov(HFOV_BOOST_MAX, a)));
+    }
     // Floor and ceiling belong to portrait only; preserve authored long lenses
     // on square/landscape screens, including normal TRACKSIDE cameras.
     if (a < 1) {
@@ -76,6 +90,7 @@ const CamFovFit = (function () {
     hfovFromVfov,
     HFOV_MAX,
     HFOV_MIN,
+    HFOV_BOOST_MAX,
     FOVY_MAX,
   };
 })();

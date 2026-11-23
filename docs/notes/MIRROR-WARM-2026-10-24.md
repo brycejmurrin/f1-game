@@ -1,5 +1,7 @@
 # Cold first-race freeze on TLX WebGPU: the menu warm was being thrown away (2026-10-24)
 
+Summary: Cold first-race freeze on TLX WebGPU: the menu warm was being thrown away; warm the race and mirror pipelines instead (A·W50).
+
 A·W50, Fleet A (OrchA 32). Bryce, relayed by DAD from the Apex BrowserStack Profiler at 7:29 PM PT 2026-10-23: fix the
 iPhone 14 Pro WebGPU cold first-race freeze by warming the race and mirror pipelines during the menu warm-up.
 
@@ -39,7 +41,7 @@ cull and winding. They were built, destroyed, and built again.
 How they were destroyed:
 
 - three r186 destroys a render pipeline, and its programs, when the last RenderObject using it is deleted.
-  `Pipelines.delete` calls `_releasePipeline` once `usedTimes` reaches 0 (`vendor/three-0.186.1/three.webgpu.min.js`).
+  `Pipelines.delete` calls `_releasePipeline` once `usedTimes` reaches 0 (`vendor/three-0.187.0/three.webgpu.min.js`).
   Switching a RenderObject to another pipeline frees the old one in the same way (`getForRender`).
 - TLX's `prunePool` (`js/render/three/tlx.js`) drops every pooled wrapper not drawn for 20 s (`PRUNE_IDLE_MS`).
   `dropWrapper` dispatches `dispose`, which deletes the wrapper's RenderObject.

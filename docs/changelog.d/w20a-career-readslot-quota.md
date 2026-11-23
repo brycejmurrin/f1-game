@@ -1,1 +1,0 @@
-Fixed: A calendar-protected career that survived only in the store cache after a quota-refused localStorage write-back is no longer clobbered to empty on the next `readSlot` (`null === null` on the captured raw).

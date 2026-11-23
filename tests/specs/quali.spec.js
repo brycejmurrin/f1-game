@@ -15,8 +15,11 @@
 // That is the wrong axis. What decides it is whether the spec drives MENU
 // SCREENS, because screen state is the thing the shared-page reset cannot
 // restore. Count the locator() calls before converting, not the goto()s.
+import { CONTRACT_WINDOWS } from "../helpers/iphone15.mjs";
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { RACE_BUILD_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -411,16 +414,22 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     expect(await page.evaluate(codes)).toHaveLength(22);
 
     await page.locator("#q-sim").click();
+    const qOrder = await page.evaluate(codes);
+    const qPos = await page.evaluate(() => [...document.querySelectorAll("#q-table .res-row")].findIndex((r) => r.classList.contains("you")) + 1);
+    expect(qPos).toBeGreaterThan(0);
     await page.locator("#q-go").click();
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60_000 });
 
     const out = await page.evaluate(() => ({
       pos: window.__apex.timing().pos,
-      field: window.__apex.fieldState().length,
+      grid: window.__apex.fieldState().map((c) => c.code),
     }));
-    expect(out.field).toBe(22);
-    // The whole point: the start slot is earned, not the hard-coded P12.
-    expect(out.pos).not.toBe(12);
+    expect(out.grid).toHaveLength(22);
+    // The whole point: the start slot is earned. It used to read "not the hard-coded P12", which held only
+    // while a simulated lap could not land there; since #5786 a simulated lap sits mid-grid, and P12 is a
+    // slot you can earn. So: the grid IS the session's order, car for car, and the player is where they qualified.
+    expect(out.grid).toEqual(qOrder);
+    expect(out.pos).toBe(qPos);
   });
 
   test("a championship forces it on, and says so rather than hiding it", async ({ page }) => {
@@ -436,5 +445,50 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     await expect(sel).toBeDisabled();
     await expect(sel).toHaveValue("quali");
     await expect(page.locator("#rs-quali-next")).toBeDisabled();
+  });
+});
+
+// ── UI contract cells (#5632, the career hub's #5580 cells in tests/specs/career-hub.spec.js) ──
+// The owner's export stores no UI SIZE, so a phone reads the shipped 70 %. Measured on deploy tip 7416c2b9: there
+// RACE SETTINGS and QUALIFYING had 538.6 own px in A and 534.3 in D, over their --compact-at 480, so both went
+// NORMAL beside a compact career hub (C, 381.4, was already compact). The short-touch gates in css/race-setup.css and
+// css/career.css hold both compact in every window; painted heads 23.4 (29.6 normal), feet 48.2 / 56.
+const OWNER_EXPORT = JSON.parse(await readFile(new URL("../data/settings-defaults-export.json", import.meta.url), "utf8"));
+const sheetCell = (id) => {
+  const sheet = document.querySelector("#" + id + " > .sheet");
+  const foot = sheet.querySelector(".sheet-foot").getBoundingClientRect();
+  return { density: sheet.dataset.density, compactAt: getComputedStyle(sheet).getPropertyValue("--compact-at").trim(),
+    footOnScreen: foot.top >= 0 && foot.bottom <= innerHeight + 0.5, headPaintedH: +sheet.querySelector(".sheet-head").getBoundingClientRect().height.toFixed(1) };
+};
+for (const win of CONTRACT_WINDOWS) test.describe("UI contract race settings + qualifying cells — " + win.name, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: win.viewport, deviceScaleFactor: 1 }) });
+  test("compact at the shipped 70 %, the foot on screen", async ({ page }) => {
+    await boot(page);
+    const imported = await page.evaluate((d) => SettingsExport.applySettings(d, {}), OWNER_EXPORT);
+    expect(imported.ok, "the owner export imports: " + JSON.stringify(imported)).toBe(true);
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    const tag = win.name + ": ";
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim()), tag + "the shipped phone 70 %").toBe("0.7");
+    await page.locator("#mb-season").click();
+    await page.locator("#sel-go").click();
+    // CI 2026-11-18 (run 44248921129): in A the first read right after the open saw data-density compact with the
+    // head still at its normal 29.6 painted px; the sheet settles a frame later (23.4 measured 500 ms after the open).
+    // So the head is polled until it settles; the bound is the compact head, not a widened one.
+    const settled = async (name, id) => {
+      await expect.poll(async () => (await page.evaluate(sheetCell, id)).headPaintedH, { message: tag + name + ": the compact head (measured 23.4; normal paints 29.6)", timeout: 5_000 }).toBeLessThan(26);
+      return page.evaluate(sheetCell, id);
+    };
+    await expect(page.locator("#race-settings")).toBeVisible();
+    const race = await settled("race settings", "race-settings");
+    await page.locator("#rs-go").click();
+    await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
+    const quali = await settled("qualifying", "quali");
+    for (const [name, cell] of [["race settings", race], ["qualifying", quali]]) {
+      expect(cell.density, tag + name + " is compact on a short touch screen at every UI SIZE").toBe("compact");
+      expect(cell.compactAt, tag + name + ": the short-touch gate holds it").toBe("99999px");
+      expect(cell.footOnScreen, tag + name + ": the foot is on screen").toBe(true);
+    }
   });
 });

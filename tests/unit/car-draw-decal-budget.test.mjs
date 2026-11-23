@@ -36,6 +36,28 @@ function rig({ legends = false } = {}) {
 const team = (id) => ({ id, drivers: [{ num: 1 }] });
 const names = (list) => list.map((c) => c.id);
 
+test("a restored fit prunes atlases inserted since its last draw and keeps peer paint", () => {
+  const r = rig(), t = team("me"), peer = { ...t, peerKey: "peer", peerTag: "~p1" };
+  let fitted = "saved";
+  r.G.getLiveryId = () => fitted;
+  const select = (id) => { fitted = id; r.G.store.rev++; };
+  const draw = (carTeam, num, player) => r.carDraw.getCarDecalTexture(carTeam, num, player, false);
+  const saved = draw(t, 1, true), remote = draw(peer, 2, false);
+  assert.equal(draw(t, 1, true), saved);
+
+  select("temporary");
+  const rival = draw(t, 3, false);
+  select("saved");
+  assert.equal(draw(t, 1, true), saved);
+  assert.deepEqual(r.freed, [rival.canvas]);
+  assert.equal(draw(peer, 2, false), remote);
+
+  select("new-fit");
+  assert.notEqual(draw(t, 1, true), saved);
+  assert.deepEqual(r.freed, [rival.canvas, saved.canvas]);
+  assert.equal(draw(peer, 2, false), remote);
+});
+
 test("invalidated livery jobs stop retrying when the idle budget stays low", () => {
   for (const deadline of [{ didTimeout: false, timeRemaining: () => 0 }, { didTimeout: true, timeRemaining: () => 50 }]) {
     const r = rig(), t = team("me"), m = new Float32Array(16);
@@ -224,7 +246,8 @@ test("the player's LEGENDS slot builds its helmet from the picked legend and key
 // then uploads the bitmap without one. GLX gets the flip baked in (WebGL ignores UNPACK_FLIP_Y /
 // UNPACK_PREMULTIPLY_ALPHA for an ImageBitmap source), TLX and WGX flip in the copy and get it
 // unflipped; premultiply is baked for all three. The texel contract (byte parity with the canvas
-// upload) is proven in Chromium by tests/unit/livery-tier.test.mjs under APEX_LIVERY_PARITY=1.
+// upload) was measured once in Chromium (docs/notes/PERF-HUNT-4-2026-10-14.md, maxAbs 0); the opt-in
+// probe that measured it was deleted 2026-11-10 (W30: no automation ran it). Nothing executes it now.
 const tick = () => new Promise((r) => setImmediate(r));
 function bitmapRig(backend, { refuse = false } = {}) {
   const r = rig();

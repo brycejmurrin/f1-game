@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -14,7 +15,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-relative.js"), "utf8");
 
 function load(extra = {}) {
   const ctx = { console, ...extra };
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-relative.js") });   // a filename, so V8 coverage attributes the run to the file
   vm.runInContext("this.HudRelative = HudRelative;", ctx);
   return ctx.HudRelative;
@@ -117,6 +118,7 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
   const G = { cars: [p, a], track: { total: L }, vTop: () => 90, cssCol: () => "rgb(255 0 0)", store: { rev: 1 } };
   R.tick(G, p);
   assert.equal(root.hidden, true, "opt-in: hidden while the toggle is off");
+  assert.equal(root.children.length, 0, "defer row creation while the box is disabled");
   on = true;
   const snap = JSON.stringify([p.s, p.prog, p.speed, a.s, a.prog, a.speed]);
   R.tick(G, p);
@@ -148,6 +150,15 @@ test("tick: off hides the box; on, it fills rows and never writes a car", () => 
     for (let i = 0; i < 60; i++) R.tick(G, p);
     assert.equal(rows[1].children[2].textContent, expected);
   }
+  on = false;
+  R.tick(G, p);
+  assert.equal(root.hidden, true);
+  on = true;
+  const selfRow = rows[2];
+  R.tick(G, p);
+  assert.equal(root.hidden, false);
+  assert.equal(root.children.length, R.ROWS);
+  assert.equal(root.children[2], selfRow, "reuse the rows on re-enable");
   G.timeTrial = true;
   R.tick(G, p);
   assert.equal(root.hidden, true, "no relative in a time trial");
@@ -493,4 +504,144 @@ test("fit key ignores ot-*/ax-* class churn on clearance controls (perf H7 row 1
   assert.equal(fits, base, "an overtake/aero class flip does not rerun the fit");
   ot.className = "hidden-by-layout"; R.tick(G, p);
   assert.ok(fits > base, "a class that can move the box still does");
+});
+
+test("fitRows never leaves the player's row alone: the card stands down instead (UI-HUNT-2-HUD)", () => {
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { el.style[k] = v; }, removeProperty(k) { delete el.style[k]; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute(k) { delete el.attrs[k]; },
+      hasAttribute(k) { return k in el.attrs; }, appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.currentCSSZoom = 1;
+  // HUD 150 %: two 32 px rows never fit under a 40 px cap.
+  Object.defineProperty(root, "scrollHeight", { get: () => root.children.filter((r) => !r.hidden).length * 32 });
+  root.clientHeight = 40;
+  root.getBoundingClientRect = () => ({ left: 50, right: 220, top: 100, bottom: 140, width: 170, height: 40 });
+  const els = { "hud-rel": root };
+  const doc = { body: { className: "", classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 }), car("A2", 1400, 3, { rank: 0 }), car("B1", 900, 3, { rank: 3 }), car("B2", 600, 3, { rank: 4 })],
+    track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+  const shown = root.children.filter((r) => !r.hidden).length;
+  assert.ok(shown >= 2, "a neighbour stays beside the player's row: " + shown);
+  assert.ok("data-fit-drop" in root.attrs, "the clipped card stands down (data-fit-drop)");
+  // With the allocator loaded the card is handed back whole: HudLayout.clearReadouts finds it a slot.
+  let clears = 0;
+  const R2 = load({ document: doc, HudElements: { isOn: () => true }, HudLayout: { clearReadouts() { clears++; } } });
+  for (const c of root.children) c.hidden = true;
+  root.children.length = 0; delete root.attrs["data-fit-drop"];
+  R2.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 }), car("A2", 1400, 3, { rank: 0 }), car("B1", 900, 3, { rank: 3 }), car("B2", 600, 3, { rank: 4 })],
+    track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+  assert.equal(root.children.filter((r) => !r.hidden).length, 5, "every occupied row is restored for the allocator");
+  assert.ok(!("data-fit-drop" in root.attrs) && clears > 0, "no stand-down; HudLayout places it");
+});
+
+test("fit idempotence: HUD 100 → 150 → 100 solves the same slide as a fresh 100, through the allocator's stale translate (UI-HUNT-2-HUD)", () => {
+  // The painted card = home + style.left × z + HudLayout's --hud-clear-x (css/hud.css translate).
+  // Fresh boot at 844x390: REL slid right past BRAKE; after 150 → 100 it kept the 150 % pass's
+  // translate, measured itself at x 57, and the allocator stacked STRATEGY where REL belonged.
+  const decl = () => {
+    const d = {};
+    d.setProperty = (k, v) => { d[k] = v; };
+    d.removeProperty = (k) => { delete d[k]; delete d[k.replace(/-([a-z])/g, (_, c) => c.toUpperCase())]; };
+    d.getPropertyValue = (k) => d[k] || "";
+    return d;
+  };
+  const mk = () => ({ hidden: true, attrs: {}, children: [], textContent: "", style: decl(),
+    setAttribute(k, v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
+    hasAttribute(k) { return k in this.attrs; }, appendChild(c) { this.children.push(c); return c; } });
+  const docEl = mk();
+  const root = mk();
+  const zNow = () => parseFloat(docEl.style.getPropertyValue("--hud-z-top")) || 1;
+  Object.defineProperty(root, "currentCSSZoom", { get: zNow });
+  Object.defineProperty(root, "scrollHeight", { get: () => root.children.filter((r) => !r.hidden).length * 20 * zNow() });
+  Object.defineProperty(root, "clientHeight", { get: () => root.scrollHeight });
+  root.getBoundingClientRect = () => {
+    const z = zNow(), left = 57 + (parseFloat(root.style.left) || 0) * z + (parseFloat(root.style["--hud-clear-x"]) || 0);
+    const top = 205 + (parseFloat(root.style["--hud-clear-y"]) || 0), h = root.clientHeight;
+    return { left, right: left + 135 * z, top, bottom: top + h, width: 135 * z, height: h };
+  };
+  const brake = mk(); brake.hidden = false;
+  brake.getBoundingClientRect = () => ({ left: 40, right: 140, top: 230, bottom: 330, width: 100, height: 100 });
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { documentElement: docEl, body: { className: "", classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  let clears = 0;
+  const HudLayout = { clearReadouts() { clears++; } };
+  const R = load({ document: doc, HudElements: { isOn: () => true }, HudLayout });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const G = { cars: [p, car("A1", 1100, 3, { rank: 1 }), car("B1", 900, 3, { rank: 3 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  const snap = () => ({ left: root.style.left || "", cx: root.style["--hud-clear-x"] || "", rect: root.getBoundingClientRect(), attrs: { ...root.attrs } });
+  R.tick(G, p);
+  const fresh = snap();
+  assert.ok(parseFloat(fresh.left) > 0, "the fresh fit slides REL past BRAKE: " + fresh.left);
+  assert.ok(clears > 0, "a measured fit hands the readouts back to HudLayout.clearReadouts");
+  // HUD 150: the allocator then translates REL back over the left column and compacts it.
+  docEl.style.setProperty("--hud-z-top", "1.5");
+  R.tick(G, p);
+  root.style.setProperty("--hud-clear-x", "-185px");
+  root.setAttribute("data-col-compact", "");
+  // …and back to 100.
+  docEl.style.removeProperty("--hud-z-top");
+  R.tick(G, p);
+  assert.deepEqual(snap(), fresh, "the same knobs give the same REL box as a fresh boot");
+  for (let i = 0; i < 12; i++) R.tick(G, p);
+  assert.deepEqual(snap(), fresh, "and it stays there across the 1 Hz net");
+});
+
+test("REL off (the default): refit touches no DOM, and the key still sees the clearance controls the phone stamp needs (perf hunt 6)", () => {
+  let lookups = 0, rects = 0, on = false;
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", className: "", style: { setProperty() {}, removeProperty() {}, getPropertyValue: () => "" },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute() {}, appendChild(c) { el.children.push(c); return c; },
+      getBoundingClientRect() { rects++; return { left: 0, right: 1, top: 0, bottom: 1, width: 1, height: 1 }; } };
+    return el;
+  };
+  const root = mk(), announce = mk();
+  const doc = { body: { className: "", classList: { contains: () => false } }, documentElement: mk(), createElement: mk,
+    getElementById: (id) => { lookups++; return id === "hud-rel" ? root : id === "announce" ? announce : null; } };
+  const R = load({ document: doc, HudElements: { isOn: () => on } });
+  const base = lookups;
+  for (let i = 0; i < 100; i++) R.refit(i % 10 === 0);   // 10 s of phone ticks, a forced sync each second
+  assert.equal(lookups - base, 0, "refit reads nothing while REL is off");
+  assert.equal(rects, 0, "no layout reads while REL is off");
+  const k0 = R.fitKey();
+  announce.hidden = false;
+  assert.notEqual(R.fitKey(), k0, "the radio card showing still changes the key hud.js stamps on");
+  assert.ok(R.fitKey().startsWith("off"));
+  on = true;
+  assert.ok(!R.fitKey().startsWith("off"), "switched on, the key sees the layout again");
+  const before = lookups;
+  R.refit();
+  assert.ok(lookups > before, "and the first tick after turning it on fits");
+});
+
+test("a home that starts inside the steer arrows goes to the allocator, not past the pad (#5256 D, HUD / BUTTON 150 %)", () => {
+  // 844x390 cockpit: the taller D top band puts REL's home at y 250, inside STEER RIGHT (175-283, y 237-345). The slide
+  // parked it at x 291 in INPUTS' column; HudLayout.clearReadouts lifts it above the pad instead. No allocator: it slides.
+  const run = (withAllocator) => {
+    const mk = () => ({ hidden: true, attrs: {}, children: [], textContent: "",
+      style: { setProperty(k, v) { this[k] = v; }, removeProperty(k) { delete this[k]; } },
+      setAttribute(k, v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
+      hasAttribute(k) { return k in this.attrs; }, appendChild(c) { this.children.push(c); return c; } });
+    const root = mk();
+    root.currentCSSZoom = 1; root.clientHeight = 78; root.scrollHeight = 78;
+    root.getBoundingClientRect = () => {
+      const left = 57 + (parseFloat(root.style.left) || 0);
+      return { left, right: left + 187, top: 250, bottom: 328, width: 187, height: 78 };
+    };
+    const steer = (l) => { const e = mk(); e.hidden = false; e.getBoundingClientRect = () => ({ left: l, right: l + 108, top: 237, bottom: 345, width: 108, height: 108 }); return e; };
+    const els = { "hud-rel": root, "btn-steer-left": steer(59), "btn-steer-right": steer(175) };
+    const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+    let clears = 0;
+    const R = load({ document: doc, HudElements: { isOn: () => true }, ...(withAllocator ? { HudLayout: { clearReadouts() { clears++; } } } : {}) });
+    const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+    R.tick({ cars: [p, car("A1", 1100, 3, { rank: 1 }), car("B1", 900, 3, { rank: 3 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } }, p);
+    return { left: root.style.left || "", clears };
+  };
+  assert.deepEqual(run(true), { left: "", clears: 1 });
+  assert.equal(run(false).left, "291.0px");
 });

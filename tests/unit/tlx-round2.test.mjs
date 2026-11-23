@@ -17,7 +17,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const TLX = read("js/render/three/tlx.js");
-const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+const CORE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.core.min.js")).href);
 
 const mk = () => new Proxy(function () {}, {
   get: (t, k) => (k === Symbol.toPrimitive ? () => 0 : k === "then" ? undefined : mk()),
@@ -27,15 +27,15 @@ const mk = () => new Proxy(function () {}, {
 const THREE = new Proxy(CORE, { get: (t, k) => (k in t ? t[k] : mk()) });
 
 function bootShadow(warming = { on: false }) {
-  const rendered = [];
+  const rendered = [], childLists = [];
   const renderer = { backend: {}, getRenderTarget: () => null, setRenderTarget() {}, autoClear: true,
-    render(scene) { rendered.push(scene); } };
+    render(scene) { rendered.push(scene); childLists.push(scene.children); } };
   const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(THREE, mk(), { renderer, isMobile: false, softwareGL: false,
     isWarming: () => warming.on });
-  return { sys, rendered, warming };
+  return { sys, rendered, warming, childLists };
 }
 
 function batchOf(n = 4) {
@@ -63,7 +63,15 @@ test("TLX-06: the instanced caster draws its own shallow geometry, one caster me
   assert.notEqual(m.geometry, b.geo, "not the lit batch's geometry");
   assert.equal(m.geometry.getAttribute("position"), b.geo.getAttribute("position"), "vertex data is shared, not copied");
   assert.equal(m.geometry.getAttribute("instanceTint"), undefined, "depth never reads the lit pass's tint");
+  const identity = new CORE.Matrix4();
+  let resets = 0;
+  for (const matrix of [m.matrix, m.matrixWorld]) {
+    matrix.identity = function () { resets++; return CORE.Matrix4.prototype.identity.call(this); };
+  }
   assert.equal(castOnce(h, b)[0], m, "the same caster is reused while the geometry is unchanged");
+  assert.equal(resets, 0, "moving instance rows needs no object transform reset");
+  assert.ok(m.matrix.equals(identity) && m.matrixWorld.equals(identity));
+  assert.equal(h.childLists.at(-1).length, 0, "the temporary render list releases its caster references after the draw");
   let disposed = 0;
   m.geometry.addEventListener("dispose", () => disposed++);
   h.sys.freeInstanced(b);
@@ -139,12 +147,13 @@ test("TLX-01: begin() retries a dead post chain on a 2 s timer, 3-strike cap and
   assert.ok(stateStart>0&&stateEnd>stateStart&&deathStart>0&&deathEnd>deathStart&&retryStart>bi&&retryEnd>retryStart,"post lifecycle extraction anchors remain production-owned");
   let now=100, builds=0, resizes=0, disposals=0, direct=0;
   const candidate=()=>({dispose(){disposals++;},resize(w,h){assert.equal(w,640);assert.equal(h,360);resizes++;}});
-  const c=vm.createContext({post:candidate(),painted:false,_warmPending:null,W:640,H:360,presentW:640,presentH:360,
+  const c=vm.createContext({post:candidate(),opts:{visorFolded:2},painted:false,_warmPending:null,W:640,H:360,presentW:640,presentH:360,
     performance:{now:()=>now},_cancelSoftBlits(){},paintCanvas(){direct++;},persistFail(){},buildPost(){builds++;return candidate();}});
   vm.runInContext(TLX.slice(stateStart,stateEnd)+";globalThis.status=()=>({strikes:_postStrikes,rebuild:_postRebuild,retryAt:_postRetryAt,health:_postHealth});",c);
   for(let strike=1;strike<=4;strike++){
     c.post=candidate();c.painted=false;
     vm.runInContext(TLX.slice(deathStart,deathEnd),c);
+    assert.equal(c.opts.visorFolded,false,"direct fallback releases visor composition");
     const state=c.status();assert.equal(state.strikes,strike);assert.equal(state.rebuild,strike<=3);
     assert.equal(state.retryAt,now+2000,"each post death arms the exact 2 s deadline");
     assert.equal(state.health.state,strike<=3?"recovering":"degraded");
@@ -162,8 +171,12 @@ test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () =>
   assert.match(read("js/render/three/tsl-lit.js"), /U\.shadowStr\.value = SHD\.S\.enabled \? k\("shadowStr", 1\.15\) \* _hf : 0;/);
 });
 
-test("TLX-03: the DPR cap follows mobileTier, so GRAPHICS: HIGH on a phone gets full DPR", () => {
-  assert.match(TLX, /let DPR_CAP = mobileTier \? 1\.5 : 2;/);
+test("TLX-03: the DPR cap follows mobileTier (1.5 phone, 2 desktop); only RESOLUTION MAX lifts it (#5222)", () => {
+  // The B8 lab (?lab=tlxLite) takes its own cap first; the full table is in render-effective-res.test.mjs.
+  const ctx = vm.createContext({ location: { search: "" }, URLSearchParams, WeakSet, WeakMap, Math, Object, Number, String });
+  vm.runInContext(TLX.replace(/^const TLX = /m, "var TLX = "), ctx, { filename: absSrc("js/render/three/tlx.js") });
+  const f = ctx.TLX.dprCapFor;
+  assert.deepEqual([f(null, true, 0, 0), f(null, false, 0, 0), f(null, true, 3, 0), f({ dprCap: 1.25 }, true, 0, 0)], [1.5, 2, 3, 1.25]);
 });
 
 test("TLX-09: the pack DataArrayTexture drops its CPU copy after the first upload", () => {
@@ -187,7 +200,7 @@ test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1",
 
 // The real tsl-lit factory over the permissive stand-in, with uniform()/uniformArray() kept as plain
 // { value } holders so updateFrame's uploads can be read back. The shadow subsystem is a lamp-armed stub.
-function bootLit({ lampIdx = 2 } = {}) {
+function bootLit({ lampIdx = 2, extras = false } = {}) {
   const ctx = vm.createContext({ window: {}, Log: { warn() {} }, Float32Array, Math, Array, Object, Number });
   vm.runInContext(read("js/render/three/tsl-lit.js"), ctx, { filename: absSrc("js/render/three/tsl-lit.js") });
   const holder = (value) => ({ value, setGroup() { return this; } });
@@ -195,6 +208,13 @@ function bootLit({ lampIdx = 2 } = {}) {
   const S = { enabled: true, carEnabled: false, lampEnabled: true, lampArmed: true, lampIdx, pcssEnabled: false,
     lightVP: new Float32Array(16), carLightVP: new Float32Array(16), lampLightVP: new Float32Array(16) };
   const shadow = { S, sunTex: {}, lampTex: {}, sunSize: 2048, lampSize: 512 };
+  if (extras) {
+    S.carEnabled = true;
+    shadow.carTex = {};
+    S.csm = { on: false, valid: [false, false], half: [240, 600], biasK: [1, 1], vp: [new Float32Array(16), new Float32Array(16)] };
+    S.lampX = { on: false, slots: [0, 1].map(idx => ({ idx, armed: false, lightVP: new Float32Array(16) })) };
+    shadow.x = { csmN: 2, csmTex: [{}, {}], lampN: 2, lampTex: [{}, {}] };
+  }
   const lit = ctx.window.TLXShaders.lit(THREE, TSL, { chunks: { hash21: mk(), vnoise: mk(), ignoise: mk() }, shadow, maxLights: 16 });
   return { lit, U: lit.uniforms, S };
 }
@@ -209,8 +229,41 @@ test("1b-F3: the TLX mirror pass uploads the lamp shadow OFF; the main pass afte
   lit.updateFrame(litFrame());         // tlx.js begin (the main pass)
   assert.equal(U.lampShadowOn.value, 1);
   assert.equal(U.lampShadowIdx.value, 2);
-  const mb = TLX.slice(TLX.indexOf("mirrorBegin(frame, w, h) {"), TLX.indexOf("mirrorEnd() {"));
+  const mb = TLX.slice(TLX.indexOf("mirrorBegin(frame, w, h, rearView) {"), TLX.indexOf("mirrorEnd() {"));
   assert.match(mb, /lit\.updateFrame\(frame, true\)/, "mirrorBegin passes the mirror flag");
+});
+
+test("shadow uniforms copy only matrices sampled by the pass and refresh immediately on reactivation", () => {
+  const { lit, U, S } = bootLit({ extras: true });
+  const frame = litFrame(), slots = S.lampX.slots;
+  const matrices = {
+    lightVP: S.lightVP, carLightVP: S.carLightVP, csmVP0: S.csm.vp[0], csmVP1: S.csm.vp[1],
+    lampShadowVP: S.lampLightVP, lampXVP0: slots[0].lightVP, lampXVP1: slots[1].lightVP,
+  };
+  const copied = [];
+  for (const [key, src] of Object.entries(matrices)) {
+    const m = U[key].value, copy = m.fromArray.bind(m);
+    m.fromArray = (a) => { copied.push(key); assert.equal(a, src); return copy(a); };
+  }
+  function pass(expected, mirror = false) {
+    copied.length = 0;
+    for (const m of Object.values(matrices)) m[12] += 7;
+    lit.updateFrame(frame, mirror);
+    assert.deepEqual(copied.sort(), expected.sort());
+    for (const key of copied) assert.deepEqual(U[key].value.elements, Array.from(matrices[key]));
+  }
+  S.enabled = false;
+  pass([], true);
+  pass(["lampShadowVP"]);
+  S.enabled = S.carArmed = S.csm.on = S.lampX.on = true;
+  S.csm.valid[1] = slots[0].armed = true;
+  pass(["lightVP", "carLightVP", "csmVP1", "lampShadowVP", "lampXVP0"]);
+  S.csm.valid[0] = slots[1].armed = true;
+  pass(["lightVP", "carLightVP", "csmVP0", "csmVP1"], true);
+  frame.sunColor = [0, 0, 0];
+  pass(["lampShadowVP", "lampXVP0", "lampXVP1"]);
+  frame.sunColor = [1, 1, 1];
+  pass(Object.keys(matrices));
 });
 
 // 5-F5 (hunt 3): game.js calls gfx.resize() every rendered frame and begin()'s resizeNow() then cancels the
@@ -354,6 +407,7 @@ function decalRunHarness() {
   const dropEnd = TLX.indexOf('      // (geometry, material, OCCURRENCE)', dropStart);
   return new Function('THREE', `
     const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
+    const _instRootOn = false, instRoot = null, _instAdd = (m) => scene.add(m), _instRemove = (m) => scene.remove(m), _instShow = () => {};   // #3104 F3 helpers: the scene.add arm
     const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
     let _warmPending = false, _sceneRenders = 0;
     const skipBatches = () => false, _coDrop = () => {};
@@ -388,3 +442,85 @@ for (const warming of [false, true]) {
     assert.equal(disposed, 40, 'each instance buffer/render object released once');
   });
 }
+
+// #5699 row 10: a drop during a warm is queued once per mesh through a flag (it was _dropQueue.some(), O(n^2) over a
+// warm's drops); the flag clears when the queue flushes, so a later warm can queue the mesh again.
+test("warm drops queue each mesh once by flag, and the flush clears it (#5699 row 10)", () => {
+  const dropStart = TLX.indexOf('      const _dropQueue = [];');
+  const dropEnd = TLX.indexOf('      // (geometry, material, OCCURRENCE)', dropStart);
+  const h = new Function('THREE', `
+    const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
+    const _instRootOn = false, instRoot = null, _instRemove = (m) => scene.remove(m);
+    const window = {}, renderer = {};
+    let _warmPending = false, _sceneRenders = 0;
+    ${TLX.slice(dropStart, dropEnd)}
+    return { drop: dropWrapper, flush: flushDropped, queue: _dropQueue, warm: (on) => { _warmPending = on; }, scene };
+  `)(CORE);
+  const meshes = [];
+  for (let i = 0; i < 50; i++) { const m = new CORE.Mesh(new CORE.BufferGeometry(), new CORE.MeshBasicMaterial()); h.scene.add(m); meshes.push(m); }
+  let disposed = 0;
+  for (const m of meshes) m.addEventListener('dispose', () => disposed++);
+  h.warm(true);
+  for (let r = 0; r < 3; r++) for (const m of meshes) h.drop(m);
+  assert.equal(h.queue.length, 50, 'three drops of 50 meshes queue 50 entries');
+  assert.ok(meshes.every((m) => m.__tlxQueued === true));
+  assert.equal(disposed, 0, 'nothing is released while the warm holds its inputs');
+  h.warm(false); h.flush();
+  assert.equal(h.queue.length, 0);
+  assert.equal(disposed, 50, 'each queued mesh drops exactly once at the flush');
+  assert.ok(meshes.every((m) => m.__tlxQueued === false), 'the flush clears the flag');
+  h.warm(true); h.drop(meshes[0]);
+  assert.equal(h.queue.length, 1, 'a later warm can queue the mesh again');
+});
+
+// #5699 row 12: capturePixels on GL reads what the canvas holds. Under the spatial upscale without fixed targets the
+// canvas is presentW x presentH while the render size W x H is smaller, and reading W x H cropped Photo/Screenshot.
+test("GL capturePixels reads the drawing buffer's size, not the render size (#5699 row 12)", async () => {
+  const a = TLX.indexOf('        capturePixels() {'), b = TLX.indexOf('        awaitSoftPresent(timeoutMs) {', a);
+  assert.ok(a > 0 && b > a, 'capturePixels moved — update this test');
+  const mk = new Function('ownGL', 'fixed', 'W', 'H', 'presentW', 'presentH', `"use strict";
+    const renderer = {}, reads = [];
+    const fixedActive = () => fixed;
+    const readGlCapture = async (gl, w, h) => { reads.push([w, h]); return { width: w, height: h }; };
+    const _captureRT = () => null, _readLdr = null;
+    const api = { ${TLX.slice(a, b)} };
+    return { api, reads };`);
+  // renderScale 0.7 under the upscale: render 591x273, canvas 844x390.
+  const up = mk({ readPixels() {}, drawingBufferWidth: 844, drawingBufferHeight: 390 }, false, 591, 273, 844, 390);
+  assert.deepEqual(await up.api.capturePixels(), { width: 844, height: 390 });
+  // No drawing-buffer size reported (a stub GL): the old choice stands.
+  const plain = mk({ readPixels() {} }, false, 591, 273, 844, 390);
+  assert.deepEqual(await plain.api.capturePixels(), { width: 591, height: 273 });
+  const fixed = mk({ readPixels() {} }, true, 591, 273, 844, 390);
+  assert.deepEqual(await fixed.api.capturePixels(), { width: 844, height: 390 });
+});
+
+// #5699 row 15: a near-black soft-blit read is held back (a warming RT), but a scene that really is black must present:
+// the third dark read in a row is shown and notifies awaitSoftPresent instead of letting it wait out 15 s.
+test("soft blit: three dark reads in a row present and notify; a bright read presents at once (#5699 row 15)", async () => {
+  const a = TLX.indexOf('      function _startSoftBlitRead(req) {');
+  const b = TLX.indexOf('\n      }\n', a);
+  assert.ok(a > 0 && b > a, '_startSoftBlitRead moved — update this test');
+  const h = new Function(`"use strict";
+    let _softReadPending = false, _softReadSince = 0, _softReadEpoch = 0, _softShownGen = 0, _softDarkRun = 0, _softDrop = 0;
+    let _softReadLastMs = 0, _softReadFails = 0, _softReadLastErr = null, _softImg = null, maxPx = 0, notes = 0, puts = 0;
+    const _displayCanvas = { width: 4, height: 2 };
+    const _displayCtx = { createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData() { puts++; } };
+    const renderer = { readRenderTargetPixelsAsync: () => Promise.resolve(new Uint8Array(32)) };
+    const _unstrideIntoSoft = () => maxPx;
+    const _softBlitNotify = () => { notes++; };
+    const _finishSoftBlitRead = () => { _softReadPending = false; };
+    ${TLX.slice(a, b + 8)}
+    return { read: (gen) => { _startSoftBlitRead({ rt: {}, w: 4, h: 2, gen, epoch: 0 }); return new Promise((r) => setTimeout(r, 0)); },
+      set: (v) => { maxPx = v; }, st: () => ({ notes, puts, shown: _softShownGen }) };`)();
+  h.set(0);
+  await h.read(1); await h.read(2);
+  assert.deepEqual(h.st(), { notes: 0, puts: 0, shown: 0 }, 'two dark reads are held back');
+  await h.read(3);
+  assert.deepEqual(h.st(), { notes: 1, puts: 1, shown: 3 }, 'the third dark read in a row presents');
+  await h.read(4);
+  assert.deepEqual(h.st(), { notes: 1, puts: 1, shown: 3 }, 'the run restarts after a present');
+  h.set(200);
+  await h.read(5);
+  assert.deepEqual(h.st(), { notes: 2, puts: 2, shown: 5 }, 'a bright read presents at once');
+});

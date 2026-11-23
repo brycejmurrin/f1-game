@@ -1,11 +1,7 @@
 // @ts-check
 /* Apex 26 — AI PACE BAND: gap-to-player catch-up vs race-scripted fixed pace.
  *
- * History: updateCar multiplied AI vmax by how far the leading human was ahead
- * (reverse-only rubber band). That is the classic unfair catch-up Black Rock /
- * Pure rejected — see Game Developer "The Pure Advantage" and GamesIndustry
- * "Rubber banding is not fair and not fun". Melder (Game AI Pro ch.42) keeps a
- * gentler band; this project defaults the other way.
+ * The default refuses the classic reverse-only rubber band (unfair catch-up).
  *
  * Modes (apex26.aiPace):
  *   scripted (default) — pace = tierV × skill × DIFF.ai × pacePhase only.
@@ -13,7 +9,8 @@
  *                        driven by car/driver data and the difficulty ladder.
  *   catchup            — legacy reverse-only vmax (and corner) band: AI behind
  *                        the lead human get up to DIFF.band extra authority,
- *                        still gated off the start line and once lapped.
+ *                        still gated off the start line and once lapped (a full
+ *                        lap behind; past GAP_REF_M the band saturates, #5900).
  *
  * Pure factor/apply helpers; mode() is the live setting updateCar reads. */
 const AiBand = (function () {
@@ -31,7 +28,7 @@ const AiBand = (function () {
 
   /**
    * Catch-up factor in [0, bandAuth]. Zero in scripted mode, with no human,
-   * inside the start guard, once lapped, or when the AI is ahead.
+   * inside the start guard, a full lap or more behind, or when the AI is ahead.
    *
    * @param {{ mode?: string, leadProg?: number, carProg?: number,
    *           trackTotal?: number, raceT?: number, launchT0?: number,
@@ -44,8 +41,9 @@ const AiBand = (function () {
     const lead = /** @type {number} */ (ctx.leadProg), car = /** @type {number} */ (ctx.carProg), total = /** @type {number} */ (ctx.trackTotal);  // finite-checked below
     if (!(Number.isFinite(lead) && Number.isFinite(car) && Number.isFinite(total) && total > 0)) return 0;
     const gap = lead - car;
-    // Reverse band only: human ahead of this AI, and not a full lap clear.
-    if (!(gap > 0 && gap < total * 0.5)) return 0;
+    // Reverse band only: human ahead of this AI by less than a full lap (gap is cumulative prog;
+    // the old half-lap cut left the far cars with nothing, #5900 over #5783 JD5).
+    if (!(gap > 0 && gap < total)) return 0;
     const t0 = ctx.launchT0 || 0;
     if ((ctx.raceT || 0) - t0 <= START_GUARD_S) return 0;
     const auth = Number.isFinite(ctx.bandAuth) ? Math.max(0, /** @type {number} */ (ctx.bandAuth)) : 0;
@@ -54,18 +52,19 @@ const AiBand = (function () {
 
   /**
    * Scale vmax by the catch-up factor, capped so a banded easy car cannot beat
-   * the top of the DIFF ladder (BAND_CEIL). Returns { vmax, bandNow }.
+   * the top of the DIFF ladder (BAND_CEIL). Returns { vmax, bandNow }: `out`
+   * when given (the per-step caller's scratch, so no object per AI car), else a fresh one.
    */
-  function applyVmax(vmax, bandFactor, paceScale, bandCeil) {
+  function applyVmax(vmax, bandFactor, paceScale, bandCeil, out) {
+    const r = out || { vmax: 0, bandNow: 0 };
     const f = Math.max(0, bandFactor || 0);
-    if (f <= 0) return { vmax: vmax, bandNow: 0 };
+    if (f <= 0) { r.vmax = vmax; r.bandNow = 0; return r; }
     const scale = Math.max(1e-6, paceScale || 1);
     const ceil = Number.isFinite(bandCeil) ? bandCeil : 1;
     const bandCap = Math.max(1, ceil / scale);
-    return {
-      vmax: vmax * Math.min(1 + f, bandCap),
-      bandNow: f,
-    };
+    r.vmax = vmax * Math.min(1 + f, bandCap);
+    r.bandNow = f;
+    return r;
   }
 
   try { Log.info("game", "AiBand ready"); } catch (_) { /* Log absent in isolated VM */ }

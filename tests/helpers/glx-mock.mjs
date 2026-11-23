@@ -15,7 +15,7 @@
  * bitmask tests on recorded arguments must compare against the mock's own
  * `gl.CONST` values (see `enums`).
  *
- *   const h = bootGlx();            // opts: { aniso, parallel, userAgent, webdriver, overlay, ls: { key: value } }
+ *   const h = bootGlx();            // opts: { aniso, parallel, userAgent, webdriver, overlay, ls: { key: value }, params, rejectSource }
  *   h.GLX.begin(h.frame());  h.reset();  h.GLX.begin(h.frame());
  *   h.count("uniform1f")                 // → 1 (only uTime moves)
  *
@@ -34,7 +34,8 @@ const GLX_FILE = "js/render/glx/glx.js";
 // Shared dependencies and the deferred GLX group in production order.
 const FILES = [...MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf("js/render/gfx.js")),
   ...MANIFEST.DEFERRED.webgl2];
-const SOURCES = FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var")]);
+// GLSL `const int …` lines inside shader strings stay const (glx-light-fit reads the rewritten loop bound).
+const SOURCES = FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b(?!\s+(?:int|uint|float|bool|[biu]?vec[234]|mat[234]|highp|mediump|lowp)\b)/gm, "var")]);
 
 
 /** A recording stand-in for the #game-soft overlay: pass as `bootGlx({ overlay })`.
@@ -71,6 +72,14 @@ export function bootGlx(opts = {}) {
     if (!(k in enums)) enums[k] = 1 << (Object.keys(enums).length % 30);
     return enums[k];
   };
+  // opts.params: { MAX_FRAGMENT_UNIFORM_VECTORS: 224 } — getParameter answers
+  // these by name. Their enums are seeded with unique non-power-of-two values
+  // so a minted enum can never alias one. Everything else still reads 16.
+  const params = new Map();
+  Object.entries(opts.params || {}).forEach(([name, v], i) => { enums[name] = 0x40000001 + 2 * i; params.set(enums[name], v); });
+  // opts.rejectSource: a RegExp; a shader whose source matches fails to compile
+  // (and its program to link), the way a driver refuses an oversized block.
+  const rejected = (sh) => !!(opts.rejectSource && sh.source && opts.rejectSource.test(sh.source));
   // EXT_texture_filter_anisotropic, when a test asks for it (opts.aniso):
   // the enum values are the real ones so a recorded texParameterf can be
   // matched on TEXTURE_MAX_ANISOTROPY_EXT.
@@ -80,13 +89,14 @@ export function bootGlx(opts = {}) {
   const contextAttrs = [];
   const answers = {
     isContextLost: () => contextLost,
-    getExtension: (name) => (opts.aniso && /anisotropic/.test(String(name)) ? ANISO
+    // opts.extensions: names answered with a plain extension object (e.g. the colour-buffer pair).
+    getExtension: (name) => (opts.extensions && opts.extensions.includes(String(name)) ? {} : opts.aniso && /anisotropic/.test(String(name)) ? ANISO
       : (opts.parallel && /parallel_shader_compile/.test(String(name)) ? PARALLEL : null)),
-    getParameter: () => 16,
+    getParameter: (p) => (params.has(p) ? params.get(p) : 16),
     // Desktop-class MSAA support, so glx/post.js takes its multisampled path.
     getInternalformatParameter: () => new Int32Array([4]),
-    getShaderParameter: (sh) => !(opts.shaderFailure && sh.id === 1),
-    getProgramParameter: (p) => !(opts.shaderFailure && p.shaders.some((sh) => sh.id === 1)),
+    getShaderParameter: (sh) => !(opts.shaderFailure && sh.id === 1) && !rejected(sh),
+    getProgramParameter: (p) => !(opts.shaderFailure && p.shaders.some((sh) => sh.id === 1)) && !p.shaders.some(rejected),
     getShaderInfoLog: () => opts.shaderFailure ? "invalid shader" : "",
     getProgramInfoLog: () => "",
     getAttachedShaders: (p) => p.shaders,

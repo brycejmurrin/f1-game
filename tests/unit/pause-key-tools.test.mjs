@@ -31,6 +31,7 @@ function rig({ paused = true, top = null } = {}) {
   const el = (id, extra = {}) => ({ id, hidden: true, dataset: {}, ...extra });
   const els = { howtoplay: el("howtoplay"), pmsettings: el("pmsettings"), pausemenu: el("pausemenu", { hidden: false }) };
   const doors = { "ga-close": { click: () => clicks.push("ga-close") }, "ps-close": { click: () => clicks.push("ps-close") }, "sp-close": { click: () => clicks.push("sp-close") } };
+  doors["screen-arranger-cancel"] = { click: () => clicks.push("screen-arranger-cancel") };
   const ctx = {
     G: { paused }, els,
     UiLayers: { top: () => (top === "pausemenu" ? els.pausemenu : top === "pmsettings" ? els.pmsettings : top) },
@@ -51,6 +52,15 @@ for (const [layer, door] of [["garrival", "ga-close"], ["photo-studio", "ps-clos
     assert.deepEqual(r.toggles, [], "no unpause under an open tool");
   });
 }
+
+test("P and gamepad Start leave the layout editor through Cancel at Home or in a paused race", () => {
+  for (const paused of [false, true]) {
+    const r = rig({ paused, top: { id: "screen-arranger", dataset: { escClose: "screen-arranger-cancel" } } });
+    r.fn();
+    assert.deepEqual(r.clicks, ["screen-arranger-cancel"]);
+    assert.deepEqual(r.toggles, []);
+  }
+});
 
 test("the pause menu itself on top: the key resumes, as before", () => {
   const r = rig({ top: "pausemenu" });

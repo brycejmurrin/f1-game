@@ -37,13 +37,20 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
   }
 });
 
-test("every exact quarantine title is collected by the real browser runner", () => {
-  // --list starts no browser. It expands dynamic titles and applies the real
-  // project/manifest filters; a substring in source proves neither.
-  const listed = JSON.parse(execFileSync(process.execPath, [
-    path.join(ROOT, "node_modules/@playwright/test/cli.js"), "test",
-    ...FILE.quarantine.map((r) => r.spec), "--list", "--reporter=json",
-  ], { cwd: ROOT, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 }));
+test("no quarantine row is past its expiry: an expired row is inert, so it must be deleted, never re-dated", () => {
+  // loadQuarantine drops a row the day after `expires`, silently: on 2026-11-10
+  // eight of ten rows were dead weight that still read as protection (audit W27).
+  // This runs on the REAL clock on purpose, like knowledge-retention: the cure
+  // is to delete the row (the test then blocks on a retry, which is the policy)
+  // or to land fresh failed-run evidence with a new deadline.
+  const today = new Date().toISOString().slice(0, 10);
+  const expired = FILE.quarantine.filter((row) => row.expires < today).map((row) => `${row.spec} › ${row.title} (expired ${row.expires})`);
+  assert.deepEqual(expired, [], "delete the expired rows from tests/data/flaky-quarantine.json (AGENTS.md rule 9: a pass on retry is a red)");
+});
+
+function verifyQuarantineTitles(rows, listSpecs) {
+  if (!rows.length) return;  // Playwright treats zero path filters as “list the entire suite”.
+  const listed = listSpecs([...new Set(rows.map(row => row.spec))]);
   assert.deepEqual(listed.errors, []);
   const collected = [];
   function visit(suites, parents = []) {
@@ -56,10 +63,37 @@ test("every exact quarantine title is collected by the real browser runner", () 
     }
   }
   visit(listed.suites);
-  for (const row of FILE.quarantine) {
+  for (const row of rows) {
     assert.equal(collected.filter((t) => "tests/" + t.file === row.spec && t.title === row.title).length, 1,
       `${row.spec}: ${row.title} must identify exactly one runnable test`);
   }
+}
+
+test("every exact quarantine title is collected by the real browser runner", () => {
+  // --list expands dynamic titles under the real project filters without starting a browser.
+  verifyQuarantineTitles(FILE.quarantine, specs => JSON.parse(execFileSync(process.execPath, [
+    path.join(ROOT, "node_modules/@playwright/test/cli.js"), "test",
+    ...specs, "--list", "--reporter=json",
+  ], { cwd: ROOT, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })));
+});
+
+test("an empty quarantine registry starts no collection", () => {
+  verifyQuarantineTitles([], () => assert.fail("listing without a spec filter collects the whole suite"));
+});
+
+test("collected titles must match exactly once within each quarantined spec", () => {
+  const file = "specs/race.spec.js";
+  const row = { spec: "tests/" + file, title: "race › results" };
+  const other = { ...row, title: "race › grid" };
+  const specs = [{ file, title: "results" }, { file, title: "grid" }];
+  const list = paths => {
+    assert.deepEqual(paths, [row.spec], "two titles in one spec need one path filter");
+    return { errors: [], suites: [{ title: file, suites: [{ title: "race", specs }] }] };
+  };
+  verifyQuarantineTitles([row, other], list);
+  assert.throws(() => verifyQuarantineTitles([{ ...row, title: "results" }], list), /exactly one runnable test/);
+  specs.push({ file, title: "results" });
+  assert.throws(() => verifyQuarantineTitles([row], list), /exactly one runnable test/);
 });
 
 test("the loader returns the quarantined spec paths, and an empty set for a missing file", () => {
@@ -125,9 +159,9 @@ test("the reporter keys a test on its SPEC, not on the file that declared it", a
   assert.equal(own.spec, "tests/specs/smoke.spec.js");
   assert.equal(own.title, "boots");
 
-  const viaHelper = at(["chromium", "manual/tracks-visual.spec.js", "monza", "renders"],
+  const viaHelper = at(["chromium", "specs/terrain-over-road.spec.js", "monza", "renders"],
                        "/repo/tests/helpers/track-helpers.js");
-  assert.equal(viaHelper.spec, "tests/manual/tracks-visual.spec.js",
+  assert.equal(viaHelper.spec, "tests/specs/terrain-over-road.spec.js",
     "the SPEC owns the test, not the helper that declared it");
   assert.equal(viaHelper.title, "monza › renders");
 
@@ -201,7 +235,8 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   const run = yml.slice(from, yml.indexOf("- name: Spec timings (junit", from));
   assert.ok(from > 0 && run.length > 0, "the selected job's run step is gone");
   assert.match(run, /APEX_FAIL_ON_FLAKY: 1/);
-  assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
+  assert.match(run, /RETRIES: \$\{\{ matrix\.retries \|\| 0 \}\}/);
+  assert.match(run, /--retries="\$RETRIES"/);
 });
 
 // Fixture ledgers: the policy is pinned on rows these tests own, so retiring,
@@ -254,11 +289,16 @@ test("invalid quarantine identity or review metadata cannot waive a failure", ()
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
   const file = path.join(dir, "ledger.json");
   const row = fixtureRow();
+  // Inside the fixture's validity window: at a date past its expiry every row
+  // blocks, and removing a field would prove nothing (the positive control).
+  const at = new Date("2026-01-15T00:00:00Z");
   try {
+    fs.writeFileSync(file, JSON.stringify({quarantine: [row]}));
+    assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], loadQuarantine(file, at)).fail, false, "the complete row waives (control)");
     for (const key of ["title", "owner", "review", "evidence", "expires"]) {
       const invalid = {...row}; delete invalid[key];
       fs.writeFileSync(file, JSON.stringify({quarantine: [invalid]}));
-      const q = loadQuarantine(file, new Date("2026-10-15T00:00:00Z"));
+      const q = loadQuarantine(file, at);
       assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], q).fail, true, key);
     }
     assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], new Set([row.spec])).fail, true, "spec membership alone cannot waive a test");

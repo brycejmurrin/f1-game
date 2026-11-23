@@ -1,5 +1,9 @@
 # Merge hygiene — concurrent-PR conflict hotspots (2026-09-29)
 
+Summary: Concurrent-PR merge conflicts: measured hotspots (~60 ship merges), why `merge=union` is never for JSON, and the one-entry-per-line + sorted normalizer (`tools/check/merge-hygiene.mjs`).
+
+> **Historical record** (2026-09-29): the ladder-digit hotspot is gone, since rung sizes are no longer written into any doc (`tools/gen/gen-ladder-figures.mjs` prints them) and PREPUSH-GATE-LADDER.md is a pointer to docs/VERIFICATION.md §4; `tools/check/merge-hygiene.mjs` still runs via `tests/unit/merge-hygiene.test.mjs`.
+
 Measured from 60 first-parent `Merge pull request` commits into
 `claude/f1-game-project-26h3ng` (PR #358–#479) plus 115 recent
 `sync-pr` / `merge(ship)` commits where both parents touched the same path.

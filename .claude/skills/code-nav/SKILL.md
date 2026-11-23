@@ -1,6 +1,6 @@
 ---
 name: code-nav
-description: "Use when finding where a JS symbol is defined (go to definition), who uses or calls it (callers, find usages, rename impact), its exports or type, an edit's new type errors: apex-lsp, not grep. Dead code → slim-bloat."
+description: "Use when finding where a JS symbol is defined, who calls it, what a rename touches, or which type errors an edit added (apex-lsp, not grep). Not for: dead code → slim-bloat; breakpoints → js-debugger; live canvas → mcp-probe; scripted hooks → agent-view."
 ---
 
 # Code navigation with apex-lsp (instead of grep)
@@ -20,33 +20,43 @@ failure, not a missing symbol. Bootstrap/trust conditions:
 
 Use attached `lsp_*` tools when listed by the session. Configured `.mcp.json`
 or an installed plugin does not establish attachment. Without those tools,
-use `bash tools/mcp/lsp-mcp.sh` with the table's commands; do not rebuild the
+use `node tools/mcp/lsp-mcp.mjs` with the table's commands (the `tools/mcp/lsp-mcp.sh`
+wrapper runs the same thing, but a reporter subagent's read-only hook refuses it); do not rebuild the
 server or change global host configuration to perform a lookup.
+
+In Claude Code `.mcp.json` marks apex-lsp `alwaysLoad`, so its `lsp_*` tools arrive loaded. A host that
+still lists them as deferred names loads them once with ToolSearch
+`select:mcp__apex-lsp__lsp_definition,mcp__apex-lsp__lsp_references,mcp__apex-lsp__lsp_callers,mcp__apex-lsp__lsp_diagnostics`
+(measured 2026-11-20: 0 lsp calls in 13 workers, none of which loaded them).
 
 ## Which call
 
-Configured MCP calls default to compact presentation. Add `outputLevel: "full"`
-when the next decision requires the complete bounded definition/reference page;
-native `limit`, `offset`, `maxLines` and `format` still determine what is fetched.
-`output_read` retrieves a saved result without repeating a call. Shell examples
-below also support the common terminal entrypoint, for example
+For output levels and saved-result retrieval, follow the
+[common output contract](../../../docs/agent-output/README.md). Native `limit`,
+`offset`, `maxLines` and `format` determine the fetched page. Shell examples
+also support the common terminal entrypoint, for example
 `node tools/agent-run.mjs -- node tools/mcp/lsp-mcp.mjs refs Tracks.curvature --concise --limit=40`.
 
 | You want | MCP call | Shell (same tools, one process per call) |
 |---|---|---|
-| where it is defined (and its code) | `lsp_definition {symbol, body: true}` | `tools/mcp/lsp-mcp.sh def Liveries.forTeam --body` |
+| where it is defined (and its code) | `lsp_definition {symbol, body: true}` | `node tools/mcp/lsp-mcp.mjs def Liveries.forTeam --body` |
 | uses, with enclosing functions (first page) | `lsp_references {symbol, format: "concise", limit: 40}` | `… refs Tracks.curvature --concise --limit=40` |
 | who would an edit touch (first caller page) | `lsp_callers {symbol, limit: 40}` | `… callers AiDrive.cornerK --limit=40` |
-| which files use it, counts only | `lsp_references {symbol, files: true}` | `… refs G.player --files` |
+| which files use it, counts only | `lsp_references {symbol, files: true}` (or `lsp_callers {…, files: true}`; definition, references and callers take `path` to scope) | `… refs G.player --files` |
 | a module's exports without reading it | `lsp_outline {symbol, limit: 40}` or `{file, limit: 40}` | `… outline GameHud --limit=40` / `… outline js/physics/consts.js --limit=40` |
 | a name you only half know | `lsp_symbols {query}` | `… sym clamp` |
 | its type / JSDoc | `lsp_hover {symbol}` | `… hover G.wrapS` |
 | did my edit break anything in this file | `lsp_diagnostics {file}` | `… diag js/ui/hud.js` |
 
 Targets: `Name` (a global such as `GameHud`), `Head.member` (`Liveries.forTeam`),
-`G.member` (the façade: answered from `interface GameCtx` in `types/game-ctx.d.ts`),
+`G.member` (the façade: ONLY the rows of `interface GameCtx` in `types/game-ctx.d.ts`),
 a contract type (`TrackModel`, found in `types/*.d.ts`),
-or `file` + `line` [+ `column`] (ONE-based; shell `js/ui/hud.js:237:15`).
+an IIFE-local function (most of `js/game.js`: `updateCar`, `dashKph`; not on GameCtx, so
+`G.updateCar` misses): the bare name (`lsp_definition {symbol: "updateCar"}`) or `file` + `line`,
+or `file` + `line` [+ `column`] (ONE-based; shell `js/ui/hud.js:<line>:<col>`).
+
+On a miss (`has no member`, `not found`): `lsp_symbols {query: <member>}`, then retry with the
+bare name or the `file` + `line` it lists. Never guess a neighbour or fall back to grep.
 
 grep stays right for: text, comments, log strings, CSS/HTML, regex shapes, files
 outside `js/`. The `lsp-hint.py` hook names the apex-lsp call after a grep for a
@@ -56,18 +66,20 @@ bare JS symbol. Take it for the next lookup.
 
 1. **Understand a module.** `lsp_outline {symbol: "Ghost", limit: 40}` lists the exports,
    then `lsp_definition {symbol: "Ghost.snapshot", body: true, maxLines: 60}` gives the body
-   (the default cap is 40 lines, max 400; pass `maxLines` for a longer one).
+   (capped by default; pass `maxLines` for a longer one, bounds in the tool schema).
    That's two calls and no full-file Read.
 2. **Before changing a shared function.** `lsp_callers {symbol, limit: 40}` lists the functions that
-   use it. Read those, not every grep hit. For a façade member, `files: true`
-   first: `G.player` has hundreds of uses across dozens of files.
+   use it. Read those, not every grep hit. For a façade member (`G.player`),
+   `files: true` first: its uses span much of `js/`.
 3. **After an edit, before the test run.** `lsp_diagnostics {file}` gives only the
    errors the edit **introduced**: per-file `// @ts-check`, high-signal codes
    (unknown name, "did you mean" typo, too many arguments, assign to const,
    calling a non-function, redeclare, syntax), minus the same file at git HEAD.
-   `all: true` lists the pre-existing ones as well. If project configuration or another JS/declaration
-   dependency differs from HEAD, subtraction is skipped and the output says so:
-   a per-file HEAD overlay cannot establish whether a cross-file/config error is old.
+   `all: true` lists the pre-existing ones as well. Other edited js/ files are put back to their HEAD text
+   for the baseline (the header names them), so a dependency's edit still shows as new here. If configuration,
+   a declaration file, or an added/deleted/moved source differs from HEAD, subtraction is skipped and the output says so.
+   Rows `APX1`/`APX2` are a call or read of a `Module.member` (or factory-instance member) that no declaration
+   defines (`tools/mcp/member-check.mjs`): a TypeError or an always-undefined read the checker cannot see.
    Configuration edits (including locally resolved extends chains) reload the persistent project before answering.
    This is a fast first check, not a substitute for the tests.
 
@@ -80,5 +92,5 @@ Row tags (`[def]`/`[export]`/`[alias]`/`[use]`), refused ambiguous names, text-m
 ```sh
 node --test tests/unit/lsp-mcp.test.mjs   # MCP client on the real tree
 node --test tests/unit/lsp-mcp-fixture.test.mjs # hermetic fixture workspaces
-node tools/mcp/lsp-eval.mjs               # 12 pinned questions, apex-lsp vs grep
+node tools/mcp/lsp-eval.mjs               # pinned questions (`QUESTIONS`), apex-lsp vs grep
 ```

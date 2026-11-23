@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D, GUARDS_JOB, guardsVerdict, newestByName, localVerdict, evaluate, shaPrefixMatch,
-  stampReadySha, planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, mergeableProblem, draftProblem, main,
+  stampReadySha, planHash, planVerdict, withPlan, memoryVerdict, withMemory, resolveSha, verdictLine, mergeableProblem, draftProblem, main,
 } from "../../tools/ci/ready-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
@@ -32,6 +32,11 @@ test("guardsVerdict: the aggregator decides; its shards are the fallback when it
   assert.equal(guardsVerdict([...shards("success").slice(0, 4), run(GUARDS_D, "queued", null, 5)]).state, "pending");
   assert.equal(guardsVerdict([run(GUARDS_A, "completed", "failure"), run(GUARDS_B, "completed", "success", 2)]).state, "failed");
   assert.equal(guardsVerdict([run("CI", "completed", "success")]).state, "none");
+  // WP-L8: A+B green with C/D missing is pending, never passed.
+  const ab = guardsVerdict([run(GUARDS_JOB, "completed", "cancelled"), run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3)]);
+  assert.deepEqual([ab.state, ab.code, ab.evidence], ["pending", 1, `${GUARDS_C}, ${GUARDS_D} missing (all four tooling shards must report)`]);
+  assert.equal(guardsVerdict([run(GUARDS_A, "completed", "success"), run(GUARDS_B, "completed", "success", 2), run(GUARDS_C, "completed", "success", 3)]).state, "pending");
+  assert.equal(guardsVerdict([run(GUARDS_C, "completed", "failure")]).state, "failed", "a red shard fails even when others are missing");
 });
 
 test("newestByName: the newest attempt per name wins; a skipped run never hides a real result (#3862)", () => {
@@ -133,12 +138,29 @@ test("planVerdict: ticked, struck, deferred and `land:` items close; unticked on
   assert.equal(planVerdict(cursor).state, "done", "Cursor's agent slice wins when it carries a Plan (#2899)");
 });
 
+test("planVerdict on edited bodies (moved from pr-body.test.mjs): a struck or deferred item closes, `**now:**` stays open", () => {
+  const plan = "<!-- example:\n       - [x] done — sample\n       - [ ] todo -->\n- [ ] **now:** first step\n- [ ] second step\n- [x] third — sha";
+  assert.deepEqual(planVerdict(body(plan)).open, ["**now:** first step", "second step"], "commented example items do not count");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [ ] ~~second step~~ — covered by #5"))).open.length, 1, "struck closes");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [~] second step"))).open.length, 1, "deferred closes");
+});
+
+test("#5404 option (a): the template's `**now:**` item is open at ready time, and the refusal says to tick it or fold it into `land:`", () => {
+  const v = withPlan(GREEN, body("- [x] a\n- [ ] now: wait for CI\n- [ ] land: x"));
+  assert.deepEqual([v.state, v.code, v.plan.open], ["plan-open", 1, ["now: wait for CI"]]);
+  assert.equal(v.evidence.split("; ")[1], "the `**now:**` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item (skill steward §Land)");
+  assert.equal(withPlan(GREEN, body("- [x] a\n- [ ] land: wait for CI, then `land`")).code, 0, "folded into land: the Plan is closed");
+  const tpl = fs.readFileSync(path.join(ROOT, ".github/pull_request_template.md"), "utf8");
+  assert.equal(tpl.split("\n").map((l) => l.trim()).filter((l) => l === "it counts as OPEN for the gate: before the ready flip tick it with its evidence, or").length, 1, "the template says it");
+});
+
 test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan warns; red and no-PR pass through", () => {
   const v = withPlan(GREEN, body("- [ ] one\n- [ ] two\n- [ ] three\n- [ ] four"));
   assert.deepEqual([v.state, v.code], ["plan-open", 1]);
   assert.ok(v.evidence.startsWith('4 of 4 Plan item(s) open: "one", "two", "three", ...'), v.evidence);
   assert.equal(withPlan(GREEN, body("- [x] one")).code, 0);
-  assert.ok(withPlan(GREEN, "## Goal\nx").planWarning);
+  assert.equal(withPlan(GREEN, "## Goal\nx").state, "plan-missing");
+  assert.equal(withPlan(GREEN, "## Goal\nx", "fold-bot[bot]").code, 0);
   assert.equal(withPlan({ ...GREEN, state: "failed", code: 1 }, body("- [ ] x")).state, "failed");
   assert.equal(withPlan(GREEN, null), GREEN);
 });
@@ -169,8 +191,8 @@ function github({ files = [{ filename: "js/core/log.js" }], pull = {}, checks = 
 
 test("resolveSha --pr: head, body, labels, draft/state and the full file list (both rename paths); a short or failed list is filesError", () => {
   const many = Array.from({ length: 150 }, (_, i) => ({ filename: `f${i}` }));
-  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "run-ci" }], draft: false, state: "closed" } }) });
-  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["run-ci"], false, "closed", 150, null]);
+  const r = resolveSha({ pr: 7, request: github({ files: many, pull: { labels: [{ name: "priority" }], draft: false, state: "closed" } }) });
+  assert.deepEqual([r.sha, r.pr, r.branch, r.labels, r.draft, r.state, r.files.length, r.filesError], [SHA, 7, "cursor/x", ["priority"], false, "closed", 150, null]);
   const ren = resolveSha({ pr: 7, request: github({ files: [{ filename: "docs/x.md", previous_filename: ".claude/memory/x.md" }] }) });
   assert.deepEqual(ren.files, ["docs/x.md", ".claude/memory/x.md"]);
   assert.ok(/incomplete files list: received 1 of 3/.test(resolveSha({ pr: 7, request: github({ files: [{ filename: "a" }], pull: { changed_files: 3 } }) }).filesError));
@@ -196,7 +218,7 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
   const deps = (request) => ({ request, judge: (a) => evaluate({ ...a, localOpts: s.opts }), receipt: (d) => receipts.push(d), sleep: (x) => slept.push(x), log: (...a) => logs.push(a.join(" ")) });
   try {
     assert.equal(main(["--pr", "7"], deps(github())), 0);
-    assert.deepEqual(receipts.at(-1), { pr: 7, head: SHA, ok: true, evidence: "" });
+    assert.deepEqual({ ...receipts.at(-1), planHash: /^[0-9a-f]{64}$/.test(receipts.at(-1).planHash) }, { pr: 7, head: SHA, ok: true, evidence: "", planHash: true });
     assert.ok(logs.at(-1).startsWith(`[ready-gate] = ready-gate passed — Structural guards success sha=${SHA}`), logs.at(-1));
     assert.equal(main(["--pr", "7"], deps(github({ pull: { body: body("- [ ] open") } }))), 1);
     assert.ok(receipts.at(-1).ok === false && receipts.at(-1).evidence.startsWith("plan-open:"), JSON.stringify(receipts.at(-1)));
@@ -221,4 +243,70 @@ test("main --pr: green draft + closed Plan exits 0 and writes an ok receipt; eac
     assert.equal(main(["--sha", SHA, "--local"], deps(() => { throw new Error("no API"); })), 0, "--local never calls GitHub");
     assert.equal(receipts.length, n, "no receipt without --pr");
   } finally { fs.rmSync(s.dir, { recursive: true, force: true }); }
+});
+
+test("--wait judges the latest PR snapshot and keeps its original head pin", () => {
+  const openPlan = body("- [ ] Verify");
+  const donePlan = body("- [x] Verify");
+  const initial = { sha: SHA, pr: 7, state: "open", draft: true, mergeableState: "clean", files: [], labels: [] };
+  for (const [before, after, expected, state] of [
+    [{ body: openPlan }, { body: donePlan }, 0, "passed"],
+    [{ body: donePlan }, { body: openPlan }, 1, "plan-open"],
+    [{ body: donePlan }, { draft: false }, 1, "not-draft"],
+    [{ body: donePlan }, { mergeableState: "dirty" }, 1, "conflicting"],
+    [{ body: donePlan }, { sha: "b".repeat(40) }, 1, "moved"],
+    [{ body: donePlan }, { error: "offline" }, 3, "unknown"],
+  ]) {
+    const snapshots = [{ ...initial, ...before }, { ...initial, ...before, ...after }];
+    const checks = [{ ...GREEN, state: "pending", code: 1 }, GREEN];
+    const receipts = [], lines = [];
+    const rc = main(["--pr", "7", "--wait"], {
+      resolve: () => snapshots.shift(), judge: () => checks.shift(), sleep: () => {}, now: () => 1,
+      receipt: r => receipts.push(r), log: (...args) => lines.push(args.join(" ")),
+    });
+    assert.equal(rc, expected, state);
+    assert.ok(lines.some(line => line.includes(`= ready-gate ${state}`)), lines.join("\n"));
+    if (["moved", "unknown"].includes(state)) assert.equal(receipts.length, 0);
+    else {
+      assert.equal(receipts[0].ok, expected === 0);
+      assert.equal(receipts[0].planHash, planHash(after.body ?? before.body));
+    }
+  }
+});
+
+test("nextAction: the land step is the MCP issue_write recipe, never a gh label write (PR #5809)", async () => {
+  const { nextAction } = await import("../../tools/ci/ready-gate.mjs");
+  const land = 'next: GitHub MCP issue_write  method=update  owner/repo=brycejmurrin/f1-game  issue_number=7  labels=<the live list from issue_read get_labels, plus "land">   (one label per call, skill steward references/labels.md)';
+  assert.deepEqual(nextAction("passed", 7), ["next: GitHub MCP update_pull_request  owner/repo=brycejmurrin/f1-game  pullNumber=7  draft:false", land]);
+  assert.deepEqual(nextAction("not-draft", 7), [`${land}   (already ready: flip nothing; add land only)`]);
+  assert.equal(nextAction("refused", 7), null);
+  assert.equal(nextAction("passed", 0), null);
+});
+
+test("ship-pr: runs ready-gate; a pass prints the MCP flip and the land label call, a refusal prints neither; nothing is flipped itself", async () => {
+  const { main: ship, nextCalls } = await import("../../tools/ci/ship-pr.mjs");
+  const out = [], seen = [];
+  const go = (argv, code) => { out.length = 0; return [ship(argv, { run: (a) => (seen.push(a), code), log: (l) => out.push(l), closing: () => ({ ok: true, lines: [] }) }), out.join("\n")]; };
+  let [rc, text] = go(["--pr", "7"], 0);
+  assert.equal(rc, 0);
+  assert.deepEqual(seen.at(-1), ["--pr", "7"]);
+  const parts = ["update_pull_request", "pullNumber=7", "draft:false", "a later push: re-run ship-pr", "10 min", 'issue_write  method=update  owner/repo=brycejmurrin/f1-game  issue_number=7  labels=<the live list from issue_read get_labels, plus "land">'];
+  assert.deepEqual(parts.filter((x) => !text.includes(x)), [], "both calls, the re-run note and the receipt-age note are printed");
+  [rc, text] = go(["--pr", "7"], 1);
+  assert.equal(rc, 1);
+  assert.deepEqual(parts.filter((x) => text.includes(x)), [], "a refusal prints neither call");
+  [rc] = go(["--pr", "x; rm"], 0);
+  assert.equal(rc, 1, "a non-numeric PR is a usage error");
+  assert.equal(nextCalls(9, "o/r").length, 3);
+});
+
+test("a body with no ## Plan: ready-gate and the merge gate agree (both refuse; a bot's PR passes both)", async () => {
+  // merge-gate.mjs planRow refuses a Plan-less body (except a *[bot] author) and ready-gate used to pass it with a
+  // warning, so a PR cleared ready-gate and then failed the merge gate. This pins the two to the same answer.
+  const { planRow } = await import("../../tools/ci/merge-gate.mjs");
+  const body = "## Goal\nx";
+  for (const author of ["someone", "fold-bot[bot]"]) {
+    const gate = planRow(body, author), ready = withPlan(GREEN, body, author);
+    assert.equal(ready.code === 0, gate.ok, `${author}: ready-gate code ${ready.code} vs merge-gate plan row ok=${gate.ok}`);
+  }
 });

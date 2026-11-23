@@ -36,6 +36,8 @@ window.SpotifyMusic = (function () {
   const K_TOKEN = "apex26.spotify.token";
   const S_VERIFY = "apex26.spotify.verifier";   // sessionStorage: one auth round-trip
   const S_STATE = "apex26.spotify.state";
+  const S_ARRANGE = "apex26.spotify.arrangeState";
+  let arrangeAfterLogin = false;
   const K_CTX = "apex26.spotify.context";       // chosen playlist uri, or "liked"
   const K_MODE = "apex26.spotify.mode";         // "remote" (Connect) | "browser" (SDK)
   const K_DEV = "apex26.spotify.device";        // remote mode: which device to play on
@@ -90,6 +92,12 @@ window.SpotifyMusic = (function () {
   let vol = 0.5;
   let explained = false;
   let lastPlayError = null;    // {status, reason} from the last refused play
+  // PREMIUM, AS PLAYBACK HAS SHOWN IT: "yes" | "no" | null (not known). Since
+  // the February 2026 Development Mode changes GET /me no longer returns
+  // `product` (developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide,
+  // "Removed fields"), so the plan is learned from what playback does: a play
+  // that starts is Premium, a 403 PREMIUM_REQUIRED or the SDK's account_error is not.
+  let premiumSeen = null;
   let art = null, progressMs = 0, durationMs = 0;
   let shuffleOn = false, repeatMode = "off";
   let devVol = null, devSupportsVol = true, devName = "";
@@ -308,6 +316,10 @@ window.SpotifyMusic = (function () {
     const verifier = randomB64(64), st = randomB64(16);
     ssSet(S_VERIFY, verifier);
     ssSet(S_STATE, st);
+    const intent = { arrange: false };
+    document.dispatchEvent(new CustomEvent("apex:spotify-authorizing", { detail: intent }));
+    if (intent.arrange) ssSet(S_ARRANGE, st);
+    else ssDel(S_ARRANGE);
     setStatus("connecting", "Redirecting to Spotify to sign in…");
     return challengeFor(verifier).then((challenge) => {
       location.assign(AUTH_URL + "?" + new URLSearchParams({
@@ -329,7 +341,7 @@ window.SpotifyMusic = (function () {
       const u = new URL(location.href);
       ["code", "state", "error"].forEach((k) => u.searchParams.delete(k));
       const q = u.searchParams.toString();
-      history.replaceState(null, "", u.pathname + (q ? "?" + q : "") + u.hash);
+      history.replaceState(history.state, "", u.pathname + (q ? "?" + q : "") + u.hash);
     } catch (e) { /* no history API — harmless */ }
   }
 
@@ -363,6 +375,8 @@ window.SpotifyMusic = (function () {
     const verifier = ss(S_VERIFY), wantState = ss(S_STATE);
     if (!verifier) return Promise.resolve();          // not our redirect
     if (!code && !err) return Promise.resolve();
+    arrangeAfterLogin = !!code && !err && st === wantState && ss(S_ARRANGE) === st && !!st;
+    ssDel(S_ARRANGE);
     ssDel(S_VERIFY);
     ssDel(S_STATE);
     cleanUrl();
@@ -388,6 +402,7 @@ window.SpotifyMusic = (function () {
     })).then((j) => {
       if (gen !== sessionGen || cid !== clientId()) return;
       if (!j || j.error || !j.access_token) {
+        arrangeAfterLogin = false;
         setStatus("error", "Token exchange failed" + (j && j.error ? " (" + j.error + ")" : "") +
           ". The redirect URI here must match the dashboard exactly.");
         return;
@@ -509,11 +524,12 @@ window.SpotifyMusic = (function () {
         explained = true;
         teardown();
         setStatus("configured", "Spotify rejected the session — checking why…");
-        check();
+        check({ after: "authentication_error" });
       });
       player.addListener("account_error", () => {
         if (gen !== sessionGen) return;
         explained = true;
+        premiumSeen = "no";
         teardown();
         setStatus("error", "This Spotify account cannot play here — full Premium is " +
           "required. Free accounts and the mobile-only plans (Premium Mini / Lite) " +
@@ -660,6 +676,7 @@ window.SpotifyMusic = (function () {
       if (r.ok || r.status === 204) {
         setStatus("connected", "Playing.");
         lastPlayError = null;
+        premiumSeen = "yes";              // only Premium can start playback
         installBackend();                 // it works — Spotify may own the music
         return;
       }
@@ -669,6 +686,7 @@ window.SpotifyMusic = (function () {
         try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
         catch (e) { reason = (txt || "").slice(0, 120); }
         lastPlayError = { status: r.status, reason: reason };
+        if (r.status === 403 && /PREMIUM_REQUIRED/i.test(reason)) premiumSeen = "no";
         if (r.status === 404 && !retried && mode() === "remote") {
           setStatus("connected", "Waking your Spotify device…");
           return loadDevices().then((ds) => {
@@ -1057,7 +1075,11 @@ window.SpotifyMusic = (function () {
     };
   }
 
-  function check() {
+  // `opts.after`: the SDK event that asked for this check. After an
+  // authentication_error a clean account must NOT read "Account OK" — that
+  // overwrote the one message saying the player refused the session.
+  function check(opts) {
+    const after = opts && opts.after;
     const gen = sessionGen;
     const d = debug();
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
@@ -1087,7 +1109,10 @@ window.SpotifyMusic = (function () {
             setStatus("error", "Could not read Spotify's account response — offline, or blocked.");
             return { ok: false, httpStatus: code, reason: "network", debug: debug() };
           }
-          const out = { ok: false, httpStatus: code, product: j.product || null,
+          // A MISSING `product` IS UNKNOWN, NOT "free": Development Mode apps no
+          // longer receive it (see premiumSeen). Fall back to what playback showed.
+          const plan = j.product != null ? (j.product === "premium" ? "yes" : "no") : premiumSeen;
+          const out = { ok: false, httpStatus: code, product: j.product || null, premium: plan,
             account: j.display_name || j.id || null, debug: debug() };
           if (code === 401) {
             setStatus("configured", "Spotify rejected the token itself (401). Press CONNECT to sign in again.");
@@ -1099,21 +1124,29 @@ window.SpotifyMusic = (function () {
           } else if (code !== 200) {
             setStatus("error", "Spotify's API answered " + code + ". Try again in a moment.");
             out.reason = "api-" + code;
-          } else if (j.product !== "premium") {
-            setStatus("error", "Signed in as " + (out.account || "?") + ", but this account is \"" +
-              (j.product || "unknown") + "\" — the web player needs full Premium. " +
-              "Free, Mini and Lite cannot play here.");
+          } else if (plan === "no") {
+            setStatus("error", "Signed in as " + (out.account || "?") + ", but this account is " +
+              (j.product ? "\"" + j.product + "\"" : "not Premium (Spotify refused playback: Premium required)") +
+              " — the web player needs full Premium. Free, Mini and Lite cannot play here.");
             out.reason = "not-premium";
           } else if (!out.debug.streamingGranted) {
-            setStatus("error", "Premium account confirmed, but this token has no playback " +
+            setStatus("error", (plan === "yes" ? "Premium account confirmed" : "Signed in") +
+              ", but this token has no playback " +
               "permission. Tick \"Web Playback SDK\" in your app's settings, remove the app at " +
               "spotify.com/account/apps, then press CONNECT again.");
             out.reason = "no-streaming-scope";
+          } else if (after === "authentication_error") {
+            setStatus("error", "Spotify's player rejected the session, though the account and its " +
+              "playback permission check out. Usually the app is not enabled for the Web Playback SDK, " +
+              "or its owner has no active Premium (Spotify requires it for apps in Development Mode). " +
+              "Fix that in the dashboard, then press CONNECT.");
+            out.reason = "auth-error";
           } else {
             out.ok = true;
             out.reason = "ok";
             setStatus(state === "connected" ? "connected" : "configured",
-              "Account OK: Premium, playback permission granted" +
+              "Account OK: " + (plan === "yes" ? "Premium, playback permission granted"
+                : "playback permission granted (Spotify no longer tells apps the plan; Premium is confirmed when a track starts)") +
               (state === "connected" ? " — connected." : ". Press CONNECT."));
           }
           return out;
@@ -1163,6 +1196,7 @@ window.SpotifyMusic = (function () {
   // first with a snapshot, without api()'s deferred token lookup/401 refresh:
   // its completion must never act on a replacement session.
   function endSession() {
+    arrangeAfterLogin = false;
     const t = readToken();
     if (mode() === "remote" && inUse() && BACKEND.active() && t) {
       const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -1180,6 +1214,7 @@ window.SpotifyMusic = (function () {
 
   function disconnect() {
     endSession();
+    premiumSeen = null;               // the next sign-in may be another account
     setStatus(available() ? "configured" : "off",
       available() ? "Signed out of Spotify on this device." : copyOff());
   }
@@ -1436,6 +1471,9 @@ window.SpotifyMusic = (function () {
   function init() {
     if (initialized) return;
     initialized = true;
+    if (typeof SettingsNav !== "undefined") SettingsNav.onLeave?.(page => {
+      if (page === "audio") arrangeAfterLogin = false;
+    });
     Log.info("audio", "SpotifyMusic.init");
     // Adopt the stored config FIRST, so the redirect handler and the first
     // render agree about whether the feature exists at all. Note we never
@@ -1455,6 +1493,9 @@ window.SpotifyMusic = (function () {
     init();
   }
 
+  // activate / setShuffle / backend / contextUri / setContext stay module-local:
+  // wire handlers and the music BACKEND call them by name; no outside
+  // SpotifyMusic.* site exists for those.
   return {
     available, configured, setClientId,
     connect, disconnect, status, onChange, debug, check,
@@ -1463,10 +1504,13 @@ window.SpotifyMusic = (function () {
         .then((r) => (r && r.ok ? readJson(r).then((j) => { if (j === null) Log.warn("audio", "Spotify devices response unreadable"); return j; }) : { httpStatus: r && r.status }));
     },
     lastPlayError() { return lastPlayError; },
-    activate,
-    context: contextUri, setContext, play() { return playChosen(); },
+    play() { return playChosen(); },
     mode, setMode, setDevice, deviceList() { return devices.slice(); },
     openPanel() {
+      if (arrangeAfterLogin && state === "connected") {
+        arrangeAfterLogin = false;
+        document.dispatchEvent(new CustomEvent("apex:spotify-arrange-return"));
+      }
       const settings = el("pmsettings");
       if (settings) settings.hidden = true;
       const p = el("spotifypanel");
@@ -1475,9 +1519,8 @@ window.SpotifyMusic = (function () {
       render();
       if (BACKEND.active()) { pollNowPlaying(); loadDevices(); }
     },
-    prev, toggle, setShuffle, setDeviceVolume, searchPlaylists, playUri,
+    setDeviceVolume, searchPlaylists,
     useAsMusic, inUse,
-    backend() { return BACKEND; },
     redirectUri, handleRedirect,
   };
 })();

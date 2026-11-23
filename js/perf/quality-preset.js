@@ -1,4 +1,4 @@
-/* Apex 26 — GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist (apex26.gfxHigh), the apex26.gfxPreset store key and the #pm-gfx button. The RENDERER picker (WEBGL2 / THREE.JS / WEBGPU, RESET RENDERER, THREE PATH, SCREENSHOTS) is js/perf/renderer-picker.js. */
+/* Apex 26 — GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA / EXTREME) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist (apex26.gfxHigh), the apex26.gfxPreset store key and the #pm-gfx button. The RENDERER picker (WEBGL2 / THREE.JS / WEBGPU, RESET RENDERER, THREE PATH, SCREENSHOTS) is js/perf/renderer-picker.js. */
 const GfxQuality = (function () {
   "use strict";
 
@@ -11,8 +11,8 @@ const GfxQuality = (function () {
 // still name a measured shed; pinning look post via autoTier alone left LOW
 // slower than MEDIUM on iPhone WebGPU (BrowserStack 2026-10-21).
 // ULTRA and HIGH share tier 0 deliberately: both mean "let the governor
-// decide". They differ only in the MOBILE boot tier, which is fixed at renderer
-// init and cannot be a live knob. A separate AUTO stop would be
+// decide". They differ in BOOT-TIME detail: MSAA, and on a desktop TLX bigger
+// shadow maps, 16× anisotropy, the env probe and a 2× rival LOD reach. A separate AUTO stop would be
 // indistinguishable from ULTRA and is omitted rather than shipped as a lie.
 //
 // PHONE CAP (D·IP1, BrowserStack 2026-10-21): ULTRA on a real iPhone 15 averaged
@@ -25,10 +25,94 @@ const PRESETS = [
   { id: "medium", label: "MEDIUM", tier: 2, mobileHigh: false },
   { id: "high",   label: "HIGH",   tier: 0, mobileHigh: false },
   { id: "ultra",  label: "ULTRA",  tier: 0, mobileHigh: true  },
+  { id: "extreme", label: "EXTREME", tier: 0, mobileHigh: true },
 ];
+// DESKTOP DETAIL (docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md): 0 = HIGH and below, and every phone; 1 = ULTRA;
+// 2 = EXTREME. A BOOT-TIME value (the flip reloads). FEATURES maps each extra to the level that turns it on;
+// apex26.gfxx.<name> = 0 / 1 forces one off / on (A/B), and the governor sheds extras from the END of SHED_ORDER
+// before it touches tier 1. Every consumer asks feature(name) and keeps today's path when it answers false.
+const DETAIL = { ultra: 1, extreme: 2 };
+const FEATURES = Object.freeze({
+  mirrorHi: 1, ssaoHi: 1, raysHi: 1, superSample: 1, liveryHi: 1, meshHi: 1,
+  csm: 2, lampShadows: 2, traa: 2, gtao: 2, ssgi: 2, ssrHi: 2, hdrOut: 2, lightsHi: 2, skyAtmo: 2,
+  matDetail: 2, packHd: 2, envAll: 2, heroCar: 2, crowd3d: 2, treesHi: 2, kerbProfile: 2, farTerrain: 2, density: 2,
+  carSurf: 2, propsHi: 2, garageHi: 2, crewHi: 2,
+  dof: 3, motionBlur: 3, ss2x: 3,   // level 3 is CINEMA: EXTREME while setCinema(true) (replay / photo / garage)
+});
+const SHED_ORDER = Object.freeze(["lightsHi", "raysHi", "ssaoHi", "gtao", "ssrHi", "superSample", "ssgi"]);
+let _detail = -1, _shed = 0, _cinema = false;
+function detail() {
+  if (_detail >= 0) return _detail;
+  let d = 0;
+  try {
+    const st = gstore();
+    if (st && !(typeof GLX !== "undefined" && GLX.isMobile)) {
+      d = DETAIL[st.get("gfxPreset", null)] || 0;
+      // A/B and the GPU census (its `ls` input takes no quoted value): apex26.gfxDetail = 0 / 1 / 2 forces the level.
+      const o = st.raw("apex26.gfxDetail");
+      if (o === "0" || o === "1" || o === "2") d = +o;
+    }
+  } catch (_) { d = 0; }
+  return (_detail = d);
+}
+// Player overrides are a boot snapshot: changing several controls never rebuilds half a scene.
+// Desktop scene experiments stay opt-in until their frame cost has been measured on hardware.
+const optInEffects = new Set(["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"]);
+const automaticEffects = new Set(["adaptiveModels", "brakeLightSpill", "gravelDebris"]);
+let automaticByPreset;
+const phoneEffects = new Set(["anisotropy", "skyAtmo", "meshHi", "heroCar", "rivalLod", "garageHi", "crewHi",
+  "crowd3d", "treesHi", "kerbProfile", "farTerrain", "density", "propsHi"]);
+function phoneDetail() { return typeof GLX !== "undefined" && GLX.isMobile; }
+function supportsOption(name) { return !phoneDetail() || phoneEffects.has(name); }
+function choicesKey() { return phoneDetail() ? "gfxPhoneFeatureOverrides" : "gfxFeatureOverrides"; }
+let choices;
+function overrides() {
+  if (!choices) choices = gstore()?.get(choicesKey(), {}) || {};
+  return choices;
+}
+function option(name, fallback) {
+  if (!supportsOption(name)) return fallback;
+  const value = overrides()[name];
+  return typeof value === "boolean" ? value : fallback;
+}
+function needsBundle() {
+  if (phoneDetail()) return option("heroCar", false);
+  return detail() >= 2 || option("rivalLiveryLod", false) || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
+}
+function feature(name, building = false, ignoreShed = false) {
+  if (automaticEffects.has(name)) {
+    if (phoneDetail()) return false;
+    if (automaticByPreset === undefined) {
+      const preset = presetById(gstore()?.get("gfxPreset", "high")) || presetById("high");
+      automaticByPreset = preset.tier === 0;
+    }
+    return option(name, automaticByPreset);
+  }
+  if (optInEffects.has(name)) return option(name, false);
+  const need = FEATURES[name];
+  if (!need) return false;
+  try { const o = gstore() && gstore().raw("apex26.gfxx." + name); if (o === "0") return false; if (o === "1") return true; } catch (_) { /* no override */ }
+  const have = detail() + (_cinema && detail() >= 2 ? 1 : 0);
+  if (!option(name, have >= need) || (need === 3 && !_cinema && !building)) return false;
+  const i = SHED_ORDER.indexOf(name);
+  return ignoreShed || i < 0 || i < SHED_ORDER.length - _shed || _holdExtras();
+}
+// The governor's upper ladder: n extras shed (0..SHED_ORDER.length), last in SHED_ORDER first.
+function setShed(n) { _shed = Math.max(0, Math.min(SHED_ORDER.length, n | 0)); return _shed; }
+function setCinema(on) { _cinema = !!on; return _cinema; }
+// apex26.gfxHoldExtras = 1 keeps every extra on whatever the governor sheds (the GPU census, so a slow runner
+// still proves gtao / ssgi / ssrHi / superSample ran). GfxQuality.holdExtras(true) writes it; read per call.
+function _holdExtras() { try { const st = gstore(); return !!st && st.raw("apex26.gfxHoldExtras") === "1"; } catch (_) { return false; } }
+function holdExtras(on) { const st = gstore(); if (st) st.rawSet("apex26.gfxHoldExtras", on ? "1" : ""); return !!on; }
+// A/B from the console: GfxQuality.forceDetail(2) then reload; forceDetail(null) clears it.
+function forceDetail(n) { const st = gstore(); if (st) st.rawSet("apex26.gfxDetail", n == null ? "" : String(n | 0)); return n; }
 const PHONE_MAX_ID = "high";
 const PHONE_ULTRA_NOTE = " — NOT ON PHONES";
 const PHONE_CAP_TITLE = "ULTRA is capped on phones (BrowserStack 2026-10-21: ~24 fps avg on iPhone 15). HIGH is the phone ceiling.";
+// EXTREME's extras are built for three.js on WebGPU (TLX); on WEBGL2 (GLX) or WGX nothing consumes them and the
+// picture equals ULTRA. Desktop only: phones cap at HIGH (above). Same note style as PHONE_ULTRA_NOTE.
+const EXTREME_NOTE = " — DESKTOP, THREE.JS WEBGPU";
+const EXTREME_TITLE = "EXTREME is for desktop GPUs on the THREE.JS renderer with WebGPU; on WEBGL2 or WEBGPU (WGX) it looks like ULTRA. Replay, photo mode and the garage add depth of field and motion blur on EXTREME.";
 const RELOAD_DELAY_MS = 260;
 
 let curId = "high";
@@ -55,7 +139,7 @@ function current() { return presetById(curId) || PRESETS[2]; }
 
 // Phone-class devices (GLX.isMobile / touch UA) never boot the ULTRA memory
 // tier. HIGH shares the tier-0 floor without flipping apex26.gfxHigh.
-function maxId(mobile) { return mobile ? PHONE_MAX_ID : "ultra"; }
+function maxId(mobile) { return mobile ? PHONE_MAX_ID : "extreme"; }
 
 function capId(id, mobile) {
   const p = presetById(id);
@@ -90,17 +174,16 @@ function isWeakPhone(nav) {
   try { return !nav.gpu; } catch (_) { return true; }
 }
 
-// The shipped default matches each device's picture without this control:
-// desktop runs the full stack (HIGH); a capable phone the memory-safe MEDIUM
-// tier; a weak phone LOW. The legacy apex26.gfxHigh opt-in used to mean ULTRA;
-// on phones that is capped to HIGH (see maxId / capId). A fresh capable phone
-// stays MEDIUM: HIGH removes the tier-2 floor and enables the env probe plus
-// lamp shadows/SSR before the governor has measured the device
+// The owner iPhone setup pairs HIGH resolution with the LOW effects budget.
+function isIPhone() {
+  return typeof navigator !== "undefined" && /\biPhone\b/i.test(navigator.userAgent || "");
+}
 function defaultId(mobile, hint) {
   if (!mobile) return "high";
   const s = gstore();
   const legacy = !!s && s.raw("apex26.gfxHigh") === "1";
   if (legacy) return PHONE_MAX_ID;
+  if (isIPhone()) return "low";
   const weak = hint && typeof hint.weak === "boolean" ? hint.weak : isWeakPhone();
   return weak ? "low" : "medium";
 }
@@ -136,8 +219,9 @@ function label() { return `GRAPHICS: ${current().label}`; }
 function gfxValues(note) {
   return PRESETS.map((p) => {
     let text = p.label;
-    const phoneBlocked = isMobile && p.id === "ultra";
+    const phoneBlocked = isMobile && p.mobileHigh;
     if (phoneBlocked) text += PHONE_ULTRA_NOTE;
+    else if (p.id === "extreme") text += EXTREME_NOTE;
     if (note && p.id === curId) text += note;
     return phoneBlocked ? [p.id, text, true] : [p.id, text];
   });
@@ -159,6 +243,27 @@ function inRace() {
   } catch (_) { return false; }
 }
 
+// Pack tier follows the preset off track only; while driving it waits for a pause or race end (#5561).
+let packObs = null;
+function driving() {
+  if (!inRace()) return false;
+  try { const pm = document.getElementById("pausemenu"); return !(pm && !pm.hidden); } catch (_) { return true; }
+}
+function syncPack() {
+  if (typeof Assets === "undefined" || !Assets.followQuality) return false;
+  if (!driving()) {
+    if (packObs) { packObs.disconnect(); packObs = null; }
+    return Assets.followQuality();
+  }
+  if (!packObs && typeof MutationObserver === "function") {
+    packObs = new MutationObserver(() => { syncPack(); });
+    const pm = document.getElementById("pausemenu");
+    if (pm) packObs.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
+    packObs.observe(document.body, { attributes: true, attributeFilter: ["data-race"] });
+  }
+  return false;
+}
+
 function reloadSoon() {
   try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in a harness */ }
   setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, RELOAD_DELAY_MS);
@@ -171,18 +276,15 @@ function set(id, opts = {}) {
   if (!p) return false;
   const prev = presetById(curId);
   curId = p.id;
+  automaticByPreset = p.tier === 0;
   Log.info("game", `GfxQuality.set ${curId}` + (raw.id !== curId ? ` (capped from ${raw.id})` : ""));
   const st = gstore();
   if (st) st.set("gfxPreset", curId);
   applyLive();
-  // The lighting store's conditional shipped layer (the ULTRA-night per-chunk
-  // rung) resolves through the CURRENT preset, so a flip must re-run the
-  // lighting apply to engage live
   try { if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply(); } catch (_) { /* pre-boot: the first apply() resolves it */ }
-  // MSAA is decided once when the render targets are made (GLX setup, WGX
-  // script eval): ULTRA 4×, anything else 2×/1×. Crossing that boundary on a
-  // DESKTOP therefore needs the same reload the mobile boot tier takes
-  const needsReload = syncBootTier() || (!isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
+  // ULTRA's boot-time detail: crossing it on a DESKTOP needs a reload too
+  try { syncPack(); } catch (_) { /* optional pack */ }
+  const needsReload = syncBootTier() || (!isMobile && !!prev && prev.id !== p.id && (prev.mobileHigh || p.mobileHigh));
   paintGfx(needsReload ? " — RELOADING…" : "");
   if (needsReload && !opts.noReload) {
     // In a race the preset is already live; the boot-tier half waits for the
@@ -195,7 +297,7 @@ function set(id, opts = {}) {
 
 function cycle() {
   // Skip phone-blocked ULTRA so the one-button fallback matches SettingRow.
-  const live = PRESETS.filter((p) => !(isMobile && p.id === "ultra"));
+  const live = PRESETS.filter((p) => !(isMobile && p.mobileHigh));
   const i = live.findIndex((p) => p.id === curId);
   return set(live[(i + 1) % live.length].id);
 }
@@ -206,7 +308,7 @@ function mountControl() {
   const host = btn.parentNode;
   if (typeof SettingRow !== "undefined" && host && typeof host.replaceChild === "function" && !row) {
     const built = SettingRow.build("pm-gfx", "GRAPHICS", gfxValues(""));
-    built.row.title = isMobile ? PHONE_CAP_TITLE : (btn.title || "");
+    built.row.title = isMobile ? PHONE_CAP_TITLE : ((btn.title ? btn.title + " " : "") + EXTREME_TITLE);
     host.replaceChild(built.row, btn);
     row = built.row;
     SettingRow.wire(row, { values: gfxValues(""), read: () => curId, write: (v) => { set(v); uiSelect(); } });
@@ -215,7 +317,7 @@ function mountControl() {
   }
   btn.hidden = false;
   btn.textContent = label();
-  if (isMobile) btn.title = PHONE_CAP_TITLE;
+  btn.title = isMobile ? PHONE_CAP_TITLE : ((btn.title ? btn.title + " " : "") + EXTREME_TITLE);
   btn.onclick = () => { cycle(); uiSelect(); };
 }
 
@@ -229,6 +331,7 @@ function init() {
   const st = gstore();
   const rawId = (st && st.get("gfxPreset", null)) || defaultId(isMobile);
   curId = capId(presetById(rawId) ? rawId : defaultId(isMobile), isMobile);
+  automaticByPreset = current().tier === 0;
   // Persist the cap so a stored "ultra" on a phone does not keep reappearing
   // as the unresolved preference on the next boot
   if (st && rawId !== curId) st.set("gfxPreset", curId);
@@ -251,9 +354,14 @@ if (typeof document !== "undefined") {
   else init();
 }
 
+// PRESETS / label stay module-local (UI + current() use them).
+// cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
-  PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
-  maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
+  init, set, cycle, syncPack, current: () => current().id, defaultId,
+  maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
+  hasShedExtras: () => detail() > 0 || (!phoneDetail() && SHED_ORDER.some(name => overrides()[name] === true)),
+  shedFeature: name => SHED_ORDER.includes(name) && feature(name, false, true) && !feature(name),
+  detail, feature, option, supportsOption, choicesKey, needsBundle, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();
 Object.freeze(GfxQuality);

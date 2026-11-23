@@ -1,0 +1,22 @@
+{
+  "why": "Autodromo Hermanos Rodriguez, def turns[] = the official F1/FIA 2026 T1-T17 numbering (re-checked 2026-11-11 with tools/track/official-corners.cjs): Esses = T7-T11, Foro Sol = T12-T16 stadium section (T15 the left flick), Peraltada = T17 (one apex, built r~106 m, back onto the pit straight).",
+  "names": {
+    "Esses": [
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "Foro Sol": [
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "Peraltada": [
+      17
+    ]
+  }
+}

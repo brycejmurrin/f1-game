@@ -60,6 +60,30 @@ test("init sets the music switch before setSound can start the menu track", () =
   assert.ok(start < 0 || sw < start, "setSound started the menu track before the MUSIC OFF switch reached the soundtrack: " + calls.join(" "));
 });
 
+test("the mixer shell shows fresh-panel volume positions and readouts before boot", () => {
+  const { dom } = boot({ soundOn: true, musicEnabled: true });
+  const shell = read("index.html");
+  for (const id of ["as-mvol", "as-svol", "as-rvol"]) {
+    const input = shell.match(new RegExp(`<input id="${id}"[^>]*value="(\\d+)"`));
+    const label = shell.match(new RegExp(`id="${id}-v">(\\d+%)</b>`));
+    assert.equal(input?.[1], dom.byId(id).value, id);
+    assert.equal(label?.[1], dom.byId(id + "-v").textContent, id + "-v");
+  }
+});
+
+test("mixer gains keep their native units while readouts follow the default mix", () => {
+  const { dom, data } = boot({ soundOn: true, musicEnabled: true });
+  for (const [id, key, mix, max] of [["as-mvol", "volMusic", 0.7, "143%"], ["as-svol", "volSfx", 0.4, "250%"], ["as-rvol", "volRadio", 0.8, "125%"]]) {
+    const input = dom.byId(id), label = dom.byId(id + "-v");
+    for (const [position, percent] of [[0, "0%"], [mix * 10, "100%"], [10, max]]) {
+      input.oninput({ target: { value: String(position) } });
+      assert.equal(data[key], position / 10);
+      assert.equal(label.textContent, percent);
+      assert.equal(input.getAttribute("aria-valuetext"), percent + " of default mix");
+    }
+  }
+});
+
 test("enabling SOUND follows falling rain rather than standing water", () => {
   for (const rainfall of [0, 0.2, 1]) {
     const { G, GameAudio, dom } = boot({ soundOn: false, musicEnabled: false });
@@ -233,4 +257,24 @@ test("SOUND turned on mid-race sets the team voice and circuit venue before the 
   assert.ok(eng >= 0, calls.join(" "));
   assert.ok(calls.indexOf("setVoice:Mercedes") >= 0 && calls.indexOf("setVoice:Mercedes") < eng, calls.join(" "));
   assert.ok(calls.indexOf("setVenue:green") >= 0 && calls.indexOf("setVenue:green") < eng, calls.join(" "));
+});
+
+test("SOUND ON under the pause card still sets voice/venue; engine waits for resume (M31)", () => {
+  // Race began SOUND OFF → pause → SOUND ON. game.js setPaused(false) starts the
+  // engine with setVoice but not setVenue; venue must land on the panel click.
+  const { calls, G, GameAudio } = boot({ soundOn: false, musicEnabled: true });
+  GameAudio.setVoice = (e) => calls.push("setVoice:" + e);
+  GameAudio.setVenue = (d) => calls.push("setVenue:" + d.theme);
+  GameAudio.startEngine = () => calls.push("startEngine");
+  GameAudio.startMusic = () => calls.push("startMusic");
+  G.state = "race"; G.paused = true;
+  G.player = { team: { engine: "Ferrari" } };
+  G.track = { def: { theme: "street_day" } };
+  G.viewRainfall = () => 0;
+  calls.length = 0;
+  G.els.soundbtn.onclick();
+  assert.ok(calls.indexOf("setVoice:Ferrari") >= 0, calls.join(" "));
+  assert.ok(calls.indexOf("setVenue:street_day") >= 0, calls.join(" "));
+  assert.equal(calls.indexOf("startEngine"), -1, "paused: resume owns startEngine — " + calls.join(" "));
+  assert.equal(calls.indexOf("startMusic"), -1, "paused: resume owns startMusic — " + calls.join(" "));
 });

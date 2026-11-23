@@ -171,6 +171,7 @@ const TrackDef = (function () {
       // (tests/unit/track-def-factory.test.mjs).
       ...(d.terrainMat === "SAND" || d.terrainMat === "SNOW" || d.terrainMat === "CONCRETE" ? { terrainMat: d.terrainMat } : {}),
       sceneryCoordinates: d.sceneryCoordinates || "legacy",
+      planarScenerySpacing: d.planarScenerySpacing,
       // Read off the COPIED def by TrackSpace.lapMirror, so it has to be copied
       // here — the sixth member of the family the comment below describes. It
       // fails the same silent way: omitted, lapMirror() just reads undefined,
@@ -179,15 +180,16 @@ const TrackDef = (function () {
       // the road and modelGroup suppresses it as "footprint rejected".
       sceneryLapMirror: !!d.sceneryLapMirror,
       dressingExclusions: d.dressingExclusions || null,
+      ...(d.rainShelter ? { rainShelter: d.rainShelter } : {}),
       // These five are READ OFF THE COPIED DEF and so have to be copied onto
       // it. Each was authored in js/circuits/<id>.js, never copied here, and
       // therefore read as undefined at every consumer — silently, because
       // every consumer's fallback is a legitimate value:
       //   sunAzimBias           atmosphere.js — hand-tuned sun geography, inert
-      //   sceneryTheme          tracks.js:~815 — Qatar fell back to `desert`,
+      //   sceneryTheme          build-props.js — Qatar fell back to `desert`,
       //                           Albert Park to `permanent`
-      //   sceneryThemeOverrides tracks.js:~819 — Singapore's, always undefined
-      //   ownPitStraight        tracks.js:~1816 — the generic 7-box pit fallback
+      //   sceneryThemeOverrides build-props.js — Singapore's, always undefined
+      //   ownPitStraight        build-props.js — the generic 7-box pit fallback
       //                           kept landing on Monza's Tribuna Centrale, the
       //                           exact thing the field was added to stop
       //   undulate              buildCenterline — the opt-out could not be taken
@@ -215,6 +217,13 @@ const TrackDef = (function () {
       // Opt-in centripetal centreline (tracks.js buildCenterline). Copied only when
       // authored: an absent key keeps every other def's metadata hash unchanged.
       ...(d.splineAlpha != null ? { splineAlpha: d.splineAlpha } : {}),
+      // The LAYOUT revision a saved lap was driven on (session-records.js puts
+      // `[revision || 1, n, total]` in every ghost / input-ghost / time-trial
+      // board context, setup-trial-session.js in a shared setup). Bump it when
+      // a circuit's lap changes in a way n and total do not show — Kyalami's
+      // direction flip kept both — so old laps stop matching rather than
+      // replaying the wrong way round. Copied only when authored, like the key above.
+      ...(d.revision != null ? { revision: d.revision } : {}),
 
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
@@ -234,9 +243,9 @@ const TrackDef = (function () {
       barrier: d.barrier || null, furniture: d.furniture || null, kit: d.kit || null,
       standSet: d.standSet || null, cityStyle: d.cityStyle || null,
     };
-    // PERF-FINDINGS: realPoints for all 40 circuits costs 24.0 ms at boot,
-    // and a session builds exactly one. Keep LIST.length===40 and every
-    // metadata field copied as today; defer points (+ startFrac remaps /
+    // PERF-FINDINGS: realPoints for all circuits was 24.0 ms at boot (measured at 40),
+    // and a session builds exactly one. Keep every metadata field copied
+    // as today; defer points (+ startFrac remaps /
     // elevation fmap / applyHwZones) until first access. The getter replaces
     // itself with a data property after materializing the SAME pipeline —
     // bit-identical once touched. Tracks.build →
@@ -306,6 +315,19 @@ const TrackDef = (function () {
     return pts;
   }
 
-  return { dayPal, nightPal, elevationAt, hasRealElevation, realPoints, applyHwZones, fromRaw, materializeListPoints };
+  // The text Assets.modelIds/modelsReady scan for a circuit's pack-model ids: its scenery closure plus each id an
+  // engine helper stamps for a def.furniture flag (ENGINE_MODELS; baked-model-instancing.test.mjs pins the set).
+  const ENGINE_MODELS = Object.freeze({ bakedPines: "pine_lod0" });
+  function scenerySource(def, registry) {
+    const fn = def && (def.scenery || (registry && registry[def.id]));
+    let src = fn ? String(fn) : "";
+    const f = def && def.furniture;
+    if (f) for (const k in ENGINE_MODELS) if (f[k]) src += ' "' + ENGINE_MODELS[k] + '"';
+    return src;
+  }
+
+  // dayPal / nightPal / realPoints / applyHwZones / materializeListPoints stay
+  // module-local (fromRaw only); elevation readers + fromRaw stay public.
+  return { elevationAt, hasRealElevation, fromRaw, scenerySource, ENGINE_MODELS };
 })();
 Object.freeze(TrackDef);

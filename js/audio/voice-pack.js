@@ -45,16 +45,20 @@ var VoicePack = (() => {
   const PAUSE = Object.freeze({ ".": 0.1, "!": 0.1, "?": 0.1, ",": 0.05, ";": 0.08, ":": 0.08 });
   const MAX_WORDS = 12;          // longest key the greedy matcher tries
   const CACHE_MAX = 80;          // decoded clips kept (second bound)
-  // DECODED SECONDS kept per voice (perf-memory M-5): 80 clips had no size cap,
-  // and an announcer clip averages ~2 s (up to 6.5 s), so a voice could pin
-  // ~160 s ≈ 30 MB of PCM. Evicted clips re-decode from the kept .bin.
+  // #4274 item 9: a held pack is a Blob where the browser can read a slice back (Safari 14+, Chrome 76+).
+  const BLOB_OK = typeof Blob === "function" && !!Blob.prototype && typeof Blob.prototype.arrayBuffer === "function";
+  // DECODED SECONDS kept in TOTAL across every voice pack (perf-memory M-5, #4676):
+  // 80 clips had no size cap, and an announcer clip averages ~2 s (up to 6.5 s), so
+  // a voice could pin ~160 s ≈ 30 MB of PCM; a budget per voice multiplied by the
+  // packs held. The oldest clip of ANY voice goes first; it re-decodes from the kept .bin.
   // ~190 KB per decoded second: 24 s ≈ 4.6 MB on a phone, 90 s ≈ 17 MB desktop.
   const CACHE_S = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 24 : 90;
   // A composed line may run this far past the card's budget — never more than
   // RadioVoice.LEAD_RESERVE_S, or the card hides under the last syllable.
   const SLACK_S = 0.2;
+  const STALL_MS = 15000;        // a pack fetch with no progress (response, chunk, hash) for this long fails (#5886)
   const RETRY_MS = 30000;        // a failed fetch (offline, 404) is tried again after this
-  const WATCHDOG_MS = 4000;      // a decode that never settles frees the channel after this
+  const WATCHDOG_MS = 4000;      // stall limit for each cached clip decode
 
   /** Speakable text (RadioVoice.speakable's output) → words and pauses.
    *  A pause is punctuation FOLLOWED BY a space or the end, so "1.4" stays a word.
@@ -155,6 +159,7 @@ var VoicePack = (() => {
   function create(G, opts) {
     codecs();   // start the probe now: it settles long before the first pack is asked for
     const base = (opts && opts.base) || "assets/voice/";
+    let tick = 0;        // LRU clock shared by every voice's clips
     const voices = {};   // id -> { state, man, bin, cache: Map, gen, failedAt }
     const wanted = new Set(); // latest keep/ensure intent, including queued tiers
     // The transmissions playing, ONE PER CHANNEL: the engineer preempting the
@@ -169,7 +174,7 @@ var VoicePack = (() => {
     const deferred = new Set();
 
     function voice(id) {
-      return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map(), secs: 0 });
+      return voices[id] || (voices[id] = { id, state: "idle", man: null, bin: null, cache: new Map(), stamp: new Map(), secs: 0 });
     }
     /** Gate announcer fetches off the race-load path. Opening flushes the queue. */
     function raceLoadGate(on) {
@@ -189,13 +194,36 @@ var VoicePack = (() => {
       if (raceLoad && isAnnouncerPack(id)) { deferred.add(id); return v.state; }
       v.state = "loading";
       const controller = typeof AbortController === "function" ? new AbortController() : null;
-      let timer;
-      const timeout = new Promise((_, reject) => {
-        timer = setTimeout(() => { reject(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) { /* abort is best effort */ } } }, 15000);
-      });
+      // #5886: a STALL timer, not a deadline. One 15 s race over manifest + 4 MB binary + hash failed every pack below
+      // ~2 Mbps (and re-fetched it each RETRY_MS). Each response, streamed chunk and step re-arms STALL_MS; a link
+      // that goes quiet still fails, a slow one that keeps delivering loads.
+      let timer, fail;
+      const timeout = new Promise((_, reject) => { fail = reject; });
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { fail(new Error("pack fetch timed out")); if (controller) { try { controller.abort(); } catch (_) { /* abort is best effort */ } } }, STALL_MS);
+      };
+      arm();
+      const stream = async (r) => {
+        const rd = r.body.getReader(), parts = [];
+        let n = 0;
+        for (;;) {
+          const { done, value } = await rd.read();
+          if (done) break;
+          arm(); parts.push(value); n += value.byteLength;
+        }
+        const out = new Uint8Array(n);
+        n = 0;
+        for (const c of parts) { out.set(c, n); n += c.byteLength; }
+        return out.buffer;
+      };
       const get = (f, t) => {
         try { return Promise.resolve(fetch(base + f, controller ? { signal: controller.signal } : undefined))
-          .then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); }); }
+          .then((r) => {
+            if (!r.ok) throw new Error(f + " " + r.status);
+            arm();
+            return t === "arrayBuffer" && r.body && typeof r.body.getReader === "function" ? stream(r) : r[t]();
+          }); }
         catch (e) { return Promise.reject(e); }
       };
       // These mutable URLs can come from different deploys: the worker may
@@ -203,6 +231,7 @@ var VoicePack = (() => {
       // Require the manifest's digest even for legacy caches; a missing voice
       // stays written instead of playing unrelated bytes at the new offsets.
       const verify = async (bin, meta) => {
+        arm();   // the hash gets its own window
         if (!meta || !/^[0-9a-f]{64}$/.test(meta.sha256) || !bin || meta.bytes !== bin.byteLength || !bin.byteLength) throw new Error("voice binary integrity metadata missing or invalid");
         if (typeof crypto === "undefined" || !crypto.subtle) throw new Error("voice binary integrity verification unavailable");
         const digest = await crypto.subtle.digest("SHA-256", bin);
@@ -237,7 +266,10 @@ var VoicePack = (() => {
       v.loading = Promise.race([timeout, pair])
         .then(([man, bin, fmt]) => {
           if (!man || !man.clips || !(bin && bin.byteLength)) throw new Error("empty pack");
-          v.man = man; v.bin = bin; v.fmt = fmt; v.state = "ready";
+          // #4274 item 9: the verified pack leaves the JS heap. A Blob holds the same bytes outside it (2.5-6.6 MB
+          // a pack) and decode() reads one clip's slice back; without Blob.arrayBuffer the ArrayBuffer stays.
+          v.bytes = bin.byteLength;
+          v.man = man; v.bin = BLOB_OK ? new Blob([bin]) : bin; v.fmt = fmt; v.state = "ready";
           Log.info("audio", "VoicePack " + id + " ready: " + Object.keys(man.clips).length + " clips (" + fmt + ")");
         })
         .catch((e) => { v.state = "failed"; v.failedAt = Date.now(); Log.info("audio", "VoicePack " + id + " unavailable: " + (e && e.message)); })
@@ -304,21 +336,44 @@ var VoicePack = (() => {
       // Decoded buffers belong to the AudioContext that made them; a rebuilt
       // context (GameAudio.rebuildCtx) starts the cache again.
       const gen = GameAudio.ctxGen ? GameAudio.ctxGen() : 0;
-      if (v.gen !== gen) { v.cache.clear(); v.secs = 0; v.gen = gen; }
+      if (v.gen !== gen) { v.cache.clear(); v.stamp.clear(); v.secs = 0; v.gen = gen; }
       const hit = v.cache.get(k);
-      if (hit) { v.cache.delete(k); v.cache.set(k, hit); return hit; }   // LRU touch
+      if (hit) { v.cache.delete(k); v.cache.set(k, hit); v.stamp.set(k, ++tick); return hit; }   // LRU touch
       const [off, len] = v.man.clips[k];
-      const p = GameAudio.decodeClip(v.bin.slice(off, off + len));
+      const part = v.bin.slice(off, off + len);   // Blob or ArrayBuffer: the same byte range
+      const work = BLOB_OK && typeof part.arrayBuffer === "function" ? part.arrayBuffer().then((ab) => GameAudio.decodeClip(ab)) : GameAudio.decodeClip(part);
+      // A hung native decode must expire in the shared cache so a later line can retry it.
+      let timer;
+      const deadline = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("clip decode timed out")), WATCHDOG_MS); });
+      const p = Promise.race([work, deadline]).finally(() => clearTimeout(timer));
       v.cache.set(k, p);
+      v.stamp.set(k, ++tick);
       v.secs += clipS(v, k);
-      p.catch(() => { if (v.cache.get(k) === p) { v.cache.delete(k); v.secs -= clipS(v, k); } });
-      // Oldest first, never the clip just added: a line already holds its
-      // promises, so an eviction only means the next use decodes again.
-      while (v.cache.size > 1 && (v.cache.size > CACHE_MAX || v.secs > CACHE_S)) {
+      p.catch(() => { if (v.cache.get(k) === p) { v.cache.delete(k); v.stamp.delete(k); v.secs -= clipS(v, k); } });
+      // Oldest first across all voices, never the clip just added: a line already
+      // holds its promises, so an eviction only means the next use decodes again.
+      while (v.cache.size > CACHE_MAX) {   // the count bound is per voice
         const old = v.cache.keys().next().value;
-        v.cache.delete(old); v.secs -= clipS(v, old);
+        if (old === k) break;
+        v.cache.delete(old); v.stamp.delete(old); v.secs -= clipS(v, old);
+      }
+      for (;;) {
+        let total = 0, oldV = null, oldK = null, oldT = Infinity;
+        for (const w of Object.values(voices)) {
+          total += w.secs;
+          const first = w.cache.keys().next();
+          if (first.done) continue;
+          const t = w.stamp.get(first.value);
+          if (t < oldT) { oldT = t; oldV = w; oldK = first.value; }
+        }
+        if (!oldV || total <= CACHE_S || (oldV === v && oldK === k)) break;
+        oldV.cache.delete(oldK); oldV.stamp.delete(oldK); oldV.secs -= clipS(oldV, oldK);
       }
       return p;
+    }
+    /** Drop every decoded clip (quit to menu); the .bin stays, clips re-decode on demand. */
+    function flushDecoded() {
+      for (const w of Object.values(voices)) { w.cache.clear(); w.stamp.clear(); w.secs = 0; }
     }
 
     /** Cut the transmission on `channel`, or every channel when none is named. */
@@ -343,7 +398,7 @@ var VoicePack = (() => {
     /** Speak `text` from voice `id` after `leadS`, if the pack covers all of it
      *  and it fits `budgetS`. Returns false (nothing scheduled) otherwise, so
      *  the caller can leave an unavailable line written. `onEnd` runs once, when the
-     *  line finishes or is cut. */
+     *  line finishes or is cut; optional `onStart` runs after decoded audio is scheduled. */
     function speak(id, text, o) {
       const pl = plan(id, text);
       if (!pl) { missed++; return false; }
@@ -359,13 +414,9 @@ var VoicePack = (() => {
       const release = () => { if (live[ch] === token) delete live[ch]; done(); };
       const token = { stop: done, end: at + pl.secs };
       live[ch] = token;
-      // A decode that never settles (a context closed under it) must not hold
-      // the channel — busy() would silence the spotter for the rest of the race.
-      const watchdog = setTimeout(() => { if (!token.h) release(); }, WATCHDOG_MS);
       const gen0 = GameAudio.ctxGen ? GameAudio.ctxGen() : 0;
       Promise.all(pl.seq.map((s) => (s.k ? decode(v, s.k) : s.p)))
         .then((parts) => {
-          clearTimeout(watchdog);
           if (live[ch] !== token) return;                   // preempted while decoding
           // A context rebuilt mid-decode restarts its clock near 0: `at` is in
           // the old one and would schedule the line minutes ahead, holding the
@@ -384,8 +435,14 @@ var VoicePack = (() => {
           token.stop = () => { h.stop(); done(); };
           token.end = h.end;
           setTimeout(release, Math.max(0, (h.end - GameAudio.now()) * 1000) + 30);
+          if (opt.onStart != null) {
+            try {
+              if (typeof opt.onStart === "function") opt.onStart();
+              else Log.info("audio", "VoicePack onStart ignored: observer is not a function");
+            } catch (e) { Log.info("audio", "VoicePack onStart observer failed: " + (e && e.message)); }
+          }
         })
-        .catch(() => { clearTimeout(watchdog); release(); });
+        .catch(release);
       spoke++; lastSeq = pl.seq.map((s) => s.k || "|");
       return true;
     }
@@ -404,15 +461,18 @@ var VoicePack = (() => {
     }
 
     return {
-      ensure, ensureStaged, raceLoadGate, ready, plan, speak, stop, remaining, releaseExcept,
+      ensure, ensureStaged, raceLoadGate, ready, plan, speak, stop, remaining, releaseExcept, flushDecoded,
       load(id) { ensure(id); return (voice(id).loading || Promise.resolve()).then(() => ready(id)); },
       busy: (channel) => (channel ? !!live[channel] : Object.keys(live).length > 0),
       debug: () => ({ voices: Object.fromEntries(Object.values(voices).map((v) => [v.id, v.state])), spoke, missed, last: lastSeq,
         raceLoad, deferred: [...deferred],
-        formats: Object.fromEntries(Object.values(voices).filter((v) => v.fmt).map((v) => [v.id, { fmt: v.fmt, bytes: v.bin ? v.bin.byteLength : 0 }])),
+        formats: Object.fromEntries(Object.values(voices).filter((v) => v.fmt).map((v) => [v.id, { fmt: v.fmt, bytes: v.bin ? v.bytes | 0 : 0 }])),
+        // #4274 item 9: pack bytes each voice holds IN the JS heap (0 while a Blob holds them).
+        heapBytes: Object.fromEntries(Object.values(voices).filter((v) => v.bin).map((v) => [v.id, typeof v.bin.byteLength === "number" ? v.bin.byteLength : 0])),
         cache: Object.fromEntries(Object.values(voices).map((v) => [v.id, { clips: v.cache.size, secs: +v.secs.toFixed(2) }])), cacheS: CACHE_S }),
     };
   }
 
-  return Object.freeze({ create, codecs, norm, compose, keyOf, lineKey, choices, packFor, isAnnouncerPack, VOICES, PAUSE, MAX_WORDS, SLACK_S });
+  // keyOf stays public: tools/gen/voicepack.mjs builds clip keys from it.
+  return Object.freeze({ create, codecs, norm, compose, keyOf, lineKey, choices, packFor, VOICES });
 })();

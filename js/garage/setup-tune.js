@@ -4,6 +4,37 @@
 const SetupTune = (function () {
   const { store } = GameStore;
   const KEY = "setup.";   // + teamId; store adds the apex26. prefix
+  // CAREER SCOPE (#5036). Parts already split by flow (game.js careerFitted):
+  // the career car's build lives in the save, the free-play build in
+  // parts.<team>. The sheet follows the same rule. While a career is OPEN
+  // (Career.inCareer()) and teamId is the career's team, the sheet is
+  // careerSetup.<flavour>.<slot>.<team>, stamped with the career's seed, so a
+  // NEW career in the same slot starts from the works sheet instead of the old
+  // one. Everything else (free play, a rival team, a save merely on disk) is
+  // setup.<team>, which is where every existing sheet already lives, so no
+  // migration moves a free-play sheet into a career. The careerSetup. prefix
+  // also rides the career IndexedDB mirror (store.js MIRROR_KEY ^career).
+  const CAREER_KEY = "careerSetup.";
+  function careerScope(teamId) {
+    if (typeof Career === "undefined" || !Career.inCareer || !Career.inCareer()) return null;
+    const c = Career.data(), s = Career.slot ? Career.slot() : null;
+    if (!c || !s || c.team !== teamId) return null;
+    return { key: CAREER_KEY + s.flavour + "." + (s.i | 0) + "." + teamId, seed: c.seed };
+  }
+  // The key the ACTIVE sheet for teamId lives under; presets, trials and share
+  // codes read revisions and write through it, never through "setup." + team.
+  function keyFor(teamId) { const s = careerScope(teamId); return s ? s.key : KEY + teamId; }
+  // The value to store under keyFor(teamId): a career sheet carries the seed.
+  function stamp(teamId, tune) {
+    const s = careerScope(teamId);
+    return s && tune && typeof tune === "object" ? Object.assign({}, tune, { seed: s.seed }) : tune;
+  }
+  function stored(teamId) {
+    const s = careerScope(teamId);
+    if (!s) return store.get(KEY + teamId, null);
+    const raw = store.get(s.key, null);
+    return raw && typeof raw === "object" && raw.seed === s.seed ? raw : null;
+  }
 
   // RANGES. Anti-roll bars are 1–11 steps (the racing-game convention — real
   // teams run discrete bar sets in N·m/deg that are confidential). Ride
@@ -33,7 +64,18 @@ const SetupTune = (function () {
   };
   const BB_REF = PhysicsConsts.BB_REF;   // 0.56 — where the ellipse split is exactly 1/1
 
-  function defaults(teamId) { return Object.assign({}, BASE, DEFAULTS[teamId] || {}); }
+  // The works sheet a fresh install gets: the SHIPPED setup.<team> block in
+  // GarageDefaults when one exists (#4922 — get/reset land there, so isDefault,
+  // mods, balance and rake must measure from it too), else the code baseline.
+  function shipped(teamId) {
+    if (typeof GarageDefaults === "undefined" || !GarageDefaults.has(KEY + teamId)) return null;
+    const raw = GarageDefaults.get(KEY + teamId);
+    if (!raw || typeof raw !== "object") return null;
+    const o = {};
+    for (const k of FIELDS) { const v = clampField(k, raw[k]); if (v != null) o[k] = v; }
+    return o;
+  }
+  function defaults(teamId) { return Object.assign({}, BASE, DEFAULTS[teamId] || {}, shipped(teamId) || {}); }
   function clampField(k, v) {
     const r = RANGE[k];
     // typeof, not Number(): a damaged field must fall back to the WORKS value,
@@ -48,7 +90,7 @@ const SetupTune = (function () {
   // The stored sheet, normalised on read (a damaged field falls to the default).
   function get(teamId) {
     const d = defaults(teamId);
-    const raw = store.get(KEY + teamId, null);
+    const raw = stored(teamId);
     const out = Object.assign({}, d);
     if (raw && typeof raw === "object") for (const k of FIELDS) {
       const v = clampField(k, raw[k]);
@@ -59,13 +101,13 @@ const SetupTune = (function () {
   function set(teamId, patch) {
     const cur = get(teamId);
     for (const k of FIELDS) if (patch && patch[k] !== undefined) { const v = clampField(k, patch[k]); if (v != null) cur[k] = v; }
-    store.set(KEY + teamId, cur);
+    store.set(keyFor(teamId), stamp(teamId, cur));
     return cur;
   }
   // undefined REMOVES the key, so the store falls back to the shipped sheet
   // (setup.<team> in garage-defaults) exactly as a fresh install does; null
   // was a stored value that bypassed it.
-  function reset(teamId) { store.set(KEY + teamId, undefined); return get(teamId); }
+  function reset(teamId) { store.set(keyFor(teamId), undefined); return get(teamId); }
   function isDefault(teamId) {
     const d = defaults(teamId);
     const t = get(teamId);
@@ -148,6 +190,7 @@ const SetupTune = (function () {
     return { f: cl(b / BB_REF), r: cl((1 - b) / (1 - BB_REF)) };
   }
 
-  return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip, experiment };
+  // BASE / DEFAULTS stay module-local — defaults() is the public works-sheet seam.
+  return { RANGE, FIELDS, BB_REF, keyFor, stamp, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip, experiment };
 })();
 Object.freeze(SetupTune);

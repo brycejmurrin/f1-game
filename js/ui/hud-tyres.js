@@ -30,18 +30,26 @@ const HudTyres = (function () {
     return band(+info.tempS, +info.tempOpt, win);
   }
 
-  const NAMES = { S: "Soft", M: "Medium", H: "Hard", I: "Intermediate", W: "Wet" };
+  const NAMES = {
+    S: () => I18n.t("hud.tyre.name.soft", null, "Soft"),
+    M: () => I18n.t("hud.tyre.name.medium", null, "Medium"),
+    H: () => I18n.t("hud.tyre.name.hard", null, "Hard"),
+    I: () => I18n.t("hud.tyre.name.intermediate", null, "Intermediate"),
+    W: () => I18n.t("hud.tyre.name.wet", null, "Wet"),
+  };
 
   /** The spoken twin of the chip: "Medium tyres, cold, about 5 laps left".
    *  temp ok says nothing (the normal state is not news); a worn-out set says so. */
   function label(code, temp, lapsLeft, spent) {
-    const name = NAMES[code] || (code ? String(code) : "Unknown");
-    let out = name + " tyres";
-    if (temp === "cold" || temp === "hot") out += ", " + temp;
-    if (spent >= 1) out += ", worn out";
+    const name = NAMES[code] ? NAMES[code]() : (code ? String(code) : I18n.t("hud.tyre.unknown", null, "Unknown"));
+    let out = I18n.t("hud.tyre.label", { name }, "{name} tyres");
+    if (temp === "cold") out += ", " + I18n.t("hud.tyre.cold", null, "cold");
+    else if (temp === "hot") out += ", " + I18n.t("hud.tyre.hot", null, "hot");
+    if (spent >= 1) out += ", " + I18n.t("hud.tyre.worn", null, "worn out");
     else if (lapsLeft != null && isFinite(lapsLeft)) {
       const n = Math.max(0, Math.min(99, Math.round(lapsLeft)));
-      out += lapsLeft < 0.5 ? ", under a lap left" : ", about " + n + (n === 1 ? " lap" : " laps") + " left";
+      out += ", " + (lapsLeft < 0.5 ? I18n.t("hud.tyre.underLap", null, "under a lap left")
+        : I18n.t("hud.tyre.lapsLeft", { n }, "about {n, plural, one {# lap} other {# laps}} left"));
     }
     return out;
   }
@@ -61,6 +69,7 @@ const HudTyres = (function () {
     return raw ? raw.charAt(0) : "-";
   }
 
+  let _chipOf = null, _chip = null;   // paint()'s #hud-tyre-code, cached per widget
   /** Write data-temp on #hud-tyre; the compound letter takes the colour and
    *  the glyph. With `extra` ({code, lapsLeft, spent, plan}) also writes the
    *  aria-label (#hud-tyre is role="img", so the label is all a reader gets). */
@@ -68,7 +77,9 @@ const HudTyres = (function () {
     if (!tyreEl || !tyreEl.dataset) return false;
     const s = state(info);
     if (tyreEl.dataset.temp !== s) tyreEl.dataset.temp = s;
-    const chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null;
+    // The chip is queried once per widget, not per 10 Hz paint: re-query only when it left the tree.
+    if (tyreEl !== _chipOf || !_chip || !_chip.isConnected) { _chipOf = tyreEl; _chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null; }
+    const chip = _chip;
     if (chip) {
       if (cbCuesOn() && extra && extra.code) {
         const L = compoundChip(extra.code);
@@ -83,6 +94,7 @@ const HudTyres = (function () {
     return true;
   }
 
-  return { BAND_FRAC, NAMES, band, state, label, compoundChip, paint };
+  // BAND_FRAC / NAMES stay module-local — paint/label/band cover the chip API.
+  return { band, state, label, compoundChip, paint };
 })();
 Object.freeze(HudTyres);

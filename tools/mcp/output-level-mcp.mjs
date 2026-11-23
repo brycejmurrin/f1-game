@@ -19,8 +19,9 @@ const own = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 // Third-party servers that send no instructions of their own: a deferring client sees only tool names and
 // instructions before it searches, so say when each server is the right one (docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md).
 export const SERVER_PREFACES = {
-  'playwright-official': 'Host browser (browser_*): drive menus, HUD and UI flows like a player (phone landscape 844x390, touch first). browser_close before any apex_* browser tool; never while a Playwright test run or chrome-devtools is live.',
-  'chrome-devtools': 'Live working-tree canvas over Chrome DevTools: evaluate __apex hooks, console, network, performance traces, heap snapshots. One browser at a time: never while a Playwright test run or the host browser_* is live.',
+  // The page is not served for them: name the URL and the command (a cold agent spent two calls finding both, MCP-REFINE-2026-10-30).
+  'playwright-official': 'Host browser (browser_*): menus and HUD (owner iPhone 15: debug-chrome phone-landscape, 852x393@3x) at http://127.0.0.1:3456/ (`node tools/serve.mjs`). browser_find beats a full snapshot. browser_close before apex_* browser tools; never beside a Playwright run or chrome-devtools.',
+  'chrome-devtools': 'Live canvas over DevTools: __apex hooks (__apex.agentHelp() lists them), console, network, traces, heap, at http://127.0.0.1:3456/ (`node tools/serve.mjs`). One browser at a time: never beside a Playwright run or the host browser_*.',
 };
 export const GATEWAY_INSTRUCTIONS = 'Output gateway: every tool takes outputLevel=compact(default)|diagnostic|full, presentation only (the action runs once). Saved evidence: the final-page retrieval tool (output_read; underscore-prefixed on a name collision) reads structuredContent.artifact.path or _meta["apex/agent-output"].artifact.path.';
 // MCP 2025-06-18 ToolAnnotations defaults; a hint equal to its default says nothing.
@@ -128,7 +129,7 @@ function inputWithLevel(schema, parameter) {
   }
 }
 
-export function runGateway({ server, command, args = [], root = process.cwd() }) {
+function runGateway({ server, command, args = [], root = process.cwd() }) {
   const processTree = spawnAgentProcess(command, args, { env: process.env, stdio: ['pipe', 'pipe', 'pipe'], cleanupOnExit: true });
   const { child } = processTree;
   const pending = new Map(), internal = new Map(), schemas = new Map();
@@ -196,7 +197,12 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
             result = readOriginalMcpArtifact({ root, artifact: a.artifact, maxBytes: 8 * 1024 * 1024 });
           } else {
             const page = a.format === 'collection' ? readOutputCollection({ root, artifact: a.artifact, pointer: a.pointer, offset: a.offset, limit: a.limit }) : readOutputArtifact({ root, artifact: a.artifact, offset: a.offset, limit: a.limit, level });
-            result = { content: [{ type: 'text', text: JSON.stringify(page) }], structuredContent: page };
+            // A byte page is the artifact's own text: send it as-is after a one-line header, never re-escaped
+            // inside a JSON string (that cost ~2.1x the original, field test 2026-10-30).
+            const { text, ...meta } = page;
+            result = a.format === 'collection' || page.encoding
+              ? { content: [{ type: 'text', text: JSON.stringify(page) }], structuredContent: page }
+              : { content: [{ type: 'text', text: `${JSON.stringify(meta)}\n${text}` }], structuredContent: page };
           }
           if (own(message, 'id')) send({ jsonrpc: '2.0', id: message.id, result });
           return;
@@ -242,8 +248,15 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
   const childLines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   hostLines.on('line', line => { try { const msg = JSON.parse(line); void fromHost(msg); } catch { if (child.stdin.writable) child.stdin.write(`${line}\n`); } });
   childLines.on('line', line => { try { fromChild(JSON.parse(line)); } catch { process.stdout.write(`${line}\n`); } });
+  // Default: retain privately (tests pin that upstream stderr stays off the host pipe).
+  // APEX_MCP_STDERR_PASS=1 tees to process.stderr so preflight / a diagnosing host
+  // sees the real exit reason instead of only "stderr retained at …".
+  const passStderr = /^(1|true|yes)$/i.test(String(process.env.APEX_MCP_STDERR_PASS || '').trim());
   function retainStderr(chunk) {
     stderrBytes += chunk.length;
+    if (passStderr) {
+      try { process.stderr.write(chunk); } catch { /* host closed stderr */ }
+    }
     try {
       if (!stderrArtifact) {
         stderrArtifact = saveOutputArtifact('', { root, tool: `${server}-stderr`, kind: 'stderr' });
@@ -273,7 +286,12 @@ export function runGateway({ server, command, args = [], root = process.cwd() })
       const diagnostic = stderrArtifact ? `stderr retained at ${stderrArtifact.path} (${stderrBytes} bytes${retentionError ? ', retention incomplete' : ''})` : 'no stderr diagnostic retained';
       process.stderr.write(`output-level-mcp: ${server} ${cleanupError ? 'cleanup failed' : error ? 'unable to start' : 'exited'} (${cleanupError ? `${cleanupError}; survivors=${(survivors ?? []).join(',')}` : error?.code ?? exitCode ?? signal}); ${diagnostic}\n`);
     }
-    process.exitCode = error || cleanupError ? 1 : stopping ? 0 : (exitCode ?? 1);
+    // Non-zero upstream exits must win over a later host EOF (`stopping`): otherwise a
+    // crashed server looks like a clean shutdown when the client closes stdin.
+    process.exitCode = error || cleanupError ? 1
+      : (typeof exitCode === 'number' && exitCode !== 0) ? exitCode
+      : stopping ? 0
+      : (exitCode ?? 1);
     process.removeListener('SIGTERM', stop); process.removeListener('SIGINT', stop);
     hostLines.close(); process.stdin.destroy();
   });

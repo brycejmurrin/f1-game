@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
+import { expandScript } from "../gen/gen-test-groups.mjs";
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../../..");
 
@@ -23,7 +24,10 @@ function globRegex(pattern) {
 
 export function auditCoverage(testFiles, scripts) {
   const covered = new Set();
-  for (const [name, command] of Object.entries(scripts)) {
+  for (const [name, line] of Object.entries(scripts)) {
+    // A wrapper line (`run-group.mjs test:x`, #5427) names no file itself: its
+    // roster is tests/groups.json's, read through expandScript.
+    const command = expandScript(line);
     // test:render drives a whole Playwright PROJECT and names no spec.
     // (test:headless was the same and was dropped 2026-09-10 — a name kept in a
     // skip list after its script is gone is invisible rot: it can never match.)

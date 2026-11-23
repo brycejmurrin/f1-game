@@ -2,7 +2,44 @@
 // Split from key-binds.test.mjs (T3-16); the VM rig is tests/helpers/key-binds-rig.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { read, boot, fakePad, plain, bootUi } from "../helpers/key-binds-rig.mjs";
+import { read, boot, fakePad, plain, bootUi, menuRig, rawPad, setBtn } from "../helpers/key-binds-rig.mjs";
+
+test("reconnecting the same pad requires a release before it can activate a menu again", () => {
+  const h = menuRig(), pad = rawPad();
+  h.sb.navigator.getGamepads = () => pad.connected ? [pad] : [];
+  h.fire("gamepadconnected", { gamepad: pad });
+  setBtn(pad, 0, true);
+  h.tick();
+  assert.equal(h.clicks, 1, "the press that first woke the controller is valid");
+  pad.connected = false;
+  h.fire("gamepaddisconnected", { gamepad: pad });
+  h.tick();
+  pad.connected = true;
+  h.fire("gamepadconnected", { gamepad: pad });
+  h.tick();
+  assert.equal(h.clicks, 1, "reconnecting while held does not click");
+  setBtn(pad, 0, false); h.tick();
+  setBtn(pad, 0, true); h.tick();
+  assert.equal(h.clicks, 2);
+});
+
+test("removing a spare pad preserves the active menu direction's repeat deadline", () => {
+  const h = menuRig(), active = rawPad(), spare = rawPad({ id: "Spare", index: 1 });
+  let now = 0;
+  h.sb.performance.now = () => now;
+  h.sb.navigator.getGamepads = () => [active, spare.connected ? spare : null];
+  h.fire("gamepadconnected", { gamepad: active });
+  setBtn(active, 13, true); h.Input.poll();
+  const keys = () => h.dispatched.map(e => e.key);
+  assert.deepEqual(keys(), ["ArrowDown"]);
+  now = 16;
+  spare.connected = false;
+  h.fire("gamepaddisconnected", { gamepad: spare });
+  h.Input.poll();
+  assert.deepEqual(keys(), ["ArrowDown"], "no early repeat when the spare leaves");
+  now = 450; h.Input.poll();
+  assert.deepEqual(keys(), ["ArrowDown", "ArrowDown"], "the scheduled repeat still fires");
+});
 
 // ---- the pad in a menu: value controls --------------------------------------
 
@@ -93,6 +130,19 @@ test("D-pad on UI SIZE (40–200, step 0.25) moves a visible amount per press, o
   assert.equal(fine.value, "6", "a coarse slider never moves less than its own step");
 });
 
+test("wetness D-pad steps are coarse on the slider and precise on its exact field", () => {
+  const { Input, sb, fire, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  for (const [type, expected] of [["range", "0.025"], ["number", "0.005"]]) {
+    const el = { tagName: "INPUT", type, min: "-0.05", max: "1", step: "0.005", value: "0",
+      dataset: type === "number" ? { padStep: "0.005" } : {}, dispatchEvent: () => true };
+    sb.document.activeElement = el;
+    press(15); Input.poll(); release(15); Input.poll();
+    assert.equal(el.value, expected);
+  }
+});
+
 test("D-pad Left/Right on a focused slider steps within min/max; a button gets the plain arrow", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);
@@ -143,9 +193,7 @@ test("an open menu still takes a key that was already down, and the on-screen pe
   assert.match(src, /function navBlocksTouch\(\) \{ return _navLatch < 0 \? navBlocksTouchLive\(\) : _navLatch === 1; \}/);
   assert.match(src, /navBlocksTouch\(\) \? 0 : buttonSteering\(\)/);
   assert.match(src, /navBlocksTouch\(\) \? 0 : analogShape\(touchSteering\(\), "touch"\)/);
-  assert.match(src, /keyThrottle \|\| \(!navBlocksTouch\(\) && btnThrottle\)/);
-  assert.match(src, /if \(btnThrottle && !navBlocksTouch\(\)\)/);
-  assert.match(src, /if \(btnBrake && !navBlocksTouch\(\)\)/);
+  // Actual zero/nonzero travel with the pause gate is exercised in throttle-latch.test.mjs.
 });
 
 test("a calibrated stick still reaches full lock on BOTH sides, and a pedal on axis 2 is not free-look", () => {
@@ -211,6 +259,33 @@ test("the wheel wizard passes the axes it already mapped, so steering and thrott
   assert.equal(map.throttle, 1, "throttle is the pedal, not the wheel springing back");
   assert.equal(map.brake, 2);
   assert.equal($("pm-pad-wheel").textContent, "SET UP A WHEEL", "the wizard finished");
+});
+
+test("a wheel (mapping \"\") does not page menus from vendor buttons 6/7", () => {
+  // PageUp/PageDown used to fire for every mapping; LB/RB (4/5) were already
+  // gated to standard. A wheel's paddles (shift bindings 4/5) still navigate
+  // rows via the dedicated path above — only the page keys must stay quiet.
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  const pad = { connected: true, mapping: "", id: "G29", axes: [0, -1, -1, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad });
+  navOpen.on = true;
+  Input.poll();
+  dispatched.length = 0;
+  pad.buttons[6] = { pressed: true, value: 1 }; Input.poll();
+  pad.buttons[7] = { pressed: true, value: 1 }; Input.poll();
+  assert.deepEqual(dispatched.map((e) => e.key), [], "no PageUp/PageDown from a wheel's 6/7");
+  // Control: a standard pad still pages on the triggers.
+  const xbox = { connected: true, mapping: "standard", id: "Xbox", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [xbox];
+  fire("gamepadconnected", { gamepad: xbox });
+  Input.poll();
+  dispatched.length = 0;
+  xbox.buttons[6] = { pressed: true, value: 1 }; Input.poll();
+  xbox.buttons[7] = { pressed: true, value: 1 }; Input.poll();
+  assert.deepEqual(dispatched.map((e) => e.key), ["PageUp", "PageDown"]);
 });
 
 test("menu navigation subtracts the CALIBRATE STICK rest offset from the steer axis", () => {

@@ -15,6 +15,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const host = (v) => JSON.parse(JSON.stringify(v));
@@ -25,7 +26,7 @@ function load(extra = {}) {
   const ctx = vm.createContext(sb);
   seedLog(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: absSrc("js/data/teams.js") });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx);
   return { D: vm.runInContext("DataRealRace", ctx) };
 }
 
@@ -119,7 +120,7 @@ test("explicit refresh replaces a stale interior gap and keeps pit and red-flag 
 function dom() {
   function el(tag, cls, text) {
     const node = {
-      tag, cls: cls || null, text: text == null ? null : String(text), children: [], type: null, value: "", hidden: false, disabled: false, listeners: {},
+      tag, cls: cls || null, text: text == null ? null : String(text), children: [], dataset: {}, type: null, value: "", hidden: false, disabled: false, listeners: {},
       appendChild(c) { node.children.push(c); c.parent = node; return c; },
       setAttribute(k, v) { node[k] = v; },
       addEventListener(ev, fn) { (node.listeners[ev] = node.listeners[ev] || []).push(fn); },

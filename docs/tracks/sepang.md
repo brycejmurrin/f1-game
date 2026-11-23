@@ -17,13 +17,7 @@ White-hot high sun almost directly overhead, heavy humidity, saturated jungle gr
 - Sun direction near-vertical `[0.20, 0.90, 0.14]` — short hard shadows
 
 ## 3. Elevation
-Gently rolling reclaimed plantation, with one genuine drop and one climb.
-- s≈0.00–0.15: level pit straight into the T1–T2 loop.
-- s≈0.22: **5 m fall** through the early sequence.
-- s≈0.46: **4.5 m climb** back up toward the mid-lap.
-- s≈0.74: 4 m descent onto the long back straight.
-- Otherwise flat — the character comes from width and heat, not hills.
-- No elevation edits in the wave-6 scenery pass.
+Formula 1’s longitudinal chart puts T3 at 27.7 m and T11 at 49.7 m. The built road reproduces the 22.0 m relief, with its low at 15.84% and crest at 58.36% of the lap. Their positions come from the geographic centreline and a 48-post terrain profile. The smaller rolls approximate the published outline. The reconstructed grades range from −5.14% to +5.32%. The adverse camber documented at T15 remains unmeasured in degrees and is still flat in the game. [F1 profile](https://www.formula1.com/en/latest/article/highs-and-lows-which-f1-track-has-the-most-elevation-changes-.7I9JEcBw3R2AqXbnJ6hyvc) · [Terrain data](https://open-meteo.com/en/docs/elevation-api)
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |
@@ -47,7 +41,7 @@ Gently rolling reclaimed plantation, with one genuine drop and one climb.
 ## 5. Track features
 - Famously **wide** — 8 m base half-width. The operator publishes a 16 m minimum; the unsupported 13.6 m T3–T4 and 13.8 m T9 zones have been removed. The 13.2 m T15 zone remains a temporary geometry constraint: removing it exposes two centreline nodes tighter than the road half-width. It is not a sourced local width. Exact local widening remains unsurveyed.
 - Two long straights joined by the T15 hairpin; vast tarmac run-off almost everywhere, so gravel is limited. 5.543 km, 15 turns, 16–22 m wide (Wikipedia / operator).
-- Gentle banking: T1–T2 loop 3.5°, T5–T6 sweep 4°, T12–T13 3°.
+- Game banking settings are 3.5° at T1, 4° at T5 and 3° at fraction 0.660. The game leaves T15 flat. The 2016 redesign raised the inside kerb by one metre and gave the final left-hander adverse camber. The published kerb displacement does not establish the finished crossfall angle. [Dromo redesign briefing](https://www.motorsport.com/f1/news/analysis-why-revamped-sepang-means-step-into-unknown-for-f1-teams-830812/830812/)
 - Tropical downpours define its races — the open drains beside the run-off should always be visible.
 - No Petronas sponsor lettering on structures (uncertain / brand-policy).
 

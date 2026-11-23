@@ -1,6 +1,6 @@
 # Real-device report recipes
 
-**Use when:** this recipe family is the narrowest match for the question.
+**Read when:** turning a phone or real-device bug report into a reproducible probe and evidence handoff.
 
 **Verification:** record the exact command, the device and the page it loaded, and returned evidence (a container probe of the deployed site → agent `deploy-research`).
 

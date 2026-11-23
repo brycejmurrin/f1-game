@@ -64,10 +64,10 @@ const CarFx = (function () {
         let best = HAZE_RANGE;
         for (let i = 0; i < cars.length; i++) {
           const c = cars[i];
-          if (c === player || !(heat(c) > 0)) continue;
+          if (c === player) continue;
           let ds = c.s - player.s;
           if (ds < 0) ds += total;   // the lap wraps: a car just past the line is still ahead
-          if (ds > 0 && ds <= best) { best = ds; want = c; }
+          if (ds > 0 && ds <= best && heat(c) > 0) { best = ds; want = c; }
         }
       }
       if (want !== anchor && (!anchor || str < HAZE_MIN)) anchor = want;
@@ -141,14 +141,21 @@ const CarFx = (function () {
     function emit(c, g, dt, state) {
       if (!c || !g || !(dt > 0)) return;
       plank(c, g, dt);
+    }
+
+    // AI lock-up marks persist: game.js calls this ABOVE the frustum cull (#4669).
+    function marks(c, g, dt, state) {
+      if (!c || !g || !(dt > 0)) return;
       if (state === "race" && !c.isPlayer && skids && skids.stampFor) aiMarks(c, g, dt);
     }
 
     function status() { return { sparks: stats.sparks, marks: stats.marks }; }
 
-    return { emit, status, haze };
+    return { emit, marks, status, haze };
   }
 
-  return { create, heatHaze, SPARK_V0, SPARK_V1, LOCK_MIN, HAZE_RANGE, HAZE_TAU };
+  // heatHaze / LOCK_MIN / HAZE_TAU stay module-private: create() closes over them;
+  // no js/ or test reader used CarFx.heatHaze / LOCK_MIN / HAZE_TAU.
+  return { create, SPARK_V0, SPARK_V1, SPARK_RATE, HAZE_RANGE };
 })();
 Object.freeze(CarFx);

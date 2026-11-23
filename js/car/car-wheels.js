@@ -2,6 +2,27 @@
 "use strict";
 
 const CarWheels = (function () {
+  // Matches PhysicsConsts.WHEEL_R / Car3D wheel radius (m). One home for the
+  // presentation spin math so createGarage and the race phase step cannot drift.
+  const WHEEL_R = 0.34;
+  const TWO_PI = Math.PI * 2;
+  // speed (m/s) → axle angle delta (rad) for one frame. Front axle scales by
+  // (1 − lock) so a lock-up freezes the fronts while the rears keep rolling.
+  // Pure: no DOM, no G, no mesh — unit-tested in wheel-phase-math.test.mjs.
+  // Returns ONE reused scratch (#5057 row 3: was a fresh {rear, front} per car per frame,
+  // 1,320 objects/s on a 22-car grid); read both fields before the next call.
+  const _step = { rear: 0, front: 0 };
+  function phaseStep(speed, dt, wheelR, lock) {
+    const r = wheelR > 0 ? wheelR : WHEEL_R;
+    const spin = (speed || 0) / r * (dt || 0);
+    const L = lock == null ? 0 : lock;
+    _step.rear = spin; _step.front = spin * (1 - L);
+    return _step;
+  }
+  function wrapPhase(rad) {
+    const x = (rad || 0) % TWO_PI;
+    return x < 0 ? x + TWO_PI : x;
+  }
   // LIVERY WHEEL TINTS (livery rimTint / caliperTint / sidewallInk): paint-only overrides of the brakes catalog
   // colours for ALL four wheels. A field is a [r,g,b] 0..1 array (resolved livery) or "#rrggbb".
   // Unset = NO_TINTS = today's catalog colour. `key` joins every wheel mesh cache key so a livery
@@ -34,6 +55,59 @@ const CarWheels = (function () {
     _tintMemo.set(liv, t);
     return t;
   }
+  // Available on the first garage visit, before the race-session bundle loads.
+  // Fitted mesh layers are built once; all rolling and steering use transforms.
+  function createGarage(gfx) {
+    let key = "", meshes = null, matRef = null;
+    const local = new Float32Array(16), world = new Float32Array(16);
+    function release() {
+      if (meshes && gfx.freeMesh) for (const mesh of meshes) gfx.freeMesh(mesh);
+      meshes = null; key = ""; matRef = null;
+    }
+    function prepare(next, liv, tiers, worn = false) {
+      if (worn) next += "|worn";
+      if (meshes && key === next) return;
+      release();
+      const v = tiers._visual || {}, t = v.tyres, b = v.brakes, w = v.wheels, tint = tints(liv);
+      const band = t && t.band || Car3D.TYRE_BAND[tiers.tyres] || Car3D.TYRE_BAND[1];
+      const cal = tint.cal || (b && b.cal) || Car3D.BRAKE_CALIPER[tiers.brakes];
+      const rim = tint.rim || w?.rim || b?.rim;
+      // The garage turntable's wheels at the player's desktop level (EXTREME tyres there; 0 on every phone).
+      const gd = Car3D.garageDetail ? Car3D.garageDetail().detail : 0;
+      const f = Car3D.buildWheelLayers(.32, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd, worn ? 1 : 0);
+      const r = Car3D.buildWheelLayers(.38, band, cal, rim, false, t, b, w, tint.ink, tint.surf, gd, worn ? 1 : 0);
+      const pending = [];
+      try {
+        for (const data of [f.rotating, f.fixed, r.rotating, r.fixed]) pending.push(gfx.createMesh(data));
+      } catch (error) {
+        if (gfx.freeMesh) for (const mesh of pending) gfx.freeMesh(mesh);
+        throw error;
+      }
+      meshes = pending; key = next;
+    }
+    const opts = { doubleSided: true };
+    function draw(base, distance, steer, material) {
+      if (!meshes) return;
+      // Same mat every turntable frame: re-link only on change (a re-link deopts V8).
+      if (material !== matRef) { Object.setPrototypeOf(opts, material || null); matRef = material; }
+      // angle = distance / R (same as integrating v/R·dt along the path).
+      const spin = (distance || 0) / WHEEL_R, cp = Math.cos(spin), sp = Math.sin(spin);
+      for (let axle = 0; axle < 2; axle++) for (let side = -1; side <= 1; side += 2) {
+        const a = axle ? 0 : steer, ca = Math.cos(a), sa = Math.sin(a);
+        for (let fixed = 0; fixed < 2; fixed++) {
+          const c = fixed ? 1 : cp, s = fixed ? 0 : sp;
+          local.fill(0); local[0] = ca; local[2] = -sa;
+          local[4] = sa * s; local[5] = c; local[6] = ca * s;
+          local[8] = sa * c; local[9] = -s; local[10] = ca * c;
+          local[12] = side * (axle ? .76 : .79); local[13] = .34;
+          local[14] = axle ? -1.6 : 1.7; local[15] = 1;
+          M4.mulTo(world, base, local);
+          gfx.draw(meshes[axle * 2 + fixed], world, opts);
+        }
+      }
+    }
+    return { prepare, draw, release };
+  }
   function create(context) {
     const { SURFACES, TYRE, INTAKE } = context;
     const { addTri, addQuad, addBox, addSpan } = context.geometry;
@@ -57,7 +131,7 @@ const CarWheels = (function () {
     const OPEN_SPOKES = 3;
 
     function addWheel(out, cx, cy, cz, r, w, bandColor, caliperColor, rimColor,
-                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor, rimSurf) {
+                      grooved, tyreStyle, fixedOut, brakeStyle, wheelStyle, inkColor, rimSurf, wear = 0) {
       // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
       // DIED here: RC was computed and never read once, so the nine catalog
       // options that set a rim colour painted nothing. The clamp scan
@@ -71,7 +145,10 @@ const CarWheels = (function () {
       // 18 -> 24: an 18-gon tyre reads visibly polygonal in any close shot.
       // +29% wheel tris, same draw-call count; ceilings in parts-physics raised
       // with the measurement (480 per wheel).
-      const SEG = 24, rw = typeof CarShade !== "undefined" && CarShade.any();   // rw: tread normals from its real shape (js/car/car-shade.js)
+      // meshHi (CarGeometry detail 1 / 2): 48 / 64. Every pattern below that counted segments (cover peeks)
+      // counts the detail-0 segment `ib` instead, so a finer wheel keeps today's layout.
+      // X2: the small fixed rings (hat, dish, tape, nut collar) double. rw: tread normals from its real shape (js/car/car-shade.js)
+      const LVL = CarGeometry.level(), SEG = [24, 48, 64][LVL], X2 = LVL ? 2 : 1, rw = typeof CarShade !== "undefined" && CarShade.any();
       const x0 = cx - w/2, x1 = cx + w/2;
       const rimR = r * 0.68;
       const coverOpen = brakeStyle && brakeStyle.coverOpen || 0;
@@ -114,7 +191,8 @@ const CarWheels = (function () {
         // measured it flat over its whole range. Registry, merge default and all
         // 27 recipes dropped it together.
         ? tyreStyle.grooves : grooved ? 3 : 0;
-      const grooveDepth = tyreStyle && tyreStyle.grooveDepth || 0.045;
+      const worn = wear & 1, flat = wear & 2;
+      const grooveDepth = (tyreStyle && tyreStyle.grooveDepth || 0.045) * (worn ? 0.45 : 1);
       const PROFILE = [];
       if (tyreShoulder === 1) {
         PROFILE.push([0, SH1], [SH1_W, 1]);
@@ -140,9 +218,14 @@ const CarWheels = (function () {
         for (let i = 0; i < SEG; i++) {
           const a = (i / SEG) * Math.PI * 2;
           const c = Math.cos(a), s = Math.sin(a);
-          out.pos.push(x, cy + rr * c, cz + rr * s);
+          // Buffed shoulders and rubber pickup are baked into the rotating tread.
+          // The front lock scar passes the ground at phase zero, matching the suspension thump.
+          const scar = flat && c < -0.86 && xf > 0 && xf < 1;
+          const scuff = worn && xf > 0 && xf < 1 ? 0.035 + 0.025 * Math.sin(5 * a + 13 * xf) : 0;
+          const lift = scar ? 0.12 : scuff;
+          out.pos.push(x, cy + (scar ? Math.max(-0.965 * r, rr * c) : rr * c), cz + rr * s);
           out.nrm.push(0, c, s);
-          out.col.push(TYRE[0], TYRE[1], TYRE[2]);
+          out.col.push(TYRE[0] + lift, TYRE[1] + lift, TYRE[2] + lift);
           out.mat.push(SURFACES.rubber);
         }
       }
@@ -182,7 +265,8 @@ const CarWheels = (function () {
         // closed STYLE Full Disc (cover + coverOpen 0) must stay sealed.
         const peekCal = useCover && coverOpen > 0
           && Math.abs(Math.atan2(Math.sin(aMid - calClock), Math.cos(aMid - calClock))) < 0.28;
-        const coverSeg = useCover && (!coverOpen || i % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
+        const ib = Math.floor(i * 24 / SEG);
+        const coverSeg = useCover && (!coverOpen || ib % (coverOpen >= 2 ? 2 : 3) !== 0) && !peekCal;
         if (coverSeg || !useCover) {
           for (const sd of [[x1, 1], [x0, -1]]) {
             const xw = sd[0], dir = sd[1];
@@ -255,7 +339,7 @@ const CarWheels = (function () {
         }
         if (rotorDetail >= 2) {
           const hatOuter = rotorInner * 1.08, hatInner = rotorInner * 0.52;
-          const HAT_SEG = 8;
+          const HAT_SEG = 8 * X2;
           for (let i = 0; i < HAT_SEG; i++) {
             const a0 = i / HAT_SEG * Math.PI * 2, a1 = (i + 1) / HAT_SEG * Math.PI * 2;
             const P = (rad, a) => [face[0], cy + rad*Math.cos(a), cz + rad*Math.sin(a)];
@@ -515,7 +599,9 @@ const CarWheels = (function () {
         if (blownAxle) {
           // no centre nut: the bore IS the hub
         } else if (!gunNut) {
-          addBox(out, hubX - dir * 0.002, cy, cz, 0.026, Math.max(hcR * 0.55, rimR * 0.12), Math.max(hcR * 0.55, rimR * 0.12), nutCol, SURFACES.metal);
+          const nS = Math.max(hcR * 0.55, rimR * 0.12);
+          addBox(out, hubX - dir * 0.002, cy, cz, 0.026, nS, nS, nutCol, SURFACES.metal);
+          if (LVL >= 2) CarHero.hub(context.geometry, SURFACES, out, hubX, dir, cy, cz, nS, nutCol);   // EXTREME hex crown
         } else {
           const nx = hubX - dir * 0.001;
           const nR = Math.max(hcR * 0.55, rimR * 0.10);
@@ -533,8 +619,8 @@ const CarWheels = (function () {
             addTri(out, [xOut, cy, cz], [xOut, y0, z0], [xOut, y1, z1], nutCol, SURFACES.metal);
           }
           const cR0 = nR * 1.15, cR1 = nR * 1.55, cxCol = nx - dir * nDeep * 0.55;
-          for (let h = 0; h < 12; h++) {
-            const a0 = (h / 12) * Math.PI * 2, a1 = ((h + 1) / 12) * Math.PI * 2;
+          for (let h = 0, H = 12 * X2; h < H; h++) {
+            const a0 = (h / H) * Math.PI * 2, a1 = ((h + 1) / H) * Math.PI * 2;
             const P = (rad, a) => [cxCol, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             addQuad(out, P(cR0, a0), P(cR0, a1), P(cR1, a1), P(cR1, a0),
                     [nutCol[0] * 0.75, nutCol[1] * 0.75, nutCol[2] * 0.75], SURFACES.metal);
@@ -582,15 +668,15 @@ const CarWheels = (function () {
         // Rim TAPE: face band + short OD bead so the set marks read from a ¾ view.
         if (wheelStyle && wheelStyle.tape) {
           const tr = rimR * 1.02, tc = (wheelStyle.nut) || bandColor;
-          for (let k = 0; k < 20; k++) {
-            const a0 = (k / 20) * Math.PI * 2, a1 = ((k + 1) / 20) * Math.PI * 2;
+          for (let k = 0, H = 20 * X2; k < H; k++) {
+            const a0 = (k / H) * Math.PI * 2, a1 = ((k + 1) / H) * Math.PI * 2;
             const A = (rad, a) => [ss[0] + dir * 0.010, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
             addQuad(out, A(tr, a0), A(tr + 0.022, a0), A(tr + 0.022, a1), A(tr, a1), tc, SURFACES.metal);
           }
           const beadR = rimR * 1.01;
           const bx0 = ss[0] + dir * 0.002, bx1 = ss[0] + dir * 0.016;
-          for (let k = 0; k < 16; k++) {
-            const a0 = (k / 16) * Math.PI * 2, a1 = ((k + 1) / 16) * Math.PI * 2;
+          for (let k = 0, H = 16 * X2; k < H; k++) {
+            const a0 = (k / H) * Math.PI * 2, a1 = ((k + 1) / H) * Math.PI * 2;
             const y0 = cy + beadR * Math.cos(a0), z0 = cz + beadR * Math.sin(a0);
             const y1 = cy + beadR * Math.cos(a1), z1 = cz + beadR * Math.sin(a1);
             addQuad(out, [bx0, y0, z0], [bx1, y0, z0], [bx1, y1, z1], [bx0, y1, z1], tc, SURFACES.metal);
@@ -610,7 +696,7 @@ const CarWheels = (function () {
           // brake disc visible. 0.024*dish → 24 / 48 mm for parts-sweep WEAK_MM.
           const dishStep = useCover ? 0.012 * dish : 0.024 * dish;
           const dxIn = ss[0] + dir * (0.014 - dishStep);
-          const DISH_SEG = 16;
+          const DISH_SEG = 16 * X2;
           for (let k = 0; k < DISH_SEG; k++) {
             const a0 = (k / DISH_SEG) * Math.PI * 2, a1 = ((k + 1) / DISH_SEG) * Math.PI * 2;
             const oy0 = cy + rimR * 0.98 * Math.cos(a0), oz0 = cz + rimR * 0.98 * Math.sin(a0);
@@ -641,6 +727,27 @@ const CarWheels = (function () {
                 RC_DEEP, RS);
             }
           }
+        }
+      }
+      // SPIN CUE — a valve stem, rim balance weight and one sidewall paint dash.
+      // Default medium is a 3-spoke slick with a continuous band: rotationally
+      // near-symmetric, so at chase distance (and under the wagon-wheel effect)
+      // the rim looks frozen even when the phase advances. These marks ride the
+      // ROTATING mesh only; calipers stay on fixedOut. Cheap (a few boxes/quads).
+      // Metal cues stay on the rim lip (≤ rimR·1.05): parts-physics pins the
+      // outer tyre band (radius > 0.30 m) as rubber-only on an open rim.
+      {
+        const stemA = 0.55, stemR = rimR * 1.04, weightA = stemA + Math.PI;
+        const STEM = [0.72, 0.74, 0.78], WEIGHT = [0.90, 0.86, 0.18], DASH = [0.94, 0.90, 0.55];
+        for (const ss of [[x0, -1], [x1, 1]]) {
+          const dir = ss[1];
+          addBox(out, ss[0] + dir * 0.018, cy + stemR * Math.cos(stemA), cz + stemR * Math.sin(stemA),
+                 0.014, 0.018, 0.018, STEM, SURFACES.metal);
+          addBox(out, ss[0] + dir * 0.008, cy + rimR * 1.01 * Math.cos(weightA), cz + rimR * 1.01 * Math.sin(weightA),
+                 0.010, 0.024, 0.016, WEIGHT, SURFACES.metal);
+          const xb = ss[0] + dir * 0.007, a0 = 1.20, a1 = 1.55;
+          const P = (rad, a) => [xb, cy + rad * Math.cos(a), cz + rad * Math.sin(a)];
+          addQuad(out, P(r * 0.78, a0), P(r * 0.78, a1), P(r * 0.70, a1), P(r * 0.70, a0), DASH, SURFACES.rubber);
         }
       }
       const calOut = fixedOut || out;
@@ -695,18 +802,43 @@ const CarWheels = (function () {
       }
     }
 
+    // detail (optional, the 11th argument of buildWheel / buildWheelLayers below): the CarGeometry tessellation
+    // level for this wheel; omitted = the level of the build in progress (0 outside one), so every existing caller
+    // builds today's wheel.
+    const atD = (f) => (...a) => a[10] == null ? f(...a) : CarGeometry.withDetail(a[10], () => f(...a));
     function buildWheel(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
       const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       addWheel(out, 0, 0, 0, 0.34, w || 0.34, bandColor, caliperColor, rimColor,
         grooved, tyreStyle, null, brakeStyle, wheelStyle, inkColor, rimSurf);
       return CarGeometry.weld(out);   // exact repeat corners merged (car3d.js build)
     }
-    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf) {
+    // Distant rivals: preserve the tyre diameter, axle width and dark rim opening.
+    // At the far-body threshold the entire wheel is under two pixels at 720p/60°.
+    function buildFarWheel(width) {
+      const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+      const sides = 12, halfWidth = width / 2;
+      const point = (x, r, a) => [x, r * Math.cos(a), r * Math.sin(a)];
+      for (let i = 0; i < sides; i++) {
+        const angle = TWO_PI * i / sides, next = TWO_PI * ((i + 1) % sides) / sides;
+        const l0 = point(-halfWidth, WHEEL_R, angle), l1 = point(-halfWidth, WHEEL_R, next);
+        const r0 = point(halfWidth, WHEEL_R, angle), r1 = point(halfWidth, WHEEL_R, next);
+        addQuad(out, l0, l1, r1, r0, TYRE, SURFACES.rubber);
+        for (const sign of [-1, 1]) {
+          const x = sign * halfWidth, rimR = WHEEL_R * 0.68;
+          const a = sign > 0 ? angle : next, b = sign > 0 ? next : angle;
+          const innerA = point(x, rimR, a), innerB = point(x, rimR, b);
+          addQuad(out, point(x, WHEEL_R, a), point(x, WHEEL_R, b), innerB, innerA, TYRE, SURFACES.rubber);
+          addTri(out, [x, 0, 0], innerA, innerB, COVER_IN, SURFACES.metal);
+        }
+      }
+      return CarGeometry.weld(out);
+    }
+    function buildWheelLayers(w, bandColor, caliperColor, rimColor, grooved, tyreStyle, brakeStyle, wheelStyle, inkColor, rimSurf, detail, wear = 0) {
       const rotating = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const fixed = { pos: [], nrm: [], col: [], mat: [], idx: [] };
       const width = w || 0.34;
       addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
-        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor, rimSurf);
+        grooved, tyreStyle, fixed, brakeStyle, wheelStyle, inkColor, rimSurf, wear);
       // Upright and hub carrier give the wishbones/caliper a visible termination.
       // The hub carrier the wishbones and caliper terminate in. It was a cube
       // sitting inside the rim, visible through the spokes from every angle.
@@ -716,9 +848,9 @@ const CarWheels = (function () {
       return { rotating: CarGeometry.weld(rotating), fixed: CarGeometry.weld(fixed) };
     }
 
-    return { addWheel, buildWheel, buildWheelLayers };
+    return { addWheel, buildFarWheel, buildWheel: atD(buildWheel), buildWheelLayers: atD(buildWheelLayers) };
   }
 
-  return { create, tints };
+  return { create, tints, createGarage, phaseStep, wrapPhase, WHEEL_R };
 })();
 Object.freeze(CarWheels);

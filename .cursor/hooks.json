@@ -2,7 +2,7 @@
   "version": 1,
   "hooks": {
     "beforeShellExecution": [
-      { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 200, "failClosed": true }
+      { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 30, "failClosed": true }
     ],
     "preToolUse": [
       { "command": "bash .cursor/hooks/edit-guard.sh", "timeout": 30, "failClosed": true }

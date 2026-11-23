@@ -23,7 +23,7 @@ const AppearanceOpts = (function () {
   const K_UNITS = "speedUnits";
   const K_HELP = "menuHelp";
 
-  const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"]];
+  const THEMES = [["dark", "DARK"], ["light", "LIGHT"], ["system", "SYSTEM"], ["endurance", "ENDURANCE"], ["drafting", "DRAFTING"]];
   // READABILITY. Text size scales the --fs-* type ladder (tokens.css) and a
   // modest --hud-text-boost so race digits grow with the menus. High contrast
   // swaps see-through plates for solid ones and brightens secondary text.
@@ -83,8 +83,8 @@ const AppearanceOpts = (function () {
   let hudAccent = oneOf(store.get(K_HUD, "team"), ACCENTS, "team");
   let menuHex = normHex(store.get(K_MENU_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
   let hudHex = normHex(store.get(K_HUD_HEX, PRESET_HEX.brand), PRESET_HEX.brand);
-  let textSize = oneOf(store.get(K_TEXT, "large"), TEXT_SIZES, "large");
-  let contrast = oneOf(store.get(K_CONTRAST, "high"), CONTRASTS, "high");
+  let textSize = oneOf(store.get(K_TEXT, "normal"), TEXT_SIZES, "normal");
+  let contrast = oneOf(store.get(K_CONTRAST, "off"), CONTRASTS, "off");
   let cvdMode = oneOf(store.get(K_CVD, "off"), CVD_MODES, "off");
   let appIcon = oneOf(store.get(K_ICON, "default"), ICON_SETS, "default");
   let units = oneOf(store.get(K_UNITS, "kmh"), UNITS, "kmh");
@@ -386,14 +386,14 @@ const AppearanceOpts = (function () {
   }
 
   function setTextSize(v) {
-    textSize = oneOf(v, TEXT_SIZES, "large");
+    textSize = oneOf(v, TEXT_SIZES, "normal");
     store.set(K_TEXT, textSize);
     applyAll();
     paintRow("pm-textsize", textSize);
     return textSize;
   }
   function setContrast(v) {
-    contrast = oneOf(v, CONTRASTS, "high");
+    contrast = oneOf(v, CONTRASTS, "off");
     store.set(K_CONTRAST, contrast);
     applyAll();
     paintRow("pm-contrast", contrast);
@@ -469,10 +469,11 @@ const AppearanceOpts = (function () {
     hudAccent = oneOf(v.hudAccent, ACCENTS, "team");
     menuHex = normHex(v.menuAccentHex, PRESET_HEX.brand);
     hudHex = normHex(v.hudAccentHex, PRESET_HEX.brand);
-    textSize = oneOf(v.textSize, TEXT_SIZES, "large");
-    contrast = oneOf(v.uiContrast, CONTRASTS, "high");
+    textSize = oneOf(v.textSize, TEXT_SIZES, "normal");
+    contrast = oneOf(v.uiContrast, CONTRASTS, "off");
     cvdMode = oneOf(v.cvdMode, CVD_MODES, "off");
-    appIcon = oneOf(v.appIcon, ICON_SETS, "default");
+    // Studio snapshots do not carry appIcon: keep the chosen icon (#5059).
+    if ("appIcon" in v) appIcon = oneOf(v.appIcon, ICON_SETS, "default");
     units = oneOf(v.speedUnits, UNITS, "kmh");
     help = oneOf(v.menuHelp, HELPS, "on");
     applyAll();
@@ -482,6 +483,15 @@ const AppearanceOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
+    function hudLink(help, text, target, setting) {
+      help.textContent = text + " ";
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "adv-more-btn";
+      button.dataset.settingsJump = "display"; button.dataset.jumpTarget = target;
+      const page = typeof SettingsNav !== "undefined" ? SettingsNav.routes.display.title : "HUD & CAMERA";
+      button.textContent = page + " › " + setting;
+      help.appendChild(button);
+    }
     // COLOUR VISION row is runtime-built (shellNodes at ceiling) — insert after
     // HIGH CONTRAST so READABILITY stays one fold.
     if (!byId("pm-cvd")) {
@@ -491,7 +501,7 @@ const AppearanceOpts = (function () {
         const help = document.createElement("p");
         help.className = "adv-help";
         help.id = "pm-cvd-help";
-        help.textContent = "Remaps green/red HUD and menu ink for colour vision deficiency. The driving line still has its own COLOUR-BLIND palette under DISPLAY › HUD.";
+        hudLink(help, "Remaps green/red HUD and menu ink. Choose the driving line palette separately.", "pm-linecolor-sel", "Driving line colour");
         const after = contrastRow.nextElementSibling;
         // Skip the contrast help <p> so CVD sits under it.
         const insertBefore = after && after.tagName === "P" && after.id === "pm-contrast-help"
@@ -543,10 +553,12 @@ const AppearanceOpts = (function () {
     wireHexPair("pm-hudaccent-hex", "pm-hudaccent-hextext", setHudHex);
     syncCustomRows();
     applyReadability();   // the eval-time apply ran before #hud-speed's unit label existed
+    const uiHelp = byId("pm-uiscale-help");
+    if (uiHelp) hudLink(uiHelp, "100% uses the default menu size for this window. Resize the race HUD separately.", "pm-hudscale", "HUD size");
     // TEXT SIZE help: menus AND a HUD digit nudge.
     const tsHelp = byId("pm-textsize-help");
     if (tsHelp) {
-      tsHelp.textContent = "Bigger words in the menus and settings, and a nudge to race HUD digits. HUD SIZE under DISPLAY still zooms the whole race chrome.";
+      hudLink(tsHelp, "Sizes menu text and race HUD digits. Resize the entire race HUD separately.", "pm-hudscale", "HUD size");
     }
   }
 
@@ -554,7 +566,8 @@ const AppearanceOpts = (function () {
   applyAll();
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    // #4798 gate
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI()), { once: true });
     else initUI();
     // SYSTEM follows OS changes live.
     try {
@@ -582,6 +595,8 @@ const AppearanceOpts = (function () {
     hudHex: () => hudHex,
     hudUsesTeam: () => hudAccent === "team",
     teamHex, resolveAccent, pickInk,
+    // The high-contrast HUD plate is 92% black, including over a white scene.
+    needsLightHudPlate: hex => wcag(hexRgb(hex), [0.08, 0.08, 0.08]) < 4.5,
     setTheme, setMenuAccent, setHudAccent, setMenuHex, setHudHex,
     applyAll, applyMenuAccent, applyHudAccent, restore, initUI,
   };

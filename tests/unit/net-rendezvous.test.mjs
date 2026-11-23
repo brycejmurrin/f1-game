@@ -148,7 +148,8 @@ test("codes are drawn without modulo bias", () => {
   try {
     const c = NetRendezvous.makeCode();
     const A = NetRendezvous.ALPHABET;
-    assert.equal(c, A[0] + A[0] + A[0] + A[247 % 31] + A[1] + A[2], "rejected bytes vanish, the rest map in order");
+    // 8 letters from one 16-byte draw: the feed wraps, its rejects vanish again.
+    assert.equal(c, A[0] + A[0] + A[0] + A[247 % 31] + A[1] + A[2] + A[3] + A[0], "rejected bytes vanish, the rest map in order");
   } finally { delete crypto.getRandomValues; assert.equal(typeof orig, "function"); }
 });
 
@@ -166,8 +167,19 @@ test("typing is forgiving about case and spacing, strict about the rest", () => 
   // But a genuinely wrong code stays wrong rather than being coerced into a
   // DIFFERENT valid room, which would silently connect two strangers.
   assert.equal(NetRendezvous.valid("ABC"), false);
-  assert.equal(NetRendezvous.valid("ABCDEFGH"), false);
+  assert.equal(NetRendezvous.valid("ABCDEFG"), false);
+  assert.equal(NetRendezvous.valid("ABCDEFGHJ"), false);
   assert.equal(NetRendezvous.valid(""), false);
+});
+
+test("public codes are eight letters; a six-letter code typed from an older build still joins (#5313)", () => {
+  NetRendezvous.setUrl(null);
+  assert.equal(NetRendezvous.CODE_LEN, 8);
+  assert.equal(NetRendezvous.makeCode().length, 8);
+  assert.equal(NetRendezvous.valid("ABCD2345"), true);
+  assert.equal(NetRendezvous.valid("abcd-2345"), true);
+  assert.equal(NetRendezvous.valid("ABC234"), true, "an older host's six-letter code");
+  assert.equal(NetRendezvous.valid("ABC2345"), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -315,7 +327,7 @@ test("an empty code reports nobody there, not an error", async () => {
     const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
     assert.equal(res.ok, false);
     assert.equal(res.error, "not_found");
-    assert.match(res.message, /nobody/i);
+    assert.equal(res.message, "Nobody is waiting on that code.");
   } finally { await r.close(); }
 });
 
@@ -340,7 +352,7 @@ test("a dead relay is reported, never thrown", async () => {
     const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
     assert.equal(res.ok, false);
     assert.equal(res.error, "relay");
-    assert.match(res.message, /invite link/i, "should point at the path that still works");
+    assert.equal(res.message, "The room service is not answering. Use the invite link instead.", "should point at the path that still works");
   } finally { await r.close(); }
 });
 
@@ -358,8 +370,7 @@ test("a captive portal answering 200 with HTML is 'relay', not 'offline'", async
     const res = await NetRendezvous.get(NetRendezvous.makeCode(), "offer");
     assert.equal(res.ok, false);
     assert.equal(res.error, "relay");
-    assert.match(res.message, /intercepting/i);
-    assert.match(res.message, /invite link/i, "should point at the path that still works");
+    assert.equal(res.message, "The room service answered with something unexpected — this network may be intercepting it. Use the invite link instead.", "should point at the path that still works");
   } finally {
     NetRendezvous.setUrl(null);
     await new Promise((r) => server.close(r));
@@ -624,7 +635,7 @@ test("an old Worker requires an upgrade, never a six-character or plaintext down
       globalThis.fetch = async (url) => { requests.push(url); return new Response('{"ok":true}', { status }); };
       const result = await NetRendezvous.put(code, "offer", "SDP");
       assert.equal(result.error, "relay_version");
-      assert.match(result.message, /Update.*Worker.*invite link/);
+      assert.equal(result.message, "Update the private room Worker and reload both players, or use the invite link. This relay uses an incompatible protocol.");
     }
     assert.equal(requests.length, 3, "one request per attempt, no legacy retry");
     assert.ok(requests.every((url) => new URL(url).pathname.startsWith("/v3/r/")));
@@ -646,7 +657,7 @@ test("QR relay configuration is validated and scoped to the controller document"
     assert.equal(NetRendezvous.setSessionUrl("http://127.0.0.1:3456/private"), true);
     assert.equal(NetRendezvous.setSessionUrl(null), true);
     assert.equal(NetRendezvous.usingPrivateRelay(), false, "public QR can override a saved private preference");
-    assert.equal(NetRendezvous.makeCode().length, 6);
+    assert.equal(NetRendezvous.makeCode().length, NetRendezvous.CODE_LEN);
     NetRendezvous.setSessionUrl(undefined);
     assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test");
   } finally { NetRendezvous.setSessionUrl(undefined); NetRendezvous.setUrl(null); }
@@ -689,10 +700,7 @@ test("waitFor expired copy is actionable (no false 'couple of minutes' claim)", 
     const got = await pending;
     assert.equal(got.ok, false);
     assert.equal(got.error, "expired");
-    assert.match(got.message, /double-check it/i);
-    assert.match(got.message, /fresh one/i);
-    assert.doesNotMatch(got.message, /couple of minutes/i);
-    assert.doesNotMatch(got.message, /six characters/i);
+    assert.equal(got.message, "Nobody answered that code. Double-check it, or ask your friend for a fresh one.");
   } finally {
     Date.now = realNow;
     await r.close();

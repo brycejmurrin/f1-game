@@ -2,7 +2,7 @@
 // backend-compare — the SAME deterministic scene, screenshotted on each render
 // @doc Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors.
 // @skill playwright-probe
-// Workflow: docs/ARCHITECTURE.md §Cross-backend parity (docs/RENDERERS.md is a redirect stub; the folded cross-backend-parity skill).
+// Workflow: docs/ARCHITECTURE.md §Cross-backend parity (docs/ARCHITECTURE.md is a redirect stub; the folded cross-backend-parity skill).
 // backend (GLX webgl2 / TLX three / WGX webgpu), plus a numeric pixel diff.
 //
 // WHY. The parity suite proves each backend's SURFACE answers; nothing proves
@@ -44,6 +44,7 @@ import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs
 import { fileURLToPath } from "node:url";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { loadAllModels, reportCaptureFallbacks } from "./capture-fallbacks.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -57,6 +58,8 @@ exitIfHelp(argv, `backend-compare — same scene on GLX/TLX/WGX + pixel diff
 
   node tools/shot/backend-compare.mjs [track] [frac] [cam]
     [--backends webgl2,three] [--tod day] [--out DIR] [--az N] [--el N] [--dist N]
+    [--side -1|1]                 trackside cam: which side of the road (default 1)
+    [--label NAME]                output file stem (default <track>-<frac%>-<cam>-<tod>)
     [--ls apex26.key=value ...]   (repeatable: localStorage pins set before boot, for kill-switch A/Bs)
     [--gov-free]                  let the perf governor shed tiers / scale during the capture (default: pinned)
     [--lamps-live]                keep the lamp warm-up ramp and flicker (default: pinned off — a night capture
@@ -132,11 +135,7 @@ async function captureBackend(backend) {
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 30_000 });
 
     // Models resident BEFORE the build so scenery bakedModel() emits identically.
-    await page.evaluate(async () => {
-      if (typeof Assets !== "undefined" && Assets.loadModels) {
-        try { await Assets.loadModels(); } catch (_) {}
-      }
-    });
+    await loadAllModels(page);
     await page.evaluate((id) => window.__apex.race(id), safeTrackId);
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     if (!govFree) await page.evaluate(() => {
@@ -195,9 +194,11 @@ async function captureBackend(backend) {
     const shot = await screenshotPresentedCanvas(page, { path, skipAwait: true, timeout: 60_000 });
     const buf = shot.buf;
     const blank = shot.bytes < 5000;
-    shots.push({ backend, path, bytes: buf.length, state, consoleLines });
     console.log(`  ${backend}: ${path} (${(buf.length / 1024).toFixed(1)} KB) bound=${state.backend}`
       + (blank ? "  ⚠ looks blank" : ""));
+    // #5790: the software-renderer fallbacks and the models loaded beyond the player's set, beside the image.
+    const fallbacks = await reportCaptureFallbacks(page, safeTrackId, (line) => console.log("    " + line));
+    shots.push({ backend, path, bytes: buf.length, state, fallbacks, consoleLines });
   } finally {
     await browser.close();
   }
@@ -266,8 +267,11 @@ try {
     console.log(`  diff ${shots[0].backend} vs ${shots[i].backend}: meanAbsDiff=${d.meanAbsDiff} pctDiffPixels=${d.pctDiffPixels}% meanRGB=${d.meanRGB}`);
   }
 
+  // A parity capture only when every shot drew the full content a real GPU draws and loaded only the player's set.
+  const parity = shots.length > 0 && shots.every((s) => s.fallbacks && s.fallbacks.parity);
+  if (!parity) console.log("  parity: false — a fallback was active or extra models were loaded (see each capture-state line); not a parity capture");
   const manifest = {
-    track: safeTrackId, frac, cam: safeCam, tod, az, el, dist, side,
+    track: safeTrackId, frac, cam: safeCam, tod, az, el, dist, side, parity,
     shots: shots.map((s) => ({ ...s, path: s.path })),
     diffs,
   };

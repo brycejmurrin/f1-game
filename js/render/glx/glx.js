@@ -1,14 +1,14 @@
 /*
- * Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps,
+ * Apex 26 — WebGL2 renderer core: the PBR GGX lit pass (sun + 48 spot lamps,
  * shadow maps, procedural materials, wet road, fog), the procedural sky and
- * the FX passes — ~13 programs. GLSL sources live in js/render/shaders/
+ * the FX passes — ~13 programs. GLSL sources live in js/render/glx/shaders/
  * (chunks/lit/sky/fx/post); the post, shadow and chunked-scenery subsystems
  * are split into js/render/glx/.
  */
 "use strict";
 
 const GLXBackend = (function () {
-  // GLSL sources live in js/render/shaders/{lit,sky,fx,post}.js (loaded before this
+  // GLSL sources live in js/render/glx/shaders/{lit,sky,fx,post}.js (loaded before this
   // file). The post/shadow sources are destructured by the split subsystem modules
   // (js/render/glx/post.js, js/render/glx/shadow.js) instead of here.
   const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS } = GLXShaders;
@@ -17,7 +17,7 @@ const GLXBackend = (function () {
   let canvas = null;
   // HeadlessChrome soft-present overlay lives in js/render/glx/soft.js (GLXSoft).
   // Created once the ctxGone helper exists; deps close over gl/canvas/PST/outFBO.
-  let Soft = null;
+  let /** @type {ReturnType<typeof GLXSoft.create> | null} */ Soft = null;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -28,14 +28,13 @@ const GLXBackend = (function () {
   //
   // The eager GLX facade owns the single device sniff, ahead of eval-time
   // consumers and deferred renderers. Read that tier rather than re-sniffing.
-  // A capable phone can opt into the desktop-quality tier (full DPR + MSAA +
-  // full-res atlases + 2048 shadows) via the pause-menu GRAPHICS: HIGH setting.
-  // Default OFF — the safe tier is what keeps memory-limited devices alive.
+  // A phone is ALWAYS the memory-safe tier: the facade sets mobileTier = isMobile and
+  // no GRAPHICS preset lifts it (the old GRAPHICS: HIGH opt-in to full DPR is gone).
   const IS_MOBILE = GLX.isMobile;
   // INSTANCE CELL-SET CULL CACHE — owned by js/render/shared/inst-cells.js
   // (apex26.instCellCache=0 escape hatch). Numbers: docs/PERF-FINDINGS.md 2c.
-  // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
-  // key off this, so HIGH restores full quality (a reload re-runs init with it).
+  // MOBILE TIER = any phone (GLX.mobileTier === GLX.isMobile). All the memory
+  // downgrades, the 1.5 DPR cap included, key off this; no setting restores them.
   const MOBILE_TIER = GLX.mobileTier;
   let _ctxLost = false, _lossCounted = false;   // lost→restore; counted loss arms ctxLostNotice (#3513)
   // Past the ctx-loss reload budget: record for __apex.diag() without painting
@@ -124,9 +123,9 @@ const GLXBackend = (function () {
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
   const _ambScratchG = [0, 0, 0], _ambScratchS = [0, 0, 0];
   let skyProg = null, skyU = null;
-  let shadowProg = null, shadowU = null;
   let markProg = null, markU = null;
   let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null, markBatchCap = 0;
+  let blobBatchProg = null;   // F5: linked here; draw/flush via GLXShadow.attachBlobBatch → BLOB
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
   let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
@@ -185,6 +184,7 @@ const GLXBackend = (function () {
   let frameLights = null;
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
+  let frameBrakeSpillStart = Infinity;
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
   // PER-CHUNK ROAD: 1 when the road (surfaceId 16) may take per-chunk lamp sets
   // too (game.js frame.roadChunkLamps; GLXChunked reads F.roadChunkLamps).
@@ -197,6 +197,7 @@ const GLXBackend = (function () {
   // god-ray scratch, which moved to js/render/glx/post.js with present().
   // Four vec4s match shaders/glsl-lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
   const MAX_LIGHTS = LightBudget.MAX;   // eval-time read: tools/manifest.cjs HARD_EDGES (light-budget.js first)
+  let litSlots = MAX_LIGHTS;   // the lit loop's LIVE slots (init fits it to the GPU)
   // ONE interleaved scratch, stride 16 floats (4 vec4s) per light — matches
   // uLight[] in shaders/glsl-lit.js so a chunk uploads in a single uniform4fv.
   const _luL = new Float32Array(MAX_LIGHTS * 16);
@@ -225,8 +226,9 @@ const GLXBackend = (function () {
 
   // The split renderer subsystems (js/render/glx/{post,shadow,chunked}.js),
   // wired at init() through the GLXCore ctx built there. PST = post chain,
-  // SHD = shadow maps (sun/car/lamp + PCSS blocker), CHK = chunked meshes.
-  let core = null, PST = null, SHD = null, CHK = null;
+  // SHD = shadow maps (sun/car/lamp + PCSS blocker) + F5 blob batch attach,
+  // CHK = chunked meshes. BLOB = return of GLXShadow.attachBlobBatch.
+  let core = null, /** @type {ReturnType<typeof GLXPost.init> | null} */ PST = null, /** @type {ReturnType<typeof GLXShadow.init> | null} */ SHD = null, /** @type {ReturnType<typeof GLXChunked.init> | null} */ CHK = null, /** @type {ReturnType<typeof GLXShadow.attachBlobBatch> | null} */ BLOB = null;
   Soft = GLXSoft.create({
     getGl: () => gl,
     getCanvas: () => canvas,
@@ -270,15 +272,18 @@ const GLXBackend = (function () {
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
   let _activeProg = null;
-  function useProg(p) { if (p !== _activeProg) { gl.useProgram(p); _activeProg = p; } }
+  // Road-decal ROAD_BIAS stays on across shadow/mark/blob; lift on other programs
+  // (perf hunt 6). F5: flush pending blob batch before binding a non-blob program.
+  function useProg(p) {
+    if (BLOB && BLOB.pending() && !BLOB.isProg(p)) BLOB.flush();
+    if (p === _activeProg) return;
+    if (_polyOn && p !== markProg && !(BLOB && BLOB.isProg(p))) setPolyOffset(null);
+    gl.useProgram(p); _activeProg = p;
+  }
 
-  // Per-frame view-projection upload cache for the blob-shadow / skid-mark
-  // programs. uViewProj never changes within a frame, but drawShadow/drawMark are
-  // called dozens of times per frame (one per skid stamp / car shadow), each
-  // re-uploading the same 16-float matrix. Track which program last received the
-  // frame's matrix so the upload happens at most once per program per frame.
+  // Per-frame view-projection upload cache for skid-mark (blob VP cache is in BLOB).
   let _frameToken = 0;
-  const _vpTok = { shadow: -1, mark: -1 };
+  const _vpTok = { mark: -1 };
   // Tuner-knob upload cache (PERF-FINDINGS §3). envFaceBegin() calls begin()
   // and the main camera calls begin() again in the same game frame with the
   // same LIGHTING TUNER scalars; WebGL uniforms persist on the program, so
@@ -473,7 +478,7 @@ const GLXBackend = (function () {
     gl.colorMask(true, true, true, on);
   }
   const ROAD_BIAS = [-4.0, -8.0];   // decals sit on the road: shared, not a literal per draw
-  // Value cache matching setBlend/setDepthMask — flushBlobs/drawMark/drawShadow
+  // Value cache matching setBlend/setDepthMask — mark/blob/skid
   // re-state the same ROAD_BIAS bracket; consecutive same-bias calls no-op.
   // resetDrawState() must invalidate (it writes GL directly).
   let _polyOn = false, _polyF = 0, _polyU = 0;
@@ -555,6 +560,8 @@ const GLXBackend = (function () {
     return checkLink(prog);
   }
 
+  const litFsFor = (n) => LIT_FS.replace(/const int MAX_LIGHTS = \d+;/, "const int MAX_LIGHTS = " + (n | 0) + ";");
+
   function locs(prog, names) {
     const u = {};
     for (const n of names) u[n] = gl.getUniformLocation(prog, n);
@@ -563,8 +570,7 @@ const GLXBackend = (function () {
 
   function init(canvasEl) {
     canvas = canvasEl;
-    LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
-    watchCanvasSize();
+    LightBudget.setSlots(litSlots = MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
     // HeadlessChrome's CDP / Playwright page screenshots race the cleared backbuffer
     // without preserveDrawingBuffer — and even with it, SwiftShader often never
     // composites the WebGL layer (a black gap). GLX keeps the buffer AND blits.
@@ -577,7 +583,6 @@ const GLXBackend = (function () {
         || !!navigator.webdriver);
     let capNative = false;
     try { capNative = (sessionStorage.getItem("apex26.wgxCapture") || localStorage.getItem("apex26.wgxCapture")) === "0"; } catch (_) { /* AUTO */ }
-    Soft.setEnabled(headlessUa && !capNative);
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -592,7 +597,6 @@ const GLXBackend = (function () {
     });
     if (!gl) return false;
     _softwareGl = detectSoftwareGl();
-    if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
@@ -704,10 +708,10 @@ const GLXBackend = (function () {
         try {
           var _onVis = function () {
             if (document.hidden) return;
-            document.removeEventListener("visibilitychange", _onVis);
+            document.removeEventListener("visibilitychange", _onVis); canvas.__glxVisReload = false;
             try { location.reload(); } catch (_) { /* harness */ }
           };
-          document.addEventListener("visibilitychange", _onVis);
+          document.addEventListener("visibilitychange", _onVis); canvas.__glxVisReload = true;   // restore defers to it (#5699 row 16)
         } catch (_) { /* no document events: the restore handler below is the remaining path */ }
         return;
       }
@@ -738,42 +742,54 @@ const GLXBackend = (function () {
     }, false);
     // Restore obeys the same two-reload budget; storage failure must not skip reload.
     canvas.addEventListener("webglcontextrestored", function () {
-      var n = GfxEscalation.reloadCount();
-      if (n > 2) return;
+      if (document.hidden && canvas.__glxVisReload) return;   // the hidden loss's visibility reload covers it (#5699 row 16)
+      var n = GfxEscalation.reloadCount(); if (n > 2) return;
       if (_lossCounted) try { sessionStorage.setItem("apex26.ctxLostNotice", "1"); } catch (_) { /* blocked storage */ }
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
 
-    // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is ~279 vec4 rows
-    // (uLight 192 + uMatTexScale 17 + three mat4 + nine vec3 + ~47 scalars),
-    // above the GLES 3.0 floor of 224 that shaders/glsl-lit.js still cites. Apple
-    // and desktop drivers report 1024+, so iPhone links; an Adreno at the
-    // floor does not, and until now the only symptom was init() returning
-    // false with a 100 KB shader dumped to the console. Say the two numbers
-    // side by side so a "no WebGL" report on a phone names its cause.
-    const LIT_FS_ROWS = 288;   // +uRain, +uSpecKnee (2026-10-01), +uCarFinish (2026-10-20)
+    // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is 292 vec4 rows (a row
+    // per scalar; glx-light-fit.test.mjs recounts it), above the GLES 3.0 floor
+    // of 224: Apple and desktop report 1024+, many Androids under 261. The light
+    // loop shrinks to fit (4 rows a light, 31 at 224) instead of failing (#5990).
+    const LIT_FS_ROWS = 292;
     try {
       const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
-      if (rows && rows < LIT_FS_ROWS) {
-        Log.warn("gfx", "GLX: MAX_FRAGMENT_UNIFORM_VECTORS " + rows + " < the lit shader's ~" + LIT_FS_ROWS + " rows — expect the lit program to fail to link on this GPU");
+      litSlots = LightBudget.fitSlots(rows, LIT_FS_ROWS, 4);
+      if (litSlots < MAX_LIGHTS) {
+        Log.warn("gfx", "GLX: MAX_FRAGMENT_UNIFORM_VECTORS " + rows + " < the lit shader's ~" + LIT_FS_ROWS + " rows — lit lights cut to " + litSlots);
       }
-    } catch (_) { /* a caps read must never cost the boot */ }
+    } catch (_) { litSlots = MAX_LIGHTS; /* a caps read must never cost the boot */ }
     beginLinks();   // the eight core programs compile as one parallel batch
-    litProg = link(LIT_VS, LIT_FS);
+    litProg = link(LIT_VS, litFsFor(litSlots));
     skyProg = link(SKY_VS, SKY_FS);
-    shadowProg = link(SHADOW_VS, SHADOW_FS);
     markProg = link(SHADOW_VS, MARK_FS);
     markBatchProg = link(MARK_BATCH_VS, MARK_FS);
+    blobBatchProg = link(MARK_BATCH_VS, SHADOW_FS);   // F5: attach → GLXBlobBatch
     glowProg = link(GLOW_VS, GLOW_FS);
     lineProg = LINE_VS && LINE_FS ? link(LINE_VS, LINE_FS) : null;
     particleProg = link(PARTICLE_VS, PARTICLE_FS);
     decalProg = link(DECAL_VS, DECAL_FS);
     const _bad = resolveLinks(), _ok = (p) => (p && !_bad.has(p) ? p : null);
-    litProg = _ok(litProg); skyProg = _ok(skyProg); shadowProg = _ok(shadowProg); markProg = _ok(markProg);
-    markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
+    litProg = _ok(litProg); skyProg = _ok(skyProg); markProg = _ok(markProg);
+    markBatchProg = _ok(markBatchProg); blobBatchProg = _ok(blobBatchProg);
+    glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
+    if (!litProg && litSlots > LightBudget.LITE) litProg = link(LIT_VS, litFsFor(litSlots = LightBudget.LITE));   // drivers pack differently: one retry
+    LightBudget.setSlots(litSlots);
+    if (!litProg || !skyProg || !markProg || !blobBatchProg) {
+      // checkLink has already released failed links. Drop their successful
+      // siblings too: an abandoned backend will never draw with this batch.
+      for (const prog of [litProg, skyProg, markProg, markBatchProg, blobBatchProg, glowProg, lineProg, particleProg, decalProg]) {
+        if (prog) gl.deleteProgram(prog);
+      }
+      litProg = skyProg = markProg = markBatchProg = blobBatchProg = glowProg = lineProg = particleProg = decalProg = null;
+      return false;
+    }
+    watchCanvasSize();
+    Soft.setEnabled(headlessUa && !capNative);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
       "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
-    if (!litProg || !skyProg || !shadowProg || !markProg) return false;
+    _decalVPToken = -1; _lastDecalGlow = NaN;
     _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules
@@ -889,7 +905,6 @@ const GLXBackend = (function () {
       "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeOrigin", "uBakeSize", "uBakeScale", "uBakeShCol", "uBakeGrid", "uBakeAtlas",
       "uNumLights", "uLight[0]"]);
     skyU = locs(skyProg, ["uInvViewProj", "uZenith", "uHorizon", "uSunDir", "uSunColor", "uStars", "uCloud", "uTime", "uMoon", "uCityGlow", "uStarBright", "uCloudSpeed", "uSkyGrad", "uStarDensity", "uDaySkyBlue", "uMieScatter", "uCloudSilver", "uCoronaAureole", "uSunDiscSize", "uStarSize", "uStarTwinkle", "uMoonDiscSize", "uMoonHalo", "uSunCorona", "uSunSquash", "uCityGlowReach", "uCloudDef", "uLightning"]);
-    shadowU = locs(shadowProg, ["uModel", "uViewProj", "uSize"]);
     markU = locs(markProg, ["uModel", "uViewProj", "uSize"]);
     if (markBatchProg) {
       markBatchU = locs(markBatchProg, ["uViewProj"]);
@@ -897,14 +912,22 @@ const GLXBackend = (function () {
       markBatchVAO = gl.createVertexArray();
       gl.bindVertexArray(markBatchVAO);
       markBatchVBO = gl.createBuffer();
+      markBatchCap = 0;
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
       const mst = 5 * 4;   // 5 floats per vertex
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, mst, 0);
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, mst, 12);
       gl.bindVertexArray(null);
     }
+    if (blobBatchProg) {
+      BLOB = GLXShadow.attachBlobBatch({
+        gl, useProg, bindVAO, setBlend, setDepthMask, setPolyOffset, ctxGone, ROAD_BIAS,
+        prog: blobBatchProg, u: locs(blobBatchProg, ["uViewProj"]),
+        getViewProj: () => frameViewProj, getFrameToken: () => _frameToken,
+      });
+    } else { BLOB = null; }
     if (lineProg) {
-      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uPalette", "uOpacity", "uStr"]);
+      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uOnPace", "uLift", "uBrake", "uOpacity", "uStr"]);
       // Static interleaved strip: [x, y, z, across, speed, zone, along] per
       // vertex (DrivingLine.STRIDE = 7), uploaded once per circuit.
       lineVAO = gl.createVertexArray();
@@ -987,6 +1010,9 @@ const GLXBackend = (function () {
   // With apex26.spatialUpscale=1 and scale < 1, the canvas is FULL present size
   // (css×dpr) and SGSR1 reconstructs the missing pixels (UPSCALING-2026-09 §6).
   let renderScale = 1;
+  // RESOLUTION MAX (js/ui/scale.js setDprBoost): 0, or the DPR asked for (at most 3). It only RAISES the tier's cap
+  // below; resize() still takes the lower of the cap and window.devicePixelRatio. TLX's twin: tlx.js dprCapFor.
+  let _dprBoost = 0;
   let presentW = 0, presentH = 0;
   let spatialUpscale = false;
   try {
@@ -1007,7 +1033,7 @@ const GLXBackend = (function () {
   }
   // CSS-box observation is shared; this backend still owns DPR, the driver
   // clamp and every render-target allocation below.
-  let cssSizeCache = null;
+  let /** @type {ReturnType<typeof CanvasCssSize.create> | null} */ cssSizeCache = null;
   function watchCanvasSize() {
     cssSizeCache = CanvasCssSize.create(canvas, { settleFrames: 8 });
   }
@@ -1031,11 +1057,13 @@ const GLXBackend = (function () {
     // Mobile: cap DPR at 1.5 (was 2) — every full-screen target scales with the
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
-    const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
+    // RESOLUTION MAX's _dprBoost (setDprBoost) only RAISES that cap, and never above the device's own DPR.
+    const dpr = Math.min(window.devicePixelRatio || 1, Math.max(MOBILE_TIER ? 1.5 : 2, _dprBoost));
     const css = cssSize();
     const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
     presentH = Math.max(1, Math.round(css.height * dpr));
+    if (cssSizeCache?.photoSize) { presentW = cssSizeCache.photoSize.width; presentH = cssSizeCache.photoSize.height; }
     // CLAMP UNIFORMLY to the driver's ceiling (maxDim, queried in init): one
     // factor for both axes keeps `aspect`, and every projection built on it,
     // correct — just smaller. It sits BEFORE rw/rh on purpose: post.js
@@ -1082,6 +1110,16 @@ const GLXBackend = (function () {
     return true;
   }
   function getRenderScale() { return renderScale; }
+  // RESOLUTION MAX asks for the device's own DPR; every other RESOLUTION and PerfGov's budget shed pass 0.
+  // True = the boost changed (TLX answers "the cap moved"; GLX has no capDpr ceiling, so the two agree here).
+  function setDprBoost(n) {
+    const v = n > 0 ? Math.min(+n, 3) : 0;
+    if (v === _dprBoost) return false;
+    _dprBoost = v;
+    if (gl) resize();
+    return true;
+  }
+  function getDprBoost() { return _dprBoost; }
 
   function toF32(a) {
     return a instanceof Float32Array ? a : new Float32Array(a);
@@ -1262,7 +1300,7 @@ const GLXBackend = (function () {
   function freeTexture(t) {
     if (!t) return;
     _texForget(t);
-    if (ctxGone()) return;   // driver already dropped the unit; deleteTexture would be INVALID_OPERATION
+    if (ctxGone()) return;   // a lost context ignores the call (WebGL: default return, no error); skip it
     gl.deleteTexture(t);
   }
 
@@ -1314,17 +1352,17 @@ const GLXBackend = (function () {
     return tex;
   }
 
-  // Adopt (or clear, with a falsy argument) the baked material maps. Frees any
-  // previously-bound arrays so a pack swap — tier change, test teardown — can't
-  // leak GPU memory.
+  // Adopt (or clear) material maps; release outgoing texture identities once.
   function setMaterialMaps(maps) {
     _matGen++;   // bindMaterialMaps rebinds + re-uploads the scales on the next begin()
-    if (matAlbedoTex) { _texForget(matAlbedoTex); gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
-    if (matNormalTex) { _texForget(matNormalTex); gl.deleteTexture(matNormalTex); matNormalTex = null; }
+    // Ownership follows texture identity, not the slot. A scale-only update
+    // or an albedo/normal alias must not delete a texture we are keeping.
+    const albedo = maps && maps.albedo || null, normal = maps && maps.normal || null;
+    for (const old of new Set([matAlbedoTex, matNormalTex]))
+      if (old && old !== albedo && old !== normal) freeTexture(old);
+    matAlbedoTex = albedo; matNormalTex = normal;
     matTexScales.fill(0);
     if (!maps) return;
-    matAlbedoTex = maps.albedo || null;
-    matNormalTex = maps.normal || null;
     const sc = maps.scales;
     if (sc) for (let i = 0; i < MAT_TEX_LAYERS; i++) matTexScales[i] = +sc[i] > 0 ? +sc[i] : 0;
     // No albedo array means no baked material at all: zero every scale so the
@@ -1391,7 +1429,7 @@ const GLXBackend = (function () {
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
   // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
   // the alpha channel is NOT written (the car's SSR paint tag underneath survives).
-  let _decalVPToken = -1;
+  let _decalVPToken = -1, _lastDecalGlow = NaN;
   function drawDecal(mesh, modelMat, tex, opts) {
     if (ctxGone() || !decalProg || !mesh || !tex) return;
     useProg(decalProg);
@@ -1399,6 +1437,11 @@ const GLXBackend = (function () {
     // Frame-constant uniforms once per frame (same token pattern as
     // drawShadow/drawMark) — this runs once per car livery, ~22x/frame.
     if (_decalVPToken !== _frameToken) {
+      // Sampler unit assignments belong to the linked program. The bound atlas can change on every car.
+      if (_decalVPToken === -1) {
+        gl.uniform1i(decalU.uTex, 5); gl.uniform1i(decalU.uShadowMap, 0);
+        gl.uniform1i(decalU.uLampBake, 12); gl.uniform1i(decalU.uLampBakeIdx, 13);
+      }
       _decalVPToken = _frameToken;
       gl.uniformMatrix4fv(decalU.uViewProj, false, frameViewProj);
       gl.uniform3fv(decalU.uSunDir, frameSunDir);
@@ -1406,7 +1449,6 @@ const GLXBackend = (function () {
       gl.uniform3fv(decalU.uAmbSky, frameAmbSky);
       gl.uniform3fv(decalU.uAmbGround, frameAmbGround);
       // Sun map stays on unit 0, the lamp bake (or its dummy) on 12 + 13 — begin() bound both.
-      gl.uniform1i(decalU.uShadowMap, 0); gl.uniform1i(decalU.uLampBake, 12); gl.uniform1i(decalU.uLampBakeIdx, 13);
       if (SHD && SHD.lightVP) gl.uniformMatrix4fv(decalU.uLightVP, false, SHD.lightVP);
       gl.uniform4fv(decalU.uShadowP, _decalSh);
       gl.uniform3fv(decalU.uShadowCtr, _decalShCtr || ZERO3);
@@ -1420,14 +1462,14 @@ const GLXBackend = (function () {
         gl.uniform2f(decalU.uBakeAtlas, lb.atlasW, lb.atlasH * 2);
       }
     }
-    gl.uniform1f(decalU.uGlow, (opts && opts.glow) || 0);
+    const glow = (opts && opts.glow) || 0;
+    if (glow !== _lastDecalGlow) { gl.uniform1f(decalU.uGlow, glow); _lastDecalGlow = glow; }
     // Bind the decal texture to a SPARE unit (5), NOT unit 0 — the lit pass keeps
     // the shadow map bound to TEXTURE0 for the whole frame, so clobbering unit 0
     // here would make every later lit draw (e.g. the player's wheels, drawn right
     // after these decals) sample this RGBA image as the shadow map → broken/black.
     gl.activeTexture(gl.TEXTURE5);
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.uniform1i(decalU.uTex, 5);
     gl.activeTexture(gl.TEXTURE0);   // leave unit 0 active + still bound to the shadow map
     setBlend(true);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);   // premultiplied atlas (createTexture)
@@ -1568,7 +1610,7 @@ const GLXBackend = (function () {
     // redirects begin() to the probe FBO; leaving it set because the texture
     // went away mid-cycle is the same brick as above, one frame later.
     _envActive = false;
-    if (!gl || !envTex) return;
+    if (!gl || !envTex) return false;
     envFacesMask |= 1 << face;
     // Unbind the probe FBO FIRST. generateMipmap below must NOT run while envTex
     // is still the COLOR_ATTACHMENT0 of the bound framebuffer — that read/write
@@ -1693,6 +1735,7 @@ const GLXBackend = (function () {
     // per-chunk sets and setting their cap via capFor.
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
+    frameBrakeSpillStart = frameLights && frame.brakeSpillCount ? frameLights.length - frame.brakeSpillCount * 15 : Infinity;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
@@ -1811,7 +1854,7 @@ const GLXBackend = (function () {
     // texture image unit — GLES 3.0 §2.11.7 makes that an INVALID_OPERATION at the
     // next draw, not a link error, so the whole lit pass would draw nothing and
     // the world would vanish under sky + post. Reachable: glx/shadow.js allocates
-    // the blocker as R16F, which needs EXT_color_buffer_float, so a device without
+    // the blocker as R32F, which needs EXT_color_buffer_float, so a device without
     // it fails checkFramebufferStatus and leaves pcssEnabled false forever. The
     // neighbouring uLampShadowMap comment makes this argument correctly for the
     // SAME sampler type; the blocker was the one case it did not cover. Hoisted
@@ -1988,8 +2031,8 @@ const GLXBackend = (function () {
   // Tail lights are reserved FIRST (there are at most 5, and a car beside you
   // matters more than the 32nd-nearest lamp), then static lamps fill what's left.
   function uploadLightSet(L, idx, n, L2, o2, n2) {
-    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
-    const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
+    const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, litSlots) : 0;
+    const nStatic = L ? Math.max(0, Math.min(litSlots - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
     // MEASURED BEFORE WRITING (docs/PERF-FINDINGS.md §2e's rule): vegas night,
     // full field in a pack, 111 uploads a frame against 53.7 distinct VALUES —
@@ -2006,21 +2049,15 @@ const GLXBackend = (function () {
       const o = fromTail ? (((o2 | 0) + (i - nStatic)) * 15)
                          : ((idx ? idx[i] : i) * 15);
       const i4 = i * 16;
-      // NO PER-CHUNK DIMMER HERE, and do not reintroduce one. The knob was once
-      // a brightness multiplier applied at this point; setFrameLights now scales
-      // the baked set exactly like the culled one, so this had already been
-      // reduced to a guaranteed identity (see the retirement note at the
-      // _lampScale assignment site, removed with it). What survived the
-      // retirement was the machinery: a per-lamp `inFrameTail` test — four
-      // comparisons for every lamp of every chunk of every chunked mesh, five
-      // times a frame — feeding a scale that was provably 1, and three
-      // multiplies by it. The knob's real jobs are enabling per-chunk sets and
-      // setting their cap via capFor; neither is a factor on rgb.
+      // NO PER-CHUNK DIMMER HERE, and do not reintroduce one: setFrameLights
+      // scales the baked set like the culled one, so a factor here was a proven
+      // identity paid per lamp per chunk. The knob only enables sets and caps them.
       L4[i4] = src[o]; L4[i4 + 1] = src[o + 1]; L4[i4 + 2] = src[o + 2]; L4[i4 + 3] = src[o + 6];
       L4[i4 + 4] = src[o + 3]; L4[i4 + 5] = src[o + 4]; L4[i4 + 6] = src[o + 5]; L4[i4 + 7] = src[o + 12];
       L4[i4 + 8] = src[o + 7]; L4[i4 + 9] = src[o + 8]; L4[i4 + 10] = src[o + 9]; L4[i4 + 11] = src[o + 10];
       L4[i4 + 12] = src[o + 11]; L4[i4 + 14] = 0; L4[i4 + 15] = 0;   // lane 13 = LIVE-ONLY (not in the lamp bake):
-      L4[i4 + 13] = fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
+      L4[i4 + 13] = src === frameLights && o >= frameBrakeSpillStart ? 1 :
+        fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
     }
     gl.uniform4fv(litU["uLight[0]"], L4, 0, nL * 16);
   }
@@ -2472,23 +2509,7 @@ const GLXBackend = (function () {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  function drawShadow(modelMat, w, l) {
-    if (ctxGone()) return;
-    useProg(shadowProg);
-    if (_vpTok.shadow !== _frameToken) {
-      gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
-      _vpTok.shadow = _frameToken;
-    }
-    gl.uniformMatrix4fv(shadowU.uModel, false, modelMat);
-    gl.uniform2f(shadowU.uSize, w, l);
-    setBlend(true);
-    setDepthMask(false);
-    // Pull the quad toward the camera so it can't z-fight the coplanar road.
-    setPolyOffset(ROAD_BIAS);
-    bindVAO(shadowVAO);
-    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    setPolyOffset(null);
-  }
+  function drawShadow(modelMat, w, l) { if (BLOB) BLOB.drawShadow(modelMat, w, l); }
 
   function drawMark(modelMat, w, l) {
     if (ctxGone()) return;
@@ -2504,7 +2525,6 @@ const GLXBackend = (function () {
     setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    setPolyOffset(null);
   }
 
   // Batched skid marks. `verts` is an interleaved Float32Array (pos3 + uv2 per
@@ -2521,11 +2541,12 @@ const GLXBackend = (function () {
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
-    if (dirty) {
+    const nF = vertCount * 5;
+    if (dirty || nF > markBatchCap) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);
-      const nF = vertCount * 5;
       if (nF > markBatchCap) {
-        markBatchCap = nF;
+        // The trail supplies its bounded ring storage; only the live prefix needs an upload.
+        markBatchCap = verts.length;
         gl.bufferData(gl.ARRAY_BUFFER, markBatchCap * 4, gl.DYNAMIC_DRAW);
       }
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
@@ -2535,12 +2556,11 @@ const GLXBackend = (function () {
     return true;
   }
 
-  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one
-  // triangle strip, stride-7 floats), drawn like the skid batch — depth-tested,
-  // no depth write, biased onto the road — but emissive, so bloom lifts it
-  // into the glow every racing game's line has. `opts.speed` is the player's
-  // speed for the dynamic colour; `opts.cornersOnly` fades the straights.
-  // Returns false when the pass is unavailable so the caller can say so.
+  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one triangle strip, stride-7 floats), drawn
+  // like the skid batch — depth-tested, no depth write, biased onto the road — but emissive, so bloom lifts it into
+  // the glow every racing game's line has. `opts.speed` is the player's speed for the dynamic colour, `opts.cols` its
+  // LINE COLOUR (9 floats, F1 GREEN when absent); `opts.cornersOnly` fades the straights. false = pass unavailable.
+  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   function drawDrivingLine(verts, vertCount, dirty, opts) {
     if (ctxGone()) return true;
     if (!lineProg) return false;
@@ -2549,7 +2569,8 @@ const GLXBackend = (function () {
     gl.uniformMatrix4fv(lineU.uViewProj, false, frameViewProj);
     gl.uniform1f(lineU.uPlayerSpeed, (opts && opts.speed) || 0);
     gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
-    gl.uniform1f(lineU.uPalette, opts && opts.palette ? 1 : 0);
+    const lc = (opts && opts.cols) || LINE_COLS_F1;   // LINE COLOUR: onPace, lift, brake (DrivingLine.PALETTES)
+    gl.uniform3fv(lineU.uOnPace, lc, 0, 3); gl.uniform3fv(lineU.uLift, lc, 3, 3); gl.uniform3fv(lineU.uBrake, lc, 6, 3);
     gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
     gl.uniform1f(lineU.uStr, 1.6);          // emissive strength: a constant, no producer sends one
     setBlend(true);
@@ -2727,7 +2748,7 @@ const GLXBackend = (function () {
       layers: Array.from(matTexScales).reduce((n, s) => n + (s > 0 ? 1 : 0), 0),
       scales: Array.from(matTexScales),
     }),
-    freeTexture,
+    freeTexture, flushTexPool() {},   // flushTexPool: TLX-only pool, no-op here
     texCensus,                    // resident texture bytes — see the ledger above
     drawDecal,
     chunkedTrackCoords: true,
@@ -2765,6 +2786,7 @@ const GLXBackend = (function () {
     setRenderSizeOverride,
     present: (opts) => {
       if (ctxGone()) return;
+      if (BLOB && BLOB.pending()) BLOB.flush();   // F5: before post takes GL state
       // Occlusion queries go LAST and before post, which is the only moment in
       // the frame when the opaque depth buffer is both complete and still
       // bound. A no-op unless apex26.occlusionCull is on (GLXChunked).
@@ -2820,8 +2842,9 @@ const GLXBackend = (function () {
     mirrorBegin,
     mirrorEnd,
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
-    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }),
+    mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
     drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
+    get envProbeOptOut() { return _envDisabled; },
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.
@@ -2848,7 +2871,7 @@ const GLXBackend = (function () {
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => PST.hdrOk(),
-    maxLights: () => MAX_LIGHTS,   // lit-shader light slots (LightBudget.slots() mirrors it)
+    maxLights: () => litSlots,   // lit-shader light slots (LightBudget.slots() mirrors it)
     // Debug introspection for the dynamic car shadow map (used by tests/tools).
     // `armed` is the frame-live gate the LIT uniform reads; `arms` is a lifetime
     // counter that stays true straight through a strobe, which is exactly why the
@@ -2860,7 +2883,8 @@ const GLXBackend = (function () {
     lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx, armed: SHD.lampArmed }),
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
-    setRenderScale, getRenderScale,
+    setPhotoCaptureSize(size) { cssSizeCache.photoSize = size; resize(); },
+    setRenderScale, getRenderScale, setDprBoost, getDprBoost,
     setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
     // supported + on); gpuTimer() reads state. gpuMs() returns the most recent

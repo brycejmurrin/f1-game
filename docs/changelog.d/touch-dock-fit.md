@@ -1,0 +1,1 @@
+Improved: In Settings → Controls → Reposition Touch Controls, move the steering arrows nearer the edge, change the gap between them and choose different pedal and action rows. Select a single button to move, resize or reshape it without changing the other buttons. Done keeps your layout for the current steering mode.

@@ -1,7 +1,7 @@
 /* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)): the resolution and
    persistence half of the lighting tuner. js/lighting/knobs.js owns the
    registry (TUNE_DEFS + the live LT object); this file layers shipped
-   LightPresets (global, shared condition, then per-track), a quality-gated
+   LightPresets (global, shared condition, then per-track), the "*|<tod>"
    conditional layer, and the player's own overrides (global then
    per-condition) over each knob's default into LT, and persists only the
    deltas from default to localStorage (apex26.lightTune).
@@ -111,35 +111,22 @@ const LightStore = (() => {
     }
 
     // Conditional shipped layer: LightPresets["*|<tod>"] (e.g. "*|night"),
-    // resolved only when gfx.hasPerChunkLights (three.js cannot bind per-chunk
-    // sets). Resolution order for most knobs: global "*", shared "*|<tod>|<wx>",
-    // per-track "<id>|<tod>|<wx>", then this cond layer, then player "*", then
-    // player per-condition. perChunkLights alone breaks step four when the
-    // per-track profile pins it: condLayer may raise the value but never lower
-    // a track-authored pin (Math.max(trackPin, condValue)); unpinned tracks
-    // still take condLayer as today. Player layers still come last and win.
-    // Lazy typeof reads — GfxQuality may be absent in a node harness.
+    // keyed by time of day alone. Resolution order for most knobs: global "*",
+    // shared "*|<tod>|<wx>", per-track "<id>|<tod>|<wx>", then this cond layer,
+    // then player "*", then player per-condition. perChunkLights alone breaks
+    // step four when the per-track profile pins it: condLayer may raise the value
+    // but never lower a track-authored pin (Math.max(trackPin, condValue));
+    // unpinned tracks take condLayer. Player layers still come last and win.
+    // No capability or device gate: every backend (GLX, TLX, WGX) binds per-chunk
+    // lamps, and what bounds the cost lives where the cost is — the resolved gate
+    // in game.js sheds on the governor's measured tier and the crash floor.
     function condLayer(F) {
       if (!F) return null;
       const track = G.track;
       if (!track || !track.def) return null;
       let tod = G.raceTimeOfDay;
       if (tod === "default") tod = track.def.night ? "night" : "day";
-      const c = F["*|" + tod];
-      if (!c) return null;
-      const gfx = G.gfx;
-      // CAPABILITY only, no preset-id or isMobile POLICY:
-      //   - "ultra only" misses HIGH, the same PerfGov tier 0 and the desktop
-      //     DEFAULT preset; nothing measured separates the two.
-      //   - "not mobile" was never measured (docs/LIGHTING-TUNER-SLIDERS.md
-      //     says so) and zeroes the feature on a phone at every preset and hour.
-      // What actually bounds the cost lives where the cost is: the resolved
-      // gate in game.js sheds on the GOVERNOR's measured tier and the crash
-      // floor, so a device that cannot afford it loses it by evidence rather
-      // than by device class. hasPerChunkLights stays — three.js genuinely
-      // cannot bind per-chunk sets without minting a program per chunk.
-      if (!gfx || !gfx.hasPerChunkLights) return null;
-      return c;
+      return F["*|" + tod] || null;
     }
 
     // Shared condition stamp: LightPresets["*|<tod>|<wx>"] (e.g. "*|dawn|dry").
@@ -150,11 +137,6 @@ const LightStore = (() => {
       const i = k.indexOf("|");
       if (i < 0) return null;
       return F["*" + k.slice(i)] || null;
-    }
-
-    function layers(k) {
-      const F = window.LightPresets || null;
-      return [F && F["*"], sharedCond(F, k), F && k && F[k], condLayer(F), profiles["*"], k && profiles[k]];
     }
 
     function mergePerChunkShipped(k, v, F) {
@@ -170,8 +152,11 @@ const LightStore = (() => {
       return v;
     }
 
-    function base(k, d) {
-      k = keyFor(d.id, k);
+    // The SHIPPED value of one knob at key k (already keyFor()-mapped): the
+    // presets' layers over the knob default, before any player layer. A knob's
+    // `shippedMax` (knobs.js: carEnvCube on phones) caps what a preset may stamp
+    // there; the player's own layers may still exceed it.
+    function shippedAt(k, d, condition = condLayer(window.LightPresets)) {
       let v = d.def;
       const F = window.LightPresets || null;
       if (F && F["*"] && typeof F["*"][d.id] === "number") v = F["*"][d.id];
@@ -180,11 +165,25 @@ const LightStore = (() => {
       if (d.id === "perChunkLights") v = mergePerChunkShipped(k, v, F);
       else {
         if (F && k && F[k] && typeof F[k][d.id] === "number") v = F[k][d.id];
-        const c = condLayer(F);
-        if (c && typeof c[d.id] === "number") v = c[d.id];
+        if (condition && typeof condition[d.id] === "number") v = condition[d.id];
       }
-      if (profiles["*"] && typeof profiles["*"][d.id] === "number") v = profiles["*"][d.id];
-      return clamp(v, d.min, d.max);
+      if (typeof d.shippedMax === "number") v = Math.min(v, d.shippedMax);
+      return v;
+    }
+
+    const shipVal = (k, d) => clamp(shippedAt(k, d), d.min, d.max);
+    function base(k, d) {
+      const globalValue = profiles["*"]?.[d.id];
+      return typeof globalValue === "number" ? clamp(globalValue, d.min, d.max) : shipVal(keyFor(d.id, k), d);
+    }
+
+    // The live condition's shipped value of `id` (clamped), without the player's
+    // layers — what Atmosphere divides out of a band-clamped fog density so the
+    // player's FOG DENSITY scale survives every re-apply and a reload.
+    function shipped(id) {
+      const d = TUNE_DEFS.find((t) => t.id === id);
+      if (!d) return undefined;
+      return shipVal(keyFor(id, key()), d);
     }
 
     function put(prof, k, d, v) {
@@ -197,16 +196,8 @@ const LightStore = (() => {
       prof[d.id] = v; return true;
     }
 
-    // A rebuild/reapply/reinit is only worth doing once per call, however many
-    // knobs moved — hence the three flags rather than acting inside the loop.
-    //
-    // apply() and set() ran these in DIFFERENT ORDERS before they shared this
-    // function (set() reinitialised the rain before reapplying race settings;
-    // apply() did the reverse). Unifying them is safe because the two branches
-    // are mutually exclusive: the reinitRain knobs are rainCount, rainStreak,
-    // rainSpeed, drizzleCount, drizzleLen and drizzleSpeed, and NONE of them is
-    // in APPLY_RACE_IDS. Checked, not assumed — if a future knob is ever both,
-    // the order becomes load-bearing and this comment is the warning.
+    // Once per call, however many knobs moved. The order of the last two only
+    // matters if a reinitRain knob ever joins APPLY_RACE_IDS (none does).
     function liveEffects(rebuilt, reapply, reinit, fromApplyRace) {
       const track = G.track;
       if (rebuilt && track) { track._lights = null; track._alwaysLights = null; }
@@ -215,36 +206,38 @@ const LightStore = (() => {
       if (reinit && (G.viewRainfall ? G.viewRainfall() > 0.01 : G.isWetRoad())) G.initRainDrops();
     }
 
-    // opts.holdRebuild (the weather arc's blended re-apply, js/lighting/atmosphere.js):
-    // leave the `rebuild` knobs (lampDensity, poolEnergy, lampRadiusMul, bleedMul,
-    // beamCone, beamCore, lampGapFill) and the bake inputs at their live values, so a mid-race weather flip never
-    // nulls track._lights and re-bakes the lamp pools. They stay as the session
-    // resolved them (track x time of day x the weather it started in) until the next
-    // un-blended apply: a chip, a slider, a track load.
-    // The lamp-bake inputs are held with them: LampBake.forTrack keys its bake on
-    // (lights, LT.lampNearClamp, budget), and lampBake / tailLightEmit gate it.
+    // opts.holdRebuild (the arc's blended re-apply, atmosphere.js) leaves the
+    // `rebuild` knobs and the bake inputs (LampBake.forTrack keys on lampNearClamp;
+    // lampBake / tailLightEmit gate it) live, so a mid-race flip never nulls
+    // track._lights; opts.heldOnly lands just those at the fade's end (#5990).
     const BAKE_IDS = new Set(["lampNearClamp", "lampBake", "tailLightEmit"]);
     const held = (d) => !!d.rebuild || BAKE_IDS.has(d.id);
+    function valueAt(k, d, condition = condLayer(window.LightPresets)) {
+      const kk = keyFor(d.id, k);
+      let v = shippedAt(kk, d, condition);
+      if (typeof profiles["*"]?.[d.id] === "number") v = profiles["*"][d.id];
+      if (typeof profiles[kk]?.[d.id] === "number") v = profiles[kk][d.id];
+      return clamp(v, d.min, d.max);
+    }
+
+    const lampKnobs = TUNE_DEFS.filter(d => d.id === "lampLevel" || d.id === "poolEnergy");
+    function garageLamps(selection, out) {
+      const tod = selection.tod === "default" ? (selection.night ? "night" : "day") : selection.tod;
+      const k = selection.trackId + "|" + tod + "|" + (selection.weather === "storm" ? "rain" : selection.weather);
+      const condition = window.LightPresets?.["*|" + tod] || null;
+      for (const d of lampKnobs) out[d.id] = valueAt(k, d, condition);
+      return out;
+    }
+
     function apply(fromApplyRace, opts) {
       if (Log.enabled("game", Log.DEBUG)) Log.debug("game", "LightStore.apply");
       const k = key();
-      const L = layers(k), Ld = layers(keyFor("sunElev", k));
-      const hold = !!(opts && opts.holdRebuild);
+      const hold = !!(opts && opts.holdRebuild), only = !!(opts && opts.heldOnly);
       let rebuilt = false, reapply = false, reinit = false;
       for (const d of TUNE_DEFS) {
         if (hold && held(d)) continue;
-        let v = d.def;
-        const Luse = TOD_KEYED.has(d.id) ? Ld : L;
-        if (d.id === "perChunkLights") {
-          const F = window.LightPresets || null;
-          if (F && F["*"] && typeof F["*"].perChunkLights === "number") v = F["*"].perChunkLights;
-          const shared = sharedCond(F, k);
-          if (shared && typeof shared.perChunkLights === "number") v = shared.perChunkLights;
-          v = mergePerChunkShipped(k, v, F);
-          if (profiles["*"] && typeof profiles["*"].perChunkLights === "number") v = profiles["*"].perChunkLights;
-          if (k && profiles[k] && typeof profiles[k].perChunkLights === "number") v = profiles[k].perChunkLights;
-        } else for (const l of Luse) if (l && typeof l[d.id] === "number") v = l[d.id];
-        v = clamp(v, d.min, d.max);
+        if (only && !held(d)) continue;
+        const v = valueAt(k, d);
         if (LT[d.id] === v) continue;
         LT[d.id] = v;
         if (d.rebuild) rebuilt = true;
@@ -258,6 +251,11 @@ const LightStore = (() => {
       const d = TUNE_DEFS.find((t) => t.id === id);
       if (!d || typeof v !== "number" || !isFinite(v)) return false;
       v = clamp(v, d.min, d.max);
+      // Skip liveEffects when the live value did not move: a no-op slider tick
+      // (or a panel re-write of the current number) used to re-run
+      // applyRaceSettings / null track._lights / re-seed rain every time —
+      // lighting applied twice for one setting.
+      const changed = LT[id] !== v;
       LT[id] = v;
       const k = keyFor(id, key());
       if (k) {
@@ -265,7 +263,7 @@ const LightStore = (() => {
         put(prof, k, d, v);
         if (!Object.keys(prof).length) delete profiles[k];
       }
-      liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
+      if (changed) liveEffects(!!d.rebuild, APPLY_RACE_IDS.has(id), !!d.reinitRain, false);
       return true;
     }
 
@@ -302,8 +300,9 @@ const LightStore = (() => {
       // has is left behind rather than copied onto 39 more profiles.
       const from = [];
       for (const d of TUNE_DEFS) {
-        const v = mode === "look" ? LT[d.id] : (profiles[keyFor(d.id, src)] || {})[d.id];
-        if (typeof v === "number" && isFinite(v)) from.push([d, v]);
+        const k = keyFor(d.id, src);
+        const v = mode === "look" ? LT[d.id] : profiles[k]?.[d.id];
+        if (Number.isFinite(v) && (mode === "look" || !isMask(k, d.id))) from.push([d, v]);
       }
       if (!from.length) return { ok: false, error: "no-edits", mode, key: src, tod, weather, tracks: 0, changed: 0 };
       const out = { ok: true, mode, key: src, tod, weather, knobs: from.length, tracks: 0, changed: 0, undo: {} };
@@ -347,14 +346,21 @@ const LightStore = (() => {
     // whatever the weather. Only those ids leave the dry slot on a wet RESET —
     // a dry-weather edit of any other knob is a different condition's edit.
     function sunSlot(k) { const s = keyFor("sunElev", k); return s !== k ? s : null; }
+    // A mask: reset() pins the shipped value where the global "*" layer reaches.
+    function isMask(kk, id) {
+      if (typeof profiles["*"]?.[id] !== "number") return false;
+      const d = TUNE_DEFS.find((t) => t.id === id);
+      return !!d && profiles[kk][id] === shipVal(kk, d);
+    }
     function tuned() {
       const k = key();
       if (!k) return 0;
       const s = sunSlot(k), p = s && profiles[s];
       // In the wet, a TOD_KEYED id under the weather's own key is never resolved.
-      const own = Object.keys(profiles[k] || {}).filter((id) => !s || !TOD_KEYED.has(id));
-      return own.length + (p ? [...TOD_KEYED].filter((id) => id in p).length : 0);
+      const own = Object.keys(profiles[k] || {}).filter((id) => (!s || !TOD_KEYED.has(id)) && !isMask(k, id));
+      return own.length + (p ? [...TOD_KEYED].filter((id) => id in p && !isMask(s, id)).length : 0);
     }
+    // RESET keeps the global "*" layer every other condition resolves through (#5990).
     function reset() {
       const k = key();
       if (k) delete profiles[k];
@@ -363,24 +369,31 @@ const LightStore = (() => {
         for (const id of TOD_KEYED) delete profiles[s][id];
         if (!Object.keys(profiles[s]).length) delete profiles[s];
       }
-      delete profiles["*"];
+      const g = profiles["*"];
+      if (!k || !g) return;
+      for (const d of TUNE_DEFS) {
+        if (typeof g[d.id] !== "number") continue;
+        const kk = keyFor(d.id, k), sv = shipVal(kk, d);
+        if (sv !== clamp(g[d.id], d.min, d.max)) (profiles[kk] || (profiles[kk] = {}))[d.id] = sv;
+      }
     }
 
     const api = {
-      key, apply, set, persist, copyToTracks, restore, tuned, reset,
+      key, garageLamps, apply, set, persist, copyToTracks, restore, tuned, reset, shipped,
       get profiles() { return profiles; },
       set profiles(v) { profiles = v || {}; },
     };
     _live = api;   // game.js creates exactly one store; reapply() targets it
     return api;
   }
-  // The conditional shipped layer resolves through GfxQuality, so a preset
-  // flip must re-run apply() for it to engage live. GfxQuality.set() calls
-  // this lazily (typeof-guarded) — a soft hook, not an eval-time edge.
+  // GfxQuality.set() calls this lazily (typeof-guarded) so a graphics-preset
+  // flip re-resolves LT live — a soft hook, not an eval-time edge.
   let _live = null;
   function reapply() { if (_live) _live.apply(); }
   // The tuner panel reaches the live store through these (no G member for them).
   function reset() { if (_live) _live.reset(); }
   function tuned() { return _live ? _live.tuned() : 0; }
-  return { create, reapply, reset, tuned };
+  function shipped(id) { return _live ? _live.shipped(id) : undefined; }
+  function garageLamps(selection, out) { return _live ? _live.garageLamps(selection, out) : out; }
+  return { create, reapply, reset, tuned, shipped, garageLamps };
 })();

@@ -12,7 +12,7 @@ three.js r186), each claim re-read in the source before it was kept. Line number
 are the deploy tip `35ef73af`. The parity rule binds every item: a look ships on
 GLX, TLX and WGX or is recorded as a gap (`docs/ARCHITECTURE.md` §Cross-backend
 parity). Plans that already cover a neighbouring slice are linked rather than
-repeated: [broadcast feel](../plans/2026-09-30-broadcast-feel.md),
+repeated: [broadcast feel](../archive/plans/2026-09-30-broadcast-feel.md),
 [flyby improvements](../plans/2026-09-24-flyby-improvements.md),
 [wetness lighting](../plans/2026-09-30-wetness-lighting.md).
 

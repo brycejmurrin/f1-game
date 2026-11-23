@@ -7,6 +7,19 @@
 (function () {
   const GR_MAX_LIGHTS = 6;   // the march and the CPU fill are both bounded at 6
 
+  // LAB ?lab=fxaaSub50 / fxaaSub25 / fxaaSub0 (D-027: URL only, read once at graph build, default OFF): the FXAA
+  // sub-pixel blend as a percentage. On a phone FXAA is the last pass at the scaled size and the browser magnifies
+  // its blend ~2.7x, so a phone A/B is two page opens. No lab (or no location): the shipped 0.75, the same constant
+  // in the graph, so nothing compiles differently.
+  function labFxaaSubpix(search) {
+    try {
+      const v = new URLSearchParams(search === undefined ? location.search : search).get("lab");
+      const m = v && v.split(",").map((s) => /^fxaaSub(\d{1,2})$/.exec(s.trim())).find(Boolean);
+      if (m) return Math.min(75, +m[1]) / 100;
+    } catch (_) { /* no location (node harness) or a bad query: no lab */ }
+    return 0.75;
+  }
+
   function post(THREE, TSL, ctx) {
     const {
       Fn, If, Loop, Break, Continue, uniform, uniformArray, texture,
@@ -23,6 +36,9 @@
     // one that shipped. Each pass gets its OUTPUT view V (the logical size the
     // chain sets before the draw); every texture it reads is a VP.tex wrapper.
     const VP = ctx.vp || { enabled: false, view: () => null, uv: () => screenUV, tex: (n) => n };
+    // DESKTOP TIERS (tsl-gi.js buildPlan): which extra variants to build. Absent = today's pass set, nothing else built.
+    const HI = ctx.hi || null;
+    const GIM = HI && typeof window !== "undefined" && window.TLXShaders && window.TLXShaders.gi || null;
 
     // GL bottom-left uv -> the node system's top-left texture space.
     const TL = (u) => vec2(u.x, u.y.oneMinus());
@@ -218,7 +234,6 @@
       q.y.mul(U.pXY.y).add(q.z.mul(U.pXY.w)), q.z.mul(U.pW));
     const ssaoU = Object.assign(perspU(), {
       sunVS: uniform(new THREE.Vector3(0, 0, -1)),
-      texel: uniform(new THREE.Vector2()),
       strength: uniform(0),
       contact: uniform(0),
       radius: uniform(0.6),
@@ -233,10 +248,12 @@
     // The AO term at vUV with centre depth d: the SSAO pass body, which the
     // godray march also carries into its alpha (hunt D7). Build it in UNIFORM
     // control flow only (top level or a uniform If): it takes dFdx/dFdy.
-    function ssaoTerm(vUV, d) {
+    function ssaoTerm(vUV, d, K = SSAO_K) {
         const res = float(1.0).toVar();
-        // Derivatives BEFORE the sky depth gate — non-uniform If around dFdx/dFdy
-        // is a hard WGSL compile error on TLX-WebGPU (same class as WGX fwidth).
+        // Derivatives BEFORE the sky depth gate: dFdx/dFdy under a non-uniform If
+        // is undefined in WGSL. r187 prepends `diagnostic(off, derivative_uniformity)`
+        // to every fragment module except on Firefox/Deno (WGSLNodeBuilder), so it
+        // is a hard compile error only there; elsewhere the values are garbage.
         const P0 = vec3(ssaoViewPosFromD(vUV, d)).toVar();
         const crN0 = cross(dFdx(P0), dFdy(P0)).toVar();
         If(d.lessThan(0.99999), () => {          // sky -> 1.0
@@ -253,8 +270,8 @@
             const scr = clamp(radius.div(max(P.z.negate(), 1.0)).mul(0.9), 0.004, 0.05).toVar();
             const ang = fract(sin(dot(screenCoordinate.xy, vec2(12.9898, 78.233))).mul(43758.5453)).mul(6.2832).toVar();
             const ca = cos(ang).toVar(), sa = sin(ang).toVar();
-            for (let ki = 0; ki < 8; ki++) {         // 12→8 taps (half-res + blurred)
-              const kx = SSAO_K[ki][0], ky = SSAO_K[ki][1];
+            for (let ki = 0; ki < K.length; ki++) {  // 12→8 taps (half-res + blurred); ssaoHi: 16
+              const kx = K[ki][0], ky = K[ki][1];
               const k = vec2(ca.mul(kx).sub(sa.mul(ky)), sa.mul(kx).add(ca.mul(ky)));
               const S = ssaoViewPos(clamp(vUV.add(k.mul(scr)), vec2(0.001), vec2(0.999))).toVar();
               const V = S.sub(P).toVar();
@@ -264,8 +281,15 @@
               occ.addAssign(ndv.mul(range));
             }
           });
-          const ao = clamp(occ.div(8.0).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
-          // Contact shadows: short view-space march toward the sun (SSAO_FS).
+          const ao = clamp(occ.div(K.length).mul(2.4), 0.0, 1.0).mul(ssaoU.strength).oneMinus().toVar();
+          contactShadowT(P, N, ao);
+          res.assign(ao);
+        });
+        return res;
+    }
+    // Contact shadows: short view-space march toward the sun (SSAO_FS), folded into ao. Shared by the SSAO term and
+    // GTAO (tsl-gi.js); the SSAO term builds it in the same place and order it always did.
+    function contactShadowT(P, N, ao) {
           If(ssaoU.contact.greaterThan(0.0).and(ssaoU.sunVS.z.lessThan(0.05)), () => {
             const sh = float(1.0).toVar();
             Loop({ start: int(1), end: int(6), type: "int", condition: "<" }, ({ i }) => {
@@ -287,9 +311,6 @@
             const front = clamp(ssaoU.sunVS.z.negate().mul(6.0), 0.0, 1.0);
             ao.mulAssign(mix(float(1.0), sh, front));
           });
-          res.assign(ao);
-        });
-        return res;
     }
     const ssaoV = VP.view();
     const ssao = {
@@ -302,12 +323,23 @@
         return vec4(res, res, res, 1.0);
       })(), "tlx-post-ssao"),
     };
+    // ssaoHi (ULTRA+): the same term with the 16-tap kernel; tlx-post.js runs it at full resolution.
+    const ssaoHi = HI && HI.ssaoHi && GIM ? {
+      U: ssaoU, V: ssaoV,
+      mat: passMaterial(Fn(() => {
+        const suv = vec2(VP.uv(ssaoV)).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const d = depthAt(vUV).toVar();
+        const res = ssaoTerm(vUV, d, GIM.ssaoKernel(GIM.BUDGET.ssaoTaps[1]));
+        return vec4(res, res, res, 1.0);
+      })(), "tlx-post-ssao-hi"),
+    } : null;
 
     /* GODRAY (GODRAY_FS in js/render/glx/shaders/glsl-post.js): world-space 16-step march of
      *    the SUN SHADOW MAP + nearest-12 lamp beam in-scatter with the mapped
      *    lamp's spot-shadow carve. Built only when the shadow subsystem is
      *    live — its depth textures are the samplers. */
-    let godray = null;
+    let godray = null, godrayHi = null;
     if (SHD && SHD.sunTex) {
       const grU = {
         invVP: uniform(new THREE.Matrix4()),
@@ -328,14 +360,6 @@
         lampShadowIdx: uniform(-1.0),
         aoOn: uniform(0),           // D7: 1 = this pass also writes the SSAO term to alpha
       };
-      const grPos = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3());
-      const grCol = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3());
-      const grDir = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector3(0, -1, 0));
-      const grGeo = Array.from({ length: GR_MAX_LIGHTS }, () => new THREE.Vector4(1, 1, 0.8, 0));
-      grU.lightPos = uniformArray(grPos);
-      grU.lightCol = uniformArray(grCol);
-      grU.lightDir = uniformArray(grDir);
-      grU.lightGeo = uniformArray(grGeo);
 
       const worldPos = (uvGl, d) => {
         const c = vec4(uvGl.mul(2.0).sub(1.0), d.mul(2.0).sub(1.0), 1.0);
@@ -363,9 +387,20 @@
         return res;
       });
 
+      // GN march steps, GL lamp slots: (16, GR_MAX_LIGHTS) is today's pass; raysHi (ULTRA+) builds a second one from
+      // tsl-gi.js BUDGET with its own lamp arrays and the SAME scalar uniforms (tlx-post.js picks one per frame).
+      function makeGodray(GN, GL, key) {
+      const grPos = Array.from({ length: GL }, () => new THREE.Vector3());
+      const grCol = Array.from({ length: GL }, () => new THREE.Vector3());
+      const grDir = Array.from({ length: GL }, () => new THREE.Vector3(0, -1, 0));
+      const grGeo = Array.from({ length: GL }, () => new THREE.Vector4(1, 1, 0.8, 0));
+      const lU = {
+        lightPos: uniformArray(grPos), lightCol: uniformArray(grCol),
+        lightDir: uniformArray(grDir), lightGeo: uniformArray(grGeo),
+      };
       const grV = VP.view();
-      godray = {
-        U: grU, V: grV,
+      return {
+        U: grU, V: grV, maxLights: GL,
         lightPos: grPos, lightCol: grCol, lightDir: grDir, lightGeo: grGeo,
         mat: passMaterial(Fn(() => {
           const suv = vec2(VP.uv(grV)).toVar();
@@ -384,7 +419,7 @@
           const dist = length(rd).toVar();
           rd.assign(rd.div(max(dist, 1e-4)));
           const march = min(dist, 260.0).toVar();
-          const stepLen = march.div(16.0).toVar();     // N = 16
+          const stepLen = march.div(GN).toVar();       // N = 16 (raysHi 32)
           const ign = ignoise(screenCoordinate.xy);
           const t0 = stepLen.mul(ign).toVar();
           const accum = float(0.0).toVar();
@@ -392,7 +427,7 @@
           const trans = float(1.0).toVar();            // Beer-Lambert extinction
           const groundY = grU.eye.y.sub(4.0).toVar();  // local ground datum
           const stepT = exp(stepLen.mul(-0.010)).toVar();   // loop-invariant (same value, same order)
-          Loop({ start: int(0), end: int(16), type: "int", condition: "<" }, ({ i }) => {
+          Loop({ start: int(0), end: int(GN), type: "int", condition: "<" }, ({ i }) => {
             const td = t0.add(stepLen.mul(float(i))).toVar();
             const p = ro.add(rd.mul(td)).toVar();
             trans.mulAssign(stepT);
@@ -420,18 +455,20 @@
               // hLamp only has one consumer (lampAccum). GLX moved the exp
               // inside this gate — daytime sun-shafts force lampVol=0.
               const hLamp = exp(max(p.y.sub(groundY), 0.0).mul(-0.07)).toVar();
-              Loop({ start: int(0), end: int(6), type: "int", condition: "<" }, ({ i: li }) => {
+              Loop({ start: int(0), end: int(GL), type: "int", condition: "<" }, ({ i: li }) => {
                 If(float(li).greaterThanEqual(grU.numLights), () => { Break(); });
-                const geo = grU.lightGeo.element(li);
-                const LP = grU.lightPos.element(li).sub(p).toVar();
-                const ld = length(LP).toVar();
+                const geo = lU.lightGeo.element(li);
+                const LP = lU.lightPos.element(li).sub(p).toVar();
+                // Squared reject first, root only for lamps in range (as glsl-post.js: ld2 > rad*rad).
+                const ld2 = dot(LP, LP).toVar();
                 const rad = float(geo.x).toVar();
-                If(ld.lessThanEqual(rad), () => {
+                If(ld2.lessThanEqual(rad.mul(rad)), () => {
+                  const ld = sqrt(ld2).toVar();
                   const Ld = LP.div(max(ld, 1e-3)).toVar();
                   const s = ld.div(rad);
                   const win = clamp(s.mul(s).mul(s).mul(s).oneMinus(), 0.0, 1.0);
                   const att = win.mul(win).div(ld.mul(ld).add(1.0));
-                  const cd = dot(Ld.negate(), grU.lightDir.element(li));
+                  const cd = dot(Ld.negate(), lU.lightDir.element(li));
                   const spot = smoothstep(geo.z, geo.y, cd);
                   const cosL = max(dot(rd, Ld), 0.0);
                   const hgLd = float(1.36).sub(cosL.mul(1.2)).toVar();   // HG g=0.6; d >= 0.16
@@ -451,15 +488,15 @@
                       });
                     });
                   }
-                  lampAccum.addAssign(grU.lightCol.element(li)
+                  lampAccum.addAssign(lU.lightCol.element(li)
                     .mul(att.mul(spot).mul(hgL.mul(0.14).add(0.12)).mul(lampLit))
                     .mul(float(geo.w)).mul(hLamp).mul(trans));
                 });
               });
             });
           });
-          accum.divAssign(16.0);
-          lampAccum.mulAssign(grU.mist.mul(grU.lampStr).mul(2.0 / 16.0));
+          accum.divAssign(GN);
+          lampAccum.mulAssign(grU.mist.mul(grU.lampStr).mul(2.0 / GN));
           // HG phase * str — skip the sqrt when str is 0 (GLX/WGSL).
           const sunTerm = vec3(0.0).toVar();
           If(grU.str.greaterThan(0.0), () => {
@@ -471,8 +508,11 @@
           sunTerm.assign(grU.sunColor.mul(accum).mul(phase).mul(grU.str));
           });
           return vec4(sunTerm.add(lampAccum), aoA);
-        })(), "tlx-post-godray"),
+        })(), key),
       };
+      }
+      godray = makeGodray(16, GR_MAX_LIGHTS, "tlx-post-godray");
+      if (HI && HI.raysHi && GIM) godrayHi = makeGodray(GIM.BUDGET.raySteps[1], GIM.BUDGET.rayLamps[1], "tlx-post-godray-hi");
     }
 
     const C = {
@@ -503,7 +543,13 @@
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
       ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
       ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
-      grainTime: uniform(0), sharpen: uniform(0), sharpenLimit: uniform(0), blackLift: uniform(0.005),
+      grainTime: uniform(0),
+      // CPU-derived per-frame constants (tlx-post.js writes them beside grainTime / reflTexel), so the composite
+      // and the mirror inset do not rebuild them per pixel (#4556): the dither's time step
+      // mod(floor(grainTime*60), 64)*5.588238 (tsl-sky.js D.dthOff, same float32 floor), the vignette's aspect
+      // reflTexel.y/x (1 before the first frame) and its corner norm 0.70710678 / length(vec2(aspect*0.5, 0.5)).
+      dthOff: uniform(0), vigAspect: uniform(1), vigNorm: uniform(1),
+      sharpen: uniform(0), sharpenLimit: uniform(0), blackLift: uniform(0.005),
       whitePoint: uniform(1.0),
       acesA: uniform(2.51), acesB: uniform(0.03), acesC: uniform(2.43),
       acesD: uniform(0.59), acesE: uniform(0.14),
@@ -512,6 +558,9 @@
       hazeTime: uniform(0),
       shaftDecay: uniform(0.82), shaftSpread: uniform(1.0),
       flareStreak: uniform(7.0), flareStreak2: uniform(0.5),
+      // Desktop tiers, read only by the hi composite (tlx-post-comp-hi): ssrHi 1 = the EXTREME march + rough blur,
+      // giOn / giStr / giTexel = the SSGI add and its half-res texel.
+      ssrHi: uniform(0), giOn: uniform(0), giStr: uniform(0), giTexel: uniform(new THREE.Vector2(0, 0)),
     };
     // ONE TEXTURE PER NODE AT BUILD TIME: three keys a TextureNode's uniform by
     // its texture's uuid (TextureNode.getUniformHash, pretty:2645 -> the
@@ -528,11 +577,20 @@
     grOffTex.needsUpdate = true;
     const godrayTexN = VP.tex(texture(grOffTex));
 
+    // hdrOut (tsl-aa.js hdrPeak): the uniform and its branch exist ONLY when tlx-post confirmed an HDR canvas at
+    // build; otherwise the composite program is byte-identical to the SDR one (tests/unit/tlx-aa.test.mjs).
+    const HDR_OUT = +ctx.hdrPeak > 1;
+    if (HDR_OUT) C.hdrPeak = uniform(+ctx.hdrPeak);
     const acesTonemap = (x0) => {
       const x = max(x0, vec3(0.0));
       return clamp(x.mul(C.acesA.mul(x).add(C.acesB))
         .div(x.mul(C.acesC.mul(x).add(C.acesD)).add(C.acesE)), 0.0, 1.0);
     };
+    // AgX (ctx.agx: EXTREME, apex26.tlxAgx=1, read once by tlx-post.js): three's own agxToneMapping in place of the
+    // ACES fit in the composite and the mirror inset. Off (or no such export): toneMap IS acesTonemap, so the
+    // programs are today's. The ACES knobs then do nothing; exposure and white point still apply before the curve.
+    const agxFn = ctx.agx && typeof TSL.agxToneMapping === "function" ? TSL.agxToneMapping : null;
+    const toneMap = agxFn ? (x0) => agxFn(max(x0, vec3(0.0)), float(1.0)) : acesTonemap;
 
     // Reconstruct view-space position from depth (COMPOSITE ssrViewPos).
     const ssrViewPos = (uvGl) => viewPosNdc(C, uvGl, depthAt(uvGl).mul(2.0).sub(1.0));
@@ -574,16 +632,20 @@
       c.assign(max(c, vec3(C.blackLift, C.blackLift.mul(0.8), C.blackLift.mul(0.6))));
     }
     function ditherT(c, xy) {
-      const dc = xy.add(mod(floor(C.grainTime.mul(60.0)), 64.0).mul(5.588238)).toVar();
+      const dc = xy.add(C.dthOff).toVar();
       const d0n = ignoise(dc);
       const d1n = fract(fract(dot(dc.add(17.31), vec2(0.00583715, 0.06711056))).mul(52.9829189));
       c.addAssign(vec3(d0n.add(d1n).sub(1.0).div(255.0)));
     }
 
     const compV = VP.view();
-    const composite = {
-      U: C, V: compV, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN }, grOffTex,
-      mat: passMaterial(Fn(() => {
+    // hi = the desktop composite (ssrHi / ssgi built): today's body plus the blocks under `if (hi)`. hi false builds
+    // exactly today's graph. The SSGI slot gets its own 1x1 black (one texture per node at build time, above).
+    const giOffTex = HI && GIM && HI.ssgi ? new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1) : null;
+    if (giOffTex) { giOffTex.colorSpace = THREE.NoColorSpace; giOffTex.needsUpdate = true; }
+    const giTexN = giOffTex ? VP.tex(texture(giOffTex)) : null;
+    function compositeFrag(hi) {
+      return Fn(() => {
         // anchors
         const suv = vec2(VP.uv(compV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
@@ -674,6 +736,29 @@
           c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
         });
 
+        // SSGI (hi only): the half-res bounce, depth-aware upsampled with the AO weights, onto a receiver proxy
+        // c / (c + 0.25) (no albedo target exists: an approximation, kept conservative by C.giStr).
+        if (hi && giTexN) {
+          If(C.giOn.greaterThan(0.5), () => {
+            const gDc = depthAt(vUV).toVar();
+            const gG = vUV.div(C.giTexel).sub(0.5).toVar();
+            const gF = fract(gG).toVar();
+            const gB = floor(gG).add(0.5).mul(C.giTexel).toVar();
+            const gSum = vec3(0.0).toVar();
+            const gW = float(0.0).toVar();
+            for (let gi = 0; gi < 4; gi++) {
+              const guv = gB.add(vec2((gi === 1 || gi === 3) ? C.giTexel.x : float(0.0),
+                (gi >= 2) ? C.giTexel.y : float(0.0))).toVar();
+              const bw = (gi === 0 ? gF.x.oneMinus().mul(gF.y.oneMinus()) : gi === 1 ? gF.x.mul(gF.y.oneMinus())
+                : gi === 2 ? gF.x.oneMinus().mul(gF.y) : gF.x.mul(gF.y)).add(1e-4);
+              const w = bw.div(abs(gDc.sub(depthAt(guv))).mul(30.0).add(1e-4)).toVar();
+              gSum.addAssign(giTexN.sample(TL(guv)).rgb.mul(w));
+              gW.addAssign(w);
+            }
+            c.addAssign(gSum.div(gW).mul(C.giStr).mul(c.div(c.add(0.25))));
+          });
+        }
+
         // Wet-road + car-paint screen-space reflection js/render/glx/shaders/glsl-post.js
         // SSR metadata: .35 car paint, .75 porous world, 1 sealed world.
         // Road SSR needs the tag even when car SSR is shed (phone MEDIUM).
@@ -750,16 +835,23 @@
             const pos = vec3(P).toVar();
             const prevPos = vec3(P).toVar();
             const stepLen = select(quality.greaterThan(1.5), float(1.4), select(quality.greaterThan(0.5), float(0.75), float(0.55))).toVar();
+            // ssrHi (hi only, quality-0 pixels): the tsl-gi.js BUDGET march, finer and longer.
+            const hq = hi ? C.ssrHi.greaterThan(0.5).and(quality.lessThan(0.5)) : null;
+            const B = hi ? GIM.BUDGET : null;
+            const marchN = hi ? select(hq, int(B.ssrMarch[1]), marchSteps) : marchSteps;
+            const refineN = hi ? select(hq, int(B.ssrRefine[1]), refineSteps) : refineSteps;
+            const growthN = hi ? select(hq, float(B.ssrGrowth[1]), stepGrowth) : stepGrowth;
+            if (hi) stepLen.assign(select(hq, float(B.ssrStep[1]), stepLen));
             pos.addAssign(R.mul(stepLen.mul(ign)));
             const hit = float(0.0).toVar();
             const hitDist = float(0.0).toVar();
             const hitUV = vec2(0.0).toVar();
             const found = float(0.0).toVar();
-            Loop({ start: int(0), end: int(24), type: "int", condition: "<" }, ({ i }) => {
-              If(i.greaterThanEqual(marchSteps), () => { Break(); });
+            Loop({ start: int(0), end: int(hi ? B.ssrMarch[1] : 24), type: "int", condition: "<" }, ({ i }) => {
+              If(i.greaterThanEqual(marchN), () => { Break(); });
               prevPos.assign(pos);
               pos.addAssign(R.mul(stepLen));
-              stepLen.mulAssign(stepGrowth);
+              stepLen.mulAssign(growthN);
               const cp = clipXYW(C, pos).toVar();
               If(cp.z.lessThanEqual(0.0), () => { Break(); });
               const muv = cp.xy.div(cp.z).mul(0.5).add(0.5).toVar();
@@ -770,8 +862,8 @@
               If(dz.greaterThan(C.ssrThick).and(dz.lessThan(max(float(5.0), stepLen.mul(1.5)))), () => {
                 const aP = vec3(prevPos).toVar();
                 const bP = vec3(pos).toVar();
-                Loop({ start: int(0), end: int(4), type: "int", condition: "<" }, ({ i }) => {
-                  If(i.greaterThanEqual(refineSteps), () => { Break(); });
+                Loop({ start: int(0), end: int(hi ? B.ssrRefine[1] : 4), type: "int", condition: "<" }, ({ i }) => {
+                  If(i.greaterThanEqual(refineN), () => { Break(); });
                   const mid = aP.add(bP).mul(0.5).toVar();
                   const mc = clipXYW(C, mid).toVar();
                   const midUV = mc.xy.div(mc.z).mul(0.5).add(0.5).toVar();
@@ -821,6 +913,23 @@
                     .add(sTap(0.5).mul(w1)).add(sTap(1.0).mul(w2)));
                   hitCol.divAssign(w0 + 2 * w1 + 2 * w2 + w3 + w4);
                 });
+              // ssrHi ROUGH BLUR (hi only): a horizontal cone that widens with the hit distance and the receiver's
+              // roughness (car paint: CAR GLOSS; road: a fixed porous 0.55), each tap firefly-weighted 1/(1+luma).
+              if (hi) {
+                If(hq, () => {
+                  const rough = select(carDom, carSoft, float(0.55)).mul(clamp(hitDist.div(30.0), 0.15, 1.0)).toVar();
+                  const sx = rough.mul(C.reflTexel.x).mul(6.0).toVar();
+                  const rAcc = vec3(hitCol).toVar();
+                  const rW = float(1.0).toVar();
+                  for (const [k, g] of [[-2, 0.35], [-1, 0.7], [1, 0.7], [2, 0.35]]) {
+                    const tap = vec3(sceneT.sample(TL(hitUV.add(vec2(sx.mul(k), 0.0)))).rgb).toVar();
+                    const w = float(g).div(dot(tap, vec3(0.299, 0.587, 0.114)).add(1.0)).toVar();
+                    rAcc.addAssign(tap.mul(w));
+                    rW.addAssign(w);
+                  }
+                  hitCol.assign(rAcc.div(rW));
+                });
+              }
             });
             // Miss fallback: horizon-vs-zenith by the reflection's up-ness,
             // measured against the ROAD PLANE — R.y is view-space y, which only
@@ -866,8 +975,11 @@
         });
 
         // LENS DIRT veil js/render/glx/shaders/glsl-post.js: grime scatters the bright-pass.
+        // TLX-P5-3 exact gate (uniform): dirt feeds only bloomSample (0 with bloom off) and the on-screen flare.
         const dirt = float(0.0).toVar();
-        If(C.lensDirt.greaterThan(0.001), () => {
+        If(C.lensDirt.greaterThan(0.001).and(C.bloomAmt.greaterThan(0.001).or(C.flareStr.greaterThan(0.0)
+          .and(C.sunUV.x.greaterThanEqual(0.0)).and(C.sunUV.x.lessThanEqual(1.0))
+          .and(C.sunUV.y.greaterThanEqual(0.0)).and(C.sunUV.y.lessThanEqual(1.0)))), () => {
           dirt.assign(dirtT.sample(TL(vUV)).r);
           c.addAssign(bloomSample.mul(C.exposure).mul(dirt).mul(C.lensDirt).mul(2.2));
         });
@@ -944,7 +1056,13 @@
         // already clamped highlights; running ACES again reads pale/washed
         // (tlx-post.js hdr probe — mirrorTone gates the same way).
         If(C.sceneHdr.greaterThan(0.5), () => {
-          c.assign(acesTonemap(c.div(C.whitePoint)));
+          if (!HDR_OUT) { c.assign(toneMap(c.div(C.whitePoint))); return; }
+          const xw = vec3(c.div(C.whitePoint)).toVar();
+          c.assign(toneMap(xw));
+          // hdrOut: the curve stretched to the display's peak takes over only in the SDR curve's top (0.7..1 out):
+          // shadows and mid-tones are today's pixels, highlights rise towards hdrPeak (tests/unit/tlx-aa.test.mjs).
+          const hi = toneMap(xw.div(C.hdrPeak)).mul(C.hdrPeak);
+          c.addAssign(max(hi.sub(c), vec3(0.0)).mul(smoothstep(0.7, 1.0, c)));
         });
         If(C.sceneHdr.lessThanEqual(0.5), () => {
           c.assign(clamp(c.div(max(C.whitePoint, float(1e-3))), vec3(0.0), vec3(1.0)));
@@ -986,11 +1104,8 @@
 
         // Vignette — aspect-corrected circular falloff js/render/glx/shaders/glsl-post.js.
         const q = vec2(vUV.sub(0.5)).toVar();
-        const vAspect = select(C.reflTexel.x.greaterThan(0.0),
-          C.reflTexel.y.div(C.reflTexel.x), float(1.0)).toVar();
-        q.x.mulAssign(vAspect);
-        const vr = length(q).mul(0.70710678)
-          .div(length(vec2(vAspect.mul(0.5), 0.5)));
+        q.x.mulAssign(C.vigAspect);
+        const vr = length(q).mul(C.vigNorm);
         // Outer edge is the CORNER (vr is corner-normalised, so exactly
         // 0.70710678 at every aspect), not 0.95. The old form ran edge0 > edge1
         // and could never finish its ramp, so VIGNETTE could not reach black and
@@ -1008,8 +1123,18 @@
           c.addAssign(vec3(gn.mul(C.grain).mul(abs(gLuma.sub(0.5)).mul(1.4).oneMinus())));
         });
         return vec4(c, 1.0);
-      })(), "tlx-post-comp"),
+      })();
+    }
+    const composite = {
+      U: C, V: compV, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN }, grOffTex,
+      mat: passMaterial(compositeFrag(false), "tlx-post-comp"),
     };
+    // tlx-post.js swaps composite.mat between these two per frame (the shed / cinema can turn the extras off).
+    if (HI && GIM && (HI.ssrHi || HI.ssgi)) {
+      composite.matBase = composite.mat;
+      composite.matHi = passMaterial(compositeFrag(true), "tlx-post-comp-hi");
+      composite.tex.gi = giTexN; composite.giOffTex = giOffTex;
+    }
 
     /* FXAA 3.11 QUALITY (FXAA_FS in js/render/glx/shaders/glsl-post.js): the
      *    edge-walk form. Orientation from the 3x3 luma neighbourhood, a walk
@@ -1024,108 +1149,126 @@
     // mir 1: the mirror inset is drawn INSIDE this pass (hunt D8; mirrorU's
     // rect / hdr / flip, its own texture node on the same mirror target).
     const fxaaMirTex = texture(ctx.blackTex);
-    const fxaaU = { texel: uniform(new THREE.Vector2()), mir: uniform(0) };
+    // Three shares sampler uniforms by texture UUID at first compile. Each lens
+    // slot needs its own filterable placeholder when the race warms without a visor.
+    function lensSampler() {
+      const lensPlaceholder = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+      lensPlaceholder.minFilter = lensPlaceholder.magFilter = THREE.LinearFilter;
+      lensPlaceholder.needsUpdate = true;
+      if (ctx.ownTexture) ctx.ownTexture(lensPlaceholder);
+      return texture(lensPlaceholder);
+    }
+    const bendTex = lensSampler(), lightTex = lensSampler();
+    const fxaaU = { lightBlend: uniform(0), bend: uniform(new THREE.Vector2()), texel: uniform(new THREE.Vector2()), mir: uniform(0) };
     const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
     const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
-    const FXAA_SUBPIX = 0.75;
+    const FXAA_SUBPIX = labFxaaSubpix();
     const fxaa = {
-      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex,
+      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex, bendTex, lightTex,
       mat: passMaterial(Fn(() => {
         const suv = vec2(VP.uv(fxaaV)).toVar();
+        const mf = vec2(screenCoordinate).toVar();
+        If(fxaaU.bend.x.greaterThan(0), () => {
+          const delta = bendTex.sample(suv).level(0).rg.sub(0.5).mul(fxaaU.bend).toVar();
+          suv.addAssign(delta);
+          mf.addAssign(delta.mul(TSL.screenSize));
+        });
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(fxaaU.texel).toVar();
         const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
         // The mipmapped mirror RT has identity UV mapping. Analytic gradients
         // preserve its LOD inside a varying inset guard; dFdx/dFdy nodes can
         // be emitted lazily inside that guard and would be nonuniform.
-        const mirC = vec3(0.0).toVar();
-        const mf = vec2(screenCoordinate).toVar();
         const mp = mf.sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
         const mu = vec2(mix(mp.x, mp.x.oneMinus(), mirrorU.flip), mp.y).toVar();
         const mx = vec2(mix(float(1), float(-1), mirrorU.flip).div(mirrorU.rect.z), 0).toVar();
         const my = vec2(0, float(1).div(mirrorU.rect.w)).toVar();
+        // Inside the rect the inset OVERWRITES (the mirror pass's NoBlending
+        // quad covered exactly these pixel centres; the rect is integer px), so
+        // those pixels take the mirror alone and skip FXAA: before, they ran the
+        // full FXAA body (up to 23 taps) and kept the mirror colour live across
+        // it, only to discard the result.
+        const res = vec3(0.0).toVar();
         If(fxaaU.mir.greaterThan(0.5).and(mf.x.greaterThanEqual(mirrorU.rect.x))
           .and(mf.x.lessThan(mirrorU.rect.x.add(mirrorU.rect.z)))
           .and(mf.y.greaterThanEqual(mirrorU.rect.y))
           .and(mf.y.lessThan(mirrorU.rect.y.add(mirrorU.rect.w))), () => {
-          mirC.assign(fxaaMirTex.sample(mu).grad(mx, my).rgb);
+          res.assign(mirrorTone(fxaaMirTex.sample(mu).grad(mx, my).rgb));
+        }).Else(() => {
+          const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
+          res.assign(cM);
+          const lM = fxLuma(cM).toVar();
+          const lN = fxL(vUV.add(vec2(0.0, t.y.negate()))).toVar();
+          const lS = fxL(vUV.add(vec2(0.0, t.y))).toVar();
+          const lW = fxL(vUV.add(vec2(t.x.negate(), 0.0))).toVar();
+          const lE = fxL(vUV.add(vec2(t.x, 0.0))).toVar();
+          const lMin = min(lM, min(min(lN, lS), min(lW, lE))).toVar();
+          const lMax = max(lM, max(max(lN, lS), max(lW, lE))).toVar();
+          const range = lMax.sub(lMin).toVar();
+          // Flat areas stay pixel-exact (the early-out).
+          If(range.greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
+            const lNW = fxL(vUV.add(vec2(t.x.negate(), t.y.negate()))).toVar();
+            const lNE = fxL(vUV.add(vec2(t.x, t.y.negate()))).toVar();
+            const lSW = fxL(vUV.add(vec2(t.x.negate(), t.y))).toVar();
+            const lSE = fxL(vUV.add(t)).toVar();
+            const lNS = lN.add(lS).toVar(), lWE = lW.add(lE).toVar();
+            const edgeH = abs(lW.mul(-2.0).add(lNW).add(lSW)).add(abs(lM.mul(-2.0).add(lNS)).mul(2.0)).add(abs(lE.mul(-2.0).add(lNE).add(lSE)));
+            const edgeV = abs(lN.mul(-2.0).add(lNW).add(lNE)).add(abs(lM.mul(-2.0).add(lWE)).mul(2.0)).add(abs(lS.mul(-2.0).add(lSW).add(lSE)));
+            const horz = edgeH.greaterThanEqual(edgeV).toVar();
+            const subpix = clamp(abs(lNS.add(lWE).mul(2.0).add(lNW).add(lSW).add(lNE).add(lSE).div(12.0).sub(lM)).div(range), 0.0, 1.0).toVar();
+            subpix.assign(subpix.mul(-2.0).add(3.0).mul(subpix).mul(subpix));
+            subpix.assign(subpix.mul(subpix).mul(FXAA_SUBPIX));
+            const l1 = select(horz, lN, lW).toVar(), l2 = select(horz, lS, lE).toVar();
+            const g1 = l1.sub(lM).toVar(), g2 = l2.sub(lM).toVar();
+            const pair1 = abs(g1).greaterThanEqual(abs(g2)).toVar();
+            const gradScaled = max(abs(g1), abs(g2)).mul(0.25).toVar();
+            const lenSign = select(pair1, select(horz, t.y, t.x).negate(), select(horz, t.y, t.x)).toVar();
+            const lAvg = select(pair1, l1, l2).add(lM).mul(0.5).toVar();
+            const posB = select(horz, vec2(vUV.x, vUV.y.add(lenSign.mul(0.5))), vec2(vUV.x.add(lenSign.mul(0.5)), vUV.y)).toVar();
+            const off = select(horz, vec2(t.x, 0.0), vec2(0.0, t.y)).toVar();
+            const posN = posB.sub(off.mul(FXAA_STEP[0])).toVar();
+            const posP = posB.add(off.mul(FXAA_STEP[0])).toVar();
+            const endN = fxL(posN).sub(lAvg).toVar();
+            const endP = fxL(posP).sub(lAvg).toVar();
+            const doneN = abs(endN).greaterThanEqual(gradScaled).toVar();
+            const doneP = abs(endP).greaterThanEqual(gradScaled).toVar();
+            for (let i = 1; i < FXAA_STEP.length; i++) {
+              If(doneN.not(), () => {
+                posN.subAssign(off.mul(FXAA_STEP[i]));
+                endN.assign(fxL(posN).sub(lAvg));
+                doneN.assign(abs(endN).greaterThanEqual(gradScaled));
+              });
+              If(doneP.not(), () => {
+                posP.addAssign(off.mul(FXAA_STEP[i]));
+                endP.assign(fxL(posP).sub(lAvg));
+                doneP.assign(abs(endP).greaterThanEqual(gradScaled));
+              });
+            }
+            const dstN = select(horz, vUV.x.sub(posN.x), vUV.y.sub(posN.y)).toVar();
+            const dstP = select(horz, posP.x.sub(vUV.x), posP.y.sub(vUV.y)).toVar();
+            const mLow = lM.sub(lAvg).lessThan(0.0).toVar();
+            const goodN = endN.lessThan(0.0).notEqual(mLow);
+            const goodP = endP.lessThan(0.0).notEqual(mLow);
+            const nearN = dstN.lessThan(dstP);
+            const dst = min(dstN, dstP);
+            const good = select(nearN, goodN, goodP);
+            const pixOff = select(good, dst.negate().div(dstN.add(dstP)).add(0.5), float(0.0));
+            const o = max(pixOff, subpix).mul(lenSign).toVar();
+            const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
+            res.assign(fxaaTex.sample(TL(pos)).rgb);
+          });
         });
-        const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
-        const res = vec3(cM).toVar();
-        const lM = fxLuma(cM).toVar();
-        const lN = fxL(vUV.add(vec2(0.0, t.y.negate()))).toVar();
-        const lS = fxL(vUV.add(vec2(0.0, t.y))).toVar();
-        const lW = fxL(vUV.add(vec2(t.x.negate(), 0.0))).toVar();
-        const lE = fxL(vUV.add(vec2(t.x, 0.0))).toVar();
-        const lMin = min(lM, min(min(lN, lS), min(lW, lE))).toVar();
-        const lMax = max(lM, max(max(lN, lS), max(lW, lE))).toVar();
-        const range = lMax.sub(lMin).toVar();
-        // Flat areas stay pixel-exact (the early-out).
-        If(range.greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
-          const lNW = fxL(vUV.add(vec2(t.x.negate(), t.y.negate()))).toVar();
-          const lNE = fxL(vUV.add(vec2(t.x, t.y.negate()))).toVar();
-          const lSW = fxL(vUV.add(vec2(t.x.negate(), t.y))).toVar();
-          const lSE = fxL(vUV.add(t)).toVar();
-          const lNS = lN.add(lS).toVar(), lWE = lW.add(lE).toVar();
-          const edgeH = abs(lW.mul(-2.0).add(lNW).add(lSW)).add(abs(lM.mul(-2.0).add(lNS)).mul(2.0)).add(abs(lE.mul(-2.0).add(lNE).add(lSE)));
-          const edgeV = abs(lN.mul(-2.0).add(lNW).add(lNE)).add(abs(lM.mul(-2.0).add(lWE)).mul(2.0)).add(abs(lS.mul(-2.0).add(lSW).add(lSE)));
-          const horz = edgeH.greaterThanEqual(edgeV).toVar();
-          const subpix = clamp(abs(lNS.add(lWE).mul(2.0).add(lNW).add(lSW).add(lNE).add(lSE).div(12.0).sub(lM)).div(range), 0.0, 1.0).toVar();
-          subpix.assign(subpix.mul(-2.0).add(3.0).mul(subpix).mul(subpix));
-          subpix.assign(subpix.mul(subpix).mul(FXAA_SUBPIX));
-          const l1 = select(horz, lN, lW).toVar(), l2 = select(horz, lS, lE).toVar();
-          const g1 = l1.sub(lM).toVar(), g2 = l2.sub(lM).toVar();
-          const pair1 = abs(g1).greaterThanEqual(abs(g2)).toVar();
-          const gradScaled = max(abs(g1), abs(g2)).mul(0.25).toVar();
-          const lenSign = select(pair1, select(horz, t.y, t.x).negate(), select(horz, t.y, t.x)).toVar();
-          const lAvg = select(pair1, l1, l2).add(lM).mul(0.5).toVar();
-          const posB = select(horz, vec2(vUV.x, vUV.y.add(lenSign.mul(0.5))), vec2(vUV.x.add(lenSign.mul(0.5)), vUV.y)).toVar();
-          const off = select(horz, vec2(t.x, 0.0), vec2(0.0, t.y)).toVar();
-          const posN = posB.sub(off.mul(FXAA_STEP[0])).toVar();
-          const posP = posB.add(off.mul(FXAA_STEP[0])).toVar();
-          const endN = fxL(posN).sub(lAvg).toVar();
-          const endP = fxL(posP).sub(lAvg).toVar();
-          const doneN = abs(endN).greaterThanEqual(gradScaled).toVar();
-          const doneP = abs(endP).greaterThanEqual(gradScaled).toVar();
-          for (let i = 1; i < FXAA_STEP.length; i++) {
-            If(doneN.not(), () => {
-              posN.subAssign(off.mul(FXAA_STEP[i]));
-              endN.assign(fxL(posN).sub(lAvg));
-              doneN.assign(abs(endN).greaterThanEqual(gradScaled));
-            });
-            If(doneP.not(), () => {
-              posP.addAssign(off.mul(FXAA_STEP[i]));
-              endP.assign(fxL(posP).sub(lAvg));
-              doneP.assign(abs(endP).greaterThanEqual(gradScaled));
-            });
-          }
-          const dstN = select(horz, vUV.x.sub(posN.x), vUV.y.sub(posN.y)).toVar();
-          const dstP = select(horz, posP.x.sub(vUV.x), posP.y.sub(vUV.y)).toVar();
-          const mLow = lM.sub(lAvg).lessThan(0.0).toVar();
-          const goodN = endN.lessThan(0.0).notEqual(mLow);
-          const goodP = endP.lessThan(0.0).notEqual(mLow);
-          const nearN = dstN.lessThan(dstP);
-          const dst = min(dstN, dstP);
-          const good = select(nearN, goodN, goodP);
-          const pixOff = select(good, dst.negate().div(dstN.add(dstP)).add(0.5), float(0.0));
-          const o = max(pixOff, subpix).mul(lenSign).toVar();
-          const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
-          res.assign(fxaaTex.sample(TL(pos)).rgb);
-        });
-        // Inside the rect the inset OVERWRITES (the mirror pass's NoBlending
-        // quad covered exactly these pixel centres; the rect is integer px).
-        const fc = vec2(screenCoordinate).toVar();
-        If(fxaaU.mir.greaterThan(0.5).and(fc.x.greaterThanEqual(mirrorU.rect.x))
-          .and(fc.x.lessThan(mirrorU.rect.x.add(mirrorU.rect.z)))
-          .and(fc.y.greaterThanEqual(mirrorU.rect.y))
-          .and(fc.y.lessThan(mirrorU.rect.y.add(mirrorU.rect.w))), () => {
-          res.assign(mirrorTone(mirC));
+        If(fxaaU.lightBlend.greaterThan(0), () => {
+          const light = lightTex.sample(VP.uv(fxaaV)).level(0).toVar();
+          // The canvas upload carries premultiplied light in display colour space.
+          res.assign(res.mul(select(fxaaU.lightBlend.greaterThan(1), float(1), light.a.oneMinus())).add(light.rgb));
         });
         return vec4(res, 1.0);
       })(), "tlx-post-fxaa"),
     };
 
     /* SGSR1 spatial upscale (SGSR_FS in glsl-post.js) — present-size
+     *    [Qualcomm SGSR1, BSD-3-Clause: conditions and disclaimer in vendor/sgsr/LICENSE]
      *    reconstruct from render-size LDR/FXAA. 4-tap gatherComp (no
      *    textureGather) for GLX/WGX parity. Flag-gated in tlx-post.js. */
     const sgsrTex = VP.tex(texture(ctx.blackTex));
@@ -1208,10 +1351,8 @@
           const minY = min(min(left.y, left.z), min(right.x, right.w));
           finalY.assign(clamp(EdgeSharpness.mul(finalY), minY, maxY));
           const deltaY = clamp(finalY.sub(colorW), float(-23.0 / 255.0), float(23.0 / 255.0));
-          outC.assign(vec3(
-            clamp(color.x.add(deltaY), float(0.0), float(1.0)),
-            clamp(color.y.add(deltaY), float(0.0), float(1.0)),
-            clamp(color.z.add(deltaY), float(0.0), float(1.0))));
+          const peak = HDR_OUT ? C.hdrPeak : float(1.0);
+          outC.assign(clamp(rgb.add(deltaY), vec3(0.0), vec3(peak)));
         });
         return vec4(outC, 1.0);
       })(), "tlx-post-sgsr"),
@@ -1253,16 +1394,26 @@
       return vec3(texN.sample(vec2(mix(p.x, p.x.oneMinus(), mirrorU.flip), p.y)).rgb).toVar();
     }
     function mirrorTone(c) {
-      const t = vec3(acesTonemap(c.mul(C.exposure).div(C.whitePoint))).toVar();
+      const t = vec3(toneMap(c.mul(C.exposure).div(C.whitePoint))).toVar();
       colourGradeT(t);
       ditherT(t, vec2(screenCoordinate.xy));
       return select(mirrorU.hdr.greaterThan(0.5), t, c);
     }
 
+    // The desktop-tier passes that do not live in this closure (tsl-gi.js): GTAO, SSGI, focus, DoF, motion blur.
+    const gi = HI && GIM ? GIM.build(THREE, TSL, {
+      // GL bottom-left uv of the pass's own fragment (phys targets never build these, so VP is the identity here).
+      passUV: () => { const suv = vec2(VP.uv(VP.view())).toVar(); return vec2(suv.x, suv.y.oneMinus()).toVar(); },
+      passMaterial, depthAt, TL, sceneT, tagT, viewPosNdc, clipXYW, perspU, ssaoU, contactShadowT, ignoise,
+      ownTexture: ctx.ownTexture,
+      // tlx-post.js: the scene's velocity attachment (null without it) and the SSGI temporal set (native WebGPU).
+      velTex: ctx.velTex || null, giTemporal: !!ctx.giTemporal,
+    }, HI) : null;
+
     return { bright, blurAO, blurGR, blurAOH, blurAOV, blurGRH, blurGRV,
              down, downFixed, upAdd, upFinal, upAddFixed, upFinalFixed, spread,
-             ssao, godray, composite, fxaa, sgsr, blit, mirror };
+             ssao, godray, composite, fxaa, sgsr, blit, mirror, ssaoHi, godrayHi, gi };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { post, labFxaaSubpix });
 })();

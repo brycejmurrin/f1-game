@@ -2,8 +2,6 @@
 "use strict";
 
 var GameAudioRadioFx = (function () {
-  /** Set when GameAudioRadioFx.create() runs; used by WATCH OpenF1 clips without an engine.js export. */
-  let playWatchMediaFn = null;
   function create(host, signal) {
     /* ── TEAM RADIO FX: THE FRAME AROUND THE VOICE ──────────────────────────
      *
@@ -142,6 +140,9 @@ var GameAudioRadioFx = (function () {
         osc.start(t);
         osc.stop(t + secs + 0.04);
         osc.onended = () => { osc.disconnect(); g.disconnect(); };
+        // Chain on the source so radioStingStop can tear the gain down too —
+        // keep[] only held the oscillator, and disconnect(osc) left g on the bus.
+        osc._apexChain = [osc, g];
         if (keep) keep.push(osc);
         t += secs;
       }
@@ -163,7 +164,15 @@ var GameAudioRadioFx = (function () {
       src.start(at, off);
       src.stop(at + decay + 0.1);
       src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
+      src._apexChain = [src, hp, lp, g];
       return src;
+    }
+
+    function dropChain(head) {
+      const nodes = (head && head._apexChain) || (head ? [head] : []);
+      for (const n of nodes) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed or already gone */ }
+      }
     }
 
     /** Cut a transmission short — the card was hidden, the game was paused, or
@@ -182,6 +191,13 @@ var GameAudioRadioFx = (function () {
       // The figure and the squelch tail are scheduled ahead: stopping only the
       // bed left the squelch to fire seconds later, over the pause menu.
       for (const x of b.extra || []) { try { x.stop(t); } catch (e) { /* already ended */ } }
+      // Disconnect the bed + extras now. onended may never run on a closed or
+      // suspended context; a Gain still wired into the SFX bus keeps rendering
+      // (same contract as voice-chain M8 / the preempt live.size pin).
+      for (const n of b.nodes || []) {
+        try { if (n && n.disconnect) n.disconnect(); } catch (e) { /* closed or already gone */ }
+      }
+      for (const x of b.extra || []) dropChain(x);
     }
 
     /** One transmission: key-up, a hiss bed held for `seconds`, then squelch.
@@ -204,8 +220,9 @@ var GameAudioRadioFx = (function () {
       // KEY, THEN THE FIGURE, THEN THE LINE — the order the ear expects: the mic
       // opens (a click, which is a noise burst and not an oscillator), and the
       // courtesy figure follows a hair later rather than landing on top of it.
-      radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
       const extra = [];
+      const click = radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
+      if (click) extra.push(click);   // so radioStingStop tears the click chain too
       const tuneS = 0.03 + radioTune(ch.tune, ch.toneAmp * radioFx, t0 + 0.03, extra);
       // THE BED MUST OUTLAST THE FIGURE. `seconds` is the card's life, and a short
       // card is shorter than four notes — scheduling the squelch tail off that
@@ -227,7 +244,9 @@ var GameAudioRadioFx = (function () {
       src.start(t0, Math.random() * (signal.noisePoolSeconds - 0.5));
       src.stop(t0 + hold + 0.2);
       src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
-      radioBed = { src, gain: g, extra };
+      // `nodes` so radioStingStop can disconnect without waiting on onended
+      // (closed / suspended contexts never fire it).
+      radioBed = { src, gain: g, extra, nodes: [src, hp, lp, g] };
       // The tail is the single most recognisable part of a two-way radio: the
       // burst you hear AFTER the talking stops, when the mic un-keys.
       if (ch.tail > 0) { const tail = radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold); if (tail) extra.push(tail); }
@@ -414,161 +433,8 @@ var GameAudioRadioFx = (function () {
       return radioFx;
     }
 
-    /* OPENF1 WATCH CLIPS (js/race/real-replay.js): recorded team radio through the
-     * same band-pass / soft-clip / compressor chain as voice-pack lines, with music
-     * ducking for the clip's lifetime. MediaElementSource when CORS allows; else
-     * fetch+decode into radioVoice; else plain HTMLAudio with duck only. */
-    const _watchClips = new Set();
-    let _watchSeq = 0;
-    function radioMediaClip(url, o) {
-      if (!url || typeof url !== "string") return null;
-      const vol = Math.max(0, Math.min(1, o && o.volume != null ? +o.volume || 0 : 1));
-      if (!(vol > 0) || !host.enabled() || !host.sfxOk()) return null;
-      let ducked = false;
-      // Its own duck source: the engineer's setRadioDuck(false) on a card replace
-      // (and another clip ending) must not lift the music under this clip.
-      const duckId = "watch:" + (++_watchSeq);
-      const duck = () => {
-        if (ducked) return;
-        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) { GameAudio.setRadioDuck(true, duckId); ducked = true; }
-      };
-      const releaseDuck = () => {
-        if (!ducked) return;
-        if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false, duckId);
-        ducked = false;
-      };
-      duck();
-      let dead = false;
-      let el = null;
-      let nodes = [];
-      let voiceHandle = null;
-      let chained = false;
-      let ended = false;
-      const entry = {};
-      let unbindFocus = null;
-      function bindMediaFocus(a) {
-        let playing = false;
-        const sync = () => {
-          if (dead || el !== a) return;
-          if (host.setVoiceFocusHold) host.setVoiceFocusHold(playing
-            && !a.paused && !a.ended && !a.muted && a.volume > 0 && host.enabled(), entry);
-        };
-        a.onplaying = () => { playing = true; sync(); };
-        a.onwaiting = a.onpause = () => { playing = false; sync(); };
-        // stalled concerns network fetch; buffered playback can continue.
-        a.onstalled = a.onvolumechange = sync;
-        unbindFocus = () => {
-          playing = false;
-          a.onplaying = a.onwaiting = a.onpause = a.onstalled = a.onvolumechange = null;
-          if (host.setVoiceFocusHold) host.setVoiceFocusHold(false, entry);
-          unbindFocus = null;
-        };
-      }
-      const teardown = () => {
-        if (dead) return;
-        dead = true;
-        ended = true;
-        _watchClips.delete(entry);
-        if (unbindFocus) unbindFocus();
-        releaseDuck();
-        if (voiceHandle && voiceHandle.stop) { try { voiceHandle.stop(); } catch (e) { /* gone */ } voiceHandle = null; }
-        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
-        nodes = [];
-        if (el) {
-          el.onended = el.onerror = null;
-          try { el.pause(); } catch (e) { /* gone */ }
-          el = null;
-        }
-      };
-      entry.teardown = teardown;
-      _watchClips.add(entry);
-      const handle = {
-        get chained() { return chained; },
-        get paused() { return dead || ended || (el ? el.paused : !voiceHandle); },
-        get ended() { return ended || (el ? el.ended : dead || !voiceHandle); },
-        pause() { teardown(); },
-        play() {
-          if (dead || !el) return Promise.resolve();
-          return el.play().catch(() => { teardown(); });
-        },
-        stop() { teardown(); },
-      };
-      function plainFallback() {
-        chained = false;
-        if (typeof Audio === "undefined") { teardown(); return null; }
-        el = new Audio(url);
-        el.volume = Math.min(1, vol);
-        bindMediaFocus(el);
-        el.onended = el.onerror = () => teardown();
-        const p = el.play();
-        if (p && p.catch) p.catch(() => teardown());
-        return handle;
-      }
-      const disconnectMedia = () => {
-        if (unbindFocus) unbindFocus();
-        for (const n of nodes) { try { n.disconnect(); } catch (e) { /* gone */ } }
-        nodes = [];
-        if (el) { el.onended = el.onerror = null; el = null; }
-        chained = false;
-      };
-      // ONE FALLBACK PER CLIP. A failing media element fires `error` AND rejects the
-      // pending play() promise; both used to run disconnectMedia + tryFetchDecode,
-      // so the clip was fetched and put on air twice (the first handle lost).
-      let fellBack = false;
-      const fallBack = () => {
-        if (dead || fellBack) return;
-        fellBack = true;
-        disconnectMedia();
-        tryFetchDecode();
-      };
-      const tryFetchDecode = () => {
-        if (dead || typeof fetch !== "function" || !host.context()) { plainFallback(); return; }
-        fetch(url, { mode: "cors", credentials: "omit" }).then((r) => {
-          if (!r.ok) throw new Error("fetch " + r.status);
-          return r.arrayBuffer();
-        }).then((ab) => decodeClip(ab)).then((buf) => {
-          if (dead) return;
-          const h = radioVoice([buf], host.now(), { fx: "radio", channel: "radio", volume: vol });
-          if (!h) { plainFallback(); return; }
-          chained = true;
-          voiceHandle = h;
-          const endAt = (h.end - host.now()) * 1000 + 150;
-          setTimeout(() => { if (!dead) teardown(); }, Math.max(50, endAt));
-        }).catch(() => { if (!dead) plainFallback(); });
-      };
-      const ctx = host.context();
-      if (!ctx || ctx.state === "closed" || ctx.state !== "running") return plainFallback();
-      el = new Audio();
-      el.crossOrigin = "anonymous";
-      el.preload = "auto";
-      try {
-        const mediaSrc = ctx.createMediaElementSource(el);
-        const preset = RADIO_PRESETS[radioPreset];
-        const ch = Object.assign({}, VOICE_CH.radio, {
-          lo: preset.lo, hi: preset.hi, drive: preset.drive, click: 0,
-        });
-        const g = ctx.createGain();
-        g.gain.value = ch.level * vol;
-        mediaSrc.connect(g);
-        g.connect(voiceChain("radio:" + radioPreset, ch));
-        nodes = [mediaSrc, g];
-        chained = true;
-        bindMediaFocus(el);
-        el.onended = () => teardown();
-        el.onerror = fallBack;
-        el.src = url;
-        const p = el.play();
-        if (p && p.catch) p.catch(fallBack);
-        return handle;
-      } catch (e) {
-        fallBack();
-        return handle;
-      }
-    }
-    playWatchMediaFn = radioMediaClip;
-
     return {
-      decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset, radioMediaClip,
+      decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset,
       radioPreset: () => radioPreset,
       radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
       radioVoicesLive: () => voicesLive,
@@ -586,20 +452,16 @@ var GameAudioRadioFx = (function () {
         return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
       },
       radioFxMax: () => RADIO_FX_MAX,
-      radioChannels: () => Object.keys(RADIO_CH),
       resetContext() {
         radioStingStop();
-        for (const w of _watchClips) w.teardown();
-        _watchClips.clear();
         for (const ent of _voiceChains.values()) dropVoiceChain(ent);
         _voiceChains.clear();
         radioBed = null;
       },
     };
   }
-  function playWatchMedia(url, o) {
-    return playWatchMediaFn ? playWatchMediaFn(url, o) : null;
-  }
-  return { create, playWatchMedia };
+  // No WATCH media player: real team radio in WATCH is caption-only (docs/DECISIONS.md
+  // D-032); the broadcast recordings are never fetched or played.
+  return { create };
 })();
 Object.freeze(GameAudioRadioFx);

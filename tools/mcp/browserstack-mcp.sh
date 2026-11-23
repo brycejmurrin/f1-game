@@ -18,7 +18,7 @@
 # it is a different attachment from this repo-configured local server.
 #
 # CREDENTIALS: read from the process environment ONLY. Nothing is tracked,
-# defaulted or persisted by this script (the tinyfish-mcp.sh rule). No
+# defaulted or persisted by this script. No
 # credentials in the shell env = a clear "not set" message and exit 1.
 # Where to get them: BrowserStack account settings (username + access key).
 # Put them in the host's secret store (Cursor Secrets / the shell env the
@@ -66,11 +66,11 @@ cmd_status() {
 need_credentials() {
   local missing=0
   if [[ -z "${BROWSERSTACK_USERNAME:-}" ]]; then
-    echo "browserstack-mcp: BROWSERSTACK_USERNAME is not set." >&2
+    echo "browserstack-mcp: credentials missing — BROWSERSTACK_USERNAME is not set." >&2
     missing=1
   fi
   if [[ -z "${BROWSERSTACK_ACCESS_KEY:-}" ]]; then
-    echo "browserstack-mcp: BROWSERSTACK_ACCESS_KEY is not set." >&2
+    echo "browserstack-mcp: credentials missing — BROWSERSTACK_ACCESS_KEY is not set." >&2
     missing=1
   fi
   if [[ "$missing" -ne 0 ]]; then
@@ -89,7 +89,16 @@ cmd_run() {
   # Bounded wait for the SessionStart npm install + npx cache note (stderr only).
   . "$ROOT/tools/mcp/mcp-preflight.sh"
   mcp_preflight "${MCP_NPM_PACKAGE%@*}"
-  exec npx --yes "$MCP_NPM_PACKAGE" "$@"
+  # Bound a cold npx download the same way as playwright / chrome-devtools so a
+  # missing pin cannot hang the MCP client until it kills the process.
+  local timeout_s="${APEX_MCP_NPX_TIMEOUT_S:-45}"
+  local base="${MCP_NPM_PACKAGE%@*}"
+  if ! compgen -G "${npm_config_cache:-$HOME/.npm}/_npx/*/node_modules/$base" >/dev/null 2>&1 \
+    && [[ "$timeout_s" != "0" ]] && command -v timeout >/dev/null 2>&1; then
+    echo "browserstack-mcp: $MCP_NPM_PACKAGE not in npx cache; download bounded to ${timeout_s}s" >&2
+    exec timeout "$timeout_s" npx --yes --prefer-offline "$MCP_NPM_PACKAGE" "$@"
+  fi
+  exec npx --yes --prefer-offline "$MCP_NPM_PACKAGE" "$@"
 }
 
 cmd="${1:-help}"

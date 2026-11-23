@@ -27,10 +27,11 @@ const CHUNKED = read("js/render/three/tlx-chunked.js");
 installThreeGlobals();
 globalThis.Log = globalThis.Log || { info() {}, warn() {}, error() {}, debug() {} };
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 const TSL = THREE.TSL;
 for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/render/shared/post-common.js",
-  "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
+  "js/render/three/tsl-viewport.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js",
+  "js/render/three/tsl-aa.js", "js/render/three/tsl-gi.js", "js/render/three/tsl-post.js", "js/render/three/tlx-post.js",
   "js/render/three/tlx-shadow.js"])
   vm.runInThisContext(read(f), { filename: absSrc(f) });
 
@@ -234,24 +235,40 @@ async function mirrorRig(t, ls = {}) {
   let mips = 0;
   fg.gl.texStorage2D = (...a) => { storage.push(a[1]); };
   fg.gl.generateMipmap = () => { mips++; };
+  const deleted = { tex: 0 }, hooks = { post: 0, fx: [] };
+  fg.gl.deleteTexture = () => { deleted.tex++; };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
   t.after(() => renderer.dispose());
-  const mk = new Function("THREE", "localStorage", `"use strict";
-    let mirRT = null, mirCam = null, _mirRect = null;
+  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
+  const mk = new Function("THREE", "localStorage", "hooks", "renderer", "scene", `"use strict";
+    let mirRT = null, mirCam = null, _mirRect = null, _mirActive = false, _warmPending = null, _mirRenders = 0;
+    let _mirReleaseWait = null, _mirReady = false, _mirFreeze = false;
     const W = 1280, H = 720, presentW = 1280, presentH = 720;
     const _instPerPass = true, skipBatches = () => false, _mirWarmSwap = () => {}, wantSpatialUpscale = () => false;
-    const post = { hdrOk: () => true };
+    const post = { hdrOk: () => true, releaseMirror: () => { hooks.post++; } };
+    const fx = { updateFrame() {}, releaseTexture: (tex) => { hooks.fx.push(tex); } };
+    const lit = { updateFrame() {} }, drawList = { n: 0 }, _mirVP = new Float32Array(16), _kidsMir = [];
+    const _softBlit = false, _envActive = false, mirrorWarmGate = () => false;
+    const resetRecs = () => {}, _kidsBegin = () => {}, _poolShow = () => {}, _hideUndrawnInstanced = () => {}, pinSkyMaterial = () => {}, softOutRT = () => null;
+    let _mirDead = false, _mirErr, _mirEye, _mirCull, _mirFog, _mirUsed, _dMatUsed, _fxMatUsed, _gpuLastOperation;
+    let _instStamp = 0, _poolBatch = 0, _mirFails = 0, _mirFlip = true, _mirGlass = 0;
+    let mirrorRearView = false;
+    const resetMirrorRoadStats = () => {};
+    const _mirRectScratch = [0, 0, 0, 0];
+    const _mirCapW = 1024, _mirCapH = 512;   // mirrorBegin's clamp below mirrorHi (ULTRA+ raises it to 2048 x 1024)
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    return { prepareMirrorTarget, rt: () => mirRT, rect(r) { _mirRect = r; }, glass() { _mirGlassSeen = true; } };`);
-  const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) });
-  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera();
+    const backend = { ${tslice("        mirrorBegin(frame, w, h, rearView) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
+    return { backend, prepareMirrorTarget, rt: () => mirRT, cam: () => mirCam, rect(r) { _mirRect = r; }, release: backend.releaseMirror,
+      busy(active, warm) { _mirActive = active; _warmPending = warm; }, rendered() { _mirRenders++; }, renders: () => _mirRenders,
+      glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);
+  const M = mk(THREE, { getItem: (k) => (k in ls ? ls[k] : null) }, hooks, renderer, scene);
   // One mirror frame: mirrorBegin's prepareMirrorTarget(w, h), then mirrorEnd's render into the target.
   const frame = (w, h) => {
     M.prepareMirrorTarget(w, h);
     renderer.setRenderTarget(M.rt()); renderer.render(scene, cam); renderer.setRenderTarget(null);
   };
-  return { M, frame, storage, mipCount: () => mips };
+  return { M, renderer, frame, storage, mipCount: () => mips, deleted, hooks };
 }
 // The census's helmet-cam mirror: a 461 x 132 target (SS 2) over its 230 x 66 px HUD rect — ratio 2.004, LOD ~1.
 const RECT = [0.4, 0.02, 230.4 / 1280, 66 / 720];
@@ -280,12 +297,27 @@ test("A-H5: the mirror target stores and regenerates 3 levels, not 9, while only
   assert.equal(h.M.rt().texture.mipmaps.length, 5, "no shrink at the same size (no churn)");
 });
 
-test("A-H5: the cockpit glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+test("perf hunt 5 F1: the cockpit glass grows the chain to its bounded LOD, not the full 9 levels", async (t) => {
   const h = await mirrorRig(t);
   h.M.rect(RECT);
   h.frame(461, 132);
   assert.equal(h.M.rt().texture.mipmaps.length, 3);
-  h.M.glass();   // drawMirrorGlass ran
+  h.M.glass(1.84);   // drawMirrorGlass at the live helmet pose (mip-footprint-lod.test.mjs)
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 4, "ceil(1.84 + 0.25) + 1 levels");
+  assert.equal(h.storage.filter((n) => n > 1).at(-1), 4, "re-allocated with 4 levels, not 9");
+  h.M.glass(1.2); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 4, "the session max: a smaller footprint never shrinks it");
+  h.M.glass(3.1); h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 5, "a larger one grows it");
+});
+
+test("A-H5: an UNBOUNDED glass latches the full chain; apex26.tlxMirMips=0 is the old chain, =N pins N under the glass", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132);
+  assert.equal(h.M.rt().texture.mipmaps.length, 3);
+  h.M.glass();   // drawMirrorGlass with no bound (two straddling frames, no CPU arrays)
   h.frame(461, 132);
   assert.equal(h.M.rt().texture.mipmaps.length, 0, "the full chain again (an empty mipmaps array = three's own rule)");
   assert.equal(h.storage.filter((n) => n > 1).at(-1), 9, "re-allocated with all 9 levels");
@@ -302,6 +334,92 @@ test("A-H5: the cockpit glass latches the full chain; apex26.tlxMirMips=0 is the
   assert.equal(pin.M.rt().texture.mipmaps.length, 3, "a pinned cap below the inset's need is raised to it");
   pin.M.glass(); pin.frame(461, 132);
   assert.equal(pin.M.rt().texture.mipmaps.length, 3, "pinned: the glass does not latch the full chain (the A/B lever)");
+});
+
+// #4219 (perf hunt 7): quit-to-menu frees the mirror target (colour + depth + mips) and its node / glass references;
+// the next mirror frame re-allocates through prepareMirrorTarget, the existing lazy path.
+test("#4219: releaseMirror frees mirRT and drops its references; the next mirror frame allocates a new one", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132); h.M.rendered();
+  const old = h.M.rt(), n0 = h.storage.length;
+  let disposed = 0;
+  old.addEventListener("dispose", () => { disposed++; });
+  h.M.busy(true, null);
+  assert.equal(h.M.release(), false, "never while a mirror pass records");
+  const warm = Promise.withResolvers();
+  const pending = warm.promise.finally(() => h.M.busy(false, null));
+  h.M.busy(false, pending);
+  assert.equal(h.M.release(), false, "never while a warm draws into it");
+  assert.equal(h.M.release(), false, "a repeated quit request does not dispose during warm");
+  assert.equal(h.M.rt(), old);
+  warm.resolve();
+  await pending;
+  assert.equal(h.M.rt(), null, "the backend holds no mirror target");
+  assert.equal(h.M.cam(), null);
+  assert.equal(h.M.renders(), 0, "mirrorState().ready is false until the next mirror render");
+  assert.equal(disposed, 1, "the target was disposed");
+  assert.ok(h.deleted.tex >= 1, "its GL textures were deleted");
+  assert.equal(h.hooks.post, 1, "the post chain's mirror texture nodes were reset");
+  assert.deepEqual(h.hooks.fx, [old.texture], "the glass material naming the texture was retired");
+  assert.equal(h.M.release(), true, "a second release is a safe no-op");
+  assert.equal(disposed, 1); assert.equal(h.hooks.post, 1);
+  h.frame(461, 132);
+  assert.ok(h.M.rt() && h.M.rt() !== old, "the next mirror frame allocates a new target");
+  assert.ok(h.M.cam(), "and its camera");
+  assert.ok(h.storage.length > n0, "with fresh storage");
+  assert.equal(h.M.rt().texture.mipmaps.length, 3, "the same capped chain");
+});
+
+test("a mirror pass started after warm-up supersedes a deferred quit release", async (t) => {
+  const h = await mirrorRig(t);
+  h.M.rect(RECT);
+  h.frame(461, 132);
+  const old = h.M.rt();
+  const warm = Promise.withResolvers();
+  let began = false;
+  const pending = warm.promise.finally(() => {
+    h.M.busy(false, null);
+    // A consumer already queued at settlement can run before pending.then.
+    queueMicrotask(() => {
+      const matrix = new THREE.Matrix4().elements;
+      began = h.M.backend.mirrorBegin({ proj: matrix, view: matrix, viewProj: matrix }, 461, 132);
+      if (began) h.M.backend.mirrorEnd();
+    });
+  });
+  h.M.busy(false, pending);
+  assert.equal(h.M.release(), false);
+  warm.resolve();
+  await pending;
+  assert.equal(began, true);
+  assert.equal(h.M.rt(), old, "the just-rendered mirror keeps its target");
+  assert.equal(h.M.renders(), 1);
+  assert.equal(h.hooks.post, 0);
+  assert.equal(h.M.release(), true, "a later quit still releases the target");
+  assert.equal(h.M.rt(), null);
+});
+
+test("mirror resize invalidates the old image until the resized target renders", async (t) => {
+  const { M, renderer } = await mirrorRig(t);
+  const matrix = new THREE.Matrix4().elements;
+  const frame = { proj: matrix, view: matrix, viewProj: matrix };
+  assert.equal(M.backend.mirrorBegin(frame, 461, 132), true);
+  M.backend.mirrorEnd();
+  assert.equal(M.backend.mirrorState().ready, true);
+  const oldCount = M.backend.mirrorState().renders;
+
+  const render = renderer.render.bind(renderer);
+  renderer.render = () => { throw new Error("mirror draw failed after resize"); };
+  assert.equal(M.backend.mirrorBegin(frame, 300, 90), true);
+  M.backend.mirrorEnd();
+  assert.equal(M.backend.mirrorState().ready, false, "the resized backing has never been painted");
+  assert.equal(M.backend.mirrorState().renders, oldCount, "readiness is independent of the lifetime counter");
+
+  renderer.render = render;
+  assert.equal(M.backend.mirrorBegin(frame, 300, 90), true);
+  M.backend.mirrorEnd();
+  assert.equal(M.backend.mirrorState().ready, true);
+  assert.equal(M.backend.mirrorState().renders, oldCount + 1);
 });
 
 test("A-H5: tlx.js wiring — the glass latch in drawMirrorGlass, mirrorState reports the levels", () => {
@@ -321,15 +439,28 @@ function withStore(ls, fn) {
   }
 }
 // The REAL post chain (tlx-post + tsl-post) on three r186 over the fake WebGL2, plus one lit mesh to draw.
-async function postRig(t, { ls = {}, samples = 0, ssrTag = false } = {}) {
+async function postRig(t, { ls = {}, samples = 0, ssrTag = false, temporal = false, softDest = () => null,
+  wantSpatialUpscale = () => false } = {}) {
   const fg = makeFakeGL(320, 180);
   const inv = [];
   fg.gl.invalidateFramebuffer = (target, list) => { inv.push([target, list.slice()]); };
   const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
   await renderer.init();
-  const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
-    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: samples }));
+  if (temporal) {
+    renderer.backend.isWebGPUBackend = true;
+    const getExtension = fg.gl.getExtension.bind(fg.gl);
+    fg.gl.getExtension = (name) => name === "EXT_color_buffer_float" ? {} : getExtension(name);
+  }
+  const shaders = globalThis.TLXShaders, makeGraph = shaders.post;
+  let graph, post;
+  try {
+    shaders.post = (...args) => (graph = makeGraph(...args));
+    post = withStore(ls, () => shaders.postChain(THREE, TSL, { renderer, isMobile: !temporal, traa: temporal, hdrPeak: temporal ? 2 : 1,
+      chunks: shaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest,
+      wantSpatialUpscale, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: samples }));
+  } finally {
+    shaders.post = makeGraph;
+  }
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   const scene = new THREE.Scene();
@@ -346,8 +477,224 @@ async function postRig(t, { ls = {}, samples = 0, ssrTag = false } = {}) {
     renderer.setRenderTarget(null);
     return { keep, dropped };
   };
-  return { fg, renderer, post, inv, scenePass, gl: fg.gl };
+  return { fg, renderer, post, graph, inv, scenePass, gl: fg.gl };
 }
+test("post warm-up does not spend the live target idle grace period", async (t) => {
+  const { post } = await postRig(t);
+  const closed = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present({ ...closed, bloom: 0.5 }, NIGHT);
+  assert.equal(post.state().held.bloom, true);
+  for (let i = 0; i < 7; i++) post.present(closed, NIGHT);
+  await post.warm(closed, NIGHT);
+  assert.equal(post.state().held.bloom, true, "compile warm is not a live frame");
+  post.drawWarm(closed, NIGHT);
+  await post.warmSettled();
+  assert.equal(post.state().held.bloom, true, "scissored warm is not a live frame");
+  post.present(closed, NIGHT);
+  assert.equal(post.state().held.bloom, false, "the eighth live frame sheds the block");
+});
+
+test("a WebGPU garage photo draws once into a readable target after a race", async () => {
+  const src = read("js/render/three/tlx.js");
+  const paint = src.slice(src.indexOf("const paintCanvas ="), src.indexOf("const dropTo ="));
+  const race = {}, garage = {};
+  for (const soft of [false, true]) {
+    const draws = []; let target, blits = 0;
+    const sandbox = {
+      _captureSource: "post", _captureDraw: false, _softBlit: soft, _blitRT: garage, post: { captureTarget: () => race },
+      ownGL: null, renderer: { backend: {}, setRenderTarget(rt) { target = rt; }, readRenderTargetPixelsAsync() {} },
+      _readLdr: async rt => { assert.equal(rt, garage); return {w: 1, h: 1, data: [41, 52, 63, 255]}; },
+      isWebGPU: () => true, pinSkyMaterial() {}, _gpuLastOperation: "", _ensureBlitRT: () => garage,
+      _queueSoftBlit() { blits++; }, _renderTimed() { draws.push(target); }, scene: {}, camera: {}, W: 1, H: 1,
+    };
+    const api = vm.runInNewContext(paint + fnSource(src, "function _captureRT() {")
+      + "\n({ draw: () => paintCanvas({}), current: _captureRT, " + fnSource(src, "renderCaptureFrame(draw) {")
+      + ", " + fnSource(src, "capturePixels() {") + "})", sandbox, { filename: absSrc("js/render/three/tlx.js") });
+    assert.equal(api.current(), race);
+    assert.equal(api.renderCaptureFrame(api.draw), true);
+    assert.deepEqual(Array.from((await api.capturePixels()).data), [41, 52, 63, 255]);
+    assert.deepEqual(draws, [garage]);
+    assert.equal(blits, Number(soft));
+    assert.equal(api.renderCaptureFrame(() => {}), false, "warm-up cannot save the previous frame");
+    api.draw(); assert.equal(draws.at(-1), soft ? garage : null);
+    sandbox.isWebGPU = () => false;
+    assert.equal(api.renderCaptureFrame(() => {}), false);
+    assert.equal(api.renderCaptureFrame(api.draw), true);
+    assert.equal(draws.at(-1), soft ? garage : null);
+  }
+});
+
+for (const fold of [true, false]) test(`FXAA capture replays the final full-size draw and the ${fold ? "folded" : "separate"} mirror (#6065)`, async (t) => {
+  let soft = null;
+  const { renderer, post, graph } = await postRig(t, { ls: { "apex26.tlxMirFold": fold ? "1" : "0" }, softDest: () => soft });
+  const mirror = new THREE.DataTexture(new Uint8Array([90, 80, 70, 255]), 1, 1);
+  mirror.needsUpdate = true;
+  t.after(() => mirror.dispose());
+  post.setMirror(mirror, [20, 10, 80, 48], false, true);
+  const draws = [];
+  const render = renderer.render.bind(renderer);
+  renderer.render = (object, camera) => {
+    const mat = object.material, rt = renderer.getRenderTarget();
+    draws.push({ mat, rt, source: mat === graph.fxaa.mat ? graph.fxaa.tex.value : null,
+      mirror: mat === graph.mirror.mat ? graph.mirror.tex.value : graph.fxaa.mirTex.value,
+      rect: mat === graph.mirror.mat ? (rt ? rt.viewport : renderer.getViewport(new THREE.Vector4())).toArray() : null });
+    return render(object, camera);
+  };
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present(opts, NIGHT);
+  const canvasDraws = draws.filter((d) => !d.rt);
+  assert.deepEqual(canvasDraws.map((d) => d.mat), fold ? [graph.fxaa.mat] : [graph.fxaa.mat, graph.mirror.mat]);
+  assert.equal(canvasDraws[0].source, post.ldrTarget().texture);
+  assert.equal(canvasDraws.at(-1).mirror, mirror);
+  assert.ok(draws.every((d) => d.rt?.texture.name !== "TLXPostFXAACapture"));
+  draws.length = 0;
+  const count = post.mirrorComposites();
+  renderer.setRenderTarget(post.sceneTarget(), 2, 1);
+  renderer.autoClear = false;
+  // The real capture entry point must submit its asynchronous read of the replay destination.
+  const src = read("js/render/three/tlx.js");
+  let readRT;
+  const api = vm.runInNewContext(`${fnSource(src, "function _captureRT() {")}
+    ({ ${fnSource(src, "capturePixels() {")} })`, {
+    ownGL: null, renderer: { backend: {}, readRenderTargetPixelsAsync() {} }, post, _captureSource: "post", Uint8ClampedArray,
+    _readLdr: async (rt) => { readRT = rt; return { w: rt.width, h: rt.height, data: new Uint8ClampedArray(4) }; },
+  }, { filename: absSrc("js/render/three/tlx.js") });
+  const shot = await api.capturePixels();
+  assert.equal(readRT.texture.name, "TLXPostFXAACapture");
+  assert.deepEqual([shot.width, shot.height], [renderer.domElement.width, renderer.domElement.height]);
+  assert.deepEqual(draws.map((d) => d.mat), canvasDraws.map((d) => d.mat));
+  assert.ok(draws.every((d) => d.rt === readRT));
+  assert.equal(draws[0].source, canvasDraws[0].source);
+  assert.equal(draws.at(-1).mirror, mirror);
+  if (!fold) assert.deepEqual(draws.at(-1).rect, canvasDraws.at(-1).rect);
+  assert.equal(renderer.getRenderTarget(), post.sceneTarget());
+  assert.equal(renderer.getActiveCubeFace(), 2);
+  assert.equal(renderer.getActiveMipmapLevel(), 1);
+  assert.equal(renderer.autoClear, false);
+  assert.equal(post.mirrorComposites(), count);
+
+  soft = new THREE.RenderTarget(320, 180);
+  t.after(() => soft.dispose());
+  post.present(opts, NIGHT);
+  draws.length = 0;
+  assert.equal(post.captureTarget(), soft);
+  assert.equal(draws.length, 0, "soft presentation already has its final draw");
+});
+
+test("disabling spatial upscale releases its input texture before disposing the AA target", async (t) => {
+  let upscale = true;
+  const { post, graph, renderer } = await postRig(t, { wantSpatialUpscale: () => upscale });
+  post.resize(160, 90);
+  const mirror = new THREE.Texture();
+  t.after(() => mirror.dispose());
+  post.setMirror(mirror, [20, 10, 80, 48], false, true);
+  const draws = [];
+  renderer.render = (quad) => draws.push([quad.material, renderer.getRenderTarget()]);
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present(opts, NIGHT);
+  const aa = post.presentedTarget();
+  assert.equal(aa.texture.name, "TLXPostAA");
+  assert.deepEqual(graph.sgsr.V.size.value.toArray(), [320, 180], "the cover maps the full output");
+  assert.equal(graph.sgsr.U.plain.value, 0, "the selected upscaler sharpens on orientation-cover phones");
+  draws.length = 0;
+  const shot = post.captureTarget();
+  assert.deepEqual([shot.width, shot.height], [320, 180]);
+  assert.deepEqual(draws, [[graph.sgsr.mat, shot], [graph.mirror.mat, shot]]);
+  assert.equal(graph.mirror.tex.value, mirror);
+  let sampledAA = false;
+  const readsAA = () => graph.sgsr.tex.value === aa.texture;
+  assert.equal(readsAA(), true);
+  aa.addEventListener("dispose", () => { sampledAA = readsAA(); });
+  upscale = false;
+  post.resize(320, 180);
+  assert.equal(post.presentedTarget(), post.ldrTarget());
+  assert.equal(sampledAA, false, "the retiring target was detached from the shader first");
+  assert.equal(readsAA(), false);
+  upscale = true;
+  post.resize(320, 180);
+  post.present(opts, NIGHT);
+  assert.notEqual(post.presentedTarget(), aa);
+  assert.equal(post.presentedTarget().texture.name, "TLXPostAA");
+});
+
+test("temporal AA resolves the cinema output and captures its last live history with the mirror", async (t) => {
+  const originalAA = globalThis.TLXAA, originalQuality = globalThis.GfxQuality;
+  let input, cinema = true;
+  globalThis.TLXAA = { ...originalAA, taa(three, tsl, ctx) {
+    return originalAA.taa(three, { ...tsl, texture(value) {
+      const node = tsl.texture(value);
+      if (value === ctx.ldrTex) input = node;
+      return node;
+    } }, ctx);
+  } };
+  globalThis.GfxQuality = { detail: () => 2, FEATURES: { dof: 3, motionBlur: 3 },
+    feature: (name) => cinema && (name === "dof" || name === "motionBlur") };
+  t.after(() => { globalThis.TLXAA = originalAA; globalThis.GfxQuality = originalQuality; });
+  const { post, graph, renderer } = await postRig(t, { temporal: true });
+  const mirror = new THREE.Texture();
+  t.after(() => mirror.dispose());
+  post.setMirror(mirror, [20, 10, 80, 48], false, true);
+  const draws = [];
+  renderer.render = (quad) => draws.push({ mat: quad.material, target: renderer.getRenderTarget() });
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.present(opts, NIGHT);
+  const dof = draws.find((d) => d.mat === graph.gi.dof.mat);
+  assert.ok(dof);
+  assert.equal(input.value, dof.target.texture);
+  assert.equal(input.value.type, THREE.HalfFloatType, "cinema preserves the HDR resolve input");
+  const canvasCopy = draws.filter((d) => !d.target)[0].mat;
+  assert.equal(canvasCopy.name, "tlx-post-traa-out");
+  const frames = post.state().aa.state.frames;
+  draws.length = 0;
+  const shot = post.captureTarget();
+  assert.deepEqual(draws, [{ mat: canvasCopy, target: shot }, { mat: graph.mirror.mat, target: shot }]);
+  assert.equal(graph.mirror.tex.value, mirror);
+  assert.equal(post.state().aa.state.frames, frames, "capturing must not advance the temporal history");
+  cinema = false;
+  for (let i = 0; i < 16; i++) post.present(opts, NIGHT);
+  const composite = draws.find((d) => d.mat === graph.composite.mat);
+  assert.equal(input.value, composite.target.texture, "returning to the race uses the ordinary composite");
+});
+
+test("disposing a post chain abandons its queued canvas compiles", async (t) => {
+  const { post, renderer } = await postRig(t);
+  let compiles = 0;
+  const compile = renderer.compileAsync.bind(renderer);
+  renderer.compileAsync = (...args) => { compiles++; return compile(...args); };
+  const opts = { bloom: 0, carReflect: 0, flareMul: 0 };
+  post.drawWarm(opts, NIGHT);
+  await post.warmSettled();
+  assert.ok(compiles > 0, "an active chain runs the queued canvas warm");
+  compiles = 0;
+  post.drawWarm(opts, NIGHT);
+  post.dispose();
+  await post.warmSettled();
+  assert.equal(compiles, 0, "retired materials must not be compiled again");
+});
+
+test("disposing a post chain stops a blocked warm without touching the replacement target", async (t) => {
+  const { post, renderer } = await postRig(t);
+  const gate = Promise.withResolvers();
+  const targets = [];
+  renderer.compileAsync = () => {
+    targets.push(renderer.getRenderTarget());
+    return gate.promise;
+  };
+  const warm = post.warm({ bloom: 0.5, carReflect: 0, flareMul: 0 }, NIGHT);
+  assert.equal(targets.length, 1);
+  assert.ok(targets[0]?.isRenderTarget, "the pending compile was using a post target");
+  post.dispose();
+  const afterDispose = renderer.getRenderTarget();
+  const replacement = new THREE.RenderTarget(32, 32);
+  t.after(() => replacement.dispose());
+  renderer.setRenderTarget(replacement);
+  gate.resolve();
+  await warm;
+  assert.equal(targets.length, 1, "retired targets must not be compiled after disposal");
+  assert.equal(afterDispose, null, "dispose unbinds its own target before retiring it");
+  assert.equal(renderer.getRenderTarget(), replacement);
+});
+
 const I16 = new THREE.Matrix4().toArray();
 // A night frame: the key light below the horizon and dim, so the flare is off; no SSAO, godray or SSR inputs.
 const VP = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1000).projectionMatrix.toArray();   // looking down -z
@@ -446,7 +793,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
   const post = globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: false,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag: true, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 });
+    wantSpatialUpscale: () => false, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: 0 });
   post.resize(320, 180);
   t.after(() => post.dispose());
   const scene = new THREE.Scene(); scene.matrixWorldAutoUpdate = false;
@@ -462,6 +809,7 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     let mirRT = null, mirCam = null, _mirRect = null, _mirUsed = false, _glassProbeGeo = null;
     const W = 320, H = 180, presentW = 320, presentH = 180, wantSpatialUpscale = () => false;
     const _instPerPass = true, skipBatches = () => false, _instRegistry = [], _mirOf = () => null;
+    const _instRootOn = false, instRoot = null, _instAdd = (m) => scene.add(m), _instRemove = (m) => scene.remove(m), _instShow = () => {};   // #3104 F3 helpers: the scene.add arm
     const fx = null, vizMat = null, softGpu = () => SOFT, softwareGL = SOFT, softContent = () => false;
     const pinSkyMaterial = () => {}, mintLateLit = () => {}, warmFxPrograms = async () => {}, warmLateLit = async () => {};
     const warmPlusOn = () => true, casterWarmOn = warmPlusOn, wantMirrorWarm = () => true, softOutRT = () => null;
@@ -470,20 +818,27 @@ async function warmRig(t, { ls = {}, soft = false, noEnv = false } = {}) {
     const _warmHistory = [];   // tlx.js keeps every warm's stages (B·H8 prep timeline)
     const _warmStages = { at: 0, scene: null, fx: null, post: null, shadow: null, draw: null, drawn: null, garageScene: null, total: null, attempts: 0, failed: 0 };
     let _warmAt = 0, _warmAttempts = 0, _warmPending = null, _warmRequested = false, _warmDone = false, _gpuLastOperation = "";
+    let _mirReady = false;
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
     ${tslice("      function _mirWarmSwap() {", "      function _showInstanced(rec, order) {")}
-    ${tslice("      let _ssrMrt = null;", "      let _poolNow = ")}
+    ${tslice("      let _ssrMrt = null, _ssrMrtV = null;", "      let _poolNow = ")}
     ${tslice("      // A-W1 (perf hunt 4): THE DRAW WARM.", "      const ENV_PROBE_TRIES")}
     return { startProgramWarm, pending: () => _warmPending, stages: _warmStages, history: _warmHistory, mrtNode: _ssrMrtNode, mirRT: () => mirRT };`);
   const W1 = mk(THREE, TSL, renderer, scene, camera, lit, post, shadowSys, { getItem: (k) => (k in ls ? ls[k] : null) },
     globalThis.Log, soft, noEnv);
   const calls = [];
+  // r187 scissors a bound target by the TARGET's scissorTest (Renderer._renderScene); the backend's updateScissor
+  // runs only when the render context it built has scissor on, so it is the effective-scissor witness.
+  const be = renderer.backend, upd = be.updateScissor.bind(be);
+  let effScissor = 0;
+  be.updateScissor = (rc) => { effScissor++; return upd(rc); };
   const base = renderer.render.bind(renderer);
   renderer.render = (sc, cam) => {
-    const tg = renderer.getRenderTarget();
-    calls.push({ tg, test: renderer.getScissorTest(), sc: tg ? tg.scissor.clone() : null, ac: renderer.autoClear,
-      mrt: renderer.getMRT(), name: tg && tg.texture ? tg.texture.name : null, size: tg ? [tg.width, tg.height] : null });
-    return base(sc, cam);
+    const tg = renderer.getRenderTarget(), e0 = effScissor;
+    const rec = { tg, test: tg ? tg.scissorTest : renderer.getScissorTest(), sc: tg ? tg.scissor.clone() : null, ac: renderer.autoClear,
+      mrt: renderer.getMRT(), name: tg && tg.texture ? tg.texture.name : null, size: tg ? [tg.width, tg.height] : null, eff: 0 };
+    calls.push(rec);
+    try { return base(sc, cam); } finally { rec.eff = effScissor - e0; }
   };
   const warm = async () => { W1.startProgramWarm({ ssao: 0.5, bloom: 0.5, godray: 0, reflect: 0.2, exposure: 1 }); await W1.pending(); };
   return { renderer, post, W1, calls, warm, fg };
@@ -505,12 +860,16 @@ test("A-W1: the warm's last stage DRAWS the scene, the post chain, the mirror an
   }
   const sc = h.calls.filter((c) => c.tg === sceneRT);
   assert.equal(sc.length, 1, "the scene, once, into the live scene target");
-  assert.equal(sc[0].test, true, "under the scissor test");
+  assert.equal(sc[0].test, true, "under the TARGET's scissor test (r187 ignores renderer.setScissorTest for a bound target)");
+  assert.ok(sc[0].eff >= 1, "three built a scissored render context: the backend applied the 1x1 rect");
   assert.deepEqual(sc[0].sc.toArray(), [0, 0, 1, 1], "a 1x1 scissor");
   assert.equal(sc[0].mrt, h.W1.mrtNode(), "with the ssrTag MRT exactly as present() sets it");
   const postDraws = h.calls.filter((c) => c.tg !== sceneRT && c.name !== "TLXWarmCast.color" && c.tg.width > 4);
   assert.ok(postDraws.length >= 3, `the post chain's passes, each into its own target (${postDraws.length})`);
-  for (const c of postDraws) { assert.equal(c.test, true); assert.deepEqual(c.sc.toArray(), [0, 0, 1, 1]); }
+  for (const c of postDraws) {
+    assert.equal(c.test, true, "each post target's own scissorTest"); assert.deepEqual(c.sc.toArray(), [0, 0, 1, 1]);
+    assert.ok(c.eff >= 1, "the backend applied the post pass's 1x1 scissor");
+  }
   assert.equal(h.calls.filter((c) => c.size[0] === 4 && c.size[1] === 4).length, 1, "the mirror's world into a 4x4 copy of mirRT's state");
   assert.ok(h.calls.every((c) => c.tg !== h.W1.mirRT()), "never the live mirror target (a lite rung may composite it before it re-renders)");
   const casts = h.calls.filter((c) => c.name === "TLXWarmCast.color");
@@ -519,7 +878,11 @@ test("A-W1: the warm's last stage DRAWS the scene, the post chain, the mirror an
   assert.equal(h.renderer.autoClear, true, "autoClear restored");
   assert.equal(h.renderer.getScissorTest(), false, "scissor test restored");
   assert.deepEqual(sceneRT.scissor.toArray(), [0, 0, 320, 180], "the scene target's scissor restored");
-  for (const c of postDraws) assert.deepEqual(c.tg.scissor.toArray(), [0, 0, c.tg.width, c.tg.height], "each post target's scissor restored");
+  assert.equal(sceneRT.scissorTest, false, "the scene target's scissorTest restored");
+  for (const c of postDraws) {
+    assert.deepEqual(c.tg.scissor.toArray(), [0, 0, c.tg.width, c.tg.height], "each post target's scissor restored");
+    assert.equal(c.tg.scissorTest, false, "each post target's scissorTest restored");
+  }
   assert.equal(h.renderer.getRenderTarget(), target0, "target restored");
   assert.equal(h.renderer.getMRT(), mrt0, "MRT restored");
   const d = h.W1.stages.drawn;
@@ -544,15 +907,20 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
 
 // Execute the production uniform derivation with its real uniform defaults;
 // this tests CPU illumination inputs, not the shader's per-ray If branches.
-function skyDeriveHarness() {
+function skyUniformHarness() {
   const source = read("js/render/three/tsl-sky.js");
   const uniforms = source.slice(source.indexOf("    const U = {"), source.indexOf("    const C = ctx"));
   const helpers = source.slice(source.indexOf("    const sstep ="), source.indexOf("    function derive()"));
   const context = vm.createContext({ THREE, uniform: (value) => ({ value }), C: null });
   vm.runInContext(uniforms + helpers + fnSource(source, "function derive()") +
-    "\n;globalThis.api = { U, D, derive };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+    fnSource(source, "function updateClock()") + fnSource(source, "function update(sky)") +
+    "\n;globalThis.api = { U, D, derive, update };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+  return context.api;
+}
+
+function skyDeriveHarness() {
+  const { U, D, derive } = skyUniformHarness();
   return (stars, y) => {
-    const { U, D, derive } = context.api;
     U.stars.value = stars;
     U.sunDir.value.set(Math.sqrt(1 - y * y), y, 0);
     U.cloud.value = 1;
@@ -565,6 +933,60 @@ function skyDeriveHarness() {
       daytime: D.daytime.value };
   };
 }
+
+test("clock-only sky updates advance clouds and dither while reusing lighting", () => {
+  const { U, D, update } = skyUniformHarness();
+  const frame = { time: 1, zenith: [0.2, 0.3, 0.6], cloudDef: 0.5 };
+  let lightingWrites = 0;
+  const zenith = D.zenithO.value;
+  const set = zenith.set.bind(zenith);
+  zenith.set = (...args) => { lightingWrites++; return set(...args); };
+
+  update(frame);
+  const original = zenith.toArray();
+  const drift = D.drift1.value.x;
+  const dither = D.dthOff.value;
+  frame.time = 2;
+  update(frame);
+  assert.equal(lightingWrites, 1);
+  assert.equal(D.drift1.value.x, drift * 2);
+  assert.notEqual(D.dthOff.value, dither);
+  frame.zenith[0] = 0.8;
+  update(frame);
+  assert.equal(lightingWrites, 2);
+  assert.notDeepEqual(zenith.toArray(), original);
+  delete frame.cloudDef;
+  update(frame);
+  assert.equal(U.cloudDef.value, 1);
+  assert.equal(lightingWrites, 3);
+});
+
+test("direct sky controls and storm flashes refresh shader uniforms without rebuilding lighting", () => {
+  const { U, D, update } = skyUniformHarness();
+  const frame = { time: 9, cloud: 0.8 };
+  update(frame);
+  let writes = 0;
+  const zenith = D.zenithO.value, set = zenith.set.bind(zenith);
+  zenith.set = (...args) => { writes++; return set(...args); };
+  for (const field of ["moon", "starBright", "cloudSpeed", "skyGrad", "daySkyBlue", "starSize",
+    "starTwinkle", "moonDiscSize", "moonHalo", "sunCorona", "cityGlowReach", "lightning"]) {
+    const initial = U[field].value;
+    frame[field] = 0.42;
+    update(frame);
+    assert.equal(U[field].value, 0.42);
+    if (field === "cloudSpeed") assert.equal(D.drift1.value.x, frame.time * 0.42 * 0.0028);
+    delete frame[field];
+    update(frame);
+    assert.equal(U[field].value, initial);
+  }
+  frame.cityGlow = [0.6, 0.4, 0.2];
+  update(frame);
+  assert.deepEqual(U.cityGlow.value.toArray(), frame.cityGlow);
+  assert.equal(writes, 0);
+  frame.cloud = 0.1;
+  update(frame);
+  assert.equal(writes, 1);
+});
 
 test("sky derivation suppresses solar scattering for low and high night moon keys", () => {
   const derive = skyDeriveHarness();
@@ -802,7 +1224,7 @@ async function rig11(t, { ls = {}, isMobile = true, ssrTag = true, wgpu = false 
   if (wgpu) renderer.backend.isWebGPUBackend = true;   // the gate reads this flag; nothing else in the chain's construction does
   const post = withStore(ls, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile,
     chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null, viz: null, ssrTag, softDest: () => null,
-    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+    wantSpatialUpscale: () => false, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: 0 }));
   post.resize(320, 180);
   t.after(() => { post.dispose(); renderer.dispose(); });
   return { post, renderer, gl: fg.gl };
@@ -847,4 +1269,87 @@ test("scene11: the probe is read before the bloom knob, and no post reader sampl
   assert.ok(post.indexOf("const r11Renderable") < post.indexOf('localStorage.getItem("apex26.tlxBloom11")'), "the probe is read before the bloom knob can clear it");
   const tslPost = read("js/render/three/tsl-post.js");
   assert.ok(!/sceneT\.sample\([^)]*\)\)?\.[aw]\b/.test(tslPost) && !/\bscn\.[aw]\b/.test(tslPost), "scene alpha is never read: RGB-only storage is lossless for the composite");
+});
+
+// ── #2649 phone bandwidth trims: godray11 counted oracle, shadow r187 gate, FB-invalidate canaries ─────────────
+// Godray present needs a shadow stub with S.enabled (sun shafts) and aoFold off so rg11b10 is allowed.
+async function godrayRig(t, { ls = {}, wgpu = true, aoFold = "0" } = {}) {
+  const store = { "apex26.tlxAoFold": aoFold, ...ls };
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  if (wgpu) renderer.backend.isWebGPUBackend = true;
+  const identity = new THREE.Matrix4().elements;
+  const shadow = { sunTex: new THREE.DepthTexture(1, 1),
+    S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
+  const post = withStore(store, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow, viz: null, ssrTag: false, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => ({ width: 320, height: 180 }), sceneSamples: 0 }));
+  post.resize(320, 180);
+  t.after(() => { post.dispose(); renderer.dispose(); });
+  const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity,
+    eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], time: 0, cloud: 0 };
+  return { post, frame, present: (opts) => post.present(opts, frame) };
+}
+
+test("godray11: default stays rgba16f; knob halves pair bytes on unfolded WebGPU frames", async (t) => {
+  const off = await godrayRig(t);
+  off.present({ ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  const s0 = off.post.state();
+  assert.equal(s0.formats.godray, "rgba16f", "default: RGBA16F (AO fold may need alpha)");
+  assert.equal(s0.godray11, false);
+  assert.equal(s0.godrayPairBytes, 160 * 90 * 8 * 2, "half of 320×180, 8 B/px, two targets");
+
+  const on = await godrayRig(t, { ls: { "apex26.tlxGodray11": "1" }, aoFold: "0" });
+  on.present({ ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  const s1 = on.post.state();
+  assert.equal(s1.formats.godray, "rg11b10", "knob + unfolded + WebGPU renderable → rg11b10");
+  assert.equal(s1.godray11, true);
+  assert.equal(s1.godrayPairBytes, 160 * 90 * 4 * 2, "counted oracle: half the colour bytes");
+  assert.equal(s1.godrayPairBytes * 2, s0.godrayPairBytes, "4 B/px is half of RGBA16F's 8");
+});
+
+test("godray11: a folded AO frame keeps RGBA16F even with the knob (alpha carries AO)", async (t) => {
+  const h = await godrayRig(t, { ls: { "apex26.tlxGodray11": "1" }, aoFold: "1" });
+  // Both AO and godray live → D7 fold writes AO into godray alpha; ensureGR(false).
+  h.present({ ssao: 0.5, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  const s = h.post.state();
+  assert.equal(s.formats.godray, "rgba16f");
+  assert.equal(s.godray11, false);
+  assert.equal(s.godrayPairBytes, 160 * 90 * 8 * 2);
+});
+
+test("godray11: WebGL2 leg never takes rg11b10 (scene11 / bloom11 WebGPU-only gate)", async (t) => {
+  const h = await godrayRig(t, { ls: { "apex26.tlxGodray11": "1" }, wgpu: false, aoFold: "0" });
+  h.present({ ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  assert.equal(h.post.state().formats.godray, "rgba16f");
+  assert.equal(h.post.state().godray11, false);
+});
+
+test("shadow depth-only on r187: no colour attachment on the phone maps, PCSS keeps R32F (#34782, #2649)", async (t) => {
+  // The base tree (three r186) carries an R8 attachment: depthOnly false, 1024² colour bytes on a phone sun map.
+  assert.equal(+(THREE.REVISION || 0) >= 187, true, "vendored three is r187+");
+  const fg = makeFakeGL(64, 64);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const phone = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer, isMobile: true, softwareGL: false, isWarming: () => false });
+  assert.equal(phone.S.depthOnly, true);
+  assert.equal(phone.S.sunColorBytes, 0, "phone 1024² sun map: 0 colour bytes (r186: 1,048,576)");
+  assert.equal(!!phone.sunTex, true, "the lit pass still samples the depth texture");
+  // The drawWarm path builds its probe targets through the same factory, and a pass renders into one.
+  assert.doesNotThrow(() => phone.drawWarm());
+});
+
+test("FB-invalidate audit: depthEnd / discardAttachments / discardHint stay on the live post chain", async (t) => {
+  const { post } = await postRig(t, { ssrTag: true });
+  assert.equal(typeof post.depthEnd, "function");
+  assert.equal(typeof post.depthBegin, "function");
+  assert.equal(typeof post.discardAttachments, "function");
+  assert.equal(typeof post.discardHint, "function");
+  assert.equal(typeof post.needsDepth, "function");
+  // Dry night frame: depth discarded (A-P1 already covers the invalidate path).
+  const r = (await postRig(t)).scenePass(OFF, NIGHT);
+  assert.equal(r.keep, false);
+  assert.equal(r.dropped, true);
 });

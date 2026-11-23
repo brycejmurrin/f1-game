@@ -26,7 +26,8 @@ const AnnounceBanner = (function () {
   // …and when a burst of warnings or penalties queues ahead of them anyway (the
   // +3 depth below), an INFO-or-lower card that has waited ANN_STALE_MS is dropped
   // at the drain rather than read out as a lie ("UP TO P5" after losing it).
-  // Warnings, box calls and penalties always play.
+  // Warnings, box calls and penalties always play. The age is RACE time (tick's dt):
+  // tick does not run while paused, so a long pause no longer drops the queue (#5068).
   const ANN_STALE_MS = 8000;
   // THE RADIO. A banner is a radio message: the WHO line names the channel it
   // came in on — race control for a penalty or a warning, the coach for a tip,
@@ -132,20 +133,13 @@ const AnnounceBanner = (function () {
         // race-radio its cooldowns and the told position). A full queue refuses a
         // newcomer that outranks nothing waiting; one that does (a warning behind
         // two reports) queues deeper instead of pushing an accepted line out.
+        // Full: refuse (callers re-offer); never pop a card already told "true".
         const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
         const cap = pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX;
-        // A full queue used to refuse the newcomer outright (race-radio counted
-        // those as announce-refused and dropped the line). Shed the lowest-priority
-        // waiting cards — comm and coach first — so engineer, box and warnings still
-        // land. Only refuse when nothing waiting is weaker than the newcomer.
-        while (_annQueue.length >= cap) {
-          const tail = _annQueue[_annQueue.length - 1];
-          if (!tail || tail.pri >= pri) return false;
-          _annQueue.pop();
-        }
+        if (_annQueue.length >= cap) return false;
         let at = _annQueue.length;
         while (at > 0 && _annQueue[at - 1].pri < pri) at--;
-        _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
+        _annQueue.splice(at, 0, { msg, dur, kind, pri, still, age: 0 });
         return true;
       }
       showAnnounce(msg, dur, kind, quiet);
@@ -153,6 +147,7 @@ const AnnounceBanner = (function () {
     }
 
     function tick(dt) {
+      for (let i = 0; i < _annQueue.length; i++) _annQueue[i].age += dt;
       if (announceT > 0) {
         announceT -= dt;
         if (_annFloor > 0 && (_annFloor -= dt) <= 0 && _annQueue.length && _annQueue[0].pri > _annPri) announceT = 0;
@@ -165,7 +160,7 @@ const AnnounceBanner = (function () {
           while (_annQueue.length) {
             const q = _annQueue.shift();
             if (q.still && !q.still()) continue;
-            if (q.pri <= ANN_PRI.info && performance.now() - q.t > ANN_STALE_MS) continue;
+            if (q.pri <= ANN_PRI.info && q.age * 1000 > ANN_STALE_MS) continue;
             showAnnounce(q.msg, q.dur, q.kind); break;
           }
         }

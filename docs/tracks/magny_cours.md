@@ -33,11 +33,11 @@ Gently rolling farmland — real but modest relief, most of it through the Estor
 | 0.30–0.40 | both | far | Field hedges; ploughed/stubble/colza patches beyond them |
 | 0.34 | R | far | **La ferme**: stone longhouse, barn and silo — the only farm for miles |
 | 0.40–0.50 | both | far | Open farmland, deliberately bare |
-| 0.580 | R | near | **Adelaide hairpin**: gravel apron + red tyre wall; biggest stand on the outside |
+| 0.413 | L | near | **Adelaide hairpin** (def T6): gravel apron + red tyre wall; biggest stand on the outside |
 | 0.62 | R | far | Distant **bourg** (church + houses) on the horizon |
 | 0.70–0.80 | L | mid | Second grass spectator bank |
 | 0.817 | L | mid | **Château d'Eau** concrete water tower (names turn 14; corner re-profiled 2003) |
-| 0.920 | R | near | **Lycée**: gravel + yellow tyre wall onto the pit straight; concrete stand opposite |
+| 0.954 | L | near | **Lycée** (def T15–17): gravel + yellow tyre wall onto the pit straight; concrete stand opposite |
 | 0.95–0.08 | L | near | Sponsor hoarding run down the straight |
 | — | ring | far | Low farmland horizon: shallow hedged fields and poplar lines fading into haze |
 

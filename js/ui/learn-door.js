@@ -1,32 +1,18 @@
-/* Apex 26 — Learn title door, lesson index and shared modal frame. */
+/* Apex 26 — Learn title door and the lesson modal. */
 const LearnDoor = (function () {
   "use strict";
 
-  const LESSONS = [
-    {id: "aero", title: "Aero Lab", summary: "Following distance, slipstream & cornering grip"},
-    {id: "braking", title: "Grip & Braking", summary: "Share tyre grip between braking and turning"},
+  const lessons = [
+    { id: "aero", title: "Aero Lab", description: "Following distance, slipstream & cornering grip" },
+    { id: "braking", title: "Grip & Braking", description: "Share tyre grip between braking and turning" },
   ];
 
-  function create(G) {
-    const menu = G.$("menu-buttons");
-    if (!menu) return;
+  let dialog;
+  let frame;
 
-    const door = document.createElement("button");
-    door.className = "bigbtn alt minibtn";
-    door.textContent = "LEARN";
-    door.id = "mb-learn";
-    door.type = "button";
-    door.setAttribute("aria-haspopup", "dialog");
-    menu.appendChild(door);
-
-    let dialog;
-    let frame;
-    door.addEventListener("click", () => {
-      if (G.state !== "menu" || UiLayers.top()?.id !== "overlay") return;
-      if (!dialog) build();
-      if (G.soundOn) GameAudio.uiSelect();
-      dialog.hidden = false;
-    });
+  function open(door) {
+    if (!dialog) build();
+    dialog.hidden = false;
 
     function build() {
       dialog = Dom.el("dialog", "screen dim");
@@ -44,15 +30,15 @@ const LearnDoor = (function () {
       const body = Dom.el("div", "sheet-body pane");
       const index = Dom.el("nav", "pm-doors");
       index.setAttribute("aria-label", "Lessons");
-      let activeButton;
-      for (const lesson of LESSONS) {
+      let activeLesson;
+      for (const lesson of lessons) {
         const button = Dom.el("button", "", lesson.title.toUpperCase() + "…");
         button.id = "learn-open-" + lesson.id;
         button.type = "button";
-        button.autofocus = !index.firstElementChild;
-        button.appendChild(Dom.el("small", "", lesson.summary));
+        button.autofocus = lesson === lessons[0];
+        button.appendChild(Dom.el("small", "", lesson.description));
         button.addEventListener("click", () => {
-          activeButton = button;
+          activeLesson = button;
           heading.textContent = "LEARN / " + lesson.title.toUpperCase();
           index.hidden = true;
           sheet.dataset.lesson = lesson.id;
@@ -85,7 +71,7 @@ const LearnDoor = (function () {
           delete sheet.dataset.lesson;
           index.hidden = false;
           heading.textContent = "LEARN";
-          activeButton?.focus();
+          activeLesson.focus();
           return;
         }
         dialog.hidden = true;
@@ -100,6 +86,6 @@ const LearnDoor = (function () {
     }
   }
 
-  return { create };
+  return { open };
 })();
 Object.freeze(LearnDoor);

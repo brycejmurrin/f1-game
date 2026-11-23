@@ -3,7 +3,7 @@
 Load this when the world is missing, the road is NaN-white, bloom dropped, or
 a real device shows a black screen.
 
-## Three shipped defect classes (2026-08-17)
+## Three shipped defect classes
 
 1. **Late sky erased the world.** Sky pipelines must use
    `depthCompare: "less-equal"` with `depthWriteEnabled: false` (GLX LEQUAL
@@ -29,7 +29,7 @@ a real device shows a black screen.
    that is a documented look gap, not a hoist miss.
 
 3. **Spec-invalid resources.** WebGPU allows ONLY sample counts 1 and 4 —
-   `MSAA_COUNT` is 1 by default, 4 for desktop ULTRA, and 1 on software/mobile/lite paths; a 2 invalidates every MS pipeline.
+   `MSAA_COUNT` (its assignments in `wgx.js` pick per tier/adapter) must stay one of those; a 2 invalidates every MS pipeline.
    `rg11b10ufloat` is color-renderable only behind
    `rg11b10ufloat-renderable` — `create()` requests it when the adapter has
    it, else `POST_HDR_FORMAT` downgrades to `rgba16float`. Re-derive the
@@ -44,21 +44,20 @@ a real device shows a black screen.
 ## Device-loss escalation (black screen on real hardware)
 
 Persisted per origin in `apex26.gfxWgxLevel`; one `device.lost` = one rung
-up + one reload:
+up + one reload (per-rung MSAA / shadows / timestamp: the ladder comment atop `wgx.js`):
 
-- rung 0 full — desktop (MSAA 1 by default, ULTRA 4, timestamp-query, 2048 shadows); rung and graphics preset are independent axes
-- rung 1 lite — phone parity (MSAA 1, 1024 shadows). Phones/WebKit apply the
-  lite stack immediately via `WGX_LITE = IS_MOBILE || IS_WEBKIT || _litePref`
-  (`_litePref` is the persisted `apex26.gfxWgxLite`) while
-  persisted `apex26.gfxWgxLevel` stays 0 on first launch; rung 1 is the
-  device-loss escalation floor, not the stored key on first boot
-  (`js/render/webgpu/wgx.js`)
+- rung 0 full — desktop stack; rung and graphics preset are independent axes
+- rung 1 lite — phone parity. Phones/WebKit apply the lite stack immediately via
+  `WGX_LITE = IS_MOBILE || IS_WEBKIT || _litePref` (`_litePref` = a persisted rung ≥ 1:
+  `apex26.gfxWgxLevel`, or the legacy `apex26.gfxWgxLite` flag) while persisted
+  `apex26.gfxWgxLevel` stays 0 on first launch; rung 1 is the device-loss
+  escalation floor, not the stored key on first boot (`js/render/webgpu/wgx.js`)
 - rung 2 minimal — lite + no post chain, DPR capped at 1
 - loss on rung 2 → session-skip to GLX; the user's RENDERER pick is preserved
 
-The ladder HEALS (5 clean sessions step a rung down; `apex26.gfxWgxOk`). An
+The ladder HEALS (`HEAL_SESSIONS` clean sessions step a rung down; `apex26.gfxWgxOk`). An
 explicit RENDERER re-pick clears it (`js/perf/renderer-picker.js` RESET RENDERER). JS
-exceptions do NOT latch a dead canvas: 3 strikes (`JS_STRIKE_CAP`) surrender
+exceptions do NOT latch a dead canvas: `JS_STRIKE_CAP` strikes surrender
 to GLX with the reason in `apex26.gfxWgxFail`. A persistent black screen on
 hardware means the ladder itself is broken — check those keys before
 touching pipelines.
@@ -73,8 +72,8 @@ which makes begin()/present() inert, so a branch that cannot reload IS a
 frozen frame (DOM menus stay usable; RENDERER re-pick is the way out):
 
 - `reason: "destroyed"` -> ignored (own teardown).
-- visible, within 3 s of `visibilitychange`/bfcache `pageshow` (iOS
-  background loss) -> `_lost`, reload in 300 ms, rung and pick untouched.
+- visible, shortly after `visibilitychange`/bfcache `pageshow` (`_shownAt`; iOS
+  background loss) -> `_lost`, deferred reload, rung and pick untouched.
 - visible otherwise -> writes `envProbeOff` + `perChunkOff`, `_wgxEscalate`
   : rung < 2 reloads one rung up, but ONLY if `gfxWgxLevel` reads back
   (blocked storage falls through); rung 2 / unpersistable -> `_markGlxBound`,
@@ -82,12 +81,12 @@ frozen frame (DOM menus stay usable; RENDERER re-pick is the way out):
   sessionStorage) -> no reload, `_lost` stays: freeze by design, the boot
   canary `gfxBackendProbe` is re-armed for the next cold start.
 - hidden -> `_lost`, reload deferred to the next `visibilitychange`, rung kept.
-- Not device.lost: 8 uncaptured GPU errors over `GPU_ERR_ESCALATE_FRAMES`
+- Not device.lost: `GPU_ERR_ESCALATE_CAP` uncaptured GPU errors over `GPU_ERR_ESCALATE_FRAMES`
   frames also call `_wgxEscalate`; `_jsStrike` (begin/present throw) drops the
-  frame until `JS_STRIKE_CAP` = 3, then GLX skip (no skip armable -> re-arms
+  frame until `JS_STRIKE_CAP`, then GLX skip (no skip armable -> re-arms
   the canary, no reload, frozen until next boot).
 
-Constants: `HEAL_SESSIONS` and `JS_STRIKE_CAP`, both constants in
+Constants: `HEAL_SESSIONS`, `JS_STRIKE_CAP`, `GPU_ERR_ESCALATE_*`, all in
 `wgx.js` only (read the values there). Pinned by `tests/unit/webgpu-lifecycle.test.mjs` ("device.lost
 climbs the ladder", "...climbs to minimal", "minimal rung: ... exits to GLX",
 "a JS throw in begin() strikes out...", "a minimal loss with blocked

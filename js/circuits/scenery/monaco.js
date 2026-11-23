@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
-      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, night, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat, motorhome } = api;
+      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, night, addBox, addPrism, addCyl, addCone, addFrustum, modelGroup, overheadSpan, lampPost, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, bush, hedge, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, bakedModel, seat, motorhome } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (15 per build here,
@@ -18,8 +18,6 @@
         if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
         api.backdrop(k, side, dist, sz, col);
       };
-
-      const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       /* KOLD: OLD-RACING frac -> current racing node. Most of this file's raw
          px/rx/tx readers were authored when startFrac was 0.28; 7a17351 moved
          the origin to 0.2516 and renumbered the control points, but raw index
@@ -582,24 +580,10 @@
       }
 
       {
-        // KOLD, not K and not KR. This block was authored against the RAW
-        // racing arrays as they were when startFrac was 0.28 — pre-7a17351,
-        // when array index == authored frac. That commit moved the origin to
-        // 0.2516 and renumbered the control points by (offNew - offOld); raw
-        // index users like this block never got the same renumbering, so the
-        // walls slid ~0.028 laps off the geometric tunnel (and off their own
-        // roof, whose overheadSpan path DID get shifted). Same formula the
-        // engine uses at tracks.js (`j = offNew - iOld`), same result: the
-        // measured hairpin sits at racing 0.383 and the corner sequence puts
-        // the tunnel at ~0.48-0.56, which is exactly KOLD(0.51..0.585).
-        // 0.478..0.553 (old-racing) => racing 0.449..0.524: entry ~50 m after
-        // Portier (measured apex 0.434), a 247 m bore, exit with a run down to
-        // the chicane (0.641). Real Monaco: the tunnel starts immediately after
-        // Portier and exits 188 m before the Nouvelle Chicane — entry-after-
-        // Portier is the constraint worth matching; the game's Portier->chicane
-        // gap is 170 m longer than the real one, so the exit run stretches.
-        const TUN0 = 0.478, TUN1 = 0.553;
-        const tunS = KOLD(TUN0), tunE = KOLD(TUN1);
+        // Portals are authored in racing space, from the measured positions of
+        // the old KOLD(0.478..0.553) bore. Rain uses these same roof dimensions.
+        const bore = def.rainShelter;
+        const tunS = K(bore.start), tunE = K(bore.end);
         const tunLen = ((tunE - tunS) + n) % n;
         const step = Math.max(2, Math.round(8.0 / ds));
         const dz = ds * step;                    // station pitch (~8 m)
@@ -629,7 +613,7 @@
           const u = upOf(track, k);
           const b = [r, u, t];
           const base = [px[k], py[k], pz[k]];
-          const cw = hw[k] * 2 + 5;
+          const cw = (hw[k] + bore.shoulderWidth) * 2;
           const lat = (o, h) => vadd([px[k] + r[0] * o, py[k], pz[k] + r[2] * o], u, h);
 
           // ── VAULT ────────────────────────────────────────────────────────
@@ -639,7 +623,7 @@
           // — same-facing coplanar pairs are exactly what the z-fighting ratchet
           // in tests/unit/coplanar-faces.test.mjs exists to catch.
           overheadSpan({
-            id: `monaco-tunnel-roof-${k}`, frac: k / n, rawFrac: true, clearance: 6.45,
+            id: `monaco-tunnel-roof-${k}`, frac: k / n, rawFrac: true, clearance: bore.clearance,
             thickness: 1.35, depth: dz * 1.06, span: cw * 0.34,
             color: VAULT3, supports: false, required: true,
           });
@@ -731,13 +715,12 @@
           }
         }
 
-        const tunnelPortal = (frac, tag) => {
-          const k = KOLD(frac);  // raw-array reader — same KOLD rule as tunS/tunE
+        const tunnelPortal = (k, tag) => {
           const r = [track.rx[k], track.ry[k], track.rz[k]];
           const t = [track.tx[k], track.ty[k], track.tz[k]];
           const u = upOf(track, k);
           const b = [r, u, t];
-          const cw = hw[k] * 2 + 5;
+          const cw = (hw[k] + bore.shoulderWidth) * 2;
           out._mat = MAT.STONE;
           for (const sd of [-1, 1]) {
             const c = [px[k] + r[0] * sd * (hw[k] + 2.6), py[k], pz[k] + r[2] * sd * (hw[k] + 2.6)];
@@ -790,8 +773,8 @@
             });
           }
         };
-        tunnelPortal(TUN0, "entry");
-        tunnelPortal(TUN1, "exit");
+        tunnelPortal(tunS, "entry");
+        tunnelPortal(tunE, "exit");
       }
 
       pastelStreetRow(0.595, 0.655, 1, 4, {
@@ -1311,8 +1294,9 @@
       // flat harbour shelf and skip any site where terrain rises >2 m above
       // the road.
       {
+        // The first awning needs another 4 m of setback to clear the bank.
         const MH = [
-          [0.625, 1, 28, 10, 5.2, 14, [0.92, 0.92, 0.94], [0.75, 0.12, 0.14]],
+          [0.625, 1, 32, 10, 5.2, 14, [0.92, 0.92, 0.94], [0.75, 0.12, 0.14]],
           [0.645, 1, 30, 11, 5.4, 15, [0.88, 0.90, 0.93], [0.10, 0.28, 0.62]],
           [0.665, 1, 32, 10, 5.0, 13, [0.94, 0.90, 0.82], [0.10, 0.55, 0.40]],
           [0.685, 1, 30, 11, 5.2, 14, [0.90, 0.88, 0.84], [0.85, 0.55, 0.10]],
@@ -1350,6 +1334,9 @@
       // and its exit road; the complex's wall stands there now.)
       guardrail(0.62, 0.68, -1, 0.4, ARMCO);
 
+      // Beau Rivage: keep the crown up on the shelf, clear of the retaining slope.
+      palm(KRACE(0.149), racingSide(-1), 14, 9.3, [0.25, 0.45, 0.22]);
+
       const harbourStations = [0.365, 0.545, 0.59]; // AUTHORED (source-frame) fracs, passed to K(); the basin they land on was measured in the Node build (x -400..-80, z 160..430), not by racing frac
       for (let station = 0; station < harbourStations.length; station++) {
         waterField(K(harbourStations[station]), 1, 16, 300, 72, 12, SEA,
@@ -1365,9 +1352,15 @@
       // stations.
 
       const megaYacht = (a, sc, hullCol) => {
-        const mc = moor([a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]], a.t, a.r, 22 * sc, 5 * sc, 4.2 * sc);
+        // The berth follows the quay heading, but the hull floats level.
+        // Check land against the waterline so the low hull stripe clears
+        // the quay too, even when the deck is already above the bank.
+        const len = Math.hypot(a.t[0], a.t[2]);
+        const t = [a.t[0] / len, 0, a.t[2] / len];
+        const r = [-t[2], 0, t[0]];
+        const mc = moor([a.c[0], pyMin - 0.8 - 0.2 * sc, a.c[2]], t, r, 22 * sc, 5 * sc, 0.2 * sc);
         if (!mc) return;
-        a = Object.assign({}, a, { c: mc });
+        a = { c: mc, t, r, u: [0, 1, 0] };
         const b = [a.r, a.u, a.t];
         const HULL = hullCol || [0.97, 0.97, 0.99];
         const NAVY = [0.14, 0.20, 0.30];

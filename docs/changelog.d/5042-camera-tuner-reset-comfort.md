@@ -1,0 +1,1 @@
+Fixed: Camera tuner: RESET CAM at THIS TRACK / THIS CAR now also clears the COMFORT sliders set for that track or car (they had no way back to the shared value, and the label did not count them); COPY VALUES no longer raises the iPhone keyboard over the preview, and a slider drag saves once on release instead of on every tick (#5042).

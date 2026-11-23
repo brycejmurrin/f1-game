@@ -320,7 +320,9 @@ test("the renderer job is path-filtered on a cheap runner and joins the deploy g
   for (const p of ["js/render/", "js/lighting/"]) {
     assert.ok(rendererFilter.includes(p), `renderer filter does not route ${p}`);
   }
-  assert.match(rendererFilter, /scripts\["test:gfx"\]/);
+  // The spec half is read from test:gfx's roster in tests/groups.json (#5427), never retyped, and an
+  // unreadable list runs everything.
+  assert.match(rendererFilter, /node tools\/gen\/gen-test-groups\.mjs --files test:gfx > "\$SPECS_FILE" \\\n\s*\|\| run_all "/);
   assert.match(rendererFilter, /run_all "git diff failed"/);
   assert.match(rendererFilter, /run_all "before-sha \$BEFORE unreachable/);
   assert.doesNotMatch(rendererFilter, /renderer=false"[^\n]*\n[^\n]*exit 0/, "an unresolvable diff must RUN, never skip");
@@ -405,13 +407,15 @@ test("staged-boot honors the SwiftShader opt-out for renderer env as well as set
 });
 
 
-function runMesaFixture(t, sudoBody) {
+function runMesaFixture(t) {
   const root = fs.mkdtempSync(path.resolve("scratch/mesa-action-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const yml = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
-  const script = yml.split("      run: |\n")[1].split("\n").map(line => line.replace(/^        /, "")).join("\n")
+  // The Xvfb step is the action's LAST run block; the apt install lives in
+  // tools/ci/apt-cached-install.sh since #5519 (tests/unit/apt-cached-install.test.mjs).
+  const script = yml.split("      run: |\n").at(-1).split("\n").map(line => line.replace(/^        /, "")).join("\n")
     .replaceAll("/tmp/.X11-unix/X99", path.join(root, "missing-display"));
-  const prelude = `sudo() { ${sudoBody}; }; Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };`;
+  const prelude = "Xvfb() { return 0; }; seq() { echo 1; }; sleep() { :; };";
   const r = spawnSync("bash", ["-e", "-c", prelude + "\n" + script], {
     encoding: "utf8", timeout: 2000,
     env: { ...process.env, GITHUB_ENV: path.join(root, "env"), RUNNER_TEMP: root },
@@ -420,14 +424,26 @@ function runMesaFixture(t, sudoBody) {
 }
 
 test("Mesa setup fails before exporting a missing Xvfb display", (t) => {
-  const {r, root} = runMesaFixture(t, "return 0");
+  const {r, root} = runMesaFixture(t);
   assert.notEqual(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout.trim().split("\n").at(-1), "::error::mesa-xvfb: Xvfb :99 has no socket after 5 s", r.stdout);
   assert.equal(fs.existsSync(path.join(root, "env")), false);
 });
 
-test("Mesa retries share a total deadline instead of exhausting the caller job", (t) => {
-  const {r} = runMesaFixture(t, "echo APT-CALL; SECONDS=$((SECONDS + 300)); return 1");
-  assert.notEqual(r.status, 0);
-  assert.equal((r.stdout.match(/APT-CALL/g) || []).length, 1, "no retry after setup budget is spent");
+test("Mesa action installs through the cached installer and saves only what apt fetched", () => {
+  const action = parseYaml(fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8"));
+  const steps = action.runs.steps;
+  const byId = Object.fromEntries(steps.filter(s => s.id).map(s => [s.id, s]));
+  assert.match(byId.plan.run, /apt-cached-install\.sh" --label mesa-xvfb --plan \$MESA_PKGS/);
+  assert.match(byId.install.run, /apt-cached-install\.sh" --label mesa-xvfb --cache "\$HOME\/\.cache\/apex-apt-debs\/mesa-xvfb" --budget 300 \$MESA_PKGS/);
+  assert.equal(byId.plan.env.MESA_PKGS, byId.install.env.MESA_PKGS, "plan and install name one package list");
+  assert.equal(byId.plan.env.MESA_PKGS, "mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb");
+  assert.match(byId.restore.uses, /^actions\/cache\/restore@[0-9a-f]{40}$/);
+  const save = steps.find(s => /^actions\/cache\/save@[0-9a-f]{40}$/.test(s.uses || ""));
+  assert.ok(save, "a save step");
+  assert.equal(save.with.key, byId.restore.with.key);
+  assert.equal(save.with.path, byId.restore.with.path);
+  assert.equal(save.if, "steps.install.outputs.populated == '1' && steps.restore.outputs.cache-hit != 'true'");
+  assert.equal(steps.some(s => "continue-on-error" in s), false, "no step may swallow a failed install");
+  assert.ok(steps.indexOf(save) < steps.length - 1 && /Xvfb :99/.test(steps.at(-1).run), "Xvfb starts last");
 });

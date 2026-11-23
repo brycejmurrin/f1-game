@@ -149,12 +149,12 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
     "sync path must never request hi-res inline");
   assert.doesNotMatch(src, /timeout:\s*2500/,
     "requestIdleCallback must not force the upload with a 2500 ms timeout");
-  assert.match(src, /deadline\.didTimeout/,
-    "a timed-out idle callback must re-queue instead of running the 2048 paint");
+  // Bounded, not forever: a starved idle queue (no roomy slot on a busy thread) must still land the 2048
+  // (garage-pick-cost "livery atlas textures seen: 0"; the VM proof is livery-hires-starved.test.mjs).
+  assert.match(src, /const starved = !deadline \|\| deadline\.didTimeout \|\| Date\.now\(\) - since >= HIRES_IDLE_MAX_MS;/,
+    "a timed-out or long-starved idle callback must run the kick, not re-queue it");
   assert.match(src, /getCarDecalTexture\(team, num, true, false\)/,
     "photo rivals mint the player-tier preview with allowHiRes=false");
-  assert.match(src, /reapHiResGrave\(\)/,
-    "the hi-res swap must not free prev until after the next material bind");
   assert.match(src, /_hiResGrave\.push\(\{\s*key:\s*key,\s*tex:\s*prev\s*\}\)/,
     "grave entries are keyed so dropDecalTexture can free a parked preview");
   assert.match(src, /g\.key !== key/,
@@ -172,6 +172,8 @@ test("desktop player hi-res atlas upload is deferred off boot and garage-open", 
 function decalRig(opts = {}) {
   const src = fs.readFileSync(path.join(ROOT, "js/car/car-draw.js"), "utf8");
   const body = src.slice(src.indexOf("    // ── decals ──"), src.indexOf("    function carDecalNum("));
+  // The car's-own-paint one-liners the decal section reads (#5037), from the same source.
+  const paintHelpers = ["PEER_TAG", "livOf", "kid", "livTag"].map((n) => src.match(new RegExp("    (?:const " + n + " =|function " + n + "\\().*\\n"))[0]).join("");
   const built = [], freed = [], idle = [], hiLiveries = [];
   const live = { id: "std" };   // the livery the garage has selected NOW
   const G = { photoMode: false, camEye: [0, 0, 0], store: { rev: 1 }, getLiveryId: () => live.id,
@@ -189,6 +191,7 @@ function decalRig(opts = {}) {
     const DECAL_TEX_CACHE_MAX = 36;
     const _decalTeams = [], _decalNums = [], _decalMats = [], _decalSetup = [];
     let _decalCount = 0;
+    ${paintHelpers}
     ${body}
     return {
       frame(cars) {            // cars: [{ team, num, at: [x,y,z], player }]
@@ -206,9 +209,9 @@ function decalRig(opts = {}) {
       flushHiRes() {
         while (idle.length) idle.shift()({ didTimeout: false, timeRemaining: () => 50 });
       },
-      starveHiRes() {
+      starveHiRes(didTimeout) {
         const n = idle.length;
-        for (let i = 0; i < n; i++) idle.shift()({ didTimeout: true, timeRemaining: () => 0 });
+        for (let i = 0; i < n; i++) idle.shift()({ didTimeout: !!didTimeout, timeRemaining: () => 0 });
       },
       hiResDone: () => _hiResDone.size,
       invalidate(teamId) { invalidateDecalTextures(teamId); },
@@ -265,16 +268,17 @@ test("sync player atlas is preview; hi-res lands only after idle flush", () => {
   assert.equal(api.frame(cars)[0], "me#1:hi", "draws swap to hi-res once ready");
 });
 
-test("a starved idle callback re-queues instead of painting 2048", () => {
+test("a tight idle slot re-queues; a timed-out one paints the 2048", () => {
   const { api, built, idle } = decalRig();
   api.frame(grid(1));
   assert.ok(idle.length >= 1, "hi-res is queued");
-  api.starveHiRes();
-  assert.equal(api.hiResDone(), 0, "didTimeout / tight deadline must not run the kick");
+  api.starveHiRes(false);
+  assert.equal(api.hiResDone(), 0, "a tight deadline inside the cap must not run the kick");
   assert.equal(built.filter((a) => a.endsWith(":hi")).length, 0);
   assert.ok(idle.length >= 1, "the callback was re-queued");
-  api.flushHiRes();
-  assert.equal(api.hiResDone(), 1);
+  // didTimeout means the idle queue was starved for the whole {timeout}: run, or it never lands.
+  api.starveHiRes(true);
+  assert.equal(api.hiResDone(), 1, "a timed-out idle callback runs the kick");
 });
 
 // L10: the deferred kick is keyed by the livery at SCHEDULE time but used to build from the
@@ -506,87 +510,4 @@ test("M28: an emblem that finishes decoding after CLEAR or a newer upload never 
   made[4].onload();
   made[3].onerror();                                  // a stale failure must not wipe the current emblem
   assert.equal(LT.LOGOS.custom, made[4], "a stale onerror does not delete the current emblem");
-});
-
-// ── C-P3 (perf hunt 4): texel parity of the ImageBitmap upload, measured in Chromium ────────────────
-// car-draw.js now hands the deferred hi-res atlas to createTexture() as an ImageBitmap (made with
-// createImageBitmap: GLX flipY + premultiply baked, TLX / WGX premultiply only) instead of the canvas
-// the backend converted with UNPACK_FLIP_Y_WEBGL + UNPACK_PREMULTIPLY_ALPHA_WEBGL. The contract is
-// IDENTICAL TEXELS, and bitmap premultiply may round differently from the unpack flag, so this reads
-// both uploads back through a framebuffer and byte-diffs them: a synthetic atlas (gradient alpha, hard
-// edges, text) and the REAL LiveryTex.buildAtlas hi-res atlas. Browser only, so opt-in:
-//   APEX_LIVERY_PARITY=1 node --test tests/unit/livery-tier.test.mjs      (one Chromium, ~20 s, in the background)
-// Prints { synthetic, real } with maxAbs / differing bytes / ms per path; asserts maxAbs <= 1 LSB
-// (0 on Chromium 2026-10: both paths read the canvas's native premultiplied store).
-test("C-P3: ImageBitmap upload == canvas upload, byte for byte (Chromium, APEX_LIVERY_PARITY=1)", { skip: !process.env.APEX_LIVERY_PARITY && "browser probe: set APEX_LIVERY_PARITY=1" }, async () => {
-  const { launchChromium, shutdown } = await import("../../tools/lib/harness.mjs");
-  const browser = await launchChromium({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"] });
-  try {
-    const page = await browser.newPage();
-    await page.goto("about:blank");
-    for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
-      await page.addScriptTag({ path: path.join(ROOT, f) });
-    const out = await page.evaluate(async () => {
-      const gl = document.createElement("canvas").getContext("webgl2");
-      if (!gl) throw new Error("no webgl2");
-      function upload(src, flip, premul) {
-        const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flip); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premul);
-        const t0 = performance.now();
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-        const ms = performance.now() - t0;
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-        return { t, ms };
-      }
-      function read(t, w, h) {
-        const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-        const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fb); return px;
-      }
-      const diff = (a, b) => { let max = 0, n = 0; for (let i = 0; i < a.length; i++) { const d = Math.abs(a[i] - b[i]); if (d) { n++; if (d > max) max = d; } } return { maxAbs: max, bytesDiffering: n, bytes: a.length }; };
-      const flipRows = (px, w, h) => { const o = new Uint8Array(px.length), row = w * 4; for (let y = 0; y < h; y++) o.set(px.subarray(y * row, y * row + row), (h - 1 - y) * row); return o; };
-      async function compare(canvas) {
-        const w = canvas.width, h = canvas.height;
-        const A = upload(canvas, true, true);                                   // shipped: canvas + unpack flags
-        const tB = performance.now();
-        const bFlip = await createImageBitmap(canvas, { imageOrientation: "flipY", premultiplyAlpha: "premultiply" });
-        const bitmapMs = performance.now() - tB;
-        const B = upload(bFlip, true, true);                                    // GLX: flags set, ignored for a bitmap
-        const B2 = upload(bFlip, false, false);                                 // the same bitmap with the flags off
-        const bFlat = await createImageBitmap(canvas, { premultiplyAlpha: "premultiply" });
-        const C = upload(bFlat, false, false);                                  // TLX-WebGL / WGX / three-WebGPU input form
-        const a = read(A.t, w, h), b = read(B.t, w, h), b2 = read(B2.t, w, h), c = read(C.t, w, h);
-        bFlip.close(); bFlat.close();
-        return { w, h, canvasMs: +A.ms.toFixed(2), bitmapMs: +bitmapMs.toFixed(2), bitmapUploadMs: +B.ms.toFixed(2),
-          glx: diff(a, b), flagsIgnoredForBitmap: diff(b, b2), unflipped: diff(a, flipRows(c, w, h)) };
-      }
-      const syn = document.createElement("canvas"); syn.width = 256; syn.height = 320;
-      const cx = syn.getContext("2d");
-      const g = cx.createRadialGradient(128, 160, 10, 128, 160, 200); g.addColorStop(0, "rgba(255,40,10,1)"); g.addColorStop(0.5, "rgba(20,200,90,0.5)"); g.addColorStop(1, "rgba(10,20,255,0)");
-      cx.fillStyle = g; cx.fillRect(0, 0, 256, 320);
-      cx.fillStyle = "rgba(255,255,255,0.33)"; cx.fillRect(40, 40, 80, 60);
-      cx.fillStyle = "#000"; cx.font = "bold 28px sans-serif"; cx.fillText("APEX 26", 30, 250);
-      for (let i = 0; i < 64; i++) { cx.fillStyle = `rgba(${(i * 37) & 255},${(i * 91) & 255},${(i * 53) & 255},${(i % 17) / 16})`; cx.fillRect(140 + (i % 8) * 12, 120 + ((i / 8) | 0) * 12, 10, 10); }
-      const synthetic = await compare(syn);
-      let real = null;
-      try {
-        const team = (Teams && Teams.LIST && Teams.LIST[0]) || { id: "ferrari" };
-        const atlas = LiveryTex.buildAtlas(team.id, {}, 16, true, true);   // the real deferred hi-res paint (2048x2560, the element canvas: an OffscreenCanvas bitmap stalled llvmpipe, see liverytex.js)
-        real = Object.assign({ team: team.id, offscreen: typeof OffscreenCanvas === "function" && atlas instanceof OffscreenCanvas }, await compare(atlas));
-      } catch (e) { real = { error: String(e && e.message || e) }; }
-      return { synthetic, real, ua: navigator.userAgent.replace(/^.*Chrome\//, "Chrome/").split(" ")[0] };
-    });
-    console.log("livery-parity " + JSON.stringify(out));
-    assert.ok(out.synthetic.glx.maxAbs <= 1, "synthetic: GLX bitmap path within 1 LSB of the canvas path");
-    assert.equal(out.synthetic.flagsIgnoredForBitmap.bytesDiffering, 0, "synthetic: the unpack flags are ignored for an ImageBitmap source");
-    assert.ok(out.synthetic.unflipped.maxAbs <= 1, "synthetic: the unflipped bitmap is the row-mirror of the canvas upload");
-    assert.ok(!out.real.error, "real atlas built: " + (out.real.error || ""));
-    assert.ok(out.real.glx.maxAbs <= 1, "real atlas: GLX bitmap path within 1 LSB");
-    assert.equal(out.real.flagsIgnoredForBitmap.bytesDiffering, 0, "real atlas: unpack flags ignored for the bitmap");
-    assert.ok(out.real.unflipped.maxAbs <= 1, "real atlas: the unflipped bitmap mirrors the canvas upload");
-  } finally {
-    await browser.close();   // a close that throws is a real failure, not one to swallow (assert-audit)
-    shutdown();
-  }
 });

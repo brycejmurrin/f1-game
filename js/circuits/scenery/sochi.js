@@ -6,10 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["sochi"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        tree, bush, hedge, ridge, building, grandstandEx,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, cypress, terrainYAt,
         addBox, addCyl, addCone, addFrustum } = api;
 
@@ -78,7 +78,8 @@
           }
         }, { required: true });
       }
-      // The Olympic flame tower and its reflecting pool, inside the Turn 2 loop.
+      // The Olympic flame tower and its reflecting pool, at the centre of the
+      // Medals Plaza loop (an infield landmark ~96 m off the road, not a corner kit).
       // ~50 m Firebird stele on Medals Plaza (2014 cauldron).
       // https://en.wikipedia.org/wiki/Sochi_Olympic_Park
       {
@@ -146,12 +147,18 @@
           stage._mat = MAT.GLASS;
           addBox(stage, vadd(vadd(a.c, a.r, -28.2), a.u, 8), [0.5, 8, 96], GLASS, b);
           stage._mat = MAT.METAL;
-          // Arc roof: nine chords rising to a crown and oversailing the walls.
+          // Continuous arched roof from eave to eave, oversailing the walls.
+          const roofHeight = (x) => 14 + 6.5 * (1 - (x / 28) ** 2);
           for (let i = 0; i < 9; i++) {
-            const f = (i - 4) / 4;
-            const drop = (1 - f * f) * 6.5;
-            addBox(stage, vadd(vadd(a.c, a.r, f * 30), a.u, 14 + drop),
-              [8.2, 1.1, 108], i & 1 ? [0.88, 0.90, 0.94] : [0.80, 0.84, 0.90], b);
+            const x0 = -34 + i * 68 / 9, x1 = x0 + 68 / 9;
+            const y0 = roofHeight(x0), y1 = roofHeight(x1);
+            const span = Math.hypot(x1 - x0, y1 - y0);
+            const cos = (x1 - x0) / span, sin = (y1 - y0) / span;
+            const across = a.r.map((r, axis) => r * cos + a.u[axis] * sin);
+            const normal = a.u.map((u, axis) => u * cos - a.r[axis] * sin);
+            addBox(stage, vadd(vadd(a.c, a.r, (x0 + x1) / 2), a.u, (y0 + y1) / 2),
+              [span, 1.1, 108], i & 1 ? [0.88, 0.90, 0.94] : [0.80, 0.84, 0.90],
+              [across, normal, a.t]);
           }
           stage._mat = 0;
         }, { required: true });
@@ -205,8 +212,14 @@
         let i = 0;
         along(s0, s1, 16, (k, spacing) => {
           if (i++ % 2) return;
-          const a = anchor(k, side, 30);
-          addBox(out, vadd(a.c, a.u, 0.24), [46, 0.10, 2.2], PLAZA_D, [a.r, a.u, a.t]);
+          // Leave the three main plaza slabs uninterrupted by transverse paving.
+          const frac = k / n;
+          if (side === 1 && (Math.abs(frac - 0.09) < 0.025 || Math.abs(frac - 0.23) < 0.022)) return;
+          if (side === -1 && Math.abs(frac - 0.03) < 0.016) return;
+          if (side === 1 && Math.abs(frac - 0.30) < 0.005) return;  // approach planting bed
+          // Draped, not a road-frame box: 46 m wide, the box's centre was
+          // flush with the terrain and its ends 0.7-1.1 m under it (#5088).
+          groundPatch(k, side, 7, [46, 0.10, 2.2], PLAZA_D, { id: `sochi-plaza-strip-${k}-${side}`, samples: 6 });
         });
       }
 
@@ -241,7 +254,9 @@
       // inside of the Turn 2 hairpin, where the run folds back onto itself.
       for (const [h0, h1] of [[0.02, 0.036], [0.077, 0.165], [0.180, 0.28]])
         hedge(h0, h1, 1, 24, 3.0, [0.17, 0.36, 0.18]);
-      hedge(0.02, 0.28, -1, 22, 3.0, [0.17, 0.36, 0.18]);
+      // Two tight bends fold the inside hedge back through adjacent segments.
+      for (const [h0, h1] of [[0.02, 0.173], [0.182, 0.211], [0.221, 0.28]])
+        hedge(h0, h1, -1, 22, 3.0, [0.17, 0.36, 0.18]);
 
       for (const [i, s] of [0.938, 0.958, 0.978, 0.998].entries()) {
         const a = anchor(K(s), -1, 16);
@@ -392,9 +407,11 @@
           out._mat = 0;
         });
       };
-      arcStand(0.225, 0.285, 1, 18, { rows: 9 });          // Turn 5 / Adler Arena side
-      arcStand(0.520, 0.575, -1, 18, { rows: 8 });         // Turn 13
-      arcStand(0.795, 0.845, 1, 16, { rows: 7, span: 8.5 });  // Turn 17
+      arcStand(0.225, 0.285, 1, 18, { rows: 9 });          // Adler Arena side, on the T4 approach (ends ~195 m before the T4 apex)
+      // Separate stand blocks at the T9 apex where the two canopy runs intersect.
+      arcStand(0.520, 0.531, -1, 18, { rows: 8 });
+      arcStand(0.542, 0.575, -1, 18, { rows: 8 });
+      arcStand(0.795, 0.845, 1, 16, { rows: 7, span: 8.5 });  // T12/T13/T14 (spans T12-T15)
 
       groundPatch(K(0.045), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "sochi-t1-gravel", samples: 6 });
@@ -417,12 +434,15 @@
 
       // Skip cambered park rails that bury jersey tops (guardrail jersey rail
       // instance in structures.js). Right side at 8 m: 6 m buried 3 posts 0.43 m on camber (D6).
-      for (const [s0, s1] of [[0.58, 0.79], [0.84, 0.92]]) {
-        guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
+      for (const [s0, leftEnd, rightEnd] of [[0.58, 0.79, 0.77], [0.84, 0.92, 0.92]]) {
+        guardrail(s0, leftEnd, -1, 6, [0.80, 0.81, 0.83]);
+        guardrail(s0, rightEnd, 1, 8, [0.80, 0.81, 0.83]);
       }
+      // Give the T13 approach barrier clearance over the sloping verge.
+      guardrail(0.77, 0.79, 1, 11, [0.80, 0.81, 0.83]);
       guardrail(0.30, 0.50, -1, 7.5, [0.80, 0.81, 0.83]);
-      guardrail(0.30, 0.50,  1, 7.5, [0.80, 0.81, 0.83]);
+      // The right verge rises across Turn 4.
+      guardrail(0.30, 0.50,  1, 8.0, [0.80, 0.81, 0.83]);
       guardrail(0.94, 0.06, -1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.95, 0.06, 1, 9, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.12, 0.18, 0.36, 0.46, 0.64, 0.74, 0.88]) {
@@ -573,6 +593,6 @@
         // The approach parterre's outer hedge (gap 17.5) starts clear of the
         // Turn 5 arcStand (0.225-0.285, gap 18): from 0.282 it ran into the
         // stand's last station's deck rows (clip-audit frac 0.283, 0.90 m).
-        hedge(id === "approach" ? 0.288 : s - 0.018, s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
+        hedge(id === "approach" ? 0.288 : s - 0.018, id === "approach" ? 0.313 : s + 0.018, side, gap + 9.5, 0.9, [0.15, 0.34, 0.18]);
       }
     };

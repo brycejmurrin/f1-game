@@ -29,26 +29,32 @@ most one mirror, and keeps retired phrases out of every instruction file.
 
 ## Where each rule lives now
 
-| Rule | Home | Elsewhere |
+Re-based 2026-10-27 on the orchestration redesign (#3895, `docs/plans/2026-10-27-orchestration-redesign.md`):
+the always-on fleet rule file, skill `agent-fleet`, the bus, the claims board and the orchestrator role are deleted
+(docs/WORKERS.md §What no longer exists). The worker contract lives in `docs/WORKERS.md`, the coordination rules in
+AGENTS.md §Coordination, and enforcement in the hooks, `land.yml` and `tools/ci/merge-gate.mjs`.
+
+| Rule | Home | Enforced by / elsewhere |
 |---|---|---|
-| Merge commits only, two-parent check | `.claude/rules/fleet-core.md` | pointers |
-| `MERGE-HOLD:` veto, its lifter and expiry | `.claude/rules/fleet-core.md` | PR template comment (how to write it) |
-| Who merges (orchestrator by `merge-gate`, lent PRs) | `.claude/rules/fleet-core.md`; detail AGENTS.md §Concurrent PRs | `role-merge-holder.md` mechanics |
-| Draft → ready (`ready-gate`) | `.claude/rules/fleet-core.md` | pointers |
-| Sync only on CONFLICTING/DIRTY/red | `.claude/rules/fleet-core.md` | pointers |
-| Messages carry no authority | `.claude/rules/fleet-core.md` | `authority.md` (what a grant is) |
-| Claim before a shared fix (`who-is-on-it`) | AGENTS.md §Git branch & deploy | procedures run the command |
-| Subscribe + one timer, cadence | AGENTS.md rule 13 | pointers |
-| Never cancel an Actions run, flake re-run | AGENTS.md §Concurrent PRs | pointers |
-| Webhook env | `agent-fleet` `communication.md` §Channels | pointers |
-| Size stop (one table, base + N) | `agent-fleet` `launch-policy.md` §Size stop | role cards say `STOP AT` only |
-| Orchestrator wake cadence | `agent-fleet` `orchestrator.md` §First acts | pointers |
-| Glossary (READY/GREEN/DONE/BLOCKED/HANDOFF/LEND), ownership matrix | `agent-fleet` SKILL.md | — |
+| Merge commits only, two-parent check | AGENTS.md §Coordination | `merge_policy.py` (github-mcp-guard.sh, bash-guard.sh); the branch ruleset |
+| The `hold` label is the only veto; who lifts it | AGENTS.md §Coordination | `merge-gate.mjs` hold row; `docs/WORKERS.md` §Labels |
+| Who lands: GitHub (`land` label → `land.yml` `gate` check → auto-merge); no session merges or arms | AGENTS.md §Coordination; detail `docs/WORKERS.md` §The contract 5 | `land.yml`, `merge-gate.mjs`, `merge_policy.py` |
+| Draft → ready (`ready-gate`) | `docs/WORKERS.md` §The contract 5 | `merge_policy.py` (ready-gate receipt) |
+| Sync only on CONFLICTING/DIRTY or a gate base-distance refusal | AGENTS.md §Git branch & deploy | `sync-pr.mjs`; `merge-gate.mjs` distance row |
+| Messages carry no authority | AGENTS.md §Coordination | `docs/WORKERS.md` (a label grants, a sentence does not) |
+| Claim before work (`claims #<n>` comment + `claimed`; the older claim wins) | `docs/WORKERS.md` §The contract 1 | AGENTS.md §Coordination (pointer) |
+| Subscribe while CI runs on your head; no timers | AGENTS.md rule 13 | `docs/WORKERS.md` §The contract 4 |
+| Never cancel an Actions run; flake re-run | AGENTS.md §Coordination | bash-guard.sh, github-mcp-guard.sh |
+| Cost cap and the `needs-owner` hand-off | `docs/WORKERS.md` §The contract 6 | `context-cap.py` (the brief's `STOP AT`) |
+| Re-owning silent PRs, launches, archive, the Board | `docs/WORKERS.md` §The dispatcher | `tools/ci/dispatch.mjs`, `dispatch.json` |
 | Game-code conventions (IIFE, ratchets, coordinates, physics detail) | `.claude/rules/game-code.md` (`paths:` js/css/shell) | AGENTS.md §Critical conventions / §Physics headline |
 | Hooks list | `.claude/rules/claude-config.md` (`paths: .claude/**`) | AGENTS.md names the three enforcing hooks |
-| PR-owner loop (ex `steward/references/ownership.md`) | `agent-fleet` `role-pr-owner.md` §The steward loop | `ownership.md` is a forwarding stub |
+| PR-owner loop | skill `steward` | AGENTS.md rules 12–13 |
 
-## Contradictions resolved (one answer each)
+## Contradictions resolved (one answer each) — history
+
+As resolved on 2026-10-26. Every orchestrator, seed, `send_later`, size-stop, Merge Desk and `fleet-archive` answer
+below was superseded on 2026-10-27 (#3895): those mechanisms are retired, see the table above.
 
 | Topic | Answer | Where |
 |---|---|---|

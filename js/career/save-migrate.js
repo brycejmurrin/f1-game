@@ -46,9 +46,16 @@ const SaveMigrate = (function () {
   const TDEV_LIMIT = 8;
   const DEV_LIMIT = 12;
   const EXP_LIMIT = 40;
+  const FACILITY_LIMIT = 8;   // = career.js FACILITY_MAX (test-pinned)
 
   function clampTo(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
-
+  // The ranges play can reach (docs/CAREER.md §Import ranges).
+  const MONEY_MAX = 1e9;
+  const SALARY_MAX = 1e5;
+  // career.js: bonusPtFor(tier 0), offer terms 1-3 seasons, BUDGET_UPGRADE.length;
+  // PAID_SPONSORS_MAX = CAL_MAX / min SPONSOR_KINDS.window.
+  const BONUS_MAX = 24, YEARS_MAX = 3, BUDGET_LVL_MAX = 3, PAID_SPONSORS_MAX = 16.;
+  const salaryIn = (v) => clampTo(finiteNumber(v), 0, SALARY_MAX);
   // A sparse {key: number} map -> only the finite entries, clamped. Career
   // multiplies tdev into every AI car's pace and adds dev into every rating:
   // one "abc" or 1e308 there became NaN or an infinite lap time for the grid.
@@ -102,7 +109,7 @@ const SaveMigrate = (function () {
   // Only keys that are present: a stub row stays a stub (acceptOffer refuses it).
   function cleanOffer(o) {
     if ("years" in o) o.years = clampTo(Math.round(finiteNumber(o.years)), 1, 3);
-    if ("salary" in o) o.salary = Math.max(0, finiteNumber(o.salary));
+    if ("salary" in o) o.salary = salaryIn(o.salary);
     return o;
   }
 
@@ -151,24 +158,22 @@ const SaveMigrate = (function () {
   // so a string or a negative in a row must not reach the arithmetic raw.
   // Owned here so migrateCareer's remapPoints and SeasonCal.resume() sanitise
   // the same way; season-cal.js delegates to these.
-  function roundMap(o) {
+  // Coerce digit strings the way scoreMap/numMap do: a JSON roundPts row that
+  // landed as "18" must keep 18 for netPts, not be zeroed.
+  function sparseNumRows(o, keep) {
     const out = {};
     if (!o || typeof o !== "object") return out;
     for (const k of Object.keys(o)) {
       if (k === "__proto__" || !Array.isArray(o[k])) continue;
-      out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+      out[k] = o[k].map((v) => {
+        const n = typeof v === "number" || (typeof v === "string" && v.trim() !== "") ? Number(v) : NaN;
+        return keep(n) ? n : 0;
+      });
     }
     return out;
   }
-  function finishMap(o) {
-    const out = {};
-    if (!o || typeof o !== "object") return out;
-    for (const k of Object.keys(o)) {
-      if (k === "__proto__" || !Array.isArray(o[k])) continue;
-      out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
-    }
-    return out;
-  }
+  function roundMap(o) { return sparseNumRows(o, (n) => Number.isFinite(n) && n > 0); }
+  function finishMap(o) { return sparseNumRows(o, (n) => Number.isInteger(n) && n > 0); }
 
   function seasonRoster() {
     const roster = [];
@@ -224,10 +229,10 @@ const SaveMigrate = (function () {
   // `salary: "x"` or JSON exponent overflow (1e309); reject non-finite values.
   function cleanDeal(deal) {
     if (!deal || typeof deal !== "object" || Array.isArray(deal)) return null;
-    deal.salary = finiteNumber(deal.salary);
-    deal.bonusPt = finiteNumber(deal.bonusPt);
-    deal.left = finiteNumber(deal.left);
-    deal.years = finiteNumber(deal.years);
+    deal.salary = salaryIn(deal.salary);
+    deal.bonusPt = clampTo(finiteNumber(deal.bonusPt), 0, BONUS_MAX);
+    deal.left = clampTo(Math.trunc(finiteNumber(deal.left)), 0, YEARS_MAX);
+    deal.years = clampTo(Math.trunc(finiteNumber(deal.years)), 0, YEARS_MAX);
     // A goal type that names an Object.prototype member ("constructor",
     // "__proto__") is junk: it is what Career.goalKind would have indexed a plain
     // table with. Unknown-but-plain types stay (they already resolve as champPos).
@@ -255,19 +260,31 @@ const SaveMigrate = (function () {
     if (typeof Parts === "undefined" || !Array.isArray(Parts.CATALOG) || !Parts.CATALOG.length) return;
     const byCategory = new Map();
     const all = new Set();
+    // #5043: a bare legacy "sport" unlocked both Sport rows; it also grants the
+    // new key. Additive, idempotent, no CAREER_V rung (older builds still load).
+    const split = [];
     for (const cat of Parts.CATALOG) {
       if (!cat || typeof cat.id !== "string" || !Array.isArray(cat.options)) continue;
       const ids = new Set();
       for (const opt of cat.options) {
         if (!opt || typeof opt.id !== "string") continue;
         ids.add(opt.id); all.add(opt.id);
+        if (typeof opt.own === "string" && opt.own !== opt.id) { all.add(opt.own); split.push(opt); }
       }
       byCategory.set(cat.id, ids);
     }
-    if (Array.isArray(career.owned)) {
-      career.owned = career.owned.filter((id, i, a) =>
-        typeof id === "string" && all.has(id) && a.indexOf(id) === i);
-    } else career.owned = [];
+    const grantSplit = (out) => {
+      for (const opt of split) if (out.includes(opt.id) && !out.includes(opt.own)) out.push(opt.own);
+      return out;
+    };
+    career.owned = Array.isArray(career.owned) ? grantSplit(career.owned.filter((id, i, a) =>
+      typeof id === "string" && all.has(id) && a.indexOf(id) === i)) : [];
+    // AI bags only gain the key.
+    const bags = career.aiParts && typeof career.aiParts === "object" && !Array.isArray(career.aiParts) ? career.aiParts : {};
+    for (const id of Object.keys(bags)) {
+      const bag = bags[id];
+      if (bag && typeof bag === "object" && Array.isArray(bag.owned)) grantSplit(bag.owned);
+    }
     const fitted = {};
     if (career.fitted && typeof career.fitted === "object" && !Array.isArray(career.fitted)) {
       for (const cat of Object.keys(career.fitted)) {
@@ -303,7 +320,7 @@ const SaveMigrate = (function () {
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = finiteNumber(career.year) | 0 || 2026;
-    career.money = finiteNumber(career.money);
+    career.money = clampTo(finiteNumber(career.money), 0, MONEY_MAX);
     career.rep = Math.max(0, Math.min(100, finiteNumber(career.rep)));
     // Driver identity is read by title/cards and by rating lookups. Keep a
     // malformed existing slot recoverable: JSON can persist objects/functions'
@@ -319,7 +336,8 @@ const SaveMigrate = (function () {
     // A missing team defaults as Career.start does: a null here threw on the title
     // screen's `.toUpperCase()` at boot, from an imported row like {"money":100}
     // (slotPayloadOk does not look at the team).
-    career.team = typeof career.team === "string" && career.team ? career.team : (career.flavour === "myteam" ? "custom" : "haas");
+    const teamKnown = (id) => typeof Teams === "undefined" || !Teams || !Array.isArray(Teams.LIST) || Teams.LIST.some((t) => t && t.id === id);
+    career.team = typeof career.team === "string" && career.team && teamKnown(career.team) ? career.team : (career.flavour === "myteam" ? "custom" : "haas");
     // THE SEAT IS AN INDEX INTO THE TEAM'S GRID ROW. game.js copies it straight
     // into driverIdx, and makeCars marks the player by `di === driverIdx`, so a
     // hand-edited or imported `seat: 5` / `-1` gridded a race with no player car.
@@ -344,6 +362,9 @@ const SaveMigrate = (function () {
     // Career.slots(); offers and moves the same way).
     const rows = (a) => (Array.isArray(a) ? a.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : []);
     career.results = rows(career.results).map(cleanResult);
+    // The live round is past every stamped row; a round reset under kept rows refused every race.
+    const lastR = career.results.reduce((m, r) => (Number.isInteger(r.r) ? Math.max(m, r.r) : m), -1);
+    if (career.season.round <= lastR) career.season.round = lastR + 1;
     career.history = rows(career.history);
     career.tally = cleanTally(career.tally, career.history);
     career.dev = devMap(career.dev);
@@ -352,22 +373,23 @@ const SaveMigrate = (function () {
       ? career.aiParts : {};
     career.seats = seatMap(career.seats);
     career.offers = rows(career.offers).map(cleanOffer);
+    if (typeof Teams !== "undefined" && Teams && Array.isArray(Teams.LIST)) career.offers = career.offers.filter((o) => teamKnown(o.teamId));
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
     // Which of the round's three briefs was chosen, {round, i}. No CAREER_V rung:
     // absent reads as index 0, which is the kind the single dealt brief always
     // was, so a save written before the choice existed keeps the brief it had.
     career.objPick = career.objPick && typeof career.objPick === "object"
       && !Array.isArray(career.objPick) ? career.objPick : null;
-    career.budgetLvl = Math.max(0, finiteNumber(career.budgetLvl) | 0);
-    career.facility = finiteNumber(career.facility) | 0;
+    career.budgetLvl = clampTo(finiteNumber(career.budgetLvl) | 0, 0, BUDGET_LVL_MAX);
+    career.facility = clampTo(finiteNumber(career.facility) | 0, 0, FACILITY_LIMIT);
     career.moves = rows(career.moves);
     // MY TEAM's hired seat: rows or null — `roster: {}` threw in wageBill().
     // Its numbers as cleanDeal's: wageBill() sums `salary`, and one "x" turned
     // career.money into NaN, saved as null and read back as 0.
     career.roster = Array.isArray(career.roster) ? rows(career.roster).map((d) => {
-      d.salary = finiteNumber(d.salary);
+      d.salary = salaryIn(d.salary);
       d.left = finiteNumber(d.left);
-      if (d.pending && typeof d.pending === "object" && !Array.isArray(d.pending)) d.pending.ask = finiteNumber(d.pending.ask);
+      if (d.pending && typeof d.pending === "object" && !Array.isArray(d.pending)) d.pending.ask = salaryIn(d.pending.ask);
       else d.pending = null;
       return d;
     }) : null;
@@ -379,7 +401,9 @@ const SaveMigrate = (function () {
     if (picks && typeof picks === "object" && !Array.isArray(picks))
       for (const key of Object.keys(picks).slice(0, 1024))
         if (/^\d{4,8}:\d{1,3}$/.test(key) && (picks[key] === 0 || picks[key] === 1)) career.sponsorPicks[key] = picks[key];
-    career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    // Unique safe window ids — junk in paidSponsors permanently blocks settleSponsor.
+    const paidRaw = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    career.paidSponsors = [...new Set(paidRaw.filter((id) => Number.isSafeInteger(id) && id >= 0 && id < PAID_SPONSORS_MAX))].slice(0, PAID_SPONSORS_MAX);
     if (career.myTeamIdentity && typeof CareerTeamIdentity !== "undefined") career.myTeamIdentity = CareerTeamIdentity.sanitize(career.myTeamIdentity);
     const winter = career.winterReport;
     if (winter && typeof winter === "object" && Number.isInteger(winter.year)) {
@@ -410,9 +434,10 @@ const SaveMigrate = (function () {
     } catch (_) { return false; }
   }
 
-  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V, tallyOf,
+  // tallyOf is migration-only (cleanTally); Career.tallyOf owns the live save.
+  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
-           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT }) };
+           LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT, MONEY_MAX, SALARY_MAX, FACILITY_MAX: FACILITY_LIMIT, BONUS_MAX, YEARS_MAX, BUDGET_LVL_MAX, PAID_SPONSORS_MAX }) };
 })();
 Object.freeze(SaveMigrate);

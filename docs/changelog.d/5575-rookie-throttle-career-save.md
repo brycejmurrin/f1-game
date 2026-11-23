@@ -1,0 +1,1 @@
+Fixed: leaving ROOKIE for RELAX, STANDARD or PRO hands the throttle back (THROTTLE no longer stays on AUTO with the GAS pedal hidden), and a career RESEARCH or RAISE THE CAP purchase that could not be saved is refused instead of shown as bought (#5575).

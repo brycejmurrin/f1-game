@@ -1,6 +1,6 @@
 # Autódromo José Carlos Pace (Interlagos) — Visual Design Brief
 
-**Theme:** `urban_day` (São Paulo, green) · **Time:** DAY · **Render:** procedural colored boxes, no textures
+**Theme:** `green` (São Paulo) · **Time:** DAY · **Render:** procedural colored boxes, no textures
 
 ## 1. Setting
 A hilly urban motor-park in the Cidade Dutra district on the south side of São Paulo, hemmed in by sprawling Brazilian city. The Represa do Guarapiranga lake sits just beyond the infield, and the lap rolls constantly over undulating ground. Beyond the catch-fences: green wooded banks, colourful favela houses stacked up the hillsides, and a hazy ring of São Paulo high-rises on the horizon. Anti-clockwise, compact, intimate.

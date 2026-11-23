@@ -39,7 +39,7 @@ async function timeTrial() {
 function armLap(g, lapTime) {
   const { G } = g;
   const p = G.player;
-  g.apex.jump((G.track.total - 8) / G.track.total, 60, 0);
+  g.apex.jump((G.track.total - 8) / G.track.total, 60, 0, { keepLap: true });   // the fixture fabricates the lap
   p.lap = Math.max(p.lap, 1);
   p.lapTime = lapTime;
   p.offT = 0;
@@ -59,7 +59,7 @@ function crossLine(g) {
 function cutOffTrack(g, maxSteps) {
   const p = g.G.player;
   const before = p.cuts | 0;
-  g.apex.jump(0.5, 60, 40);
+  g.apex.jump(0.5, 60, 40, { keepLap: true });
   let i = 0;
   for (; i < maxSteps && (p.cuts | 0) === before; i++) g.apex.step(1 / 60, 1);
   return { counted: (p.cuts | 0) > before, steps: i };
@@ -75,7 +75,7 @@ function ghostState(g) {
 }
 
 function recordSamples(g) {
-  g.apex.jump(0.02, 60, 0);
+  g.apex.jump(0.02, 60, 0, { keepLap: true });
   g.apex.setInput({ throttle: true, steer: 0 });
   for (let i = 0; i < 90; i++) g.apex.step(1 / 60, 1);
 }
@@ -136,7 +136,7 @@ test("a brief excursion under the cut threshold still sets a record", async () =
 
   // Off the road for well under the 1.2 s game.js needs to count a cut.
   const cutsBefore = p.cuts | 0;
-  g.apex.jump(0.5, 60, 40);
+  g.apex.jump(0.5, 60, 40, { keepLap: true });
   for (let i = 0; i < 30; i++) g.apex.step(1 / 60, 1);   // 0.5 s
   assert.equal(p.cuts | 0, cutsBefore, "0.5 s off the road is not a cut — the threshold moved");
   assert.equal(p.incidentInvalidLap, false, "two wheels over a kerb is still a lap");
@@ -160,7 +160,7 @@ test("time trial never applies the +5s track-limits ladder", async () => {
     assert.equal(p.incidentInvalidLap, true, "each counted cut still invalidates the lap");
     // After a counted cut the car is parked at the -2 grace sentinel; jump
     // back on-track and step until grace clears so the next off-track counts.
-    g.apex.jump(0.5, 60, 0);
+    g.apex.jump(0.5, 60, 0, { keepLap: true });
     for (let i = 0; i < 180 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
   }
   assert.equal(p.penalty, 0, "TT must not accrue race-classification seconds");
@@ -193,12 +193,40 @@ test("a race: 3rd strike is the black-and-white flag, 4th AND EACH ADDITIONAL +5
     assert.ok(cut.counted, "cut " + (n + 1) + " must count");
     assert.equal(p.incidentInvalidLap, true, "cut " + (n + 1) + " deletes the race lap");
     pens.push(p.penalty); warns.push(p.cutWarn);
-    g.apex.jump(0.5, 60, 0);
+    g.apex.jump(0.5, 60, 0, { keepLap: true });
     for (let i = 0; i < 180 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
   }
   assert.deepEqual(pens, [0, 0, 0, 5, 10, 15], "warnings, B/W on the 3rd, then +5s for every strike from the 4th");
   assert.deepEqual(warns, [1, 2, 3, 4, 5, 6], "the strike count never resets inside a race");
   assert.ok((p.cuts | 0) >= 6, "lifetime cuts still accumulate");
+});
+
+test("ONE strike per trip off: a long excursion counts once, the next separate trip counts again (#5945 1A)", async () => {
+  // The -2 grace used to re-arm WHILE the car was still off, so an 8 s spin on
+  // the grass counted a strike every 3.2 s (three strikes, the 4th is +5 s).
+  const g = await race();
+  try {
+    const p = g.G.player;
+    p.penalty = 0; p.cutWarn = 0;
+    const before = p.cuts | 0;
+    // Under throttle so the car is not beached (an auto-rescue ends the trip).
+    g.apex.jump(0.5, 60, 40);
+    g.apex.setInput({ throttle: true, steer: 0 });
+    let offSteps = 0;
+    for (let i = 0; i < 8 * 60; i++) { g.apex.step(1 / 60, 1); if (!p.offroad) break; offSteps++; }
+    // The old re-arm counted again at 1.2 + 3.2 = 4.4 s; the trip must outlast it.
+    assert.ok(offSteps > 4.8 * 60, "the car must stay off past the old re-count (" + offSteps + " steps off)");
+    assert.equal((p.cuts | 0) - before, 1, "one continuous trip off is ONE strike");
+    g.apex.setInput({ throttle: false, steer: 0 });
+    assert.equal(p.cutWarn, 1);
+    // Rejoin, let the grace clear, then a separate trip counts again.
+    g.apex.jump(0.5, 60, 0);
+    for (let i = 0; i < 240 && p.offT < 0; i++) g.apex.step(1 / 60, 1);
+    assert.equal(p.offT, 0, "the grace clears once back on the track");
+    const cut = cutOffTrack(g, 200);
+    assert.ok(cut.counted, "a second, separate trip off counts");
+    assert.equal(p.cutWarn, 2);
+  } finally { g.close(); }
 });
 
 test("a race lap with a counted cut is DELETED — no best/last lap — but still counts for distance", async () => {

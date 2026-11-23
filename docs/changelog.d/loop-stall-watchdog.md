@@ -1,1 +1,0 @@
-Fixed: When a weak GPU leaves a race presenting a frame every few seconds, the game now drops to its lightest settings and, if that is not enough, returns to the menu with a graphics-reset notice instead of freezing.

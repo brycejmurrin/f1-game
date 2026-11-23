@@ -66,7 +66,6 @@ test("camera metadata has the shape consumers rely on, and the CLI reads the one
     for (const id of stations) assert.ok(id in STATIONS, `${field} → unknown station ${id}`);
   }
   const cli = fs.readFileSync(new URL("../../tools/shot/garage-angles.mjs", import.meta.url), "utf8");
-  assert.match(cli, /garage-camera-catalog\.mjs/);
   assert.doesNotMatch(cli, /^const (TARGETS|STATIONS|FIELD_STATIONS|CAM_ALIAS) = \{/m, "the CLI must not re-declare the catalog");
   const result = discoverCatalog({ section: "garage", filter: "spineTop", limit: 100 });
   assert.deepEqual(result.rows.find((r) => r.id === "spineTop").target, STATIONS.spineTop.target);

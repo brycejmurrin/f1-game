@@ -25,6 +25,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/weather-arc.js"), "utf8").replace(/^const\b/gm, "var");
@@ -44,14 +45,14 @@ function boot(over = {}) {
   // SeasonCal.luckSeed's contract: the season's stamped seed wins over the session's.
   ctx.SeasonCal = { drawRound: (s) => s.round, luckSeed: (season, session) => season.seed || session };
   vm.runInContext(SRC, ctx, { filename: absSrc("js/race/weather-arc.js") });
-  const G = Object.assign({
+  const G = fakeG(Object.assign({
     state: "menu", flow: "single", season: null, seasonMode: false,
     raceWeather: "dry", raceRound: 0, raceLaps: 25, lapsTarget: 1,
     track: { total: 5800 }, soundOn: false,
     simSeed: () => 1, netPlay: { active: () => false },
-    announce() {}, applyRaceSettings() {}, isWetRoad: () => false, isRaining: () => false,
+    announce() {}, applyRaceSettings() {}, isWetRoad: () => false,
     initRainDrops() {},
-  }, over);
+  }, over));
   ctx.Particles = { rainShow() {} };
   const wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
   wa.changeable = true;
@@ -60,6 +61,15 @@ function boot(over = {}) {
 // The plan comes out of the VM's realm: compare it as data.
 const plain = (v) => JSON.parse(JSON.stringify(v));
 const plan = (b) => plain(b.wa.planFor());
+
+test("a time-of-day change rebuilds the track once even if a preview selects it again", () => {
+  const loads = [], settings = [];
+  const { wa } = boot({ raceTimeOfDay: "day", trackIdx: 7,
+    loadTrack: id => loads.push(id), applyRaceSettings: () => settings.push(wa.setTimeOfDay()) });
+  for (const tod of ["day", "night", "night", "default", "invalid"]) wa.setTimeOfDay(tod);
+  assert.deepEqual(loads, [7, 7]);
+  assert.deepEqual(settings, ["night", "default"]);
+});
 
 test("the plan the lobby ships is the plan the green light uses, whatever lapsTarget was left at", () => {
   for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {

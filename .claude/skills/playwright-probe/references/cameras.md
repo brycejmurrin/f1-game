@@ -1,22 +1,18 @@
 # Camera debug hooks
 
-Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **20 built-in camera
+Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **built-in camera
 modes** (C / CAM button) and the **free debug camera** (`view()` and friends)
 that overrides them for framing.
 
-## The 20 camera modes
+## The camera modes
 
-`__apex.camera()` → `{ mode, index, modes:[...] }`. Cycle order
-(`CamModes.CAM_MODES` in `js/camera/mode-switch.js`):
-
-```
-chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear  visor  trackside  rival  pitwall  drone  tv  helmet
-```
+`__apex.camera()` → `{ mode, index, modes:[...] }`; the cycle order is
+`CamModes.CAM_MODES` in `js/camera/mode-switch.js` (read the list there).
 
 Set by id (case-insensitive; a label like "TV SIDE" returns `false`) or index: `__apex.camera("cockpit")` / `__apex.camera(3)`.
 Index is append-only (`apex26.camMode`). After switching, `__apex.snapCam()` jumps the rig
 without damping (every mode). `camera()` clears any `view()` / debug override.
-Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
+Each mode's cut ease is its `cut` in `CAM_MODES` (`0` = onboard modes lock instantly).
 
 - **drift** — swings OUTSIDE a slide so the flank faces camera; settles behind when gripping.
 - **heli/side/cinematic** — corner-aware: auto-pick the OUTSIDE of the upcoming bend.
@@ -28,7 +24,7 @@ Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
 
 ## Measuring lag (fixes belong to f1-animation-cameras)
 
-Lag is MEASURED here and FIXED in skill f1-animation-cameras (the rig code). One boot, no pixels:
+Lag is measured with this reference; fixes to the rig code live in skill f1-animation-cameras. One boot, no pixels:
 drive (`race()`, `go()`, throttle via `step()`), and each step record the distance from `camState().eye`
 to the car (`physState().px`/`pz`) next to `physState().speed`; compare with the snapped distance
 (`snapCam()` once: chase eye ≈ 5.8 m, docs/DEBUG-HOOKS.md §snapCam). Report p50/p95 of the excess
@@ -53,7 +49,3 @@ framing; you get a free-orbit shot.
 Inspectors: `camState()` → `{eye, tgt, fov, debug}`; `viewState()` is the
 full scene/camera snapshot. Capture → **playwright-probe**.
 
-## Load on demand
-
-- Free-cam table, `previewCam`, `look:"in"` vs `roadside()` look set, recipes →
-  [references/debug-cameras-framing.md](debug-cameras-framing.md).

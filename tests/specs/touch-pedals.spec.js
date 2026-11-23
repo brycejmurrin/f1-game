@@ -120,15 +120,73 @@ test("auto-throttle and the GAS button can never disagree, across mode switches"
     // Through the REAL pause menu, the way a player switches: the pause button
     // opens it, STEER cycles the mode, resume closes it. Driving setSteerMode()
     // directly would skip the very refresh this test exists to check.
-    await page.evaluate(() => {
+    // The flip is SYNCHRONOUS: › runs setSteerMode inside its click handler
+    // (js/ui/setting-row.js step -> js/game.js setSteerMode -> Input), so read it
+    // in the same task as the clicks. A page-side poll (#5958) timed out on CI
+    // with the flip already made: a stalled main thread could not run the poll.
+    const flip = await page.evaluate(() => {
       document.getElementById("pausebtn")?.click();
       // STEERING INPUT is a setting row: › steps to the next mode.
       document.getElementById("pm-steer-next")?.click();
       document.getElementById("pm-resume")?.click();
+      return { mode: window.__apex.inputState().steerMode,
+        closed: !!document.getElementById("pausemenu")?.hidden };
     });
-    await page.waitForTimeout(150);
+    expect(flip.mode, `STEER › from ${pair.mode} changed nothing`).not.toBe(pair.mode);
+    expect(flip.closed, "RESUME left the pause card open").toBe(true);
   }
   // Anti-vacuity: the loop must actually have visited more than one mode, or it
   // proved the invariant for a single state and called it a sweep.
   expect(new Set(seen.map((s) => s.mode)).size).toBeGreaterThan(1);
+});
+test("a driver can tune Gas and Left independently, reload, and reset only Gas", async ({ page }) => {
+  const openControls = async () => {
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-controls").tap();
+    await page.locator("#pm-touch-response").tap();
+  };
+  await openControls();
+  const guide = page.locator("#pm-touch-steering-guide-sel");
+  await expect(guide).toHaveValue("ring");
+  await guide.selectOption("wheel");
+  const form = page.locator("#pm-touch-response-fields");
+  const button = form.locator('[data-field="button"]');
+  const press = form.locator('[data-field="press"]');
+  const travel = form.locator('[data-field="travel"]');
+  await button.selectOption("gas");
+  await press.selectOption("progressive");
+  const edge = form.locator('[data-field="fullEdge"]');
+  const indicator = form.locator('[data-field="indicator"]');
+  await edge.selectOption("right");
+  await indicator.selectOption("percent");
+  await expect(form.locator('[data-field="start"]')).toBeDisabled();
+  await travel.focus();
+  await travel.press("Home");
+  await expect(travel).toHaveValue("40");
+  await button.selectOption("left");
+  await press.selectOption("progressive");
+  const adaptive = form.locator('[data-field="adaptive"]');
+  await adaptive.selectOption("10");
+
+  await page.reload();
+  await openControls();
+  await expect(guide).toHaveValue("wheel");
+  await button.selectOption("gas");
+  await expect(press).toHaveValue("progressive");
+  await expect(travel).toHaveValue("40");
+  await expect(edge).toHaveValue("right");
+  await expect(indicator).toHaveValue("percent");
+  await form.locator('[data-field="reset"]').tap();
+  await expect(edge).toHaveValue("fixed");
+  await expect(indicator).toHaveValue("color");
+  await expect(press).toHaveValue("instant");
+  await expect(travel).toHaveValue("90");
+  await button.selectOption("left");
+  await expect(press).toHaveValue("progressive");
+  await expect(adaptive).toHaveValue("10");
+  for (const id of ["right", "brake"]) {
+    await button.selectOption(id);
+    await expect(press).toHaveValue("instant");
+    await expect(travel).toHaveValue("90");
+  }
 });

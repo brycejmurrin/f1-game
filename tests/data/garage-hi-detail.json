@@ -1,0 +1,65 @@
+{
+  "_doc": "EXTREME garage detail pins (tests/unit/garage-hi-detail.test.mjs). off = the setup room after removing the eight solid neighbor facade blocks (e3f7c72195) and every bay crew look from dce9a300, built with tests/helpers/garage-hi-harness.mjs; on.tris = GfxQuality garageHi + crewHi with js/garage/hi-prims.js resident.",
+  "off": {
+    "room": {
+      "sha256": "6e35e7c251e45a72cc0669a25e8271d0602d20a353129445d391691a0bae52a3",
+      "meshes": 20,
+      "verts": 26634,
+      "tris": 19530
+    },
+    "crew": {
+      "classic": {
+        "sha256": "5df76a71cafa45663e046cc7f1e3493db74676f28ab3a6916ceff5669aea715b",
+        "meshes": 3,
+        "verts": 3342,
+        "tris": 3960
+      },
+      "sculpted": {
+        "sha256": "5105a8d82881ac07000d676201637f46a84b3b1f517a46950979e95eaa17af30",
+        "meshes": 10,
+        "verts": 4445,
+        "tris": 5276
+      },
+      "pitstop": {
+        "sha256": "659f6351ef732170867d2cbb4542e1e18c06f969ce68baace5ccf49dbffba4cd",
+        "meshes": 11,
+        "verts": 33493,
+        "tris": 39640
+      },
+      "workshop": {
+        "sha256": "d6593300c28b617e893fa32514b9a93a60b2f2c14ecd6922fcee5fe10206eaca",
+        "meshes": 11,
+        "verts": 13708,
+        "tris": 16220
+      },
+      "welcome": {
+        "sha256": "3e5b390532da0e81a1694f367ab5c3bd2210a6db2918d37492809c1e3deb867d",
+        "meshes": 4,
+        "verts": 17062,
+        "tris": 20472
+      }
+    }
+  },
+  "off_tris": {
+    "room": 19530,
+    "crew": {
+      "classic": 3960,
+      "sculpted": 5276,
+      "pitstop": 39640,
+      "workshop": 16220,
+      "welcome": 20472
+    }
+  },
+  "on": {
+    "tris": {
+      "room": 79196,
+      "crew": {
+        "classic": 16560,
+        "sculpted": 22152,
+        "pitstop": 165860,
+        "workshop": 67408,
+        "welcome": 86896
+      }
+    }
+  }
+}

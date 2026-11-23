@@ -287,7 +287,8 @@ test("TLX k()/gk() keys are TUNE_DEFS ids (no silent fallbacks)", () => {
 
 // Knobs a backend honestly lacks. Each entry must be admitted in the knob's own help
 // text, and goes stale (test fails) the moment the backend wires the uniform.
-const BACKEND_GAPS = { wgx: { windSpeed: /WGX has no per-vertex sway/ } };
+// windSpeed was the last WGX gap (#5777 row 5: foliage sway / flag wave via normal.w).
+const BACKEND_GAPS = {};
 
 test("every TUNE_DEFS uniform is wired in executable code on GLX, WGX, and TLX", () => {
   // A new `u:` knob that ships on GLX only is the project's most persistent
@@ -303,16 +304,34 @@ test("every TUNE_DEFS uniform is wired in executable code on GLX, WGX, and TLX",
       "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js",
       "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"]),
   };
-  const hit = (src, d) => [d.id, d.u].filter(Boolean).some((n) => src.includes(n));
+  // Two halves, both required. CONSUME: the id or uniform name appears as a
+  // whole word (a bare substring let "tint" match `const tint = o.tint`, the
+  // per-draw sprite tint, so WGX could drop the WARM / COOL upload unnoticed).
+  // UPLOAD: the backend READS the knob's value — a quoted id (`k("tint")`,
+  // `PostCommon.knob(T, "tint")`) or a member read on one of that backend's
+  // tune / frame holders. A knob uploaded through a new holder fails here with
+  // its name: add the holder to UPLOAD_HOLDERS, it is the backend's contract.
+  const UPLOAD_HOLDERS = {
+    glx: ["T", "opts"],
+    wgx: ["T", "Td", "f", "lastFrame"],
+    tlx: ["T", "U", "F", "sky", "frame", "_postF", "o"],
+  };
+  const esc = (s) => s.replace(/[$]/g, "\\$&");
+  const word = (n) => new RegExp(`(?<![\\w$])${esc(n)}(?![\\w$])`);
+  const uploads = (name, src, id) =>
+    new RegExp(`["'\`]${id}["'\`]`).test(src) ||
+    new RegExp(`(?<![\\w$.])(?:${UPLOAD_HOLDERS[name].map(esc).join("|")})\\s*\\.\\s*${id}(?![\\w$])`).test(src);
+  const hit = (name, src, d) =>
+    [d.id, d.u].filter(Boolean).some((n) => word(n).test(src)) && uploads(name, src, d.id);
   const uniforms = defs().filter((x) => x.u);
   assert.ok(uniforms.length > 50, `only ${uniforms.length} u: knobs — the registry parse broke`);
   const missing = [], staleGaps = [];
   for (const d of uniforms) {
     for (const [name, src] of Object.entries(backends)) {
       const gap = BACKEND_GAPS[name] && BACKEND_GAPS[name][d.id];
-      if (hit(src, d)) { if (gap) staleGaps.push(`${d.id} is wired on ${name} now: drop its BACKEND_GAPS entry`); continue; }
+      if (hit(name, src, d)) { if (gap) staleGaps.push(`${d.id} is wired on ${name} now: drop its BACKEND_GAPS entry`); continue; }
       if (gap && gap.test(d.help || "")) continue;
-      missing.push(`${d.id} (${d.u}) has no executable use on ${name.toUpperCase()}`);
+      missing.push(`${d.id} (${d.u}) has no executable upload + use on ${name.toUpperCase()}`);
     }
   }
   assert.deepEqual(staleGaps, []);
@@ -670,11 +689,13 @@ test("the sun-glint knee and the world env-probe reflection reach every backend"
   // the probe in the world env block, faded over the same 60..150 m on all three
   for (const [name, src, re] of [
     ["GLX", glx, /probeW = clamp\(uEnvStr, 0\.0, 1\.0\) \* clamp\(1\.0 - \(vDist - 60\.0\) \/ 90\.0, 0\.0, 1\.0\)/],
-    ["TLX", tlx, /probeW = clamp\(U\.envStr, 0\.0, 1\.0\)\s*\.mul\(clamp\(vd\.sub\(60\.0\)\.div\(90\.0\)\.oneMinus\(\), 0\.0, 1\.0\)\)/],
+    ["TLX", tlx, /probeW = clamp\(localProbeStrength, 0\.0, 1\.0\)\s*\.mul\(clamp\(vd\.sub\(60\.0\)\.div\(90\.0\)\.oneMinus\(\), 0\.0, 1\.0\)\)/],
     ["WGX", w, /probeW = clamp\(F\.params5\.x, 0\.0, 1\.0\) \* clamp\(1\.0 - \(vDist - 60\.0\) \/ 90\.0, 0\.0, 1\.0\)/],
   ]) assert.match(src, re, `${name}: the world env block weights the live probe by strength x eye-distance fade`);
   assert.match(glx, /envColor = mix\(envColor, textureLod\(uEnvCube, R, rough \* 2\.5\)\.rgb, probeW\)/, "GLX samples the probe at rough*2.5");
-  assert.match(tlx, /cubeTexture\(envCubeNode, R, rough\.mul\(2\.5\)\)\.rgb, probeW\)/, "TLX samples the probe at rough*2.5");
+  assert.match(tlx, /const direction = probeDirection\(R\)/, "the gloss probe starts from the reflected view ray");
+  assert.match(tlx, /if \(!U\.garageBox\) return ray;/, "the ordinary cube keeps the original direction");
+  assert.match(tlx, /cubeTexture\(envCubeNode, direction, rough\.mul\(2\.5\)\)\.rgb, probeW\)/, "TLX samples the probe at rough*2.5");
   assert.match(w, /textureSampleLevel\(envCube, envCubeSamp, vec3<f32>\(Rw\.x, -Rw\.y, Rw\.z\), rough \* 2\.5\)\.rgb, probeW\)/, "WGX samples the probe at rough*2.5, -y like every probe tap");
 });
 

@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["catalunya"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill, bleacher,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
@@ -175,8 +175,8 @@
           }, { required: true });
         }
       }
-      // Grandstand J (Tribuna J): smaller uncovered stand toward T1, opposite
-      // pit exit. Source: oversteer48.com/grandstand-j-circuit-de-catalunya-barcelona/
+      // Grandstand J (Tribuna J): smaller uncovered stand on the main straight
+      // past the line (faces the straight, not a corner), opposite pit exit. Source: oversteer48.com/grandstand-j-circuit-de-catalunya-barcelona/
       // (LEFT of S/F; NOT covered; adjacent to Main on its right when facing track).
       // Length approximate — seating-plan zones suggest shorter than Main.
       grandstandEx(0.048, -1, 12, 72, null, null,
@@ -270,12 +270,14 @@
       // circuitcat F1 folio map (B/G/C cluster + H). Arena feel: uncovered B/G/C
       // as bleachers on the outside (−1) of the T12–T13 complex (grandstandEx
       // roof:"none" still builds a 12 m shell — wrong and expensive here),
-      // covered H at the final corner, covered T10 on the La Caixa entry inside.
-      // T10 covered — the one roofed stand that sees this sector (oversteer48 B).
+      // covered H at T13, covered T10 on the La Caixa entry inside.
+
+      // T10 braking-zone stand, covered: seated on the back-straight end ~120 m
+      // before the La Caixa apex — the one roofed stand that sees this sector (oversteer48 B).
       grandstandEx(0.700, -1, 14, 40, null, null,
         { livery: "concrete", tiers: 1, roof: "flat", endWalls: true,
           roofCol: [0.72, 0.74, 0.78] });
-      // Tribuna B — outside T12, uncovered (follows the arc).
+      // Tribuna B — outside the T12 approach, uncovered (follows the arc).
       // https://oversteer48.com/grandstand-b-circuit-de-catalunya-barcelona/
       bleacher(0.778, 0.788, -1, 12, {
         rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
@@ -286,12 +288,12 @@
         rows: 6, rise: 0.55, setback: 0.85, frame: "steel",
         frameCol: [0.52, 0.53, 0.55], plankCol: BONE, density: 0.35, step: 8,
       });
-      // Tribuna C — beside G toward T13–14; farther gap (gravel runoff between).
+      // Tribuna C — beside G at T12; farther gap (gravel runoff between).
       bleacher(0.804, 0.812, -1, 22, {
         rows: 5, rise: 0.55, setback: 0.85, frame: "steel",
         frameCol: [0.55, 0.56, 0.58], plankCol: [0.90, 0.78, 0.30], density: 0.30, step: 9,
       });
-      // Tribuna H — covered view of stadium + final corner (New Holland).
+      // Tribuna H — covered, on T13 at the stadium exit (sees the stadium and the run onto the main straight).
       grandstandEx(0.860, -1, 14, 40, null, null,
         { livery: "concrete", tiers: 1, roof: "cantilever", endWalls: true, pylons: true,
           roofCol: [0.70, 0.72, 0.76] });
@@ -379,7 +381,7 @@
       // Single-side hedges where both sides would share a plane.
       hedge(0.955, 0.045, -1, 16, 3.0, [0.18, 0.36, 0.18]);
       hedge(0.022, 0.078, 1, 16, 2.6, [0.19, 0.37, 0.19]);
-      // Hedge behind T10 stand only — not through the B/G/C rake.
+      // Hedge on the T10 approach, behind the braking-zone stand only — not through the B/G/C rake.
       hedge(0.660, 0.695, -1, 28, 2.6, [0.19, 0.37, 0.19]);
       {
         // Cypress ranks — clear of Stadium B/G/C/H and pit boxes (clip was
@@ -414,7 +416,7 @@
           });
         }
       }
-      // Sponsor boards down the main straight and around Turn 1.
+      // Sponsor boards down the main straight on the T1 approach (they stop ~270 m short of the apex).
       const BOARDS = [[0.86, 0.16, 0.14], [0.94, 0.93, 0.88], [0.12, 0.32, 0.66], [0.96, 0.78, 0.10]];
       sponsorHoarding(0.955, 0.100, -1, 6.5, { h: 1.25, step: 10, palette: BOARDS });
       // Braking-zone boards into Repsol (T4) and Campsa (T9) — the two
@@ -428,7 +430,7 @@
       // (14–38 m) so the crowns never overlap the near row.
       every(26, (k) => {
         const s = k / n;
-        // Skip T1 stand corridor (~0.13) and the sun-terrace band (~0.36–0.41)
+        // Skip the orange-stand corridor (K(0.145)) and the sun-terrace band (~0.36–0.41)
         // — crowns sat in those boxes (clip 0.50–1.19 m).
         if (!((s > 0.20 && s < 0.35) || (s > 0.42 && s < 0.556))) return;
         const h = hash(k * 43 + 11);
@@ -442,7 +444,7 @@
         cameraTower(K(s), side, gap, { h: 14, col: [0.60, 0.62, 0.66] });
       }
       if (circuitKit) {
-        // Marshal shelter at the T5 braking point (La Caixa already has a post).
+        // Marshal shelter on the T3-exit straight before the T4 (Repsol) braking zone (La Caixa already has a post).
         circuitKit.marshalShelter({
           id: "kit:catalunya:t5-marshal", frac: 0.300, side: 1, gap: 10, size: [3, 3, 3],
         });

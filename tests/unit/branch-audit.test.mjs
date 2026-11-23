@@ -49,10 +49,12 @@ test("indexRuns keeps the newest run per head sha", () => {
 
 test("verdict precedence: open PR, merged, too recent, absorbed, no history, superseded, post-merge, pr-closed, unmerged", () => {
   const old = { ageDays: 9, sha: "h", lines: 10, anyPct: 10 };
-  const v = (o) => verdictFor({ ...old, ...o });
+  const v = (o) => verdictFor({ ...old, ...o }, { base: "deploy" });
   assert.equal(v({ pr: { state: "open" }, ancestor: true }), "active");
   assert.equal(v({ ancestor: true }), "merged");
-  assert.equal(v({ pr: { state: "merged", headSha: "h" } }), "merged");
+  assert.equal(v({ pr: { state: "merged", base: "deploy", headSha: "h" } }), "merged");
+  assert.equal(v({ pr: { state: "merged", base: "integration", headSha: "h" } }), "post-merge");
+  assert.equal(v({ pr: { state: "merged", headSha: "h" } }), "post-merge");
   assert.equal(v({ ageDays: 0.2, absorbed: true }), "active");
   assert.equal(v({ absorbed: true, anyPct: 0 }), "absorbed");
   assert.equal(v({ noHistory: true }), "no-history");

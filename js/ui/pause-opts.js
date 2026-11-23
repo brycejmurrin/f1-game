@@ -25,13 +25,9 @@
    fallbacks. Lands on <html data-pause-dim>. An OS asking for reduced
    transparency still wins on the backdrop (its rule is later in the cascade).
 
-   CONFIRM QUIT: ON (shipped) / OFF. With it ON the first press on QUIT TO MENU
-   or RESTART RACE only ARMS the button ("… — TAP AGAIN", .armed fill, an
-   aria-label that says so); a second press within ARM_MS runs the game's own
-   onclick. A capture-phase click listener on #pausemenu does the gating, so
-   the handlers in js/game.js stay untouched. The arm clears on its timer and
-   whenever the pause card hides. A disabled button (multiplayer restart) is
-   never armed. Behaviour only, so no attribute.
+   QUIT and RESTART use capture-phase confirmation. A matching pointerdown
+   supplies the input timestamp when a stalled frame delays event dispatch.
+   Keyboard and scripted activations pass through the click handler.
 
    SHIPPED composes: the fold's summary says SHIPPED only while these four AND
    ScreenLooks' lookPause knobs (BUTTONS & CARD, mounted into the same fold)
@@ -51,11 +47,18 @@ const PauseOpts = (function () {
   const SIDES = [["centre", "CENTRE"], ["left", "LEFT"], ["right", "RIGHT"]];
   const DIMS = [["full", "FULL"], ["soft", "SOFT"], ["off", "OFF"]];
   const CONFIRMS = [["on", "ON"], ["off", "OFF"]];
-  // Same window as the other two-press guards (settings-export LOAD, the
-  // renderer picker's raceGuard), a second longer: this one is read mid-race.
-  const ARM_MS = 5000;
-  // The guarded buttons and the words the armed label and aria-label use.
-  const GUARDED = { "pm-quit": "QUIT TO MENU", "pm-restart": "RESTART" };
+  // A thumb's double tap (~120-175 ms) sent BOTH presses to #pm-quit and
+  // ended the race (UI hunt 2026-10-29 #1). A real pointer press younger
+  // than this is the same gesture, swallowed; the arm stays up.
+  const ARM_MIN_MS = 350;
+  const ARM_MAX_MS = 5000;
+  // The guarded buttons and their aria-label once armed. The armed LABEL is
+  // one short line for both (#3892): "RESTART — TAP AGAIN" wrapped in a
+  // half-width 844x390 cell and its second line hid under the next row. Keep
+  // it no longer than the unarmed labels so it fits every cell they fit; the
+  // .armed fill and the aria-label name the action.
+  const GUARDED = { "pm-quit": 1, "pm-restart": 1 };
+  const ARMED_LABEL = "TAP AGAIN";
   const ARIA = { "pm-quit": "Confirm: quit to menu", "pm-restart": "Confirm: restart race" };
 
   const store = GameStore.store;
@@ -115,46 +118,209 @@ const PauseOpts = (function () {
   function setConfirm(v) { const r = setConfirmRaw(v); if (r === "off") disarm(); return r; }
 
   // ── CONFIRM QUIT / RESTART ─────────────────────────────────────────────
-  let armed = null;   // { btn, text, aria, at, t }
-  function disarm() {
-    if (!armed) return;
-    const a = armed;
-    armed = null;
-    clearTimeout(a.t);
+  let armed = null;   // { btn, text, aria, wallAt, evAt } — wallAt from performance.now()
+  let armTimer = 0;
+  let expiredArm = null; // { btn, evAt, wallAt } after the idle timer reverts the label
+  let confirmPending = null;   // btn.id while a pointerup-driven el.click() is in flight
+  let confirmPendingAt = 0;    // wallNow() when it was set: the trusted click that clears it may never come
+  let confirmPendingEv = null; // that gesture's pointerdown timeStamp
+  let confirmFallback = false; // the timer's el.click() is the quit when no native click followed
+  let downQ = [];              // { id, ts, wall } pointerdown input times, oldest first
+  function clearPending() { confirmPending = null; confirmPendingAt = 0; confirmPendingEv = null; confirmFallback = false; }
+  function wallNow() {
+    try { return performance.now(); } catch (_) { return Date.now(); }
+  }
+  function guardedBtn(node) {
+    const btn = node && node.closest ? node.closest("#pm-quit, #pm-restart") : null;
+    return btn && GUARDED[btn.id] ? btn : null;
+  }
+  function pruneDowns() {
+    const now = wallNow();
+    if (downQ.length) downQ = downQ.filter((d) => now - d.wall < ARM_MAX_MS);
+  }
+  function noteDown(e) {
+    if (e && e.isTrusted && e.pointerId != null) downQ = downQ.filter((d) => d.released || d.pointerId !== e.pointerId);
+    const btn = guardedBtn(e && e.target);
+    if (!btn || !e.isTrusted || !Number.isFinite(e.timeStamp)) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    pruneDowns();
+    // A new press on an armed button starts a new gesture. A down still queued
+    // from a ghost whose click never arrived must not become this gesture's clock.
+    if (armed && armed.btn === btn) downQ = downQ.filter((d) => d.id !== btn.id);
+    downQ.push({ id: btn.id, ts: e.timeStamp, wall: wallNow(), pointerId: e.pointerId, released: false });
+    if (downQ.length > 6) downQ.shift();
+  }
+  function peekDown(id) {
+    pruneDowns();
+    for (const d of downQ) if (d.id === id) return d.ts;
+    return null;
+  }
+  function takeDown(id) {
+    pruneDowns();
+    const i = downQ.findIndex((d) => d.id === id);
+    if (i < 0) return null;
+    const ts = downQ[i].ts;
+    downQ.splice(i, 1);
+    return ts;
+  }
+  // Click and pointerup timeStamps collapse to dispatch time behind a long
+  // frame. The pointerdown that started the gesture keeps the input time.
+  function stampOf(e) {
+    if (!e || !e.isTrusted) return null;
+    const btn = guardedBtn(e.target);
+    if (btn && e.type !== "pointerdown") {
+      const down = peekDown(btn.id);
+      if (Number.isFinite(down)) return down;
+    }
+    return Number.isFinite(e.timeStamp) ? e.timeStamp : null;
+  }
+  function clearArmTimer() {
+    if (armTimer) { clearTimeout(armTimer); armTimer = 0; }
+  }
+  // Gesture age from the events' own timeStamps. Input queued behind a long
+  // frame (software GL) is handled in one late batch: the wall gap collapses
+  // to ~0 or stretches past ARM_MAX_MS while the user's real gap was 400 ms.
+  function eventAge(e) {
+    if (!armed || armed.evAt == null || !e || !e.isTrusted) return null;
+    const ts = stampOf(e);
+    if (!Number.isFinite(ts)) return null;
+    return ts - armed.evAt;
+  }
+  function expireIfStale(e) {
+    if (!armed || wallNow() - armed.wallAt < ARM_MAX_MS) return;
+    const ev = eventAge(e);
+    if (ev != null && ev >= 0 && ev < ARM_MAX_MS) return;   // the tap itself came in time; only its handling was late
+    disarm();
+  }
+  // Young on BOTH clocks = the same double tap. Old on either = deliberate.
+  function youngTap(e) {
+    if (!armed || wallNow() - armed.wallAt >= ARM_MIN_MS) return false;
+    const ev = eventAge(e);
+    return !(ev != null && ev >= ARM_MIN_MS);
+  }
+  function revertBtn(a) {
     a.btn.textContent = a.text;
     if (a.aria == null) a.btn.removeAttribute("aria-label");
     else a.btn.setAttribute("aria-label", a.aria);
     if (a.btn.classList) a.btn.classList.remove("armed");
   }
-  function arm(btn) {
+  function disarm() {
+    expiredArm = null;
+    if (!armed) return;
+    const a = armed;
+    armed = null;
+    clearArmTimer();
+    revertBtn(a);
+  }
+  // The label goes back at ARM_MAX_MS, but the gesture's event time stays so a
+  // confirm already queued behind a long frame is not read as a fresh arm.
+  function expireArmTimer() {
+    armTimer = 0;
+    if (!armed) return;
+    const a = armed;
+    armed = null;
+    revertBtn(a);
+    expiredArm = { btn: a.btn, evAt: a.evAt, wallAt: a.wallAt };
+  }
+  function arm(btn, e) {
+    const fromDown = e && e.isTrusted ? takeDown(btn.id) : null;
     disarm();
     armed = {
       btn,
+      evAt: Number.isFinite(fromDown) ? fromDown
+        : (e && e.isTrusted && Number.isFinite(e.timeStamp) ? e.timeStamp : null),
       text: btn.textContent,
       aria: btn.getAttribute ? btn.getAttribute("aria-label") : null,
-      at: Date.now(),
-      t: setTimeout(disarm, ARM_MS),
+      wallAt: wallNow(),
     };
-    btn.textContent = GUARDED[btn.id] + " — TAP AGAIN";
+    btn.textContent = ARMED_LABEL;
     btn.setAttribute("aria-label", ARIA[btn.id]);
     if (btn.classList) btn.classList.add("armed");
+    armTimer = setTimeout(expireArmTimer, ARM_MAX_MS);
   }
+  const armAge = (t) => {
+    if (!armed) return Infinity;
+    const now = t != null ? t : wallNow();
+    return now - armed.wallAt;
+  };
   const isArmed = (id) => !!(armed && armed.btn && armed.btn.id === id);
 
   // CAPTURE phase on the card: runs before the button's own onclick, so an
-  // unarmed press is swallowed here and never reaches js/game.js.
+  // unarmed press is swallowed here and never reaches js/game.js. Any other
+  // click on the card is another option: drop the arm and let it through.
   function onPauseClick(e) {
+    expireIfStale(e);
     const t = e && e.target;
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
-    if (!btn || !GUARDED[btn.id] || btn.disabled) return;
+    // A pointerup whose native click never arrived (pointercancel, a click
+    // retargeted to an ancestor) must not leave a one-tap QUIT for later.
+    if (confirmPending) {
+      const onPending = !!(btn && confirmPending === btn.id);
+      const ev = (onPending && confirmPendingEv != null && e && e.isTrusted && Number.isFinite(e.timeStamp))
+        ? e.timeStamp - confirmPendingEv : null;
+      if (wallNow() - confirmPendingAt >= ARM_MAX_MS && !(ev != null && ev >= 0 && ev < ARM_MAX_MS)) clearPending();
+    }
+    if (confirmPending && btn && confirmPending === btn.id) {
+      if (!e.isTrusted && !confirmFallback) {
+        e.stopImmediatePropagation();
+        if (e.preventDefault) e.preventDefault();
+        return;
+      }
+      clearPending();
+      expiredArm = null;
+      return;
+    }
+    if (!btn || !GUARDED[btn.id] || btn.disabled) { if (armed) disarm(); else expiredArm = null; return; }
     if (confirmMode() === "off") { disarm(); return; }
-    // Age as well as the timer: a throttled background tab can hold the expiry
-    // back, and a tap that old is a fresh question.
-    const live = armed && armed.btn === btn && (Date.now() - armed.at) <= ARM_MS;
-    if (live) { disarm(); return; }          // the second press: let the handler run
+    if (!armed && expiredArm && expiredArm.btn === btn && e && e.isTrusted && e.detail !== 0
+        && expiredArm.evAt != null && Number.isFinite(e.timeStamp)) {
+      const ev = e.timeStamp - expiredArm.evAt;
+      if (ev >= ARM_MIN_MS && ev < ARM_MAX_MS) { expiredArm = null; return; }
+    }
+    if (expiredArm && expiredArm.btn === btn) expiredArm = null;
+    const live = !!(armed && armed.btn === btn);
+    // Keyboard activation (detail 0) and a script's el.click() (untrusted) are
+    // deliberate; only a fast pointer repeat is the accidental double tap.
+    const ghost = live && e.isTrusted && e.detail !== 0 && youngTap(e);
+    if (ghost) takeDown(btn.id);
+    if (live && !ghost) { takeDown(btn.id); disarm(); return; }   // the second press: let the handler run
     e.stopImmediatePropagation();
     if (e.preventDefault) e.preventDefault();
-    arm(btn);
+    if (!ghost) arm(btn, e);
+  }
+  function finishPointerConfirm(btn, stamp) {
+    setTimeout(() => {
+      if (confirmPending !== btn.id || confirmPendingAt !== stamp) return;
+      confirmFallback = true;
+      try { btn.click(); } finally { confirmFallback = false; }
+    }, 0);
+  }
+  function onPausePointerUp(e) {
+    if (!e || !e.isTrusted || e.pointerType === "mouse" && e.button !== 0) return;
+    pruneDowns();
+    const down = downQ.find((d) => !d.released && d.pointerId === e.pointerId);
+    if (!down) return;
+    down.released = true;
+    const btn = guardedBtn(e.target);
+    if (!btn || btn.id !== down.id) { downQ.splice(downQ.indexOf(down), 1); return; }
+    expireIfStale(e);
+    if (btn.disabled || confirmMode() === "off" || !armed || armed.btn !== btn) return;
+    if (youngTap(e)) return;
+    downQ.splice(downQ.indexOf(down), 1);
+    confirmPending = btn.id;
+    confirmPendingAt = wallNow();
+    confirmPendingEv = down.ts;
+    const stamp = confirmPendingAt;
+    disarm();
+    btn.click();
+    // A flush can deliver the confirming pointerup and never synthesize its click.
+    finishPointerConfirm(btn, stamp);
+  }
+  function onPauseKey(e) {
+    if (!e || e.key !== "Escape") return;
+    const pm = hasDoc ? document.getElementById("pausemenu") : null;
+    if (!pm || pm.hidden) return;
+    disarm();
   }
 
   // Pause-card build stamp (was an IIFE in game.js). Reads apex-build meta —
@@ -168,16 +334,45 @@ const PauseOpts = (function () {
     tag.textContent = build ? ("build " + build) : "build unknown";
   }
 
-  function initUI() {
-    wireRows();
+  function initUI(gate) {
+    // #4798 gate: rows only
+    if (gate) gate(wireRows); else wireRows();
     paintSummary();
     paintBuild();
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
     if (!pm || pm._pauseOptsWired) return;
     pm._pauseOptsWired = true;
+    if (typeof InputHoldButtons !== "undefined") InputHoldButtons.hudTouchTap(document.getElementById("pausebtn"), {
+      beforeActivate: e => {
+        // The synthetic activation must still arm the real modal's ghost-tap shield.
+        let blocked = false;
+        if (typeof TopModal !== "undefined") TopModal.onClickShield({
+          isTrusted: e.isTrusted, detail: 1, target: e.target, timeStamp: e.timeStamp,
+          clientX: e.clientX, clientY: e.clientY,
+          preventDefault() { blocked = true; }, stopImmediatePropagation() {},
+        });
+        return !blocked;
+      },
+    });
+    // THE PHONE CARD'S SECOND KEY (#5200). css/overlays.css lays the pause card out as one
+    // wide, scroll-free card on body compact + wide, which is own px: a landscape phone at
+    // UI SIZE <= 65 % is "normal" there and fell back to the 420 card, which scrolled and
+    // lost RESUME. The window itself being short is zoom-blind, so stamp it from the media
+    // query (the layout viewport: never stale inner*, UI contract 2026-11-06 rule 1).
+    const mq = typeof matchMedia === "function" ? matchMedia("(orientation: landscape) and (max-height: 500px)") : null;
+    if (mq && document.body && document.body.toggleAttribute) {
+      const stamp = () => document.body.toggleAttribute("data-pause-short", !!mq.matches);
+      stamp();
+      if (mq.addEventListener) mq.addEventListener("change", stamp);
+    }
     pm.addEventListener("click", onPauseClick, true);
+    // A mouse can leave the card for its release, then start its next drag outside.
+    document.addEventListener("pointerdown", (e) => { if (!pm.hidden) noteDown(e); }, true);
+    pm.addEventListener("pointerup", onPausePointerUp, true);
+    pm.addEventListener("pointercancel", (e) => { downQ = downQ.filter((d) => d.pointerId !== e.pointerId); }, true);
+    document.addEventListener("keydown", onPauseKey, true);
     if (typeof MutationObserver !== "undefined") {
-      const mo = new MutationObserver(() => { if (pm.hidden) disarm(); });
+      const mo = new MutationObserver(() => { if (pm.hidden) { disarm(); clearPending(); downQ = []; } });
       mo.observe(pm, { attributes: true, attributeFilter: ["hidden"] });
     }
   }
@@ -222,14 +417,14 @@ const PauseOpts = (function () {
   // that is already COMPLETE wires now (same rule as js/ui/title-fx.js).
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => initUI(typeof SettingsNav !== "undefined" ? SettingsNav.lazy : null), { once: true });
   }
 
   return {
-    KEY_LAYOUT, KEY_SIDE, KEY_DIM, KEY_CONFIRM, LAYOUTS, SIDES, DIMS, CONFIRMS, ARM_MS,
+    KEY_LAYOUT, KEY_SIDE, KEY_DIM, KEY_CONFIRM, LAYOUTS, SIDES, DIMS, CONFIRMS, ARM_MIN_MS, ARM_MAX_MS,
     layoutMode, sideMode, dimMode, confirmMode, shipped,
     setLayout, setSide, setDim, setConfirm,
-    apply, initUI, wireRows, disarm, isArmed, onPauseClick,
+    apply, initUI, wireRows, disarm, isArmed, armAge, onPauseClick,
   };
 })();
 Object.freeze(PauseOpts);

@@ -101,3 +101,22 @@ export function emit(rel, content, argv = process.argv.slice(2)) {
 export function isMain(metaUrl) {
   return !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(metaUrl);
 }
+
+/**
+ * Bring a BUILD PRODUCT up to date: a generated file that is gitignored and built
+ * where it is served (tools/gen/ensure-built.mjs; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
+ * Writes only when the bytes differ, through a temp file and a rename, so a test or a
+ * static server reading it concurrently sees the old bytes or the new, never half a file.
+ * @param {string} abs absolute path
+ * @param {string} content
+ * @returns {"fresh" | "missing" | "stale"} the state BEFORE the call ("fresh" = nothing written)
+ */
+export function ensureFile(abs, content) {
+  const current = fs.existsSync(abs) ? fs.readFileSync(abs, "utf8") : null;
+  if (current === content) return "fresh";
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  const tmp = `${abs}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, content);
+  fs.renameSync(tmp, abs);
+  return current === null ? "missing" : "stale";
+}

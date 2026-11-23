@@ -1,5 +1,7 @@
 # Strategy and career depth — plan (2026-09-30)
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — tyreSeverity is authored on all 52 circuits (js/track/circuit-meta.js) and career export/import exists (js/career/career-backup.js); the engineer-cue and AI part-development slices were not verified.
 
 Status when written: **PLAN** — docs-only first; implementation in ordered slice PRs below.
@@ -197,7 +199,7 @@ Symmetric with the player economy, era-safe:
 | 5 **C** AI catalog parts | `cursor/ai-catalog-parts-6e6c` | `career.js`, `save-migrate.js`, `game.js` **hook only** (extract if growth into a new module under `js/career/` if the rollover logic does not fit) | career unit + economy script delta; career.spec smoke |
 
 Each PR: draft until **full** CI green on that head, then undraft. No merge.
-Sync to ship only on conflict or tip-red required check (AGENTS §Concurrent PRs).
+Sync to ship only on conflict or tip-red required check (AGENTS §Coordination).
 
 ## Risks
 

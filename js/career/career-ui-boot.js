@@ -3,7 +3,6 @@
 const CareerUI = (function () {
 "use strict";
 
-const STARTER_TIER_MIN = 3;
 let _load = null;
 
 function ensureScreen() {
@@ -15,7 +14,9 @@ function ensureScreen() {
     Log.warn("ui", "career UI bundle is not in this build");
     return Promise.resolve(false);
   }
-  _load = ScriptLoader.create().load(files, edges, { strict: true }).then((ok) => {
+  // The CAREER FILE row (SettingsExport.careerRow) is built synchronously by the screen: its body comes too (#4748).
+  const saves = typeof SettingsExport !== "undefined" && SettingsExport.ready ? SettingsExport.ready() : null;
+  _load = Promise.all([ScriptLoader.create().load(files, edges, { strict: true }), saves]).then(([ok]) => {
     if (!ok || typeof CareerScreen === "undefined") {
       _load = null;
       Log.warn("ui", "the career UI bundle did not load");
@@ -33,8 +34,9 @@ function ensureScreen() {
 function create(G) {
   Log.info("ui", "CareerUI.create");
   const { $ } = G;
-  let real = null;
+  let /** @type {ReturnType<typeof CareerScreen.create> | null} */ real = null;
   let entryGeneration = 0;
+  let goGeneration = 0;
   let entryFailed = false;
   function ensure() {
     if (real) return Promise.resolve(real);
@@ -92,11 +94,21 @@ function create(G) {
     if (r.close) r.close();
     if (G.els && G.els.overlay) G.els.overlay.hidden = false;
   });
-  if ($("cr-go")) $("cr-go").onclick = defer((r) => {
-    // Re-fire on the real binding CareerScreen.create installs.
-    const n = $("cr-go");
-    if (n && n.onclick) n.onclick();
-  });
+  // #cr-go is special: create() rebinds onclick to the real start/rollover
+  // path, so the stub must re-fire that binding. Two taps while the lazy
+  // fetch is still in flight both queue ensure() callbacks; after create
+  // rebinds, each would call the new handler (disabled is ignored by a
+  // direct onclick()), so a phone double-tap could start a career and then
+  // open race settings, or rollover() and skip the hire gate. Keep only the
+  // latest queued tap — same generation idea as openEntry.
+  if ($("cr-go")) $("cr-go").onclick = () => {
+    const generation = ++goGeneration;
+    ensure().then((r) => {
+      if (!r || generation !== goGeneration) return;
+      const n = $("cr-go");
+      if (n && n.onclick) n.onclick();
+    });
+  };
 
   return {
     build: () => ensure().then((r) => { if (r && r.build) r.build(); }),
@@ -114,6 +126,12 @@ function create(G) {
   };
 }
 
-return { create, STARTER_TIER_MIN, ensureScreen };
+// CareerBackup rides this bundle (#4748): SETTINGS > FILES awaits it before a
+// CAREER FILE save/load reads it. ensureScreen itself stays module-local.
+function ensureBackup() {
+  if (typeof CareerBackup !== "undefined") return Promise.resolve(true);
+  return ensureScreen().then((ok) => !!ok && typeof CareerBackup !== "undefined");
+}
+return { create, ensureBackup };
 })();
 Object.freeze(CareerUI);

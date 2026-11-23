@@ -14,6 +14,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
 const SRC = CAMG + "\n" + fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+const EDITOR = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout-editor.js"), "utf8");
 
 function fakeEl() {
   const props = {}, attrs = {};
@@ -52,6 +53,7 @@ function loadHidden({ stored = {}, classes = [], live = false } = {}) {
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
   return { H: ctx.HudLayout, written, els, cls, hud };
 }
@@ -87,6 +89,7 @@ function foldEditor(stored = {}) {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/setting-row.js"), "utf8"), ctx, { filename: absSrc("js/ui/setting-row.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8") + "; this.HudElements = HudElements;", ctx, { filename: absSrc("js/ui/hud-elements.js") });
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx, { filename: absSrc("js/ui/hud-layout.js") });
   ctx.HudLayout.build();
   const choose = (id, value) => {

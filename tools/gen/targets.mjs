@@ -16,7 +16,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The doc generators, in the order `npm run gen:docs` runs them. Each
- *  exports `TARGET`, the repo-relative file it writes. */
+ *  exports `TARGET`, the repo-relative file it writes. The last is not a doc: gen-quali-calib writes the CALIB
+ *  block of js/race/quali-model.js and is listed so the edit hook refuses a hand edit of that block. */
 export const GENERATORS = [
   "./gen-tools-readme.mjs",
   "./gen-output-surface.mjs",
@@ -24,8 +25,8 @@ export const GENERATORS = [
   "./gen-hooks-table.mjs",
   "./gen-flags-table.mjs",
   "./gen-arch-table.mjs",
-  "../docs/gen-coverage-table.mjs",
   "../docs/gen-agent-index.mjs",
+  "./gen-quali-calib.mjs",
 ];
 
 export async function targets() {

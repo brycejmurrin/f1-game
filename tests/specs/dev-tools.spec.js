@@ -32,7 +32,9 @@ async function load(page, trackId = "monza", opts = {}) {
 async function loadParked(page, frac = 0.1, trackId = "monza", opts = {}) {
   await load(page, trackId, opts);
   await page.evaluate((f) => window.__apex.park(f), frac);
-  await page.waitForTimeout(200);
+  // park() puts the state at "race" and freezes the scene: wait on exactly that.
+  await page.waitForFunction(() => window.__apex.info().state === "race" && window.__apex.freeze() === true,
+    null, { polling: 100, timeout: 10000 });
 }
 
 // ── Catalog / meta ─────────────────────────────────────────────────────────
@@ -292,9 +294,7 @@ test.describe("__apex.hud()", () => {
   test("returns true when HUD is visible during a race", async ({ page }) => {
     await load(page);
     await page.evaluate(() => window.__apex.go());
-    await page.waitForTimeout(300);
-    const visible = await page.evaluate(() => window.__apex.hud());
-    expect(visible).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.__apex.hud()), { timeout: 10000 }).toBe(true);
   });
 
   test("hud(false) reports hidden", async ({ page }) => {
@@ -390,8 +390,7 @@ test.describe("__apex.physState()", () => {
   test("slipFactor drops when braking hard", async ({ page }) => {
     await loadParked(page, 0.2, "bahrain");
     // Teleport to mid-lap at high speed then brake hard
-    await page.evaluate(() => window.__apex.jump(0.2, 70, 0));
-    await page.waitForTimeout(100);
+    await page.evaluate(() => window.__apex.jump(0.2, 70, 0));   // synchronous: no settle (was 100 ms)
     await page.evaluate(() => window.__apex.setInput({ throttle: false, brake: true }));
     await page.evaluate(() => {
       for (let i = 0; i < 30; i++) window.__apex.step(1 / 60);
@@ -503,8 +502,7 @@ test.describe("__apex.resetPlayer()", () => {
   test("repositions player car and returns physState", async ({ page }) => {
     await load(page);
     await page.evaluate(() => window.__apex.go());
-    await page.evaluate(() => window.__apex.jump(0.2, 60, 8)); // push to edge
-    await page.waitForTimeout(100);
+    await page.evaluate(() => window.__apex.jump(0.2, 60, 8)); // push to edge (synchronous: no settle, was 100 ms)
     const result = await page.evaluate(() => window.__apex.resetPlayer());
     expect(result).not.toBe(false);
     expect(typeof result.x).toBe("number");

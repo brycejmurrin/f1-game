@@ -28,9 +28,10 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   Don't chain several in one shell command. Serialize browser boots; prefer the Node VM for numeric batches.
   Renames: `trackInfo`→`track`, `carView`→`car`, `agentHelp`→`help`;
   `model` = `render({what:"circuit"})`. `terminal`/`seed` are in-page only.
-- `node tools/shot/apex-eval.mjs <track> "<expr>"` — one boot, `a` = `__apex`.
-  Batch multi-reads into one expression. Stages `race()` only — stage the rest
-  inside the expression (or use the CLI).
+- `node tools/shot/apex-eval.mjs <track> "<expr>" [--vm] [--raw]` — one boot, `a` = `__apex`;
+  `--vm` boots the Node VM instead of Chromium. Batch multi-reads into one expression.
+  Stages `race()` only — stage the rest inside the expression (or use the CLI). Output is
+  shape-compacted: pass `--raw` for arrays.
 - `window.__apex.<tool>(...)` in a live page — **stage first**: `race(id)` →
   `go()` → `jump(frac, speed)`, then two frames. Skip it → `PlayerNotPlacedError`
   or a stale camera. Full rules under Staging below.
@@ -63,14 +64,15 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   repeated dressing clustered into features, named landmarks with sizes, barrier
   spans, and a corner-by-corner walk (`dir`/`radiusM`/`severity` only — for
   banking, signed `k`, gradient/elevation, kerbs and apex speed, pull
-  `trackInfo({what:"corners"})` and join by turn id). `summary|sections|full`.
+  `trackInfo({what:"corners"})` and join by the `turn` label — merged rows read `T3-T5`). `summary|sections|full`.
   The first call for "understand a place I can't see."
 - `trackInfo({what})` (CLI `track`) — corners (with signed `k` and `bankingDeg`) /
-  sectors / elevation profile; grounded in the real circuit (`gp`, `realLengthKm`,
+  sectors / elevation profile (sampled `y`/`widthM`/`radiusM`, no slope: grade is
+  `trackProfile(n).slope`); grounded in the real circuit (`gp`, `realLengthKm`,
   `lengthErrorPct`).
 - `carView({detail})` (CLI `car`) — the car as JSON: team, the CHOSEN parts spec +
   net `mods` multipliers, measured geometry. `detail:"parts"` adds per-part boxes —
-  the ~19 MESH components (wheels, wings, halo…), NOT the 12 upgrade categories; it
+  the MESH components (wheels, wings, halo…), NOT the upgrade categories; it
   reads the current loadout, not the catalog of options — to CHOOSE a build, read
   `Parts.CATALOG` (cost + stat multipliers per option) from `js/car/parts.js`, and
   verify a candidate in-page with `Parts.getMods(setup, team, tune)`/`Parts.getCost`.
@@ -78,7 +80,7 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
 
 **Drill down (pull, never dump)**
 - `describe(id)` — everything about ONE thing: `prop:1980`, `corner:T3`,
-  `car:4`, `span:2`. Ids come from the list rows.
+  `car:4`, `span:2`. Ids come from the list rows (a merged corner is `corner:T3-T5`).
 - `query({kind, near, fromS, toS})` — a bounded slice as prototype + instances
   (6 pines cost ~1 KB, not 6 records), and it reports what it withheld.
 
@@ -89,8 +91,8 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   circuit-document/`carView` payloads. Prefer the numeric tools to measure anything.
 
 **Act & check**
-- `rollout({seconds, policy|input})` — drive an interval at `policyHz` (default 10,
-  physics still steps every tick), get a DIGEST (speed min/max/mean, off-track
+- `rollout({seconds, policy|input})` — drive an interval at `policyHz` (defaults: the
+  `rollout` BadArgument `fix` text; physics still steps every tick), get a DIGEST (speed min/max/mean, off-track
   events, min clearance, per-corner min speed, terminal reason), not every frame.
   `policy` is `world => {steer,throttle,brake}`; use `world()`+`act()` for a single
   decision instead.
@@ -101,7 +103,7 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
   than driving on from a rescued state — `__apex.resetPlayer()` forces the
   rescue immediately if you want to stop fighting a beached car.
 - `survey({stations, lats, reachM, limit, profile})` — geometry DEFECTS for track
-  authoring, not driving: 8 buckets (floating/buried props, `overVoid`, terrain
+  authoring, not driving: buckets (floating/buried props, `overVoid`, terrain
   holes/cliffs, terrain-through-road, props over the line). Its
   `propsOverRoadCandidates` are BROAD-PHASE — a large `lateralM` is a bounding-box
   false positive, not a prop on the line. The payload self-documents (read
@@ -117,11 +119,14 @@ Load this when driving a lap, writing a policy, or debugging a typed error. SKIL
 Action space: `{steer, throttle, brake}`. `steer` ∈ [−1,1], **+1 = full right
 lock**; note `+k` is a **LEFT**-hand turn, so full right lock is toward `-k`.
 `throttle`/`brake` are **booleans** (any truthy = full, so
-`throttle:0.5` is full throttle, not half). `act(input, dt, n)` applies it for `n`
+`throttle:0.5` is full throttle, not half). Partial pedal travel is a separate
+field: `throttleLevel` / `brakeLevel` ∈ [0,1] (default 1 when absent), read
+beside the boolean (`{throttle:true, throttleLevel:0.5}`; Monza VM, 5 s from
+rest: 23.08 m/s full, 12.87 at 0.5, 0 at 0). `act(input, dt, n)` applies it for `n`
 ticks; `rollout({policy})` calls your policy repeatedly.
 
 ```
-race("monza"); go(); jump(0.008, 70)   // Monza T1 — ~frac 0.008, ~70 m/s entry
+race("monza"); go(); jump(0.09, 70)    // ~45 m before Monza T1 (turns[0] = 0.0962), ~70 m/s entry
                                       // STAGE FIRST — without this every read
                                       //   below returns PlayerNotPlacedError
 objective()                       // once — what winning is
@@ -156,8 +161,10 @@ const policy = w => {
 **Why `CAP` carries the policy.** `apexSpeedKph`/`suggestBrakeM` assume more grip
 than default parts have, and corner-relative braking — however early — cannot
 rescue an entry the preceding straight already over-fed. Without the governor the
-same policy gets rescued within 5-40 s on Monza's fast corners; with it, a
-measured lap completes. So **fix entry speed before anything else**: until it is
+same policy gets rescued within 5-40 s on Monza's fast corners; with it, the lap
+completes for distance, but its track-limit cuts (`world().ego.penalties`) can still delete the
+time: a cut sets `incidentInvalidLap` and `lastLap`/`best` stay null, so check the cut count
+before quoting a lap or sector time. So **fix entry speed before anything else**: until it is
 right, turn-in does nothing, the car washes wide and beaches, and the off-track
 crawl above is all that stops it stalling there for the rest of the interval.
 Once laps complete, raise `CAP`, then add a small feed-forward toward `nc.dir`
@@ -185,14 +192,12 @@ by wherever the last sample lands. Three gotchas the loop above hides:
   barely moves. Gate it — `brake: braking && e.speed > 3`.
 
 An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for.
-**`seconds` is clamped to 120**, silently — ask for 300 and you get 120, which
-reads as "my policy stalled" when it merely ran out of interval. One lap of Monza
-at the pace above takes ~200 s, so a lap is 2-3 chained `rollout()` calls, not
-one; carry your own distance/lap total across them and check `terminal()` between
+**`seconds` is clamped silently** (the cap is in `rollout` in `js/agent/agentview.js`; `digest.ran.seconds` says
+what ran), which reads as "my policy stalled" when it merely ran out of interval. A lap at the pace above
+outlasts one interval, so a lap is several chained `rollout()` calls, not one; carry your own distance/lap total across them and check `terminal()` between
 each. The recipe drives a live AI field and pins no seed, so runs differ: pin
 `seed(n)` before `race()` to compare two.
-**Reaching `finished` takes a real race.** The default is 3 laps, so ~600 s —
-five-plus chained calls. `setLap(n)` only moves the counter: `finished` is set
+**Reaching `finished` takes a real race** (`info().lapsTarget` laps) — many chained calls. `setLap(n)` only moves the counter: `finished` is set
 by the line-crossing handler, so you must still drive across the line after it.
 
 ## Determinism — pin the seed before any comparison

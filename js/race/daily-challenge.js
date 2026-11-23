@@ -1,12 +1,10 @@
-/* Apex 26 — DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same day gets the same plan. */
+/* Apex 26 — DAILY CHALLENGE: one time-trial plan per local calendar day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same calendar date gets the same plan. */
 const DailyChallenge = (function () {
   "use strict";
 
   const KEY = "daily.v1";   // store adds the apex26. prefix
   const HISTORY_DAYS = 60;
-  // Weighted toward dry so most days are a clean lap; the rest are the game's
-  // real conditions (game.js WEATHER chips). Time of day includes night, which
-  // loadTrack lights per circuit.
+  // Weighted to dry; the rest are game.js WEATHER chips. loadTrack lights night per circuit.
   const WEATHER = ["dry", "dry", "overcast", "wet", "rain", "fog"];
   const TOD = ["default", "dawn", "day", "dusk", "night"];
 
@@ -15,8 +13,12 @@ const DailyChallenge = (function () {
   // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
   function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
-  // UTC day, YYYY-MM-DD — the one calendar every player shares.
-  function dayKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  // The player's LOCAL day, YYYY-MM-DD (#5010): a UTC key rolled at 4 pm in Los Angeles and split
+  // consecutive local days. The plan is a pure function of the string; prevDay is date-only arithmetic.
+  function dayKey(d) {
+    const t = d || new Date(), p2 = (n) => String(n).padStart(2, "0");
+    return t.getFullYear() + "-" + p2(t.getMonth() + 1) + "-" + p2(t.getDate());
+  }
   function prevDay(day) {
     const d = new Date(day + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() - 1);
@@ -36,6 +38,41 @@ const DailyChallenge = (function () {
     };
   }
 
+  // Apply one valid lap to the supplied save data. Persistence, badges and
+  // the active session belong to record(); these rules mutate only d.
+  function recordDay(d, day, lapTime, context) {
+    let newest = "";   // newest stored day before this lap (#5943)
+    for (const k of Object.keys(d.days)) if (k !== day && k > newest) newest = k;
+    // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
+    const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    e.laps = (num(e.laps) || 0) + 1;
+    if (context != null) {
+      if (!isObj(e.classes)) e.classes = {};
+      const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
+      cls.laps = (num(cls.laps) || 0) + 1;
+      if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
+      e.classes[context] = cls;
+    }
+    if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
+    // Streak: consecutive local days with a lap. Only a NEWER day moves it (a tab left on yesterday
+    // past midnight reset it to 1), or a last 2+ days past the clock: a clock once ahead froze it (#5887).
+    const t = new Date(), soon = (t.setDate(t.getDate() + 1), dayKey(t));
+    if (!d.streak.last || day > d.streak.last || d.streak.last > soon) {
+      d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
+      d.streak.last = day;
+    }
+    // Write-only history: a window, counted from the earlier of day and newest so a clock set back or ahead
+    // deletes no real day (#5943).
+    const floor = new Date((newest && newest < day ? newest : day) + "T00:00:00Z");
+    if (Number.isFinite(floor.getTime())) {
+      floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
+      const cut = floor.toISOString().slice(0, 10);
+      for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
+    }
+    return e;
+  }
+
   function create(G) {
     Log.info("game", "DailyChallenge.create");
     const { store } = G;
@@ -51,10 +88,8 @@ const DailyChallenge = (function () {
     }
     function today() { const e = data().days[dayKey()]; return isObj(e) ? e : null; }
 
-    // Stage the plan as a TIME TRIAL without starting it. The circuit picker
-    // uses this so DAILY follows the same select → NEXT → RACE SETTINGS → RACE!
-    // contract as every circuit button; open() remains the explicit direct-start
-    // API for the title door and scripted hooks.
+    // Stage the plan as a TIME TRIAL without starting it: the picker's DAILY follows the select →
+    // NEXT → RACE SETTINGS → RACE! contract; open() is the direct start (title door, hooks).
     function select(day, mode = "standard") {
       const p = plan(day);
       const idx = Tracks.LIST.findIndex((t) => t.id === p.trackId);
@@ -91,34 +126,7 @@ const DailyChallenge = (function () {
       if (!active || !(lapTime > 0) || !Number.isFinite(lapTime)) return null;
       const d = data();
       const day = active.day;
-      // A restored backup is only checked to be an object: any entry may be a number, a string or an array.
-      const e = isObj(d.days[day]) ? d.days[day] : (d.days[day] = { best: null, laps: 0 });
-      const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-      e.laps = (num(e.laps) || 0) + 1;
-      if (context != null) {
-        if (!isObj(e.classes)) e.classes = {};
-        const cls = isObj(e.classes[context]) ? e.classes[context] : { best: null, laps: 0 };
-        cls.laps = (num(cls.laps) || 0) + 1;
-        if (num(cls.best) == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
-        e.classes[context] = cls;
-      }
-      if (num(e.best) == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
-      // Streak: consecutive UTC days with at least one lap. Only a NEWER day
-      // moves it (ISO dates compare as strings): a tab left on yesterday's plan
-      // past midnight, today already played elsewhere, reset it to 1.
-      if (!d.streak.last || day > d.streak.last) {
-        d.streak.count = d.streak.last === prevDay(day) ? d.streak.count + 1 : 1;
-        d.streak.last = day;
-      }
-      // The per-day history is write-only (every reader asks for today; the
-      // streak lives in d.streak), so it keeps a window rather than growing
-      // ~680 chars a day for ever.
-      const floor = new Date(day + "T00:00:00Z");
-      if (Number.isFinite(floor.getTime())) {
-        floor.setUTCDate(floor.getUTCDate() - HISTORY_DAYS);
-        const cut = floor.toISOString().slice(0, 10);
-        for (const k of Object.keys(d.days)) if (k < cut) delete d.days[k];
-      }
+      const e = recordDay(d, day, lapTime, context);
       store.set(KEY, d);
       if (typeof Badges !== "undefined") Badges.onStreak(d.streak.count);   // js/career/badges.js
       return e;
@@ -132,7 +140,7 @@ const DailyChallenge = (function () {
       const e = context ? day && day.classes && day.classes[context] : day;
       const best = e && e.best != null ? e.best : undefined;
       const medal = best != null && typeof Quali !== "undefined" && G.referencePole
-        ? Quali.medalFor(best, G.referencePole()) : null;
+        ? Quali.medalFor(best, G.referencePole("medal")) : null;
       return { day: p.day, track: p.trackId, trackName: p.trackName, weather: p.weather,
         best, medal, streak: liveStreak(), class: p.class || "standard" };
     }
@@ -154,10 +162,10 @@ const DailyChallenge = (function () {
       return parts.join(" · ");
     }
 
-    async function shareCard(medal) {
-      if (typeof ShareCardData === "undefined" || typeof ShareCard === "undefined") {
-        throw new Error("Share cards are unavailable");
-      }
+    // The card model for today's result, its file name and share text (the preview
+    // sheet draws it at tap time); shareCard() renders and delivers it directly.
+    function card(medal) {
+      if (typeof ShareCardData === "undefined") throw new Error("Share cards are unavailable");
       const p = active || plan(), day = data().days[p.day];
       const context = G.records && G.records.key();
       const entry = context ? day && day.classes && day.classes[context] : day;
@@ -168,10 +176,14 @@ const DailyChallenge = (function () {
         const encoded = ShareCode.encode("daily", { ...result, medal });
         if (encoded.ok) link = encoded.url;
       }
-      const model = ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link });
-      const blob = await ShareCard.render(model, "portrait");
-      return ShareCard.deliver(blob, "apex26-daily-" + p.day + ".png",
-        { title: "APEX 26 DAILY", text: shareText(medal), url: link });
+      return { model: ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link }), name: "daily-" + p.day, text: shareText(medal) };
+    }
+    async function shareCard(medal) {
+      // ShareCard rides LAZY_RESULTS_SHEET (off the boot wall): load it before the first card.
+      if (typeof ShareCard === "undefined" && typeof GameResults !== "undefined" && GameResults.ensureLoaded) await GameResults.ensureLoaded();
+      if (typeof ShareCard === "undefined") throw new Error("Share cards are unavailable");
+      const c = card(medal), blob = await ShareCard.render(c.model, "portrait");
+      return ShareCard.deliver(blob, "apex26-" + c.name + ".png", { title: "APEX 26 DAILY", text: c.text, url: c.model.link });
     }
 
     function stop() {
@@ -191,7 +203,7 @@ const DailyChallenge = (function () {
       return st.count > 0 && (st.last === day || st.last === prevDay(day)) ? st.count : 0;
     }
 
-    return { plan, dayKey, select, open, record, shareResult, shareText, shareCard, stop, isActive, current, data, today, liveStreak };
+    return { plan, dayKey, select, open, record, shareResult, shareText, card, shareCard, stop, isActive, current, data, today, liveStreak };
   }
 
   return { create, plan, dayKey, prevDay };

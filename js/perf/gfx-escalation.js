@@ -10,7 +10,9 @@ const GfxEscalation = (function () {
   // caller-owned prefix, and reset only at explicit clean-race / user boundaries.
   const LOSS_KEY = "apex26.ctxLostReloads";
   const LOSS_MARKER = /(?:^|\n)apex26\.ctxLostReloads=(\d+)$/;
+  const BUDGET_BUILD_KEY = "apex26.ctxLostBudgetBuild";
   let _reloadCount = 0;
+  let _menuBootSynced = false;
   function reloadCount() {
     let n = 0, marker = null;
     try { marker = String(window.name || "").match(LOSS_MARKER); } catch (_) { /* no window */ }
@@ -41,6 +43,46 @@ const GfxEscalation = (function () {
       try { window.name = String(window.name || "").replace(LOSS_MARKER, ""); } catch (_) { /* no window */ }
     } else rememberReloadCount(0);
   }
+
+  function currentBuildId() {
+    try {
+      const m = typeof document !== "undefined" && document.querySelector && document.querySelector('meta[name="apex-build"]');
+      return (m && m.content) || "";
+    } catch (_) { return ""; }
+  }
+
+  function initReloadBudgetSession() {
+    try {
+      const entry = typeof performance !== "undefined" && performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+      if (entry && entry.type === "navigate") {
+        resetReloadBudget();
+        const build = currentBuildId();
+        if (build) try { sessionStorage.setItem(BUDGET_BUILD_KEY, build); } catch (_) { /* blocked storage */ }
+      }
+    } catch (_) { /* harness */ }
+  }
+
+  /** Once per document: drop a stale budget after a deploy reload in the same tab. */
+  function noteCleanMenuBoot() {
+    if (_menuBootSynced) return;
+    _menuBootSynced = true;
+    try {
+      const build = currentBuildId();
+      let bound = "";
+      try { bound = sessionStorage.getItem(BUDGET_BUILD_KEY) || ""; } catch (_) { /* blocked storage */ }
+      if (build && bound && build !== bound) resetReloadBudget();
+      if (build) try { sessionStorage.setItem(BUDGET_BUILD_KEY, build); } catch (_) { /* blocked storage */ }
+    } catch (_) { /* harness */ }
+  }
+
+  function stashInPageRecoverFlags() {
+    try {
+      sessionStorage.setItem("apex26.ctxLostNeedReload", "1");
+      sessionStorage.setItem("apex26.ctxLostExhausted", "1");
+    } catch (_) { /* Retry + card copy */ }
+  }
+
+  initReloadBudgetSession();
 
   let _menuRecover = null;
   let _raceEntryCtxRecover = false;
@@ -102,6 +144,8 @@ const GfxEscalation = (function () {
     reloadCount,
     nextReloadCount,
     resetReloadBudget,
+    noteCleanMenuBoot,
+    stashInPageRecoverFlags,
     raceEntryActive,
     registerMenuRecover,
     registerRaceEntrySoften,

@@ -6,11 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["estoril"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
-        tree, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
+      const { K, terrainYAt, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum, forestEdge, cameraTower, acacia, circuitKit } = api;
+        addBox, addCyl, addFrustum, cameraTower, acacia, circuitKit } = api;
 
       const LIME = [0.95, 0.94, 0.90], LIME_D = [0.86, 0.85, 0.80];
       const TILE = [0.68, 0.33, 0.21], TILE_D = [0.54, 0.27, 0.18];
@@ -148,14 +147,27 @@
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         const IN = -side;                       // +1 along a.r points at the track
         const topH = 2.6 + rows * 1.55;
+        // Keep the lowest bench above the uphill end, and seat each post locally.
+        let lift = 0;
+        for (let i = 0; i <= bays; i++) {
+          const front = vadd(vadd(a.c, a.t, (i - bays / 2) * pitch), a.r, IN * 3.6);
+          const ground = terrainYAt(front[0], front[2]);
+          if (Number.isFinite(ground)) lift = Math.max(lift, ground - front[1]);
+        }
+        a.c = vadd(a.c, a.u, lift / a.u[1]);
+        const post = (stage, foot, radius, height) => {
+          const ground = terrainYAt(foot[0], foot[2]);
+          const extension = Number.isFinite(ground) ? (foot[1] - ground) / a.u[1] : 0;
+          seat.cyl(stage, vadd(foot, a.u, -extension), radius, Math.max(0.15, height + extension), TUBE, 6, b);
+        };
         modelGroup(id, {
           center: vadd(a.c, a.u, topH * 0.6), size: [11, topH + (opts.awning ? 6 : 1), len + 2], basis: b,
         }, (stage) => {
           stage._mat = MAT.METAL;
           for (let i = 0; i <= bays; i++) {
             const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
-            seat.cyl(stage, vadd(p, a.r, IN * -3.6), 0.15, topH, TUBE, 6, b);
-            seat.cyl(stage, vadd(p, a.r, IN * 3.6), 0.15, 2.4, TUBE, 6, b);
+            post(stage, vadd(p, a.r, IN * -3.6), 0.15, topH);
+            post(stage, vadd(p, a.r, IN * 3.6), 0.15, 2.4);
             // One leaning tube per bay reads as the full X-brace at speed.
             addBox(stage, vadd(vadd(p, a.r, 0), a.u, topH * 0.45),
               [7.6, 0.13, 0.13], TUBE, b);
@@ -250,7 +262,9 @@
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
       }
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
-      fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 9: no wall in front, so a car's side reached 10.1 m (the 9 m run-off + its
+      // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
+      fence(0.95, 0.06, -1, 10.3, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.16, 0.26, 0.48, 0.62, 0.70, 0.83]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
@@ -312,6 +326,8 @@
             // Always −r (downslope): (h-0.5)*11 let cubes land on the church.
             // Pitch 11 clears neighbouring roof prisms (8.6 left 2.09 m² coplanar).
             const p = vadd(vadd(a.c, a.t, (i - 2.5) * 11), a.r, -(4 + h * 8));
+            const ground = terrainYAt(p[0], p[2]);
+            if (Number.isFinite(ground)) p[1] = ground;
             const w = 6.5 + h * 2.5, ht = 4.5 + h * 2.5, d = 6 + hash(i * 41) * 2.5;
             seat.box(stage, p, [w, ht, d], h < 0.4 ? LIME_D : LIME, b);
             stage._mat = MAT.ROOF;

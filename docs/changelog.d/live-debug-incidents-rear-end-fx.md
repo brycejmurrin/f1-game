@@ -1,1 +1,0 @@
-Fixed: a heavy rear-end shunt now fires the contact feedback (hit count, shake, sound), the debris impact and the incident takeover candidate — they only fired on the last collision pass, which a hard hit never reached.

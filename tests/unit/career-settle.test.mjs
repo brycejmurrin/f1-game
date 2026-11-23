@@ -148,7 +148,11 @@ test("a legal clean race keeps its objective bonus, reputation, and sponsor prog
   assert.equal(clean.row.clean, true);
   assert.equal(clean.sponsor.done, 1);
   assert.equal(clean.res.pos, dsq.res.pos, "same tail position isolates the objective reward");
-  assert.equal(clean.res.money - dsq.res.money, clean.Career.OBJ_BONUS);
+  // A DSQ is unclassified, so (#4576) it earns no position prize either: the gap
+  // is exactly the clean car's prize plus the objective bonus.
+  assert.equal(dsq.res.prize, 0, "a disqualified car earns no position prize");
+  assert.equal(clean.res.prize, clean.Career.prizeFor(clean.res.pos));
+  assert.equal(clean.res.money - dsq.res.money, clean.res.prize + clean.Career.OBJ_BONUS);
   assert.ok(clean.res.rep > dsq.res.rep, "a DSQ cannot earn the clean-objective reputation reward");
 });
 
@@ -206,6 +210,45 @@ test("DRIVER career: the salary and points bonus still pay, and there is no team
   assert.ok(res.salary > 0, "a driver is paid a salary");
   assert.ok(res.bonus > 0, "and a bonus for P2's points");
   assert.equal(res.matePrize, 0, "a driver is not paid for the team-mate's car");
+});
+
+test("a DNF earns no position prize, but a DRIVER's salary still pays (#4576)", () => {
+  const Career = load();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const mk = (id, retired) => ({ team: { id }, retired, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = { ...mk("haas", true), dnf: "engine" };
+  const order = [];
+  for (let i = 0; i < 19; i++) order.push(mk("custom", false));
+  order.push(player);                            // a retirement sits at the foot of the order
+  const res = Career.settleRound(order, player);
+  assert.equal(res.pts, 0, "a retirement scores nothing");
+  assert.equal(res.prize, 0, "and earns no position prize either");
+  assert.ok(res.salary > 0, "the contract salary is still paid");
+  assert.equal(res.bonus, 0, "no points, no points bonus");
+});
+
+test("a DNF classified past 90 % distance still scores and is still paid its prize", () => {
+  const Career = load();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  Career.data().season.round = 1;
+  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = { ...mk("haas"), retired: true, classified: true, dnf: "gearbox" };
+  const order = [mk("custom"), mk("custom"), player];
+  for (let i = 0; i < 17; i++) order.push(mk("custom"));
+  const res = Career.settleRound(order, player);
+  assert.equal(res.pts, 15);
+  assert.ok(res.prize > 0, "a classified DNF is paid like a finisher");
+});
+
+test("MY TEAM: a retired team-mate earns no matePrize (#4576)", () => {
+  const { res } = settle(true);
+  assert.equal(res.matePos, 5, "classified P5 in the order");
+  assert.equal(res.matePrize, 0, "but retired: no prize for that car");
+  assert.ok(res.prize > 0, "the finishing player's car is still paid");
 });
 
 test("MY TEAM standings include the hired second driver", () => {
@@ -266,7 +309,8 @@ test("MY TEAM completing a sponsor window through settleRound cannot pay twice",
   career.results = career.results.filter((row) => row.r !== sp.end);
   const rebuilt = Career.settleRound(order, player);
   assert.equal(rebuilt.sponsorPay, 0, "paidSponsors independently guards a rebuilt results row");
-  assert.equal(career.money, cash + rebuilt.prize + rebuilt.matePrize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS : 0) - rebuilt.wages);
+  assert.equal(rebuilt.stake, 0, "this fixture commits no brief stake (career-planning stake() is 0 until chooseStake)");
+  assert.equal(career.money, cash + rebuilt.prize + rebuilt.matePrize + rebuilt.salary + rebuilt.bonus + (rebuilt.obj.done ? Career.OBJ_BONUS + rebuilt.stake * 2 : 0) - rebuilt.wages);
   assert.equal(JSON.stringify(career.paidSponsors), ledger);
 });
 
@@ -279,6 +323,25 @@ test("the retired flag is the ONLY discriminator between the two rounds", () => 
   assert.equal(finished.res.pts, retired.res.pts, "identical player result in both rounds");
   assert.notEqual(finished.row.double, retired.row.double,
     "same classified order, different retired flag — the double facts must differ");
+});
+
+test("a DSQ mate is not a double even when still classified in the points", () => {
+  // paid() gates prize and the player's pts; the sponsor "double" must use the
+  // same gate. scored() alone would still count a DSQ that kept classified.
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const mk = (id, fields) => Object.assign({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 }, fields);
+  const player = mk("custom", {});
+  const mate = mk("custom", { dsq: "one dry compound", classified: true });
+  const order = [mk("haas", {}), mk("haas", {}), player, mk("haas", {}), mate];
+  for (let i = 0; i < 15; i++) order.push(mk("haas", { retired: i < 5 }));
+  const res = Career.settleRound(order, player);
+  assert.ok(res);
+  assert.equal(res.matePrize, 0, "a DSQ mate earns no prize");
+  assert.equal(career.results[0].double, false, "DSQ mate is not both cars in the points");
 });
 
 // ── the contract binds, and the budget ladder moves (F1 25 research fixes) ───
@@ -409,6 +472,64 @@ test("rollover clears the weekend-started stamp: next season's same round is not
   Career.rollover();
   assert.equal("startedRound" in career.season, false, "the stamp is last season's");
   assert.equal(Career.objectiveLocked(), false);
+});
+
+test("rollover restores the season when durable storage refuses the winter write", () => {
+  // requireDurable: a quota-refused session-only year++ would vanish on reload
+  // while the hub already showed the new season. Mirror adoption's gate.
+  const stored = new Map();
+  const flatRating = { pace: 80, craft: 75, awareness: 75, consistency: 75, experience: 50 };
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    GameStore: {
+      CAREER_V: 3,
+      store: {
+        get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+        set: (k, v) => stored.set(k, v),
+        write(k, v, options) {
+          if (options && options.requireDurable) return { ok: false, durable: false, reason: "QuotaExceededError" };
+          stored.set(k, v);
+          return { ok: true, durable: true, reason: null };
+        },
+      },
+      seasonDriverId: (teamId, i) => teamId + ":" + i,
+      migrateCareer: (c) => c,
+    },
+    Teams: {
+      POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      isReal: (t) => !!t && !t.custom && !t.legends,
+      LIST: [
+        { id: "haas", tier: 4, color: 0xffffff, name: "Haas",
+          drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }] },
+        { id: "mclaren", tier: 1, color: 0xff6600, name: "McLaren",
+          drivers: [{ name: "C", code: "CCC", num: 3 }, { name: "D", code: "DDD", num: 4 }] },
+      ],
+    },
+    Parts: { getFactorySetup: () => ({}), getCost: () => 1000, CATALOG: [], setLegality() {} },
+    Tracks: { LIST: [], SEASON: new Array(3).fill({}) },
+    DriverRatings: {
+      get: (code) => Object.assign({ code }, flatRating),
+      overall: () => 80,
+      AXES: ["pace", "craft", "awareness", "consistency", "experience"],
+    },
+  });
+  seedLog(ctx);
+  seedHash32(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx, { filename: absSrc("js/career/season-cal.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/regulations.js"), "utf8"), ctx, { filename: absSrc("js/career/regulations.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx, { filename: absSrc("js/career/career-planning.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx, { filename: absSrc("js/career/career.js") });
+  const Career = vm.runInContext("Career", ctx);
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  const year = career.year;
+  const money = career.money;
+  assert.equal(Career.rollover(), null, "refused winter must not report success");
+  assert.equal(career.year, year, "year must not advance when the write was not durable");
+  assert.equal(career.money, money);
+  assert.equal(Career.conflicted(), true);
 });
 
 test("a multi-year contract suppresses the winter market until it expires", () => {
@@ -1281,20 +1402,33 @@ test("ambition moves WHO the rival is, in the direction it moves every other kin
   // champPos shifts its target position by AMBITION.delta; beatRival walks the
   // same delta along the rating-ranked grid. Ambitious must never name someone
   // slower than modest does.
-  const Career = loadDriver();
-  Career.start({ flavour: "driver", teamId: "mclaren", seat: 1, seed: 11 });
+  //
+  // Distinct ratings so the ranked pool has an order to walk: the player (YOU,
+  // in Haas seat 1) rates 87, between VG1 (85) and AP2 (90), so two of the four
+  // rival seats are quicker. modest (+3) clamps to the slowest, expected (0)
+  // lands on the next one below the player, ambitious (-3) clamps to the top.
+  const ratings = { AP1: 95, AP2: 90, VG1: 85, VG2: 80, HH1: 70, YOU: 87 };
+  const Career = loadDriver(ratings);
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 11 });
   Career.engage(true);
-  const team = { id: "mclaren", tier: 1 };
+  const team = { id: "haas", tier: 4 };
   const ids = Career.AMBITION.map((_, i) => Career.GOAL_KINDS.beatRival.value(team, i));
   const own = Career.data().team;
+  const codeOf = new Map(Career.driverStandings().map((r) => [r.id, r.code]));
   for (const id of ids) {
     assert.equal(typeof id, "string", "every rung names someone");
     assert.notEqual(id.split(":")[0], own, `${id} must not be the player's own garage`);
+    assert.ok(codeOf.has(id), `${id} is a seat on the grid`);
   }
   // The rungs are ordered modest -> ambitious, and delta runs +3 -> -3, so the
-  // ambitious pick sits at or above the modest one in the ranked pool.
+  // ambitious pick is QUICKER than the modest one by the grid's own rating.
   assert.ok(Career.AMBITION[0].delta > Career.AMBITION[Career.AMBITION.length - 1].delta,
     "the ambition table still runs modest-high to ambitious-low");
+  const rated = Array.from(ids, (id) => ratings[codeOf.get(id)]);   // host array, not the VM realm's
+  assert.deepEqual(rated, [80, 85, 95],
+    "modest names the slowest rival, expected the next one below you, ambitious the quickest");
+  for (let i = 1; i < rated.length; i++)
+    assert.ok(rated[i] > rated[i - 1], `rung ${i} must name a quicker rival than rung ${i - 1}`);
 });
 
 test("ADDING A KIND MUST NOT RE-PROMISE THE OTHER THREE", () => {
@@ -1454,6 +1588,17 @@ test("settlement persists once and saveStatus only reads the last result", () =>
   assert.deepEqual(Career.saveStatus(), result.save);
   Career.saveStatus(); Career.saveStatus();
   assert.equal(writes, 1);
+});
+
+test("stakeShort() is the funds gate chooseStake(true) applies (#5073)", () => {
+  const Career = hub(); const p = Career.planning();
+  assert.equal(p.stakeShort(), false);
+  Career.data().money = 49;
+  assert.equal(p.stakeShort(), true);
+  assert.equal(p.chooseStake(true), false); assert.equal(p.stake(Career.round()), 0);
+  assert.equal(p.chooseStake(false), true);
+  Career.data().money = 50;
+  assert.equal(p.stakeShort(), false); assert.equal(p.chooseStake(true), true);
 });
 
 test("Committed brief escrows only 50 credits once, locks at weekend start, settles once", () => {

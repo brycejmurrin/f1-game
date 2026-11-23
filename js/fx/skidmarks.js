@@ -31,11 +31,17 @@ const SkidMarks = (function () {
     let vertCount = 0;
     let dirty = false;
 
-    function rebuild() {
+    // Batched trail is culled here, around the camera at rebuild time; draw() re-runs it once the eye
+    // has moved REBUILD_MOVE, so every mark inside SKID_CULL stays in the batch.
+    const REBUILD_MOVE = 16, BATCH_CULL = (170 + REBUILD_MOVE) * (170 + REBUILD_MOVE);
+    let rbX = 0, rbZ = 0;
+    function rebuild(ex, ez) {
+      rbX = ex; rbZ = ez;
       const full = active >= MAX_SKID, cnt = full ? MAX_SKID : active;
       let o = 0;
       for (let i = 0; i < cnt; i++) {
         const M = full ? marks[(idx + i) % MAX_SKID] : marks[i];
+        { const dx = M[12] - ex, dz = M[14] - ez; if (dx * dx + dz * dz > BATCH_CULL) continue; }
         const m0 = M[0], m1 = M[1], m2 = M[2], m4 = M[4], m5 = M[5], m6 = M[6],
               m8 = M[8], m9 = M[9], m10 = M[10], m12 = M[12], m13 = M[13], m14 = M[14];
         for (let v = 0; v < 6; v++) {
@@ -48,7 +54,7 @@ const SkidMarks = (function () {
           verts[o++] = ay * 2;
         }
       }
-      vertCount = cnt * 6;
+      vertCount = o / 5;
       dirty = false;
     }
 
@@ -61,7 +67,7 @@ const SkidMarks = (function () {
     // One car's cadence: true when a stamp is due. `timer.t` is its countdown.
     function due(timer, laying, dt) {
       if (!laying) { timer.t = 0; return false; }
-      timer.t -= dt > 0 ? dt : 1 / 60;   // no dt (an old caller) charges one nominal frame
+      timer.t -= dt === undefined ? 1 / 60 : Math.max(0, +dt || 0);   // no dt (an old caller) charges one nominal frame; a paused dt of 0 charges nothing
       if (timer.t > 0) return false;
       // Carry the remainder, so a 30 Hz frame (33 ms) does not round the 83 ms
       // period up to 100 ms — but never more than one period of debt, so a
@@ -104,9 +110,9 @@ const SkidMarks = (function () {
 
     function draw(gfx, camEye) {
       let rebuilt = false;
-      if (dirty) { rebuild(); rebuilt = true; }
-      if (gfx.drawSkidBatch(verts, vertCount, rebuilt)) return;
       const ex = (camEye && camEye[0]) || 0, ez = (camEye && camEye[2]) || 0;
+      if (dirty || Math.abs(ex - rbX) + Math.abs(ez - rbZ) > REBUILD_MOVE) { rebuild(ex, ez); rebuilt = true; }
+      if (gfx.drawSkidBatch(verts, vertCount, rebuilt)) return;
       const full = active >= MAX_SKID, cnt = full ? MAX_SKID : active;
       for (let i = 0; i < cnt; i++) {
         const m = full ? marks[(idx + i) % MAX_SKID] : marks[i];

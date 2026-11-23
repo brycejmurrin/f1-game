@@ -104,6 +104,32 @@ test("bench-capture: performance.memory, Log and the device-loss breadcrumb", ()
   assert.equal(B.recover(), null);
 });
 
+test("a shared GPU loss promise watches only the active benchmark leg", async () => {
+  function fakeDevice() {
+    let resolve, subscriptions = 0;
+    const lost = new Promise(r => { resolve = r; });
+    return { device: { lost: { then(fn) { subscriptions++; return lost.then(fn); } } },
+      count: () => subscriptions, lose: () => resolve({ reason: "destroyed", message: "reset" }) };
+  }
+  const first = fakeDevice(), second = fakeDevice(), renderer = { backend: { device: first.device } };
+  const { B, store } = load({ GLX: { inspectorHost: () => ({ renderer }) } });
+  for (let i = 0; i < 12; i++) {
+    B.legStart({ label: "completed " + i });
+    B.legEnd();
+  }
+  assert.equal(first.count(), 1, "completed legs share a loss watcher");
+  renderer.backend.device = second.device;
+  B.legStart({ label: "current" });
+  first.lose();
+  await Promise.resolve();
+  assert.equal(store.has(B.CRUMB), false, "losing a former device cannot resurrect a breadcrumb");
+  second.lose();
+  await Promise.resolve();
+  assert.equal(JSON.parse(store.get(B.CRUMB)).label, "current");
+  assert.deepEqual(J(B.legEnd().errors).map(e => e.kind), ["device-lost"]);
+  assert.equal(store.has(B.CRUMB), false);
+});
+
 test("bench-capture: budget() trims logs, then timelines, then step captures, until the plan fits", () => {
   const { B } = load();
   const big = (n) => Array.from({ length: n }, (_, i) => ({ t: i, ns: "gfx", level: i % 3 ? "info" : "warn", msg: "x".repeat(150) }));

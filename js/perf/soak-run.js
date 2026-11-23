@@ -31,7 +31,10 @@ const SoakRun = (function () {
   const LAPS = 40;                     // far more than 15 min of racing: the flag never ends the soak
   const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
   const VMAX = 94, KP = 2.4;
-  const A_LAT_WET = 9, A_BRAKE_WET = 16;   // the autopilot spec's 13/24 are dry numbers
+  // Autopilot envelope (tests/specs/autopilot.spec.js): dry 13/24, wet 9/16.
+  // GPU TEST / lap bench pass weather:"dry"; AUTO SOAK defaults to wet.
+  const A_LAT_DRY = 13, A_BRAKE_DRY = 24;
+  const A_LAT_WET = 9, A_BRAKE_WET = 16;
 
   let _G = null;
   let _run = null;                     // { raf, t0, started, ... } while active
@@ -49,20 +52,28 @@ const SoakRun = (function () {
     return { x: P.x, angle, k: Tracks.curvature(T, P.s), hw: smp.hw, speed: P.speed, s: P.s };
   }
 
+  // Wet family (atmosphere wxWet): wet / rain / storm. Everything else is dry grip.
+  function envelope(G) {
+    const w = G && G.raceWeather;
+    if (w === "wet" || w === "rain" || w === "storm") return { aLat: A_LAT_WET, aBrake: A_BRAKE_WET };
+    return { aLat: A_LAT_DRY, aBrake: A_BRAKE_DRY };
+  }
+
   // One control frame: returns the _testInput to hold until the next frame.
   function control(G, st, dt) {
     const p = probe(G);
     if (!p) return null;
     const T = G.track, P = G.player;
+    const { aLat, aBrake } = envelope(G);
     let kSteer = p.k;
     const steerLook = Math.max(9, p.speed * 0.4);
-    let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(A_LAT_WET / Math.abs(p.k)) : VMAX;
+    let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(aLat / Math.abs(p.k)) : VMAX;
     for (let j = 0; j < DISTS.length; j++) {
       const d = DISTS[j];
       const k = Tracks.curvature(T, G.wrapS(P.s + d));
       if (d <= steerLook) kSteer = k;
-      const vCorner = Math.abs(k) > 1e-4 ? Math.sqrt(A_LAT_WET / Math.abs(k)) : VMAX;
-      const vAllow = Math.sqrt(vCorner * vCorner + 2 * A_BRAKE_WET * d);
+      const vCorner = Math.abs(k) > 1e-4 ? Math.sqrt(aLat / Math.abs(k)) : VMAX;
+      const vAllow = Math.sqrt(vCorner * vCorner + 2 * aBrake * d);
       if (vAllow < vT) vT = vAllow;
     }
     vT = Math.max(11, Math.min(VMAX, vT));
@@ -90,13 +101,13 @@ const SoakRun = (function () {
     if (!r) return false;
     _run = null;
     try { document.removeEventListener("visibilitychange", onHidden); } catch (_) { /* no document */ }
-    if (r.raf) cancelAnimationFrame(r.raf);
-    if (G) {
+    if (r.raf !== null) cancelAnimationFrame(r.raf);
+    if (G && r.raf !== null) {
       G._testInput = null;     // the real Input owns the car again the instant the soak ends
       // The game's own PAUSE button (G has no setPaused member; the pause menu then shows SHARE's panel).
       try { const b = document.getElementById("pausebtn"); if (b && !G.paused) b.click(); } catch (_) { /* pause is a courtesy */ }
     }
-    try { if (typeof PhoneRecorder !== "undefined" && PhoneRecorder.isOn()) PhoneRecorder.stop(); } catch (_) { /* recorder gone */ }
+    try { if (r.recording) PhoneRecorder.stop(r); } catch (_) { /* recorder gone */ }
     _last = { state: "done", reason, minutes: +((performance.now() - r.t0) / 60000).toFixed(2) };
     log("end " + reason);
     return true;
@@ -111,7 +122,7 @@ const SoakRun = (function () {
     if (G.state === "race") {
       if (!r.started) {
         r.started = true; r.tRace = performance.now();
-        try { PhoneRecorder.start(); } catch (_) { /* recorder missing: the drive still runs */ }
+        try { r.recording = PhoneRecorder.start(r); } catch (_) { /* recorder missing: the drive still runs */ }
         log("racing");
       }
       const inp = control(G, r.st, dt);
@@ -124,38 +135,57 @@ const SoakRun = (function () {
     }
   }
 
-  function start(opts) {
+  async function start(opts) {
     const G = _G;
     opts = opts || {};
-    if (!G || _run) return Promise.resolve(false);
+    if (!G || _run) return false;
     const i = Tracks.LIST.findIndex((t) => t.id === (opts.track || TRACK_ID));
-    if (i < 0) return Promise.resolve(false);
+    if (i < 0) return false;
     try {
       if (G.closeSettings) G.closeSettings();
       G.trackIdx = i; G.seasonMode = false; G.timeTrial = false; G.duel = false;
       G.raceLaps = LAPS;
       if (G.endWeatherSession) G.endWeatherSession();
       G.raceWeather = opts.weather || "wet"; G.raceTimeOfDay = opts.tod || "default";   // GPU TEST runs it dry; BENCHMARK (bench-run.js) asks for rain / night
-    } catch (e) { try { Log.warn("game", "SoakRun start refused: " + (e && e.message)); } catch (_) { /* Log not loaded */ } return Promise.resolve(false); }
-    _run = { raf: 0, t0: performance.now(), tRace: 0, prev: 0, started: false, minutes: opts.minutes > 0 ? opts.minutes : SOAK_MIN,
+    } catch (e) { try { Log.warn("game", "SoakRun start refused: " + (e && e.message)); } catch (_) { /* Log not loaded */ } return false; }
+    const run = _run = { raf: null, t0: performance.now(), tRace: 0, prev: 0, started: false, minutes: opts.minutes > 0 ? opts.minutes : SOAK_MIN,
       st: { hold: 30, stalled: 0, lastS: null } };
     _last = { state: "starting", reason: "" };
     try { document.addEventListener("visibilitychange", onHidden); } catch (_) { /* no document */ }
     log("start " + (opts.track || TRACK_ID) + " " + (opts.weather || "wet") + " " + _run.minutes + " min");
-    return Promise.resolve(G.startRace()).then(() => {
-      if (!_run) return false;
-      try {   // the chase camera (js/camera/mode-switch.js CAM_MODES); GPU TEST asks for helmet, where the mirror is up
-        const ix = CamModes.CAM_MODES.findIndex((m) => m.id === (opts.cam || "chase"));
-        if (ix >= 0) G.setCamMode(ix, { persist: false });   // the player's saved camera stays theirs
-      } catch (_) { /* camera stays as the player had it */ }
-      _run.raf = requestAnimationFrame(tick);
-      return true;
-    }, () => { finish("start-failed"); return false; });
+    let outcome;
+    try {
+      const request = G.startRace();
+      outcome = await (request && request.outcome || request);
+    } catch (_) {
+      if (_run === run) finish("start-failed");
+      return false;
+    }
+    if (_run !== run) return false;
+    if (outcome === false || (outcome && outcome.kind && outcome.kind !== "committed")) {
+      finish("start-failed");
+      return false;
+    }
+    try {   // the chase camera (js/camera/mode-switch.js CAM_MODES); GPU TEST asks for helmet, where the mirror is up
+      const ix = CamModes.CAM_MODES.findIndex((m) => m.id === (opts.cam || "chase"));
+      if (ix >= 0) G.setCamMode(ix, { persist: false });   // the player's saved camera stays theirs
+    } catch (_) { /* camera stays as the player had it */ }
+    run.raf = requestAnimationFrame(tick);
+    return true;
   }
 
+  // probe stays module-local (start/control use it). SOAK_MIN / TRACK_ID stay exported for harness.
   return {
-    SOAK_MIN, TRACK_ID, control, probe,
+    SOAK_MIN, TRACK_ID, control,
     create(G) { _G = G; return this; },
+    // GPU TEST's boost phase (gpu-test-run.js): BOOST on/off for the driven car, set directly (no tap, so the
+    // touch/audio-unlock path stays out of the reading). Returns whether the player is deploying right now.
+    boost(on) {
+      const p = _G && _G.player;
+      if (!p) return false;
+      if (typeof on === "boolean") p.boostOn = on;
+      return !!p.deploying;
+    },
     start, stop: (why) => finish(why || "stopped"),
     active: () => !!_run,
     status: () => Object.assign({}, _last, _run ? { state: _run.started ? "racing" : "starting",

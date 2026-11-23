@@ -1,5 +1,7 @@
 # Perf governor: the quantum probe, one-frame stalls, thermal-drift default (2026-10-23)
 
+Summary: Perf governor: the vsync-quantum probe, one-frame stalls and the thermal-drift default (A·W40).
+
 A·W40 (Fleet A, "Phone perf" lane). Three items from
 `docs/notes/PERF-KNOWN-WINS-2026-10-23.md`: row 6 (a scale step that cannot
 cross a vsync quantum), #3657 (the visor makes WebGL2 shed tiers), and row 5

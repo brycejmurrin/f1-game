@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["cota"] =
   function (api) {
-      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop, terrainYAt, seat } = api;
+      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop, terrainYAt, seat, bakedModel } = api;
 
       // -- Speckled crowd palette (casual Texan race-day colours) --
       const crowdCols = [
@@ -87,7 +87,7 @@
           const tt = (i + 0.5) / segs_ - 0.5;             // -0.5..0.5 along the 150 m stand
           const crown = Math.cos(tt * Math.PI) * 2.6;      // peaks at centre, 0 at the ends
           addBox(out, vadd(vadd(aMain.c, aMain.t, tt * 150), aMain.u, roofY + 1.1 + crown),
-                 [11.6, 0.5, 150 / segs_ + 0.8], [0.30, 0.32, 0.37], mb);
+                 [11.6, 0.5, 150 / segs_], [0.30, 0.32, 0.37], mb);
         }
       }
       // Wave-4 hero: Main Grandstand red/white fascia — COTA's start/finish identity
@@ -121,7 +121,7 @@
       // Final-corner stepped stand leading onto the main straight (s≈0.95, R)
       grandstandEx(0.95, 1, 9, 80, null, null, { livery: "darkSteel", endWalls: true });
       grandstandEx(0.07, -1, 14, 80, null, null, { livery: "alu", roof: "none" });
-      // T1 hill stand mid-rise (s≈0.11, L) — uncovered alu
+      // T1-T2 descent stand (s≈0.11, L; outside of the T2 right) — uncovered alu
       grandstandEx(0.11, -1, 18, 60, null, null, { livery: "alu", roof: "none" });
       // T1 amphitheatre upper tier (s≈0.13, L) — uncovered alu
       grandstandEx(0.13, -1, 26, 64, null, null, { livery: "alu", roof: "none" });
@@ -256,7 +256,7 @@
         { rows: 6, rise: 1.5, depth: 2.5, step: 9, crowd: crowdCols, density: 0.58,
           conc: [0.74, 0.72, 0.68], concAlt: [0.66, 0.64, 0.60] });
 
-      // rise +0.15: outer row sat 0.19 m under terrain on the T1 climb (ground-audit).
+      // rise +0.15: outer row sat 0.19 m under terrain on the T1-T2 descent (ground-audit).
       spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 2.95, depth: 2.2, density: 0.55, grass: dryGrass });
 
       amphiStage(0.76, 1, 68);
@@ -564,9 +564,9 @@
                   { id: "cota-t12-runoff", samples: 8 });
 
       fence(0.00, 0.06,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // main straight, R
-      fence(0.94, 1.00,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // final corner, R
+      fence(0.94, 1.00,  1, 5, 3.4, [0.62, 0.64, 0.68]);   // run from the last apex to the line, R
       fence(0.46, 0.62, -1, 6, 3.4, [0.62, 0.64, 0.68]);   // back straight, L
-      fence(0.08, 0.14, -1, 8, 3.4, [0.62, 0.64, 0.68]);   // T1 hill, L
+      fence(0.08, 0.14, -1, 8, 3.4, [0.62, 0.64, 0.68]);   // T1-T2 hill descent, L
       wall(0.94, 0.06, -1, 2.2, 1.1, [0.72, 0.73, 0.76], 0.35, 0.08); // pit wall (alt: T1 slope overlaps its slabs)
 
       guardrail(0.15, 0.28,  1, 4, [0.80, 0.80, 0.82]);    // Esses, R
@@ -574,7 +574,7 @@
       guardrail(0.78, 0.90,  1, 4, [0.80, 0.80, 0.82]);    // triple-apex sweeper, R
       guardrail(0.62, 0.70,  1, 5, [0.80, 0.80, 0.82]);    // T12 hairpin exit, R
 
-      tyreWall(0.095, 0.135,  1, 6, redSteel);             // T1 apex outside
+      tyreWall(0.058, 0.076,  1, 20, redSteel);            // T1 hairpin outside, past the runoff
       tyreWall(0.61,  0.66,   1, 6, [0.95, 0.85, 0.1]);   // T12 hairpin
       tyreWall(0.30,  0.34,  -1, 6, [0.1, 0.5, 0.9]);     // mid-lap chicane
 
@@ -624,4 +624,11 @@
                  [0.6, 0.28, 1.2], lampHead, [pa.r, pa.u, pa.t]);
         }
       });
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.97, 0.995, 0.02]) bakedModel("k_tentlong", K(s), -1, 90, { scale: 2.4 });
+      for (const [s, side] of [[0.0655, 1], [0.4155, 1], [0.6335, 1], [0.7655, 1], [0.9175, 1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
     };

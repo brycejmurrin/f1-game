@@ -22,10 +22,10 @@
      the motif strokes of the painted tail. When absent it is chosen automatically
      to separate from the fin's own paint (the fin is one flat colour, so an art
      colour equal to it is invisible), which is what every livery got before.
-   finStyle? optional TAIL STYLE — which motif the tail graphic draws, on the
-     fin AND the engine-cover wash: "team" (absent; the per-team motif in
-     LiveryTex.TAIL_STYLE), "diag" | "sweep" | "chevron" | "streak" | "check"
-     to borrow another, or "none" for plain paint.
+   finStyle? optional TAIL STYLE — which motif the tail graphic draws on the
+     fin only: "team" (absent; the per-team motif in LiveryTex.TAIL_STYLE),
+     "diag" | "sweep" | "chevron" | "streak" | "check" | "stars" to borrow
+     another, or "none" for plain paint.
    finBadge? optional FIN BADGE — what the shark fin carries: "logo" (absent;
      the team crest), "number" (the race number, the real-F1 layout), "code"
      (the driver's three-letter abbreviation) or "none".

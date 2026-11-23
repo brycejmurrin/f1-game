@@ -126,6 +126,71 @@ test.describe.parallel("Career — save", () => {
     expect(season.round).toBe(7);
     expect(season.pts["mclaren:0"]).toBe(99);
   });
+
+  // M1-18 (#3040): the restore-point history against a REAL IndexedDB, not the
+  // transactional fake in tests/unit/save-durability.test.mjs. A readwrite
+  // transaction aborted after its put succeeded must roll the put back (the
+  // engine's rollback), keep the prior point, and report the capture as not
+  // durable. No wall-clock waits: every step awaits the transaction's own events.
+  test("an aborted history write rolls back and keeps the prior restore point", async ({ page }) => {
+    await boot(page);
+    const r = await page.evaluate(async () => {
+      const DB = "apex26-restore-points";
+      // Arm a one-shot abort on the next readwrite "slots" transaction: the put
+      // succeeds inside it, then the transaction is aborted before it commits.
+      let armed = false, injected = 0;
+      const orig = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (names, mode, ...rest) {
+        const tx = orig.call(this, names, mode, ...rest);
+        if (armed && this.name === DB && mode === "readwrite") {
+          armed = false;
+          const objectStore = tx.objectStore.bind(tx);
+          tx.objectStore = (n) => {
+            const os = objectStore(n), put = os.put.bind(os);
+            os.put = (v, ...a) => {
+              const req = put(v, ...a);
+              req.addEventListener("success", () => { injected++; tx.abort(); });
+              return req;
+            };
+            return os;
+          };
+        }
+        return tx;
+      };
+      const readRaw = () => new Promise((resolve, reject) => {
+        const o = indexedDB.open(DB);
+        o.onerror = () => reject(o.error);
+        o.onsuccess = () => {
+          const db = o.result, q = db.transaction("slots", "readonly").objectStore("slots").get("driver.2");
+          q.onsuccess = () => { db.close(); resolve(q.result ? q.result.items.map((x) => JSON.parse(x.json).season.round) : []); };
+          q.onerror = () => { db.close(); reject(q.error); };
+        };
+      });
+      const save = (round) => ({ v: 1, flavour: "driver", year: 2026, team: "haas", money: 100 + round,
+        season: { round, pts: {}, teamPts: {}, results: [] } });
+      try {
+        const P = CareerRestorePoints.create({ store: GameStore.store });
+        const first = await P.capture("driver", 2, save(1), { reason: "round" });
+        armed = true;
+        const aborted = await P.capture("driver", 2, save(2), { reason: "round" });
+        const afterAbort = await readRaw();
+        const listed = (await P.list("driver", 2)).items.map((x) => x.summary.round);
+        // Positive control: the same write with no injected abort lands.
+        const control = await P.capture("driver", 2, save(3), { reason: "round" });
+        const afterControl = await readRaw();
+        return { first, aborted, injected, afterAbort, listed, control, afterControl };
+      } finally {
+        IDBDatabase.prototype.transaction = orig;
+      }
+    });
+    expect(r.first.durable, "the first point commits").toBe(true);
+    expect(r.injected, "the abort fired after a successful put").toBe(1);
+    expect(r.aborted.durable, "an aborted write is reported as not durable").toBe(false);
+    expect(r.afterAbort, "the engine rolled the put back: only the prior point is on disk").toEqual([1]);
+    expect(r.listed, "the history API sees the same").toEqual([1]);
+    expect(r.control.durable, "positive control: an unaborted write commits").toBe(true);
+    expect(r.afterControl, "and lands on disk ahead of the prior point").toEqual([3, 1]);
+  });
 });
 
 // ── isolation: a career must not change free play ────────────────────────────
@@ -139,12 +204,29 @@ test.describe.parallel("Career — isolation", () => {
     });
     await boot(page);
     await startCareer(page, { teamId: "haas", seat: 1, seed: 1 });
-    const changed = await page.evaluate(() => {
-      const c = window.__apex.career();
-      c.fitted.aero = "high";
-      return JSON.parse(localStorage.getItem("apex26.parts.haas"));
+    // Fit a part THROUGH THE CAREER GARAGE, so the career save path really runs.
+    // (Assigning c.fitted.aero on the in-memory object and then reading
+    // localStorage proved nothing: no save path ran, either build.)
+    await page.evaluate(() => window.__apex.careerMoney(99999));
+    await page.evaluate(() => document.getElementById("cr-garage").click());
+    await expect(page.locator("#carsetup")).toBeVisible();
+    await selectPartCategory(page);
+    const row = await page.evaluate(() => {
+      const r = document.querySelector("#cs-options .cs-opt.locked");
+      return r ? { id: r.dataset.csOpt, cat: r.dataset.csCat } : null;
     });
-    expect(changed.aero).toBe("low");   // untouched by the career build
+    expect(row, "the career garage offers a part to research and fit").not.toBeNull();
+    const click = (r) => page.evaluate((x) => document.querySelector(`.cs-opt[data-cs-opt="${x.id}"]`).click(), r);
+    await click(row);                                   // research it
+    if (await page.evaluate((r) => window.__apex.career().fitted[r.cat] !== r.id, row)) await click(row);   // then fit it
+    const after = await page.evaluate((r) => ({
+      fitted: window.__apex.career().fitted[r.cat],
+      saved: (JSON.parse(localStorage.getItem("apex26.career.driver.0") || "null") || {}).fitted,
+      free: JSON.parse(localStorage.getItem("apex26.parts.haas")),
+    }), row);
+    expect(after.fitted, "the career build took the part").toBe(row.id);
+    expect(after.saved && after.saved[row.cat], "the career SAVE took the part").toBe(row.id);
+    expect(after.free).toEqual({ engine: "stock", aero: "low" });   // untouched by the career build
   });
 
   test("career team development does not reach a Grand Prix", async ({ page }) => {
@@ -325,12 +407,42 @@ test.describe.parallel("Career — hub", () => {
     await expect(page.locator("#cr-go")).toHaveText("GO RACING");
   });
 
-  test("NEW CAREER number rejects truncated numeric input before saving", async ({ page }) => {
+  for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) test(`NEW CAREER validation reveals its field and error at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
     await boot(page);
     await page.locator("#mb-career").click();
     await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
     const fields = page.locator("#cr-right .cr-input");
+    const assertError = async (/** @type {import("@playwright/test").Locator} */ input, /** @type {string} */ id) => {
+      await expect(input).toBeFocused();
+      await expect(input).toHaveAttribute("aria-describedby", id);
+      const note = page.locator("#" + id);
+      await expect(note).toHaveAttribute("role", "alert");
+      expect(await note.evaluate((n) => !n.closest("label") && n.previousElementSibling && n.previousElementSibling.tagName === "LABEL")).toBe(true);
+      expect(await input.evaluate((field) => {
+        const note = document.getElementById(field.getAttribute("aria-describedby") || "");
+        if (!note) return false;
+        const a = field.getBoundingClientRect(), b = note.getBoundingClientRect();
+        let top = 0, bottom = innerHeight, left = 0, right = innerWidth;
+        for (let p = field.parentElement; p; p = p.parentElement) {
+          const s = getComputedStyle(p), r = p.getBoundingClientRect();
+          if (/auto|scroll|hidden|clip/.test(s.overflowY)) { top = Math.max(top, r.top + (parseFloat(s.getPropertyValue("--sfade-t")) || 0) * (r.height / (p.offsetHeight || r.height))); bottom = Math.min(bottom, r.bottom - (parseFloat(s.getPropertyValue("--sfade-b")) || 0) * (r.height / (p.offsetHeight || r.height))); }
+          if (/auto|scroll|hidden|clip/.test(s.overflowX)) { left = Math.max(left, r.left); right = Math.min(right, r.right); }
+        }
+        const foot = document.getElementById("cr-foot").getBoundingClientRect();
+        bottom = Math.min(bottom, foot.top);
+        return Math.min(a.top, b.top) >= top - 1 && Math.max(a.bottom, b.bottom) <= bottom + 1 && Math.min(a.left, b.left) >= left - 1 && Math.max(a.right, b.right) <= right + 1;
+      }), "invalid field and its description must both clear the viewport, clip edges, scroll fade and footer").toBe(true);
+    };
+    await fields.nth(0).fill("");
+    await fields.nth(1).fill("");
+    await page.locator("#cr-go").click();
+    await assertError(fields.nth(0), "cr-error-name");
+    await expect(fields.nth(1)).toHaveValue("");
     await fields.nth(0).fill("Number Test");
+    await page.locator("#cr-go").click();
+    await assertError(fields.nth(1), "cr-error-code");
+    await expect(fields.nth(0)).toHaveValue("Number Test");
     await fields.nth(1).fill("NUM");
     const number = page.locator('#cr-right input[type="number"]');
     for (const value of ["1e2", "1.5", "100", "0", ""]) {
@@ -338,6 +450,9 @@ test.describe.parallel("Career — hub", () => {
       await page.locator("#cr-go").click();
       await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
       await expect(number).toHaveAttribute("aria-invalid", "true");
+      await assertError(number, "cr-error-num");
+      await expect(fields.nth(0)).toHaveValue("Number Test");
+      await expect(fields.nth(1)).toHaveValue("NUM");
       await expect(page.locator("#cr-right")).toContainText("Number must be 1–99");
       expect(await page.evaluate(() => localStorage.getItem("apex26.career.driver.0"))).toBeNull();
     }
@@ -357,7 +472,9 @@ test.describe.parallel("Career — hub", () => {
     await expect(page.locator("#career")).toBeVisible();
     const meters = await page.locator(".cr-meter-lbl").allTextContents();
     expect(meters).toEqual(["BALANCE", "REPUTATION", "ROUND"]);
-    await expect(page.locator("#cr-meters")).toContainText("1 / 24");
+    // The career's own calendar length (2026 REAL: 23; the 24-ROUND list: 24).
+    const rounds = await page.evaluate(() => window.__apex.careerState().rounds);
+    await expect(page.locator("#cr-meters")).toContainText("1 / " + rounds);
   });
 
   test("the hub replaces #select — GO RACING goes straight to race settings", async ({ page }) => {
@@ -405,7 +522,7 @@ test.describe.parallel("Career — a round", () => {
     // NEXT takes you back to the hub, not straight into the next race.
     await page.locator("#res-next").click();
     await expect(page.locator("#career")).toBeVisible();
-    await expect(page.locator("#cr-meters")).toContainText("2 / 24");
+    await expect(page.locator("#cr-meters")).toContainText("2 / " + st.rounds);   // the save's calendar length
   });
 
   test("the player takes the contracted seat on the grid", async ({ page }) => {

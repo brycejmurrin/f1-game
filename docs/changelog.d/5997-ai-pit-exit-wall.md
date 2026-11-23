@@ -1,0 +1,1 @@
+Fixed: AI cars that were not pitting aimed their racing line across the pit wall and the pit-exit wall and scraped along it (Mosport Turn 1, Mont-Tremblant, Baku and others); they now aim on the road side of it, and their wall contacts beside the pit fall by about 80 % over nine circuits (#5997).

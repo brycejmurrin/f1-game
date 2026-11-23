@@ -1,4 +1,5 @@
-/* Explicit opt-in for cue targets that account for current driving conditions. */
+/* Cue targets that account for current driving conditions: ON by default since the #2177 calibration
+   (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md); the checkbox turns it off. */
 const ConditionCueControls = (function () {
   "use strict";
   const KEY = "conditionCues";
@@ -19,8 +20,8 @@ const ConditionCueControls = (function () {
       if (typeof DrivingCues !== "undefined" && DrivingCues.setConditionAware) DrivingCues.setConditionAware(on);
     }
     input.onchange = () => { const on = input.checked === true; store.set(KEY, on); apply(on); };
-    apply(store.get(KEY, false) === true); row.append(input, label); host.append(row, note);
-    const refresh = () => apply(store.get(KEY, false) === true);
+    apply(store.get(KEY, true) !== false); row.append(input, label); host.append(row, note);
+    const refresh = () => apply(store.get(KEY, true) !== false);
     const unsubscribe = store.subscribe ? store.subscribe((c) => { if (c && (c.key === KEY || c.clear || (Array.isArray(c.keys) && c.keys.includes(KEY)))) refresh(); }) : null;
     return Object.freeze({ refresh, dispose() { unsubscribe?.(); row.remove(); note.remove(); } });
   }

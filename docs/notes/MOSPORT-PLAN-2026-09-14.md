@@ -1,6 +1,6 @@
 # Adding Mosport as circuit 52 — research and plan
 
-**Status:** plan. Nothing implemented. Written 2026-09-14, after the eleven-circuit
+**Status:** SHIPPED (re-checked 2026-11-10): Mosport is `js/circuits/mosport.js`. Earlier status: plan, nothing implemented. Written 2026-09-14, after the eleven-circuit
 OSM round landed (`docs/notes/TRACK-ROSTER-RESEARCH-2026-09-14.md`).
 
 ## 1. Why this circuit, and why it is different from the last eleven

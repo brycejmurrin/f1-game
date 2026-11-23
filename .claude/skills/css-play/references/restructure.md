@@ -2,8 +2,8 @@
 
 The 15 rules live in restructure-screens-css-rules.md; each with the failure it prevents and the measurement that
 justifies it. Sourced from shipped code (Pico, USWDS, Phaser, GOV.UK,
-typebot.io, medplum), the HTML/CSS specs, and this repo's own history —
-2026-08-08. **Every rule here is checkable; none is a matter of taste.**
+typebot.io, medplum), the HTML/CSS specs, and this repo's own history.
+Re-measure with the commands below; never quote an old figure. **Every rule here is checkable; none is a matter of taste.**
 
 The governing question for any restructure: **does it reduce a COUNT, or does
 it rename things?** Renaming is not restructuring.
@@ -59,4 +59,4 @@ reject a named methodology, take rules 8 and 10 only.
 3. Edit, then the css-play hot-swap loop for the after shot.
 4. `node tools/check/tree-counts.mjs`, then `node tools/check/ratchets.mjs --update --lower-only` (lowers).
 5. Remove or update the family entry in `docs/COMPONENTS.md` (`component-inventory.test.mjs`).
-6. Type metrics moved? SKILL.md hard don't 5: run `menu-baseline` yourself.
+6. Type metrics moved? SKILL.md hard don't 5: request CI group `baseline` on the pushed branch and re-bless from its artifact.

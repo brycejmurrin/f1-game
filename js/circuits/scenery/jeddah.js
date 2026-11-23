@@ -6,14 +6,16 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jeddah"] =
   function (api) {
-      const { K, out, MAT, n, pyMin, place, backdrop,
-        addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
+      const { K, out, MAT, pyMin, place, backdrop,
+        addBox, addCyl, addCone, addFrustum, addPrism, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
-        cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
+        cityFront, modelGroup, waterBand, onTrack, hash, every, circuitKit,
         lampPost, seat, along } = api;
 
       // sl(f) lands at RACING frac f (brands_hatch idiom): authored s = 0 is the
-      // scenery origin (sceneryStartFrac 0.9625), not the start line (#2201).
+      // scenery origin (the T27 hairpin, sceneryStartFrac), not the start line,
+      // which sits ~0.132 past it on the pit straight (#5507). Everything that
+      // belongs to the line (pit building, S/F stands, gantries) goes through sl().
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
 
@@ -37,7 +39,7 @@
 
       if (circuitKit) {
         circuitKit.hospitality({
-          id: "kit:jeddah:pit-hospitality", frac: 0.035, side: -1, gap: 72,
+          id: "kit:jeddah:pit-hospitality", frac: sl(0.99), side: -1, gap: 40,
           size: [20, 10, 42], modules: 6,
         });
         circuitKit.hospitality({
@@ -145,14 +147,17 @@
           }
         }, `jeddah-canyon-feet:${side}:${gap.toFixed(2)}`);
       };
+      const PIT_W0 = sl(0.9448), PIT_W1 = sl(0.0312);
       for (const side of [-1, 1]) {
         for (const [b0, b1, accent] of SAUDI_BLOCKS) {
           // The -1 (pit side) canyon stops at the pit complex's window
-          // (.9643-.0211) and resumes after it: 82 slabs measured superseded
-          // across it, and a wall that visibly ends at the pit wall reads
-          // right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
-          const a0 = side === -1 && b0 === 0.00 ? 0.0211 : b0;
-          const a1 = side === -1 && b1 === 0.997 ? 0.9643 : b1;
+          // (racing .9468-.0292, read off track.pit.keep) and resumes after
+          // it: 82 slabs measured superseded across it, and a wall that
+          // visibly ends at the pit wall reads right —
+          // docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4. The window
+          // straddles the .16 block seam, so each neighbour is trimmed to it.
+          const a1 = side === -1 && b0 === 0.00 ? PIT_W0 : b1;
+          const a0 = side === -1 && b0 === 0.16 ? PIT_W1 : b0;
           // 4.35, not 3.50: def.barrierGap is 3.4 and the engine's street
           // barrier is 0.8 m thick, so a canyon at 3.50 stands INSIDE it —
           // two walls in one volume, 73 same-facing coplanar pairs where the
@@ -165,7 +170,7 @@
           });
           seatCanyonFeet(a0, a1, side, 4.35);
         }
-        // The T13 banked sector keeps its own wider, taller wall.
+        // The banked sector (FIA T13; def.turns[12]) keeps its own wider, taller wall.
         canyon(0.47, 0.53, side, 5.05, {
           h: 1.40 + (side > 0 ? 0.08 : 0.00),
           stripeCol: GOLD, stripeEvery: 2,
@@ -274,7 +279,9 @@
         marshalPost(K(s), side, 3.5);   // gap is to the hut CENTRE, guard onTrack(c, 3): 2.4 never built
       }
 
-      waterBand(0.06, 0.375, 1, 35, 550, 12, SEA, { id: "jeddah-red-sea" });
+      // From T1 on: 0.06 put the sea 35 m off the +1 side of the pit straight,
+      // where the main stand is (the real east side there is city).
+      waterBand(sl(0.036), 0.375, 1, 35, 550, 12, SEA, { id: "jeddah-red-sea" });
       waterBand(0.43, 0.64, 1, 22, 150, 12, [0.018, 0.035, 0.080],
         { id: "jeddah-marina-water" });
       for (let i = 0; i < 11; i++) {
@@ -363,30 +370,33 @@
       // ── START/FINISH gantries ─────────────────────────────────────────────
       // Start gantry over the REAL line (sl); exit gantry stays authored-frame.
       gantry(sl(0.0), 13, [0.12, 0.13, 0.17]);
-      // .030, past the complex's exit line (.0211): at .012 its portal leg at
-      // 1.5 m stood ON the exit road's lane (measured, an 11.2 m box at lat 2.0).
-      gantry(0.030, 11, [0.12, 0.13, 0.17]);
+      // 55 m past the complex's exit line (racing .0146): any nearer and its
+      // portal leg stands ON the exit road's lane (measured at the old line,
+      // an 11.2 m box at lat 2.0).
+      gantry(sl(0.0235), 11, [0.12, 0.13, 0.17]);
 
-      // The pit building: the complex has no bays here (its 190 m window
-      // compresses the row's pitch under a bay), so the kit's hall stands
-      // behind the garage line, 12 doors over the painted row's 120 m.
+      // The pit building: the complex has no bays here (def.pit.bays false),
+      // so the kit's hall stands behind the garage line, 12 doors over the
+      // painted row's 120 m (boxes 61 m before the line to 60 m after it).
       if (circuitKit) {
         circuitKit.pitBuilding({
-          id: "kit:jeddah:pit-building", frac: 0.993, side: -1, gap: 11.2,
+          id: "kit:jeddah:pit-building", frac: sl(0.0), side: -1, gap: 11.8,
           size: [18, 11, 120], garages: 12,
         });
       } else {
-        building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+        building(K(sl(0.0)), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
       }
       const STAND_GREEN = [0.07, 0.30, 0.16];
       const STAND_GOLD  = [0.72, 0.58, 0.16];
       // Gap 48 (was 15): night_pass / dual_lite S/F orbit (az 45 / dist 40–42)
       // puts the eye ~27 m lateral (~21 m past road edge) — old GS bowls sat
       // on that eye so frac-0 orbit was a neon canyon (#3315).
-      grandstandEx(0.0,  1, 48, 60, STAND_GREEN, [0.42, 0.46, 0.40],
+      // The real main stand (OSM way 1154622779) runs from 240 m before the
+      // line to 40 m past it on the +1 side, opposite the pit lane.
+      grandstandEx(sl(0.99), 1, 48, 60, STAND_GREEN, [0.42, 0.46, 0.40],
         { tiers: 2, roof: "cantilever", endWalls: true, pylons: true,
           roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
-      grandstandEx(0.02, 1, 48, 50, STAND_GREEN, [0.40, 0.44, 0.40],
+      grandstandEx(sl(0.97), 1, 48, 50, STAND_GREEN, [0.40, 0.44, 0.40],
         { tiers: 1, roof: "cantilever", endWalls: true,
           roofCol: STAND_GOLD, fasciaCol: STAND_GOLD });
 
@@ -538,8 +548,10 @@
       });
 
       // Golden Tower hotel cue near T1 — warm-lit mid-rise facing the canyon.
+      // Seated on def.turns[0] through sl(): authored K(0.055) built ~356 m
+      // past T1, on the straight.
       {
-        const a = anchor(K(0.055), -1, 74), b = [a.r, a.u, a.t];
+        const a = anchor(K(sl(api.def.turns[0])), -1, 74), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 16)) {
           const box = (seat && seat.box) ? seat.box.bind(seat) : null;
           const put = (stage, c, sz, col) => {
@@ -610,7 +622,7 @@
         }
       }
 
-      // ── T13 BANKED SECTOR — s 0.50 ───────────────────────────────────────
+      // ── T14 BANKED SECTOR (FIA T13; def.turns[13]) — s 0.50 ──────────────
       floodMast(K(0.49), -1, 22);
       floodMast(K(0.51),  1, 26);
       if (typeof scaffoldStand === "function") {
@@ -624,7 +636,7 @@
         grandstand(0.475, 1, 22, 52, [0.12, 0.13, 0.17], [0.66, 0.38, 0.42]);
         grandstand(0.525, 1, 22, 52, [0.12, 0.13, 0.17], [0.42, 0.54, 0.68]);
       }
-      tyreWall(0.485, 0.515, -1, 3.5, MAGENTA);
+      tyreWall(0.485, 0.515,  1, 4.5, MAGENTA);   // T13 (the banked left) is a LEFT: outside is +1 (was -1, inside); gap 4.5 clears the +1 marshal post (flatCoplanar)
 
       // ── HOTEL / COMMERCIAL CLUSTER — s 0.68–0.74 L ───────────────────────
       building(K(0.69), -1, 70, 22, 22, 18, { kind: "fin", wall: [0.22, 0.22, 0.26], window: WINWARM, lit: true, floor: 5 });
@@ -718,7 +730,9 @@
       floodMast(K(0.91), -1, 24);
 
       // ── CORNER PROTECTION ─────────────────────────────────────────────────
-      tyreWall(0.07, 0.10, -1, 2.8, GREEN);
+      // T1 is a LEFT: its outside is +1. Authored 0.07-0.10 (-1) built on the
+      // straight ~450 m past it.
+      tyreWall(sl(api.def.turns[0] - 0.008), sl(api.def.turns[0] + 0.010), 1, 2.8, GREEN);   // T1 outside
       tyreWall(0.79, 0.82,  1, 2.8, SPANGLE);
       guardrail(0.34, 0.38, -1, 2.4, [0.55, 0.56, 0.6]);
       guardrail(0.96, 0.99,  1, 2.4, [0.55, 0.56, 0.6]);
@@ -754,7 +768,8 @@
           // 0.38 m over the water, so the whole mosque hung (ground-audit).
           addBox(stage, vadd(base, a.u, 1.7), [26, 4.6, 26], [0.90, 0.90, 0.86], b);
           addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
-          addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
+          // The hall rises from the plinth cap at 4.6 m to the dome at 11 m.
+          addBox(stage, vadd(base, a.u, 7.8), [16, 6.4, 16], [0.93, 0.93, 0.90], b);
           addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
           addFrustum(stage, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
           addCone(stage, vadd(base, a.u, 16), 4.7, 5.5, [0.96, 0.96, 0.93], 12, b);
@@ -786,8 +801,8 @@
           stage._mat = 0;
           addBox(stage, vadd(a.c, a.u, 166), [1.2, 0.8, 1.2], SPANGLE, b);
           stage._mat = MAT.FABRIC;
-          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.4, 24, 44], GREEN, b);
-          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 24), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 22), [0.4, 24, 44], GREEN, b);
+          addBox(stage, vadd(vadd(a.c, a.u, 132), a.t, 22), [0.5, 4, 44], [0.95, 0.96, 0.98], b);
           stage._mat = 0;
         }, { required: true });
       }
@@ -827,7 +842,10 @@
       for (let i = 0; i < 3; i++) dhow(K(0.57 + i * 0.014), 46 + (i % 2) * 12, 0.9 + (i % 2) * 0.3);
 
       for (let i = 0; i < 12; i++) {
-        const s = i / 12;
+        // + 0.002 (8 m): at exactly i/12 tower 2 seats on the T1 entry node,
+        // where the engine backdrop's own window band comes out 16 mm off its
+        // body (coplanar-audit, 1 spot); any other node clears it.
+        const s = i / 12 + 0.002;
         const w = 40 + hash(i * 11) * 30, h = 80 + hash(i * 7) * 100;
         backdrop(K(s), -1, 260 + (i % 4) * 20, [w, h, w], [0.22, 0.23, 0.31]);
       }

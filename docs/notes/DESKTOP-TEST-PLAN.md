@@ -27,6 +27,9 @@ still gets a fresh run when those packaging paths changed. Matrix on PR:
 3. Soft-GL env: `APEX_DESKTOP_SOFT_GL=1` + `APEX_DESKTOP_NO_SANDBOX=1` (explicit;
    never implied by `CI=true` alone — packaged releases must keep the Chromium
    sandbox). Soft-GL appends ANGLE SwiftShader + `enable-unsafe-webgpu`.
+   The packaged spec drops the soft-GL switches on macOS (the runner's Metal GPU):
+   with them the packaged app has no WebGL2 and no usable WebGPU there, so no
+   renderer binds and no frame ticks (`desktop.yml` run 43950525465, 2026-11-16).
 4. Playwright `_electron` against the unpacked binary
    (`desktop/tests/electron-packaged.spec.mjs`):
    - window opens; `app.isPackaged === true`

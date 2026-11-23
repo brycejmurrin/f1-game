@@ -6,14 +6,17 @@
 // Tip-green without tooling-fast is how #1111 burned a Structural guards red that a local suite would have caught
 // first. docs/plans/2026-10-27-orchestration-redesign.md §4.2: the worker runs it, flips ready, adds `land`; the
 // landing gate is merge-gate.mjs, run by CI as the `gate` check. A `--pr` run still writes the ready receipt
-// (artifacts/ready-gate/<pr>.json, tools/lib/gate-receipt.mjs): the hooks (.claude/hooks/merge_policy.py via
-// github-mcp-guard.sh and bash-guard.sh) require a fresh ok one before a draft→ready flip.
+// (artifacts/ready-gate/<pr>.json, tools/lib/gate-receipt.mjs) as a local record of the verdict, but NO hook reads
+// it: merge_policy.py left with the hook reset of 2026-11-03 and github-mcp-guard.sh allows the draft→ready flip
+// (tests/unit/agent-scope-hooks.test.mjs). Running this gate before the flip is the worker's discipline, not a hook.
 //
 //   node tools/ci/ready-gate.mjs                 # HEAD
 //   node tools/ci/ready-gate.mjs --sha <sha>
 //   node tools/ci/ready-gate.mjs --pr <n>        # that PR: open draft, Plan closed, head green, memory marker
 //   node tools/ci/ready-gate.mjs --json
 //   node tools/ci/ready-gate.mjs --local         # local stamp only (no API)
+//
+// With --pr it also prints one `advisory:` line from the pre-flip probe (preflip-probe.mjs): never a block.
 //
 // With --pr the body's `## Plan` checklist (AGENTS.md rule 12) must be closed: an item neither ticked nor struck is
 // work the PR says is not done, so a green tip still reads `plan-open`. An item starting `land:` (or the older
@@ -22,6 +25,7 @@
 // Exit: 0 green, 1 red / pending / no evidence / Plan open / not a draft, 3 no token / API error (unless --local).
 // Prints one `= ready-gate <state>` line.
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,16 +75,20 @@ export function guardsVerdict(checkRuns) {
     if (agg.conclusion === "failure" || agg.conclusion === "timed_out") return { state: "failed", evidence: `${GUARDS_JOB} ${agg.conclusion}`, code: 1 };
     // cancelled / skipped / neutral — fall through to the shards (reuse-draft path)
   }
-  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C), d = by.get(GUARDS_D);
-  if (a && b) {
-    const halves = [a, b, c, d].filter(Boolean);
-    if (halves.some((j) => j.status && j.status !== "completed")) return { state: "pending", evidence: `${halves.map((j) => j.name).join("/")} still running`, code: 1 };
-    if (halves.every((j) => j.conclusion === "success")) return { state: "passed", evidence: `${halves.map((j) => j.name).join(" + ")} success`, code: 0 };
-    const bad = halves.filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out");
+  // Every shard must report (review 2026-10-27 WP-L8): A+B green with C/D missing or never started is NOT green.
+  const names = [GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D];
+  const shards = names.map((n) => by.get(n)).filter(Boolean);
+  if (shards.length) {
+    const bad = shards.filter((j) => j.status === "completed" && (j.conclusion === "failure" || j.conclusion === "timed_out"));
     if (bad.length) return { state: "failed", evidence: bad.map((j) => `${j.name} ${j.conclusion}`).join("; "), code: 1 };
+    const running = shards.filter((j) => j.status && j.status !== "completed");
+    if (running.length) return { state: "pending", evidence: `${running.map((j) => j.name).join("/")} still running`, code: 1 };
+    const missing = names.filter((n) => !by.get(n));
+    if (missing.length) return { state: "pending", evidence: `${missing.join(", ")} missing (all four tooling shards must report)`, code: 1 };
+    if (shards.every((j) => j.conclusion === "success")) return { state: "passed", evidence: `${shards.map((j) => j.name).join(" + ")} success`, code: 0 };
   }
-  if (!agg && !a && !b) return { state: "none", evidence: "no Structural guards check-run on tip", code: 1 };
-  return { state: "pending", evidence: `Structural guards inconclusive (agg=${agg?.conclusion || "—"} a=${a?.conclusion || "—"} b=${b?.conclusion || "—"})`, code: 1 };
+  if (!agg && !shards.length) return { state: "none", evidence: "no Structural guards check-run on tip", code: 1 };
+  return { state: "pending", evidence: `Structural guards inconclusive (agg=${agg?.conclusion || "—"}; ${names.map((n) => `${n.slice(-2, -1)}=${by.get(n)?.conclusion || "—"}`).join(" ")})`, code: 1 };
 }
 
 /** Tip and stamp match when either is a prefix of the other (min 7 hex). */
@@ -150,6 +158,29 @@ export function draftProblem(pull) {
   return null;
 }
 
+/** One clear next-step line for the agent after a --pr verdict. Pure.
+ *  Draft+green → flip ready then add `land`; already ready (`not-draft`) → add `land` only (do not flip again). */
+export function nextAction(state, pr, repo = "brycejmurrin/f1-game") {
+  const n = Number(pr);
+  if (!Number.isInteger(n) || n < 1) return null;
+  // The MCP recipe, never `gh` (PR #5809): a `gh` label write is refused by bash-guard.sh or recorded as Bryce's click.
+  const land = `next: GitHub MCP issue_write  method=update  owner/repo=${repo}  issue_number=${n}  labels=<the live list from issue_read get_labels, plus "land">   (one label per call, skill steward references/labels.md)`;
+  if (state === "passed") {
+    return [
+      `next: GitHub MCP update_pull_request  owner/repo=${repo}  pullNumber=${n}  draft:false`,
+      land,
+    ];
+  }
+  if (state === "not-draft") {
+    return [`${land}   (already ready: flip nothing; add land only)`];
+  }
+  return null;
+}
+
+/** --max-behind was the old distance-row knob; name its replacement in one line. Pure. */
+export const MAX_BEHIND_GONE =
+  "= ready-gate error — --max-behind is gone: the distance row was retired 2026-11-03; sync only when needs-sync.mjs says conflict|stale-red|retest-refused (node tools/ci/needs-sync.mjs <branch>)";
+
 export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
   if (sha) {
     const r = git("git", ["rev-parse", "--verify", sha], { cwd: ROOT, encoding: "utf8" });
@@ -190,7 +221,7 @@ export function resolveSha({ sha, pr, git = spawnSync, request = api } = {}) {
       state: one.json?.state || "open", draft: one.json?.draft !== false, merged: !!one.json?.merged,
       mergeableState: one.json?.mergeable_state ?? null,
       branch: one.json?.head?.ref || "", body: one.json?.body || "", title: one.json?.title || "",
-      labels, files: filesError ? null : files, filesError,
+      labels, files: filesError ? null : files, filesError, author: one.json?.user?.login || "",
     };
   }
   const r = git("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" });
@@ -263,16 +294,30 @@ export function planVerdict(body) {
   return { state: open.length ? "open" : "done", items: items.length, open };
 }
 
-/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan passes with a `planWarning`. */
-export function withPlan(v, body) {
+/** A `**now:**` item (the template's step in progress) is an open item like any other (#5404, option a: the gate is
+ *  unchanged, the template and skill steward §Land say what to do with it). The refusal names that cure. Pure. */
+export const NOW_ITEM = /^(\*\*)?now:/i;
+export function nowHint(open) {
+  return (open || []).some((t) => NOW_ITEM.test(String(t).trim()))
+    ? "; the `**now:**` item counts: at the ready flip tick it with its evidence, or move what is left of it into the `land:` item (skill steward §Land)"
+    : "";
+}
+
+/** Fold the Plan into a green verdict: open items refuse (exit 1); no Plan refuses too, as merge-gate.mjs planRow
+ *  does (a fold bot's PR, `author` a `*[bot]` login, is exempt there and here). Pure. */
+export function withPlan(v, body, author = "") {
   if (!v || v.code !== 0 || body == null) return v;
   const p = planVerdict(body);
   if (p.state === "open") {
     const shown = p.open.slice(0, 3).map((t) => `"${t}"`).join(", ");
     return { ...v, state: "plan-open", code: 1, plan: p,
-      evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)` };
+      evidence: `${p.open.length} of ${p.items} Plan item(s) open: ${shown}${p.open.length > 3 ? ", ..." : ""} — tick each with its evidence or strike it with why (AGENTS.md rule 12)${nowHint(p.open)}` };
   }
-  if (p.state === "none") return { ...v, plan: p, planWarning: "PR body has no ## Plan checklist (AGENTS.md rule 12)" };
+  if (p.state === "none") {
+    if (/\[bot\]$/.test(String(author || ""))) return { ...v, plan: p };
+    return { ...v, state: "plan-missing", code: 1, plan: p,
+      evidence: "PR body has no ## Plan checklist (skill steward §Open) — add the template's Plan and close it; the merge gate refuses it too" };
+  }
   return { ...v, plan: p };
 }
 
@@ -321,33 +366,76 @@ const USAGE = `usage: node tools/ci/ready-gate.mjs [--sha <sha|ref>] [--pr <n>] 
   and .claude/memory/ edits carry \`memory-change: <reason>\` in the body or the \`memory-change\` label.
   A failed PR-files fetch fails closed. --wait polls a pending Structural guards every 30 s (default 30 min; a new
   head aborts). --local uses artifacts/logs/tooling-fast-ready.sha + tooling-fast-suite.log only (no GitHub API).
-  A --pr run writes artifacts/ready-gate/<n>.json (pass or refuse), which the hooks require before the flip.
+  A --pr run writes artifacts/ready-gate/<n>.json (pass or refuse): a local record; no hook gates the flip on it.
+  On exit 0 (draft + green) prints \`next:\` flip ready then add \`land\`; on \`not-draft\` prints \`next:\` add \`land\` only.
+  --max-behind is gone (distance row retired): sync only when needs-sync.mjs says conflict|stale-red|retest-refused.
   Exit 1 refused, 3 no token / API error.`;
 
+/** sha256 of the PR body's `## Plan` section, the half of the ready receipt's key that is not the head (the receipt
+ *  stays valid while head and this hash are unchanged). Normalised so a CRLF body, trailing blanks or an edit outside
+ *  the Plan hash alike: LF line ends, trailing spaces/tabs and blank lines dropped. No Plan section hashes "".
+ *  (Its Python twin merge_policy.plan_hash left with the hook reset of 2026-11-03.) */
+export function planHash(body) {
+  const text = planBodySource(String(body || "").replace(/\r\n?/g, "\n")).replace(/\r\n?/g, "\n");
+  const head = /^##[ \t]+Plan\b.*$/m.exec(text);
+  let section = "";
+  if (head) {
+    const rest = text.slice(head.index + head[0].length);
+    const next = /^##[ \t]/m.exec(rest);
+    section = next ? rest.slice(0, next.index) : rest;
+  }
+  const lines = section.split("\n").map((l) => l.replace(/[ \t]+$/, "")).filter(Boolean);
+  return crypto.createHash("sha256").update(lines.join("\n")).digest("hex");
+}
+
 /** The CLI, with every side effect injectable: request (GitHub), resolve (git/PR), judge (the tip), receipt, sleep, now, log. */
-export function main(argv, { request = api, resolve = resolveSha, judge = evaluate, receipt = (d) => writeReceipt(ROOT, "ready", d), sleep = (s) => spawnSync("sleep", [String(s)]), now = Date.now, log = console.log } = {}) {
+export function main(argv, { request = api, resolve = resolveSha, judge = evaluate, receipt = (d) => writeReceipt(ROOT, "ready", d), sleep = (s) => spawnSync("sleep", [String(s)]), now = Date.now, log = console.log, advisory = null } = {}) {
   exitIfHelp(argv, USAGE);
   const say = (...a) => log("[ready-gate]", ...a);
-  // The receipt github-mcp-guard.sh / bash-guard.sh require before a draft→ready flip: written for a --pr run only,
-  // pass or refuse, so the hook can say WHY the last gate run refused.
-  const record = (pr, head, ok, evidence) => { try { receipt({ pr, head, ok, evidence }); } catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); } };
+  if (argv.includes("--max-behind")) { say(MAX_BEHIND_GONE); return 1; }
+  // The ready receipt: written for a --pr run only, pass or refuse, as the local record of WHY the last run passed or
+  // refused. No hook reads it (the flip is not hook-gated since 2026-11-03).
+  const record = (pr, head, ok, evidence) => { try { receipt({ pr, head, ok, evidence, planHash: planHash(resolved.body) }); } catch (e) { say(`warning: could not write the ready-gate receipt: ${e.message}`); } };
   const opt = (k) => { const i = argv.indexOf(k); return i < 0 ? null : argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : null; };
   const localOnly = argv.includes("--local");
   const asJson = argv.includes("--json");
   const waitMin = argv.includes("--wait") ? Number(opt("--timeout") || 30) : 0;
   let resolved = resolve({ sha: opt("--sha"), pr: opt("--pr"), request });
   if (resolved.error) { say(`= ready-gate unknown — ${resolved.error}`); return 3; }
-  if (resolved.pr) {
-    const dp = draftProblem({ state: resolved.state, draft: resolved.draft, merged: resolved.merged });
-    if (dp) { say(`= ready-gate ${dp.state} — ${dp.evidence} sha=${resolved.sha}`); record(resolved.pr, resolved.sha, false, `${dp.state}: ${dp.evidence}`); return 1; }
-    // mergeability: `unknown` is re-read up to 3 times (2, 4, 8 s), `dirty` refuses with its own row.
-    for (let i = 0; i < 3 && resolved.mergeableState === "unknown"; i++) {
-      sleep(2 ** (i + 1));
-      resolved = resolve({ pr: opt("--pr"), request });
-      if (resolved.error) { say(`= ready-gate unknown — ${resolved.error}`); return 3; }
+  const refreshPull = () => {
+    const again = resolve({ pr: opt("--pr"), request });
+    if (again.error) { say(`= ready-gate unknown — ${again.error}`); return 3; }
+    if (again.sha !== resolved.sha) {
+      say(`= ready-gate moved — head is now ${again.sha} (was ${resolved.sha}); re-run on the new head`);
+      return 1;
     }
-    const mp = mergeableProblem(resolved.mergeableState);
-    if (mp) { say(`= ready-gate conflicting — ${mp.evidence} sha=${resolved.sha}`); record(resolved.pr, resolved.sha, false, `conflicting: ${mp.evidence}`); return 1; }
+    resolved = again;
+    return 0;
+  };
+  const checkPull = () => {
+    for (let retry = 0; ; retry++) {
+      const dp = draftProblem(resolved);
+      if (dp) {
+        say(`= ready-gate ${dp.state} — ${dp.evidence} sha=${resolved.sha}`);
+        for (const line of nextAction(dp.state, resolved.pr) || []) say(line);
+        record(resolved.pr, resolved.sha, false, `${dp.state}: ${dp.evidence}`);
+        return 1;
+      }
+      const mp = mergeableProblem(resolved.mergeableState);
+      if (!mp) return 0;
+      if (mp.state !== "unknown" || retry === 3) {
+        say(`= ready-gate conflicting — ${mp.evidence} sha=${resolved.sha}`);
+        record(resolved.pr, resolved.sha, false, `conflicting: ${mp.evidence}`);
+        return 1;
+      }
+      sleep(2 ** (retry + 1));
+      const code = refreshPull();
+      if (code) return code;
+    }
+  };
+  if (resolved.pr) {
+    const code = checkPull();
+    if (code) return code;
   }
   let judged = judge({ sha: resolved.sha, localOnly, request });
   if (waitMin > 0) {
@@ -357,21 +445,30 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
       if (now() - lastSaid > 5 * 60_000) { say(`= ready-gate waiting — ${judged.evidence} sha=${resolved.sha}`); lastSaid = now(); }
       sleep(30);
       if (resolved.pr) {
-        const again = resolve({ pr: opt("--pr"), request });
-        if (!again.error && again.sha !== resolved.sha) { say(`= ready-gate moved — head is now ${again.sha} (was ${resolved.sha}); re-run on the new head`); return 1; }
+        const code = refreshPull() || checkPull();
+        if (code) return code;
       }
       judged = judge({ sha: resolved.sha, localOnly, request });
     }
   }
-  const v = withMemory(withPlan(judged, resolved.body), resolved.files,
+  const v = withMemory(withPlan(judged, resolved.body, resolved.author), resolved.files,
     { body: resolved.body || "", labels: resolved.labels || [], filesError: resolved.filesError || null });
   if (resolved.pr) record(resolved.pr, v.sha, v.code === 0, v.code === 0 ? "" : `${v.state}: ${v.evidence}`);
-  if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
+  if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null, next: resolved.pr ? nextAction(v.code === 0 ? "passed" : v.state, resolved.pr) : null }, null, 2));
   else {
-    if (v.planWarning) say(`warning: ${v.planWarning}`);
+    if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip ready and add `land` in one step (next: lines); if it ages out, re-run ready-gate");
+    // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs). The CLI
+    // passes it in: merge-gate imports this module, and preflip-probe (with pick-tests) stays out of the gate's
+    // import closure, so both are ROUTINE config paths (D-034).
+    if (resolved.pr && advisory) say(advisory(resolved.pr, v.sha));
+    // next: before the `= ready-gate` verdict so the verdict stays the final line (ready-gate.test.mjs).
+    if (resolved.pr && v.code === 0) for (const line of nextAction("passed", resolved.pr) || []) say(line);
     say(verdictLine(v));
   }
   return v.code;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { preflipAdvisory, readProbeReceipt } = await import("./preflip-probe.mjs");
+  process.exitCode = main(process.argv.slice(2), { advisory: (pr, sha) => preflipAdvisory(readProbeReceipt(pr), sha, pr) });
+}

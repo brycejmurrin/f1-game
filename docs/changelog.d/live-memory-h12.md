@@ -1,1 +1,0 @@
-Fixed: Every race you finished stayed in memory for the rest of the session: finished cars, and through them their whole circuit. On a phone the game grew by roughly 28 MB per two races until it stuttered or the browser closed the tab. A finished race is now released when you return to the menu or start the next one.

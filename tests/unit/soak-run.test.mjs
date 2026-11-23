@@ -12,11 +12,12 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/perf/soak-run.js"), "utf8");
 
-function rig({ curveAt = null, k = 0.02 } = {}) {
+function rig({ curveAt = null, k = 0.02, realRecorder = false, rafId } = {}) {
   const calls = { raf: [], cancel: 0, recStart: 0, recStop: 0, pauseClicks: 0, startRace: 0 };
   let now = 0;
   const G = {
@@ -37,18 +38,22 @@ function rig({ curveAt = null, k = 0.02 } = {}) {
   };
   const ctx = {
     Math, Promise, Object, Array, Number, performance: { now: () => now },
-    requestAnimationFrame: (f) => { calls.raf.push(f); return calls.raf.length; },
+    requestAnimationFrame: (f) => { calls.raf.push(f); return rafId ?? calls.raf.length; },
     cancelAnimationFrame: () => { calls.cancel++; },
     document: { hidden: false, addEventListener(t, f) { calls.vis = f; }, removeEventListener() { calls.vis = null; }, getElementById: (id) => (id === "pausebtn" ? { click() { calls.pauseClicks++; } } : null) },
     Tracks, CamModes: { CAM_MODES: [{ id: "tv" }, { id: "chase" }] },
     Log: { info() {} }, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) },   // the shared clamp soak-run.js calls
-    PhoneRecorder: { start() { calls.recStart++; ctx.PhoneRecorder._on = true; }, stop() { calls.recStop++; ctx.PhoneRecorder._on = false; }, isOn: () => !!ctx.PhoneRecorder._on },
+    PhoneRecorder: { start() { calls.recStart++; ctx.PhoneRecorder._on = true; return true; }, stop() { calls.recStop++; ctx.PhoneRecorder._on = false; }, isOn: () => !!ctx.PhoneRecorder._on },
   };
+  if (realRecorder) {
+    const src = readFileSync(join(ROOT, "js/perf/phone-recorder.js"), "utf8");
+    ctx.PhoneRecorder = vm.runInNewContext(src + "\n;PhoneRecorder", { performance: ctx.performance }, { filename: absSrc("js/perf/phone-recorder.js") });
+  }
   calls.hide = () => { ctx.document.hidden = true; calls.vis(); };
   const SoakRun = vm.runInNewContext(SRC + "\n;SoakRun", ctx);
   SoakRun.create(G);
   const frame = (ms) => { now += ms; const f = calls.raf.pop(); if (f) f(now); };
-  return { SoakRun, G, calls, frame, advance: (ms) => { now += ms; } };
+  return { SoakRun, G, calls, frame, recorder: ctx.PhoneRecorder, advance: (ms) => { now += ms; } };
 }
 
 test("idle until start(): no rAF, no input", () => {
@@ -106,17 +111,108 @@ test("a second start while active is refused", async () => {
   assert.equal(await SoakRun.start(), false);
 });
 
+for (const late of ["resolve", "reject"]) {
+  test(`a stopped soak's late ${late} leaves the replacement driving loop alone`, async () => {
+    const { SoakRun, G, calls, frame } = rig();
+    const first = Promise.withResolvers();
+    G.startRace = () => first.promise;
+    const oldStart = SoakRun.start();
+    SoakRun.stop();
+    G.startRace = () => Promise.resolve();
+    await SoakRun.start({ cam: "tv" });
+    first[late]();
+    assert.equal(await oldStart, false);
+    assert.equal(SoakRun.active(), true);
+    assert.equal(G.camMode, 0, "the replacement's camera stays selected");
+    assert.equal(calls.raf.length, 1, "one driver loop");
+    G.state = "race";
+    frame(16);
+    assert.equal(calls.recStart, 1);
+    assert.ok(G._testInput);
+  });
+}
+
+test("an unsuccessful race entry releases the pending soak without touching the game", async () => {
+  for (const startRace of [
+    () => { throw new Error("race setup failed"); },
+    () => Promise.reject(new Error("race load failed")),
+    () => Object.assign(Promise.resolve(), { outcome: Promise.resolve({ kind: "canceled" }) }),
+    () => Object.assign(Promise.resolve(false), { outcome: Promise.resolve({ kind: "failed" }) }),
+  ]) {
+    const { SoakRun, G, calls } = rig();
+    G.startRace = startRace;
+    assert.equal(await SoakRun.start(), false);
+    assert.equal(SoakRun.active(), false);
+    assert.equal(calls.vis, null);
+    assert.equal(calls.raf.length, 0);
+    assert.equal(G.camMode, 0);
+    assert.equal(calls.pauseClicks, 0);
+  }
+});
+
+test("finishing an auto soak preserves an earlier or replacement manual recording", async () => {
+  for (const preexisting of [true, false]) {
+    const { SoakRun, G, frame, recorder } = rig({ realRecorder: true });
+    if (preexisting) assert.equal(recorder.start(), true);
+    await SoakRun.start();
+    G.state = "race";
+    frame(16);
+    assert.equal(recorder.isOn(), true);
+    if (!preexisting) {
+      assert.equal(recorder.stop(), true, "SHARE ends the soak recording");
+      assert.equal(recorder.start(), true, "a fresh recording begins during the drive");
+    }
+    SoakRun.stop();
+    assert.equal(recorder.isOn(), true, "the manual recording stays live");
+    assert.equal(recorder.stop(), true);
+  }
+});
+
+test("a zero animation-frame ID still releases input and cancels the scheduled frame", async () => {
+  const { SoakRun, G, calls, frame } = rig({ rafId: 0 });
+  await SoakRun.start();
+  G.state = "race";
+  frame(16);
+  assert.ok(G._testInput);
+  SoakRun.stop();
+  assert.equal(G._testInput, null);
+  assert.equal(calls.cancel, 1);
+});
+
 test("the law brakes for a corner it has not reached and flat-outs a straight", () => {
   const straight = rig();
+  straight.G.raceWeather = "wet";
   straight.G.player.speed = 30;
   const a = straight.SoakRun.control(straight.G, { hold: 94, stalled: 0, lastS: null }, 1 / 60);
   assert.equal(a.throttle, true);
   assert.equal(a.brake, false);
   const corner = rig({ curveAt: 160, k: 0.05 });
+  corner.G.raceWeather = "wet";
   corner.G.player.speed = 80;
   const b = corner.SoakRun.control(corner.G, { hold: 94, stalled: 0, lastS: null }, 1 / 60);
   assert.equal(b.brake, true, "80 m/s into a 50 m radius corner 60 m ahead");
   assert.equal(b.throttle, false);
+});
+
+test("dry weather uses the dry envelope: same corner allows a higher target than wet", () => {
+  // k=0.02 → wet vCorner=√(9/0.02)≈21.2, dry √(13/0.02)≈25.5; hold starts at 20 so both climb toward vT.
+  const wet = rig({ curveAt: 100, k: 0.02 });
+  wet.G.raceWeather = "wet";
+  wet.G.player.speed = 20;
+  const wetIn = wet.SoakRun.control(wet.G, { hold: 20, stalled: 0, lastS: null }, 1 / 60);
+  const dry = rig({ curveAt: 100, k: 0.02 });
+  dry.G.raceWeather = "dry";
+  dry.G.player.speed = 20;
+  const dryIn = dry.SoakRun.control(dry.G, { hold: 20, stalled: 0, lastS: null }, 1 / 60);
+  // At 20 m/s both still throttle; raise speed into the wet gap between envelopes.
+  wet.G.player.speed = 23;
+  const wetFast = wet.SoakRun.control(wet.G, { hold: 23, stalled: 0, lastS: null }, 1 / 60);
+  dry.G.player.speed = 23;
+  const dryFast = dry.SoakRun.control(dry.G, { hold: 23, stalled: 0, lastS: null }, 1 / 60);
+  assert.equal(wetFast.brake, true, "23 m/s is over the wet corner target");
+  assert.equal(dryFast.brake, false, "23 m/s is still under the dry corner target");
+  assert.equal(wetIn.throttle, true);
+  assert.equal(dryIn.throttle, true);
 });
 
 test("it steers back toward the road: right of centre steers one way, left the other", () => {

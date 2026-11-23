@@ -372,13 +372,13 @@ const NetHandshake = (function () {
     } catch (e) { return false; }
   }
 
+  // INVISIBLE stays module-local (peekCode only).
   return {
     MAGIC,
     encodeCode, decodeCode, peekCode, normaliseSdp,
     localBuild, metaBuild, checkBuild, waitForIce, offerId,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl, withoutInviteUrl, consumeInviteUrl,
-    INVISIBLE,
   };
 })();
 Object.freeze(NetHandshake);

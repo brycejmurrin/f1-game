@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mexico",
+    revision: 3,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 1.6 m off centreline; = trace vertex 0.
     // 0.6350 also measures straight (mean |k| 0.00211 over 120 m) but
@@ -15,7 +16,7 @@
     // straight before Foro Sol and the stadium bowl on the T4-T6 hairpins.
     // docs/notes/DEFECT-LEDGER.md "mexico — FIXED".
     name: "MEXICO CITY",
-    gp: "Mexican GP",
+    gp: "Mexican GP",   // the event is the Mexico City GP; the announcer reads this aloud, so it changes with a voice re-bake (tests/unit/voice-pack.test.mjs)
     country: "Mexico",
     night: false,
     theme: "modern",
@@ -50,42 +51,36 @@
     // Racing-lap arc fractions, like the elevations below (no sceneryStartFrac
     // shift); the banks land on the curated apexes above. MEASURED via
     // Tracks.bankAngle: max 5.99 deg at 0.693 (T11), 3.5 deg at 0.892-0.930
-    // (T15), none after 0.93. docs/tracks/mexico.md still says 6 deg at ~0.97.
+    // (T16), none after 0.93. docs/tracks/mexico.md still says 6 deg at ~0.97.
     bankZones: [
-      { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T15 (was 0.1866 + shift 0.7236)
+      { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T16 (was 0.1866 + shift 0.7236)
       { frac: 0.5044, angleDeg: 3.0, widthM: 80 },    // T6
       { frac: 0.6070, angleDeg: 3.0, widthM: 90 },    // T8
-      { frac: 0.6275, angleDeg: 3.0, widthM: 100 },   // T9
+      { turn: 9, angleDeg: 3.0, widthM: 100 },        // T9 (was frac 0.6275, which built on T8 at 0.6073)
       { frac: 0.6928, angleDeg: 6.0, widthM: 120 },   // T11
       { frac: 0.7311, angleDeg: 5.0, widthM: 140 },   // T11-T12 link
     ],
-    // Source-coordinate undulations. Hermanos Rodríguez sits on a drained lakebed
-    // and is gentle, but not flat: it climbs through the esses, crests before the
-    // stadium and drops through Foro Sol.
-    // Authored in SOURCE space, so no pair can remap across start/finish and
-    // invent a hill.
-    //
-    // MEASURED off the built spline, 240 samples: 6.64 m end to end, peaking at
-    // 2.83 % grade on the flank of the s = 0.245 rise, with 6 samples over 2 %.
-    // This said "under 2 % anywhere" — a figure nobody computed, which
-    // tests/specs/terrain-over-road.spec.js then pinned verbatim in `f9bbf479` and
-    // sat red on. The geometry is unchanged and correct; only the claim was
-    // wrong. Re-measure if these three rows change, rather than adjusting the
-    // sentence to taste.
-    // Racing-lap ARC fractions (no sceneryStartFrac, so no fmap): old source
-    // s 0.855/0.245/0.520 -> (s - 0.635) + 0.72364.
+    // Smooth centerline fit to Sainz's 2024 qualifying lap 20, checked against
+    // Verstappen's lap 17. Heights are relative metres. Both laps span 2.8 m.
+    // https://api.openf1.org/v1/location?session_key=9621&driver_number=55&date%3E2024-10-26T22:03:53.895&date%3C2024-10-26T22:05:09.841
     elevations: [
-      { s: 0.94364, halfM: 420, rise: 5.0 },
-      { s: 0.33364, halfM: 380, rise: 3.0 },
-      { s: 0.60864, halfM: 280, rise: -1.6 },
-    ],
+      0.08, -0.69, -0.03, -0.56, -0.31, -0.40, -0.45, -0.54,
+      -0.43, -0.65, -0.41, -0.82, -0.32, -0.63, -0.40, -0.21,
+      -0.52, 0.10, -0.08, 0.92, 0.72, 0.47, 0.09, -0.55,
+      0.13, -0.61, -0.18, -0.52, -0.20, -0.47, -0.21, -0.47,
+      -0.29, -0.29, -1.03, 0.48, -1.21, -0.09, -0.99, -0.51,
+    ].map((rise, i) => ({ s: i / 40, halfM: 214.34, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.62],
-    turns: [0.2571, 0.2776, 0.2891, 0.4531, 0.4701, 0.5066, 0.5836, 0.6076, 0.6276, 0.6721, 0.6926, 0.8261, 0.8681, 0.8821, 0.9101, 0.9346, 0.9496],
+    // FIA 2026 numbering (live-timing corner markers, circuits/65/2026, + FIA
+    // 2026 MEX circuit map, 17 turns): Foro Sol = T12-T16 (T15 the left flick
+    // at the 0.8909 peak, R~106 m), Peraltada = T17 (one apex, peak 0.9356;
+    // its 0.9487 tail peak is the same corner, not a numbered turn).
+    turns: [0.2571, 0.2776, 0.2891, 0.4531, 0.4701, 0.5066, 0.5836, 0.6076, 0.6276, 0.6721, 0.6926, 0.8261, 0.8681, 0.8821, 0.8909, 0.9101, 0.9356],
     barrier: { a: [0.05, 0.55, 0.26], b: [0.95, 0.95, 0.96], c: [0.90, 0.12, 0.14], night: [0.09, 0.20, 0.11], tyre: [0.05, 0.55, 0.26] },  // flag green/white/red
     furniture: { tree: "broad", fol: [0.32, 0.44, 0.18], lamp: "post",  lc: [1.0, 0.86, 0.55] },
     kit: { marshal: "hut",       rail: "armco",       fence: "chainlink",  tyre: "tecpro",  board: "led",       gantry: "portal",     camera: "scaffold",  hoarding: "led" },

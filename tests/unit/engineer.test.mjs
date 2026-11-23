@@ -402,6 +402,26 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
 });
 
+test("rival stop tracking records arrivals and counter changes without rewriting a steady field", (t) => {
+  const { eng, tyres, G } = sessionFor();
+  const player = carOn(tyres, { prog: 5000 });
+  G.cars = [player];
+  G.pits = { estimate: () => ({ lossS: 22 }) };
+  eng.senseOf(player);
+  const writes = t.mock.method(player._eng.stops, "set");
+  const rival = { code: "VER", prog: 4900, pitStops: 3 };
+  G.cars.push(rival);
+  assert.equal(eng.senseOf(player).rivalBoxed, null, "an arriving rival establishes a baseline");
+  assert.equal(writes.mock.callCount(), 1);
+  for (let i = 0; i < 60; i++) eng.update(player, 1 / 60);
+  assert.equal(writes.mock.callCount(), 1, "an unchanged stop count needs no writes");
+  rival.pitStops = 0;
+  assert.equal(eng.senseOf(player).rivalBoxed, null, "a counter reset is quiet");
+  rival.pitStops = 1;
+  assert.equal(eng.senseOf(player).rivalBoxed, "VER", "the first stop after the reset counts");
+  assert.equal(writes.mock.callCount(), 3);
+});
+
 test("the PIT CALL rides its own priority; every other line still yields", () => {
   // Every engineer line was "info" (js/game.js ANN_PRI rank 2), which put the
   // instruction to pit BELOW the pit lane's own "PIT ENTRY — LIMITER ON"
@@ -730,4 +750,16 @@ test("RAIN IN N LAPS counts to the first wet stage of the arc, not its end", () 
   const w = sessionFor({ arc: { from: "dry", to: "rain", dur: 540, t: 200, seq } });
   const d = carOn(w.tyres, { wear: 0 });
   assert.equal(w.eng.senseOf(d).rainInLaps, null);
+});
+
+// Clean-room audit fix 57: before the first line crossing the car's lap is 0
+// (game.js grid build), and it is already racing lap 1, so a 5-lap race has
+// 5 laps to the flag, not 6.
+test("laps to the flag on the grid side of the line count the race, not one more", () => {
+  for (const lap of [0, 1]) {
+    const { eng, tyres } = sessionFor({ laps: 5 });
+    const c = carOn(tyres, { life: 0.7 });
+    c.lap = lap;
+    assert.equal(eng.senseOf(c).stintLeft, 5, "lap " + lap + " of a 5-lap race");
+  }
 });

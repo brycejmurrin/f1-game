@@ -33,7 +33,7 @@ test("the actual collision candidate accepts two rotated humans across the lap s
 test("AI corner planning solves the same speed-dependent envelope as steering", () => {
   const A = load(["js/physics/ai-drive.js"]).get("AiDrive");
   for (const pace of [.4,.84,1,1.4]) for (const grip of [.4,.8,1]) for (const k of [.001,.006,.03,.1]) {
-    const load=.8, lat=22*(1+(load-.5)*.16)*grip;
+    const load=.8, lat=22*A.aeroGrip(load)*grip;
     const v=A.cornerSpeed(k,lat,pace,72);
     assert.ok(Math.abs(v*v*k - 22*A.lateralScale(v,load,grip,pace,72))<1e-9);
     assert.ok(A.cornerSpeed(k,lat*.8,pace,72)<v,"less grip must lower the target");
@@ -47,6 +47,16 @@ test("roll stiffness shifts grip between axles while works settings stay identic
   const front={...S.axleGrip(.3,22)},rear={...S.axleGrip(-.3,22)};
   assert.ok(front.f<1 && front.r>1 && rear.f>1 && rear.r<1);
   for (const x of [front,rear]) assert.ok(x.f>.8 && x.r>.8 && x.f<1.2 && x.r<1.2);
+});
+
+test("axleGrip transfer magnitude at LAT_MAX", () => {
+  const { get } = load(["js/physics/consts.js", "js/garage/setup-tune.js"]);
+  const S = get("SetupTune"), lat = get("PhysicsConsts").LAT_MAX;
+  const g = { ...S.axleGrip(0.3, lat) };
+  // Full lateral demand must move axle capacity by a material amount — a token
+  // transfer (≈0.01) leaves both axles within a few parts per ten-thousand of 1.
+  assert.ok(Math.abs(g.f - 1) > 0.02, `front axle shift at LAT_MAX must be >2%, got ${g.f}`);
+  assert.ok(Math.abs(g.r - 1) > 0.01, `rear axle shift at LAT_MAX must be >1%, got ${g.r}`);
 });
 
 test("ghost classes isolate records, retain legacy laps and survive immediate switching", () => {
@@ -63,7 +73,7 @@ test("ghost classes isolate records, retain legacy laps and survive immediate sw
 });
 
 test("network strategic state clamps telemetry and never changes car pose", () => {
-  const N=load(["js/net/netplay.js"]).get("NetPlay");
+  const N=load(["js/net/quali-wire.js", "js/net/strategy-wire.js", "js/net/netplay.js"]).get("NetPlay");
   const c={px:3,pz:5,speed:40,tyre:{id:"soft",code:"S",life:.67,tread:0,colour:[1,0,0]},tyreWear:.7,pitState:"box",pitT:2,tyreStints:2};
   const d=N.strategyState(c,7,"monza"), remote={px:10,speed:30};
   d.fields.tyreWear=1e8; d.fields.speed=1000;
@@ -74,7 +84,7 @@ test("network strategic state clamps telemetry and never changes car pose", () =
 });
 
 test("adaptive interpolation reacts to arrival jitter, stays bounded, and preserves prediction", () => {
-  const N=load(["js/net/snapshot.js"]).get("NetSnapshot");
+  const N=load(["js/net/interp.js", "js/net/snapshot.js"]).get("NetSnapshot");
   const a=N.createInterp({total:1000,adaptive:true}), b=N.createInterp({total:1000});
   for(let i=0;i<80;i++) {
     const st={s:i,lap:1,x:0,speed:20,head:0};
@@ -88,7 +98,7 @@ test("adaptive interpolation reacts to arrival jitter, stays bounded, and preser
 
 
 test("adaptive presentation cannot rewind when a burst grows the delay", () => {
-  const N=load(["js/net/snapshot.js"]).get("NetSnapshot");
+  const N=load(["js/net/interp.js", "js/net/snapshot.js"]).get("NetSnapshot");
   const a=N.createInterp({total:10000,adaptive:true});
   for(let i=0;i<8;i++) a.push(i*50,{s:i,lap:1,x:0,speed:20,head:0},i*50);
   const before=a.sample(400).s;

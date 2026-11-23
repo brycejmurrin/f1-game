@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -258,16 +259,15 @@ test("career export awaits native I/O and never retries a failed or cancelled sh
 
 test("career export button never announces success for a cancelled or failed native backup", async () => {
   const source = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
-  const start = source.indexOf("exp.onclick = (ev)");
-  const handler = source.slice(start, source.indexOf("\n      };", start) + 9);
+  const factory = source.slice(source.indexOf("function exportAllButton()"), source.indexOf("function appendImport("));
   for (const outcome of ["success", "failure", "cancel"]) {
     const { sandbox } = loadNative({ capacitor: true });
-    const notices = [], button = { disabled: false };
+    const notices = [], button = { disabled: false, setAttribute() {} };
     let resolve, reject, calls = 0;
     const held = new Promise((yes, no) => { resolve = yes; reject = no; });
-    Object.assign(sandbox, { exp: button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
+    Object.assign(sandbox, { el: () => button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
       CareerBackup: { exportAll: () => { calls++; return held; } } });
-    vm.runInContext("let armedDelete = '';\n" + handler, vm.createContext(sandbox));
+    vm.runInContext("let armedDelete = '';\n" + factory + "\nexportAllButton();", vm.createContext(sandbox), { filename: absSrc("js/career/career-ui.js") });
     const event = { stopPropagation() {} };
     button.onclick(event); button.onclick(event);
     assert.equal(calls, 1);
@@ -322,7 +322,8 @@ test("ghost download reflects the awaited native result and re-enables its butto
     const held = new Promise((yes, no) => { resolve = yes; reject = no; });
     const plugin = outcome === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
     plugin[outcome === "write" ? "writeFile" : "share"] = () => { calls++; return held; };
-    vm.runInContext(handler, vm.createContext(sandbox));
+    const translator = source.slice(source.indexOf("const tr ="), source.indexOf("const trN ="));
+    vm.runInContext(translator + handler, withI18n(vm.createContext(sandbox)));
     const pending = button.onclick();
     await new Promise(setImmediate);
     assert.equal(button.textContent, "SAVING…");
@@ -337,7 +338,7 @@ test("ghost download reflects the awaited native result and re-enables its butto
 });
 
 test("SettingsExport.download awaits the real native helper and surfaces write/share failures", async () => {
-  const src = readFileSync(join(ROOT, "js/ui/settings-export.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/ui/settings-export-body.js"), "utf8");   // the LAZY_SAVES_DATA body (#4748)
   const download = src.slice(src.indexOf("async function download("), src.indexOf("function stamp()"));
   for (const stage of ["write", "share"]) {
     const { sandbox } = loadNative({ capacitor: true });
@@ -347,9 +348,11 @@ test("SettingsExport.download awaits the real native helper and surfaces write/s
     sandbox.Capacitor.Plugins[stage === "write" ? "Filesystem" : "Share"][stage === "write" ? "writeFile" : "share"] = () => held;
     sandbox.Blob = Blob;
     const ctx = vm.createContext(sandbox);
-    vm.runInContext(download, ctx);
+    const config = "js/ui/settings-export.js";
+    vm.runInContext(readFileSync(join(ROOT, config), "utf8"), ctx, { filename: absSrc(config) });
+    vm.runInContext("const { FORMAT, SETTINGS_MAX_BYTES } = SettingsExport._core;\n" + download, ctx, { filename: absSrc("js/ui/settings-export-body.js") });
     let settled = false;
-    const result = sandbox.download({ settings: true }, "settings.json");
+    const result = sandbox.download({ format: "apex26-settings-v1", settings: {} }, "settings.json");
     const rejected = assert.rejects(result, (err) => err === error);
     result.then(() => { settled = true; }, () => { settled = true; });
     await new Promise((resolve) => setImmediate(resolve));
@@ -398,6 +401,7 @@ test("renderer screenshots await native saving and report its failure", async ()
 });
 
 test("blob:<a download> click refuses a non-ok fetch instead of saving the body", async () => {
+  const toasts = [];
   const writes = [];
   const logs = [];
   let clickHandler = null;
@@ -405,10 +409,13 @@ test("blob:<a download> click refuses a non-ok fetch instead of saving the body"
     console, Promise, Date, Math, JSON, Object, Array, String, Number, Uint8Array,
     btoa: (s) => Buffer.from(s, "binary").toString("base64"),
     atob: (s) => Buffer.from(s, "base64").toString("binary"),
-    Log: { info(_ch, msg) { logs.push(String(msg)); }, warn() {} },
+    Log: { info(_ch, msg) { logs.push(String(msg)); }, warn(_ch, msg) { logs.push(String(msg)); } },
     document: {
       addEventListener(type, fn) { if (type === "click") clickHandler = fn; },
+      createElement: () => { const el = { style: {}, setAttribute() {}, remove() {} }; toasts.push(el); return el; },
+      body: { appendChild() {} },
     },
+    setTimeout: () => 0,
     location: { origin: "https://game.test" },
     Capacitor: {
       isNativePlatform: () => true,
@@ -440,7 +447,7 @@ test("blob:<a download> click refuses a non-ok fetch instead of saving the body"
   clickHandler({ target: a, preventDefault() {}, stopPropagation() {} });
   for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(writes.length, 0, "a 404 body must not be written as the download");
-  assert.ok(logs.some((m) => /native download failed:.*HTTP 404/.test(m)), logs.join(" | "));
+  assert.ok(logs.some((m) => /native download failed:.*HTTP 404/.test(m)) && toasts.length === 1 && /EXPORT FAILED.*trace\.json/.test(toasts[0].textContent), "failed export must warn and toast once: " + logs.join(" | "));
 });
 
 test("renderer screenshot refuses a non-ok fetch instead of saving the body", async () => {
@@ -542,4 +549,15 @@ test("missing or failing retention operations cannot block sharing", async () =>
     assert.equal((await sandbox.NativeDownload.saveBlob(bytesBlob([1]), "backup.json")).ok, true);
     assert.equal(shares.length, 1);
   }
+});
+
+test("Android FileProvider exposes only the cache folder NativeDownload shares from", () => {
+  const xml = readFileSync(join(ROOT, "mobile/android/app/src/main/res/xml/file_paths.xml"), "utf8")
+    .replace(/<!--[\s\S]*?-->/g, "");
+  const src = readFileSync(join(ROOT, "js/core/native-download.js"), "utf8");
+  const exportDir = src.match(/EXPORT_DIR = "([^"]+)"/)[1];
+  assert.match(src, /CACHE_DIR = "CACHE"/, "exports are written to Directory.CACHE (cache-path)");
+  const roots = [...xml.matchAll(/<([a-z-]+-path)\b([^>]*)\/>/g)].map((m) => ({ tag: m[1], path: /path="([^"]*)"/.exec(m[2])[1] }));
+  assert.deepEqual(roots, [{ tag: "cache-path", path: exportDir + "/" }],
+    "one cache-path root at EXPORT_DIR; no external-path / '.' roots");
 });

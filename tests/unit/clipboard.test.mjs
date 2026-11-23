@@ -47,6 +47,13 @@ test("write prefers the async clipboard API then falls back to execCommand", asy
   assert.deepEqual(h.order, ["clipboard:hello", "execCommand:copy"]);
 });
 
+test("a failed ownership check declines the fallback without rejecting the write", async () => {
+  const h = boot({ clipboardRejects: true, execOk: true });
+  const copied = await h.ApexClipboard.write("old link", { mayFallback() { throw new Error("view gone"); } });
+  assert.equal(copied, false);
+  assert.deepEqual(h.order, ["clipboard:old link"]);
+});
+
 test("write succeeds on clipboard alone when execCommand is gone", async () => {
   const h = boot({ execOk: false });
   const ok = await h.ApexClipboard.write("x");

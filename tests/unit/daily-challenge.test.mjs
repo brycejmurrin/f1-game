@@ -1,8 +1,8 @@
 /* daily-challenge.test.mjs — the DAILY CHALLENGE plan and record, in a VM.
  *
  * js/race/daily-challenge.js is pure rules over the date and a store: the plan
- * must be the same for every player on the same UTC day and different across
- * days; the streak counts consecutive UTC days with a lap; the share line has
+ * must be the same for every player on the same calendar date and different across
+ * days; the streak counts consecutive LOCAL days with a lap (#5010); the share line has
  * one shape. Loaded whole with stub Tracks / Log, like season-cal.test.mjs.
  *
  * Run: node --test tests/unit/daily-challenge.test.mjs   (npm run test:tooling-fast)
@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -34,7 +35,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     let livery = { c1: team.color, c2: team.color2 };
     const player = { team, num: team.drivers[0].num };
     const G = { player, teamIdx: Teams.LIST.indexOf(team), driverIdx: 0, seed: 37, ttDistance: 3,
-      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved,
+      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved, getLiveryId: () => "default",
       gfx: { createMesh: data => ({ serial: ++builds, ...data }), freeMesh() {} } };
     const ctx = vm.createContext({ G, Parts, Teams, Float32Array, CarMesh: {}, FieldLod: { init() {} },
       Log: { info() {}, warn() {} },
@@ -45,7 +46,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
       getTeamParts: () => saved, getLiveryId: () => "default",
       SetupTune: { mods() {}, BB_REF: 0.5, brakeBias() {}, balance() {}, aero() {} },
       modsFor: () => ({}), tyreBaseModsFor: () => ({}), tyres: { applyCompound() {}, optionRecord: () => ({}) } });
-    for (const file of ["js/core/hash32.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
+    for (const file of ["js/core/hash32.js", "js/race/session-phys.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
       vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     G.records = vm.runInContext("SessionRecords.create(G)", ctx);
     const daily = ctx.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
@@ -65,9 +66,21 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     saved = custom;
     assert.equal(daily.select("2026-10-24", "standard").class, "standard");
     assert.equal(G.driverIdx, 0);
+    // makeCars stamps visualSetup once from the garage save (carVisual own:true).
+    // STANDARD Daily must restamp to the factory key before teamMesh (TT ghost) /
+    // player flaps read it — residual M27 after playerPartsFor covered body/cockpit.
+    const customStamp = Parts.CATALOG.map((c) => custom[c.id] || "").join(",");
+    player.visualSetup = custom;
+    player.visStamp = customStamp;
+    player.visPaint = customStamp + ":" + player.num;
+    player.visSh = customStamp + ":sh";
     refresh();
     const key = draw.playerVisualKey, standard = meshes();
     assert.ok(standard.every(m => m.ids.aero === factory.aero), history + ": STANDARD uses factory exterior, cockpit and shadow");
+    assert.equal(player.visualSetup, null, history + ": setPlayerParts restamps STANDARD off the SAVED visualSetup");
+    assert.equal(player.visStamp, "", history + ": factory stamp is empty");
+    assert.equal(draw.teamMesh(team, player).ids.aero, factory.aero, history + ": TT ghost teamMesh follows factory");
+    assert.equal(draw.teamDecalState(team, true).parts._ids.aero, factory.aero, history + ": player flaps use setPlayerParts, not getTeamParts");
     if (history === "factory-warm") assert.ok(standard.every((m, i) => m === warmed[i]), "factory entries remain reusable");
     if (history === "custom-warm") assert.ok(standard.every((m, i) => m !== warmed[i]), "custom meshes keep a distinct key");
     daily.stop(); saved = factory; G.store.rev++; refresh();
@@ -79,6 +92,9 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     assert.ok(meshes(customKey).every(m => m.ids.aero === custom.aero), "explicit menu key uses its saved custom recipe");
     refresh();
     assert.ok(meshes().every(m => m.ids.aero === custom.aero), "ordinary custom parts remain custom after Daily");
+    assert.ok(player.visualSetup && player.visStamp, "ordinary custom restamps the live player for teamMesh");
+    assert.equal(draw.teamMesh(team, player).ids.aero, custom.aero, "TT ghost follows the restamped custom recipe");
+    assert.equal(draw.teamDecalState(team, true).parts._ids.aero, custom.aero, "player flaps follow the restamped custom recipe");
     livery = { ...livery, aeroShape: "style_aero_rift" }; refresh(); draw.invalidateCustomMeshCaches(team.id);
     assert.ok(meshes().every(m => m.ids.aero === livery.aeroShape), "livery appearance is applied over fitted parts");
     livery = { c1: team.color, c2: team.color2 }; draw.invalidateCustomMeshCaches(team.id);
@@ -86,11 +102,11 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
   }
 });
 
-function load() {
+function load(opts = {}) {
   const season = ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"]
     .map((id) => ({ id, name: id.toUpperCase() }));
   const ctx = vm.createContext({
-    Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
+    Math, JSON, Object, Array, String, Number, Date: opts.Date || Date, isNaN, isFinite, console,
     Tracks: { LIST: season.concat([{ id: "kyalami", name: "KYALAMI" }]), SEASON: season },
   });
   seedLog(ctx);
@@ -106,10 +122,10 @@ function load() {
     flow: "gp", timeTrial: false,
     startRace: () => calls.push("startRace"),
   };
-  return { D, d: D.create(G), G, stored, calls };
+  return { D, d: D.create(G), G, stored, calls, ctx };
 }
 
-test("COPY DAILY CODE binds time and medal to the same class PB across repeats", () => {
+test("COPY DAILY CODE binds time and medal to the same class PB across repeats", async () => {
   const { G } = load();
   let copied;
   let context = "standard-class";
@@ -123,14 +139,16 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   for (const file of ["js/race/quali-model.js", "js/race/daily-challenge.js", "js/ui/share-code.js"]) {
     vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
   }
-  ctx.G = { ...G, referencePole: () => 82, player: { best: 80 },
+  ctx.G = { ...G, referencePole: (k) => (k === "medal" ? 82 : NaN), player: { best: 80 },
     records: { key: () => context, prepareDaily() {}, restoreDaily() {} } };
   ctx.G.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
   const src = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
   const start = src.indexOf("      codeBtn.onclick = () => {", src.indexOf('codeBtn.id = "res-daily-share-code"'));
   const end = src.indexOf("\n      };", start) + "\n      };".length;
   assert.ok(start >= 0 && end > start);
-  vm.runInContext(src.slice(start, end), ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  withI18n(ctx); ctx.I18n._installCatalog("de", { "results.copied": "KOPIERT" });
+  const translator = src.slice(src.indexOf("const tr ="), src.indexOf("const trN ="));
+  vm.runInContext(translator + src.slice(start, end), ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const day = ctx.G.daily.dayKey();
   const click = () => { ctx.codeBtn.onclick(); return vm.runInContext("ShareCode.decode", ctx)(copied); };
   ctx.G.daily.select(day, "standard"); ctx.G.daily.record(80, context);
@@ -141,12 +159,14 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   assert.equal(click().medal, "gold");
   ctx.G.daily.record(79, context);
   assert.equal(click().best, 79);
+  await Promise.resolve();
+  assert.equal(ctx.codeBtn.textContent, "KOPIERT", "the awaited copy confirmation uses the translated catalogue");
   context = "different-class";
   assert.equal(ctx.G.daily.shareResult().best, undefined);
   assert.equal(ctx.G.daily.shareResult().medal, null);
 });
 
-test("the plan is a pure function of the UTC day — same day, same plan; adjacent days differ", () => {
+test("the plan is a pure function of the day — same day, same plan; adjacent days differ", () => {
   const { D } = load();
   const a = D.plan("2026-09-03"), b = D.plan("2026-09-03");
   assert.deepEqual(a, b);
@@ -158,7 +178,7 @@ test("the plan is a pure function of the UTC day — same day, same plan; adjace
     assert.ok(["default", "dawn", "day", "dusk", "night"].includes(p.tod));
     assert.ok(p.seed > 0 && Number.isInteger(p.seed));
   }
-  assert.equal(D.dayKey(new Date(Date.UTC(2026, 8, 3, 23, 59))), "2026-09-03", "UTC, not local");
+  assert.equal(D.dayKey(new Date(2026, 8, 3, 23, 59)), "2026-09-03", "local calendar day, not UTC");
   assert.equal(D.prevDay("2026-03-01"), "2026-02-28");
 });
 
@@ -205,7 +225,7 @@ test("stop() hands the session seed back: a later one-off GP does not draw off t
   assert.equal(G.seed, 777);
 });
 
-test("record() keeps the day's best and counts a streak of consecutive UTC days", () => {
+test("record() keeps the day's best and counts a streak of consecutive days", () => {
   const { d } = load();
   assert.equal(d.record(80), null, "no active session, nothing recorded");
   d.open("2026-09-03");
@@ -218,6 +238,140 @@ test("record() keeps the day's best and counts a streak of consecutive UTC days"
   d.open("2026-09-06"); d.record(70);   // a missed day resets the streak
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-09-06" });
   assert.equal(d.data().days["2026-09-04"].best, 70, "earlier days are kept");
+});
+
+// #5010: in Los Angeles (PST) the UTC day rolls at 4 pm, so a 3 pm lap and a 6 pm lap on the next
+// local day were UTC days N and N+2 and the streak reset to 1; two laps one evening counted two days.
+test("the streak counts the player's local days: LA 3 pm then 6 pm the next day is a streak of 2", () => {
+  const tz = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    const { d } = load();
+    const key = (s) => d.dayKey(new Date(s));
+    assert.equal(key("2026-11-04T15:00:00"), "2026-11-04");
+    assert.equal(key("2026-11-05T18:00:00"), "2026-11-05", "6 pm PST is still the 5th, not the UTC 6th");
+    d.open(key("2026-11-04T15:00:00")); d.record(80);
+    d.open(key("2026-11-05T18:00:00")); d.record(80);
+    assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-05" });
+    d.open(key("2026-11-06T14:00:00")); d.record(80);
+    d.open(key("2026-11-06T17:00:00")); d.record(79);
+    assert.deepEqual(host(d.data().streak), { count: 3, last: "2026-11-06" }, "two laps one afternoon are one day");
+    d.stop();
+  } finally {
+    if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz;
+  }
+});
+
+test("an open challenge keeps its day across UTC and local midnight; the next challenge uses the new local day", () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    let now = "2026-11-20T23:59:59Z";
+    class Clock extends Date { constructor(...args) { super(...(args.length ? args : [now])); } }
+    const { d } = load({ Date: Clock });
+    const started = d.open();
+    assert.equal(started.day, "2026-11-20");
+    now = "2026-11-21T00:00:01Z";
+    assert.equal(d.dayKey(), started.day);
+    d.record(85);
+    now = "2026-11-21T08:00:01Z";
+    assert.equal(d.dayKey(), "2026-11-21");
+    d.record(80);
+    assert.equal(d.shareResult().day, started.day);
+    assert.equal(d.shareResult().best, 80);
+    assert.equal(d.today(), null);
+    d.stop();
+    assert.equal(d.open().day, "2026-11-21");
+    d.record(89);
+    assert.equal(d.shareResult().best, 89);
+    assert.equal(d.liveStreak(), 2);
+  } finally {
+    if (previousZone === undefined) delete process.env.TZ; else process.env.TZ = previousZone;
+  }
+});
+
+// #5887 (audit A6): a lap with the device clock a year ahead set streak.last to that day and pruned
+// the history before it; back on the real date, `day > last` never held again and the streak froze.
+test("a streak left by a clock set ahead moves again once the clock is back", () => {
+  let now = "2027-11-20T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  d.open("2027-11-20"); d.record(80);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2027-11-20" });
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(81);
+  assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-11-21" }, "the real day takes the streak back");
+  // #5943: a future-dated day cannot be told from real days after a clock set back, so it stays (one key);
+  // pruning it by the device's "tomorrow" deleted real history.
+  assert.equal(d.data().days["2027-11-20"].best, 80, "the future-dated day is kept, not pruned by the device clock");
+  now = "2026-11-22T12:00:00";
+  d.open("2026-11-22"); d.record(82);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" }, "and counts on from there");
+  // One day ahead is a time-zone hop, not a bad clock: a lap on the earlier local day leaves it.
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(80);
+  assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-11-22" });
+  assert.equal(d.data().days["2026-11-22"].best, 82);
+  d.stop();
+});
+
+// #5943: the prune trusted the device clock. A clock set back two days deleted every real day after its
+// "tomorrow"; one set more than HISTORY_DAYS ahead deleted the whole real history.
+test("a clock set back two days, then corrected, loses no real day", () => {
+  let now = "2026-11-18T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  for (const day of ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]) {
+    now = day + "T12:00:00"; d.open(day); d.record(80);
+  }
+  now = "2026-11-18T12:00:00";   // a dead battery: the phone wakes two days in the past
+  d.open("2026-11-18"); d.record(79);
+  for (const day of ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"])
+    assert.ok(d.data().days[day], day + " survives a play with the clock set back");
+  now = "2026-11-21T12:00:00";   // corrected
+  d.open("2026-11-21"); d.record(78);
+  assert.deepEqual(Object.keys(d.data().days).sort(), ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21"]);
+  assert.equal(d.data().days["2026-11-18"].best, 79);
+  d.stop();
+});
+
+test("a clock set far ahead keeps the real history, and the window still prunes", () => {
+  let now = "2026-11-20T12:00:00";
+  const FakeDate = class extends Date { constructor(...a) { if (a.length) super(...a); else super(now); } };
+  const { d } = load({ Date: FakeDate });
+  d.open("2026-08-01"); d.record(80);   // older than the window once the 20th is played
+  d.open("2026-11-19"); d.record(80);
+  d.open("2026-11-20"); d.record(80);
+  assert.equal(d.data().days["2026-08-01"], undefined, "a real day out of the window is pruned");
+  now = "2027-03-01T12:00:00";   // 101 days ahead
+  d.open("2027-03-01"); d.record(80);
+  for (const day of ["2026-11-19", "2026-11-20", "2027-03-01"]) assert.ok(d.data().days[day], day + " kept");
+  now = "2026-11-21T12:00:00";
+  d.open("2026-11-21"); d.record(80);
+  for (const day of ["2026-11-19", "2026-11-20", "2026-11-21"]) assert.ok(d.data().days[day], day + " kept after the clock is back");
+  d.stop();
+});
+
+test("record() persists its returned entry before notifying streak badges", () => {
+  const { d, G, ctx } = load();
+  const day = "2026-09-03", events = [];
+  let persisted;
+  G.store.set = (key, value) => {
+    events.push("store");
+    assert.equal(key, "daily.v1");
+    persisted = value;
+  };
+  ctx.Badges = { onStreak(count) {
+    events.push("badge");
+    assert.equal(count, 1);
+    assert.equal(persisted.days[day].best, 81.345);
+    assert.equal(persisted.days[day].classes.standard.best, 81.345);
+    assert.equal(persisted.streak.last, day);
+  } };
+  d.select(day);
+  const entry = d.record(81.3454, "standard");
+  assert.deepEqual(events, ["store", "badge"]);
+  assert.equal(entry, persisted.days[day], "return the exact entry supplied to persistence");
 });
 
 test("a lap on an OLDER day's plan never resets or rewinds the streak", () => {
@@ -253,11 +407,13 @@ test("record() keeps a 60-day window of history; the streak is untouched", () =>
   d.open("2026-01-01"); d.record(90);
   d.open("2026-03-01"); d.record(90);    // 59 days later: still inside the window
   assert.ok(d.data().days["2026-01-01"], "a day inside the window was dropped");
-  d.open("2026-03-03"); d.record(90);    // 61 days after the first
-  const days = Object.keys(d.data().days).sort();
-  assert.deepEqual(days, ["2026-03-01", "2026-03-03"]);
+  // #5943: the window counts from the EARLIER of the lap's day and the newest stored day, so a lap on the 3rd
+  // (61 days on) still keeps the 1st, which is 59 days before the newest stored day (Mar 1).
+  d.open("2026-03-03"); d.record(90);
+  assert.ok(d.data().days["2026-01-01"], "the window counts from the newest stored day, not the device's");
   assert.deepEqual(host(d.data().streak), { count: 1, last: "2026-03-03" });
-  d.open("2026-03-04"); d.record(90);
+  d.open("2026-03-04"); d.record(90);    // now counted from Mar 3: Jan 1 is 61 days out
+  assert.deepEqual(Object.keys(d.data().days).sort(), ["2026-03-01", "2026-03-03", "2026-03-04"]);
   assert.deepEqual(host(d.data().streak), { count: 2, last: "2026-03-04" });
 });
 
@@ -310,7 +466,7 @@ test("with no medal passed, the share line carries TODAY's — from today's best
   });
   seedLog(ctx); seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx, { filename: absSrc("js/race/daily-challenge.js") });
-  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: () => 82 });
+  const d = vm.runInContext("DailyChallenge", ctx).create({ ...G, referencePole: (k) => (k === "medal" ? 82 : NaN) });
   d.open("2026-09-03");
   d.record(84);                                   // within 3 % of pole: silver
   assert.match(d.shareText(), / · SILVER( · |$)/);
@@ -336,4 +492,30 @@ test("stop() resumes the sim stream where the Daily found it (G.simSeed(seed, st
   d.stop();
   assert.equal(seed, 777);
   assert.equal(stream, 123456, "the stream is back where race 1 left it");
+});
+
+// #5821: the share-card stack rides LAZY_RESULTS_SHEET (off the boot wall). Daily shareCard() loads that
+// group through GameResults.ensureLoaded before painting, instead of throwing "unavailable" at the title.
+test("shareCard() loads the lazy share-card group before rendering, and the stack is off the boot wall", async () => {
+  const { d, ctx } = load();
+  const delivered = [];
+  let loads = 0;
+  ctx.GameResults = { ensureLoaded: () => {
+    loads++;
+    ctx.ShareCardData = { fromDaily: () => ({ link: null }) };
+    ctx.ShareCard = { render: () => Promise.resolve({ type: "image/png" }), deliver: (blob, name) => { delivered.push(name); return Promise.resolve("shared"); } };
+    return Promise.resolve(true);
+  } };
+  assert.equal(await d.shareCard("gold"), "shared");
+  assert.equal(loads, 1, "the results-sheet group was loaded once");
+  assert.equal(delivered[0].startsWith("apex26-daily-"), true, delivered[0]);
+  await d.shareCard("gold");
+  assert.equal(loads, 1, "a second share does not reload");
+  const manifest = (await import("../../tools/manifest.cjs")).default;
+  const { eagerScriptsOf } = await import("../../tools/check/boot-wall.mjs");
+  const lazy = new Set(manifest.LAZY_RESULTS_SHEET), wall = new Set(eagerScriptsOf(readFileSync(join(ROOT, "index.html"), "utf8")));
+  for (const f of ["js/share/share-card-data.js", "js/share/share-card-layout.js", "js/share/share-card.js"]) {
+    assert.equal(lazy.has(f), true, f + " rides LAZY_RESULTS_SHEET");
+    assert.equal(wall.has(f), false, f + " has no boot <script> tag");
+  }
 });

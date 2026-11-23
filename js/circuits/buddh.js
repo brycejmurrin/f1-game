@@ -16,6 +16,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "buddh",
+    revision: 2,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -71,7 +72,9 @@
     // Re-seated onto the main-straight line (old v0 frame + _sceneryShift 0.2866, the
     // rotate-markings.cjs rule): [0] = real T1 (the 93 deg right), [1] T2, [2] the T3
     // hairpin, [3] = T4 after the 1.24 km back straight.
-    turns: [0.0809, 0.0999, 0.1548, 0.4063, 0.5154, 0.5393, 0.5829, 0.5969, 0.6529, 0.6673, 0.7094, 0.7779, 0.7958, 0.8499, 0.8599, 0.9348],
+    // 2026-11-18 (#5652): all 16 re-seated onto the built |k| peaks (corner-frames.cjs);
+    // every entry had sat 6-18 m past its peak, one systematic offset.
+    turns: [0.0776, 0.0972, 0.1520, 0.4036, 0.5133, 0.5368, 0.5799, 0.5948, 0.6505, 0.6638, 0.7069, 0.7759, 0.7939, 0.8487, 0.8582, 0.9326],
     // sparse: the outfield is open farmland with a field boundary, not the
     // generic 2–3 tree wood (the scatter was dropping ~90 of those).
     furniture: { tree: "broad", fol: [0.26, 0.40, 0.22], lamp: "post", lc: [0.92, 0.96, 1.0], sparse: true },

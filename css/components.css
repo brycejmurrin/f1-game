@@ -104,6 +104,12 @@ dialog.screen {
   margin: 0;
   border: 0;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  /* The shorthand above re-declares every side, so without this line the
+     `.screen` keyboard rule never reaches a <dialog>: the iOS keyboard covered
+     Settings search and the share-code inputs (#5067; fixed by #5097, rolled
+     back with #5151, re-landed alone — UI contract 2026-11-06 gap 5). Same
+     restatement in css/dialog-platform.css. */
+  padding-bottom: max(var(--safe-b), var(--kb));
   max-width: none; max-height: none;
   width: 100%; height: 100%;
   background: transparent;
@@ -124,10 +130,10 @@ dialog.screen[open] { display: grid; }
    hidden attribute, so they come back from `display: none`, which restarts an
    animation by itself and needs no allow-discrete plumbing. */
 @media (prefers-reduced-motion: no-preference) {
-  .screen.dim { animation: scrim-in 0.16s ease-out; }
+  .screen.dim { animation: scrim-in var(--dur-1) var(--ease-out); }
     /* no fill-mode: nothing may hold a dialog at zero opacity if the animation
      never runs — the sheet must be visible either way. */
-  .screen.dim > .sheet { animation: sheet-in 0.19s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  .screen.dim > .sheet { animation: sheet-in var(--dur-3) var(--ease-out); }
 }
 @keyframes scrim-in { from { opacity: 0; } }
 @keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
@@ -155,32 +161,25 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
      without the 0 floor a long list forces the sheet past the screen instead
      of scrolling inside it */
   grid-template-rows: auto minmax(0, 1fr) auto;
-  /* ZOOM IS THE ONLY LEVER THAT REACHES THIS UI'S TYPE. Of 359 font-size
-     declarations in css/, 314 are raw px and 30 go through a var() — there is
-     no root font-size, no rem system, and only 1.6% of all sizing is relative.
-     So a token knob moves the boxes and leaves the text where it was, which is
-     exactly what "everything is still slightly too small" felt like after two
-     passes of raising tokens. `zoom` scales the whole subtree including the
-     hard-coded px, for one declaration.
-     ON .sheet, NOT .screen: .screen carries the safe-area padding, and zooming
-     that would divide the notch inset by the scale and centre the sheet under
-     hardware.
-     NO WIDTH COMPENSATION IS NEEDED, and adding some is a bug. `min(100%, …)`
-     and `max-height: 100%` resolve in the element's OWN (zoomed) space, so the
-     painted box still fits its parent — measured: #sel-inner paints 836px at
-     every scale. What grows is the --sheet-w cap, which is exactly the uplift
-     wanted. Dividing by the scale as well would shrink the sheet as the setting
-     went up.
-     Container queries inside evaluate in the same local space, so `--pair-at`
-     and every `@container sheet` breakpoint keep their meaning: at 130% you
-     need 30% more REAL width to afford two columns, which is the honest answer.
-     A browser without `zoom` renders at 1.0, which is the old behaviour. */
+  /* ZOOM IS THE ONLY LEVER THAT REACHES THIS UI'S TYPE: of 359 font-size
+     declarations 314 are raw px and there is no rem system, so a token knob
+     moves boxes, not text. `zoom` scales the subtree, hard-coded px included.
+     ON .sheet, NOT .screen: .screen carries the safe-area padding.
+     NO WIDTH COMPENSATION (adding some is a bug): `min(100%, …)` and
+     `max-height: 100%` resolve in the zoomed space, so the box still fits
+     (#sel-inner paints 836px at every scale); dividing would shrink the sheet as
+     the setting rose. `@container sheet` breakpoints keep their meaning (130 %
+     needs 30 % more real width for two columns). No `zoom` support = 1.0. */
   /* A dense screen may declare --fit-at (its minimum functional height in
      LOCAL units). SheetShape then supplies --sheet-scale only when the safe
      viewport cannot afford the requested UI size. This keeps a 200% preference
      on roomy screens but prevents chrome from reducing the actual content pane
      to zero on a short landscape phone. */
   zoom: var(--sheet-scale, var(--ui-scale));
+  /* THE iOS FOCUS-ZOOM FLOOR IS PAINTED PX (#5236). Safari zooms the page when a focused field is under 16 px; under
+     this zoom a bare 16px painted 11.2 at UI SIZE 70. Every typeable field writes
+     max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1)))), resolved on the field so a fit-capped sheet counts
+     (editor, race-setup, overlays, appearance-studio, carsetup, garage-experience, tuner, select css). */
   /* The compensated viewport tokens must divide by the zoom this subtree
      ACTUALLY paints at: the :root family divides by the requested slider,
      but a --fit-at sheet paints at the capped --sheet-scale — on an 852x393
@@ -241,26 +240,16 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   background: var(--grad-rule);
   pointer-events: none;
 }
-/* Title scales with the viewport HEIGHT, which is the axis that is scarce on a
-   phone held sideways — a fixed 24px title costs the same as a row of the list
-   it is sitting above.
-   AND SO IT DOES NOT FOLLOW UI SIZE, WHICH IS THE POINT AND NOT A BUG. `--vhz`
-   is `1vh / --ui-scale` consumed inside `zoom: var(--ui-scale)`, so the scale
-   cancels and the heading is a constant fraction of the SCREEN. MEASURED on a
-   portrait iPhone: 24 / 18 / 13.2 own units at UI SIZE 80 / 100 / 150 — which
-   reads like type that shrinks as you ask for bigger type, and is ~19 PAINTED px
-   at all three. (The 100 -> 150 step also crosses into the compact tier, which
-   drops the ceiling from 24 to 18; that compounds it.)
-   Checked once and nearly "fixed". Do not: every unit given back to this
-   heading comes straight out of the list under it, on exactly the short screens
-   the rule exists for. The clamp's px bounds ARE in own units and do scale, so
-   the heading is never smaller than the floor at any setting. */
+/* The heading follows viewport height: --vhz cancels sheet zoom to leave
+   room for content on short screens. The clamp bounds still follow UI SIZE
+   and all three terms respect the region's text size. */
 .sheet-head h2 {
   /* White title + red leading rail (box-shadow on .sheet-head): brand keeps
      Warm Red scarce — rail/tick/P1 only, not headline ink. */
   color: var(--text); margin: 0;
   overflow-wrap: anywhere;
-  font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px);
+  /* The floor is the TEXT SIZE ladder (#5215): 15 px at the default rung as before, never under the body text above it. */
+  font-size: clamp(var(--fs-2), calc(3.6 * var(--vhz) * var(--arrange-text-size, 1)), calc(24px * var(--arrange-text-size, 1)));
   font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-3);
   text-transform: uppercase;
@@ -273,19 +262,8 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 }
 .sheet-foot {
   display: flex; align-items: center; gap: var(--gap);
-  /* WRAP, because a footer that does not fit must STACK and never clip. Its
-     buttons carry `min-width: 110px` (below), so they stop shrinking well before
-     they stop overflowing — and every sheet in this app clips (#cs-inner,
-     #sel-inner et al are overflow:hidden), so the part that does not fit is not
-     merely off-screen, it is unreachable. Measured instance: at UI SIZE 100 %
-     and up the garage's pane-pair turns on and its foot drops into a 124 px
-     rail holding 161 px of buttons, and BACK painted at 55 % with nothing to
-     scroll to. The select screen's START does the same in portrait at 150 %.
-     Set on the BASE rather than per screen: there are 21 .sheet-foot instances
-     and four of them carry three or four buttons (quali, career, both tuners),
-     none of which any spec visits — so a per-screen patch fixes the two that
-     were measured and leaves the ones more likely to overflow. Wrapping engages
-     only on overflow, so a footer that fits today is untouched. */
+  /* Wrap when buttons overflow: sheets clip overflow, so a non-wrapping foot
+     can hide actions (garage BACK at 55%, select START in portrait 150%). */
   flex-wrap: wrap;
   padding: calc(var(--pad) * 0.35) var(--pad);
   border-top: 0;
@@ -304,25 +282,16 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   pointer-events: none;
 }
 /* ---------- the SHORT sheet ---------- */
-/* `data-density` is written by js/game/sheetshape.js from the sheet's height in
-   its OWN units — the header there explains why neither a media query nor the
-   `sheet` container can answer this (one is blind to `zoom`, the other to
-   height). This is the tier that consumes it.
-
-   WHY IT EXISTS. Measured in the garage at 1000x462, head+foot as a share of the
-   sheet: 46% at UI SIZE 100%, 59% at 130%, 68% at 150% — because `zoom` scales
-   padding exactly as fast as it scales text while the sheet's height stays
-   pinned to the viewport. At 150% that left ONE option row on screen. Raising UI
-   SIZE is a request for bigger TEXT, not bigger chrome, so on a short sheet the
-   chrome gives its vertical padding back to the content. Horizontal padding is
-   untouched: width is not the axis that is scarce here, and taking it would
-   re-introduce the truncation this same session spent its time removing. */
+/* SheetShape measures height in the sheet's own units, accounting for zoom.
+   At 1000×462 and 150% UI SIZE the Garage header and footer consumed 68%
+   of the sheet. Compact mode returns vertical padding to the options list
+   while preserving horizontal room for long labels. */
 .sheet[data-density="compact"] .sheet-head {
   padding-top: calc(var(--pad) * 0.28); padding-bottom: calc(var(--pad) * 0.2);
   gap: calc(var(--gap) * 0.6);
 }
 /* Min 14px: at UI SIZE 90% (.sheet zoom ≈0.9) painted type stays ≥12px. */
-.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(14px, calc(3 * var(--vhz)), 18px); }
+.sheet[data-density="compact"] .sheet-head h2 { font-size: clamp(var(--fs-micro), calc(3 * var(--vhz) * var(--arrange-text-size, 1)), calc(18px * var(--arrange-text-size, 1))); }
 .sheet[data-density="compact"] .sheet-body { padding-top: 0; padding-bottom: calc(var(--pad) * 0.25); }
 .sheet[data-density="compact"] .sheet-foot { padding-top: calc(var(--pad) * 0.22); padding-bottom: calc(var(--pad) * 0.22); }
 .sheet-foot .bigbtn {
@@ -330,7 +299,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* same reasoning as the title: on a 393px-tall screen a 20px/14px button is
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
-  font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
+  font-size: clamp(var(--fs-micro), calc(3.6 * var(--vhz) * var(--arrange-text-size, 1)), calc(20px * var(--arrange-text-size, 1)));   /* floor on the TEXT SIZE ladder (#5215) */
   /* --vhz like the font-size above — same zoomed element, one line apart.
      Leading-edge +4px so the skewed label stays optically column-centred. */
   padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
@@ -346,6 +315,23 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   flex: 0 1 auto;
   width: auto;
   margin-inline: auto;
+}
+/* A LONE BACK RIDES IN THE HEAD ON A SHORT WINDOW (#5215, Bryce 2026-11-11 "Move BACK into the header"). A foot that
+   holds one button spent a whole ~62 px row on it (head + foot ~95 px of a 393 px phone). Here the foot takes the head's
+   row, right of the title, and the body gets the row back. Only a plain head / body / foot sheet: a fourth region has
+   its own placement. The head keeps its sheen and rail; the foot drops its plate and hairline. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) {
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr);
+  }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-head { grid-column: 1; grid-row: 1; }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-body { grid-column: 1 / -1; grid-row: 2; }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-foot {
+    grid-column: 2; grid-row: 1; align-self: stretch;
+    padding: calc(var(--pad) * 0.3) var(--pad) calc(var(--pad) * 0.3) 0;
+    background: none; box-shadow: none;
+  }
+  .sheet:has(> .sheet-foot > :is(button, a):only-child):not(:has(> :nth-child(4))) > .sheet-foot::before { content: none; }
 }
 /* ---------- pane: a scroll region ---------- */
 .pane {
@@ -396,28 +382,15 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .sf-r { --sfade-r: 36px; }
 
 /* ---------- scroll POSITION INDICATOR ----------
-   A scrollbar thumb down the right edge, like a web page has. The fade above
-   only ever says "there is more"; this says how much and where you are, and it
-   stays put instead of appearing for half a second mid-flick the way the
-   platform's own overlay scrollbar does on a phone.
-
-   ScrollFade sets --sf-h (thumb height) and --sf-y (its offset down the track)
-   on every scrollable region; everything here is just drawing.
-
-   Mechanics that matter:
-   * `position: sticky` — a pseudo-element is the first IN-FLOW child, so sticky
-     is what pins it to the scrollPORT rather than letting it scroll away with
-     the content. `top: var(--sf-y)` is then the thumb's travel: JS moves it
-     down the track as scrollTop grows. Absolute positioning could not do this
-     without adding a wrapper element around every panel.
-   * `margin-bottom: calc(-1 * var(--sf-h))` cancels the thumb's own height, so
-     it never grows scrollHeight — which ScrollFade measures, and which would
-     otherwise let a panel conclude it was scrollable because of its own
-     indicator.
-   * `grid-column: 1 / -1` because several of these regions are grids
-     (#sel-teams, #cz-body, #cs-tabs, the HOW TO PLAY <dl>); without it the
-     pseudo-element takes a cell and shoves a real item out of place. Inert in
-     flex and block containers. */
+   A scrollbar thumb down the right edge: the fade says "there is more", this
+   says how much and where, and it stays put (unlike the phone's overlay bar).
+   ScrollFade sets --sf-h (thumb height) and --sf-y (offset); CSS only draws.
+   * `position: sticky` pins the first in-flow pseudo-element to the scrollPORT;
+     `top: var(--sf-y)` is its travel (absolute would need a wrapper per panel).
+   * `margin-bottom: calc(-1 * var(--sf-h))` keeps it out of scrollHeight, which
+     ScrollFade measures — else a panel is scrollable because of its indicator.
+   * `grid-column: 1 / -1`: several regions are grids (#sel-teams, #cz-body,
+     #cs-tabs, the HOW TO PLAY <dl>); a cell-taking thumb shoves an item out. */
 .sf-scroll::before {
   content: "";
   position: sticky;
@@ -465,22 +438,14 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    a sixth of --gap (~2px) in from the padding edge. A region with no padding measures 0 and keeps
    the old placement, so nothing is pushed past its own scrollport. */
 .sf-scroll:not(.sheet-body)::before { margin-right: calc(var(--gap) / 6 - var(--sf-pr)); }
-/* NO THUMB ON THE TITLE SCREEN. #overlay's children are all grid-PLACED, so the
-   auto-placed pseudo-element lands in a trailing row below the content, where
-   its cancelling margin cancels nothing: its box grows scrollHeight, and its
-   height is computed FROM scrollHeight. Measured 2026-09-29: a title screen
-   left scrollable by its own thumb after a rotation (430px landscape, 654
-   tall), and at UI SIZE 130 % on a 320x568 phone scrollTop jittering 342/343
-   every repaint, so HELP never held still long enough to tap. Hiding the thumb
-   there for one read clamped the reader back to the top instead. The fades
-   (sf-t / sf-b) still say "there is more"; the doors are the position.
-
-   #menu-buttons is the REAL title scroller (zoom rides `#overlay > *`, so
-   #overlay's own overflow-y is mostly a dead letter). Its children are also
-   grid items, and on a narrow landscape column (568×320, UI 130 %) the 6px
-   accent thumb had no .sheet-body padding lane to sit in — it painted a red
-   strip down the door edges and clipped CAREER / DAILY labels. Same hide,
-   same fades-still-say-more contract. */
+/* NO THUMB ON THE TITLE SCREEN. #overlay's children are grid-PLACED, so the
+   auto-placed pseudo-element lands in a trailing row where its cancelling
+   margin cancels nothing and its height feeds back from scrollHeight
+   (2026-09-29: a title left scrollable by its own thumb after a rotation, and
+   scrollTop jittering 342/343 at UI 130 % on 320x568, so HELP never held still).
+   #menu-buttons, the REAL title scroller, had no padding lane either: at
+   568×320 UI 130 % the 6px thumb painted down the door edges and clipped
+   labels. The fades (sf-t / sf-b) still say "there is more". */
 #overlay.sf-scroll::before,
 #menu-buttons.sf-scroll::before { display: none; }
 
@@ -517,6 +482,16 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
       transform 0.08s ease;
   }
 }
+/* PRESSED = LIT (design pass 3E). On touch the thumb hides the face it presses,
+   so a plate one step lighter (all tabs and chips had) read as no press at all.
+   A red ring and base rule show AROUND the thumb; in at once, out on the
+   control's own fade. The red CAREER hero keeps its key travel (.bigbtn:active). */
+:is(.bigbtn.alt, button[role="tab"], .sel-chip, .opt-btn, .preset-btn, .cz-liv-none,
+    .cs-opt, .dh-pill, .dh-dchip):active:not(:disabled) {
+  background: color-mix(in oklab, var(--red) 24%, var(--plate-opaque));
+  box-shadow: var(--press-lit);
+  transition-duration: 0s;
+}
 
 /* ---------- BALANCED CONTROL ROWS ----------
    A control group must answer the room it actually gets, not a remembered
@@ -546,16 +521,11 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   /* --vwz, not bare vw: .bigbtn lives inside .sheet and inside #overlay > *,
      both of which are zoomed. See the note in tokens.css. */
   width: min(calc(78 * var(--vwz)), 340px);
-  /* WCAG conformance floor, zoom-honest: padding gives these ~40px at 100%,
-     but at UI SIZE 40% RESUME painted 18px tall (2026-08-21 sweep, pause and
-     advanced @40 on every viewport). --tap-min is 24 local px at <=100% —
-     under every existing button height, so nothing moves — and grows as the
-     zoom shrinks so the PAINTED box never drops below 24px. */
-  min-height: var(--tap-min);
   margin: 10px auto;
-  /* on the height ladder (css/tokens.css). The padding alone happened to land
-     these on --tap at most sizes and a pixel or two off at others; stating the
-     floor means a font-size override can never quietly shrink a primary
+  /* House height ladder (css/tokens.css). --tap is always ≥ --tap-min
+     (44/52 vs 24 local floor, same 24/ui-scale term), so a prior
+     min-height: var(--tap-min) was dead under this declaration. Stating
+     --tap means a font-size override cannot quietly shrink a primary
      button below the rest of its row. */
   min-height: var(--tap);
   /* Optical centre under skewX(-6deg): the parallelogram drifts left, so

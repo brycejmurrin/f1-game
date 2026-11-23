@@ -2,11 +2,11 @@
 
 **Setting:** DAY, green/classic theme. Autódromo Fernanda Pires da Silva on the
 Alcabideche plateau (Cascais), ~9 km inland from the coastal town of Estoril —
-not on the Atlantic shoreline. 4.182 km (official centreline), 13 corners,
-clockwise; final corner is the **Parabólica Ayrton Senna**. Senna's first F1
+not on the Atlantic shoreline. The game follows the clockwise 4.163 km, 11-turn Tanque layout. The GP layout is 4.183 km with 13 corners. The final corner is the **Parabólica Ayrton Senna**. Senna's first F1
 win, 1985. Last used by F1 in 1996.
 
 Sources: [circuito-estoril.pt technical data](https://www.circuito-estoril.pt/en/technical-data/),
+[operator’s 2025 Tanque layout map](https://circuitoestoril.alkamelsystems.com/Results_NoticeBoard/12_2025/01_ANPAC%20START%20SEASON/Mapa%20da%20Pista%20circuito%20estoril%20CURVA%20TANQUE.pdf),
 [Wikipedia — Circuito do Estoril](https://en.wikipedia.org/wiki/Circuito_do_Estoril).
 
 ## 1. Setting

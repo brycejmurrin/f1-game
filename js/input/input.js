@@ -85,6 +85,8 @@ const Input = (function () {
   // toggles as the fix, between HOLD and full AUTO. `throttleLatch` is the mode,
   // `throttleLatched` the state it keeps.
   let throttleLatch = false, throttleLatched = false;
+  // PEDAL SLIDE (#5996): "instant" | "ease", read by hold-buttons.js slideEase.
+  let pedalSlide = "instant";
   let padThrottle = false;
   let padBrake = false;
   let padThrottleVal = 0;
@@ -129,7 +131,7 @@ const Input = (function () {
   const touches = new Map();
   let touchSeq = 0;
   let touchSteer = 0;      // the winning touch's drag, -1..1
-  let touchActive = false; // is any finger on the glass (vs. ramping back home)
+  let activeTouch = null;  // winning steering contact; null while ramping back home
   let touchSteerVal = 0;   // what steer() emits: touchSteer while held, ramped on release
   let touchSteerT = 0;     // last ramp timestamp, ms
 
@@ -140,6 +142,8 @@ const Input = (function () {
   let btnBrakeVal = 0;
   let btnSteerLeft = false;
   let btnSteerRight = false;
+  let leftCommand = 0, rightCommand = 0;  // Effective touch travel before the common steering ramp.
+  let leftSpeedMix, rightSpeedMix; // Unset follows the global Adaptive Buttons setting.
   let btnSteerLeftVal = 0; // 0..1 analog travel (adaptive buttons; tap = 1)
   let btnSteerRightVal = 0;
   let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
@@ -428,17 +432,23 @@ const Input = (function () {
     // yet seeds focus, exactly as the pad's first press does.
     navUp: () => padMenu.remoteNav("up"), navDown: () => padMenu.remoteNav("down"),
     navLeft: () => padMenu.remoteNav("left"), navRight: () => padMenu.remoteNav("right"),
-    navSelect: () => { padMenu.activate(); },
+    // A PHONE may not press RESET / DELETE / IMPORT (InputPadMenu.isDestructive):
+    // those take a tap on this screen. The XR controllers are the local player.
+    navSelect: () => padMenu.activate(remoteOwner === "xr" ? null : remoteGuard),
     navBack: () => { padMenu.escape(); },
   };
+  function remoteGuard(el) {
+    if (!InputPadMenu.isDestructive(el)) return false;
+    if (typeof Log !== "undefined") Log.info("input", "phone SELECT refused on a destructive control: tap it on this screen");
+    return true;
+  }
   function remoteEvent(kind) {
     const fn = REMOTE_EDGES[kind];
     if (!fn) return false;
     const menuEdge = kind === "pause" || kind.startsWith("nav");
     if (!menuEdge && remoteDrivingBlocked()) return false;
     if (!menuEdge) noteInputSource(remStick ? "controller" : "phone");
-    fn();
-    return true;
+    return fn() !== false;
   }
   // Forget the current remote command without tearing down the paired transport.
   // reset() uses this on blur/visibility loss; the next fresh sample can take
@@ -558,7 +568,7 @@ const Input = (function () {
    * the build rate rather than thrown away — otherwise the step quietly caps a
    * direction change at one rate per frame.
    */
-  function digitalStep(val, target, dt) {
+  function digitalStep(val, target, dt, speedMix) {
     // Work in shaped (road-wheel) space, return raw so game.js's expo undoes it.
     const v = toShaped(val), t = target;   // target is -1 / 0 / +1; shaping is identity there
     if (t === 0) return fromShaped(moveToward(v, 0, KEY_RAMP_OUT * dt));
@@ -567,16 +577,18 @@ const Input = (function () {
       const unwind = KEY_RAMP_OUT * dt;
       if (unwind < toCentre) return fromShaped(moveToward(v, 0, unwind));
       const spare = (unwind - toCentre) / KEY_RAMP_OUT;   // seconds still unspent
-      return fromShaped(moveToward(0, t, digitalRateIn() * spare));
+      return fromShaped(moveToward(0, t, digitalRateIn(speedMix) * spare));
     }
-    return fromShaped(moveToward(v, t, digitalRateIn() * dt));
+    // Easing a held arrow back to partial lock keeps the existing global return rate.
+    const buildMix = Math.abs(t) >= Math.abs(v) ? speedMix : undefined;
+    return fromShaped(moveToward(v, t, digitalRateIn(buildMix) * dt));
   }
 
-  function digitalRateIn() {
-    if (adaptiveMix <= 0) return KEY_RAMP_IN;
+  function digitalRateIn(mix = adaptiveMix) {
+    if (mix <= 0) return KEY_RAMP_IN;
     const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
     const full = KEY_RAMP_IN / (1 + currentSpeedStd() / ref);
-    return KEY_RAMP_IN + (full - KEY_RAMP_IN) * adaptiveMix;
+    return KEY_RAMP_IN + (full - KEY_RAMP_IN) * mix;
   }
 
   function keyboardSteer() {
@@ -607,11 +619,15 @@ const Input = (function () {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
-  let deviceProfiles = null;
+  let /** @type {ReturnType<typeof ControllerProfiles.create> | null} */ deviceProfiles = null;
   function profileChanged() { if (deviceProfiles) deviceProfiles.save(); }
   const bindings = InputBindings.create({
-    onKeysChanged() { heldKeys.clear(); keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; clearDriveToggles(); },
-    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; clearDriveToggles(); profileChanged(); },
+    onKeysChanged() { heldKeys.clear(); keyThrottleToggle = keyLookBackToggle = false; syncHeldKeys(); },
+    onPadBindingChanged() {
+      padThrottle = padBrake = padLookBack = padThrottleToggle = padLookBackToggle = false;
+      padThrottleVal = padBrakeVal = 0;
+      profileChanged();
+    },
     activePad,
   });
   const {
@@ -731,6 +747,7 @@ const Input = (function () {
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
     padPedalSignature = JSON.stringify(padAxisMap);
+    padMapIsDefault = padPedalSignature === defaultPadAxisSignature;
     if (owner) invalidateAxisRest(padIdOf(owner), previous);
     profileChanged();
     return getPadAxisMap();
@@ -773,17 +790,7 @@ const Input = (function () {
     return true;
   }
 
-  // PAD_AXIS_DEF's keys never change. Object.keys of it allocated an array on every
-  // poll (wheelFirst), including for a pad that is only plugged in.
-  let padAxisDefKeys = null;
-  function padAxesAreDefault() {
-    if (!padAxisDefKeys) padAxisDefKeys = Object.keys(PAD_AXIS_DEF);
-    for (let i = 0; i < padAxisDefKeys.length; i++) {
-      const k = padAxisDefKeys[i];
-      if (padAxisMap[k] !== PAD_AXIS_DEF[k]) return false;
-    }
-    return true;
-  }
+  function padAxesAreDefault() { return padMapIsDefault; }
   /* Capture where the steering axis RESTS and subtract it forever after. This
      is the honest answer to stick drift: a worn potentiometer's wiper no longer
      reads zero at centre, and the alternative — one big dead zone for everyone
@@ -803,7 +810,9 @@ const Input = (function () {
   function calibratePad(expectedOwner) {
     const pads = readPads(), pad = pickPad(pads, null, wheelFirst());
     if (!pad || !pad.axes || (expectedOwner !== undefined && expectedOwner !== padKey(pad, Array.prototype.indexOf.call(pads, pad)))) return false;
-    const v = readPadAxis(pad.axes, padAxisMap.steer) * padAxisMap.steerInvert;
+    const raw = pad.axes[padAxisMap.steer];
+    if (!Number.isFinite(raw)) return false;
+    const v = raw * padAxisMap.steerInvert;
     // A stick genuinely held over cannot be a rest position; refuse rather than
     // bake a permanent offset that steers the car on its own.
     if (Math.abs(v) > 0.5) return false;
@@ -818,13 +827,8 @@ const Input = (function () {
     const p = activePad();
     return p ? restFor(p) : (padRestLegacy !== null ? padRestLegacy : padRestOffset);
   }
-  // Forget the driving pad's offset only (the wheel wizard moved its steering axis).
-  function clearPadRest() {
-    const p = activePad();
-    if (p) padRestMap.delete(padIdOf(p));
-    padRestLegacy = null; padRestOffset = 0;
-  }
   // What KeyBinds persists as apex26.padRest: {[padId]: offset}, 0 when none.
+  // Axis-map / profile resets clear rest via invalidateAxisRest (no clearPadRest export).
   function padRestStore() {
     if (padRestLegacy !== null) return padRestLegacy;
     return padRestMap.size ? Object.fromEntries(padRestMap) : 0;
@@ -852,7 +856,9 @@ const Input = (function () {
   const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1,
     throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
-  let padPedalSignature = JSON.stringify(padAxisMap);
+  const defaultPadAxisSignature = JSON.stringify(PAD_AXIS_DEF);
+  let padPedalSignature = defaultPadAxisSignature;
+  let padMapIsDefault = true;
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
   let axisCaptureOwner = null;   // after first wheel answer, ignore other physical devices
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
@@ -861,6 +867,10 @@ const Input = (function () {
     if (i == null) return 0;
     const v = axes[i];
     return (typeof v === "number" && isFinite(v)) ? v : 0;
+  }
+  function padStick(axes, rest = padRestOffset, wheel = padIsWheel) {
+    const raw = axes[padAxisMap.steer];
+    return Number.isFinite(raw) ? padAxisShape(raw * padAxisMap.steerInvert, rest, wheel) : 0;
   }
   // A wheel can assign either right-stick slot to a pedal or steering. Those
   // axes belong to driving, including a pedal's -1 rest position.
@@ -911,7 +921,8 @@ const Input = (function () {
   function padPedalAxis(axes, which, seen = padPedalSeen) {
     const i = padAxisMap[which];
     if (i == null) return 0;
-    const raw = readPadAxis(axes, i);
+    const raw = axes[i];
+    if (!Number.isFinite(raw)) { seen[which] = false; return 0; }
     if (raw !== 0) seen[which] = true;
     if (!seen[which]) return 0;
     // The wizard's measured travel ends (a pedal that rests at 0, or a
@@ -929,6 +940,12 @@ const Input = (function () {
      and a full pedal stay exactly 1. */
   const PAD_PEDAL_DZ = 0.12;
   function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
+  function resetPadDriveState() {
+    padThrottleToggle = padLookBackToggle = false;
+    padDpadTarget = padDpadVal = padDpadT = 0;
+    padDpadLeftHeld = padDpadRightHeld = false;
+    padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+  }
   function padDpadSteer(pad) {
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
     // Worn pads and some maps briefly report both left+right; right−left
@@ -970,7 +987,7 @@ const Input = (function () {
     const axes = pad.axes || [];
     const rest = padRestMap.get(padIdOf(pad)) || (padRestLegacy !== null ? padRestLegacy : 0);
     const wheel = !padStd(pad) && !padAxesAreDefault();
-    const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert, rest, wheel);
+    const stick = padStick(axes, rest, wheel);
     const seen = Object.assign({}, padPedalSeen);
     return {
       steer: analogShape(stick, wheel ? "wheel" : "pad"),
@@ -1029,8 +1046,7 @@ const Input = (function () {
     }
     // Native HUD buttons own their activation keys. Let the browser deliver
     // their click once; releases still clear keys held before focus moved here.
-    const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
-      active.matches("#btn-cam, #pausebtn, #hud-restore, #pc-restore") &&
+    const nativeHudActivation = tag === "BUTTON" && hudControl &&
       (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
     if (nativeHudActivation) {
       if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
@@ -1210,8 +1226,9 @@ const Input = (function () {
      exactly one finger is down, because a Touch identifier and a pointerId are
      not the same namespace and correlating them under multi-touch would be
      guesswork. Two fingers on the glass simply falls back to the touch path,
-     which has always worked. Chromium-only; `in` is the feature test MDN
-     recommends and Safari takes the else branch. */
+     which has always worked. Chromium since 58 and Safari since 18.2 (MDN
+     compat), so an iPhone on iOS 18.2+ takes this path too; a browser without
+     it fails the typeof test below and keeps the touch path alone. */
   function onCanvasPointerMove(e) {
     if (steerMode !== "touch" || touches.size !== 1) return;
     // A mouse or pen moving on a touch laptop is not the finger: its coalesced
@@ -1259,25 +1276,14 @@ const Input = (function () {
     return xHat;
   }
 
-  // "Most recent steering touch wins" is the rule, and it needs an explicit
-  // sequence number to be true. The obvious reading — take the last entry of the
-  // Map — is wrong: Map iterates in INSERTION order and `set()` on an existing
-  // key keeps that key where it was. So a finger placed FIRST and then dragged
-  // across the screen could never take the steering from a later finger that had
-  // not moved since. Stamping every start and every move gives the rule its
-  // literal meaning: whichever touch last SAID something is the one steering.
-  //
-  // A touch still resting inside its dead zone counts as steering-zero rather
-  // than as absent, so a second thumb parked on the glass does not silently hand
-  // control back to a finger the player stopped using.
+  // Steering and its indicator follow the same finger: the latest horizontal
+  // drag outside its dead zone, or the first resting touch before any drag.
   function recomputeTouchSteer() {
-    let best = -1;
-    touchActive = false;
-    for (const rec of touches.values()) {
-      if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
-    }
-    if (!touchActive) touchSteer = 0;
-    updateDragAnchor();
+    const rec = steeringTouchRec();
+    if (!rec) dragFilterClear();
+    activeTouch = rec;
+    touchSteer = rec ? touchCmd(rec) : 0;
+    updateDragAnchor(rec);
   }
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
@@ -1285,7 +1291,7 @@ const Input = (function () {
   /* Drag-anchor ring + offset dot: optional DOM (#drag-anchor), cached lookups
      only, transform/left/top updates on the touch path — must never throw. */
   let dragMark = undefined;
-  let dragDotEl = null;
+  let dragDotEl = null, paintedDrag = null, paintedOffset = NaN, paintedTurn = NaN;
   const DRAG_DOT_CSS = "position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,0.65);box-shadow:0 0 0 2px rgba(0,0,0,0.5)";
   function dragMarkEl() {
     if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
@@ -1293,7 +1299,7 @@ const Input = (function () {
   }
   function dragDot(mark) {
     if (dragDotEl && dragDotEl.parentNode === mark) return dragDotEl;
-    dragDotEl = null;
+    dragDotEl = null; paintedOffset = NaN;
     if (typeof mark.appendChild === "function" && typeof document.createElement === "function") {
       dragDotEl = document.createElement("span");
       dragDotEl.setAttribute("aria-hidden", "true");
@@ -1312,22 +1318,37 @@ const Input = (function () {
   function hideDragAnchor() {
     const mark = dragMarkEl();
     if (mark) mark.classList.remove("on");
+    paintedDrag = null;
   }
-  function updateDragAnchor() {
+  function updateDragAnchor(rec) {
     if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
-    const rec = steeringTouchRec();
     if (!rec) { hideDragAnchor(); return; }
     const mark = dragMarkEl();
     if (!mark) return;
-    mark.style.left = rec.anchorX + "px";
-    mark.style.top = rec.anchorY + "px";
+    // Only picking a different contact changes the ring's touchdown position.
+    if (paintedDrag !== rec) {
+      mark.style.left = rec.anchorX + "px";
+      mark.style.top = rec.anchorY + "px";
+      mark.classList.add("on");
+      paintedDrag = rec;
+    }
+    if (mark.dataset?.steeringGuide === "wheel") {
+      const turn = touchSteer * 120;
+      if (paintedTurn !== turn) {
+        mark.style.setProperty("--drag-turn", turn + "deg");
+        paintedTurn = turn;
+      }
+      return;
+    }
     const dx = rec.x - rec.anchorX;
     const adx = Math.abs(dx);
     const range = touchRangePx();
     const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
     const dot = dragDot(mark);
-    if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
-    mark.classList.add("on");
+    if (dot && dot.style && paintedOffset !== offPx) {
+      dot.style.transform = "translateX(" + offPx + "px)";
+      paintedOffset = offPx;
+    }
   }
 
   function onTouchStart(e) {
@@ -1336,18 +1357,22 @@ const Input = (function () {
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, {
-        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: ++touchSeq,
+        // seq 0 until it moves past the dead zone: a resting finger never steals steering.
+        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: 0,
       });
     }
     recomputeTouchSteer();
   }
 
   function onTouchMove(e) {
-    if (!canvasTouchIsDriving()) return;
+    // A held canvas touch still moves under Pause. Track it for Resume; the menu gates driving.
+    if (!touches.size) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
-      if (rec) { rec.x = t.clientX; rec.seq = ++touchSeq; }
+      if (!rec) continue;
+      if (rec.x !== t.clientX && Math.abs(t.clientX - rec.anchorX) > TOUCH_DEAD_PX) rec.seq = ++touchSeq;
+      rec.x = t.clientX;
     }
     recomputeTouchSteer();
   }
@@ -1364,25 +1389,31 @@ const Input = (function () {
     const t = nowMs();
     const dt = rampDtSince(touchSteerT, t);
     touchSteerT = t;
-    if (touchActive) { touchSteerVal = dragFilter(touchSteer, dt > 0 ? dt : 0.016); return touchSteerVal; }
-    dragOeInit = false;   // a fresh press starts from where the finger lands, not from the last lap
+    if (activeTouch) {
+      const command = touchCmd(activeTouch);
+      if (command !== touchSteer) { touchSteer = command; updateDragAnchor(activeTouch); }
+      touchSteerVal = dragFilter(command, dt > 0 ? dt : 0.016);
+      return touchSteerVal;
+    }
     touchSteerVal = moveToward(touchSteerVal, 0, KEY_RAMP_OUT * dt);
     return touchSteerVal;
   }
 
   function buttonSteering() {
+    // Resting arrows at centre: the keyboardSteer short-circuit. This runs per physics substep on the phone path.
+    if (!btnSteerLeft && !btnSteerRight && btnSteerVal === 0) { btnSteerT = nowMs(); return 0; }
     const t = nowMs();
     const dt = rampDtSince(btnSteerT, t);
     btnSteerT = t;
-    const left = btnSteerLeft ? (1 + (btnSteerLeftVal - 1) * adaptiveMix) : 0;
-    const right = btnSteerRight ? (1 + (btnSteerRightVal - 1) * adaptiveMix) : 0;
+    const left = btnSteerLeft ? leftCommand : 0;
+    const right = btnSteerRight ? rightCommand : 0;
     // LAST PRESS WINS — mirrors keyboardSteer. right − left centred the wheel
     // whenever both arrows were down, which is every capacitive left→right
     // roll-over in a chicane (RIGHT down before LEFT comes up).
     const target = btnSteerLeft && btnSteerRight
       ? (btnSteerRightSeq > btnSteerLeftSeq ? right : -left)
       : right - left;
-    btnSteerVal = digitalStep(btnSteerVal, target, dt);
+    btnSteerVal = digitalStep(btnSteerVal, target, dt, target < 0 ? leftSpeedMix : rightSpeedMix);
     return btnSteerVal;
   }
 
@@ -1396,9 +1427,15 @@ const Input = (function () {
     if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
     else el.removeAttribute("aria-pressed");
   }
+  // Explicit touch response must reach the wheel even with ADAPTIVE BUTTONS off.
+  const arrowSpeedMix = profile => profile?.adaptive == null ? undefined : (profile.adaptive - 1) / 9;
+  function steerButtonCommand(travel, profile) {
+    if (profile.press === "progressive" || profile.travel !== PedalTravel.TRAVEL_PX || profile.direction || profile.slideCurve || profile.start != null) return travel;
+    return 1 + (travel - 1) * adaptiveMix;
+  }
   const holdButtons = InputHoldButtons.create({
-    clamp,
     beforeReleaseAll(keepLatch) { if (!keepLatch) { throttleLatched = false; paintLatch(); } },
+    slideEase: () => pedalSlide === "ease",
   });
   const { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease } = holdButtons;
 
@@ -1454,17 +1491,21 @@ const Input = (function () {
       const k = padKey(p, i), axes = p.axes || [], nb = p.buttons ? p.buttons.length : 0;
       padUseLive.add(k);
       let rec = padUse.get(k), used = false;
-      if (!rec) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
+      const first = !rec;
+      if (first) { rec = { axes: [], btn: [], usedAt: 0 }; padUse.set(k, rec); }
       else {
         for (let a = 0; a < axes.length; a++) {
           if (typeof rec.axes[a] === "number" && Math.abs(readPadAxis(axes, a) - rec.axes[a]) >= PAD_WAKE) used = true;
         }
-        for (let b = 0; b < nb; b++) if (btnDown(p, b) && !rec.btn[b]) used = true;
+      }
+      for (let b = 0; b < nb; b++) {
+        const down = btnDown(p, b);
+        if (!first && down && !rec.btn[b]) used = true;
+        rec.btn[b] = down;
       }
       // The rest reference moves only on use (or first sight), so a slow drift
       // cannot creep past PAD_WAKE a frame at a time without ever counting.
       if (used || !rec.axes.length) for (let a = 0; a < axes.length; a++) rec.axes[a] = readPadAxis(axes, a);
-      for (let b = 0; b < nb; b++) rec.btn[b] = btnDown(p, b);
       if (used) rec.usedAt = t > 0 ? t : 1;
     }
     for (const k of padUse.keys()) if (!padUseLive.has(k)) padUse.delete(k);
@@ -1585,11 +1626,9 @@ const Input = (function () {
       _padNextProbeMs = 0;   // next poll may re-probe immediately (fast window)
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
-      padSteerAnalog = false; padLookBack = false;
+      padSteerAnalog = padLookBack = padThrottleToggle = padLookBackToggle = false;
       lookStickX = 0; lookStickY = 0;
-      padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
-      padDpadLeftHeld = padDpadRightHeld = false;
-      padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
+      resetPadDriveState();
       padIsWheel = false;
       // A missing browser snapshot is not a release. Reseed on recovery:
       // even a button pressed during the gap needs
@@ -1609,6 +1648,7 @@ const Input = (function () {
     // pad. Not on first connection: the press that woke a pad is a real one.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
     if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
+      resetPadDriveState();
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
@@ -1632,7 +1672,7 @@ const Input = (function () {
       Log.warn("input", `gamepad mapping "${pad.mapping}" is not "standard": button/axis indices may not match`);
     }
     const axes = pad.axes || [];
-    const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
+    const stick = padStick(axes);
     // Right stick (standard mapping axes 2/3) → free-look. Menu nav still uses
     // both sticks via padNavDir; free-look is only consumed in-race by CamFeel.
     // ONLY ON A STANDARD PAD, and never an axis the wheel wizard took: a wheel
@@ -1641,12 +1681,12 @@ const Input = (function () {
     // throttle/brake/steer axis is a control, not a stick (pad-menu's
     // padNavDirOf skips the mapped pedals for the same reason).
     {
-      const lookAxis = (i) => pad.mapping === "standard" ? readLookAxis(axes, i) : 0;
-      const rx = lookAxis(2), ry = lookAxis(3);
+      const std = pad.mapping === "standard";
+      const rx = std ? readLookAxis(axes, 2) : 0, ry = std ? readLookAxis(axes, 3) : 0;
       const mag = Math.hypot(rx, ry);
       if (mag < LOOK_STICK_DEAD) { lookStickX = 0; lookStickY = 0; }
       else {
-        const t = (mag - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
+        const t = (Math.min(1, mag) - LOOK_STICK_DEAD) / (1 - LOOK_STICK_DEAD);
         lookStickX = (rx / mag) * t;
         lookStickY = (ry / mag) * t;
       }
@@ -1838,6 +1878,9 @@ const Input = (function () {
   }
 
   const REMOTE_PEDAL_ON = 0.1;   // travel below this is a resting thumb, not a press
+  // The pad's rule (padPedalLevel): the dead zone is RESCALED, not a gate, so travel
+  // ramps from 0 at the threshold to 1 at full press instead of jumping 0 -> 11 %.
+  function remotePedalLevel(v) { return v > REMOTE_PEDAL_ON ? clamp((v - REMOTE_PEDAL_ON) / (1 - REMOTE_PEDAL_ON), 0, 1) : 0; }
   // remoteActive() FIRST: it is a clock compare, and with no phone paired (the common case) it ends the
   // test before remoteDrivingBlocked() walks the UI layers — that walk ran every physics step (B·H11).
   function remoteThrottle() { return remoteActive() && !remoteDrivingBlocked() && remThr > REMOTE_PEDAL_ON; }
@@ -1855,6 +1898,7 @@ const Input = (function () {
   function navBlocksTouch() { return _navLatch < 0 ? navBlocksTouchLive() : _navLatch === 1; }
   function poll() {
     const menu = menuOverlayOpen();
+    if (menu !== _menuWasOpen && activeTouch) { dragFilterClear(); updateDragAnchor(activeTouch); }
     if (menu && !_menuWasOpen) clearDriveToggles();
     _menuWasOpen = menu;
     const inRace = !!(window.UiLayers && typeof window.UiLayers.inRace === "function" && window.UiLayers.inRace());
@@ -1865,11 +1909,11 @@ const Input = (function () {
   }
 
   function throttle() {
-    return keyThrottle || (!navBlocksTouch() && btnThrottle) || padThrottle || remoteThrottle();
+    return keyThrottle || (touchThrottleLevel() > 0 && !navBlocksTouch()) || padThrottle || remoteThrottle();
   }
 
   function braking() {
-    return keyBrake || (!navBlocksTouch() && btnBrake) || padBrake || remoteBrake();
+    return keyBrake || (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) || padBrake || remoteBrake();
   }
 
   // 0..1 pedal travel. A KEY is digital and is therefore always full travel; an
@@ -1877,16 +1921,18 @@ const Input = (function () {
   // Priority matches throttle()/braking(): whichever source is pressed wins, and
   // the keyboard wins over everything so a desktop player is never modulated by
   // a stray pad axis.
+  function touchThrottleLevel() { return btnThrottle ? (throttleLatched ? 1 : btnThrottleVal) : 0; }
   function throttleLevel() {
     if (keyThrottle) return 1;
-    if (btnThrottle && !navBlocksTouch()) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
-    if (remoteThrottle()) return remThr;
+    const touch = touchThrottleLevel();
+    if (touch > 0 && !navBlocksTouch()) return touch;
+    if (remoteThrottle()) return remotePedalLevel(remThr);
     return padThrottleVal;
   }
   function brakeLevel() {
     if (keyBrake) return 1;
-    if (btnBrake && !navBlocksTouch()) return btnBrakeVal;
-    if (remoteBrake()) return remBrk;
+    if (btnBrake && btnBrakeVal > 0 && !navBlocksTouch()) return btnBrakeVal;
+    if (remoteBrake()) return remotePedalLevel(remBrk);
     return padBrakeVal;
   }
 
@@ -2019,7 +2065,10 @@ const Input = (function () {
   }
 
   function setSteerMode(m) {
-    steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
+    // Unknown / foreign values → BUTTONS (not tilt): matches game.js STEER_MODES
+    // and WCAG 2.2 SC 2.5.4. M40: Input used to default unknown to "tilt" with no
+    // motion permission, so a bad store/API call left a phone unable to steer.
+    steerMode = (m === "tilt" || m === "touch") ? m : "buttons";
     try { Log.info("input", `steerMode ${steerMode}`); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
@@ -2028,8 +2077,9 @@ const Input = (function () {
       btnSteerSeq = btnSteerLeftSeq = btnSteerRightSeq = 0;
     }
     if (steerMode !== "touch") {
+      if (activeTouch) hideDragAnchor();
       touches.clear();
-      touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+      touchSteer = 0; activeTouch = null; touchSteerVal = 0; touchSteerT = 0;
       dragFilterClear();
     }
     if (steerMode !== "tilt") { ++gyroRequestGeneration; detachGyro(); }
@@ -2070,8 +2120,10 @@ const Input = (function () {
     KEY_RAMP_OUT = KEY_RAMP_IN * 2;
   }
   function setAdaptiveButtons(v) {
-    if (typeof v === "boolean") { adaptiveMix = v ? 1 : 0; return; }
-    if (typeof v === "number" && isFinite(v)) adaptiveMix = clamp(v, 0, 1);
+    if (typeof v === "boolean") v = Number(v);
+    if (typeof v !== "number" || !isFinite(v)) return;
+    adaptiveMix = clamp(v, 0, 1);
+    holdButtons.refreshLevels();
   }
   /* RAMP IN SHAPED SPACE — the road-wheel angle, not the raw stick value.
    *
@@ -2137,15 +2189,11 @@ const Input = (function () {
     }
     return !!(_coarseMql && _coarseMql.matches);
   }
-  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING, and until now only half the
-     app heard about it. The query above stays live, so autoThrottle/manualGears
-     were always right — but `body.desktop` was computed ONCE at boot
-     (js/game.js), and every CSS rule that gives the driving dock its tap targets
-     and its `pointer-events: auto` hangs off `body:not(.desktop)`. Undock an
-     iPad from its Magic Keyboard mid-session and the pointer goes coarse: the
-     GAS/BRAKE/BOOST buttons duly appear, inherit `pointer-events: none` from
-     #hud-dock, and do nothing — with #pm-steer and #pm-calib still hidden by
-     css/responsive.css, so there is no route back either. Subscribe instead. */
+  /* THE ANSWER CHANGES WHILE THE GAME IS RUNNING. The query stays live, but
+     `body.desktop` was computed once at boot, and the dock's tap targets and
+     `pointer-events: auto` hang off `body:not(.desktop)`: undock an iPad from
+     its keyboard and GAS/BRAKE/BOOST appear but do nothing, with #pm-steer and
+     #pm-calib still hidden (css/responsive.css). Subscribe instead. */
   function onPointerKindChange(cb) {
     touchControlsNeeded();            // make sure the MQL (and its listener) exists
     if (typeof cb === "function" && !_coarseCbs.includes(cb)) _coarseCbs.push(cb);
@@ -2162,7 +2210,15 @@ const Input = (function () {
   function onScreenRotate() {
     oeInit = false; tiltSteerVal = 0;
     // A drag's anchor is in the old screen space; the next move would read W - 2x as a steer.
-    touches.clear(); touchSteer = 0; touchActive = false; dragFilterClear(); hideDragAnchor();
+    // Zero the ramp state too (setSteerMode / reset already do): leaving touchSteerVal
+    // at full lock made steer() unwind via KEY_RAMP_OUT after the fingers were cleared.
+    touches.clear(); touchSteer = 0; activeTouch = null;
+    touchSteerVal = 0; touchSteerT = 0;
+    dragFilterClear(); hideDragAnchor();
+    // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
+    _viewLong = 0;
+    // The dock re-lays out under a held thumb: every hold lets go (a latch is kept, as on a lift).
+    holdReleaseAll(true);
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
@@ -2262,7 +2318,7 @@ const Input = (function () {
     // The same net frees a ghost steering finger: a lost canvas touchend left `touches` pinned at its last offset.
     const noFingers = function (e) {
       if (e.touches.length !== 0) return;
-      holdReleaseAll(true);
+      holdReleaseAll(true, true);
       if (touches.size) { touches.clear(); recomputeTouchSteer(); }
     };
     window.addEventListener("touchend", noFingers, { capture: true, passive: true });
@@ -2282,21 +2338,22 @@ const Input = (function () {
       // latch outright rather than toggling it (see holdReleaseAll).
       if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
       else btnThrottle = v;
-    }, function (l) { btnThrottleVal = l; });
-    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; });
+    }, function (l) { btnThrottleVal = l; }, { button: "gas", sibling: "btn-brake" });
+    wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; }, { button: "brake", sibling: "btn-throttle" });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
+    InputHoldButtons.hudTouchTap(document.getElementById("hud-restore"));
     wireHold("btn-steer-left", function (v) {
       if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
       btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
-    }, function (l) { btnSteerLeftVal = l; }, { axis: "x", dir: -1 });
+    }, function (l, command, p) { btnSteerLeftVal = l; leftCommand = command; leftSpeedMix = arrowSpeedMix(p); }, { button: "left", command: steerButtonCommand, axis: "x", dir: -1, sibling: "btn-steer-right" });
     wireHold("btn-steer-right", function (v) {
       if (v && !btnSteerRight) btnSteerRightSeq = ++btnSteerSeq;
       btnSteerRight = v; if (!v) btnSteerRightVal = 0;
-    }, function (l) { btnSteerRightVal = l; }, { axis: "x", dir: 1 });
+    }, function (l, command, p) { btnSteerRightVal = l; rightCommand = command; rightSpeedMix = arrowSpeedMix(p); }, { button: "right", command: steerButtonCommand, axis: "x", dir: 1, sibling: "btn-steer-left" });
 
     // LIVE INPUT-SOURCE READOUT, for a bug that only reproduces on a real
     // phone: a player reported the throttle behaving always-on after an
@@ -2355,19 +2412,21 @@ const Input = (function () {
       let still = false;
       try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
       if (!still) { _padLostAt = nowMs(); _padNextProbeMs = 0; } else { _padLostAt = 0; _padNextProbeMs = 0; }
-      padConnected = still; padSteer = 0; padThrottle = padBrake = false;
-      padThrottleVal = padBrakeVal = 0;
-      padSteerAnalog = false; padLookBack = false;
-      lookStickX = 0; lookStickY = 0;
-      padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
-      padDpadLeftHeld = padDpadRightHeld = false;
-      padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
-      if (!still) padIsWheel = false;
-      // Only the ACTIVE pad's edge baseline: a spare pad leaving must not turn
-      // every button still held on the driving pad into a fresh press.
-      if (e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons) padPrevButtons.length = 0;
+      padConnected = still;
+      const lostActive = e.gamepad && padPrevByIndex.get(e.gamepad.index) === padPrevButtons;
+      if (!still || lostActive) {
+        padSteer = padThrottleVal = padBrakeVal = 0;
+        padThrottle = padBrake = padSteerAnalog = padLookBack = false;
+        lookStickX = lookStickY = 0;
+        resetPadDriveState();
+        padIsWheel = false;
+        padMenu.reset();
+        // A replacement pad starts with its current buttons as the edge baseline.
+        // A spare leaving preserves both held buttons and the active menu repeat.
+        if (padPrevKey !== null) padSnapshotLost = true;
+        padPrevButtons.length = 0;
+      }
       if (e.gamepad) padPrevByIndex.delete(e.gamepad.index);
-      padMenu.reset();
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
       /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing
@@ -2386,7 +2445,7 @@ const Input = (function () {
     heldKeys.clear();
     touches.clear();
     hideDragAnchor();
-    touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
+    touchSteer = 0; activeTouch = null; touchSteerVal = 0; touchSteerT = 0;
     dragFilterClear();   // else a press right after a blur/reset blends from the last drag
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
@@ -2498,7 +2557,7 @@ const Input = (function () {
       rateIn: digitalRateIn(),
       pad: { connected: padConnected, steer: padSteer, throttle: padThrottle, brake: padBrake },
       touchSteer,
-      touchActive,
+      touchActive: !!activeTouch,
       touchRangePx: touchRangePx(),
       touchRangeFrac,
       touchSpeedMix,
@@ -2585,6 +2644,8 @@ const Input = (function () {
     triggerRumbleSupported,
     vibrate,
     hapticsSupported,
+    setPedalSlide(m) { pedalSlide = m === "ease" ? "ease" : "instant"; return pedalSlide; },
+    pedalSlide: () => pedalSlide,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
     setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
     getHoldMode: () => InputBindings.parseHoldMode(holdMode),
@@ -2600,7 +2661,7 @@ const Input = (function () {
     getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
     resetControllerProfile,
-    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,

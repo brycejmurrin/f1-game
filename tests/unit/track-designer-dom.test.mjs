@@ -15,7 +15,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
-const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/zones.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -37,13 +37,17 @@ function bootScreen(stored = {}) {
   ctx.queueMicrotask = (fn) => Promise.resolve().then(fn);
   ctx.setTimeout = setTimeout; ctx.clearTimeout = clearTimeout;
   ctx.devicePixelRatio = 1;
+  // The window listeners the screen registers (the foot's `resize` re-seat); fired by `fire(type)`.
+  const listeners = new Map();
+  ctx.addEventListener = (type, fn) => { (listeners.get(type) || listeners.set(type, []).get(type)).push(fn); };
+  const fire = (type, ev = { type }) => { for (const fn of listeners.get(type) || []) fn(ev); };
   for (const f of SCREEN_FILES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const G = { soundOn: false, trackIdx: 0 };
   const clicks = [];
   for (const id of ["mb-race", "mb-tt"]) dom.byId(id).addEventListener("click", () => clicks.push(id));
   dom.byId("mb-race").click = () => clicks.push("mb-race");
   dom.byId("mb-tt").click = () => clicks.push("mb-tt");
-  return Object.assign(vmx, { dom, G, clicks, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
+  return Object.assign(vmx, { dom, G, clicks, fire, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
 }
 
 // The normal editor store keeps object references; SAVE mutating a cached draft
@@ -147,6 +151,27 @@ test("init() builds the rail before any design exists; open() randomises a green
   assert.equal(b.D.isOpen(), false);
   assert.equal(b.root.hidden, true);
   assert.ok(b.C.draft(), "a draft is autosaved on close");
+});
+
+test("a fresh open leaves no UNDO entry of the blank design", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open();
+  assert.equal(b.D.state().undo, 0, "nothing to undo on a fresh open");
+  assert.equal(b.D.undo(), false);
+});
+
+test("UNDO keeps a country change (it is not an undoable edit, like the name)", () => {
+  const b = bootScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open(); b.D.randomise(7);
+  b.D.setTool("corner"); assert.equal(b.D.applyStamp(3, 3), true);
+  const sel = walk(b.root).find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Country");
+  sel.value = "Japan"; sel.dispatchEvent({ type: "change" });
+  const country = b.D.state().design.country;
+  assert.ok(country, "the country was set");
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.country, country, "UNDO leaves the country alone");
 });
 
 test("the rail's edits: stamp, undo/redo, reverse, start, delete floor, theme, width, name", () => {
@@ -437,6 +462,89 @@ test("an insert / delete / stamp keeps zones before the edit at their distance f
   assert.equal(d3.pts.length, d2.pts.length + 1, "the tap inserted a point");
   samePlace(pointAt(d3.pts, d3.bankZones[0].frac), pointAt(d2.pts, d2.bankZones[0].frac), 1e-6, "an insert upstream leaves a downstream zone in place");
   samePlace(pointAt(d3.pts, d3.elevations[0].s), pointAt(d2.pts, d2.elevations[0].s), 1e-6, "…and an upstream one");
+});
+
+test("a stamp over a span that wraps the start line, and deleting point 0, keep every zone on its road (WP-G1)", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  const N = d0.pts.length;
+  const cum = (p) => { const c = [0]; for (let i = 0; i < p.length; i++) { const a = p[i], q = p[(i + 1) % p.length]; c.push(c[i] + Math.hypot(q[0] - a[0], q[1] - a[1])); } return c; };
+  const c0 = cum(d0.pts), L0 = c0[N], f = (k) => c0[k] / L0;
+  const a = Math.floor(N / 3), m = Math.floor(N / 2), z = Math.floor((2 * N) / 3);
+  const zones = { bankZones: [{ frac: f(m), angleDeg: 8, widthM: 100 }], bridges: [{ s: f(z), halfM: 60, rise: 6 }], elevations: [{ s: f(a), halfM: 60, rise: 2 }],
+    props: [{ kind: "trees", s: f(m + 2), side: 1 }] };
+  const loaded = Object.assign({}, d0, zones);
+  b.D.load(loaded);
+  const z0 = plain(b.D.state().design);
+  const keep = (dn, what, tol) => {
+    assert.notDeepEqual(dn.pts[0], z0.pts[0], `${what}: the start moved (the case under test)`);
+    samePlace(pointAt(dn.pts, dn.bankZones[0].frac), pointAt(z0.pts, z0.bankZones[0].frac), tol, `${what}: bank`);
+    samePlace(pointAt(dn.pts, dn.bridges[0].s), pointAt(z0.pts, z0.bridges[0].s), tol, `${what}: bridge`);
+    samePlace(pointAt(dn.pts, dn.elevations[0].s), pointAt(z0.pts, z0.elevations[0].s), tol, `${what}: elevation`);
+    if (z0.props && z0.props.length) samePlace(pointAt(dn.pts, dn.props[0].s), pointAt(z0.pts, z0.props[0].s), tol, `${what}: prop`);
+  };
+  // Shift-click span from N-3 round to 2: the splice keeps the road from its rejoin up to N-3, makes
+  // that rejoin point the new index 0 and (past 200 points) RDP-thins the survivors at 1 m — hence 1.5 m.
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(N - 3, 2), true);
+  keep(plain(b.D.state().design), "wrapped stamp", 1.5);
+  // DELETE on the start point: old pts[1] becomes the start.
+  b.D.load(loaded);
+  assert.equal(b.D.deletePoint(0), true);
+  keep(plain(b.D.state().design), "delete point 0", 1e-6);
+});
+
+test("a full-lap width zone overlaps every span: SPAN WIDTH reads it, and a span edit keeps it on the rest of the lap (W10 #2)", () => {
+  const b = bootHooked();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }] }));
+  b.D.open({ design: item, shared: true });
+  const row = rowOf(b.root, "SPAN WIDTH m"), val = row.children[2];
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9]);
+  assert.equal(val.textContent, "5.0", "the road under the span is the full-lap zone's, not the 8.0 base");
+  const c = cumOf(b.D.state().design.pts), L = c[b.D.state().design.pts.length], f0 = c[5] / L, f1 = c[9] / L;
+  assert.equal(b.D.setSpanWidth(8), true, "the base width clears the span only");
+  assert.deepEqual(plain(b.D.state().design.hwZones), [{ s0: f1, s1: f0, hw: 5, ease: 0.025 }], "the rest of the lap keeps 5.0");
+  b.D.undo();
+  assert.deepEqual(plain(b.D.state().design.hwZones), [{ s0: 0, s1: 1, hw: 5, ease: 0.025 }]);
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(6), true, "a wider span than the full-lap zone");
+  const z = plain(b.D.state().design.hwZones);
+  assert.equal(z.length, 2);
+  assert.deepEqual(z[0], { s0: f1, s1: f0, hw: 5, ease: 0.025 });
+  assert.deepEqual([z[1].s0, z[1].s1, z[1].hw], [f0, f1, 6]);
+  b.D.close();
+});
+
+test("a span inside a longer width zone trims that zone to the road either side of the span", () => {
+  const b = bootHooked();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  const pts = b.C.sanitize(design({ baseHW: 8 })).pts;
+  const c = cumOf(pts), L = c[pts.length], f = (i) => c[i] / L;
+  const item = b.C.sanitize(design({ baseHW: 8, hwZones: [{ s0: f(2), s1: f(12), hw: 5, ease: 0.025 }] }));
+  b.D.open({ design: item, shared: true });
+  const z0 = plain(b.D.state().design.hwZones)[0];
+  b.hooks.onPick(5, {}); b.hooks.onPick(9, { shiftKey: true });
+  assert.equal(b.D.setSpanWidth(8), true);
+  assert.deepEqual(plain(b.D.state().design.hwZones), [Object.assign({}, z0, { s1: f(5) }), Object.assign({}, z0, { s0: f(9) })],
+    "points 2-5 and 9-12 stay at 5.0; only the span goes back to base");
+  b.D.close();
+});
+
+test("the map canvas leaves Tab to the browser; [ ] still walk the points (W10 #5)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const canvas = b.root.querySelector("canvas");
+  const key = (k, shiftKey = false) => { const e = { type: "keydown", key: k, shiftKey }; b.dom.dispatch(canvas, e); return e; };
+  assert.notEqual(key("Tab").defaultPrevented, true);
+  assert.equal(b.D.state().sel, -1, "Tab selects nothing");
+  key("]");
+  assert.equal(b.D.state().sel, 0);
+  assert.notEqual(key("Tab").defaultPrevented, true, "a selected point does not trap Tab either");
+  assert.notEqual(key("Tab", true).defaultPrevented, true);
+  assert.equal(b.D.state().sel, 0, "…and does not cycle");
+  b.D.close();
 });
 
 test("full-lap width survives REVERSE and START HERE through storage and engine rebuild", () => {
@@ -1316,6 +1424,154 @@ test("START FROM…: a card per shipped circuit; a pick traces it into a new des
   assert.equal(b.D.startFrom("custom-nope"), false);
 });
 
+test("START FROM hydrates a metadata-only pick and revokes stale replacements", async () => {
+  const b = bootScreen(); openGreen(b);
+  const idx = b.Tracks.LIST.findIndex((d) => d.id === "monza"), full = b.Tracks.LIST[idx];
+  const stub = () => ({ id: full.id, name: full.name, _metaOnly: true });
+  const reset = () => { b.Tracks.LIST[idx] = stub(); };
+  reset();
+  assert.throws(() => b.ctx.TrackInsight.fromCircuit(b.Tracks.LIST[idx]), "metadata cannot be traced before hydration");
+  let release, calls = 0;
+  b.G.ensureCircuit = (i) => { assert.equal(i, idx); calls++; return new Promise((resolve) => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; }); };
+  const before = plain(b.D.state().design), order = b.Tracks.LIST.map((d) => d.id);
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  assert.deepEqual(plain(b.D.state().design), before, "waiting does not replace the working circuit");
+  release(); assert.equal(await pending, true);
+  assert.equal(b.D.state().design.name, "MONZA REMIX");
+  assert.deepEqual(b.Tracks.LIST.map((d) => d.id), order, "hydration preserves saved order");
+  assert.equal(b.D.undo(), true); assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  for (const change of [() => b.D.setName("EDIT WHILE LOADING"), () => b.D.close(), () => b.D.startFrom("spa")]) {
+    b.D.open(); reset(); const next = b.D.startFrom("monza"); await Promise.resolve();
+    change(); const retained = plain(b.D.state().design); release();
+    assert.equal(await next, false); assert.deepEqual(plain(b.D.state().design), retained);
+  }
+  b.D.open(); reset(); const retained = plain(b.D.state().design);
+  b.G.ensureCircuit = () => Promise.reject(new Error("offline"));
+  assert.equal(await b.D.startFrom("monza"), false);
+  assert.deepEqual(plain(b.D.state().design), retained, "load failure preserves unsaved edits");
+  assert.equal(calls, 4);
+  b.D.close();
+});
+
+// Hydration may finish while a gesture is still live. startFrom waits for the
+// map/profile to go idle, then re-checks the generation so a deliberate move
+// revokes and a selection-only tap still applies (#6031).
+for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test(`pending START FROM ${move ? "yields to an in-progress " : "survives a selection-only "}${gesture} gesture`, async () => {
+  const b = bootScreen(), captured = {}, arcs = [];
+  for (const [global, key] of [["DesignerCanvas", "map"], ["DesignerProfile", "profile"]]) {
+    const real = b.ctx[global];
+    b.ctx[global] = Object.assign({}, real, { create(c, hooks) {
+      captured[key] = { canvas: c };
+      if (key === "profile") {
+        c._rect = { left: 0, top: 0, width: 640, height: 72 };
+        const get = c.getContext;
+        c.getContext = (...args) => { const g = get(...args); return new Proxy(g, { get(target, k) {
+          if (k === "arc") return (x, y, r) => arcs.push({ x, y, r });
+          if (k === "clearRect") return () => { arcs.length = 0; };
+          return target[k];
+        } }); };
+      }
+      const api = real.create(c, hooks); captured[key].api = api; return api;
+    } });
+  }
+  openGreen(b); b.D.setMode(gesture === "profile" ? "elevation" : gesture === "draw" ? "draw" : "edit");
+  b.D.preview();
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured[gesture === "profile" ? "profile" : "map"];
+  h.api.resize();
+  const fire = (type, x, y) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: x, clientY: y });
+  let x, y;
+  if (gesture === "profile") { const grip = arcs.slice(-before.pts.length)[4]; x = grip.x; y = 36; }
+  else { h.api.fit(); const v = h.api.view(), p = before.pts[4]; x = (p[0] - v.cx) * v.scale + v.w / 2; y = (p[1] - v.cz) * v.scale + v.h / 2; }
+  fire("pointerdown", x, y);
+  if (move) {
+    fire("pointermove", x + 30, y - 15);
+    if (gesture === "draw") fire("pointermove", x + 60, y + 30);
+  }
+  assert.deepEqual(plain(b.D.state().design), before, "live gesture has not committed");
+  release();
+  fire("pointerup", x + 60, y + 30);
+  assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement");
+  const after = b.D.state();
+  assert.equal(after.design.name, move ? before.name : "MONZA REMIX");
+  assert.equal(after.undo, undo + 1, "one gesture or replacement remains one undo transaction");
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  assert.deepEqual(plain(b.D.state().design.heights), before.heights);
+  b.D.close();
+});
+
+// Hydration between pointerdown and the drag threshold used to apply the remix
+// under the finger; the drag then mutated MONZA REMIX (#6031 press-window).
+test("pending START FROM yields when hydrate finishes during a map press before the drag arms", async () => {
+  const b = bootScreen(), captured = {};
+  const real = b.ctx.DesignerCanvas;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks); captured.map = { canvas: c, api }; return api;
+  } });
+  openGreen(b); b.D.setMode("edit"); b.D.setSelectionMode("point"); b.D.preview();
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured.map; h.api.resize(); h.api.fit();
+  const v = h.api.view(), p = before.pts[4];
+  const x = (p[0] - v.cx) * v.scale + v.w / 2, y = (p[1] - v.cz) * v.scale + v.h / 2;
+  const fire = (type, cx, cy) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: cx, clientY: cy });
+  fire("pointerdown", x, y);
+  release();
+  fire("pointermove", x + 30, y - 15);
+  fire("pointerup", x + 60, y + 30);
+  assert.equal(await pending, false, "a press that becomes a drag revokes even when hydrate won the race");
+  assert.equal(b.D.state().design.name, before.name);
+  assert.notDeepEqual(plain(b.D.state().design.pts), before.pts);
+  assert.equal(b.D.state().undo, undo + 1);
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  b.D.close();
+});
+
+// A Loading / SW reflow used to re-fit (#6000) under stale aim coords so the
+// press missed into a pan: no onBegin, startFrom resolved true (#6031).
+test("pending START FROM holdFit keeps a pre-reflow map aim on the grip after a large resize", async () => {
+  const b = bootScreen(), captured = {};
+  const real = b.ctx.DesignerCanvas;
+  b.ctx.DesignerCanvas = Object.assign({}, real, { create(c, hooks) {
+    const api = real.create(c, hooks); captured.map = { canvas: c, api }; return api;
+  } });
+  openGreen(b); b.D.setMode("edit"); b.D.setSelectionMode("point"); b.D.preview();
+  const before = plain(b.D.state().design);
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured.map;
+  h.canvas._rect = { left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 };
+  h.api.resize(); h.api.fit();
+  const v1 = h.api.view(), p = before.pts[4];
+  const at = { x: (p[0] - v1.cx) * v1.scale + v1.w / 2, y: (p[1] - v1.cz) * v1.scale + v1.h / 2 };
+  h.canvas._rect = { left: 0, top: 0, right: 900, bottom: 600, width: 900, height: 600 };
+  h.api.resize();
+  const v2 = h.api.view();
+  assert.equal(v2.scale, v1.scale, "holdFit skipped the re-fit");
+  const fire = (type, cx, cy) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: cx, clientY: cy });
+  fire("pointerdown", at.x, at.y);
+  fire("pointermove", at.x + 30, at.y - 15);
+  release();
+  fire("pointerup", at.x + 60, at.y + 30);
+  assert.equal(await pending, false, "stale pre-reflow aim still hits the grip and revokes");
+  assert.equal(b.D.state().design.name, before.name);
+  b.D.close();
+});
+
 // START FROM pinned every shipped circuit's whole centreline (~4 MB) for the page
 // once the panel opened; a card strokes a 160×110 outline, so only that is kept.
 test("START FROM… memoises a small outline per circuit, not its whole centreline", async () => {
@@ -1431,11 +1687,14 @@ test("SPAN WIDTH m: one hwZone on the span's control points, merged on repeat, c
   assert.equal(b.D.deletePoint(14), true);
   e = b.D.state().design;
   samePlace(pointAt(e.pts, e.hwZones[0].s0), P[5], 1e-6, "delete after: s0 still on the same point"); samePlace(pointAt(e.pts, e.hwZones[0].s1), P[9], 1e-6, "…and s1");
-  // Repeat on an overlapping span merges: one zone, the new width.
+  // An overlapping span takes its own road; the zone keeps the rest (P[7] … P[9] stays 5.0).
+  const zOld = plain(e.hwZones[0]);
   b.hooks.onPick(5, {}); b.hooks.onPick(8, { shiftKey: true });   // P[4] … P[7] after the insert
   assert.equal(b.D.setSpanWidth(6), true);
   e = b.D.state().design;
-  assert.equal(e.hwZones.length, 1, "an overlapping span replaces the zone"); assert.equal(e.hwZones[0].hw, 6);
+  const cE = cumOf(e.pts), fE = (i) => cE[i] / cE[e.pts.length];
+  assert.deepEqual(plain(e.hwZones), [Object.assign({}, zOld, { s0: fE(8) }), { s0: fE(5), s1: fE(8), hw: 6, ease: 0.025 }],
+    "the zone is trimmed to the road after the span; the span is one zone at the new width");
   // 24 is the registry's cap: a 25th refuses with the limit, a replacement still works.
   const N = e.pts.length, c = cumOf(e.pts), L = c[N];
   const many = [];
@@ -1486,7 +1745,10 @@ test("BANK °: the SELECTED TURN banks its apex — {frac, angleDeg, widthM: the
   assert.equal(b.D.state().design.bankZones[0].angleDeg, 4);
   assert.ok(!v.issues.some((i) => i.code === "fia-bank"), "4° is within Grade 1");
   stepBy(row, -5);
-  assert.deepEqual(plain(b.D.state().design.bankZones), [], "down past 2° is flat: the zone goes");
+  assert.equal(val.textContent, "-6°");
+  assert.equal(b.D.state().design.bankZones[0].angleDeg, -6);
+  stepBy(row, 3);
+  assert.deepEqual(plain(b.D.state().design.bankZones), [], "zero removes the bank");
   assert.equal(val.textContent, "FLAT");
   assert.equal(b.D.setCornerBank(2, 99), true, "by number; clamps to 30");
   assert.equal(b.D.state().design.bankZones[0].angleDeg, 30);
@@ -1546,6 +1808,17 @@ test("elevation: presets + node height undo/redo; strip selects a point; Escape 
     // Force a strip selection by dispatching after mode elev + selecting via canvas pick is heavy; call profileBack path by selecting through setNodeHeight which selects.
     // Profile select via evaluating: the strip's select is internal; Escape with no selection should not claim.
     for (const l of back) l.fn(esc);
+    const arranger = b.dom.document.body.appendChild(b.dom.makeElement("dialog", "screen-arranger"));
+    const filesMenu = walk(b.root).find((el) => el.dataset.role === "file-menu");
+    filesMenu.open = true;
+    const layoutEscape = {type:"keydown", key:"Escape", target:arranger, preventDefault(){this.defaultPrevented=true;}, stopPropagation(){}};
+    for (const listener of back) listener.fn(layoutEscape);
+    assert.equal(filesMenu.open, true, "Escape in the layout editor leaves the browsed disclosure open");
+    assert.equal(layoutEscape.defaultPrevented, undefined);
+    const layoutUndo = {type:"keydown", key:"z", ctrlKey:true, target:arranger, preventDefault(){this.defaultPrevented=true;}};
+    for (const listener of back) listener.fn(layoutUndo);
+    assert.equal(layoutUndo.defaultPrevented, undefined, "the layout editor owns its undo shortcut");
+    assert.equal(b.D.state().design.heights[pick], 5, "layout undo leaves the design intact");
     // Undo / redo the height edit.
     assert.equal(b.D.undo(), true);
     assert.notEqual(b.D.state().design.heights[pick], 5);
@@ -1708,6 +1981,18 @@ test("CARD: a 640×360 PNG to the share sheet when canShare({files}) allows, els
   assert.match(msgText(b), /Fix the red issues before sharing/);
 });
 
+test("EXPORT refuses a RED design (same gate as SHARE / CARD — no invalid file leaves the machine)", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  assert.ok(await b.D.exportEnvelope(), "a green design still exports");
+  b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
+  assert.equal(b.D.preview().ok, false);
+  assert.equal(await b.D.exportEnvelope(), null);
+  assert.equal(/Fix the red issues before exporting/.test(msgText(b)), true);
+  assert.equal(await b.D.exportFile(), false);
+  assert.equal(await b.D.share(), null, "SHARE stays gated");
+});
+
 test("CARD re-entry: a second shareCard while the first is mid-share is refused (no double download)", async () => {
   const b = bootScreen();
   openGreen(b);
@@ -1846,6 +2131,15 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.deepEqual(plain(calls), [["raceIntro"], ["startRace"], ["quit"]], "never a frozen race");
   assert.equal(b.D.isOpen(), true);
   assert.match(msgText(b), /could not start/);
+  // Hunt #5743 D3: TEST HERE on another point while a range is selected drops the
+  // range — the way back must not restore "point 10 → old span end 6".
+  b.D.selectRange(2, 6);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [2, 6]);
+  calls.length = 0; b.G.state = "results";
+  assert.equal(await b.D.testHere(10), false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(b.D.isOpen(), true);
+  assert.deepEqual([b.D.state().sel, b.D.state().span], [10, -1], "the point driven from, no stale span");
   // A red design is refused before anything moves.
   calls.length = 0;
   b.D.load(Object.assign({}, b.D.state().design, { pts: SHORT_LOOP() }));
@@ -1961,6 +2255,15 @@ test("3 LOOK: a chip per theme (thirty), dual-colour swatches, the theme's blurb
   assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\]\s*\{/, "theme grid");
   assert.match(css, /#trackdesigner \.td-chips\[data-role="themes"\] \.swatch\s*\{/, "theme swatch paint box");
   assert.match(css, /forced-colors: active[\s\S]*\[data-role="themes"\][\s\S]*forced-color-adjust:\s*none/, "swatch colour survives forced-colors");
+  // Phone default DESIGNER SIZE 75 % × ui-scale 0.7 → zoom 0.525; a bare 16 px
+  // --fs-micro painted ~8.4 px on UNDO/REDO/FIT. Floor against --td-zoom.
+  // Prefer equal(+.test) over a source-pin regex assert — assertPinsAll is at ceiling.
+  assert.equal(/#trackdesigner\s*\{[^}]*--td-fs-floor:\s*calc\(12px\s*\/\s*var\(--td-zoom\)\)[^}]*--fs-micro:\s*max\(14px,\s*var\(--td-fs-floor\)\)/s.test(css), true,
+    "designer text floors at 12 painted px via --td-fs-floor");
+  assert.equal(/#trackdesigner\s+\.td-rail\s*\{[^}]*scroll-padding-bottom:\s*calc\(var\(--tap-paint\)\s*\+\s*var\(--gap\)\)/s.test(css), true,
+    "rail scroll-padding-bottom clears the SAVE foot");
+  const zoom = 0.7 * 0.75;
+  assert.equal((12 / zoom) * zoom >= 11.99 && 16 * zoom < 10, true, "floor paints ≥ 12 px; pre-fix LARGE micro was under 10");
 });
 
 // ── Banking UI + kerb styles + berms (overhaul E+F+G) ──────────────────────
@@ -2866,6 +3169,43 @@ test("native CARD share title remains captured when the design changes during PN
 });
 
 
+test("CARD from a closed visit cannot share its PNG or release the reopened visit's pending card", async () => {
+  const b = bootScreen(); openGreen(b); b.ctx.File = File;
+  const create = b.dom.document.createElement, shared = [];
+  let onPng;
+  b.dom.document.createElement = tag => {
+    const el = create(tag);
+    if (tag === "canvas") el.toBlob = done => onPng(() => done(new Blob(["png"], { type: "image/png" })));
+    return el;
+  };
+  b.ctx.navigator = { canShare: () => true, share: async data => { shared.push(data.title); } };
+  const oldPng = new Promise(resolve => { onPng = resolve; });
+  const old = b.D.shareCard(), finishOld = await oldPng;
+  b.D.close(); b.D.open(); b.D.setName("Next visit");
+  const newPng = new Promise(resolve => { onPng = resolve; });
+  const newer = b.D.shareCard(), finishNew = await newPng;
+  finishOld(); assert.equal(await old, false); assert.deepEqual(shared, []);
+  assert.equal(await b.D.shareCard(), false, "older completion keeps the current card busy");
+  finishNew(); assert.equal(await newer, true); assert.deepEqual(shared, [b.D.state().design.name]);
+  b.D.close();
+});
+
+for (const outcome of ["resolve", "reject"]) {
+  test(`CARD native share ${outcome} after close leaves the next visit alone`, async () => {
+    const b = bootScreen(); openGreen(b); recordingCanvas(b, [], []); b.ctx.File = File;
+    let onShare, saves = 0;
+    const entered = new Promise(resolve => { onShare = resolve; });
+    b.ctx.navigator = { canShare: () => true, share: () => new Promise((resolve, reject) => onShare({ resolve, reject })) };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    const old = b.D.shareCard(), finish = await entered;
+    b.D.close(); b.D.open(); const message = msgText(b);
+    finish[outcome](new Error("share unavailable"));
+    assert.equal(await old, false); assert.equal(saves, 0);
+    assert.equal(msgText(b), message);
+    b.D.close();
+  });
+}
+
 test("close cancels pending single-file and decoded imports without blocking a new closed API load", async () => {
   for (const path of ["file","decode"]) {
     const b=bootScreen();b.D.init(b.G,{custom:b.C,root:b.root});b.D.open();b.D.load(design({name:"ORIGINAL"}));
@@ -2952,6 +3292,105 @@ test("authored road bridge adds, refuses overlap/unsafe inputs, edits, undoes an
   assert.equal(b.D.state().design.bridges.length, 1, "draft reopens with its bridge");
 });
 
+test("SHARE copies the newer circuit when its encode finishes first", async () => {
+  const b = bootScreen(); openGreen(b);
+  const finish = [], written = [];
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => finish.push(resolve)) };
+  b.ctx.ApexClipboard = { write: async url => { written.push(url); return true; } };
+  const old = b.D.share();
+  b.D.setName("New circuit");
+  const latest = b.D.share();
+  finish[1]("new"); const url = await latest;
+  finish[0]("old"); assert.equal(await old, null);
+  assert.deepEqual(written, [b.CD.shareUrl("new")]);
+  assert.equal(url, written[0]);
+  assert.equal(b.root.querySelector('[aria-label="Share code or link"]').value, url);
+  assert.equal(b.D.state().lastCode, "new");
+  b.D.close();
+});
+
+for (const action of ["share", "shareCard"]) {
+  test(`${action} from a replaced circuit leaves the imported design and its controls alone`, async () => {
+    const b = bootScreen(); openGreen(b);
+    const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+    let finish, copies = 0, saves = 0;
+    b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+    b.ctx.ApexClipboard = { write: async () => { copies++; return false; } };
+    b.ctx.NativeDownload = { viable: () => true, saveBlob: async () => { saves++; } };
+    recordingCanvas(b, [], []);
+    const pending = b.D[action]();
+    assert.equal(await b.D.loadFrom(incoming), true);
+    assert.equal(b.D.state().design.name, "IMPORTED");
+    const field = b.root.querySelector('[aria-label="Share code or link"]'), value = field.value;
+    const focus = b.dom.document.activeElement, status = msgText(b);
+    finish("old-code");
+    assert.equal(await pending, action === "share" ? null : false);
+    assert.equal(copies, 0); assert.equal(saves, 0);
+    assert.equal(field.value, value); assert.equal(msgText(b), status);
+    assert.ok(b.dom.document.activeElement === focus);
+    assert.notEqual(b.D.state().lastCode, "old-code");
+    b.D.close();
+  });
+}
+
+test("undoing a document replacement withdraws the replaced circuit's pending SHARE", async () => {
+  const b = bootScreen(); openGreen(b);
+  const original = b.D.state().design.name;
+  const incoming = await b.CD.encode({ ...plain(b.D.state().design), name: "IMPORTED" });
+  assert.equal(await b.D.loadFrom(incoming), true);
+  let finish, copied = false;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async () => { copied = true; return true; } };
+  const pending = b.D.share();
+  assert.equal(b.D.undo(), true); assert.equal(b.D.state().design.name, original);
+  finish("imported-code");
+  assert.equal(await pending, null); assert.equal(copied, false);
+  b.D.close();
+});
+
+test("a refused import leaves the pending SHARE on its original circuit", async () => {
+  const b = bootScreen(); openGreen(b);
+  const copied = []; let finish;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: () => new Promise(resolve => { finish = resolve; }) };
+  b.ctx.ApexClipboard = { write: async url => { copied.push(url); return true; } };
+  const pending = b.D.share();
+  assert.equal(await b.D.loadFrom("invalid"), false);
+  finish("original");
+  assert.equal(await pending, b.CD.shareUrl("original"));
+  assert.deepEqual(copied, [b.CD.shareUrl("original")]);
+  b.D.close();
+});
+
+test("SHARE waits for an in-flight clipboard write and suppresses its fallback after reopening", async () => {
+  const b = bootScreen(); openGreen(b);
+  vm.runInContext(read("js/core/clipboard.js"), b.ctx, { filename: absSrc("js/core/clipboard.js") });
+  const writes = [], pending = [];
+  let copiedSelection = 0;
+  b.dom.document.execCommand = () => { copiedSelection++; return true; };
+  b.ctx.navigator = { clipboard: { writeText(url) {
+    writes.push(url);
+    return new Promise((resolve, reject) => pending.push({ resolve, reject }));
+  } } };
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: async item => item.name };
+  const old = b.D.share();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1);
+  b.D.close(); b.D.open(); b.D.setName("New circuit"); b.D.showPane("library");
+  const latest = b.D.share();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 1, "second native write waits for first to settle");
+  pending[0].reject(new Error("permission denied"));
+  assert.equal(await old, null);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(writes.length, 2);
+  assert.equal(copiedSelection, 0, "old clipboard fallback never copies or takes focus");
+  assert.equal(b.root.dataset.pane, "library");
+  pending[1].resolve();
+  assert.equal(await latest, writes[1]);
+  assert.equal(msgText(b), "Share link copied");
+  b.D.close();
+});
+
 test("share clipboard fallback opens the workspace containing its copy field", async () => {
   const b = bootScreen(); openGreen(b); b.D.setMode("scenery"); b.D.showPane("library");
   b.ctx.ApexClipboard = { write: async () => false };
@@ -2985,4 +3424,184 @@ test("terrain library search filters without editing; landscapes place, undo and
   b.D.undo(); assert.equal(b.D.state().design.props, undefined);
   for (const theme of ["fjord", "badlands", "redwood"]) { by("theme", theme).click(); assert.equal(b.D.state().design.theme, theme); }
   b.D.close();
+});
+
+// Deploy red b852807e (Pages run 42337166562): at 844x390 the foot re-seats under the rail
+// on the resize that follows the open; moving the foot moved the SHARE & FILES summary
+// Playwright had just focused, the platform dropped focus on <body>, and the Enter then
+// seeded MenuNav's landing (the pressed EDIT chip) instead of opening the menu.
+test("re-seating the foot on a short-landscape resize keeps focus on the control that had it", () => {
+  const b = bootScreen();
+  const { document } = b.dom;
+  b.ctx.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  b.ctx.innerWidth = 1280; b.ctx.innerHeight = 720;
+  b.D.open();
+  // What the mini DOM does not do and the platform does: a focused node that moves
+  // between parents loses focus to <body>. (Element identity is asserted with ===:
+  // assert.equal's diff of two mini-DOM trees is what OOM-killed the runner.)
+  for (const host of [b.root, b.root.querySelector(".td-body")]) {
+    const append = host.appendChild;
+    host.appendChild = (c) => { const had = document.activeElement; const r = append(c); if (had && c.contains(had)) document.activeElement = document.body; return r; };
+  }
+  const foot = b.root.querySelector(".td-foot"), menu = walk(b.root).find((e) => e.dataset.role === "file-menu"), summary = menu && menu.children[0];
+  assert.ok(foot && summary, "the foot and its SHARE & FILES summary exist");
+  assert.equal(b.root.dataset.foot, "out", "a landscape desktop keeps the foot under the body");
+  summary.focus();
+  b.ctx.innerWidth = 844; b.ctx.innerHeight = 390;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "in", "844x390 seats the foot inside the body");
+  assert.ok(foot.parentNode === b.root.querySelector(".td-body"), "the foot moved under the rail");
+  assert.ok(document.activeElement === summary, "the summary keeps focus across the move");
+  // ...and back out again on the way to portrait, still without dropping it.
+  b.ctx.innerWidth = 390; b.ctx.innerHeight = 844;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "out");
+  assert.ok(document.activeElement === summary, "the summary keeps focus when the foot returns to the dialog");
+  // Nothing focused inside the foot: the re-seat touches focus nowhere else.
+  const draw = walk(b.root).find((e) => e.dataset.role === "mode-bar").querySelector("button");
+  draw.focus();
+  b.ctx.innerWidth = 844; b.ctx.innerHeight = 390;
+  b.fire("resize");
+  assert.equal(b.root.dataset.foot, "in");
+  assert.ok(document.activeElement === draw, "focus outside the foot is left alone");
+});
+
+// #5947 A: a circuit's id is a hash of its SHAPE, so saving a friend's shared copy of your own layout used to
+// replace your name and country without a word. SAVE now asks first: KEEP MINE / USE THEIRS.
+test("saving a shared copy of a circuit you already have asks first: KEEP MINE / USE THEIRS (#5947)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  b.D.setName("MY RING");
+  const mine = b.D.save();
+  assert.equal(mine.ok, true);
+  const shared = Object.assign(b.C.sanitize(b.D.state().design), { name: "THEIR NAME", country: "Italy" });
+  const ask = () => b.dom.document.body.children.find((n) => n.id === "td-label-ask");
+
+  b.D.open({ design: shared, shared: true }); b.D.preview();
+  const asked = b.D.save();
+  assert.deepEqual([asked.ok, asked.reason], [false, "ask"], "the save waits for the answer");
+  assert.equal(b.C.get(mine.id).name, "MY RING", "nothing is written before the answer");
+  const dlg = ask();
+  assert.ok(dlg, "the house modal opens over the designer");
+  assert.equal(dlg.tagName.toLowerCase(), "dialog");
+  assert.equal(dlg.className, "screen dim", "the house .screen sheet");
+  assert.equal(dlg.querySelector(".sheet-body").children[0].textContent, "You already have this circuit as MY RING.");
+  const keep = dlg.querySelector("#td-label-keep"), theirs = dlg.querySelector("#td-label-theirs");
+  assert.equal(keep.textContent, "KEEP MINE"); assert.equal(theirs.textContent, "USE THEIRS");
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const target = window.ScreenRegions["td-label-ask"];
+  const modal = ask();
+  assert.equal(target.root, "#" + modal.id);
+  for (const region of Object.values(target.regions)) assert.ok(modal.querySelector(region.selector), region.label);
+
+  const floor = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
+  for (const d of [keep, theirs]) assert.deepEqual([d.style.minHeight, d.style.minWidth], [floor, floor], "a 44 px painted tap floor");
+  assert.equal(b.dom.document.activeElement, keep, "focus lands on the safe answer");
+  keep.click();
+  assert.equal(ask(), undefined, "the modal closes");
+  assert.equal(b.C.get(mine.id).name, "MY RING", "KEEP MINE keeps your name…");
+  assert.equal(b.C.get(mine.id).country || "", "", "…and your country");
+  assert.equal(b.D.state().design.name, "MY RING", "the designer shows the kept name");
+
+  b.D.open({ design: shared, shared: true }); b.D.preview();
+  assert.equal(b.D.save().reason, "ask");
+  ask().querySelector("#td-label-theirs").click();
+  assert.equal(b.C.get(mine.id).name, "THEIR NAME", "USE THEIRS takes their name…");
+  assert.equal(b.C.get(mine.id).country, "Italy", "…and their country");
+  assert.equal(b.C.list().length, 1, "still one circuit either way");
+
+  // Your own circuit re-saved under a new name (opened from the library) is a rename, not a clash.
+  b.D.open({ design: b.C.get(mine.id), originId: mine.id }); b.D.preview();
+  b.D.setName("RENAMED");
+  assert.equal(b.D.save().ok, true);
+  assert.equal(ask(), undefined);
+  assert.equal(b.C.get(mine.id).name, "RENAMED");
+});
+
+test("UNDO during a point drag keeps the undo: the release does not re-commit the stale drag copy (clean-room 66)", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  assert.ok(b.D.deletePoint(5), "a point deleted");
+  const d1 = plain(b.D.state().design), u1 = b.D.state().undo;
+  assert.equal(d1.pts.length, d0.pts.length - 1);
+  // Point 10 on screen, through fit()'s view (the loop's box × 0.82 in 640 × 400).
+  const xs = d1.pts.map((p) => p[0]), zs = d1.pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const sc = Math.min(640 / Math.max(60, x1 - x0), 400 / Math.max(60, z1 - z0)) * 0.82;
+  const at = { clientX: (d1.pts[10][0] - (x0 + x1) / 2) * sc + 320, clientY: (d1.pts[10][1] - (z0 + z1) / 2) * sc + 200, pointerId: 4, pointerType: "mouse" };
+  const canvas = b.root.querySelector("canvas");
+  b.D.setTool("select");
+  b.dom.dispatch(canvas, Object.assign({ type: "pointerdown" }, at));
+  b.dom.dispatch(canvas, Object.assign({ type: "pointermove" }, at, { clientX: at.clientX + 30, clientY: at.clientY + 20 }));
+  assert.ok(b.D.undo(), "UNDO mid-drag");
+  b.dom.dispatch(canvas, Object.assign({ type: "pointerup" }, at, { clientX: at.clientX + 30, clientY: at.clientY + 20 }));
+  const s = b.D.state();
+  assert.equal(s.design.pts.length, d0.pts.length, "the deleted point is back after the release");
+  assert.deepEqual(plain(s.design.pts), d0.pts, "the undone design stands: the drag copy was dropped");
+  assert.equal(s.undo, u1 - 1, "the release pushed no new undo step");
+  assert.equal(s.redo, 1, "redo survives the release");
+});
+
+test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", () => {
+  const b = bootScreen();
+  openGreen(b);
+  const find = (el) => { if (el.dataset && el.dataset.role === "checks-summary") return el; for (const c of el.children || []) { const r = find(c); if (r) return r; } return null; };
+  const checks = find(b.root);
+  assert.ok(checks, "the CHECKS summary chip");
+  const V = b.ctx.TrackValidate;
+  const as = (red, amber) => { b.ctx.TrackValidate = Object.assign({}, V, { check: (d) => Object.assign({}, V.check(d), { red, amber }) }); b.D.preview(); };
+  try {
+    as(0, 1);
+    assert.equal(checks.textContent, "CHECKS · 1 WARNING");
+    assert.equal(checks.getAttribute("aria-label"), "Review design checks: 0 errors, 1 warning");
+    as(1, 2);
+    assert.equal(checks.textContent, "CHECKS · 1 TO FIX");
+    assert.equal(checks.getAttribute("aria-label"), "Review design checks: 1 error, 2 warnings");
+    as(0, 3);
+    assert.equal(checks.textContent, "CHECKS · 3 WARNINGS");
+  } finally { b.ctx.TrackValidate = V; }
+});
+
+// track-designer:71 (734x343 / 852x344 at 100 %, foot tucked): the screen
+// arranger's entry took a fourth 44 px grid row and the dialog scrolled 16 px.
+// Tucked, it floats at the foot's end at a fixed width the status line keeps clear.
+// The entry shares the body's cell (no fourth row) at its end. An absolute bottom anchored it to the visible box, so
+// a dialog that scrolls at UI SIZE 150 % put it over SHARE & FILES (CI run 44853962507, 852x344@150).
+test("closing the designer cancels candidate and thumbnail work before the next visit", async () => {
+  const b = bootScreen();
+  openGreen(b);
+  const frames = [], timers = new Map();
+  let id = 0, drawn = 0, generated = 0;
+  const realRandom = b.ctx.TrackRandom, realCanvas = b.ctx.DesignerCanvas;
+  b.ctx.TrackRandom = { ...realRandom, designOne(...args) { generated++; return realRandom.designOne(...args); } };
+  b.ctx.DesignerCanvas = { ...realCanvas, thumb(...args) { drawn++; return realCanvas.thumb(...args); } };
+  b.ctx.requestAnimationFrame = fn => frames.push(fn);
+  b.ctx.setTimeout = fn => { timers.set(++id, fn); return id; };
+  b.ctx.clearTimeout = handle => timers.delete(handle);
+  const flushFrames = () => { while (frames.length) frames.shift()(); };
+  const flushTimer = () => { const [key, fn] = timers.entries().next().value; timers.delete(key); fn(); };
+  b.D.toggleStartFrom();
+  const pending = b.D.designed("FAST", 21);
+  b.D.close();
+  assert.equal(await pending, false);
+  b.D.open();
+  flushFrames();
+  assert.equal(drawn, 0);
+  assert.equal(generated, 0);
+  assert.equal(b.D.state().candidates.length, 0);
+  const fast = chipsIn(panes(b)[0], "FAST")[0];
+  assert.equal(fast.disabled, false);
+  assert.equal(fast.getAttribute("aria-pressed"), "false");
+  assert.equal(b.D.toggleStartFrom(), true, "the card panel reopens");
+  flushFrames();
+  assert.ok(drawn > 40);
+  const fresh = b.D.designed("FAST", 22);
+  while (timers.size) flushTimer();
+  assert.equal(await fresh, true);
+  assert.equal(generated, 16);
+  assert.equal(b.D.state().candidates.length, 4);
+  b.D.close();
+  flushFrames();
+  assert.equal(b.D.state().candidates.length, 0);
 });

@@ -1,8 +1,9 @@
 /* Apex 26 — ApexXR: thin façade over XRPlan + XrSession for boot / settings.
  *
- * Owns the cached plan, capability probe → apex26.xrCaps latch, bootPick() for
- * game.js backendPreference(), and noteFallback() for the post-boot ladder
- * (task 45). Does NOT own the immersive session — that stays XrSession.
+ * Owns the cached plan, capability probe → apex26.xrCaps latch (written through
+ * XrBoot.storeVrCaps, the one writer), bootPick()
+ * and noteFallback() for the post-boot ladder.
+ * Does NOT own the immersive session — that stays XrSession.
  *
  * Storage (all apex26.-prefixed):
  *   apex26.xr          "0"|"1"     VR mode armed (XROpts)
@@ -36,6 +37,12 @@ const ApexXR = (function () {
     try { sessionStorage.setItem(k, v); return true; } catch (_) { return false; }
   }
 
+  // The one apex26.xrCaps writer is the eager XrBoot.storeVrCaps (it must hold when
+  // no XR bundle loads); this module only reads LS_CAPS.
+  function storeCaps(vr) {
+    if (typeof XrBoot !== "undefined" && XrBoot.storeVrCaps) XrBoot.storeVrCaps(vr);
+  }
+
   function readPrefs() {
     let xr = "0";
     let xrBackend = "webgl2";
@@ -64,13 +71,14 @@ const ApexXR = (function () {
       vr: cached === "1",
       gpu: typeof navigator !== "undefined" && !!navigator.gpu,
       xrgpu: typeof globalThis !== "undefined" && typeof globalThis.XRGPUBinding !== "undefined",
-      layers: false,
       mobileQuest: typeof navigator !== "undefined" && questUa(navigator.userAgent),
     };
   }
 
-  /** Async capability probe. Writes apex26.xrCaps for the next boot's sync pick. */
-  async function detect() {
+  /** Capability probe. A stored apex26.xrCaps answer is adopted WITHOUT asking navigator.xr
+   *  (#4324 / #5417: the ask bars the bfcache), synchronously, so XrSession is seeded before
+   *  XrUi.mount looks; `force` asks anyway. A live answer is stored for the next boot. */
+  async function detect(force) {
     if (_detecting) return _detecting;
     _detecting = (async () => {
       const caps = syncCapsFromCache();
@@ -78,16 +86,25 @@ const ApexXR = (function () {
       caps.gpu = typeof navigator !== "undefined" && !!navigator.gpu;
       caps.xrgpu = typeof globalThis !== "undefined" && typeof globalThis.XRGPUBinding !== "undefined";
       caps.mobileQuest = typeof navigator !== "undefined" && questUa(navigator.userAgent);
-      let vr = false;
-      if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
+      // Only rewrite apex26.xrCaps when the probe settles. A throw must not wipe
+      // a positive latch (bootPick / VR rows still need the last good detect).
+      const stored = lsGet(LS_CAPS);
+      let known = true;
+      if (!force && (stored === "1" || stored === "0")) {
+        caps.vr = stored === "1";
+      } else if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
         try {
-          vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
-        } catch (_) { vr = false; }
+          const vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
+          caps.vr = vr;
+          storeCaps(vr);
+        } catch (_) { known = false; /* keep caps.vr from syncCapsFromCache */ }
+      } else {
+        caps.vr = false;
+        storeCaps(false);
       }
-      caps.vr = vr;
-      lsSet(LS_CAPS, vr ? "1" : "0");
       _caps = caps;
       _plan = null; // invalidate so plan() re-resolves
+      if (known && typeof XrSession !== "undefined" && XrSession.seed) XrSession.seed(caps.vr);
       if (typeof XROpts !== "undefined" && XROpts.onCaps) {
         try { XROpts.onCaps(caps); } catch (_) { /* UI optional */ }
       }
@@ -114,15 +131,14 @@ const ApexXR = (function () {
     return resolved;
   }
 
-  /** Sync boot override for backendPreference(). null ⇒ leave 2D pick alone. */
+  /** Sync boot override read by renderer-boot.js storedBackendPreference().
+   *  null ⇒ leave the 2D pick alone. ApexXR is LAZY_XR, so on a real boot it is
+   *  not loaded when that read runs and this never steers one; the ENTER VR
+   *  pin + reload (XrBoot.ensureXrBackend) is what switches the renderer. */
   function bootPick() {
     const p = plan(true);
     if (p.xrMode !== "armed") return null;
     return p.backendPref || null;
-  }
-
-  function path() {
-    return plan().path;
   }
 
   function fallbacks() {
@@ -156,28 +172,11 @@ const ApexXR = (function () {
 
   function invalidate() {
     _plan = null;
-  }
-
-  /** True when the live gfx bind matches the armed plan (or VR is off). */
-  function rendererMatchesPlan() {
-    const p = plan();
-    if (p.xrMode !== "armed") return true;
-    // Until task 40/45 wire GLX/TLX XR attach for every path, "can attach"
-    // is the practical gate for ENTER VR (Phase 0 TLX+forceGL).
-    if (typeof XrBoot !== "undefined" && typeof XrBoot.canAttach === "function") {
-      try { if (XrBoot.canAttach()) return true; } catch (_) { /* */ }
-    }
-    let bound = null;
-    try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
-    if (p.path === "webgl2") return bound === "webgl2";
-    // webgpu experimental: TLX clears gfxBound on a successful bind.
-    return bound == null;
+    _caps = null;   // re-read apex26.xrCaps: XrBoot.recheck may have rewritten it
   }
 
   return {
-    LS_XR, LS_BACKEND, LS_CAPS, SS_FALLBACK,
-    detect, caps, plan, bootPick, path, fallbacks, noteFallback, stats,
-    invalidate, rendererMatchesPlan, readPrefs, questUa,
+    detect, caps, plan, bootPick, fallbacks, noteFallback, stats, invalidate,
   };
 })();
 Object.freeze(ApexXR);

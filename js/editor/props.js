@@ -145,8 +145,12 @@ const TrackDesignerProps = (function () {
     const s = frac(opts.s != null ? opts.s : 0);
     if (s == null) return null;
     const next = Array.isArray(list) ? list.slice() : [];
-    // Same floor as placeBatch / updateAt: COPY and a single PLACE must not store
-    // a gap below MIN_GAP (dress clamps later, but content id / share codes would differ).
+    // Same floor as placeBatch / updateAt: COPY and a single PLACE never store a
+    // gap below MIN_GAP. sanitize() does NOT floor (it clamps 0..120): an imported
+    // design may keep a smaller gap, which dress() clamps to MIN_GAP when it
+    // builds, so it looks the same but hashes to another content id, and its
+    // first edit here rewrites the gap. Flooring in sanitize would move the id
+    // of every saved design that stored one (audit 2026-11-09 W10 #4, deferred).
     const gap = effectiveGap(kind, opts.gap);
     next.push({ kind, s, side: sideOf(opts.side), gap: gap == null ? gapOf(kind, opts.gap) : gap });
     return sanitize(next) || next;

@@ -31,7 +31,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { overlapArea, planeGap } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
+const { facesOf, overlapArea, planeGap } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
 
 // SPOTS = distinct 40 m locations carrying at least one same-facing coplanar
 // pair (spots, not pairs: a pair count swings when one prop moves, a spot
@@ -143,6 +143,22 @@ test("overlapArea is the real overlap, exact on the shapes the emitters emit", (
   near(overlapArea(rect(0, 0.45, 1, 0.55), rect(0.45, 0, 0.55, 1)), 0.01, "crossed bars");
 });
 
+test("near-parallel panels retain their overlap when moved away from the origin", () => {
+  function panel(x, z, yaw) {
+    const c = Math.cos(yaw), s = Math.sin(yaw), pos = [], nrm = [];
+    for (const [u, y] of [[0, 0], [4, 0], [4, 4], [0, 4]]) {
+      pos.push(x + c * u, y, z - s * u);
+      nrm.push(s, 0, c);
+    }
+    return facesOf({ s: 0, e: pos.length }, pos, nrm)[0];
+  }
+  for (const z of [0, 1000]) {
+    const a = panel(0, z, 0);
+    assert.ok(overlapArea(a, panel(4, z, 0.001)) < 1e-6, "panels meet at their edges");
+    assert.ok(Math.abs(overlapArea(a, panel(3, z, 0.001)) - 4) < 1e-6, "one metre overlaps");
+  }
+});
+
 test("planeGap is the point-to-plane separation, not |d_a - d_b| (#2205)", () => {
   // The vegas hoarding x street-barrier pair, reduced: two parallel vertical
   // faces 1.37 m apart, ~800 m from the origin, normals 0.11 deg apart. Each
@@ -189,4 +205,14 @@ test("CLI: a boolean flag never swallows the circuit id after it; bad numeric ov
   for (const bad of [["--gap"], ["--gap", "abc"], ["--area", "0"], ["--fight", "-1"], ["--maxdim", "--json"]]) {
     assert.throws(() => optsFrom(bad, false), /needs a positive number/, bad.join(" "));
   }
+});
+
+// #2501: --json is one JSON document; --why's text report refuses it.
+test("coplanar-audit refuses --json --why before building anything", () => {
+  let err;
+  try { execFileSync(process.execPath, [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "monza", "--json", "--why"], { encoding: "utf8", stdio: "pipe", timeout: 20000 }); }
+  catch (e) { err = e; }
+  assert.ok(err, "must exit non-zero");
+  assert.equal(err.status, 2); assert.equal(err.stdout, "");
+  assert.match(err.stderr, /--why is a text report/);
 });

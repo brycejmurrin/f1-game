@@ -238,7 +238,16 @@ export function auditAll(dir = SPECS) {
     .filter((f) => f.endsWith(".spec.js"))
     .sort()
     .map((f) => {
-      const r = auditSource(fs.readFileSync(path.join(dir, f), "utf8"), `tests/specs/${f}`);
+      const src = fs.readFileSync(path.join(dir, f), "utf8");
+      const r = auditSource(src, `tests/specs/${f}`);
+      // A registry spec's tests live in its case modules (`import x from "./foundation/<id>.js"`,
+      // TK2-17): their blockers are the spec's, or the registry reads as portable with no body.
+      for (const m of src.matchAll(/^import\s+\w+\s+from\s+"(\.\/[^"]+\.js)";$/gm)) {
+        const rel = path.posix.join("tests/specs", m[1]);
+        const sub = auditSource(fs.readFileSync(path.join(dir, m[1]), "utf8"), rel);
+        r.blockers.push(...sub.blockers.map((b) => ({ ...b, what: `${b.what} [${rel}:${b.line}]` })));
+        r.evaluates += sub.evaluates || 0;
+      }
       const hard = r.blockers.filter((b) => b.kind !== "import");
       return { ...r, portable: r.blockers.length === 0, portableAfterImportFix: hard.length === 0 };
     });

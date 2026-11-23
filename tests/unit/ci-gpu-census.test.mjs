@@ -9,7 +9,66 @@ import os from "node:os";
 import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
-import { ciWorkflow, gpuWorkflow } from "../helpers/ci-workflow.mjs";
+import { ciWorkflow, gpuWorkflow, evalTemplate } from "../helpers/ci-workflow.mjs";
+import { buildSummary, compareTimings, timingPlan, validateLiveCell, validateTimingWindow } from "../../tools/gfx/chunk-merge-timing.mjs";
+
+test("chunk-merge timing uses one path-filtered macOS job with balanced isolated boots", () => {
+  const workflow = parseYAML(fs.readFileSync(new URL("../../.github/workflows/chunk-merge-timing.yml", import.meta.url), "utf8"));
+  assert.deepEqual(Object.keys(workflow.on), ["pull_request", "workflow_dispatch"]);
+  assert.deepEqual(workflow.on.pull_request.paths, [
+    ".github/workflows/chunk-merge-timing.yml", "tools/gfx/chunk-merge-timing.mjs",
+  ]);
+  assert.deepEqual(Object.keys(workflow.jobs), ["timing"]);
+  assert.equal(workflow.jobs.timing["runs-on"], "macos-latest");
+  const plan = timingPlan();
+  assert.equal(plan.length, 18);
+  for (const [index, arm] of plan.entries()) {
+    assert.equal(arm.track, index % 2 ? "spa" : "monza");
+    assert.equal(arm.repeat, Math.floor(index / 6));
+  }
+  for (const track of ["monza", "spa"]) {
+    const arms = plan.filter((arm) => arm.track === track);
+    for (let position = 0; position < 3; position++) {
+      assert.deepEqual([arms[position], arms[position + 3], arms[position + 6]].map((x) => x.factor).sort(), [2, 3, 4]);
+    }
+  }
+});
+
+test("path-filtered hardware timing and WebGPU census defer ordinary drafts and run on ready or dispatch", () => {
+  for (const [file, job] of [["chunk-merge-timing", "timing"], ["perf-census-webgpu", "census"]]) {
+    const workflow = parseYAML(fs.readFileSync(new URL(`../../.github/workflows/${file}.yml`, import.meta.url), "utf8"));
+    assert.deepEqual(workflow.on.pull_request.types, ["opened", "synchronize", "reopened", "ready_for_review"]);
+    assert.ok(workflow.on.pull_request.paths.length);
+    assert.ok(Object.hasOwn(workflow.on, "workflow_dispatch"));
+    const enabled = (event_name, draft, head_ref) => evalTemplate(workflow.jobs[job].if,
+      { github: { event_name, head_ref, event: { pull_request: { draft } } } });
+    assert.equal(enabled("pull_request", true, "topic"), false);
+    assert.equal(enabled("pull_request", false, "topic"), true);
+    assert.equal(enabled("pull_request", true, "train/batch"), true);
+    assert.equal(enabled("workflow_dispatch", undefined, ""), true);
+  }
+});
+
+test("chunk-merge timing rejects fallback and incomplete or noisy comparisons", () => {
+  const live = { state: "race", track: "monza", factor: 3, camera: "helmet", api: "webgpu", softAdapter: false, softBlit: false,
+    skipBatches: false, lost: false, hidden: false, healed: false, errors: 0, calls: 42, presents: 4096,
+    canvas: { id: "game", visible: true } };
+  assert.doesNotThrow(() => validateLiveCell(live, "monza", 3));
+  for (const bad of [{ softAdapter: true }, { softBlit: true }, { errors: 1 }, { calls: 0 }, { factor: 2 }]) {
+    assert.throws(() => validateLiveCell({ ...live, ...bad }, "monza", 3));
+  }
+  assert.equal(compareTimings([10, 11, 12], [7, 7, 8]).verdict, "faster");
+  assert.equal(compareTimings([10, 11, 12], [13, 15, 15]).verdict, "slower");
+  assert.equal(compareTimings([10, 11, 12], [9, 10, 11]).verdict, "inconclusive", "overlapping repeats");
+  assert.equal(compareTimings([5, 10, 10], [11, 11, 12]).verdict, "inconclusive", "difference inside repeat spread");
+  assert.equal(compareTimings([10, 11, 12], [7, 8]).verdict, "inconclusive", "missing boot");
+  const rows = [10, 11, 12].map((cpuMs) => ({ track: "monza", at: 0.1, factor: 3, cpuMs }));
+  rows.push(...[7, 7, 8].map((cpuMs) => ({ track: "monza", at: 0.1, factor: 2, cpuMs })));
+  assert.equal(buildSummary(rows).find((row) => row.track === "monza" && row.at === 0.1 && row.factor === 2).verdict, "faster");
+  const cpu = Array.from({ length: 90 }, () => 10);
+  assert.equal(validateTimingWindow({ initial: 4096, final: 4186, cpu }), 90, "lifetime present count advances past the frame-time ring");
+  assert.throws(() => validateTimingWindow({ initial: 4096, final: 4185, cpu }), /incomplete/);
+});
 
 // THE FOUR CONTROL LEGS. The opt-in relaunch step (#3235: the TLX/WebGPU check twice on one
 // profile, the returning player's launch) is not a fifth control; it is cut out here and pinned
@@ -18,14 +77,17 @@ const RELAUNCH_NAME = "Game check — three.js / WebGPU, first and second launch
 const RELAUNCH_STEP = /\n      - name: Game check — three\.js \/ WebGPU, first and second launch \(one profile\)[\s\S]*?\n          done\n/;
 // The opt-in mem-cycles step (A·H12) is a measurement, not a control leg: cut out like the relaunch step.
 const MEMCYCLES_STEP = /\n      - name: Memory cycles — three\.js race to quit[\s\S]*?\n          done\n/;
-const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n");
+// Opt-in paired photography is likewise separate from the four renderer controls.
+const GARAGE_CAPTURE_STEP = /\n      - name: Capture paired desktop garage departure[\s\S]*?\n            --json game-garage-desktop.json --shot game-garage-desktop.png\n/;
+const gpuControls = gpuWorkflow.replace(RELAUNCH_STEP, "\n").replace(MEMCYCLES_STEP, "\n").replace(GARAGE_CAPTURE_STEP, "\n");
 
 test("gpu-census runs nightly staggered from the boot group, with the full check and its dispatch defaults", () => {
   // 2026-09-29: both were `17 3 * * *` and stacked on the same ~20 slots with
   // the boot-group nightly. Stagger them (ci.yml 04:17, gpu-census 05:47) and
-  // keep neither on the old 03:17 pin.
-  assert.match(ciWorkflow, /- cron: "17 4 \* \* \*"/,
-    "ci.yml nightly must leave 03:17 (staggered to 04:17 UTC)");
+  // keep neither on the old 03:17 pin. 2026-11-20: the nightly moved to 16:17
+  // so GitHub's ~8 h delay starts it in the quiet hours (CI-CRON-DELAY-2026-11-20).
+  assert.match(ciWorkflow, /- cron: "17 16 \* \* \*"/,
+    "ci.yml nightly must stay staggered from gpu-census (16:17 UTC)");
   assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "47 5 \* \* \*"\s*\n  workflow_dispatch:/m,
     "gpu-census.yml nightly must be staggered (05:47 UTC), not shared with ci.yml");
   assert.doesNotMatch(ciWorkflow, /- cron: "17 3 \* \* \*"/);
@@ -51,13 +113,13 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
 });
 
 test("gpu-census: agents may still request by push; dispatches queue, push requests never cancel each other", () => {
-  // The push-request path (2026-09-09) is how sessions WITHOUT dispatch rights
-  // reach the real GPU (a GH App token gets 403 on workflow_dispatch), and it
-  // is in daily use (2026-10-14: runs 38603534048, 38610120171, 38611116514).
+  // Dispatch is the default route (agent tokens dispatch; review 2026-10-27). The
+  // push-request path stays for the request-only legs (`leg`, `lf_*`, `lrm_*`):
+  // the dispatch form is at GitHub's 25-input cap.
   const wf = parseYAML(gpuWorkflow);
   assert.deepEqual(Object.keys(wf.on).sort(), ["push", "schedule", "workflow_dispatch"]);
   assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,
-    "agents without workflow_dispatch may push a request file on cursor/*");
+    "a request-only leg is pushed as a request file on cursor/*");
   assert.deepEqual(wf.on.push.branches, ["cursor/**", "claude/**"]);
   const req = JSON.parse(fs.readFileSync(new URL("../../.github/gpu-census-request.json", import.meta.url), "utf8"));
   assert.ok(req && typeof req === "object", "the request file must stay valid JSON — the plan job json.load()s it");
@@ -102,7 +164,7 @@ test("gpu-census: the nightly skips an unchanged renderer, fail-safe; legs time 
     assert.equal(s["continue-on-error"], true, `${s.name}: a red leg must still reach the Verdict`);
   }
   assert.ok(legs.length * 6 < wf.jobs.census["timeout-minutes"], "four capped legs must fit inside the job cap");
-  const up = wf.jobs.census.steps.find((s) => String(s.uses || "").startsWith("actions/upload-artifact@"));
+  const up = wf.jobs.census.steps.find((s) => String(s.uses || "").startsWith("actions/upload-artifact@") && s.with?.name === "gpu-census-${{ matrix.image }}");
   assert.equal(up.with["retention-days"], 7);
 });
 
@@ -110,7 +172,10 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch", "mem_cycles"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry", "relaunch", "mem_cycles", "detail"]);
+  // detail (#5951 follow-up): appended last; 0 keeps the census as it was, 1 / 2 ride `ls` as apex26.gfxDetail.
+  assert.deepEqual(inputs.detail.options, ["0", "1", "2"]);
+  assert.equal(inputs.detail.default, "0");
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
   assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
@@ -149,7 +214,7 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
 test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
-  assert.equal(Object.keys(inputs).at(-3), "entry", "appended last (before relaunch, #3235, and mem_cycles, A·H12): every earlier input keeps its position");
+  assert.equal(Object.keys(inputs).at(-4), "entry", "appended last (before relaunch, #3235, mem_cycles, A·H12, and detail, #5951): every earlier input keeps its position");
   assert.equal(inputs.entry.type, "choice");
   assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
   assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");

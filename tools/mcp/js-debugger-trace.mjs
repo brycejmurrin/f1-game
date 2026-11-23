@@ -207,7 +207,6 @@ export function hitchWindowsFromCpuProfile(profile, { thresholdMs = 50, maxWindo
       url: shortUrl(n?.callFrame?.url),
       functionName: clip(n?.callFrame?.functionName || "(anon)", 120),
     });
-    if (windows.length >= maxWindows) break;
   }
   windows.sort((a, b) => b.durationMs - a.durationMs);
   return { windows: windows.slice(0, maxWindows), thresholdMs, scannedSamples: profile.samples.length };
@@ -250,20 +249,24 @@ export function hitchSamplerExpression({ durationMs = 2000, thresholdMs = 50, ma
   const thr = Math.max(8, Math.min(2000, thresholdMs | 0));
   const cap = Math.max(1, Math.min(50, maxWindows | 0));
   return `(()=>new Promise(resolve=>{
-    var thr=${thr}, cap=${cap}, end=performance.now()+${ms}, last=performance.now(), wins=[], frames=0;
+    var thr=${thr}, cap=${cap}, end=performance.now()+${ms}, last=performance.now(), wins=[], frames=0, hitches=0;
     function tick(t){
       frames++;
       var dt=t-last; last=t;
-      if(dt>=thr && wins.length<cap) wins.push({t:Math.round(t), durationMs:+dt.toFixed(1), sinceStartMs:Math.round(t-(end-${ms}))});
+      if(dt>=thr){
+        hitches++;
+        wins.push({t:Math.round(t), durationMs:+dt.toFixed(1), sinceStartMs:Math.round(t-(end-${ms}))});
+        if(wins.length>cap){ wins.sort(function(a,b){return b.durationMs-a.durationMs}); wins.length=cap; }
+      }
       if(t<end) requestAnimationFrame(tick);
-      else resolve({ok:true, durationMs:${ms}, thresholdMs:thr, frames:frames, windows:wins.sort(function(a,b){return b.durationMs-a.durationMs}).slice(0,cap)});
+      else resolve({ok:true, durationMs:${ms}, thresholdMs:thr, frames:frames, hitches:hitches, windows:wins.sort(function(a,b){return b.durationMs-a.durationMs}).slice(0,cap)});
     }
     requestAnimationFrame(tick);
   }))()`;
 }
 
 /** Persist a raw profile under scratch/debug-profiles for DevTools reopen. */
-export function saveProfileArtifact(kind, body, root = fileURLToPath(new URL("../..", import.meta.url))) {
+function saveProfileArtifact(kind, body, root = fileURLToPath(new URL("../..", import.meta.url))) {
   const dir = path.join(root, "scratch", "debug-profiles");
   mkdirSync(dir, { recursive: true });
   const id = randomUUID();
@@ -273,8 +276,8 @@ export function saveProfileArtifact(kind, body, root = fileURLToPath(new URL("..
   return file;
 }
 
-export const PROFILE_ACTIONS = ["start", "stop", "status", "hitch"];
-export const PROFILE_KINDS = ["cpu", "heap"];
+const PROFILE_ACTIONS = ["start", "stop", "status", "hitch"];
+const PROFILE_KINDS = ["cpu", "heap"];
 
 /**
  * Mixin for DebugSession: realtime CDP Profiler / HeapProfiler / rAF hitch windows.

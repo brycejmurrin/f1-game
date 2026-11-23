@@ -130,15 +130,18 @@ const CarShade = (function () {
    *  both ends capped. `tri(out, a, b, c, col, surface)` is car3d's addTri;
    *  opts.frontCol paints the front (+Z) cap (an intake mouth), opts.surface
    *  overrides the surface id. */
+  // heroCar loft UVs (CarGeometry.loftUv): a no-op unless a hero build with the TLX car-surface program is running.
+  const loftUv = (o, v, r) => typeof CarGeometry !== "undefined" && CarGeometry.loftUv(o, v, r);
   function loft(out, front, rear, col, tri, opts) {
     const n = (opts && opts.n) || RING_N, p = (opts && opts.p) || EXP, pt = (opts && opts.pt) || EXP_TOP;
     const sf = opts && opts.surface, fc = (opts && opts.frontCol) || col;
-    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt);
+    const F = ring(front, n, p, pt), R = ring(rear, n, p, pt), v0 = out.pos ? out.pos.length / 3 : 0;
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
       tri(out, F[i], R[i], R[j], col, sf);
       tri(out, F[i], R[j], F[j], col, sf);
     }
+    loftUv(out, v0, [F, R]);
     const cf = [front.x || 0, front.y, front.z], cr = [rear.x || 0, rear.y, rear.z];
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
@@ -147,7 +150,6 @@ const CarShade = (function () {
     }
   }
 
-  // ---- SMALL PARTS (2026-10-02, batch 3): struts, rounded blocks, plates ----
   // The body sections above were rounded first; what still read as boxes were
   // the parts hung off them — wishbones, halo pillar, mirrors, airbox, floor,
   // endplates. Each helper below takes car3d's own datums (its corners, its
@@ -207,6 +209,7 @@ const CarShade = (function () {
     // back on itself (the headrest's U) has its ends side by side.
     const d0 = sub(mid(rings[1]), mid(rings[0])), d1 = sub(mid(rings[last]), mid(rings[last - 1]));
     const flip = dot(newell(rings[0]), d0) > 0;   // the rings wind the other way round the loft
+    const v0 = out.pos ? out.pos.length / 3 : 0;
     for (let r = 0; r < last; r++) {
       const F = rings[r], R = rings[r + 1];
       for (let i = 0; i < n; i++) {
@@ -215,6 +218,7 @@ const CarShade = (function () {
         else { face(out, F[i], R[i], R[j], c, tri, sf); face(out, F[i], R[j], F[j], c, tri, sf); }
       }
     }
+    if (o.luv) loftUv(out, v0, rings);   // o.luv: a body loft (coverLoft) records heroCar loft UVs, sides only
     if (o.caps === false) return;
     const cap = (ring, c, d) => {   // the cap faces along d
       const keep = dot(newell(ring), d) > 0;
@@ -403,7 +407,9 @@ const CarShade = (function () {
     const rBot = Math.max(0.02, Math.min(0.07, lightLo - r.bottom - 0.01));
     const rTop = Math.max(0.015, Math.min(0.04, r.top - lightHi - 0.01));
     const fr = fracs(q(X1, 0), [0.10, 0.07, rTop, rBot]), CT = 0.018;
-    skin(out, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
+    // heroCar: the plate's two rims rounded 4 mm in two segments (CarGeometry.heroBevel; today's plate otherwise).
+    const plate = (o) => skin(o, [rquad(q(X1, 0), fr, seg), rquad(q(X0, 0), fr, seg)], col, tri);
+    if (typeof CarGeometry !== "undefined") CarGeometry.heroBevel(out, 0.004, 2, plate); else plate(out);
     // The crown straddles the top edge as the flat strip did (y top +- 9 mm), its
     // ends inset half its thickness so they finish flush with the plate's edges.
     pipe(out, rquad(q((X0 + X1) / 2, CT / 2), fr, seg).slice(seg + 1, 3 * (seg + 1)), crownCol, tri, crownSurf,
@@ -496,7 +502,7 @@ const CarShade = (function () {
   /** Loft closed rings front -> rear (each CCW from +Z, same count), capped:
    *  the front cap in `frontCol`, the rear in `col`. */
   function loftRings(out, rings, col, frontCol, tri) {
-    const n = rings[0].length;
+    const n = rings[0].length, v0 = out.pos ? out.pos.length / 3 : 0;
     for (let r = 0; r < rings.length - 1; r++) {
       const F = rings[r], R = rings[r + 1];
       for (let i = 0; i < n; i++) {
@@ -505,6 +511,7 @@ const CarShade = (function () {
         tri(out, F[i], R[j], F[j], col);
       }
     }
+    loftUv(out, v0, rings);
     const cap = (ring, c, flip) => {
       const m = [0, 0, 0];
       for (const p of ring) { m[0] += p[0] / n; m[1] += p[1] / n; m[2] += p[2] / n; }
@@ -522,7 +529,6 @@ const CarShade = (function () {
     for (const side of [-1, 1]) loftRings(out, stations.map((st) => podRing(st, side, chine)), col, frontCol, tri);
   }
 
-  // ---- COKE BOTTLE + DOWNWASH (rounded builds, 2026-10-03) ----
   // The engine recipe's `coke` knob (0.72-1.38; after #797 the grid runs 0.90
   // Alpine .. 1.18 Mercedes .. 1.30 Audi, 1.32 Red Bull / Aston) only narrowed
   // the pods' PLAN view at the waist (z -0.62) and tail (-1.48). The engine cover
@@ -633,7 +639,7 @@ const CarShade = (function () {
     skin(out, zs.map((z) => {
       const p = profile(anchors.coverAt(z)).pts;
       return p.map(([x, y]) => [x, y, z]).concat(p.slice().reverse().map(([x, y]) => [-x, y, z]));
-    }), col, tri);
+    }), col, tri, undefined, { luv: true });
   }
 
   /** Smooth vertex normals from the faces of an INDEXED vertex range [from, to):
@@ -654,7 +660,6 @@ const CarShade = (function () {
       if (l > 0) { N[v * 3] = acc[k] / l; N[v * 3 + 1] = acc[k + 1] / l; N[v * 3 + 2] = acc[k + 2] / l; }
     }
   }
-  // ---- UPPER/LOWER TWO-TONE (livery `lower` / `upper`, 2026-10-03 / 2026-10-14) ----
   // A second body colour on one side of a line along the sidepods and on
   // forward along the monocoque side:
   //   y(z) = podAt(z).bottom + 0.80 (top - bottom),  z -2.00 .. +1.05
@@ -716,6 +721,7 @@ const CarShade = (function () {
       const n = P.length / 3, nrm = [0, 1, 2].map((k) => N[u * 3 + k] + (N[w * 3 + k] - N[u * 3 + k]) * t), l = len(nrm) || 1;
       for (let k = 0; k < 3; k++) { P.push(at(u, w, t, k)); N.push(nrm[k] / l); C.push(body[k]); }
       M.push(M[u]);
+      if (out.luv) CarHero.luvLerp(out, u, w, t);
       return n;
     };
     // Triangle q (indices, winding kept) cut where g(x, y, z) changes sign, as
@@ -784,6 +790,29 @@ const CarShade = (function () {
     return heightZone(out, from, to, c1, upper, anchors, paint, true);
   }
 
+  // Stable LSD counting sort of `order` (vertex ids, in place) by k0, then k1, then k2 (k2 most significant).
+  // false, order untouched, when a key's range is over 2^21 buckets.
+  function countSort3(order, k0, k1, k2) {
+    const n = order.length, keys = [k0, k1, k2], lo = [0, 0, 0], span = [0, 0, 0];
+    if (!n) return true;
+    for (let p = 0; p < 3; p++) {
+      let a = Infinity, b = -Infinity;
+      for (let i = 0; i < n; i++) { const q = keys[p][order[i]]; if (q < a) a = q; if (q > b) b = q; }
+      if (!(b - a < 2097152)) return false;
+      lo[p] = a; span[p] = b - a + 1;
+    }
+    let src = order, dst = new Int32Array(n);
+    for (let p = 0; p < 3; p++) {
+      const key = keys[p], a = lo[p], at = new Uint32Array(span[p] + 1);
+      for (let i = 0; i < n; i++) at[key[src[i]] - a + 1]++;
+      for (let c = 0; c < span[p]; c++) at[c + 1] += at[c];
+      for (let i = 0; i < n; i++) { const v = src[i]; dst[at[key[v] - a]++] = v; }
+      const t = src; src = dst; dst = t;
+    }
+    if (src !== order) order.set(src);   // three passes: the result sits in the scratch buffer
+    return true;
+  }
+
   /** Crease-angle normal smoothing over a Car3D mesh, in place, read through
    *  `idx`: most of car3d emits three fresh vertices per triangle with a face
    *  normal, but tubes (halo, harness) share ring vertices that already carry
@@ -822,13 +851,18 @@ const CarShade = (function () {
       // Vertices SORTED by quantised position (stable: index order within), so each position run is contiguous;
       // a weld group is a run's vertices on one surface.
       const qx = new Int32Array(nv), qy = new Int32Array(nv), qz = new Int32Array(nv);
-      order = [];
+      order = new Int32Array(nv);
+      let no = 0;
       for (let v = 0; v < nv; v++) {
         if (skip.has(M[v]) || cnt[v + 1] === cnt[v]) continue;
         qx[v] = Math.round(P[v * 3] * 1e4); qy[v] = Math.round(P[v * 3 + 1] * 1e4); qz[v] = Math.round(P[v * 3 + 2] * 1e4);
-        order.push(v);
+        order[no++] = v;
       }
-      order.sort((u, v) => (qx[u] - qx[v]) || (qy[u] - qy[v]) || (qz[u] - qz[v]));
+      order = order.subarray(0, no);
+      // Three stable counting passes, least significant key first (z, y, x): the order a stable comparator sort on
+      // (x, y, z) gives, without ~n log n comparator calls (81 ms of a 22-car grid warm, 2026-11-18). A key range
+      // too wide to count (not a car) takes the comparator.
+      if (!countSort3(order, qz, qy, qx)) order.sort((u, v) => (qx[u] - qx[v]) || (qy[u] - qy[v]) || (qz[u] - qz[v]));
       runs = [];   // [start, end) pairs of runs with two or more vertices
       for (let i = 0; i < order.length;) {
         const u0 = order[i];
@@ -884,9 +918,12 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, COVER_Z_NEAR, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
-           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, upperZone, heightZone, smooth,
-           skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
+  // Module-local only (no external js/ or test readers): RING_N, EXP,
+  // EXP_TOP, LOWER, RAMP, pref, loftRings, heightZone, skin, sect, pipe, rquad.
+  // KEY stays public: car-shade.test pins the localStorage key via S.KEY.
+  return { KEY, COVER_Z, COVER_Z_NEAR, on, any, set, ring, sink, loft, capLoft, podRing, podLoft,
+           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, upperZone, smooth,
+           earcut, strut, fine, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();
 Object.freeze(CarShade);

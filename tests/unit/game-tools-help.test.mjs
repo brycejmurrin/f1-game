@@ -103,6 +103,14 @@ for (const rel of PARSED) {
   });
 }
 
+// W25 row 13 (2026-11): the three-peer sibling had no --help at all and ran the whole handshake.
+test("rtc-e2e-3p.mjs --help prints its usage line and exits 0 without booting Chromium", () => {
+  const r = runFast("tools/net/rtc-e2e-3p.mjs", "--help");
+  assert.equal(r.error, undefined, `--help did not return within ${FAST_MS} ms`);
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  assert.equal(r.stdout.split("\n")[0], "usage: node tools/net/rtc-e2e-3p.mjs");
+});
+
 test("gen-shell.mjs refuses an unknown flag instead of writing", () => {
   const r = spawnSync(process.execPath, ["tools/gen/gen-shell.mjs", "--bogus"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
   assert.equal(r.status, 2, r.stdout + r.stderr);
@@ -119,3 +127,31 @@ for (const [rel, want] of CASES) {
     assert.match(r.stdout, want);
   });
 }
+
+// ---- browser tools whose exit code ignored their own verdict (2026-11-10) ----
+// The browser half cannot run here, so each tool's verdict -> exit code is a
+// pure export, held with bad inputs that must come out red.
+test("apex-eval: an expr that throws in the page is exit 1 (the browser route exited 0)", async () => {
+  const { evalVerdict } = await import("../../tools/shot/apex-eval.mjs");
+  assert.deepEqual(evalVerdict({ ok: true, val: 3 }), { out: 3, code: 0 });
+  assert.equal(evalVerdict({ ok: true, val: undefined }).code, 0);
+  const red = evalVerdict({ err: "a.nope is not a function" });
+  assert.equal(red.code, 1);
+  assert.deepEqual(red.out, { err: "a.nope is not a function" }, "the error is still printed as JSON");
+  assert.equal(evalVerdict(undefined).code, 1, "no answer from the page is not a pass");
+});
+
+test("check-physics: a printed FAIL is exit 1 (every probe exited 0)", async () => {
+  const P = await import("../../tools/check/check-physics.mjs");
+  assert.equal(P.exitCodeFor(P.bankVerdict({ finite: true, gained: 120, errs: ["favicon.ico 404"] })), 0);
+  assert.equal(P.exitCodeFor(P.bankVerdict({ finite: false, gained: 120, errs: [] })), 1);
+  assert.equal(P.exitCodeFor(P.bankVerdict({ finite: true, gained: 120, errs: ["TypeError: x"] })), 1);
+  assert.equal(P.exitCodeFor(P.gripVerdict({ finite: true, totalGain: 12 })), 1, "stuck in place");
+  assert.equal(P.exitCodeFor(P.gripVerdict({ finite: true, totalGain: 80 })), 0);
+  assert.equal(P.exitCodeFor(P.roadfollowVerdict([{ widest: 9, limit: 15 }, { widest: 16, limit: 15 }])), 1);
+  assert.equal(P.exitCodeFor(P.roadfollowVerdict([])), 1, "nothing sampled is not a pass");
+  assert.equal(P.exitCodeFor(P.roadfollowVerdict([{ widest: 9, limit: 15 }])), 0);
+  assert.equal(P.exitCodeFor(P.steerVerdict({ noSteer: 0.4 })), 1, "on rails");
+  assert.equal(P.exitCodeFor(P.steerVerdict({ noSteer: 3 })), 0);
+  assert.equal(P.exitCodeFor(undefined), 1, "a probe that returned nothing is not a pass");
+});

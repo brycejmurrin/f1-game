@@ -27,6 +27,68 @@ import vm from "node:vm";
 import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("the far body and its wheels change detail together through distance and zoom", () => {
+  const v = carDrawVm();
+  v.field((_car, i) => i * 8);
+  const c = v.G.cars.find(car => !car.isPlayer);
+  const m = Float32Array.of(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
+  const lod = v.ctx.FieldLod;
+  function wheels(distance, degrees, bare = false, subject = c) {
+    const fov = degrees * Math.PI / 180;
+    m[14] = distance;
+    const tier = lod.tier(distance * distance, fov, subject);
+    if (tier >= 2) lod.farBody(distance * distance, fov, subject);
+    v.rec.draws.length = 0;
+    v.carDraw.drawPlayerWheels(subject, m, 0, { doubleSided: true }, false, 0, 1, bare);
+    const rims = v.rec.draws.filter(mesh => mesh.kind === "wheel");
+    assert.equal(rims.length, 4);
+    for (const rim of rims) if (!rim.far) assert.equal(!!rim._field, !subject.isPlayer, "player and field use their own fitted wheels");
+    return rims.filter(mesh => mesh.far).length;
+  }
+  assert.equal(wheels(80, 60), 0);
+  assert.equal(wheels(400, 60), 4);
+  assert.equal(wheels(245, 60), 4, "hysteresis holds on approach");
+  assert.equal(wheels(400, 60, true), 0, "mirror uses its own camera");
+  assert.equal(wheels(400, 60, false, v.G.player), 0);
+  assert.equal(wheels(400, 18), 0, "zoom restores detailed wheels");
+  assert.equal(wheels(400, 60), 4);
+  lod.setEnabled(false);
+  assert.equal(wheels(400, 60), 0);
+});
+
+test("partial far-wheel uploads draw fitted wheels until both axles are ready", () => {
+  const v = carDrawVm();
+  v.field((_car, i) => i * 8);
+  const c = v.G.cars.find(car => !car.isPlayer);
+  v.ctx.FieldLod.tier(400 ** 2, undefined, c);
+  v.ctx.FieldLod.farBody(400 ** 2, undefined, c);
+  v.ctx.Car3D.buildFarWheel = width => ({ kind: "wheel", far: true, width });
+  const farUploads = [], farFrees = [];
+  v.G.gfx.createMesh = mesh => {
+    if (mesh.far) {
+      farUploads.push(mesh);
+      if (farUploads.length === 2) throw new Error("lost rear upload");
+      if (farUploads.length === 3) return null;
+    }
+    return mesh;
+  };
+  v.G.gfx.freeMesh = mesh => { if (mesh.far) farFrees.push(mesh); };
+  const base = Float32Array.of(1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,400,1);
+  function draw() {
+    v.rec.draws.length = 0;
+    v.carDraw.drawPlayerWheels(c, base, 0, { doubleSided: true });
+    assert.equal(v.rec.draws.length, 4);
+    return v.rec.draws.filter(mesh => mesh.far).length;
+  }
+  assert.equal(draw(), 0);
+  assert.equal(draw(), 0);
+  assert.equal(draw(), 4);
+  assert.equal(draw(), 4);
+  assert.deepEqual(farUploads.map(m => m.width), [0.32, 0.38, 0.38, 0.38]);
+  v.carDraw.invalidateFactoryMeshCaches();
+  assert.deepEqual(farFrees, [farUploads[0], farUploads[3]]);
+});
+
 test("factory invalidation frees both shared rival LODs and rebuilds the far body", async () => {
   const v = carDrawVm();
   let decimates = 0;
@@ -262,8 +324,8 @@ test("a career field and MY TEAM's hire: after the menu prep, race entry builds 
     v.G.teamIdx = 3; v.G.driverIdx = 0;
     await v.carDraw.prepareMenuCarAssets(() => true);
     const bodies = count(v, "body") - 1, casters = count(v, "sh");
-    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 21, 13],
-      "21 rival bodies (2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build + shared LOD silhouette (D·DP3)");
+    assert.deepEqual([count(v, "whole"), bodies, casters], [0, 11, 13],
+      "21 rival seats on 11 body builds, a teammate derived from its team's (#4219; 2 upgraded teams on their own keys); a :sh per team (an upgrade's own) + the player's build + shared LOD silhouette (D·DP3)");
     assert.ok(bodies <= cap && casters <= cap);
     raceEntry(v, v.rec.builds.length, "career");
   }
@@ -427,9 +489,10 @@ test("the bounded team caches hold the menu prep, the race warm and the mirror w
       // Bodies: playerBodyMesh (its own cache) + teamBodyMesh per rival seat the
       // menu lists: 21 real; LEGENDS preps ONLY the picked legend, as the race
       // grids one seat (game.js seatsFor): 21 + the picked legend's key = 22.
+      // A teammate's body is derived from its team's one build (#4219): 11 builds.
       const teamBodies = count("body") - 1, casters = count("sh");
       assert.deepEqual([pick, count("whole"), teamBodies, casters],
-        pick === "legends" ? [pick, 0, 22, 13] : [pick, 0, 21, 13],
+        [pick, 0, 11, 13],
         "menu: no whole car; the rivals' bodies; a :sh per team (+ the picked team's) + the player's own build");
       assert.ok(teamBodies <= cap && casters <= cap, `teamBodies ${teamBodies} / teamMeshes ${casters} within ${cap}`);
       const menu = v.rec.builds.length;
@@ -498,7 +561,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   const { ctx, G, carDraw } = v;
   ctx.CamModes.CAM_MODES.push({ id: "helmet" }, { id: "visor" });   // [chase, cockpit, helmet, visor]
   ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });      // a seat that is not the visor's
-  for (const f of ["js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
+  for (const f of ["js/camera/vantage-ride.js", "js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   v.field((c, i) => 1000 + 9 * i);
   const player = G.player;
@@ -526,7 +589,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
     G.camMode = camMode; G.state = state; casts.length = 0;
     sp.reset();   // drop the lamp map's content key: every call here rebuilds
     sp.livePlayerMat.set(ground);
-    sp.resolvePlayer(smp, yv);
+    sp.resolvePlayer(smp, yv, 0.1);
     if (which === "car") sp.sunPass(f, 0, true); else sp.lampPass(f, 0, true);
     const mine = casts.filter((k) => k.pass === which);
     assert.equal(mine.length, 1, `${which} map: one caster, the player (no rivals pooled)`);
@@ -536,7 +599,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   // What the cockpit branch in game.js draws the body at: the same call over the same inputs.
   const drawnMat = (seat) => {
     const R = [0, 0, 0], U = [0, 1, 0], F = [0, 0, 0], P = [0, 0, 0];
-    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat));
+    ctx.GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, R, U, F, P, ctx.GameCams.seatFwd(seat), ctx.GameCams.seatUp(seat), 0.1);
     // Stored as game.js stores _cockMat (a Float32Array): the cast must match it bit for bit.
     return Array.from(Float32Array.from([R[0], R[1], R[2], 0, U[0], U[1], U[2], 0, F[0], F[1], F[2], 0, P[0], P[1], P[2], 1]));
   };
@@ -648,7 +711,7 @@ test("A-H3: drawAeroFlaps draws through CarDraw.coOpt — coalesced on TLX, the 
   const CarMesh = { getAeroFlapSet: () => ({ set: true }), getAeroFlap: () => ({ flap: true }) };
   const Car3D = { aeroFlaps: () => [{ wing: "front", zAngle: 0, xAngle: 0.3, y: 0.2, z: 1 }, { wing: "rear", zAngle: 0, xAngle: 0.4, y: 0.8, z: -1.5 }] };
   const CarMaterials = vm.runInNewContext(read("js/car/car-materials.js") + "\nCarMaterials");
-  const run = (CarDraw) => new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw", "CarMaterials",
+  const run = (CarDraw) => new Function("wingColorOfLivery", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw", "CarMaterials",
     src + "\nreturn drawAeroFlaps;")(() => [1, 0, 0], (x, a, b) => Math.min(b, Math.max(a, x)), () => ({}), Car3D, CarMesh, gfx, new Float32Array(16), CarDraw, CarMaterials);
   const paint = { roughness: 0.3, metalness: 0.1, specular: 0.5, clearcoat: 0.4, emissive: 0, carPaint: 1, sparkle: 1, doubleSided: true };
   const I = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -737,8 +800,9 @@ test("team meshes: painted and body-only key per seat, the caster per team, and 
   assert.notEqual(v.carDraw.teamMesh(team, a, false), sa, "silhouette:false is the painted mesh");
   v.rec.builds.length = 0;
   const ba = v.carDraw.teamBodyMesh(team, a), bb = v.carDraw.teamBodyMesh(team, b);
-  assert.deepEqual(seen(), ["body:" + a.num, "body:" + b.num], "body-only: one build per seat, numbered");
-  assert.notEqual(ba, bb);
+  assert.deepEqual(seen(), ["body:" + a.num], "body-only: one build per team, the teammate's body derived from it (#4219)");
+  assert.notEqual(ba, bb, "…into its own mesh");
+  assert.deepEqual([ba.num, bb.num, bb.seated], [a.num, b.num, a.num], "each mesh carries its own seat's number");
   assert.equal(v.carDraw.teamBodyMesh(team, b), bb, "a repeat is a hit");
   v.rec.builds.length = 0;
   const qa = v.carDraw.playerBodyMesh(team, a), qb = v.carDraw.playerBodyMesh(team, b);
@@ -748,6 +812,28 @@ test("team meshes: painted and body-only key per seat, the caster per team, and 
 
 // A car with its OWN fitted shelf (a career R&D upgrade) must not share the
 // factory mesh — its stamp joins the suffix, the caster's ":sh" included.
+// R19/R20 (#5777): Car3D's `_releaseCpuMirror` marks EVERY silhouette build, the shared rival body included, and
+// that one draws LIT (game.js). `_casterOnly` is what TLX builds position + index for, so it may sit on the two
+// depth-only builds and nowhere else. The VM's createMesh hands the build data back, so the mesh IS the data.
+test("_casterOnly marks the team caster and the first-person caster, never a lit mesh or the shared rival body", () => {
+  const v = carDrawVm({ casters: true, cam: "cockpit" });
+  v.field((c, i) => 1000 + 9 * i);
+  const cd = v.carDraw, team = v.teams[1], idle = [];
+  const [a] = v.G.cars.filter((c) => c.team === team);
+  v.ctx.requestIdleCallback = (fn) => { idle.push(fn); return idle.length; };
+  v.ctx.CarGeometry = { decimate: (geo) => ({ ...geo, far: true }) };   // a decimator that keeps every own property
+  assert.ok(cd.teamMesh(team, a, true)._casterOnly === true, "the team silhouette caster");
+  assert.ok(cd.teamMesh(team, null)._casterOnly === true, "teamMesh(team) with no car is that caster");
+  assert.ok(cd.cockpitShadowMesh(v.G.player.team, v.G.player)._casterOnly === true, "the first-person caster");
+  const lit = { painted: cd.teamMesh(team, a), body: cd.teamBodyMesh(team, a), cockpit: cd.cockpitBodyMesh(v.G.player.team, v.G.player),
+    rival: cd.sharedRivalBodyMesh(true) };
+  assert.equal(idle.length, 1, "the far decimation queued");
+  idle.shift()();
+  lit.far = cd.sharedRivalBodyMesh(true);
+  assert.ok(lit.far.far === true && lit.far !== lit.rival, "the decimated far body");
+  for (const k in lit) assert.ok(lit[k] && !("_casterOnly" in lit[k]), k + " draws lit: no caster flag");
+});
+
 test("a car on its own shelf builds its own body and its own caster; the factory car shares the team's", () => {
   const up = Object.assign({}, WORKS, { aero: "outwash_max" });
   const v = carDrawVm({ career: {} });
@@ -803,6 +889,7 @@ test("with no car or lamp map, resolvePlayer builds no first-person caster", () 
   const { ctx, G, carDraw, rec } = v;
   ctx.CamModes.CAM_MODES.push({ id: "helmet" });
   ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });
+  vm.runInContext(read("js/camera/vantage-ride.js"), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
   vm.runInContext(read("js/camera/vantage.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/camera/vantage.js") });
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   v.field((c, i) => 1000 + 9 * i);
@@ -838,6 +925,36 @@ function sharedRivalLifecycleRig() {
   v.ctx.GLTF = { toMesh() { return {}; } };
   return { ...v, idle, made, freed, decimated, nextRevision() { revision++; } };
 }
+
+test("distant rival liveries share a silhouette, preserve both inks across LODs, and release palette uploads", () => {
+  const r = sharedRivalLifecycleRig();
+  vm.runInContext(read("js/car/car-hero.js"), r.ctx);
+  r.ctx.GfxQuality = { feature: key => key === "rivalLiveryLod" };
+  const pos = [0, 0, 0, 1, 1, 1, 0, 1, 0];
+  let builds = 0;
+  r.ctx.Car3D.build = (primary, secondary) => {
+    builds++;
+    return { pos, col: [...primary, ...secondary, 0.25, 0.25, 0.25] };
+  };
+  const car = { team: r.ctx.Teams.LIST[0] };
+  const other = { team: car.team, netPaint: { tag: "peer", livery: { c1: [0, 1, 0], c2: [1, 0, 0] } } };
+  const mesh = r.carDraw.sharedRivalBodyMesh(true, car);
+  const inputs = [1, 0, 0, 0, 0, 1, 0.25, 0.25, 0.25];
+  assert.deepEqual(Array.from(mesh.geo.col), inputs);
+  assert.equal(r.carDraw.sharedRivalBodyMesh(true, { ...car }), mesh, "same palette reuses the upload");
+  const peer = r.carDraw.sharedRivalBodyMesh(false, other);
+  assert.equal(peer.geo.pos, mesh.geo.pos);
+  assert.deepEqual(Array.from(peer.geo.col), [0, 1, 0, 1, 0, 0, 0.25, 0.25, 0.25]);
+  r.idle.shift()();
+  const far = r.carDraw.sharedRivalBodyMesh(true, car);
+  assert.equal(far.geo.far, true);
+  assert.deepEqual(Array.from(far.geo.col), inputs);
+  assert.equal(builds, 1);
+  assert.equal(r.decimated.length, 1);
+  r.carDraw.invalidateFactoryMeshCaches();
+  assert.equal(r.freed.length, r.made.length);
+  for (const handle of [mesh, peer, far]) assert.ok(r.freed.includes(handle));
+});
 
 test("shared rival cache: invalidation releases both LODs and rebuilds the far body", () => {
   const r = sharedRivalLifecycleRig(), cd = r.carDraw;
@@ -922,4 +1039,89 @@ test("shared rival cache: a failed far upload keeps its source and retries on th
   assert.equal(r.idle.length, 1, "the next far draw schedules a retry");
   r.idle.shift()();
   assert.equal(cd.farRivalBodyReady(), true);
+});
+
+// TEAMMATES SHARE ONE BODY BUILD (#4219). The race-entry / menu warm built the
+// field body once per SEAT (22 Car3D builds, ~58 ms each in Node) where the two
+// seats differ only in the lid's colours. Car3D.build({ seats }) derives each
+// teammate from the one build. (1) The REAL Car3D (Node VM): every team's
+// derived second seat is deepStrictEqual to that seat's own full build, the
+// first seat unchanged, with CarShade smoothing off (the shipped default) and on
+// ("*"); an "auto" T-cam (seat-coloured housing) is refused, never approximated.
+function realCar3d(smooth) {
+  const quiet = { log() {}, info() {}, warn() {}, error() {}, debug() {} };
+  const ctx = vm.createContext({ console: quiet, Math, Object, Array, Float32Array, Float64Array, Int32Array, Uint16Array, Uint32Array,
+    JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-design.js", "js/car/livery-graphics.js",
+    "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js",
+    "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/liveries.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const all = vm.runInContext("({ CarShade, Car3D, Teams, Parts, Liveries })", ctx);
+  all.CarShade.set(smooth);
+  return { Car3D: all.Car3D, Teams: all.Teams, Parts: all.Parts, Liveries: all.Liveries };
+}
+test("a teammate's derived field body is byte-identical to its own full build, every team, smoothing off and on", () => {
+  for (const smooth of ["", "*"]) {
+    const { Car3D, Teams, Parts, Liveries } = realCar3d(smooth);
+    // car-draw.js buildCarData's opts for a body-only (field) mesh.
+    const opts = (team, liv, num) => ({ livery: liv, teamId: team.id, num, parts: Parts.getVisualTiers(Parts.getFactorySetup(team), team), noWheels: true, field: true });
+    const teams = Teams.LIST.filter((t) => Teams.isReal(t));
+    assert.equal(teams.length, 11);
+    for (const team of teams) {
+      const liv = Liveries.forTeam(team)[0], [a, b] = team.drivers, seats = new Map([[b.num, null]]);
+      const first = Car3D.build(liv.c1, liv.c2, Object.assign(opts(team, liv, a.num), { seats }));
+      const derived = seats.get(b.num), label = `${team.id} smooth=${smooth || "off"}`;
+      assert.ok(derived, label + ": the second seat is derived");
+      const own = Car3D.build(liv.c1, liv.c2, opts(team, liv, b.num));
+      assert.deepStrictEqual(derived, own, label + ": derived seat == its own build (pos, nrm, col, mat, idx, flapInfo)");
+      assert.deepStrictEqual(first, Car3D.build(liv.c1, liv.c2, opts(team, liv, a.num)), label + ": the first seat is unchanged");
+      assert.notDeepStrictEqual(derived.col, first.col, label + ": the lids differ");
+      assert.notEqual(derived.pos, first.pos, label + ": own arrays, not shared ones");
+      if (team === teams[0] && !smooth) {
+        const auto = Object.assign({}, liv, { tcam: "auto" }), refused = new Map([[b.num, null]]);
+        Car3D.build(auto.c1, auto.c2, Object.assign(opts(team, auto, a.num), { seats: refused }));
+        assert.equal(refused.get(b.num), null, "an \"auto\" T-cam differs per seat: no derivation, the caller builds it");
+      }
+    }
+  }
+});
+
+// (2) THE WARM: a 22-car race entry builds the field's bodies once per TEAM
+// (+ the player's own), and every rival still draws its own mesh and number.
+test("race entry's warm builds one field body per team, each seat its own mesh", () => {
+  const v = carDrawVm();
+  v.G.teamIdx = 3; v.G.driverIdx = 0;
+  const cars = v.field((c, i) => 3000 - 9 * i);
+  assert.equal(cars.length, 22);
+  v.carDraw.warmCarAssets();
+  const bodies = v.rec.builds.filter((b) => b.kind === "body");
+  assert.ok(bodies.length <= 11 + 1, `${bodies.length} body builds for 22 cars (one per team + the player's)`);
+  const rivals = cars.filter((c) => !c.isPlayer), meshes = rivals.map((c) => v.carDraw.teamBodyMesh(c.team, c));
+  assert.equal(new Set(meshes).size, rivals.length, "21 rivals, 21 distinct meshes");
+  assert.deepEqual(meshes.map((m) => m.num), rivals.map((c) => c.num), "each mesh is its own seat's");
+  assert.equal(v.rec.builds.filter((b) => b.kind === "body").length, bodies.length, "and the draws are all hits");
+});
+
+test("cockpitKey: a hit builds no key string; the cockpit style and the livery's chassis still key apart (#5057)", () => {
+  // Node VM census 2026-11-11: 112 B -> 0 a cockpit body + caster pair with a livery body style.
+  const livery = { c1: [1, 0, 0], c2: [0, 0, 1], bodyStyle: "b1" };
+  const v = carDrawVm({ cam: "cockpit", livery });
+  v.field((c, i) => 1000 + 9 * i);
+  const t = v.G.player.team, pl = v.G.player, built = () => v.rec.builds.length;
+  const m1 = v.carDraw.cockpitBodyMesh(t, pl), n1 = built();
+  assert.equal(v.carDraw.cockpitBodyMesh(t, pl), m1, "a repeat is a hit");
+  assert.equal(built(), n1, "and builds nothing");
+  livery.bodyStyle = "b2";
+  const m2 = v.carDraw.cockpitBodyMesh(t, pl);
+  assert.notEqual(m2, m1, "another chassis keys its own cockpit body");
+  v.ctx.CockpitOpts.body = () => "low";
+  assert.notEqual(v.carDraw.cockpitBodyMesh(t, pl), m2, "another cockpit style keys its own body");
+  v.ctx.CockpitOpts.body = () => "standard"; livery.bodyStyle = "b1";
+  const n2 = built();
+  assert.equal(v.carDraw.cockpitBodyMesh(t, pl), m1, "back to the first inputs: the cached body");
+  assert.equal(built(), n2);
+  const src = fs.readFileSync(new URL("../../js/car/car-draw.js", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("    function cockpitKey("), src.indexOf("    function cockpitBodyMesh("));
+  const hit = fn.slice(0, fn.indexOf("if (team.id !== _cbId"));
+  assert.ok(hit.length > 0 && !/\+\s*"/.test(hit) && !/"\s*\+/.test(hit), "no string is joined before the change test");
 });

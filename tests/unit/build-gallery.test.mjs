@@ -71,9 +71,9 @@ test('shared screenshot pages expose native group links, expansion and empty sta
 
 test('screenshot images reject executable URLs and retain safe embedded media', () => {
   for (const image of ['javascript:bad()', 'data:text/html,<script>bad()</script>']) {
-    assert.doesNotMatch(screenshotCard({ title: 'Bad', image }), /<img\b/);
+    assert.equal(screenshotCard({ title: 'Bad', image }), "<figure class=\"capture \"><p class=\"empty\">No screenshot captured.</p><figcaption><span class=\"capture-title\">Bad</span></figcaption></figure>");
   }
-  assert.match(screenshotCard({ title: 'Good', image: 'data:image/png;base64,AAAA' }), /src="data:image\/png;base64,AAAA"/);
+  assert.equal(screenshotCard({ title: 'Good', image: 'data:image/png;base64,AAAA' }), "<figure class=\"capture \"><details class=\"image-view\"><summary aria-label=\"Enlarge or close Good\"><img src=\"data:image/png;base64,AAAA\" loading=\"lazy\" alt=\"Good\"></summary></details><figcaption><span class=\"capture-title\">Good</span></figcaption></figure>");
 });
 
 test('capture plans are prebuilt data downloads with faithful camera jobs', () => {

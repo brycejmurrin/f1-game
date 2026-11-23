@@ -46,6 +46,7 @@ function boot(opts = {}) {
   vm.runInContext(read("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
   sb.GameStore = vm.runInContext("GameStore", ctx);
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
@@ -105,19 +106,21 @@ test("a native 660-lap backup round-trips every circuit and class", () => {
     src.GameStore.ttBoardAddResult(track, lap(80 + c + n / 100, { context: JSON.stringify({ physics: c }) }));
   }
   const file = { ...src.collect("all"), settings: {} }; // isolate lap counts from exported settings
-  assert.equal(Object.values(file.ttlb).reduce((n, rows) => n + rows.length, 0), 660);
-  const dst = boot(), result = dst.loadSettings(file);
+  assert.equal(Object.values(file.ttlb).reduce((n, rows) => n + rows.laps.length, 0), 660);
+  const serialized = JSON.stringify(file);
+  assert.ok(Buffer.byteLength(serialized) < src.SettingsExport._core.SETTINGS_MAX_BYTES);
+  const dst = boot(), result = dst.loadSettings(JSON.parse(serialized));
   assert.equal(result.applied, 660);
   assert.equal(result.skipped, 0);
   for (const track of tracks) assert.deepEqual(
-    JSON.parse(JSON.stringify(dst.GameStore.ttBoard(track))), file.ttlb[track], track + " retains all six classes");
+    JSON.parse(JSON.stringify(dst.GameStore.ttBoard(track))), JSON.parse(JSON.stringify(src.GameStore.ttBoard(track))), track + " retains all six classes");
   assert.equal(dst.loadSettings(file).applied, 0, "re-import remains idempotent");
 });
 
 test("ttlb import retains finite track and lap work budgets", () => {
   const b = boot();
-  const oversized = Object.fromEntries(Array.from({ length: 65 }, (_, i) => ["track-" + i, [lap(90)]]));
-  assert.equal(b.loadSettings({ format: "apex26-settings-v1", ttlb: oversized }).rejectedTtlb, 65);
+  const oversized = Object.fromEntries(Array.from({ length: 64 * 6 * 10 + 1 }, (_, i) => ["track-" + i, [lap(90)]]));
+  assert.equal(b.loadSettings({ format: "apex26-settings-v1", ttlb: oversized }).rejectedTtlb, Object.keys(oversized).length);
   assert.equal(b.disk.size, 0, "too many tracks are refused before writes");
   const rows = Array.from({ length: 64 * 6 * 10 }, () => lap(90));
   rows.push(lap(89));
@@ -145,10 +148,10 @@ test("settings leaderboard export round-trips the full shipped and custom roster
   const result = dst.loadSettings(file);
   assert.equal(result.applied, ids.length); assert.equal(result.rejectedTtlb, 0);
   for (const id of ids) assert.equal(dst.GameStore.ttBoard(id)[0].t, 90);
-  const oversized = { ...file, ttlb: { ...file.ttlb, "one-too-many": [lap(90)] } };
-  const untouched = boot({ globals });
-  assert.equal(untouched.loadSettings(oversized).rejectedTtlb, ids.length + 1);
-  assert.equal(untouched.disk.size, 0, "over-budget imports are refused before writes");
+  const withOlderBoard = { ...file, ttlb: { ...file.ttlb, "former-circuit": [lap(90)] } };
+  const fresh = boot({ globals });
+  assert.equal(fresh.loadSettings(withOlderBoard).applied, ids.length + 1);
+  assert.equal(fresh.GameStore.ttBoard("former-circuit").length, 1);
 });
 
 test("ttlb import reports quota-refused laps as failed rather than reloading them away", () => {
@@ -219,4 +222,26 @@ test("old settings backups without ttlb still import", () => {
   assert.equal(r.ok, true);
   assert.equal(JSON.parse(b.disk.get("apex26.volMusic")), 0.7);
   assert.equal(b.GameStore.ttBoard("monza").length, 0);
+});
+
+
+test("a newly imported slower lap that misses the board reports no change", () => {
+  const dst = boot();
+  for (let t = 80; t < 90; t++) dst.GameStore.ttBoardAddResult("monza", lap(t));
+  const before = dst.disk.get("apex26.ttlb.monza");
+  const result = dst.loadSettings({ format: "apex26-settings-v1", ttlb: { monza: [lap(99)] } });
+  assert.equal(result.applied, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(dst.disk.get("apex26.ttlb.monza"), before);
+});
+
+test("a union of two backups restores boards beyond a single installed roster", () => {
+  const source = boot();
+  for (const group of ["a", "b"]) {
+    const ttlb = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [group + i, [lap(80 + i)]]));
+    assert.equal(source.loadSettings({ format: "apex26-settings-v1", ttlb }).applied, 40);
+  }
+  const result = boot().loadSettings(source.collect("changes"));
+  assert.equal(result.applied, 80);
+  assert.equal(result.rejectedTtlb, 0);
 });

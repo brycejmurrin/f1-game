@@ -1,5 +1,7 @@
 # Feature roadmap: what to build next (2026-10-04)
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **OPEN** (checked against the code 2026-10-26) — a ranking; its Tier-1 plans share-cards, stream-overlay, localisation and pwa-shortcuts have each partly or fully landed (see their own Status lines).
 
 **Date:** 2026-10-04  
@@ -39,11 +41,11 @@ Madrid, and a full career mode (`docs/CAREER.md`).
 
 | # | Idea | Why it ranks here | Plan |
 |---|---|---|---|
-| 1 | Result and share image cards | Share text exists but images are what spread; pairs with Photo Studio and the daily challenge | [share cards](2026-10-04-share-cards.md) |
-| 2 | Stream overlay mode | Nothing exists; DOM-only, low risk, opens the game to streamers | [stream overlay](2026-10-04-stream-overlay.md) |
+| 1 | Result and share image cards | Share text exists but images are what spread; pairs with Photo Studio and the daily challenge | share cards (`2026-10-04-share-cards.md`, archived) |
+| 2 | Stream overlay mode | Nothing exists; DOM-only, low risk, opens the game to streamers | stream overlay (`2026-10-04-stream-overlay.md`, archived) |
 | 3 | Highlight reel and clip export | Larger follow-up that reuses the replay and highlight systems | [highlight reel and clip export](2026-10-04-highlight-reel-clip-export.md) |
-| 4 | Install shortcuts and an `.ics` race-weekend calendar | The manifest has no shortcuts; the calendar gives a reminder without Web Push, which needs a server | [PWA shortcuts and calendar](2026-10-04-pwa-shortcuts-calendar.md) |
-| 5 | Extend the colour-vision mode, and a captions pass | A colour-vision mode already ships (`cvdMode`: deutan, protan, tritan token remaps), but the plan's audit found 9 of 22 colour-coded meanings with no non-colour cue, and spotter calls with no caption | [colour-blind and captions](2026-10-04-colourblind-captions.md) |
+| 4 | Install shortcuts and an `.ics` race-weekend calendar | The manifest has no shortcuts; the calendar gives a reminder without Web Push, which needs a server | PWA shortcuts and calendar (`2026-10-04-pwa-shortcuts-calendar.md`, archived) |
+| 5 | Extend the colour-vision mode, and a captions pass | A colour-vision mode already ships (`cvdMode`: deutan, protan, tritan token remaps), but the plan's audit found 9 of 22 colour-coded meanings with no non-colour cue, and spotter calls with no caption | colour-blind and captions (`2026-10-04-colourblind-captions.md`, archived) |
 | 6 | Localisation | No i18n exists at all; the biggest plan here | [localisation](2026-10-04-localisation.md) |
 
 Suggested order: 1, 2, then 3 (it builds on 1). Plans 4 and 5 are independent and can
@@ -55,9 +57,9 @@ other large UI work.
 | Idea | Existing material to start from |
 |---|---|
 | Pit strategy panel and rival windows | [pit guidance plan](../research/PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md): written, unbuilt. Tyre severity is authored for only ~7 of 52 circuits ([strategy and career depth](2026-09-30-strategy-career-depth.md)), which caps how good strategy can be |
-| Mechanics backlog: brake temperature and fade, true lock-up and wheelspin, handling damage | [mechanics survey](../research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md), [racing depth](2026-09-15-racing-depth.md) |
+| Mechanics backlog: brake temperature and fade, true lock-up and wheelspin, handling damage | [mechanics survey](../research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md), racing depth (`2026-09-15-racing-depth.md`, archived) |
 | Distinct AI personalities and visible mistakes | [AI personality plan](2026-09-30-ai-personality.md). Check what already merged before planning |
-| Manual pit-stop mini-game; cooldown lap, parc fermé and podium flow | Repeatedly requested in the EA F1 25 forum wishlist (seen as a search snippet only) |
+| Manual pit-stop mini-game; cooldown lap, parc fermé and podium flow | Cooldown / parc fermé / podium plan: [2026-10-27-cooldown-podium.md](2026-10-27-cooldown-podium.md) (#1584). Manual pit-stop mini-game stays deferred (separate later issue). Wishlist origin: EA F1 25 forum (search snippet only). |
 | Spectate a friend's race | Send only car state over the existing friend connection and render locally |
 | Online play on track-designer circuits | Documented as unsupported in `docs/TRACK-DESIGNER.md` ("Limits", may be stale) |
 | Fair-play online: reduced collisions and a clean-racing score | F1 25's online collisions are a top complaint (secondary source). Plan: [fair-play online](2026-10-19-fair-play-online.md) (#1588) |
@@ -111,7 +113,7 @@ paid key that a static site cannot hold).
 - **Engine rules** (`AGENTS.md`): `js/game.js` must not grow, so new logic goes in new
   modules. The arc must not reach the driver: nothing derived from track curvature may
   affect the player with assists off. Never hand-edit generated files.
-- **Merge pacing** (`AGENTS.md` §Concurrent PRs): batch small tooling and doc fixes into
+- **Merge pacing** (`AGENTS.md` §Coordination): batch small tooling and doc fixes into
   one PR, and arm auto-merge on at most two PRs at a time per session.
 
 ## Open product questions for the owner

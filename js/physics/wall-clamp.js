@@ -24,6 +24,7 @@ const WallClamp = (function () {
   //   track, dt, steer, postLim, smp,
   //   wrapS(s), worldFromTrack(s, x, smp),
   //   soundOn (bool), incidentSim ({ notifyWall }),
+  //   vStd — optional (absent: PACE 1),
   //   addShake(delta) — optional; street incidence FX (game.js owns shake)
   function apply(c, ctx) {
     const track = ctx.track;
@@ -36,13 +37,17 @@ const WallClamp = (function () {
     const soundOn = ctx.soundOn;
     const incidentSim = ctx.incidentSim;
     const addShake = ctx.addShake;
+    const kStd = ctx.vStd ? ctx.vStd(1) : 1;   // vStd is linear in v
 
     // Same candidate-position boundary as contact separation and incident takeover.
     const lim = ContactGeometry.wallLimits(track, c.s, c.x, _lim, postLim);
     const wallR = lim.r, wallL = lim.l, laneMin = lim.laneMin, pitSd = lim.side;
     let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
     // A wall that steps inward along s is an END FACE, not a side wall (#1623): hold s, scrub, keep x.
-    if ((c.x > wallR || c.x < -wallL) && WallEndFace.apply(c, track, lim, dt)) xPinned = true;
+    const pitNose = laneMin > 0 && c.x * pitSd < laneMin && track.pit && pitSd === track.pit.side
+      && !(track.posts && track.posts.length && postLim.minOut >= laneMin);
+    const faceHeld = (c.x > wallR || c.x < -wallL || pitNose) && WallEndFace.apply(c, track, lim, dt);
+    if (faceHeld) xPinned = true;
     else if (c.x > wallR || c.x < -wallL) {
       const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
       // Debris hook (render-only side-world): the pre-clamp overshoot is the
@@ -55,7 +60,8 @@ const WallClamp = (function () {
         // the bespoke xPinned clamp below is UNCHANGED; broken panels are never a
         // collision surface for the car (that would be R3). promoteBarrier gates
         // on its own severity minimum and is a no-op when the flag is off.
-        const _wallSev = xOver * 60 + Math.abs(c.speed || 0) * 0.15;
+        // #4947: std-scale, any PACE / step rate (= xOver*60 form at PACE 1, 60 Hz)
+        const _wallSev = ((dt > 0 ? xOver / dt : 0) + Math.abs(c.speed || 0) * 0.15) * kStd;
         DebrisWorld.promoteBarrier(c, into, _wallSev);
         // Incident sim (R2 airborne): a GENUINELY hard wall strike launches this
         // car into a bounded 6-DoF Rapier tumble (queued now, promoted in preStep).
@@ -119,7 +125,7 @@ const WallClamp = (function () {
           // velocity to justify being turned (unscaled, a stopped car snaps
           // parallel in ~0.2 s).
           const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
-                          * clamp(Math.abs(c.speed) / 8, 0, 1);
+                          * clamp(Math.abs(c.speed) * kStd / 8, 0, 1);
           c.head -= rel * wallAlign;
           if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
         }
@@ -130,12 +136,13 @@ const WallClamp = (function () {
         // pad haptics stay street-only. Throttled scrape re-arm while grinding.
         const WALL_SFX_REARM = 0.35;
         const WALL_SCRAPE_SPEED = 2;   // m/s — stopped against the barrier stays quiet
-        if (c.isPlayer && c.collideT <= 0 && soundOn) {
+        // SOUND OFF mutes the SFX only, never the feel
+        if (c.isPlayer && c.collideT <= 0) {
           const firstStrike = !c.wasOnWall && noseIn && incidence > 0.12;
           const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
           if (firstStrike || grindScrape) {
             const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
-            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45, into);
+            if (soundOn) GameAudio.collision(fxInc, !firstStrike || incidence < 0.45, into);
             c.collideT = WALL_SFX_REARM;
             if (firstStrike && track.street) {
               if (addShake) addShake(0.1 + incidence * 0.3);
@@ -165,7 +172,8 @@ const WallClamp = (function () {
             if (key == null) {
               const id = c.team && c.team.id;
               const list = typeof Teams !== "undefined" ? Teams.LIST : [];
-              const ti = list.findIndex((t) => t.id === id);
+              let ti = -1;
+              for (let i = 0; i < list.length; i++) if (list[i].id === id) { ti = i; break; }
               key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
             }
             key = (key | 0) + 10000;
@@ -186,7 +194,7 @@ const WallClamp = (function () {
         // the player just drives off the barrier — no sticky pin, no auto-rescue.
       } else {
         // AI has no world-space heading to slide; clamp + gentle scrub.
-        c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub(!!track.street) * dt);
+        c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub() * dt);
         // Offline AI wall SFX (#2212). The VS FRIEND path above needs c.human
         // (heading incidence); offline AI is human:false and never reached it.
         // Incidence proxy: |vLat|/speed, steer-into-wall, and a first-pin
@@ -215,7 +223,8 @@ const WallClamp = (function () {
             if (key == null) {
               const id = c.team && c.team.id;
               const list = typeof Teams !== "undefined" ? Teams.LIST : [];
-              const ti = list.findIndex((t) => t.id === id);
+              let ti = -1;
+              for (let i = 0; i < list.length; i++) if (list[i].id === id) { ti = i; break; }
               key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
             }
             key = (key | 0) + 10000;
@@ -230,7 +239,7 @@ const WallClamp = (function () {
     }
     // The lane side of the pit wall: a car on the lane is kept off the platform
     // and its barrier — it cannot rejoin the track through the wall either.
-    if (laneMin > 0 && c.x * pitSd < laneMin) {
+    if (!faceHeld && laneMin > 0 && c.x * pitSd < laneMin) {
       c.x = laneMin * pitSd; xPinned = true;
       if (c.vLat) c.vLat = 0;
       if (c.human) Tracks.sample(track, c.s, smp);

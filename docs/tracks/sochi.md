@@ -19,9 +19,10 @@ Soft humid Black Sea light, hazy horizon, subtropical green outside the park and
 
 ## 3. Elevation
 Reclaimed coastal flat — nearly level. Keep box heights near-constant.
-- s≈0.34: +3.5 m on the outer loop.
-- s≈0.68: −3 m coming back.
-- Nothing else. Sochi's character is length and geometry, never relief.
+- s≈0.34: +1.02 m on the outer loop.
+- s≈0.68: −0.88 m coming back.
+
+The model retains the authored crest and trough positions. The 2019 event media kit gives an altitude range of 21.4–23.3 m. [FIA event media kit](https://www.fia.com/sites/default/files/2019_russian_media_kit_eng_1-min.pdf)
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

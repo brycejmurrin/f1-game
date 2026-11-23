@@ -1,7 +1,16 @@
 # Apex 26 — Capacitor Android (sideload)
 
-Wraps the **same stamped site** the Pages train publishes. Not a second copy of
-the game. Store listing / signed AAB / CI are later tasks.
+Wraps the site the Pages deploy publishes, staged by the same function
+(`stageSiteMinified` in `tools/desktop/stage.mjs`, the one `stage.mjs --out
+_site` runs on Pages) and then stamped. Not a second copy of the game. What is
+true today:
+
+- `js/` matches the Pages bytes only when terser is installed at the repo root
+  (`npm ci`); otherwise a local sync stages it unminified and logs a warning
+  (`tools/desktop/minify.mjs` `unminifiedPolicy`).
+- Nothing in CI builds `mobile/`: no workflow syncs, assembles or tests an APK,
+  and no APK has been built or run on a device by this repo's automation.
+- Store listing, signed AAB and CI are later tasks.
 
 ## Identity (frozen)
 
@@ -50,6 +59,10 @@ wipe (keep this list current):
 - Adaptive icons from `icons/icon-512.png` + `icons/icon-maskable-512.png`
   (`node mobile/scripts/gen-icons.mjs`).
 - `app/build.gradle`: version + optional env signing.
+- `res/xml/file_paths.xml`: the FileProvider exposes ONLY
+  `cache/apex26-downloads/v2/` (where `js/core/native-download.js` writes
+  exports for the share sheet). A re-add restores Capacitor's template, which
+  exposes the whole external storage root (`external-path path="."`).
 
 `www/` and Gradle `build/` are gitignored.
 

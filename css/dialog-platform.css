@@ -19,6 +19,9 @@ dialog.screen {
   margin: 0;
   border: 0;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+  /* Keyboard inset: the shorthand resets padding-bottom, so `.screen`'s
+     max(--safe-b, --kb) must be restated here too (#5067, contract gap 5). */
+  padding-bottom: max(var(--safe-b), var(--kb));
   max-width: none; max-height: none;
   width: 100%; height: 100%;
   background: transparent;

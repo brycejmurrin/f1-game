@@ -351,6 +351,15 @@ function gitHead() {
   return r.status === 0 ? r.stdout.trim() + (d.stdout && d.stdout.trim() ? "+dirty" : "") : null;
 }
 
+/** The fleet's verdict as an exit code: a circuit whose child crashed, hung or
+ *  printed no report was not judged, so the sweep did not pass (an all-ERROR
+ *  fleet used to exit 0). The JSON / summary is still written first. */
+export function fleetExitCode(rec) {
+  const entries = Object.values((rec && rec.tracks) || {});
+  if (!entries.length) return 1;
+  return entries.some((e) => !e || e.error) ? 1 : 0;
+}
+
 /** One CHILD per circuit, strictly in turn: a crash or a hang costs that
  *  circuit, not the sweep, and no two game VMs are ever alive at once. */
 async function fleet(F) {
@@ -389,9 +398,11 @@ async function fleet(F) {
   const file = path.resolve(F.flag("--out", FLEET_OUT));
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(rec, null, 1));
+  process.exitCode = fleetExitCode(rec) || process.exitCode;
   if (F.has("--json")) { process.stdout.write(JSON.stringify(rec, null, 1) + "\n"); return; }
   console.log(FF.formatSummary(rec, +F.flag("--worst", 10)));
   console.log(`wrote ${path.relative(ROOT, file)} (${(rec.wallMs / 1000).toFixed(0)} s)`);
+  if (process.exitCode) console.error(`frame-report fleet: FAIL — ${Object.values(rec.tracks).filter((e) => e.error).length} circuit(s) not judged`);
 }
 
 function diff(F, argv) {

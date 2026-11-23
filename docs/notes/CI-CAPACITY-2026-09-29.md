@@ -1,5 +1,7 @@
 # CI capacity — the 20-slot jam of 2026-09-29
 
+Summary: The 20-concurrent-job jam of 2026-09-29 (200-290 jobs queued for 7 h): where PR runs spent their slots, why the selector over-sharded and excluded the circuit's own spec, what changed, what did not, and how to re-measure.
+
 Measured from the GitHub API over 1,000 workflow runs, 2026-09-27 22:35 →
 2026-09-29 15:47 UTC (every job's `created_at` / first step start / `completed_at`),
 plus the job logs of the Imola scenery run `df0ad70` and the `bot/spec-timings`

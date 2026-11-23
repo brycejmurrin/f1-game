@@ -1,13 +1,19 @@
 /* PhotoStudio: camera borrowing, readback ordering, bounded composition,
  * cancellation and local persistence failure, without renderer hardware.
- * Also PHOTO LIGHTING: TUNE_DEFS clone/restore via ltSet (no latching setLightTune). */
+ * Also PHOTO LIGHTING: TUNE_DEFS clone/restore via the ltStore dep game.js passes (no latching setLightTune). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 const source = fs.readFileSync(new URL("../../js/ui/photo-studio.js", import.meta.url), "utf8").replace(/^const PhotoStudio/m, "var PhotoStudio");
+const bodySource = fs.readFileSync(new URL("../../js/ui/photo-studio-ui.js", import.meta.url), "utf8").replace(/^const PhotoStudioBody/m, "var PhotoStudioBody");
+// The light-store deps game.js passes to PhotoStudio.create, read from its one call site.
+const GAME_JS = gameSource();
+const GAME_CALL = GAME_JS.slice(GAME_JS.indexOf("PhotoStudio.create(G, {"), GAME_JS.indexOf("function openExperiencePhoto("));
+const GAME_DEPS = new Set(["ltStore", "ltSet", "ltApply"].filter((k) => new RegExp("[{,]\\s*" + k + "\\s*[,:}]").test(GAME_CALL)));
 function boot(options = {}) {
   const dom = makeDom(), order = [], downloads = [], canvasOps = [], storage = new Map();
   const create = dom.document.createElement;
@@ -16,8 +22,9 @@ function boot(options = {}) {
     if (tag === "canvas") {
       el.getContext = () => ({
         createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
-        putImageData: (image) => canvasOps.push(["pixels", image.data[0]]),
-        drawImage: (...args) => canvasOps.push(["draw", ...args.slice(1)]),
+        putImageData: (image) => { el.pixel = image.data[0]; canvasOps.push(["pixels", el.pixel]); },
+        getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(el.pixel) }),
+        drawImage: (src, ...args) => { el.pixel = src.pixel; canvasOps.push(["draw", ...args]); },
         fillRect: (...args) => canvasOps.push(["caption", ...args]), fillText: () => {},
       });
       el.toDataURL = () => "data:image/jpeg;base64,ZmFrZQ==";
@@ -44,17 +51,18 @@ function boot(options = {}) {
     close: (_pause, keep) => { closed++; order.push("close"); if (!keep) G.photoMode = false; },
     cmd: (v) => { current = v; restored = v; },
   };
-  const garage = { snapshot: () => ({ az: 1, spin: true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
+  const garage = { snapshot: () => ({ az: 1, spin: options.garageSpin ?? true }), shot: (v) => order.push("shot:" + v), restore: (v) => { restored = v; order.push("restore"); },
     looks: options.looks, looked: options.looked };
   const scene = { value: options.homeScene || "photo" };
-  const ltWrites = [];
+  const ltWrites = [], latchWrites = [];
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
+    Log: { info: () => {}, warn: () => {} }, Tracks: { sample: (_t, s, out) => {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
-    } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
-    NativeDownload: options.nativeDownload,
+    } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    AppearanceStudio: { setScene(mode) { scene.value = mode; return { durable: true }; } },
+    NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
       TUNE_DEFS: options.tuneDefs || [
@@ -63,23 +71,157 @@ function boot(options = {}) {
         { id: "sunElev", group: "SUN & MOON", label: "Sun elevation", min: -20, max: 90, step: 1 },
       ],
     },
-    LightStore: { reapply: () => { order.push("lt-reapply"); } },
-    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; } } },
+    LightStore: { reapply: () => { Object.assign(LT, ltProfiles.value["test|day|dry"]); order.push("lt-reapply"); } },
+    DrivingLine: { shown: () => true, setPhoto: () => {} },
+    GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; },
+      // js/core/store.js rawSet/rawDel: false (never a throw) when the write fails.
+      rawSet: (k, v) => { try { ctx.localStorage.setItem(k, v); return true; } catch (_) { return false; } },
+      rawDel: (k) => { try { ctx.localStorage.removeItem(k); return true; } catch (_) { return false; } } } },
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
-  vm.runInContext(source, ctx);
-  const ltSet = options.ltSet || ((id, v) => {
+  if (options.withModalFocus) {
+    dom.document.readyState = "loading";
+    vm.runInContext(fs.readFileSync(new URL("../../js/ui/modal.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/modal.js") });
+    ctx.TopModal = ctx.window.TopModal;
+  }
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/photo-studio-ui.js") }); vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
+  // LightStore.set's shape: the live LT plus whatever profiles object G._ltStore holds right now.
+  const ltStore = { set: (id, v) => {
     ltWrites.push([id, v]); LT[id] = v;
     const key = "test|day|dry", prof = ltProfiles.value[key] || (ltProfiles.value[key] = {});
     prof[id] = v; return true;
-  });
-  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
-    ltSet: options.skipLtSet ? undefined : ltSet,
+  } };
+  // game.js's setLightTune: the same store write, plus the renderer-recovery latch clears
+  // (light-tune-edit.js). Photo Studio must never reach it (#5040).
+  G.setLightTune = (id, v) => { latchWrites.push([id, v]); storage.delete("apex26.perChunkOff"); storage.delete("apex26.envProbeOff"); return ltStore.set(id, v); };
+  // The light-store deps exactly as game.js hands them over, so this boot cannot pass while production differs.
+  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
+    ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
-  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites,
+  return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("a garage still waits for a fresh capture draw even when a previous photo exists", async () => {
+  const b = boot();
+  b.api.open({source: "garage"});
+  assert.equal(await b.api.capture(), true);
+  b.G.gfx.renderCaptureFrame = () => false;
+  assert.equal(await b.api.capture(), false);
+  assert.equal(b.dom.byId("ps-message").textContent,
+    "Capture failed: The scene is still getting ready. Try again once the scene is ready.");
+  assert.equal(b.order.filter(action => action === "read").length, 1);
+  b.G.gfx.renderCaptureFrame = draw => { draw(); return true; };
+  assert.equal(await b.api.capture(), true);
+});
+
+function chooseSamples(b, count) {
+  const row = b.dom.byId("ps-samples");
+  row.value = String(count);
+  b.dom.dispatch(row, { type: "change" });
+}
+
+for (const count of [8, 32]) test(`${count}-sample capture freezes the camera and averages distinct subpixel renders`, async () => {
+  const positions = [], views = [];
+  const b = boot({
+    setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },
+    renderSample(pass) {
+      const proj = new Float32Array(16), view = new Float32Array(16);
+      proj[8] = pass.index + 0.25; view[12] = pass.index + 42;
+      pass.project(proj, view, 4, 2);
+      positions.push([(proj[8] - 0.25) * 2, proj[9]]);
+      views.push(view[12]);
+    },
+  });
+  b.api.open({ source: "garage" });
+  assert.equal(b.api.state().samples, 1);
+  chooseSamples(b, count);
+  b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32).fill(2 * positions.length) });
+  assert.equal(await b.api.capture(), true);
+  assert.equal(positions.length, count);
+  for (const axis of [0, 1]) {
+    const offsets = positions.map(p => p[axis]);
+    assert.equal(new Set(offsets).size, count);
+    assert.ok(offsets.every(v => Math.abs(v) < 0.5));
+    assert.equal(offsets.reduce((a, v) => a + v, 0), 0);
+  }
+  assert.ok(views.every(v => v === 42));
+  assert.equal(b.canvasOps.filter(op => op[0] === "pixels").at(-1)[1], count + 1);
+  assert.equal(b.dom.byId("ps-body").inert, false);
+});
+
+test("closing a sampled capture cancels its pending read, releases controls and keeps online capture instant", async () => {
+  const owners = [], cancelled = [];
+  let currentPass;
+  const b = boot({ renderSample(pass) {
+    currentPass = pass;
+    pass?.project(new Float32Array(16), new Float32Array(16), 4, 2);
+  } });
+  b.api.open();
+  chooseSamples(b, 8);
+  b.G.gfx.capturePixels = owner => { owners.push(owner); return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (_msg, owner) => cancelled.push(owner);
+  const first = b.api.capture();
+  assert.ok(b.dom.byId("ps-body").inert);
+  assert.equal(currentPass.pump, true);
+  b.api.close(false);
+  assert.deepEqual(cancelled, owners);
+  assert.equal(await first, false);
+  assert.equal(b.dom.byId("ps-body").inert, false);
+  b.G.netPlay = { active: () => true };
+  b.api.open();
+  assert.equal(b.dom.byId("ps-samples").disabled, true);
+  assert.equal(b.dom.byId("ps-samples").value, "1");
+  b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32) });
+  assert.equal(await b.api.capture(), true);
+  assert.equal(currentPass, null);
+});
+
+test("preparation survives only an owned Photo subject swap and restores usable focus on cancel", async () => {
+  const dom = makeDom(), root = dom.document.createElement("div");
+  root.id = "photo-studio"; dom.body.appendChild(root);
+  const button = title => {
+    const el = dom.document.createElement("button");
+    el.textContent = title; el.getClientRects = () => [{}]; root.appendChild(el);
+    return el;
+  };
+  const invoker = button("Choose subject");
+  const current = button("Capture");
+  root.getClientRects = () => root.hidden ? [] : [{}];
+  const win = { ScreenRegions: { "photo-studio": { label:"Photo Studio", root:"#photo-studio" } } };
+  let notify;
+  class MutationObserver {
+    constructor(update) { notify = () => queueMicrotask(update); }
+    observe() {}
+    disconnect() { notify = null; }
+  }
+  vm.runInNewContext(fs.readFileSync(absSrc("js/ui/screen-arranger.js"), "utf8"),
+    { window:win, document:dom.document, MutationObserver }, { filename:absSrc("js/ui/screen-arranger.js") });
+  const api = win.ScreenArranger;
+  const buttons = () => [...root.querySelectorAll("button")];
+  const start = () => buttons().find(el => el.textContent === "Start arranging");
+  assert.equal(api.suspendPreparation("photo-studio"), null);
+  assert.ok(api.prepare("photo-studio", invoker));
+  const resume = api.suspendPreparation("photo-studio");
+  invoker.remove();
+  root.hidden = true;
+  notify(); await Promise.resolve();
+  assert.ok(start(), "one hidden observer tick during a scene swap retains the existing preparation");
+  root.hidden = false; resume(true);
+  assert.equal(dom.document.activeElement, start());
+  buttons().find(el => el.textContent === "Cancel").click();
+  assert.equal(dom.document.activeElement, current);
+  resume(true);
+  assert.equal(start(), undefined, "a stale completion cannot recreate a cancelled preparation");
+  assert.ok(api.prepare("photo-studio", current));
+  const failed = api.suspendPreparation("photo-studio");
+  failed(false);
+  assert.equal(start(), undefined);
+  assert.ok(api.prepare("photo-studio", current));
+  root.hidden = true; notify(); await Promise.resolve();
+  assert.equal(start(), undefined, "a normal close still dismisses preparation");
+});
 
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
   const prior = { px: 88 }, subject = {};
@@ -177,6 +319,32 @@ test("centre crops preserve composition across aspect ratios and filenames stay 
   assert.equal(PS.crop(1600, 900, "scene").width, 1600);
   assert.equal(PS.filename("../../My <Monza> Photo!"), "apex26-my-monza-photo.png");
 });
+test("PhotoStudio freeze omits unused ASPECTS and LIMIT exports", () => {
+  const { PS } = boot();
+  assert.equal("ASPECTS" in PS, false);
+  assert.equal("LIMIT" in PS, false);
+  assert.equal(typeof PS.crop, "function");
+  assert.equal(typeof PS.filename, "function");
+  assert.equal(typeof PS.create, "function");
+});
+test("import keeps small personal photos at native size (no resizeWidth upscale)", async () => {
+  const calls = [];
+  const b = boot({ bitmap: async (_file, opts) => {
+    calls.push(opts);
+    return { width: 400, height: 300, close: () => {} };
+  } });
+  b.api.open({ source: "garage" });
+  const file = b.dom.byId("ps-import");
+  file.files = [{ type: "image/jpeg", size: 1000 }];
+  file.dispatchEvent({ type: "change" });
+  await turn();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], undefined, "createImageBitmap must not force resizeWidth on import");
+  assert.equal(b.api.state().captured, true);
+  // Default aspect is wide: compose centre-crops 400×300 → 400×225 (no upscale).
+  assert.equal(b.api.state().width, 400);
+  assert.equal(b.api.state().height, 225);
+});
 test("capture draws before reading a live backbuffer, omits DOM overlays and downloads actual image", async () => {
   const b = boot(); assert.equal(b.api.open({ source: "race" }), true);
   assert.equal(await b.api.capture(), true);
@@ -190,7 +358,8 @@ test("native photo export awaits the share outcome and reports a cancelled or fa
   for (const outcome of ["success", "cancel", "failure"]) {
     let resolve, reject, saved, calls = 0;
     const held = new Promise((yes, no) => { resolve = yes; reject = no; });
-    const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); } } });
+    const b = boot({ nativeDownload: { viable: () => true, isCancelled: (e) => e.name === "AbortError",
+      saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); } } });
     b.api.open(); await b.api.capture();
     const pending = b.api.exportPhoto();
     await b.api.exportPhoto();
@@ -202,9 +371,12 @@ test("native photo export awaits the share outcome and reports a cancelled or fa
     assert.equal(calls, 1, "a second tap must not overlap the native chooser");
     assert.equal(b.api.state().busy, false, "download does not take ownership of capture/close busy state");
     assert.equal(b.dom.byId("ps-close").disabled, false);
-    if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    if (outcome === "success") resolve();
+    else reject(Object.assign(new Error(outcome === "cancel" ? "Share canceled" : "disk full"), { name: outcome === "cancel" ? "AbortError" : "Error" }));
     await pending;
-    assert.match(b.dom.byId("ps-message").textContent, outcome === "success" ? /PNG download requested/ : outcome === "cancel" ? /Download failed: Share canceled/ : /Download failed: disk full/);
+    // A dismissed share sheet is the player's choice, never "Download failed" (#5040).
+    assert.equal(b.dom.byId("ps-message").textContent,
+      outcome === "success" ? "PNG download requested." : outcome === "cancel" ? "Download cancelled." : "Download failed: disk full");
     await b.api.exportPhoto();
     assert.equal(calls, 2, "settlement allows a later export after success, cancellation, or failure");
   }
@@ -213,7 +385,8 @@ test("native photo export awaits the share outcome and reports a cancelled or fa
 test("library DOWNLOAD shares the in-flight guard with PNG export and permits retry after a cancelled share", async () => {
   let reject, calls = 0;
   const held = new Promise((resolve, no) => { reject = no; });
-  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  const b = boot({ nativeDownload: { viable: () => true, isCancelled: (e) => e.name === "AbortError",
+    saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
   b.api.open({ source: "garage" }); await b.api.capture(); await b.api.savePhoto();
   const row = b.dom.byId("ps-library").children[0];
   const download = row.children.find((child) => child.textContent === "DOWNLOAD");
@@ -221,8 +394,8 @@ test("library DOWNLOAD shares the in-flight guard with PNG export and permits re
   await b.api.exportPhoto();
   assert.equal(calls, 1, "library double taps and the PNG action cannot overlap native sharing");
   assert.equal(b.dom.byId("ps-close").disabled, false);
-  reject(new Error("Share canceled")); await turn();
-  assert.match(b.dom.byId("ps-message").textContent, /Download failed: Share canceled/);
+  reject(Object.assign(new Error("Share canceled"), { name: "AbortError" })); await turn();
+  assert.equal(b.dom.byId("ps-message").textContent, "Download cancelled.");
   download.click(); await turn();
   assert.equal(calls, 2);
   assert.match(b.dom.byId("ps-message").textContent, /Photo download requested/);
@@ -231,7 +404,8 @@ test("library DOWNLOAD shares the in-flight guard with PNG export and permits re
 test("closing and reopening during a photo export stays usable and ignores stale completion feedback", async () => {
   let finish, calls = 0;
   const held = new Promise((resolve) => { finish = resolve; });
-  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  const b = boot({ nativeDownload: { viable: () => true, isCancelled: (e) => e.name === "AbortError",
+    saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
   b.api.open({ source: "garage" }); await b.api.capture();
   const pending = b.api.exportPhoto(); await turn();
   b.api.close(false); b.api.open({ source: "garage" }); await b.api.capture();
@@ -262,15 +436,34 @@ test("#3656: a live view below native resolution captures at renderScale 1, then
   assert.equal(await b.api.capture(), false);
   assert.deepEqual(scales, [1, 0.5]); assert.equal(scale, 0.5);
 });
-test("software presentation is awaited while raw pixels are captured before compositing", async () => {
-  const b = boot(); let present;
+test("valid raw pixels finish capture even while software presentation is pending", async () => {
+  const b = boot(); let rejectPresent;
   b.G.gfx.softPresent = () => true;
   b.G.gfx.invalidateSoftPresent = () => b.order.push("invalidate");
-  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((resolve) => { present = resolve; }); };
+  b.G.gfx.awaitSoftPresent = () => { b.order.push("wait"); return new Promise((_, reject) => { rejectPresent = reject; }); };
   b.api.open(); const pending = b.api.capture();
   assert.deepEqual(b.order.slice(-4), ["invalidate", "wait", "draw", "read"]);
-  assert.equal(b.canvasOps.length, 0, "composition waits for the presentation result"); present(); await pending;
+  const early = await Promise.race([pending, new Promise((resolve) => setImmediate(() => resolve("pending")))]);
+  rejectPresent(new Error("2D blit timed out"));
+  assert.equal(await pending, true);
+  assert.equal(early, true);
+  assert.deepEqual(b.canvasOps[0], ["pixels", 123]);
   assert.equal(b.order.at(-1), "read");
+});
+test("failed raw readback waits for the software canvas before copying it", async () => {
+  const b = boot(), soft = b.dom.byId("game-soft");
+  let present;
+  soft.width = 160; soft.height = 90;
+  b.G.gfx.softPresent = () => true;
+  b.G.gfx.awaitSoftPresent = () => new Promise((resolve) => { present = resolve; });
+  b.G.gfx.capturePixels = () => Promise.reject(new Error("No readback target"));
+  b.api.open();
+  const pending = b.api.capture();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(b.canvasOps.length, 0);
+  present();
+  assert.equal(await pending, true);
+  assert.equal(b.canvasOps[0][0], "draw");
 });
 test("a backend without readback falls back to an immediate canvas copy", async () => {
   const b = boot(); b.G.canvas.width = 160; b.G.canvas.height = 90;
@@ -291,19 +484,21 @@ test("a delayed save retains its original photo and cannot clear a reopened capt
   b.api.open({ metadata: { title: "Old Monza photo" } }); await b.api.capture();
   const saved = b.api.savePhoto();
   b.api.close(false); b.api.open({ source: "garage", metadata: { title: "New garage" } }); await turn();
-  const libraryBefore = b.dom.byId("ps-library").children[0];
   b.G.gfx.capturePixels = () => new Promise((r) => { read = r; });
   const captured = b.api.capture();
   encode(new Blob(["old photo"], { type: "image/jpeg" })); await saved;
   assert.equal(b.api.state().busy, true, "old finally cannot enable a new operation's buttons");
   assert.match(b.dom.byId("ps-message").textContent, /Capturing/);
-  assert.equal(b.dom.byId("ps-library").children[0], libraryBefore, "old save cannot repaint the current library");
+  assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "current visit displays the completed save");
   read({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await captured;
   b.api.close(false); b.api.open({ source: "garage" }); await turn();
   assert.equal(b.dom.byId("ps-library").children[0].children[1].textContent, "Old Monza photo", "persisted entry retains its initiating context");
 });
 test("garage camera snapshot is restored and a borrowed FreeCam returns only on normal exit", () => {
-  const garage = boot(); garage.api.open({ source: "garage" }); garage.api.close(true);
+  const manual = boot({ garageSpin: false }); manual.api.open({ source: "garage" });
+  assert.equal(manual.order.includes("shot:hero"), false);
+  const garage = boot(); garage.api.open({ source: "garage" });
+  assert.ok(garage.order.includes("shot:hero")); garage.api.close(true);
   assert.deepEqual(plain(garage.restored()), { az: 1, spin: true }); assert.equal(garage.closed(), 0);
   const prior = { open: true, speed: 25, roll: 5, lens: "flyby", eye: [1, 2, 3], target: [4, 5, 6], fov: 40 };
   const b = boot({ priorCamera: prior }); b.api.open(); b.api.close(true);
@@ -391,27 +586,108 @@ test("missing IndexedDB uses a visit-only library and localStorage quota failure
   assert.equal(b.api.state().busy, false);
 });
 
-// #2848: USE AS MENU BACKGROUND / library tiles stay inert unless Appearance Scene is My photo.
-test("menu background stays inert unless Appearance Scene is My photo", async () => {
-  const b = boot({ homeScene: "garage", storageFull: true });
-  b.api.open({ source: "garage" });
-  await b.api.capture();
-  await b.api.savePhoto();
-  b.dom.byId("ps-background").click();
-  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
-  const bg = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
-  assert.ok(bg, "library MENU BACKGROUND carries .ps-use-bg for SettingDeps");
-  assert.equal(bg.disabled, true);
-  bg.click();
-  assert.match(b.dom.byId("ps-message").textContent, /My photo/i);
-  b.scene.value = "photo";
-  b.api.close(false);
-  b.api.open({ source: "garage" });
-  await turn();
-  const live = b.dom.byId("ps-library").querySelector("button.ps-use-bg");
-  assert.ok(live, "saved visit photo still listed after reopen");
-  assert.equal(live.disabled, false);
+test("the menu background goes through GameStore's raw lane and reads back the same text (#5023)", () => {
+  const b = boot(), img = "data:image/jpeg;base64,ZmFrZQ==";
+  assert.equal(b.PS.setBackground(img), true);
+  assert.equal(b.storage.get("apex26.photoBackground"), img, "stored bare, never JSON-quoted");
+  assert.equal(b.PS.background(), img);
+  assert.equal(b.PS.setBackground(""), true);
+  assert.equal(b.storage.has("apex26.photoBackground"), false);
 });
+
+test("a captured or saved photo selects its own Home scene after the image is stored", async () => {
+  for (const full of [false, true]) {
+    const b = boot({homeScene: "garage", storageFull: full});
+    b.api.open({source: "garage"}); await b.api.capture();
+    b.dom.byId("ps-background").click();
+    assert.equal(b.scene.value, full ? "garage" : "photo");
+    assert.equal(!!b.PS.background(), !full);
+    b.scene.value = "garage";
+    await b.api.savePhoto();
+    const bg = b.dom.byId("ps-library").children[0].children.find(el => el.textContent === "MENU BACKGROUND");
+    bg.click();
+    assert.equal(b.scene.value, full ? "garage" : "photo");
+  }
+});
+
+for (const [resolution, width, height] of [["normal", 1920, 1080], ["4k", 3840, 2160]]) test(`${resolution} garage capture renders at the selected size and releases it before export`, async () => {
+  const b = boot(), sizes = [];
+  Object.assign(b.G.gfx, {width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
+    capturePixels() { const size = sizes.at(-1); return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) }; }});
+  b.api.open({source: "garage"});
+  const select = b.dom.byId("ps-resolution"); select.value = resolution; b.dom.dispatch(select, {type:"change"});
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [width,height,null]);
+  assert.deepEqual([b.api.state().width,b.api.state().height], [width,height]);
+  await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
+});
+
+test("Home photo uses the same native framing at full and half render scale", async () => {
+  const b = boot();
+  let scale = 1, captureSize;
+  Object.defineProperties(b.G.gfx, {
+    width: { get: () => Math.round(390 * scale) },
+    height: { get: () => Math.round(845 * scale) },
+  });
+  Object.assign(b.G.gfx, {
+    getRenderScale: () => scale,
+    setRenderScale: value => { scale = value; },
+    setPhotoCaptureSize: size => { captureSize = size; },
+    capturePixels() {
+      const { width, height } = captureSize;
+      return { width, height, data: new Uint8ClampedArray(width * height * 4) };
+    },
+  });
+  b.api.open({ source: "home" });
+  const dimensions = () => [b.api.state().width, b.api.state().height];
+  assert.equal(await b.api.capture(), true);
+  const native = dimensions();
+  scale = 0.5;
+  assert.equal(await b.api.capture(), true);
+  assert.deepEqual(dimensions(), native);
+  assert.equal(scale, 0.5);
+  assert.equal(captureSize, null);
+});
+
+test("multi-sample 4K captures use a fresh draw for each sample and retain the selected resolution", async () => {
+  const sizes = [];
+  let freshDraws = 0;
+  const b = boot({
+    setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },
+    renderSample(pass) { pass.project(new Float32Array(16), new Float32Array(16), 3840, 2); },
+  });
+  Object.assign(b.G.gfx, {
+    width: 1920, height: 1, setPhotoCaptureSize(size) { sizes.push(size); },
+    renderCaptureFrame(draw) { freshDraws++; draw(); return true; },
+    capturePixels() {
+      const size = sizes.at(-1);
+      return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) };
+    },
+  });
+  b.api.open({ source: "garage" });
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, { type: "change" });
+  const frame = b.dom.byId("ps-aspect"); frame.value = "scene"; b.dom.dispatch(frame, { type: "change" });
+  chooseSamples(b, 8);
+  assert.equal(await b.api.capture(), true);
+  assert.equal(b.api.state().width, 3840);
+  assert.equal(freshDraws, 8);
+  assert.equal(sizes.at(-1), null);
+});
+
+test("closing an unfinished 4K capture releases its backing size once", async () => {
+  const b = boot(), sizes = [];
+  let finish;
+  Object.assign(b.G.gfx, { width: 800, height: 450, setPhotoCaptureSize(size) { sizes.push(size); },
+    capturePixels() { return new Promise(resolve => { finish = resolve; }); } });
+  b.api.open();
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, { type: "change" });
+  const pending = b.api.capture();
+  b.api.close(false);
+  assert.equal(sizes.at(-1), null);
+  finish({ width: 1, height: 1, data: new Uint8ClampedArray(4) });
+  assert.equal(await pending, false); assert.equal(sizes.length, 2);
+});
+
 test("failed PNG encoding reports a recoverable error instead of creating a bogus download", async () => {
   const b = boot({ nullBlob: true }); b.api.open(); await b.api.capture(); await b.api.exportPhoto();
   assert.equal(b.downloads.length, 0); assert.match(b.dom.byId("ps-message").textContent, /could not be encoded/);
@@ -425,6 +701,15 @@ test("Studio uses canonical sheet regions and enumerated controls with a persist
   assert.equal(b.dom.byId("ps-capture").parentElement, panel.children[2]);
   assert.equal(b.dom.byId("ps-capture").classList.contains("bigbtn"), true);
   assert.equal(body.contains(b.dom.byId("ps-export")), true);
+  // Each saved region must resolve on the real, lazily constructed Studio
+  // DOM, including collapsed panels. The framing guide cannot be displaced.
+  const reg = { window: {} };
+  vm.runInNewContext(fs.readFileSync(new URL("../../js/ui/screen-regions.js", import.meta.url), "utf8"), reg, { filename: absSrc("js/ui/screen-regions.js") });
+  const studio = b.dom.byId("photo-studio"), guide = b.dom.byId("ps-guide");
+  for (const part of Object.values(reg.window.ScreenRegions["photo-studio"].regions)) {
+    const region = studio.querySelector(part.selector);
+    assert.ok(region && !region.contains(guide), part.label);
+  }
   const frame = b.dom.byId("ps-aspect"); frame.value = "portrait"; b.dom.dispatch(frame, { type: "change" });
   assert.equal(b.api.state().aspect, "portrait");
   b.dom.byId("ps-aspect-row-next").click(); assert.equal(b.api.state().aspect, "scene");
@@ -452,6 +737,17 @@ test("saving repairs a previously oversized library in the same transaction", as
   assert.equal(idb.rows.size, 6); assert.equal(idb.writes, 1);
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-4", "old-5", "old-6", "old-7", "old-8"]);
 });
+test("a save after the device clock goes backward is committed and remains the newest photo", async () => {
+  const future = Date.now() + 60_000;
+  const idb = photoDb(seededPhotos(6).map((row) => ({ ...row, at: future + row.at })));
+  const b = boot({ indexedDB: idb });
+  b.api.open({ metadata: { title: "After clock adjustment" } });
+  await b.api.capture(); await b.api.savePhoto();
+  assert.equal(idb.rows.size, 6);
+  assert.equal(idb.rows.has("old-0"), false);
+  assert.equal((await b.api.album())[0].title, "After clock adjustment");
+  assert.equal(b.dom.byId("ps-message").textContent, "Saved to My Photos on this device.");
+});
 test("save remains busy and unannounced until the write transaction commits", async () => {
   const idb = photoDb(seededPhotos(6)), b = boot({ indexedDB: idb });
   b.api.open(); await b.api.capture(); const held = idb.holdNextCommit(), saving = b.api.savePhoto(); await held;
@@ -471,10 +767,79 @@ test("put, prune, and commit failures roll back all durable changes and retain a
   }
 });
 
+test("a visit-only save survives clock rollback, reopen, and a later durable save", async () => {
+  const future = Date.now() + 60_000;
+  const seed = seededPhotos(6).map((p) => ({ ...p, at: future + p.at }));
+  const db = photoDb(seed), b = boot({ indexedDB: db });
+  const titles = () => Array.from(b.dom.byId("ps-library").children, (row) => row.children[1].textContent);
+  b.api.open({ metadata: { title: "Visit photo" } });
+  await b.api.capture(); db.failNext("put"); await b.api.savePhoto();
+  assert.deepEqual([...db.rows.values()], seed);
+  assert.equal(titles()[0], "Visit photo");
+  b.api.close(false); b.api.open({ metadata: { title: "Durable photo" } });
+  assert.deepEqual(Array.from(await b.api.album(), (p) => p.title), titles());
+  assert.equal(titles()[0], "Visit photo");
+  await b.api.capture(); await b.api.savePhoto();
+  assert.deepEqual(titles().slice(0, 2), ["Durable photo", "Visit photo"]);
+  assert.equal(titles().length, 6);
+});
+
+test("a failed album deletion leaves a reopened Studio's notice alone", async () => {
+  const db = photoDb(seededPhotos(1)), b = boot({ indexedDB: db });
+  b.api.open(); await b.api.album();
+  const remove = () => b.dom.byId("ps-library").children[0].children[4].click();
+  db.failNext("delete"); remove();
+  b.api.close(false); b.api.open({ source: "garage" });
+  const notice = b.dom.byId("ps-message").textContent;
+  await b.api.album();
+  assert.equal(b.dom.byId("ps-message").textContent, notice);
+  db.failNext("delete"); remove(); await b.api.album();
+  assert.equal(b.dom.byId("ps-message").textContent, "Photo could not be deleted.");
+  assert.equal(db.rows.size, 1);
+});
+
 test("equal timestamps prune deterministically by ID instead of request or enumeration order", async () => {
   const seed = seededPhotos(8).map((row) => ({ ...row, at: 1 })).reverse(), idb = photoDb(seed), b = boot({ indexedDB: idb });
   b.api.open(); await b.api.capture(); await b.api.savePhoto();
   assert.deepEqual([...idb.rows.keys()].filter((id) => id.startsWith("old-")).sort(), ["old-3", "old-4", "old-5", "old-6", "old-7"]);
+});
+test("saving to a full album evicts the last displayed photo when legacy timestamps tie", async () => {
+  const db = photoDb(seededPhotos(6).map((row) => ({ ...row, at: 100 })));
+  const b = boot({ indexedDB: db });
+  const titles = () => Array.from(b.dom.byId("ps-library").children, (row) => row.children[1].textContent);
+  b.api.open({ metadata: { title: "New capture" } });
+  const before = Array.from(await b.api.album(), (photo) => photo.title);
+  assert.deepEqual(titles(), before);
+  await b.api.capture(); await b.api.savePhoto();
+  const expected = ["New capture", ...before.slice(0, 5)];
+  assert.deepEqual(titles(), expected);
+  assert.deepEqual(Array.from(await b.api.album(), (photo) => photo.title), expected);
+});
+for (const fallback of [false, true]) test(`a late ${fallback ? "visit-only" : "durable"} save appears in the reopened album with its original bytes`, async () => {
+  const db = photoDb(seededPhotos(1));
+  let finishEncode, downloaded;
+  const b = boot({ indexedDB: db, withModalFocus: true, encode: cb => { finishEncode = cb; },
+    nativeDownload: { viable: () => true, saveBlob: blob => { downloaded = blob; return Promise.resolve(); } } });
+  b.api.open({ metadata: { title: "Earlier shot" } }); await b.api.capture();
+  const saving = b.api.savePhoto();
+  b.api.close(false); b.api.open({ source: "garage", metadata: { title: "Current shot" } });
+  await b.api.album();   // the new visit's initial gallery read finishes before the JPEG is ready
+  let finishCapture;
+  b.G.gfx.capturePixels = () => new Promise(resolve => { finishCapture = resolve; });
+  const capturing = b.api.capture(), notice = b.dom.byId("ps-message").textContent;
+  b.dom.byId("ps-library").children[0].children[4].focus();
+  if (fallback) db.failNext("put");
+  finishEncode(new Blob(["original capture bytes"], { type: "image/jpeg" })); await saving;
+  assert.equal(b.api.state().busy, true);
+  assert.equal(b.dom.byId("ps-message").textContent, notice);
+  const row = b.dom.byId("ps-library").children[0];
+  assert.equal(row.children[1].textContent, "Earlier shot");
+  assert.equal(db.rows.size, fallback ? 1 : 2);
+  assert.equal(b.dom.document.activeElement.parentElement.children[1].textContent, "Old 0", "DELETE still targets the previously focused photo");
+  assert.equal(b.dom.document.activeElement.textContent, "DELETE");
+  row.children.find(el => el.textContent === "DOWNLOAD").click(); await turn();
+  assert.equal(await downloaded.text(), "original capture bytes");
+  finishCapture({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await capturing;
 });
 test("a committed save from a closed Studio retains its original metadata without touching a reopened session", async () => {
   const idb = photoDb(), b = boot({ indexedDB: idb });
@@ -548,7 +913,7 @@ test("coaching is optional DOM content; presets cannot move a pending capture", 
   let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
   b.api.open({ source: "garage" }); const pending = b.api.capture();
   b.dom.byId("ps-shots").children[1].click();
-  assert.equal(b.order.some((s) => s.startsWith("shot:")), false);
+  assert.deepEqual(b.order.filter((s) => s.startsWith("shot:")), ["shot:hero"]);
   const coach = b.dom.byId("ps-coach"); coach.children[coach.children.length - 1].click();
   assert.equal(coach.hidden, true);
   resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await pending;
@@ -565,7 +930,7 @@ test("contact sheet captures three sequential renderer frames and labels one bou
   assert.equal(b.downloads.length, 1, "cancel does not download");
 });
 
-for (const outcome of ["success", "write failure", "share cancellation"]) test("contact sheet awaits native export " + outcome, async () => {
+for (const outcome of ["success", "write failure", "share cancellation"]) test(`contact sheet awaits native export ${outcome}`, async () => {
   let resolve, reject, calls = 0, saved, settled = false;
   const held = new Promise((yes, no) => { resolve = yes; reject = no; });
   const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => {
@@ -614,7 +979,27 @@ test("#1895: the Home title art does not paint over a live Photo Studio subject"
     "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
 });
 
-test("Photo Lighting clones the profile store, writes via ltSet, and restores the exact original reference on close", () => {
+test("game.js hands Photo Studio the light store, so PHOTO LIGHTING never needs setLightTune (#5040)", () => {
+  assert.ok(GAME_CALL.length > 0, "game.js still builds Photo Studio with PhotoStudio.create(G, {...})");
+  assert.ok(GAME_DEPS.has("ltStore") || GAME_DEPS.has("ltSet"), "PhotoStudio.create gets a light-store writer");
+});
+
+test("PHOTO LIGHTING sliders are this photo only: no latch clear, no saved-tune write (#5040)", () => {
+  const original = { "test|day|dry": { carEnvCube: 0 } };
+  const b = boot({ profiles: original, LT: { exposureMul: 1, contrast: 1, sunElev: 12 } });
+  b.storage.set("apex26.perChunkOff", "1"); b.storage.set("apex26.envProbeOff", "1");
+  b.api.open({ source: "race" });
+  const inp = b.dom.byId("ps-lt-in-exposureMul");
+  inp.value = "2"; inp.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [["exposureMul", 2]], "the slider reached the live store");
+  assert.deepEqual(b.latchWrites, [], "never through setLightTune");
+  assert.equal(b.storage.get("apex26.perChunkOff"), "1"); assert.equal(b.storage.get("apex26.envProbeOff"), "1");
+  b.api.close(false);
+  assert.equal(b.G._ltStore, original, "the saved profiles come back untouched");
+  assert.deepEqual(original, { "test|day|dry": { carEnvCube: 0 } });
+});
+
+test("Photo Lighting clones the profile store, writes via the light store, and restores the exact original reference on close", () => {
   const original = { "monza|day|dry": { exposureMul: 1.1 } };
   const b = boot({ profiles: original });
   assert.equal(b.api.open({ source: "race" }), true);
@@ -637,6 +1022,52 @@ test("Photo Lighting clones the profile store, writes via ltSet, and restores th
   b.api.close(false);
   assert.equal(b.G._ltStore, original, "close restores the exact original profiles reference");
   assert.equal(original["monza|day|dry"].exposureMul, 1.1, "original map was never mutated");
+});
+
+test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {
+  const original = { "test|day|dry": { exposureMul: 1 } };
+  const b = boot({ profiles: original });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-exposureMul"), exact = b.dom.byId("ps-lt-num-exposureMul");
+  const change = (value, valid = true) => {
+    exact.value = value;
+    exact.valueAsNumber = value === "" ? NaN : Number(value);
+    exact.validity = { valid }; // the mini DOM does not implement native range / step validation
+    exact.dispatchEvent({ type: "change" });
+  };
+  assert.equal(exact.type, "number");
+  assert.match(exact.getAttribute("aria-label"), /exposure/i);
+  assert.deepEqual([exact.min, exact.max, exact.step], [slider.min, slider.max, slider.step]);
+  exact.value = "1."; exact.dispatchEvent({ type: "input" });
+  assert.deepEqual(b.ltWrites, [], "typing an incomplete decimal does not edit the session");
+  change("1.35");
+  assert.equal(slider.value, "1.35");
+  assert.equal(b.dom.byId("ps-lt-v-exposureMul").textContent, "1.35");
+  assert.equal(slider.getAttribute("aria-valuetext"), "1.35");
+  for (const bad of ["", "3.5", "1.33"]) { change(bad, false); assert.equal(exact.value, "1.35"); }
+  slider.value = "1.55"; slider.dispatchEvent({ type: "input" });
+  assert.equal(exact.value, "1.55");
+  assert.deepEqual(b.ltWrites, [["exposureMul", 1.35], ["exposureMul", 1.55]]);
+  b.dom.byId("ps-lt-reset").click();
+  assert.equal(exact.value, "1"); assert.equal(slider.value, "1");
+  assert.equal(b.dom.byId("ps-lt-reset").disabled, true);
+  b.api.close(false);
+  change("2");
+  assert.equal(b.ltWrites.length, 2);
+  assert.equal(b.G._ltStore, original);
+});
+
+test("Photo Lighting locks both controls for desktop-only knobs on mobile", () => {
+  const b = boot({ mobile: true, LT: { carShadow: 1 }, tuneDefs: [
+    { id: "carShadow", label: "Car shadows", group: "Shadows", min: 0, max: 1, step: 1, desktopOnly: true },
+  ] });
+  b.api.open({ source: "race" });
+  const slider = b.dom.byId("ps-lt-in-carShadow"), exact = b.dom.byId("ps-lt-num-carShadow");
+  assert.equal(slider.disabled, true);
+  assert.equal(exact.disabled, true);
+  assert.match(exact.getAttribute("aria-label"), /desktop only/i);
+  exact.value = "0"; exact.dispatchEvent({ type: "change" });
+  assert.deepEqual(b.ltWrites, []);
 });
 
 test("Photo Lighting stays out of the garage subject", () => {
@@ -773,4 +1204,127 @@ test("all shipped garage styles and lighting remain shared by Team and both gara
     assert.equal(team.specs().find(s => s.key === "mood").cur, nextMood, "Photo lighting remains selected in Team");
   }
   assert.equal(repaints, 6, "each changed photo visit refreshes the garage panel");
+});
+
+// ── hunt #5743 P1 / P3 ───────────────────────────────────────────────────────
+test("#5743 P1: a borrowCar that throws hands FreeCam and photo mode back and open() answers false", () => {
+  const b = boot({ borrowCar: () => { throw new Error("makeCars failed"); } });
+  assert.equal(b.api.open({ source: "home-track" }), false);
+  assert.equal(b.closed(), 1, "the camera handover is undone");
+  assert.equal(b.G.photoMode, false);
+  assert.equal(b.overlays(), true, "FreeCam's guides come back");
+  assert.equal(b.api.state().open, false);
+  // A later open still works.
+  assert.equal(b.api.open({ source: "race" }), true);
+});
+
+test("#5743 P3: a readback that never resolves times out to Capture failed, not busy, and frees the slot", async () => {
+  const timers = [];
+  const b = boot({ setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } });
+  let cancelled = null, readOwner;
+  b.G.gfx.capturePixels = (owner) => { readOwner = owner; return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (why, owner) => { assert.ok(owner); assert.equal(owner, readOwner); cancelled = why; };
+  b.api.open();
+  const pending = b.api.capture();
+  assert.equal(b.api.state().busy, true);
+  const t = timers.find((x) => x.ms === 8000);
+  assert.ok(t, "an 8 s capture timeout is armed");
+  t.fn();
+  assert.equal(await pending, false);
+  assert.equal(b.api.state().busy, false);
+  assert.equal(b.api.state().captured, false);
+  assert.equal(cancelled, "capture timed out");
+  assert.equal(b.dom.byId("ps-message").textContent.split(":")[0], "Capture failed");
+});
+
+
+test("closing a capture releases its render scale before the next capture takes ownership", async () => {
+  const b = boot(), reads = [];
+  let scale = 0.5;
+  b.G.gfx.getRenderScale = () => scale;
+  b.G.gfx.setRenderScale = (value) => { scale = value; return true; };
+  b.G.gfx.capturePixels = () => new Promise((resolve) => reads.push(resolve));
+  const pixels = { width: 1, height: 1, data: new Uint8ClampedArray(4) };
+  b.api.open();
+  const first = b.api.capture();
+  b.api.close(false);
+  assert.equal(scale, 0.5);
+  b.G.gfx.setRenderScale(0.75);
+  b.api.open();
+  const second = b.api.capture();
+  reads[0](pixels);
+  assert.equal(await first, false);
+  assert.equal(scale, 1);
+  reads[1](pixels);
+  assert.equal(await second, true);
+  assert.equal(scale, 0.75);
+});
+
+test("a submitted read timing out after reopen leaves the next photo queued", async () => {
+  const timers = [], requests = [];
+  const b = boot({ setTimeout: (fn, ms) => { if (ms === 8000) timers.push(fn); return timers.length; } });
+  let queued;
+  b.G.gfx.capturePixels = (owner) => new Promise((resolve, reject) => {
+    queued = { owner, resolve, reject }; requests.push(queued);
+  });
+  b.G.gfx.cancelCapture = (why, owner) => {
+    if (queued && queued.owner === owner) { queued.reject(new Error(why)); queued = null; }
+  };
+  b.api.open();
+  const first = b.api.capture();
+  queued = null;   // WGX submitted this read, but its buffer has not mapped yet
+  b.api.close(false); b.api.open({ source: "garage" });
+  const second = b.api.capture();
+  timers[0]();
+  assert.equal(await first, false);
+  assert.equal(queued, requests[1], "the reopened studio still owns its queued GPU read");
+  queued.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await second, true);
+});
+
+// Mirrors tests/specs/photo-studio.spec.js's bare page (no Log, no ScriptLoader): the
+// stub must finish evaluating so PhotoStudio is defined (#4978 draft CI red).
+test("boot stub evaluates and create() works without Log or ScriptLoader", () => {
+  const ctx = vm.createContext({
+    Object, String, Math, Promise, JSON, Error,
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    window: { dispatchEvent: () => {} },
+    CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } },
+    GameStore: { store: { rawSet: () => true, rawDel: () => true, get: (_k, d) => d, set: () => true } },
+  });
+  ctx.window = ctx;
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
+  assert.equal(typeof ctx.PhotoStudio, "object");
+  assert.equal(typeof ctx.PhotoStudio.create, "function");
+  const api = ctx.PhotoStudio.create({ $: () => null, setTimeOfDay: () => "day", weather: () => "dry" }, { garage: {} });
+  assert.equal(api.state().open, false);
+  assert.equal(ctx.PhotoStudio.loaded(), false);
+});
+
+test("gallery read failure exposes retry and keeps the session gallery separate", async () => {
+  const b = boot();
+  b.api.open({source:"garage"});
+  await turn();
+  assert.equal(b.dom.byId("ps-library-error").hidden, false);
+  assert.equal(b.dom.byId("ps-library").children.length, 0);
+  await b.api.capture(); await b.api.savePhoto();
+  assert.equal(b.dom.byId("ps-library-error").hidden, false);
+  assert.equal(b.dom.byId("ps-library").children.length, 1);
+  const healthy = boot({indexedDB:photoDb([])});
+  healthy.api.open({source:"garage"}); await healthy.api.album();
+  assert.equal(healthy.dom.byId("ps-library-error").hidden, true);
+  assert.equal(healthy.dom.byId("ps-library").children[0].textContent, "Capture a frame and save it here. Photos stay on this device.");
+});
+
+test("creating a cold Photo facade and closing an unopened studio leave editor scripts unloaded", async () => {
+  const loads = [];
+  const ctx = vm.createContext({ScriptLoader:{create:() => ({load:async files => {loads.push(...files);return false;}})}});
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/photo-studio.js") });
+  const studio = ctx.PhotoStudio.create({}, {});
+  assert.equal(studio.state().open, false);
+  assert.equal(studio.hasCar(), false, "title render polls a synchronous boolean without loading capture UI");
+  studio.close(false);
+  assert.deepEqual(loads, []);
+  assert.equal(await studio.ensureLoaded(), false);
+  assert.deepEqual(loads, ["js/ui/photo-studio-ui.js"]);
 });

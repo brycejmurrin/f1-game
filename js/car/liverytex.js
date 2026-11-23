@@ -52,12 +52,23 @@ const LiveryTex = (function () {
   // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
   // tests/unit/livery-tier.test.mjs holds it to these numbers headlessly.
   // hiRes: desktop player only; ignored for AI and mobile (no larger upload).
-  function atlasDiv(isPlayer, mobile, hiRes) {
+  // aiHi (feature liveryHi, desktop ULTRA+): an AI atlas uploads at 2 (1024x1280, ~7.0 MB with mips, x21 rivals
+  // ~147 MB against ~37 MB at 512x640: +110 MB). Full 2048 for the nearest rivals is NOT done: 26.7 MB each,
+  // and it would need a per-distance upgrade/free cycle like photo mode's (car-draw planPhotoAtlases).
+  function atlasDiv(isPlayer, mobile, hiRes, aiHi) {
     if (mobile) return isPlayer ? 4 : 8;
-    if (!isPlayer) return 4;
+    if (!isPlayer) return aiHi ? 2 : 4;
     return hiRes ? 1 : 2;
   }
   // True when a desktop player preview can be upgraded to a larger atlas.
+  // Boot-time (GfxQuality.detail is): read once. False when GfxQuality is absent (node) or throws.
+  let _livHi = null;
+  function liveryHi() {
+    if (_livHi === null) {
+      try { _livHi = !!GfxQuality.feature("liveryHi"); } catch (_) { _livHi = false; }   // absent (node): the ReferenceError
+    }
+    return _livHi;
+  }
   function playerHiResDeferred(mobile) {
     return atlasDiv(true, !!mobile, false) > atlasDiv(true, !!mobile, true);
   }
@@ -975,6 +986,27 @@ const LiveryTex = (function () {
   // halo too — an early `return` from a tinted branch would skip it for
   // exactly the uploads most likely to need it. One source, one set of
   // passes, both cases.
+  // Tinted emblem cached per (image, size, tint) (perf P6, #4546); markChanged drops all.
+  let _tintCache = new WeakMap();
+  const TINT_PER_IMAGE_MAX = 24;
+  markReady.push(() => { _tintCache = new WeakMap(); });
+  function tintedLogo(img, ow, oh, fill) {
+    let byImg = _tintCache.get(img);
+    if (!byImg) { byImg = new Map(); _tintCache.set(img, byImg); }
+    const key = ow + "x" + oh + "|" + fill;
+    let off = byImg.get(key);
+    if (off) return off;
+    off = document.createElement("canvas");
+    off.width = ow; off.height = oh;
+    const oc = off.getContext("2d");
+    oc.drawImage(img, 0, 0, off.width, off.height);
+    oc.globalCompositeOperation = "source-in";
+    oc.fillStyle = fill;
+    oc.fillRect(0, 0, off.width, off.height);
+    if (byImg.size >= TINT_PER_IMAGE_MAX) byImg.delete(byImg.keys().next().value);
+    byImg.set(key, off);
+    return off;
+  }
   function drawLogoImage(ctx, img, R, tint, halo, outline) {
     // CLIP FIRST. The halo below is five passes of up to 14 px blur, which
     // reaches ~5 px outside R — across the atlas gutter and into whatever
@@ -987,16 +1019,7 @@ const LiveryTex = (function () {
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
     const x = R.x + (R.w - w) / 2, y = R.y + (R.h - h) / 2;
     let src = img;
-    if (tint) {
-      const off = document.createElement("canvas");
-      off.width = Math.max(1, Math.round(w)); off.height = Math.max(1, Math.round(h));
-      const oc = off.getContext("2d");
-      oc.drawImage(img, 0, 0, off.width, off.height);
-      oc.globalCompositeOperation = "source-in";
-      oc.fillStyle = css(tint);
-      oc.fillRect(0, 0, off.width, off.height);
-      src = off;
-    }
+    if (tint) src = tintedLogo(img, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), css(tint));
     // Halo outside, outline inside — the same order and the same reason as
     // drawCrest, so an emblem needing both reads the way a crest does.
     const pass = (col, blur, n) => {
@@ -1083,7 +1106,8 @@ const LiveryTex = (function () {
   const FIN_BADGE_IDS = ["logo", "number", "code", "none"];
   function driverCode(teamId, num) {
     const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
-    const d = t && t.drivers && t.drivers.find((x) => x.num === num);
+    // A string override ("63") must still match the numeric drivers[].num (#4651).
+    const d = t && t.drivers && t.drivers.find((x) => x.num == num);
     return (d && d.code) || teamShort(teamId);
   }
   // Whether the crest is also drawn on the engine-cover spine. With the badge
@@ -1318,31 +1342,15 @@ const LiveryTex = (function () {
     return t <= 0 ? 0 : (SUN.r / FLANK.zLen) * Math.sqrt(t);
   }
   // How much of the flank the bull claims. Its HEIGHT is chosen and its LENGTH
-  // derived from the traced path's own aspect through the flank's anisotropy —
-  // 1.24 m over 304 px along the car against 0.47 m over 160 px down it, so a
-  // length picked in metres and a height picked in pixels gave a bull 113 % of
-  // the region tall, clipped to a white blob. Published because the SIDE
-  // designs have to clear it.
-  // It hangs from `top`, not from the crease, and the two numbers answer to
-  // opposite ends of the band. Hung at 0.04 it filled to 0.84 and buried the
-  // crease strip — the one a cover design can always use, where the real RB22
-  // carries its sponsor names — under a metre of bull, which pushed every side
-  // design aft of the whole animal and so behind the rear wheel. Standing it on
-  // the sidepod line instead (top 0.26, h 0.74) freed that strip and cost the
-  // ANIMAL: the flank's bottom corner is not on camera. From the garage side
-  // view the sidepod eats the band below v ~0.81 forward of u 0.2, so a bull
-  // reaching v 0.99 lost 19 % of its ink and 36 % of its HEAD, which is the low
-  // forward part of a charging silhouette — the head went and the rump stayed.
-  // Both ends are now inside what the camera keeps: shorter (h), hung just
-  // below the lettering strip (top), and its lowest hoof — at 0.96 of the bbox
-  // — lands at v 0.81. Measured, not eyeballed: the `(crown)` row of
-  // tools/car/spine-station.mjs --occlude reports 2 % of the ink hidden.
-  // …and then the RB22 look asked for more: a bigger bull whose TOP stands on
-  // the ridge, so each flank's bull runs up over the shoulder and the pair
-  // meet on the spine (flankBull paints the crown half). The top is the
-  // ridge itself (s 0), the bottom v 0.60 of the flank, which keeps the
-  // derived length (0.88 m at the path's 0.557 aspect) ending at z -1.60 —
-  // where the rear tyre starts to stand over the flank from a side camera.
+  // derived from the traced path's aspect through the flank's anisotropy (1.24 m
+  // over 304 px along vs 0.47 m over 160 px down — mixing units once gave a bull
+  // 113 % of the region tall). Published because the SIDE designs must clear it.
+  // The TOP stands on the ridge (s 0), so each flank's bull runs over the
+  // shoulder and the pair meet on the spine (flankBull paints the crown half);
+  // the bottom is v 0.60 of the flank, which ends the derived length (0.88 m at
+  // the path's 0.557 aspect) at z -1.60, where the rear tyre starts to cover the
+  // flank from a side camera. Lower placements lost the head under the sidepod
+  // (below v ~0.81 forward of u 0.2) — check with tools/car/spine-station.mjs --occlude.
   const BULL = { h: (0.49) / FLANK.sLen, u0: 0.05, top: -FLANK.sTop / FLANK.sLen };
   // A team with NO traced bull wears its lockup as a square badge in the
   // bull's slot (v 0.30 .. 0.82): a badge cannot cross the shoulder.
@@ -1658,7 +1666,7 @@ const LiveryTex = (function () {
   function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
     const mobile = atlasMobile(!!isPlayer, IS_MOBILE, IS_PHONE);
-    const div = atlasDiv(!!isPlayer, mobile, !!hiRes);
+    const div = atlasDiv(!!isPlayer, mobile, !!hiRes, !isPlayer && !mobile && liveryHi());
     // ALWAYS the element, never an OffscreenCanvas — including the deferred hi-res paint that
     // car-draw.js hands to createImageBitmap() (C-P3). An ImageBitmap made from an OffscreenCanvas
     // stalled the WebGL upload on Chromium over Mesa llvmpipe (the car group's DAILY garage-out spec
@@ -2070,14 +2078,11 @@ const LiveryTex = (function () {
     // the sidepod line. Sharing the flank with the mark is what the real cover
     // does; hiding behind the rear tyre to avoid it is not.
     const sideFrom = spineLogo === "wrap" ? Math.round((sunReach(0) + 0.02) * 1000) / 1000 : 0;
-    // …and a band may run to the tail of the flank, but CONTENT may not: a
-    // stripe's aft end disappearing behind the wheel is a stripe, a sponsor
-    // name's aft end disappearing behind the wheel is half a word. `su` is the
-    // band axis, `sc` the content axis, and they differ only where a crown has
-    // taken the front — every other team's lettering is where it always was.
+    // …a band may run to the flank's tail, CONTENT stops at FLANK_SEEN on every
+    // crown: a name behind the wheel is half a word (#5712). `su` band, `sc` content.
     const sideTo = sideFrom ? FLANK_SEEN : 1;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
-    const sc = (F, u) => F.fx(sideFrom + u * (sideTo - sideFrom));
+    const sc = (F, u) => F.fx(Math.min(FLANK_SEEN, sideFrom + u * (sideTo - sideFrom)));
     const sbox = (F, u0, u1, v0, v1) => {
       const xa = sc(F, u0), xb = sc(F, u1);
       return { x: Math.min(xa, xb), y: F.R.y + v0 * F.R.h, w: Math.abs(xb - xa), h: (v1 - v0) * F.R.h };
@@ -2184,7 +2189,7 @@ const LiveryTex = (function () {
       // BULL.top freed above the animal's back. Under a saddle it STAYS on the
       // saddle panel (aft of ~u 0.50 leaves the rake onto bare cover).
       eachFlank((F) => {
-        let box = sbox(F, 0.06, 0.94, 0.12, 0.48);
+        let box = sbox(F, 0.04, 0.60, 0.12, 0.48);
         if (sideFrom) box = sbox(F, 0.02, 0.98, 0.03, 0.30);
         else if (spineLogo === "saddle") box = sbox(F, 0.04, 0.50, 0.12, 0.48);
         const ink = sideFrom ? inkMark : inkFlank;
@@ -2220,10 +2225,11 @@ const LiveryTex = (function () {
             { align: "center", pad: 4, halo: flankHalo(inkFlank) });
           return;
         }
-        drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.14, 0.50), inkFlank,
-          { align: "center", pad: 8, halo: flankHalo(inkFlank) });
-        drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.16, 0.46), inkFlank,
+        // Stacked inside the seen strip (#5712).
+        drawWordmark(ctx, names[0] || "", sbox(F, 0.04, 0.60, 0.10, 0.32), inkFlank,
           { align: "center", pad: 6, halo: flankHalo(inkFlank) });
+        drawWordmark(ctx, names[1] || "", sbox(F, 0.10, 0.54, 0.34, 0.52), inkFlank,
+          { align: "center", pad: 4, halo: flankHalo(inkFlank) });
       });
     } else if (spineSide === "title") {
       // Title sponsor ON a contrasting board — distinct from bare wordmark / PLATE.
@@ -2593,13 +2599,14 @@ const LiveryTex = (function () {
   // repainted the paint + crest lockup: 370-450 ms of a phone-throttled pick (CPU x4,
   // B·H13 2026-10-21). A card's pixels depend only on (team, livery fields, size), so
   // the first paint lands in an offscreen canvas and later ones blit it. Cached only
-  // once web fonts are in (a lockup painted in the fallback face must not stick);
+  // once its NUM_FONTS faces are in (not fonts.status: any page font load flips it, #5983);
   // a logo install or removal (markChanged) drops every card.
   const _swatchCache = new Map(), SWATCH_CACHE_MAX = 160, _swatchStats = { paints: 0, blits: 0, reused: 0 };
+  let _fIn = false;
+  const fontsOk = () => _fIn || (_fIn = typeof document !== "undefined" && (!document.fonts || Object.values(NUM_FONTS).every((r) => document.fonts.check(r.font(9)))));
   markReady.push(() => { _swatchCache.clear(); _cardCanvas.clear(); });
   function paintSwatch(ctx, teamId, liv, w, h) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
-    if (!fontsIn || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
+    if (!fontsOk() || typeof document.createElement !== "function") return paintSwatchNow(ctx, teamId, liv, w, h);
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = _swatchCache.get(key);
     if (!c) {
@@ -2612,15 +2619,15 @@ const LiveryTex = (function () {
     }
     ctx.drawImage(c, 0, 0); _swatchStats.blits++;
   }
-  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick still made 113 new canvases, each with
+  // THE CARD'S OWN CANVAS, KEPT. Even blitting, each pick made 113 new canvases, each
   // a getContext and a drawImage: ~74 ms of a phone-throttled pick (CPU x4, B·H32 2026-10-21).
   // swatchCanvas hands back the painted canvas a card used last build, for the new card to adopt
   // (appendChild moves it out of the discarded sheet). `build` names the sheet build: a second card
   // with the same look in one build gets a fresh canvas instead of stealing the first one's.
-  // Kept only once fonts are in, and dropped with the swatch cache on markChanged.
+  // Kept only once fonts are in; dropped with the swatch cache on markChanged.
   const _cardCanvas = new Map();
   function swatchCanvas(teamId, liv, w, h, build) {
-    const fontsIn = typeof document !== "undefined" && (!document.fonts || document.fonts.status === "loaded");
+    const fontsIn = fontsOk();
     const key = teamId + "|" + w + "x" + h + "|" + JSON.stringify(liv || null);
     let c = fontsIn ? _cardCanvas.get(key) : null;
     if (c && c.__swatchBuild !== build) {
@@ -2663,14 +2670,16 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  // CREST_DISC stays internal: crestKeepsPlate / markPalette / crestExtent and
+  // LiveryCrests.create consume it; nothing outside this file reads LiveryTex.CREST_DISC.
+  return { SIZE, SIZE_H, atlasDiv, liveryHi, liveryHiUsed: () => _livHi, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchCanvas, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
-           CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
+           CRESTS, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
-           airboxMeshColour, resolveFinPaint,
+           airboxMeshColour, resolveFinPaint, driverCode,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

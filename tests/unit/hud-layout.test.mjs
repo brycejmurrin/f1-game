@@ -8,12 +8,14 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
 // hud-layout reads CamGroups at eval (tools/manifest.cjs HARD_EDGES), so every
 // harness evaluates the two together, in load order.
 const SRC = CAMG + "\n" + fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+const EDITOR = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout-editor.js"), "utf8");
 const CSS = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
 
 test("HUD browser helper atomically holds producers, selects camera and refreshes the controlled HUD", async () => {
@@ -100,7 +102,9 @@ function fakeEl() {
   };
 }
 
-function load(stored = {}) {
+// The second argument is true (a phone, the PHONE_STANDARD tests) or { doc, ctx, phone } (an extended fake page).
+function load(stored = {}, opts = {}) {
+  const extra = opts === true ? { phone: true } : opts || {}, phone = !!extra.phone;
   const written = Object.assign({}, stored);
   const els = {};
   const doc = {
@@ -108,16 +112,71 @@ function load(stored = {}) {
     getElementById: () => null,
     querySelector: (sel) => (els[sel] || (els[sel] = fakeEl())),
     addEventListener() {},
+    ...extra.doc,
   };
   const ctx = {
     console,
+    ...extra.ctx,
     document: doc,
+    HudElements: { phone: () => phone },
     GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
   };
   vm.createContext(ctx);
+  if (extra.editor) vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
-  return { H: ctx.HudLayout, written, els };
+  return { H: ctx.HudLayout, written, els, ctx };
 }
+
+test("a cold HUD shares the editor request, retries after failure and restores saved race colors", async () => {
+  let attempts = 0, finish;
+  const loader = { create: () => ({ load(files) {
+    assert.deepEqual([...files], ["js/ui/hud-layout-editor.js"]);
+    attempts++;
+    return new Promise(resolve => { finish = resolve; });
+  } }) };
+  const { H, ctx } = load({ hudColors: { "map-ghost": "#aabbcc" } }, { ctx: { ScriptLoader: loader } });
+  assert.equal(attempts, 1, "saved colors request the policy before opening Settings");
+  const waiting = H.ensureEditor();
+  assert.equal(H.ensureEditor(), waiting, "a fast second request shares the first attempt");
+  finish(false);
+  assert.equal(await waiting, false);
+  const retry = H.ensureEditor();
+  assert.equal(attempts, 2);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
+  finish(true);
+  assert.equal(await retry, true);
+  assert.equal(H.colors.value("map-ghost"), "#aabbcc");
+  assert.equal(await H.ensureEditor(), true);
+  assert.equal(attempts, 2, "the warm editor is reused");
+  load({}, { ctx: { ScriptLoader: loader } });
+  assert.equal(attempts, 2, "an ordinary race without customized colors needs no color policy");
+});
+
+test("standard phone placements apply when fresh, respect explicit empty sets, and reset per camera", () => {
+  const { H, written, els } = load({}, true);
+  assert.equal(H.get("tower", "other").s, 80);
+  assert.equal(H.get("tower", "helmet").s, 70);
+  assert.equal(H.get("tower", "helmet", "minimal").s, 100);
+  assert.equal(H.get("tower", "cockpit").s, 100);
+  assert.equal(els[".hud-top"].hasAttribute("data-hl-v4"), true);
+  assert.equal(H.isShipped(undefined, "all"), true);
+  assert.equal(H.presetOf("other"), "shipped");
+  assert.deepEqual(written, {});
+  H.set("tower", { s: 122 }, "other");
+  assert.equal(H.get("tower", "helmet").s, 70);
+  assert.equal(H.isShipped("other"), false);
+  H.resetEl("tower", "other");
+  assert.equal(H.get("tower", "other").s, 80);
+  assert.equal(written.hudLayout, null);
+
+  const explicit = load({ hudLayout: { v: 4, standard: { other: {}, helmet: {} } } }, true);
+  assert.equal(explicit.H.get("tower", "other").s, 100);
+  assert.equal(explicit.H.isShipped("other"), false);
+  explicit.H.resetSet("other");
+  assert.equal(explicit.H.get("tower", "other").s, 80);
+  assert.equal(explicit.H.get("tower", "helmet").s, 100);
+  assert.equal(load().H.get("tower", "other").s, 100);
+});
 
 test("untouched: nothing stored, no element carries data-hl", () => {
   const { H, written, els } = load();
@@ -137,6 +196,17 @@ test("set writes only moved elements and paints --hl-* on that element", () => {
   assert.equal(m.props["--hl-s"], "1.5");
   assert.equal(m.props["--hl-o"], "top left");
   assert.equal("data-hl" in els[".hud-top"].attrs, false);
+});
+
+test("a live set paints without saving; commit saves the gesture once (#5031)", () => {
+  const { H, written, els } = load();
+  for (let x = 1; x <= 5; x++) H.set("map", { x }, "other", undefined, true);
+  assert.equal(written.hudLayout, undefined, "no storage write during the drag");
+  assert.equal(els["#minimap"].props["--hl-x"], "5", "every frame still paints");
+  assert.deepEqual({ ...H.get("map", "other") }, { x: 5, y: 0, s: 100 });
+  assert.equal(H.commit(), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(written.hudLayout)), { v: 4, standard: { cockpit: {}, helmet: {}, other: { map: { x: 5, y: 0, s: 100 } } } });
+  assert.equal(H.commit(), false, "nothing left to save");
 });
 
 test("unbounded values survive; explicit reset clears the element and the store", () => {
@@ -200,7 +270,7 @@ test("phone portrait parks the minimap under the timing tower; other shapes keep
   assert.ok(m, "a portrait-and-narrow query owns the tower/map stack");
   assert.match(m[1], /#minimap/);
   assert.match(m[1], /\.hud-gaps/);
-  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, 54px\) \+ 8px\)/);
+  assert.match(m[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\) \+ var\(--hud-top-h, var\(--hud-top-h-0\)\) \+ 8px\)/);
   const baseMap = src.match(/(?:^|\n)#minimap \{\s*position: absolute;([\s\S]*?)\n\}/);
   assert.ok(baseMap, "shipped #minimap rule");
   assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
@@ -704,7 +774,7 @@ test("clearControls preserves manual placement and discards stale automatic clea
     style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; }, getPropertyValue(k) { return props[k] || ""; } },
     setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
     // 100 wide at 800 + --hl-x vw: stored +30vw is 204 px past the right edge before the clamp.
-    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W + parseFloat(props["--hud-clear-x"] || 0); return { left: x, right: x + 100, top: 500, bottom: 530, width: 100, height: 30 }; },
+    getBoundingClientRect() { const x = 800 + parseFloat(props["--hl-x"] || 0) / 100 * W + parseFloat(props["--hud-clear-x"] || 0), y = 500 + parseFloat(props["--hud-clear-y"] || 0); return { left: x, right: x + 100, top: y, bottom: y + 30, width: 100, height: 30 }; },
   };
   const btn = { hidden: false, classList: { contains: () => false },
     getBoundingClientRect: () => ({ left: 900, right: 1000, top: 400, bottom: 540, width: 100, height: 140 }) };
@@ -721,7 +791,9 @@ test("clearControls preserves manual placement and discards stale automatic clea
   vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
   ctx.HudLayout.fit();
   const r = rel.getBoundingClientRect();
+  // Wholly off the screen is a parked piece: #5678's race-time keep leaves it where the player put it.
   assert.equal(r.right, 1200, "an edited widget is not brought back on screen");
+  assert.deepEqual([props["--hud-clear-x"], props["--hud-clear-y"]], [undefined, undefined]);
   assert.equal(props["--hl-x"], "30", "control clearance cannot change the saved geometry");
   assert.equal(ctx.HudLayout.get("rel", "other").x, 30, "stored offset unchanged");
   // A prior terminal placement must not bias the next edge clamp. Simulate a
@@ -788,6 +860,7 @@ function load3({ stored = {}, classes = [], live = true, hide = "", rootAttrs = 
     };
   }
   vm.createContext(ctx);
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + "; this.HudLayout = HudLayout; this.CamGroups = CamGroups;", ctx);
   return { H: ctx.HudLayout, CG: ctx.CamGroups, written, els, cls, hud, rootAttrs, bodyAttrs, byId };
 }
@@ -912,19 +985,19 @@ test("hiddenReason: classes name the reason; the live element has the last word"
   assert.equal(h({ live: false }).hiddenReason("rel"), null, "touch RELATIVE has a home under the map");
   assert.equal(h({ live: false }).hiddenReason("inputs"), null, "touch INPUTS has a home under the sectors");
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
-  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\)/);
   assert.doesNotMatch(css, /body:not\(\.desktop\) :is\(#hud-rel, #hud-inputs\):not\(\[data-hl-user\]\) \{ display: none; \}/);
-  assert.match(css, /body:not\(\.desktop\) #hud-strat \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
+  // Bounded to ONE rule (css-rules.mjs): a lazy `[\s\S]*?` after the selector ran past
+  // the rule's `}` and was satisfied by a later rule's declaration.
+  const rules = cssRules(css);
+  assert.equal(decl(rules, "body:not(.desktop) #hud-strat", "top"), "calc(var(--hud-left-h, 152px) + 8px)",
     "touch STRATEGY sits under fitHud's measured left column (--hud-left-h), not a bare 152px");
-  assert.match(css, /body:not\(\.desktop\) #hud-rel:not\(\[data-hl-user\]\) \{[\s\S]*?top: calc\(var\(--hud-left-h, 152px\) \+ 8px\)/,
+  assert.equal(decl(rules, "body:not(.desktop) #hud-rel:not([data-hl-user])", "top"), "calc(var(--hud-left-h, 152px) + 8px)",
     "touch RELATIVE uses the same measured left column");
-  assert.match(css, /:has\(> :where\(#hud\) > #hud-rel:not\(\[hidden\]\)\) #hud-strat:not\(\[data-hl-user\]\)/,
-    "STRATEGY steps beside RELATIVE instead of stacking onto PLAN");
   assert.match(css, /:root\[data-limits-left\] #hud-strat/,
     "STRATEGY clears the left-mode TRACK LIMITS chip");
   assert.match(css, /@supports \(anchor-name: --a\)[\s\S]*#dock-left \{ anchor-name: --apex-dock-left; \}[\s\S]*#hud-tyre \{[^}]*position-anchor: --apex-dock-left;[^}]*bottom: calc\(anchor\(top\)/,
     "touch TYRES sits on top of the left dock");
-  assert.match(css, /body:not\(\.desktop\) #hud-sectors \{[\s\S]*?right:\s*calc\(10px \+ var\(--sar\) \/ var\(--hud-z\) \+ var\(--dock-r-w, 0px\)\)/,
+  assert.equal(decl(rules, "body:not(.desktop) #hud-sectors", "right"), "calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px))",
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
@@ -937,7 +1010,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors clear BOOST via measured --dock-r-w only (#1191 anchor max overshot into #announce)");
   // OVERTAKE / CORNER MODE: cockpit --hl-x must not shove the chips under the
   // right dock when taps/shifts are lit (hud-survey aero×shift-up + Bryce OT/BOOST).
-  assert.match(css, /body:has\(\.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
+  // The :has() argument is scoped to the shell's child chain (#3108, css-has-scope.test.mjs): same match.
+  assert.match(css, /body:has\(> :where\(#hud\) > :where\(#hud-dock\) > \.dock \.touchbtn:not\(\[hidden\]\)\) :is\(#hud-ot, #hud-aero\)\[data-hl\]:not\(\[data-hl-v4\]\)\s*\{[^}]*translate:\s*0\s+calc\(var\(--hl-y/,
     "lit docks adjust shipped OVERTAKE / CORNER MODE while preserving explicitly placed chips");
   // The four opt-in readouts hide on the same classes css/hud.css uses for them.
   for (const id of ["damage", "rel", "strat", "inputs"]) {
@@ -1070,7 +1144,8 @@ test("HELMET ships its own layout: the cockpit strip plus GEAR and SPEED on a de
     "ENERGY stays in the bottom strip beside TYRES, not mid-visor over the wheel");
   assert.ok(T.H.get("tyre", "helmet").x === 0 && T.H.get("tyre", "helmet").y < 0, "TYRES stays in the left corner, lifted off the steer buttons");
   assert.deepEqual(plain(T.H.get("gearbox", "helmet")), { x: 0, y: 0, s: 100 }, "GEAR takes the LCD's place: the row's own centre");
-  assert.ok(T.H.get("speed", "helmet").x > 0 && T.H.get("speed", "helmet").y === 0, "SPEED moves right of GEAR");
+  assert.ok(T.H.get("speed", "helmet").x > 0 && T.H.get("speed", "helmet").y < 0,
+    "SPEED sits right of GEAR and lifted above ENERGY (844x390 survey: y 0 overlapped ENERGY, x 17 the AERO button)");
   for (const id of ["ot", "aero", "bb"]) assert.deepEqual(plain(T.H.get(id, "helmet")), { x: 0, y: 0, s: 100 }, id + ": shipped on touch");
   assert.deepEqual(plain(T.H.get("energy", "cockpit")), plain(D.H.get("energy", "cockpit")), "the cockpit strip is the same on both");
   assert.equal(T.H.isShipped("helmet"), true);
@@ -1091,14 +1166,13 @@ test("touch HELMET hides only what the LCD glyph and the buttons carry; ENERGY a
     assert.ok(r && /touch helmet/.test(r.reason) && r.soft, id + ": " + JSON.stringify(r));
   }
   for (const id of ["energy", "tyre", "speed", "gearbox"]) assert.equal(T.H.hiddenReason(id), null, id + " shows in a touch helmet");
-  // With a wheel LCD the floating SPEED is a duplicate — soft-hide until placed
-  // (css/track-detail.css data-helmet-cam + data-wheel-lcd; MOVE & SIZE notes it).
-  assert.match(TD, /body\[data-helmet-cam\]\[data-wheel-lcd\]:not\(\.desktop\) #hud-speed:not\(\[data-hl-user\]\) \{ display: none; \}/);
-  const lcd = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" } });
+  // The GEAR pill covers the wheel LCD's speed digits (UI-HUNT-2-HUD), so a touch
+  // helmet keeps the floating SPEED whatever the wheel: no CSS hide, no soft reason.
+  assert.doesNotMatch(TD, /data-helmet-cam[^{]*#hud-speed[^{]*\{\s*display:\s*none/);
+  const lcd = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "" } });
   lcd.H.setCam("helmet");
-  const spd = lcd.H.hiddenReason("speed");
-  assert.ok(spd && spd.soft && /wheel LCD/.test(spd.reason), "touch helmet + LCD soft-hides SPEED: " + JSON.stringify(spd));
-  assert.equal(lcd.H.hiddenReason("gearbox"), null, "GEAR stays on the visor pill with an LCD");
+  assert.equal(lcd.H.hiddenReason("speed"), null, "touch helmet keeps SPEED beside the GEAR pill");
+  assert.equal(lcd.H.hiddenReason("gearbox"), null, "GEAR stays on the visor pill");
   const placed = load3({ classes: [], live: false, bodyAttrs: { "data-helmet-cam": "", "data-wheel-lcd": "" },
     stored: { hudLayout: { v: 4, standard: { helmet: { speed: { x: 5, y: 0, s: 100 } } } } } });
   placed.H.setCam("helmet");
@@ -1161,7 +1235,14 @@ test("every edited widget retains geometry through clearance and high-scale pack
     assert.equal(el.props["--hl-s"], String(wanted.s / 100), id);
     assert.deepEqual(el.getBoundingClientRect(), before[sel], id + " stays where the player put it");
     for (const a of ["data-hl-pack", "data-col-compact", "data-col-drop", "data-lane-collapsed"]) assert.equal(el.hasAttribute(a), false, id + " " + a);
-    for (const p of ["translate", "margin-left", "margin-top", "--hud-clear-x", "--hud-clear-y", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
+    for (const p of ["translate", "margin-left", "margin-top", "max-width", "max-height"]) assert.equal(el.props[p], undefined, id + " " + p);
+    // #5678: the one race-time correction is keepUser's, only the edge clamp here (the control covers the
+    // whole screen, so no clear spot exists), and only for a piece the saved spot puts off screen.
+    const b = before[sel], cx = el.props["--hud-clear-x"], cy = el.props["--hud-clear-y"];
+    if (!el.hasAttribute("data-hl-keep")) { assert.equal(cx, undefined, id + " --hud-clear-x"); assert.equal(cy, undefined, id + " --hud-clear-y"); continue; }
+    const wantX = b.right - b.left > W ? -b.left : b.left < 0 ? -b.left : b.right > W ? W - b.right : 0;
+    const wantY = b.bottom - b.top > H ? -b.top : b.top < 0 ? -b.top : b.bottom > H ? H - b.bottom : 0;
+    assert.deepEqual([parseFloat(cx), parseFloat(cy)], [+wantX.toFixed(1), +wantY.toFixed(1)], id + " edge clamp only");
   }
   assert.equal(JSON.stringify(saved), storedBefore);
 });
@@ -1170,7 +1251,7 @@ test("measured clearance protects instruments and controls without changing save
   const W = 844, H = 390, elements = {};
   const make = (id, x, y, w, h) => {
     const p = {}, attrs = {};
-    const e = { id, style: { setProperty(k, v) { p[k] = v; }, removeProperty(k) { delete p[k]; }, getPropertyValue(k) { return p[k] || ""; } },
+    const e = { id: id.slice(1), style: { setProperty(k, v) { p[k] = v; }, removeProperty(k) { delete p[k]; }, getPropertyValue(k) { return p[k] || ""; } },
       setAttribute(k,v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
       getBoundingClientRect() {
         const left = x + parseFloat(p["--hl-x"] || 0) * W / 100 + parseFloat(p["--hud-clear-x"] || 0);
@@ -1185,6 +1266,8 @@ test("measured clearance protects instruments and controls without changing save
   const cam = make("#btn-cam", 735, 80, 75, 44), radio = make("#announce", 585, 31, 175, 74);
   const limits = make("#hud-limits", 590, 202, 125, 24);
   const ot = make("#hud-ot", 250, 330, 140, 30), aero = make("#hud-aero", 400, 330, 140, 30);
+  const steer = [make("#steer-left", 59, 159.8, 176.4, 176.4), make("#steer-right", 248.5, 159.8, 176.4, 176.4)];
+  const shift = make("#shift-up", 650, 200, 64, 64);
   const stored = { v: 4, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
   const before = JSON.stringify(stored);
   let placedRadio = false;
@@ -1195,7 +1278,7 @@ test("measured clearance protects instruments and controls without changing save
       querySelectorAll: (sel) => {
         if (sel.includes("#pausebtn")) {
           assert.match(sel, /#hud-ot/); assert.match(sel, /#hud-aero/); assert.match(sel, /#hud-bb/);
-          return [gear, tyre, cam, ot, aero];
+          return [gear, tyre, cam, ot, aero, ...(sel.split(", ").includes(".steerbtn") ? steer : []), ...(sel.split(", ").includes(".shiftbtn") ? [shift] : [])];
         }
         return [gear, speed, cam];
       } },
@@ -1206,7 +1289,7 @@ test("measured clearance protects instruments and controls without changing save
   const manualRelative = rel.getBoundingClientRect();
   ctx.HudLayout.clearReadouts();
   const readouts = [limits, radio, damage, strat];
-  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel].map((e) => e.getBoundingClientRect());
+  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel, ...steer, shift].map((e) => e.getBoundingClientRect());
   for (const el of readouts) {
     const r = el.getBoundingClientRect();
     assert.ok(protectedBoxes.every((b) => !overlap(r,b)), el.id + " clears controls and instruments");
@@ -1233,6 +1316,21 @@ test("measured clearance protects instruments and controls without changing save
   placedRadio = false;
   ctx.HudLayout.clearReadouts();
   assert.ok(!overlap(radio.getBoundingClientRect(), cam.getBoundingClientRect()), "RESET restores automatic clearance");
+  // The stock helmet layout also has explicit positions. Its tyre and relative
+  // readouts can yield to controls until the driver saves a different position.
+  for (const el of [tyre, rel]) {
+    el.setAttribute("data-hl-user", ""); el.setAttribute("data-hl-seed", "");
+  }
+  ctx.HudLayout.clearReadouts();
+  const clearTyre = tyre.getBoundingClientRect(), clearRel = rel.getBoundingClientRect();
+  assert.ok(steer.every(btn => !overlap(btn.getBoundingClientRect(), clearTyre)));
+  assert.ok(!overlap(clearTyre, clearRel));
+  assert.ok(!overlap(clearRel, strat.getBoundingClientRect()));
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(tyre.getBoundingClientRect(), clearTyre, "factory clearance is stable");
+  tyre.removeAttribute("data-hl-seed");
+  ctx.HudLayout.clearReadouts();
+  assert.equal(tyre.getBoundingClientRect().left, 58, "editing the factory tyre restores its saved spot");
 });
 
 
@@ -1267,6 +1365,7 @@ test("optional strategy compacts, explains a drop, and restores when space retur
   assert.ok(strat.getBoundingClientRect().top >= 154);
   viewport.innerHeight = 170;ctx.HudLayout.clearReadouts();
   assert.ok(strat.hasAttribute("data-col-drop"));
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   assert.equal(ctx.HudLayout.hiddenReason("strat").reason,"not enough room");
   correctionWrites = 0;
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
@@ -1324,6 +1423,27 @@ test("a collapsed radio lane reopens for measured placement without changing set
   assert.equal(p["--announce-lane-w"],"292px");
   const r=radio.getBoundingClientRect();assert.ok(r.left>=154||r.top>=104);
   ctx.HudLayout.clearReadouts();assert.deepEqual(radio.getBoundingClientRect(),r,"local width survives repeated clearance until producer recomputes lane");
+  // Tracked export cockpit: a 282px card cannot fit, but wrapping into the
+  // measured central gap clears both 176px steer buttons and the pedal dock.
+  ctx.window.innerWidth = 844; ctx.window.innerHeight = 390;
+  const R = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
+  const obstacles = [R(0, 0, 844, 144), R(59, 159.8, 176.4, 176.4), R(248.5, 159.8, 176.4, 176.4), R(599, 144, 245, 246), R(425, 280, 174, 110)];
+  ctx.document.querySelectorAll = sel => sel.includes("#pausebtn") ? obstacles.map(rect => ({ getBoundingClientRect: () => rect })) : [];
+  radio.getBoundingClientRect = () => {
+    const width = radio.hasAttribute("data-lane-collapsed") ? 0 : Math.min(282.4, parseFloat(p["--announce-lane-w"] || 282.4));
+    return R(55 + parseFloat(p["--hud-clear-x"] || 0), 151.9 + parseFloat(p["--hud-clear-y"] || 0), width, width < 200 ? 85 : 50.7);
+  };
+  p["--announce-lane-w"] = "282.4px";
+  ctx.HudLayout.clearReadouts();
+  const wrapped = radio.getBoundingClientRect();
+  assert.ok(Math.abs(wrapped.width - 166.1) < 0.2, "the card wraps into the real central gap, including clearance air");
+  assert.equal(radio.hasAttribute("data-lane-collapsed"), false, "a fitting wrapped call stays visible");
+  assert.ok(obstacles.every(b => wrapped.right <= b.left || wrapped.left >= b.right || wrapped.bottom <= b.top || wrapped.top >= b.bottom));
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(radio.getBoundingClientRect(), wrapped, "wrapped placement is stable on the next allocator pass");
+  obstacles.splice(0, obstacles.length, R(0, 0, 844, 390));
+  ctx.HudLayout.clearReadouts();
+  assert.equal(radio.hasAttribute("data-lane-collapsed"), true, "a genuinely blocked viewport cannot retain a card over driving controls");
 });
 
 
@@ -1347,6 +1467,7 @@ test("optional input trace yields to occupied space and restores without saving"
   vm.createContext(ctx);vm.runInContext(SRC + "; this.HudLayout = HudLayout;",ctx);
   ctx.HudLayout.clearReadouts();
   assert.ok(inputs.hasAttribute("data-col-drop"));
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   assert.equal(ctx.HudLayout.hiddenReason("inputs").reason,"not enough room");
   viewport.innerHeight = 400;ctx.HudLayout.clearReadouts();
   assert.ok(!inputs.hasAttribute("data-col-drop"));
@@ -1393,7 +1514,7 @@ test("only the unplaced touch broadcast map clears pedals without resizing or sa
 
 // Real SettingRow + HudElements + HudLayout, including the original preference
 // rows. A saved JSON change alone must not masquerade as a live game change.
-function visibilityEditor() {
+function visibilityEditor(phone = false) {
   const dom = makeDom({ readyState: 'loading' }), document = dom.document;
   const lookup = document.getElementById, create = document.createElement;
   document.getElementById = id => dom.has(id) ? lookup(id) : null;
@@ -1410,6 +1531,7 @@ function visibilityEditor() {
   const ctx = { document, GameStore: { store }, setTimeout: fn => timers.push(fn),
     Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } } };
   ctx.window = ctx;
+  if (phone) Object.assign(ctx, { innerWidth: 852, innerHeight: 393, matchMedia: () => ({ matches: true }) });
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/setting-row.js'), 'utf8'), ctx, { filename: absSrc("js/ui/setting-row.js") });
   for (const [id, key, initial] of [['map', 'hudMapVis', 'on'], ['gaps', 'hudGapsVis', 'on'], ['mirror', 'hudMirror', 'auto']]) {
@@ -1418,12 +1540,26 @@ function visibilityEditor() {
     host.appendChild(built.row);
   }
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/hud-elements.js'), 'utf8') + '; this.HudElements = HudElements;', ctx, { filename: absSrc("js/ui/hud-elements.js") });
+  vm.runInContext(EDITOR, ctx, { filename: absSrc("js/ui/hud-layout-editor.js") });
   vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
   ctx.HudLayout.build();
   const choose = (id, value) => { const el = document.getElementById(id); assert.ok(el, id); el.value = value; dom.dispatch(el, { type: 'change', bubbles: true }); };
   return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes, ctx, dom,
     flush() { while (timers.length) timers.shift()(); } };
 }
+
+test("HUD size readout uses the selected element's factory scale and keeps exact numeric input", () => {
+  const e = visibilityEditor(true);
+  e.choose("pm-hl-set-sel", "helmet");
+  e.choose("pm-hl-el-sel", "tower");
+  const size = e.document.getElementById("pm-hl-s"), readout = size.parentNode.children[0].children[1];
+  assert.equal(size.value, "70");
+  assert.equal(readout.textContent, "100% of default");
+  size.value = "35";
+  e.dom.dispatch(size, { type: "change" });
+  assert.equal(readout.textContent, "50% of default");
+  assert.equal(e.H.get("tower", "helmet").s, 35);
+});
 
 test('numeric HUD drafts stay readable and commit once when moving between fields', () => {
   const e = visibilityEditor(), previews = [];
@@ -1632,4 +1768,150 @@ test("BIG, CORNERS and CLEAN are not offered on a touch phone (hud-survey 844x39
   assert.equal(D.H.applyPreset("big", "other"), true, "desktop keeps BIG");
   assert.equal(D.H.applyPreset("corners", "other"), true, "desktop keeps CORNERS");
   assert.equal(D.H.applyPreset("clean", "other"), true, "desktop keeps CLEAN");
+});
+
+test("HUD arrangement drafts preserve sparse ownership, scope, external imports and mirror settings", () => {
+  const {H, written} = load({hudMirror:"off"});
+  H.set("map", {x:13}, "helmet", "broadcast");
+  const original = written.hudLayout;
+  const snapshot = H.arrangeSnapshot("other", "standard");
+  H.holdArrangePreview(true);
+  H.set("mirror", {x:7}, "other", "standard", true);
+  const moved = H.arrangeSnapshot("other", "standard");
+  H.resetSet("other", "standard", true);
+  H.restoreSnapshot("other", "standard", moved);
+  assert.equal(H.get("mirror", "other", "standard").x, 7);
+  assert.equal(written.hudLayout, original);
+  assert.equal(written.hudMirror, "off");
+  H.endArrangeDraft(false, "other", "standard", snapshot);
+  assert.deepEqual(plain(H.arrangeSnapshot("other", "standard")), {});
+  assert.equal(written.hudLayout, original);
+  H.set("mirror", {x:15}, "other", "standard", true);
+  H.endArrangeDraft(true, "other", "standard", snapshot);
+  assert.equal(written.hudMirror, "on");
+  assert.equal(written.hudLayout.standard.other.mirror.x, 15);
+  assert.equal(written.hudLayout.broadcast.helmet.map.x, 13);
+  H.set("mirror", {x:25}, "other", "standard", true);
+  written.hudLayout = original;
+  H.endArrangeDraft(true, "other", "standard", moved);
+  assert.equal(written.hudLayout, original, "a newer settings import wins");
+});
+
+test("clean-room 13: the helmet layout re-applies once body.desktop lands (DOMContentLoaded) and on a pointer-kind flip", () => {
+  // hud-layout applies at eval, before platform-session's syncPointerKind writes
+  // body.desktop; shippedEl reads touch() and setCam skips an unchanged set.
+  const cls = new Set(), dcl = [], kindCbs = [];
+  const { H, els } = load({}, {
+    doc: { readyState: "interactive", body: { classList: { contains: (c) => cls.has(c) }, setAttribute() {} },
+      addEventListener: (t, f) => { if (t === "DOMContentLoaded") dcl.push(f); } },
+    ctx: { setTimeout: (f) => f(), Input: { onPointerKindChange: (cb) => kindCbs.push(cb) } },
+  });
+  H.setCam("helmet");
+  assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "touch values painted at eval");
+  cls.add("desktop");                                     // initInput -> syncPointerKind, before DOMContentLoaded
+  for (const f of dcl) f();
+  assert.equal(els["#hud-gearbox"].props["--hl-x"], "-30", "DOMContentLoaded re-applies the desktop helmet");
+  cls.delete("desktop");                                  // iPad undocked: pointer goes coarse
+  for (const cb of kindCbs) cb(true);
+  assert.notEqual(els["#hud-gearbox"].props["--hl-x"], "-30", "a pointer-kind flip re-applies the touch helmet");
+});
+
+// Bryce 2026-11-20 ("Keep the caps"): the factory PHONE_STANDARD seed sets where the
+// pieces start, but fitHud's screen-fit caps still size them; a piece the player
+// moved or sized owns its geometry. 852x393 helmet, measured: HUD 100 paints every
+// seed rect where it was, HUD 200 caps the top band at 1.11 (the tip: 1.1).
+test("the factory phone seed keeps the screen-fit caps; a player's own placement does not", () => {
+  const { H, els } = load({}, true);
+  H.setCam("chase");
+  const tower = els[".hud-top"];
+  assert.equal(tower.hasAttribute("data-hl-user"), true, "the seed is an explicit placement");
+  assert.equal(tower.hasAttribute("data-hl-seed"), true, "…still the factory entry");
+  H.set("tower", { s: 122 }, "other");
+  assert.equal(tower.hasAttribute("data-hl-seed"), false, "sized by the player: it owns its geometry");
+  H.resetEl("tower", "other");
+  assert.equal(tower.hasAttribute("data-hl-seed"), true, "reset returns it to the seed");
+  const desk = load({}, false);
+  desk.H.set("tower", { s: 80 }, "other");
+  assert.equal(desk.els[".hud-top"].hasAttribute("data-hl-seed"), false, "no seed off a phone, even at the seed's numbers");
+
+  // fitHud's cap passes count a seed piece like an automatic one (layoutRect undoes its offset and size).
+  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const defs = hud.slice(hud.indexOf("const manualHud = "), hud.indexOf("\n", hud.indexOf("const capManual = ")));
+  const capManual = vm.runInNewContext(defs + "; capManual", {}, { filename: absSrc("js/ui/hud.js") });
+  const piece = (...a) => ({ hasAttribute: (k) => a.includes(k) });
+  assert.equal(capManual(piece()), false, "automatic: measured");
+  assert.equal(capManual(piece("data-hl-user", "data-hl-seed")), false, "the factory seed: measured");
+  assert.equal(capManual(piece("data-hl-user")), true, "the player's own placement: left out");
+  const fit = hud.slice(hud.indexOf("function fitHud()"));
+  assert.equal(fit.split("capManual(").length - 1, 8, "the eight cap-measurement sites");
+  // …and paints it at its band's capped zoom: only a non-seed placement takes the raw --hud-scale.
+  const rules = cssRules(CSS);
+  assert.equal(decl(rules, "[data-hl][data-hl-v4]", "--hud-z"), "var(--hl-z-seed, var(--hud-scale)) !important");
+  assert.equal(decl(rules, "[data-hl-seed]", "--hl-z-seed"), "var(--hud-z-top, var(--hud-scale))");
+  assert.equal(decl(rules, "[data-hl-seed][data-hl-bottom]", "--hl-z-seed"), "var(--hud-z-bot, var(--hud-scale))");
+});
+
+test("saved black tower ink has a backing until the player chooses a LAP plate", () => {
+  const sheet = {};
+  const { H } = load({ hudColors: { "tower-text": "#000000", "pos-fill": "#ffffff" } }, {
+    editor: true, doc: { createElement: () => sheet, head: { appendChild() {} } },
+    ctx: { AppearanceOpts: { needsLightHudPlate: () => true } },
+  });
+  const selector = ':root[data-ui-contrast="high"] #hud-lap';
+  assert.equal(decl(cssRules(sheet.textContent), selector, "background-color"), "white");
+  H.colors.save("lap-fill", "#deedde");
+  assert.equal(sheet.textContent.includes(selector + " {"), false);
+  assert.equal(H.colors.value("tower-text"), "#000000");
+});
+
+test("Arrange HUD event colors persist independently and reset one state at a time", () => {
+  const sheet = {};
+  const { H, written } = load({}, { editor: true, doc: { createElement: () => sheet, head: { appendChild() {} } } });
+  const flags = H.colors.options("flag");
+  for (const [index, kind] of ["yellow", "vsc", "sc", "red", "blue"].entries()) {
+    const selector = kind === "blue" ? '#hud-flag[data-flag="blue"]' : "#hud-flag.flag-" + kind;
+    for (const [part, property, color] of [
+      ["fill", "background-color", "#12345" + index],
+      ["text", "color", "#abcde" + index],
+    ]) {
+      const option = flags.find(flag => flag.id === "flag-" + kind + "-" + part);
+      H.colors.save(option.id, color);
+      assert.equal(decl(cssRules(sheet.textContent), selector, property), color + " !important");
+    }
+  }
+  H.colors.save("energy-text", "#112233");
+  H.colors.save("energy-deploy-text", "#ff8800");
+  const energyRules = cssRules(sheet.textContent);
+  assert.equal(decl(energyRules, "#hud-energy .hud-energy-label", "color"), "#112233 !important");
+  assert.equal(decl(energyRules, '#hud-energy[data-ers="deploy"] .hud-energy-label', "color"), "#ff8800 !important");
+  H.colors.save("flag-yellow-fill", "#abcdef");
+  H.colors.save("map-armed", "#123456");
+  const restored = load(written, { editor: true }).H.colors;
+  assert.equal(restored.value("flag-yellow-fill"), "#abcdef");
+  restored.save("flag-yellow-fill", null);
+  assert.equal(restored.value("flag-yellow-fill"), undefined);
+  assert.equal(restored.value("map-armed"), "#123456");
+});
+
+test("HUD panel dimensions and type round-trip independently in their profile and camera", () => {
+  const { H, written, els } = load();
+  const id = "rel";
+  H.set(id, { width: 45, textSize: 150, minHeight: 16 }, "other", "standard");
+  const card = els["#hud-rel"];
+  assert.equal(card.props["--hl-type"], "1.5");
+  assert.equal(card.props["--hl-width"], "calc(45vw / var(--hud-z, 1))");
+  assert.equal(card.props["--hl-height"], "calc(16vh / var(--hud-z, 1))");
+  const recovered = load(written).H;
+  assert.equal(recovered.get(id, "other", "standard").textSize, 150);
+  assert.equal(recovered.get(id, "other", "standard").s, 100);
+  assert.equal(recovered.get(id, "helmet", "standard").width, undefined);
+  assert.equal(recovered.get(id, "other", "broadcast").width, undefined);
+  assert.equal(H.set(id, {width: 10000}).width, 95);
+  assert.equal(H.set(id, {textSize: "broken"}).textSize, 150);
+  H.set("mirror", { width: 50 });
+  assert.equal(H.get("mirror").width, undefined);
+  H.resetEl(id, "other", "standard");
+  assert.equal(card.props["--hl-type"], undefined);
+  assert.equal(card.props["--hl-height"], undefined);
+  assert.equal(card.props["--hl-width"], undefined);
 });

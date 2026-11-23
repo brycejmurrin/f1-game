@@ -159,6 +159,21 @@ test("every lane matches a full rewrite, across a flicker sequence and a source 
   });
 });
 
+test("static lamp generation distinguishes source replacements and length changes from colour changes", () => {
+  const fill = loadFill(), src = makeSet(3, 7), frame = {}, steady = () => [1, 1, 1];
+  fill(frame, src, 1, 1, 1, steady);
+  const buffer = frame.allLights, first = frame.allLightsStaticGen;
+  fill(frame, src, 0.5, 1, 1, steady);
+  assert.equal(frame.allLightsStaticGen, first);
+  const replacement = src.slice(); replacement[6] += 100;
+  fill(frame, replacement, 0.5, 1, 1, steady);
+  assert.equal(frame.allLights, buffer);
+  assert.equal(frame.allLightsStaticGen, first + 1);
+  replacement.length -= 15;
+  fill(frame, replacement, 0.5, 1, 1, steady);
+  assert.equal(frame.allLightsStaticGen, first + 2);
+});
+
 test("the generation counter still moves exactly when consumers need it to", () => {
   // LampChunks memoises on the lights ARRAY IDENTITY and WGX on this counter,
   // so a missed bump means a stale GPU buffer and a spurious one undoes the
@@ -227,11 +242,12 @@ test("the flicker-only re-tint is held for 50 ms of wall clock; a scale or sourc
   same(f7, reference(B, 0.5, 1, 1, other), "a different factor function (flicker settled to steady) is not held");
 });
 
-test("frame.lampSetGen moves with the lamp set and its scale, never with the flicker", () => {
+// The REAL FrameLights over a fake clock, for the tests that drive setFrameLights.
+function loadReal(clock, globals = {}) {
   const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
-  let now = 1000;
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array, Float32Array, WeakRef,
-    performance: { now: () => now }, Number };
+    performance: { now: () => clock.now }, Number };
+  Object.assign(sb, globals);
   sb.window = sb;
   sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
   sb.Tracks = { sample(t, s, o) { return o; } };
@@ -239,12 +255,17 @@ test("frame.lampSetGen moves with the lamp set and its scale, never with the fli
   vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb, { filename: absSrc("js/render/shared/light-budget.js") });
   vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb, { filename: absSrc("js/lighting/knobs.js") });
   vm.runInContext(src, sb);
-  const FL = vm.runInContext("FrameLights", sb), LT = vm.runInContext("LightKnobs.LT", sb);
+  return { FL: vm.runInContext("FrameLights", sb), LT: vm.runInContext("LightKnobs.LT", sb) };
+}
+
+test("frame.lampSetGen moves with the lamp set and its scale, never with the flicker", () => {
+  const clock = { now: 1000 };
+  const { FL, LT } = loadReal(clock);
   LT.lampFlicker = 0.1;
   const A = makeSet(60, 2), B = makeSet(60, 9);
   const track = { _lights: A };
   const frame = { time: 0, perChunkLights: 0.3 };
-  const run = (scale) => { now += 16.7; frame.time += 1 / 60; FL.setFrameLights(frame, track, [], [0, 2, 0], scale, [0, 0, 1], false); return frame.lampSetGen; };
+  const run = (scale) => { clock.now += 16.7; frame.time += 1 / 60; FL.setFrameLights(frame, track, [], [0, 2, 0], scale, [0, 0, 1], false); return frame.lampSetGen; };
   const g0 = run([1, 1, 1]), gens = new Set();
   for (let i = 0; i < 30; i++) assert.equal(run([1, 1, 1]), g0, `frame ${i}: flicker alone moved lampSetGen`);
   for (let i = 0; i < 30; i++) { run([1, 1, 1]); gens.add(frame.allLightsGen); }
@@ -254,6 +275,49 @@ test("frame.lampSetGen moves with the lamp set and its scale, never with the fli
   assert.notEqual(g1, g0, "a scale change moves it");
   track._lights = B;
   assert.notEqual(run([0.8, 0.8, 0.8]), g1, "a new lamp set moves it");
+});
+
+test("hot front discs use two bounded moving slots with solo, painted and emitting traffic", () => {
+  let thermal = true;
+  const { FL, LT } = loadReal({ now: 1000 }, { WheelState: { enabled: () => true, thermalEnabled: () => thermal } });
+  const wheels = [{ x: -0.8, y: 0.34, z: 1.7, front: true }, { x: 0.8, y: 0.34, z: 1.7, front: true },
+    { x: -0.8, y: 0.34, z: -1.6, front: false }];
+  const pose = (_player, m) => { m.fill(0); m[1] = 1; m[4] = -1; m[10] = 1; m[12] = 10; m[13] = 3; m[14] = 4; return m; };
+  const player = { s: 0, brakeTF: 1000, brakeHeat: 0 };
+  const track = { total: 8000, _lights: makeSet(90, 0) };
+  const run = (traffic, emit, enabled = 1, mobile = false) => {
+    LT.tailLightEmit = emit;
+    const frame = { time: 0, brakeSpillEnabled: enabled };
+    FL.setFrameLights(frame, track, traffic, [0, 2, 0], 1, [0, 0, 1], mobile);
+    FL.appendCarTailLights(frame, track, traffic, player, mobile, pose, wheels);
+    return frame;
+  };
+  for (const traffic of [[], [{ s: 10, x: 0 }]]) for (const emit of [0, 1]) {
+    const f = run(traffic, emit);
+    assert.equal(f.brakeSpillCount, 2);
+    assert.equal(f.tailCount, 2 + traffic.length * emit);
+    assert.equal(f.tailStart + f.tailCount, f.lights.length / 15);
+    assert.ok(f.lights.length / 15 <= 48);
+    for (let j = 0; j < 2; j++) {
+      const at = f.lights.length - 30 + j * 15;
+      assert.deepEqual(Array.from(f.lights.slice(at, at + 7)), [9.66, 3 + wheels[j].x, 5.7, 4, 0.76, 0.1, 2.6]);
+      assert.deepEqual(Array.from(f.lights.slice(at + 13, at + 15)), [0, 0]);
+    }
+  }
+  player.brakeTF = 600;
+  const cold = run([], 0);
+  assert.equal(cold.brakeSpillCount, 0);
+  assert.equal(cold.lights.length, run([], 0, 0).lights.length);
+  player.brakeTF = 1000;
+  assert.equal(run([], 0, 1, true).brakeSpillCount, 0);
+  thermal = false;
+  assert.equal(run([], 0).brakeSpillCount, 0);
+  player.brakeHeat = 1;
+  track._lights = [];
+  const solo = run([], 0, 0.25);
+  assert.equal(solo.lights.length, 30);
+  assert.equal(solo.lights[3], 1);
+  assert.equal(solo.tailStart, 0);
 });
 
 // Folded from frame-lights-tail-budget (#1965): the two cases the tests above do
@@ -308,4 +372,42 @@ test("lampCap with traffic never budgets above LightBudget.slots(), phone tier i
   const api = vm.runInContext("FrameLights", ctx);
   assert.equal(api.lampCap(10, false), 16, "TLX-lite: lampCull 40 clamped to the 16 live slots");
   assert.equal(api.lampCap(10, true), 16, "phone tier still clamped by live slots, not MOBILE alone");
+});
+
+// R2-2 (#3104): the two shipped night cases through the REAL setFrameLights.
+// Settled flicker (lampFlicker 0.10, the knob default most night presets
+// inherit) takes an inlined loop — it must equal the flicker formula lane for
+// lane. Steady (lampFlicker 0, warm-up done) must not re-tint at all.
+test("R2-2: settled-flicker tint equals the formula; a steady set is never re-tinted", () => {
+  const clock = { now: 1000 };
+  const { FL, LT } = loadReal(clock);
+  const A = makeSet(200, 2);
+  const track = { _lights: A };
+  const frame = { time: 0, perChunkLights: 1 };
+  const run = (scale, ms) => { clock.now += ms; frame.time += ms / 1000; FL.setFrameLights(frame, track, [], [0, 2, 0], scale, [0, 0, 1], false); return frame; };
+  const hsh = (o) => { const x = Math.sin((o + 13) * 91.17) * 43758.5453; return Math.fround(x - Math.floor(x)); };
+
+  LT.lampFlicker = 0.1;
+  run([1, 0.9, 0.8], 16);
+  for (let i = 0; i < 60 * 10; i++) run([1, 0.9, 0.8], 1000 / 60);   // past the 8 s warm-up
+  const f = run([1, 0.9, 0.8], 60), t = clock.now * 0.001, L = f.allLights;
+  for (let o = 0; o < A.length; o += 15) {
+    const h = hsh(o), flick = 0.1;
+    const k = 1 + flick * (h > 0.90 ? 1 : 0.2) * Math.sin(t * (6 + h * 9) + h * 40)
+            + flick * 0.15 * Math.sin(t * (0.35 + h * 0.5) + h * 20);
+    assert.equal(L[o + 3], A[o + 3] * 1 * k, `lamp ${o / 15} r`);
+    assert.equal(L[o + 4], A[o + 4] * 0.9 * k, `lamp ${o / 15} g`);
+    assert.equal(L[o + 5], A[o + 5] * 0.8 * k, `lamp ${o / 15} b`);
+  }
+
+  LT.lampFlicker = 0;
+  const g0 = run([1, 0.9, 0.8], 60).allLightsGen;
+  assert.equal(L[3], A[3], "flicker off: the steady tint is the plain scale");
+  L[3] = -1;                                   // poison: a re-tint would overwrite it
+  for (let i = 0; i < 20; i++) run([1, 0.9, 0.8], 100);
+  assert.equal(frame.allLightsGen, g0, "steady set: no new generation");
+  assert.equal(L[3], -1, "steady set: no re-tint, however much wall clock passes");
+  run([0.5, 0.9, 0.8], 100);
+  assert.equal(L[3], A[3] * 0.5, "a scale change still re-tints at once");
+  assert.notEqual(frame.allLightsGen, g0);
 });

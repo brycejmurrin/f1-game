@@ -6,7 +6,10 @@
 # (ci-resolve-before.sh diffs against the empty tree), never HEAD~1.
 set -eu
 fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }
-chmod +x tools/ci/ci-resolve-before.sh 2>/dev/null || true
+# No `chmod +x` here: the helper is run through `bash`, and it is committed 100644, so a chmod made it a
+# MODIFIED path in the very diff select-specs reads. Every PR then listed it as a changed infra path
+# (reason=infra on 20 of 20 sampled runs, 2026-11-09), which made the "unmatched" fail-closed branch
+# below unreachable and hid the CSS-only narrowing (docs/notes/TEST-TRUTH-HUNT-2026-11-09.md G2).
 if [ -f tools/ci/ci-resolve-before.sh ]; then
   BEFORE="$(EVENT="${EVENT:-}" PUSH_BEFORE="${PUSH_BEFORE:-}" PR_BASE="${PR_BASE:-}" CALLED="${CALLED:-false}" bash tools/ci/ci-resolve-before.sh)" \
     || fail "could not resolve comparison base"
@@ -42,8 +45,18 @@ if git fetch -q origin +refs/heads/bot/spec-timings:refs/remotes/origin/bot/spec
 else
   echo "timings: bot/spec-timings unavailable; committed record only"
 fi
-node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt \
-  ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} --json > sel.json \
+# Only certify the complete PR diff against the base GitHub merged. A fallback
+# HEAD~1 on a plain branch would certify only the last commit of a series.
+ready_args=()
+if [ "${READY_PR:-false}" = true ] && [ "${EVENT:-}" = pull_request ] && [ "${CALLED:-false}" != true ]; then
+  [ "$(git rev-parse --verify 'HEAD^2' 2>/dev/null)" = "${PR_HEAD:-missing}" ] \
+    && [ "$(git rev-parse --verify 'HEAD^1')" = "$BEFORE" ] \
+    || fail "ready PR checkout does not match the event head and resolved merge base"
+  ready_args=(--ready-pr)
+fi
+node tools/ci/select-specs.mjs --since "$BEFORE" "${ready_args[@]}" --failed-from .selected-failed.txt \
+  ${BUDGET_MIN:+--budget-min "$BUDGET_MIN"} ${OVERFLOW_SHARDS:+--overflow-shards "$OVERFLOW_SHARDS" --stale-first} \
+  ${OVER_BUDGET_SHARDS:+--over-budget-shards "$OVER_BUDGET_SHARDS"} --json > sel.json \
   || fail "selector failed"
 node -e '
   const r = require("./sel.json");
@@ -51,6 +64,8 @@ node -e '
     console.error("SELECTED GATE FAILED CLOSED: changed files matched no selection rule");
     process.exit(1);
   }
+  if (r.reason === "partial")
+    console.log(`::warning::SELECTION PARTIAL: ${r.unmatched.length} changed path(s) match no selection rule (${r.unmatched.slice(0, 6).join(", ")}); the boot floor runs for them`);
   const specs = r.selected.map((s) => s.file).join(" ");
   console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra")
@@ -69,6 +84,9 @@ node -e '
     console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
   for (const s of (r.coveredByManualOptIn || []))
     console.log(`COVERED BY MANUAL OPT-IN (env-gated; not a selected-gate verdict): ${s.file} (${s.tests} tests)`);
+  // Named, never silent (#5241 G3): these left the browser legs; node-plan / pick-unit-slices run their twins.
+  for (const s of (r.coveredByVmTwin || []))
+    console.log(`COVERED BY A VM TWIN (no browser leg; its node slice runs it): ${s.file} (${s.tests} tests) -> ${s.twin}`);
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests, over the whole ${r.secFit} s budget): ${s.file}`);
   for (const s of (r.unreadable || []))
@@ -76,7 +94,7 @@ node -e '
   for (const s of (r.overflow || []))
     console.log(`OVERFLOW (routed; packed into the plan past the budget): ${s.file} (${s.tests} tests)`);
   for (const s of (r.spill || []))
-    console.log(`SPILL (overflow full; runs in a bounded spill job): ${s.file} (${s.tests} tests)`);
+    console.log(s.tail ? `SPILL TAIL (overflow and spill full; its own spill job, never dropped): ${s.file} (${s.tests} tests)` : `SPILL (overflow full; runs in a bounded spill job): ${s.file} (${s.tests} tests)`);
   // Past overflow AND spill: never a quiet skip. An error annotation names it
   // on the PR checks page, and `dropped` below reds selected-verdict.
   for (const s of r.skipped) console.log(`::error::DROPPED (over budget; overflow AND spill are full — NOT RUN ANYWHERE): ${s.file} (${s.tests} tests) — run its group with tools/ci/remote-group.mjs or split the change`);
@@ -97,5 +115,20 @@ node -e '
   console.log(`dropped ${dropped} routed spec(s) this plan cannot run`);
   require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
     `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`
-    + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`);
+    + `browser_exempt=${r.reason === "browser-exempt"}\n`
+    + `dropped=${dropped}\nreason=${r.reason}\ncircuits=${(r.circuits || []).join(",")}\n`
+    + `unrepresented=${(r.runnerUnrepresented || []).join(" ")}\n`);
+  // Groups the runner fan-out could not represent (every spec over budget) are said where a person reads them.
+  if ((r.runnerUnrepresented || []).length && process.env.GITHUB_STEP_SUMMARY) {
+    require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+      `**Not run on this PR:** ${r.runnerUnrepresented.join(", ")} (runner fan-out; every spec in the group is over budget), nightly rota covers them\n`);
+  }
+  // Only an empty, docs-only, or explicitly browser-exempt PR diff can have no plan.
+  // select() puts the boot floor in every other plan; a code diff that still
+  // has no job and dropped nothing (a drop reds the verdict on its own) means
+  // the selection is broken: fail closed.
+  if (!shards.length && !dropped && !["none", "docs", "browser-exempt"].includes(r.reason)) {
+    console.error(`SELECTED GATE FAILED CLOSED: a ${r.reason} diff produced an empty plan (the boot floor is missing)`);
+    process.exit(1);
+  }
 '

@@ -9,7 +9,7 @@
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+import { cssSpecs, CSS_LAYOUT_SPECS, CSS_SMOKE_ONLY, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES, HUD_LAYOUT_MIN_PIECES,
@@ -23,10 +23,12 @@ import { specsAffectedByImpact } from "../../tools/lib/impact-map.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom, unattributedFailuresFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
-import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
+import { MEASURED, capacity, declaredTests, declaredTestsIn, honoursCircuitScope } from "../../tools/ci/select-budget.mjs";
+import { loadDb, TIMINGS_FILE } from "../../tools/ci/spec-timings.mjs";
+import { specTitles, unlistable, fatShardPlan, titleCosts, lptPieces, countSplitPieces, fatShardArgs, listFile, PW_ROOT_DIR } from "../../tools/ci/fat-shard.mjs";
 import fs from "node:fs";
 import os from "node:os";
-import { execFileSync } from "node:child_process";
+import { spawnSync, execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,6 +41,9 @@ const budgetFor = (sec) => (sec + SELECTED_GATE.perTestTimeoutSec - MEASURED.sec
 // pin them there so raising MAX_SPILL_SHARDS (7, PR #3812) keeps them saturated.
 const FIXTURE_SPILL = 4;
 const EMPTY = { specs: {} };
+// N oversize probe specs, each a whole shard's worth of seconds, so shards() gives exactly N legs.
+const probePlan = (n) => ({ oversize: Array.from({ length: n }, (_, i) =>
+  ({ file: `tests/specs/lane-probe-${i}.spec.js`, tests: 2, sec: TARGET_SHARD_SEC })) });
 const at = (files, secPerTest) => ({ specs: Object.fromEntries(files.map((f) => [f,
   { s: [1, 2, 3].map((i) => [`2026-09-2${i}T00:00:00Z`, "llvmpipe", secPerTest * declaredTests(f), declaredTests(f)]) }])) });
 
@@ -161,7 +166,7 @@ test("a FULL overflow spills into bounded spill jobs instead of skipping (PR #12
   const placed = [...over.selected, ...over.overflow, ...over.spill, ...over.oversize, ...over.skipped].map((s) => s.file);
   assert.equal(placed.length, 21, "every spec lands in exactly one bucket");
   assert.equal(new Set(placed).size, 21);
-  assert.equal(MAX_SPILL_SHARDS, 7, "the measured spill allowance stays bounded");
+  assert.equal(MAX_SPILL_SHARDS, 8, "the measured spill allowance stays bounded (7 -> 8, #5368)");
 });
 
 test("full oversize slots carry expensive suites before a smaller hoisted failure (PR #1289)", () => {
@@ -354,7 +359,7 @@ test("overflow is bounded, and every spec lands in exactly one bucket at any all
   assert.ok(wide.overflow.length + wide.selected.length > r.overflow.length + r.selected.length, "the nightly's allowance runs more");
   const all = (x) => x.selected.length + x.skipped.length + x.overflow.length + (x.spill || []).length + x.oversize.length
     + x.overBudgetRun.length + x.unreachable.length + x.overBudgetSpecs.length + x.coveredByFixedGates.length
-    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length;
+    + x.coveredByManualOptIn.length + x.coveredByVmTwin.length + x.unreadable.length + x.outOfScope.length;
   assert.equal(all(r), all(wide), "the same specs, bucketed, at any allowance");
 });
 
@@ -379,9 +384,14 @@ test("the nightly diffs from the deploy branch as it stood a day ago, with a wid
   assert.match(step, /--overflow-shards "\$OVERFLOW_SHARDS" --stale-first/);
   assert.match(step, /--budget-min "\$BUDGET_MIN"/);
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| '' \}\}/);
-  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| '' \}\}/,
-    "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan");
+  // The nightly keeps 60; a DRAFT PR gets 5 (one shard per push, 2026-11-03); ready, dispatch and the train take the default.
+  assert.match(yml, /BUDGET_MIN: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '60' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '5' \|\| '' \}\}/);
+  // The nightly widens to 12; a DRAFT gets no OVERFLOW legs (the first draft push of #4515 fanned out to 24 browser
+  // legs on the default 11, 2026-11-03). This caps the overflow pool only: fit() never drops a routed spec, so the
+  // bounded spill and oversize legs still run (26 legs on that PR's 660-file diff at 0); ready, dispatch and the
+  // train take the default.
+  assert.match(yml, /OVERFLOW_SHARDS: \$\{\{ github\.event_name == 'schedule' && !inputs\.concurrency_key && '12' \|\| \(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && '0' \|\| '' \}\}/,
+    "only the nightly (never a Pages train tick, whose caller event is also schedule) widens the plan; a draft takes no overflow legs");
 });
 
 test("a spec that reserves more than the selected-gate timeout runs in the OVER-BUDGET POOL, never the budget", () => {
@@ -684,18 +694,21 @@ test("select(): a docs-only diff selects nothing and says docs", () => {
   assert.deepEqual(r.selected, []);
 });
 
+test("only the ready PR planner can exempt Node reporting changes from the browser floor", () => {
+  const files = ["tools/ci/ci-watch.mjs", "tests/unit/ci-watch.test.mjs", "docs/TESTING.md"];
+  const exempt = select(null, 10, { files, readyPr: true, failed: ["tests/specs/smoke.spec.js"] });
+  assert.equal(exempt.reason, "browser-exempt");
+  assert.deepEqual(exempt.shards, []);
+  assert.ok(select(null, 10, { files }).shards.length, "train and nightly retain their plan");
+  assert.ok(select(null, 10, { readyPr: true, files: [...files, "js/ui/hud.js"] }).shards.length);
+  assert.ok(select(null, 10, { readyPr: true, files: ["docs/archive/manual-probes/skid-probe.spec.js"] }).shards.length);
+});
+
 test("select(): an edited spec runs first, alone in rank 0", () => {
   const spec = "tests/specs/boot-guard.spec.js";
   const r = selectFor({ [spec]: "// fixture edit\n" });
   assert.deepEqual(r.changedSpecs, [spec]);
   assert.equal(filesOf(r)[0], spec, "the edited spec leads the selection");
-});
-
-test("select(): a css edit selects the small CSS set, not a whole group", () => {
-  const r = selectFor({ "css/menus.css": "/* fixture edit */\n" });
-  assert.equal(r.reason, "matched");
-  const allowed = new Set(cssSpecs(["css/menus.css"]));
-  assert.ok(r.selected.length > 0 && filesOf(r).every((f) => allowed.has(f)), `got ${filesOf(r)}`);
 });
 
 test("select(): editing the selector itself is infra — narrower than the change, and says so", () => {
@@ -956,7 +969,8 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   // Retries come from the plan: 0 on every leg but a quarantined spec's own
   // (R3-CI-HEALTH-4; tests/unit/flaky-quarantine.test.mjs pins that half).
   assert.equal(SELECTED_GATE.retries, 0);
-  assert.match(yml, new RegExp(`--retries=\\$\\{\\{ matrix\\.retries \\|\\| 0 \\}\\} --timeout=${ms} --max-failures=${MAX_FAILURES}`),
+  assert.match(yml, /RETRIES: \$\{\{ matrix\.retries \|\| 0 \}\}/, "the plan's retries reach the step through env");
+  assert.match(yml, new RegExp(`--retries="\\$RETRIES" --timeout=${ms} --max-failures=${MAX_FAILURES}`),
     `ci.yml's selected step does not run --retries=<plan> --timeout=${ms} --max-failures=${MAX_FAILURES}`);
   // The cap is DERIVED per job by shardCapMin and handed over through the
   // matrix; it must clear the budgeted job's worst case, which --max-failures
@@ -974,7 +988,8 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   const selectJob = /\n  select:\n[\s\S]*?\n  selected:\n/.exec(yml)?.[0] || "";
   // The JOB's `if:` (the ship-filter STEP inside it sits out the fast tier on purpose since 2026-10-15).
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
-  assert.ok(selectJob && selectJobIf && !/concurrency_key == ''/.test(selectJobIf),
+  // No `if:` at all (since 2026-11-10, the dead fast_tier_run guard went) runs on every event, the Pages call included.
+  assert.ok(selectJob && !/concurrency_key == ''/.test(selectJobIf),
     "the select job must not skip itself on the Pages call — exact-commit deploys need the change-aware gate too");
 });
 
@@ -1057,7 +1072,8 @@ test("the TRACKED infra list names where the selector tools ACTUALLY live", () =
                    "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs",
                    "tools/ci/pick-unit-slices.mjs", "tools/ci/node-plan.mjs",
                    "tools/ci/geometry-paths.mjs", "tools/ci/twinned-specs.mjs",
-                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh"]) {
+                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh",
+                   "tools/ci/fat-shard.mjs"]) {
     assert.ok(hit(f), `${f} is selection machinery and must be TRACKED`);
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — re-point TRACKED, do not pin a ghost`);
   }
@@ -1126,7 +1142,7 @@ test("partitionMegaSweepArgs peels terrain-over-road out of a packed circuits ar
   const props = "tests/specs/props-over-road.spec.js";
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const shimmer = "tests/specs/material-shimmer.spec.js";
-  const qatar = "tests/specs/qatar-foundation.spec.js";
+  const qatar = "tests/specs/circuit-foundation.spec.js";   // qatar's foundation case lives here (TK2-17)
   assert.equal(isMegaSweepSpec(props), false,
     "props-over-road is under the selected gate; peel must not isolate it");
   assert.equal(isMegaSweepSpec(terrain), false,
@@ -1312,10 +1328,10 @@ test("run-playwright keeps native --shard for megas-only oversize jobs (PR #1110
   assert.deepEqual(soloPart.rest, alone);
   assert.deepEqual(playwrightShard(alone), { index: 1, total: 3 });
   // Packed with a sibling: peel stays the packed-group path (megaShardPlan).
-  const packed = ["--shard=2/4", "tests/specs/qatar-foundation.spec.js", tlx];
+  const packed = ["--shard=2/4", "tests/specs/circuit-foundation.spec.js", tlx];
   const p = partitionMegaSweepArgs(packed);
   assert.deepEqual(p.mega, [tlx]);
-  assert.ok(p.rest.some((a) => a.includes("qatar-foundation")), "sibling stays on the shared shard");
+  assert.ok(p.rest.some((a) => a.includes("circuit-foundation")), "sibling stays on the shared shard");
 });
 
 test("mega solos spread across shards longest-first, each on exactly one shard (T1)", () => {
@@ -1589,7 +1605,7 @@ test("a circuit landmark registry + its foundation spec stay circuit-scoped (PR 
   const files = [
     "js/circuits/scenery/monza.js",
     "tests/data/landmarks/monza.json",
-    "tests/specs/monza-foundation.spec.js",
+    "tests/specs/foundation/monza.js",
     "tools/ci/select-specs.mjs",
     "tests/unit/select-specs.test.mjs",
   ];
@@ -1647,6 +1663,51 @@ test("a circuit's own foundation spec is affected, and other circuits' are not c
   assert.match(src, /ownFoundations\.includes\(f\).*sourceAffected\.includes\(f\).*impactAffected\.includes\(f\)\) \? 2 : 3/,
     "own foundation specs rank as affected (2)");
   assert.match(src, /\.filter\(\(f\) => !otherCircuit\(f\)\)/, "other circuits' foundations leave the candidates");
+});
+
+/* ONE FOUNDATION SPEC (TK2-17, #3039). Thirteen per-circuit foundation specs became
+ * tests/specs/circuit-foundation.spec.js + one case module per circuit
+ * (tests/specs/foundation/<id>.js). The selection must not get worse: a one-circuit
+ * diff still runs only that circuit's cases (APEX_CIRCUITS, billed at its own count),
+ * and anything the routing cannot narrow runs every circuit. */
+test("TK2-17: a circuit's foundation cases route through the registry, scoped to that circuit", () => {
+  const R = "tests/specs/circuit-foundation.spec.js";
+  assert.equal(foundationSpec("monza"), R, "a merged circuit's foundation spec is the registry");
+  assert.equal(foundationSpec("cota"), "tests/specs/cota-foundation.spec.js", "an ADAPTED circuit keeps its own file");
+  assert.ok(!fs.existsSync(path.join(ROOT, foundationSpec("madrid"))), "a circuit with no foundation names a path that is not there");
+  // circuitsTouched: a case module names its circuit; the registry itself is the loop, so not scoped.
+  assert.deepEqual(circuitsTouched(["tests/specs/foundation/spa.js"], null), { ids: ["spa"], scoped: true, dataResolved: [] });
+  assert.equal(circuitsTouched([R], null).scoped, false, "editing the registry edits every circuit's cases");
+  assert.deepEqual(circuitsTouched([R], null).ids, [], "the registry's own name is not a circuit id");
+  assert.equal(circuitsTouched(["tests/helpers/foundation-roster.js"], null).scoped, false);
+  assert.ok(CIRCUIT_FILTERED_TESTS.has(R), "the registry reads APEX_CIRCUITS, so it is a filtered loop");
+  const row = (r) => [...r.selected, ...r.oversize, ...(r.overflow || []), ...(r.spill || []), ...(r.overBudgetRun || [])]
+    .find((x) => x.file === R);
+  const one = (files) => select(undefined, undefined, { files });
+  // A scenery-only edit: the registry runs (affected, rank 2), billed for spa's 5 cases, with APEX_CIRCUITS=spa.
+  const spa = one(["js/circuits/scenery/spa.js"]);
+  assert.deepEqual(spa.circuits, ["spa"]);
+  assert.equal(row(spa)?.rank, 2);
+  assert.equal(row(spa)?.tests, 5, "billed for the cases APEX_CIRCUITS=spa registers, not all 24");
+  assert.ok(spa.shards.filter((s) => s.specs.split(" ").includes(R)).every((s) => s.circuits === "spa"));
+  // An edited case module is an edited spec (rank 0), still scoped to its circuit.
+  const mod = one(["tests/specs/foundation/monza.js"]);
+  assert.deepEqual(mod.changedSpecs, [R]);
+  assert.deepEqual(mod.circuits, ["monza"]);
+  assert.equal(row(mod)?.rank, 0);
+  assert.equal(row(mod)?.tests, 1);
+  // An ADAPTED circuit's diff does not pull the registry in: its own file is VM-covered, as before.
+  const cota = one(["js/circuits/scenery/cota.js"]);
+  assert.equal(row(cota), undefined, "a scoped diff to a circuit the registry lacks drops it (otherCircuit)");
+  assert.ok(cota.coveredByVmTwin.some((x) => x.file === "tests/specs/cota-foundation.spec.js"));
+  // FAIL CLOSED: the registry edited, or a circuit + engine diff, runs EVERY circuit (no APEX_CIRCUITS).
+  const whole = one([R]);
+  assert.deepEqual(whole.circuits, []);
+  assert.equal(row(whole)?.tests, 24, "the loop itself changed: all of it runs");
+  const engine = one(["js/circuits/monza.js", "js/track/tracks.js"]);
+  assert.deepEqual(engine.circuits, [], "not circuit-only: the whole fleet");
+  assert.equal(row(engine)?.rank, 2, "monza's own foundation is still affected");
+  assert.equal(row(engine)?.tests, 24, "…and runs every circuit's cases, more than before, never fewer");
 });
 
 test("a circuit edit routes the specs that RACE that circuit, read from the files (T2)", () => {
@@ -1788,58 +1849,201 @@ test("helper imports and reexports propagate transitively with cycles", () => {
   assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
 });
 
-test("CSS-only changes retain bounded relevant player layout coverage", () => {
+test("CSS-only changes run the layout specs that measure the sheet they touch", () => {
+  const S = (n) => `tests/specs/${n}.spec.js`;
   assert.deepEqual(cssSpecs(["docs/README.md"]), []);
   const menu = cssSpecs(["css/menus.css", "docs/README.md"]);
-  assert.ok(menu.includes("tests/specs/css-player-smoke.spec.js"));
-  assert.ok(menu.includes("tests/specs/menu-baseline.spec.js"));
-  assert.ok(!menu.includes("tests/specs/hud-layout.spec.js"));
+  assert.ok(menu.includes(S("css-player-smoke")));
+  assert.ok(menu.includes(S("menu-baseline")));
   for (const name of ["title", "fonts-hud", "components", "responsive", "dialogs", "dialog-platform", "overlays", "garage-experience"]) {
-    assert.ok(cssSpecs([`css/${name}.css`]).includes("tests/specs/menu-baseline.spec.js"),
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("menu-baseline")),
       `${name} changes the title/selector/garage identity`);
   }
+  // The smoke is one 844x390 default-profile boot that taps controls; it never measures a size or a fit. Until
+  // 2026-11-09 it was the ONLY spec a css/hud.css or css/touch-controls.css diff selected (this test pinned that
+  // with `deepEqual(hud, [smoke])`), so the specs that measure the HUD and the pause sheet at phone shapes ran
+  // for JS diffs only. Each sheet now names the spec that measures it.
   const hud = cssSpecs(["css/hud.css"]);
-  assert.deepEqual(hud, ["tests/specs/css-player-smoke.spec.js"]);
-  assert.ok(!hud.includes("tests/specs/menu-baseline.spec.js"));
+  for (const name of ["hud", "touch-controls", "touch-button-colors"]) {
+    const got = cssSpecs([`css/${name}.css`]);
+    assert.ok(got.includes(S("hud-layout")) && got.includes(S("ui-scale")), `${name}.css runs the HUD layout matrix`);
+  }
+  for (const name of ["dialogs", "overlays", "settings"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("ui-resize")), `${name}.css runs the phone sheet cells (pause, settings)`);
+  }
+  for (const name of ["title", "menus", "menu-destinations"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("title-fit")), `${name}.css runs the title fit matrix`);
+  }
+  for (const name of ["garage-experience", "carsetup"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes(S("garage-aero")), `${name}.css runs the garage phone cells`);
+  }
+  for (const name of ["tokens", "responsive", "components"]) {
+    const got = cssSpecs([`css/${name}.css`]);
+    for (const spec of ["hud-layout", "ui-scale", "ui-resize", "title-fit", "garage-aero"]) {
+      assert.ok(got.includes(S(spec)), `${name}.css feeds every surface, so it runs ${spec}`);
+    }
+  }
+  assert.ok(!hud.includes(S("menu-baseline")));
   // Home/menu layout CSS also runs the two specs that reach mid-season doors
   // (#mb-standings): ship CI 39017766676 went red on them after #2633.
   for (const name of ["menus", "menu-destinations", "overlays", "experience"]) {
     const home = cssSpecs([`css/${name}.css`]);
-    assert.ok(home.includes("tests/specs/season.spec.js"), `${name} moves Home doors season.spec clicks`);
-    assert.ok(home.includes("tests/specs/ui-audit.spec.js"), `${name} moves Home doors ui-audit clicks`);
+    assert.ok(home.includes(S("season")), `${name} moves Home doors season.spec clicks`);
+    assert.ok(home.includes(S("ui-audit")), `${name} moves Home doors ui-audit clicks`);
   }
-  assert.ok(!hud.includes("tests/specs/season.spec.js"));
-  assert.equal(menu.length, 4);
-  assert.equal(hud.length, 1);
-  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"]), cssSpecs(["css/menu-destinations.css"])]) {
+  assert.ok(!hud.includes(S("season")));
+  // Every stylesheet on disk is classified: a layout spec, or the smoke-only list by name. A new sheet that is
+  // in neither fails here instead of silently getting the smoke alone.
+  const sheets = fs.readdirSync(path.join(ROOT, "css")).filter((f) => f.endsWith(".css")).map((f) => `css/${f}`);
+  assert.ok(sheets.length > 20, "css/ was read");
+  for (const f of sheets) {
+    const routed = CSS_LAYOUT_SPECS.some(([re]) => re.test(f));
+    assert.notEqual(routed, CSS_SMOKE_ONLY.test(f), `${f} is in exactly one of CSS_LAYOUT_SPECS / CSS_SMOKE_ONLY`);
+  }
+  for (const [, specs] of CSS_LAYOUT_SPECS) for (const spec of specs) assert.ok(fs.existsSync(path.join(ROOT, spec)), `${spec} exists`);
+  // Nothing routed is dropped: every spec lands on a runnable leg (the layout matrices run in their oversize pools).
+  for (const f of ["css/menus.css", "css/hud.css", "css/tokens.css", "css/menu-destinations.css", "css/dialogs.css"]) {
+    const specs = cssSpecs([f]);
     const plan = fit(specs, DEFAULT_BUDGET_MIN);
-    assert.deepEqual(plan.skipped, [], "bounded CSS coverage fits existing shard pools");
+    assert.deepEqual(plan.skipped, [], `${f}: no routed CSS spec is skipped`);
     assert.deepEqual(plan.overBudgetSpecs, []);
-    assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
+    const legs = new Set(shards(plan).flatMap((j) => j.specs.split(" ")));
+    for (const spec of specs) assert.ok(legs.has(spec), `${f}: ${spec} is on a leg`);
   }
-  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
-  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
-  assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
+  // The whole selector, not its text: a css-only diff reaches CI legs carrying the layout specs, and a css + docs
+  // diff is still css; a css + js diff takes the routed group instead.
+  const legsOf = (files) => new Set(shards(select("HEAD", DEFAULT_BUDGET_MIN, { files })).flatMap((j) => j.specs.split(" ")));
+  const cssOnly = legsOf(["css/hud.css", "docs/README.md"]);
+  assert.ok(cssOnly.has(S("hud-layout")) && cssOnly.has(S("css-player-smoke")), "a css + docs diff runs the HUD layout matrix");
+  assert.ok(!cssOnly.has(S("menu-keyboard")), "…and stays narrower than the routed ui group");
+  assert.ok(legsOf(["css/dialogs.css"]).has(S("ui-resize")), "a pause-sheet css diff runs the phone sheet cells");
+  assert.ok(legsOf(["css/hud.css", "js/ui/hud.js"]).has(S("menu-keyboard")), "a css + js diff takes the whole routed group");
+});
+
+test("the CI select step leaves the tree it diffs untouched (a chmod there made every PR an infra diff)", () => {
+  // The step used to `chmod +x` its helper, which is committed 100644: git then reported the helper as MODIFIED in
+  // the diff select-specs reads, so reason was "infra" on every PR and "unmatched" (the fail-closed branch) could
+  // never fire. Run the real step in a throwaway repo that commits both scripts at their committed modes; the
+  // selector itself is absent there, so the step fails after base resolution, which is all this needs.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "select-step-"));
+  try {
+    const git = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8" }).trim();
+    git("init", "-q"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
+    git("config", "core.fileMode", "true");
+    fs.mkdirSync(path.join(dir, "tools/ci"), { recursive: true });
+    for (const f of ["tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh"]) {
+      fs.copyFileSync(path.join(ROOT, f), path.join(dir, f));
+      const mode = execFileSync("git", ["ls-files", "-s", "--", f], { cwd: ROOT, encoding: "utf8" }).slice(0, 6);
+      assert.match(mode, /^100(644|755)$/, `${f} is tracked`);
+      fs.chmodSync(path.join(dir, f), mode === "100755" ? 0o755 : 0o644);
+    }
+    git("add", "-A"); git("commit", "-q", "-m", "one");
+    fs.writeFileSync(path.join(dir, "x.txt"), "x"); git("add", "-A"); git("commit", "-q", "-m", "two");
+    const before = git("rev-parse", "HEAD~1");
+    let ran = false;
+    try {
+      execFileSync("bash", ["tools/ci/ci-select-specs-step.sh"], { cwd: dir, encoding: "utf8", stdio: "pipe",
+        env: { ...process.env, EVENT: "push", PUSH_BEFORE: before, PR_BASE: "", CALLED: "false", GITHUB_OUTPUT: path.join(dir, "out.txt") } });
+    } catch (e) {
+      ran = /selector failed/.test(String(e.stdout) + String(e.stderr));
+    }
+    assert.ok(ran, "the step got past base resolution to the selector (absent in this fixture)");
+    assert.equal(git("diff", "--name-only", before), "x.txt", "the step's own diff lists only what the commit changed");
+    assert.equal(git("status", "--porcelain", "--untracked-files=no"), "", "no tracked file was modified by the step");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("ready PR selection certifies both parents of the checked-out merge", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ready-select-base-"));
+  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q", "-b", "base"); git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t");
+    fs.mkdirSync(path.join(dir, "tools/ci"), { recursive: true });
+    for (const f of ["ci-select-specs-step.sh", "ci-resolve-before.sh", "ci-pr-base.sh"]) {
+      fs.copyFileSync(path.join(ROOT, "tools/ci", f), path.join(dir, "tools/ci", f));
+    }
+    fs.writeFileSync(path.join(dir, "tools/ci/select-specs.mjs"),
+      'import fs from "node:fs"; fs.writeFileSync("args.json", JSON.stringify(process.argv.slice(2))); process.exit(1);');
+    git("add", "."); git("commit", "-qm", "base");
+    const base = git("rev-parse", "HEAD");
+    git("switch", "-qc", "topic"); git("commit", "-qm", "change", "--allow-empty");
+    const head = git("rev-parse", "HEAD");
+    const argsPath = path.join(dir, "args.json");
+    const run = (prHead) => spawnSync("bash", ["tools/ci/ci-select-specs-step.sh"], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, EVENT: "pull_request", CALLED: "false", READY_PR: "true", PR_HEAD: prHead, PR_BASE: base },
+    });
+    assert.equal(run(head).status, 1);
+    assert.equal(fs.existsSync(argsPath), false, "a plain branch never reaches the selector");
+    git("switch", "-q", "base"); git("merge", "-q", "--no-ff", "-m", "test merge", "topic");
+    assert.equal(run(base).status, 1);
+    assert.equal(fs.existsSync(argsPath), false, "a stale event never reaches the selector");
+    run(head);
+    const args = JSON.parse(fs.readFileSync(argsPath));
+    assert.deepEqual(args.slice(0, 3), ["--since", base, "--ready-pr"]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
   const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(LANES, 28);
   assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
   assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
-  const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
-    "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
-  const base = LANES - 1;
-  const lanes = shards(fit(specs, 1, { db: EMPTY }), EMPTY, new Set(), base).map((j) => j.lane);
-  assert.ok(lanes.length >= 2, `two legs to wrap: ${lanes}`);
-  assert.ok(lanes.includes(base) && lanes.includes(0), `starts at the rotated lane and wraps: ${lanes}`);
-  assert.equal(new Set(lanes).size, lanes.length, "a run's own legs never share a lane");
-  assert.ok(lanes.every((l) => Number.isInteger(l) && l >= 0 && l < LANES), "every lane is in range");
+  // One leg per probe spec: each costs a whole shard, so none pack together.
+  const lanes = shards(probePlan(4), EMPTY, new Set(), LANES - 1).map((j) => [j.name, j.lane]);
+  assert.deepEqual(lanes, [["oversize-lane-probe-0", 27], ["oversize-lane-probe-1", 0],
+    ["oversize-lane-probe-2", 1], ["oversize-lane-probe-3", 2]], "starts at the rotated lane and wraps");
+});
+
+// D-LANES: the lane count comes from APEX_CI_LANES (ci.yml hands it over only on the variable runner); bounds and
+// fallback. ci-runner-variable.test.mjs pins the condition that keeps fork / unset runs at LANES.
+test("lanes: APEX_CI_LANES sets the lane count in [1, MAX_LANES]; anything else is LANES", async () => {
+  const { LANES, MAX_LANES, ciLanes, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(MAX_LANES, 128);
+  assert.equal(ciLanes({}), LANES, "unset: 28");
+  for (const v of ["", " ", "0", "-4", "3.5", "64x", "0x40", "1e2", "129", "999", "NaN"]) assert.equal(ciLanes({ APEX_CI_LANES: v }), LANES, `'${v}' falls back`);
+  assert.equal(ciLanes({ APEX_CI_LANES: "64" }), 64);
+  assert.equal(ciLanes({ APEX_CI_LANES: " 1 " }), 1);
+  assert.equal(ciLanes({ APEX_CI_LANES: "128" }), 128);
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633", APEX_CI_LANES: "64" }), 12633 % 64, "the start rotates over the raised count");
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633", APEX_CI_LANES: "bogus" }), 12633 % LANES);
+  const lanes = shards(probePlan(4), EMPTY, new Set(), 62, false, 64).map((j) => j.lane);
+  assert.deepEqual(lanes, [62, 63, 0, 1], "legs use lanes above 28 and wrap at the raised count");
+  assert.ok(shards(probePlan(4), EMPTY, new Set(), 27).every((j) => j.lane < LANES), "the default count is unchanged");
+});
+
+// #5536: a plan of at most SMALL_RUN_LEGS legs gets NO_LANE, which ci.yml's `selected` job maps to the
+// per-run group (`matrix.lane >= 0` is false), so a one-leg fix never waits behind wide runs in a lane.
+test("lanes: a plan of 1 or 2 legs gets NO_LANE; 3 legs keep lanes; nothing else in a row changes", async () => {
+  const { LANES, NO_LANE, SMALL_RUN_LEGS } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(SMALL_RUN_LEGS, 2);
+  assert.equal(NO_LANE, -1);
+  const lanesOf = (n, base) => shards(probePlan(n), EMPTY, new Set(), base).map((j) => j.lane);
+  assert.deepEqual(lanesOf(1, 5), [-1]);
+  assert.deepEqual(lanesOf(2, 5), [-1, -1]);
+  assert.deepEqual(lanesOf(2, LANES - 1), [-1, -1]);
+  assert.deepEqual(lanesOf(3, 5), [5, 6, 7]);
+  assert.deepEqual(shards({}, EMPTY, new Set(), 5), [], "an empty plan has no legs");
+  // The two-leg rows equal the first two rows of the three-leg plan in every field but `lane`.
+  const withoutLane = (rows) => rows.map(({ lane, ...rest }) => rest);
+  assert.deepEqual(withoutLane(shards(probePlan(2), EMPTY, new Set(), 5)), withoutLane(shards(probePlan(3), EMPTY, new Set(), 5)).slice(0, 2));
+});
+
+// PR #5809: a merge train's legs never queue in the shared PR lanes: every leg of a `train/*` head gets NO_LANE.
+test("lanes: a train/* head gets NO_LANE on every leg; any other head keeps its lanes", async () => {
+  const { trainHead } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "train/20261118-2215" }), true);
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "claude/ci-trains-junit-5802" }), false);
+  assert.equal(trainHead({ GITHUB_HEAD_REF: "x/train/1" }), false);
+  assert.equal(trainHead({}), false, "push, schedule and dispatch runs have no head ref");
+  assert.deepEqual(shards(probePlan(3), EMPTY, new Set(), 5, true).map((j) => j.lane), [-1, -1, -1]);
+  assert.deepEqual(shards(probePlan(3), EMPTY, new Set(), 5, false).map((j) => j.lane), [5, 6, 7]);
 });
 
 test("spec-less js dirs route to a module-specific spec, and a dir with no coverage at all is named (ci-7d C7)", async () => {
   const { specsAffectedBySource, jsCoverageGaps, GENERIC_BOOT_SPECS, nodeTestsNaming } = await import("../../tools/ci/select-specs.mjs");
   assert.deepEqual(specsAffectedBySource(["js/track/build-worker.js"]).sort(),
-    ["tests/specs/monza-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
+    ["tests/specs/circuit-foundation.spec.js", "tests/specs/track-switch-release.spec.js"]);
   assert.deepEqual(specsAffectedBySource(["js/workers/bitmap-decode-worker.js"]), ["tests/specs/garage-livery-fit.spec.js"]);
   assert.ok(nodeTestsNaming("js/workers/bitmap-decode-worker.js").includes("tests/unit/bitmap-decode-worker.test.mjs"));
   // Real routing: none of the six dirs ci-7d named is uncovered today.
@@ -1862,4 +2066,401 @@ test("spec-less js dirs route to a module-specific spec, and a dir with no cover
     assert.deepEqual(jsCoverageGaps([["js", "lonely", "a.js"].join("/")], { root, routeOf: () => ["tests/specs/own.spec.js"] }), [],
       "a module-specific browser spec is coverage");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("performance mjs helpers select their actual browser consumers", () => {
+  for (const [helper, spec] of [
+    ["perf-session", "perf-session-budgets"],
+    ["perf-frametime", "perf-frametime"],
+    ["perf-race-entry", "perf-race-entry"],
+    ["race-cycle-memory", "race-cycle-memory"],
+  ]) {
+    assert.ok(specsImporting([`tests/helpers/${helper}.mjs`]).includes(`tests/specs/${spec}.spec.js`), helper);
+  }
+});
+
+test("mixed-module helper imports propagate through intermediates without selecting unrelated specs", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "select-module-import-"));
+  try {
+    fs.mkdirSync(path.join(dir, "tests/helpers"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "tests/specs"));
+    const files = {
+      [["tests", "helpers", "leaf.mjs"].join("/")]: "export const value = 1;",
+      [["tests", "helpers", "bridge.mjs"].join("/")]: "export * from './leaf.mjs';",
+      [["tests", "helpers", "leaf.cjs"].join("/")]: "module.exports = 1;",
+      [["tests", "helpers", "bridge.cjs"].join("/")]: "module.exports = require('./leaf.cjs');",
+      [["tests", "specs", "esm.spec.js"].join("/")]: "import '../helpers/bridge.mjs';",
+      [["tests", "specs", "cjs.spec.js"].join("/")]: "import '../helpers/bridge.cjs';",
+      [["tests", "specs", "unrelated.spec.js"].join("/")]: "export const value = 2;",
+    };
+    for (const [file, src] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), src);
+    assert.deepEqual(specsImporting([["tests", "helpers", "leaf.mjs"].join("/")], dir), [["tests", "specs", "esm.spec.js"].join("/")]);
+    assert.deepEqual(specsImporting([["tests", "helpers", "leaf.cjs"].join("/")], dir), [["tests", "specs", "cjs.spec.js"].join("/")]);
+    assert.deepEqual(specsImporting([["tests", "helpers", "leaf.mjs"].join("/"), ["tests", "helpers", "leaf.cjs"].join("/")], dir),
+      [["tests", "specs", "cjs.spec.js"].join("/"), ["tests", "specs", "esm.spec.js"].join("/")]);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("files plans a hypothetical change and names rule 3's floor spec only when the diff evidences one", () => {
+  const pinned = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/career/career-ui.js"] });
+  assert.equal(pinned.changed, 1);
+  assert.ok(SOURCE_AFFECTED.some(([re, spec]) => re.test("js/career/career-ui.js") && spec === pinned.floor), pinned.floor);
+  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  assert.equal(routed.floor, null);
+  assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
+});
+
+// ── audit W31 (2026-11-10): when the selector cannot place a change it selects MORE ──
+{
+  const W31 = await import("../../tools/ci/select-specs.mjs");
+  const planned = (r) => [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
+  const sel = (files) => W31.select(undefined, DEFAULT_BUDGET_MIN, { files });
+
+  test("W31 row 1: an infra-only diff runs the boot floor, never an empty plan", () => {
+    for (const files of [["tools/ci/select-specs.mjs"],
+      [".github/workflows/ci.yml", "package-lock.json", "playwright.config.js", "tests/data/flaky-quarantine.json"]]) {
+      const r = sel(files);
+      assert.equal(r.reason, "infra");
+      assert.ok(r.floored, `${files}: the floor is applied`);
+      assert.ok(r.shards.length > 0, `${files}: a job runs`);
+      assert.ok(planned(r).includes("tests/specs/boot-guard.spec.js"), `${files}: boot-guard is planned`);
+    }
+    // logging.spec.js is in test:tiny but TWINNED (ADAPTED, vm-page-a): the floor leaves it out so it forces no node slice.
+    assert.deepEqual(W31.floorSpecs().sort(), ["tests/specs/boot-guard.spec.js", "tests/specs/smoke.spec.js"]);
+  });
+
+  test("W31 row 1: a runner/config diff runs one spec per default-project browser group", () => {
+    const per = W31.perGroupSpecs();
+    assert.ok(per.length >= 10, `only ${per.length} representatives`);
+    const r = sel(["playwright.config.js"]);
+    assert.ok(r.runner);
+    const got = new Set([...planned(r), ...r.coveredByVmTwin.map((x) => x.file)]);
+    for (const f of per) assert.ok(got.has(f), `${f} is planned`);
+    for (const f of ["tools/ci/run-playwright.mjs", "tests/helpers/fixtures.js", "tests/helpers/global-setup.js"]) assert.ok(sel([f]).runner, f);
+  });
+
+  test("W31 row 1: a runner representative never takes over-budget pool room, so it can never displace a routed spec", () => {
+    // #5304's first full-tier run: the single-spec perf/memory groups' only specs declare 600-1200 s per test,
+    // so as representatives they could only sit in the capped over-budget pool, and they pushed out the ROUTED
+    // new-hooks.spec.js (dropped=1, verdict red). Representatives now come only from shardable specs.
+    const plan = W31.perGroupPlan();
+    for (const f of plan.specs) assert.ok(W31.maxDeclaredTimeout(f) < W31.SOLO_OWN_TIMEOUT_SEC * 1000, `${f} is solo-class`);
+    const r = sel(["tests/helpers/fixtures.js", "js/agent/apex.js"]);
+    // capacityFallback rows are ordinary leftovers packed into room left AFTER the pool's own candidates.
+    const pool = new Set([...(r.overBudgetRun || []).filter((x) => !x.capacityFallback), ...r.overBudgetSpecs].map((x) => x.file));
+    assert.deepEqual(plan.specs.filter((f) => pool.has(f)), [], "no representative takes over-budget pool room");
+    assert.deepEqual([...r.overBudgetSpecs, ...r.skipped].map((x) => x.file), [], "nothing routed is dropped");
+    assert.ok(new Set(planned(r)).has("tests/specs/new-hooks.spec.js"), "the routed hooks spec runs");
+    // The groups left without a representative are named, never silently skipped.
+    assert.ok(plan.unrepresented.length > 0 && plan.unrepresented.every((g) => g.startsWith("test:")), String(plan.unrepresented));
+    assert.deepEqual(r.runnerUnrepresented, plan.unrepresented);
+  });
+
+  test("W31 row 1: a diff to a perf spec or its source still routes it; only the runner fan-out changed", () => {
+    for (const [files, spec] of [
+      [["tests/specs/perf-race-entry.spec.js"], "tests/specs/perf-race-entry.spec.js"],
+      [["tests/helpers/perf-race-entry.mjs"], "tests/specs/perf-race-entry.spec.js"],
+      [["sw.js"], "tests/specs/perf-sw-cache-hit.spec.js"],
+    ]) {
+      const r = sel(files);
+      assert.ok(new Set(planned(r)).has(spec), `${files} -> ${spec}`);
+      assert.deepEqual(r.runnerUnrepresented, [], `${files}: not a runner diff`);
+    }
+  });
+
+  test("W31 row 1: an empty plan is a pass only for a docs diff (non-browser code diffs get the floor)", () => {
+    const tools = sel(["tools/check/ratchets.mjs"]);
+    assert.ok(tools.shards.length > 0 && tools.floored, "a tools/ diff with no browser group still runs the floor");
+    const docs = sel(["README.md"]);
+    assert.equal(docs.reason, "docs");
+    assert.equal(docs.shards.length, 0);
+    // The CI step's fail-closed on an empty code plan: selected-gate-verdict.test.mjs runs the step's report.
+  });
+
+  test("W31 row 2: vendor/ and the standalone pages route to real groups; some-unmatched is partial + floor", () => {
+    const all = sel(["vendor/three-0.187.0/three.core.min.js", "overlay.html", "controller.html", "bench.html"]);
+    assert.equal(all.reason, "matched");
+    assert.deepEqual(["test:gfx", "test:modes", "test:input", "test:perf-frametime"].filter((g) => !new Set(all.groups).has(g)), [], `groups: ${all.groups}`);
+    assert.ok(all.shards.length > 0);
+    assert.ok(sel(["cockpit-view.html"]).groups.includes("test:ui"));
+    // A path nothing claims, beside a claimed one: partial, the floor runs, the path is named.
+    const part = sel(["README.md", "nowhere/unclaimed.bin"]);
+    assert.equal(part.reason, "partial");
+    assert.deepEqual(part.unmatched, ["nowhere/unclaimed.bin"]);
+    assert.ok(part.floored && part.shards.length > 0);
+    const mixed = sel(["tools/check/ratchets.mjs", "nowhere/unclaimed.bin"]);
+    assert.equal(mixed.reason, "partial");
+    assert.equal(sel(["nowhere/unclaimed.bin"]).reason, "unmatched", "every path unmatched still fails closed");
+    // Hooks are executable config, not docs: claimed, and the floor runs.
+    const hook = sel([".claude/hooks/bash-guard.sh"]);
+    assert.notEqual(hook.reason, "docs");
+    assert.notEqual(hook.reason, "unmatched");
+    assert.equal(isDocsOnly([".claude/hooks/bash-guard.sh"]), false);
+    assert.equal(isDocsOnly([".claude/settings.json"]), false);
+  });
+
+  test("W31 row 7: every spec pick-tests' extraSpecs names is in select-specs' plan (or a covered bucket)", async () => {
+    const { extraSpecs } = await import("../../tools/ci/pick-tests.mjs");
+    for (const f of ["js/ui/modal.js", "js/ui/dom.js", "js/ui/photo-studio.js", "js/ui/key-binds.js", "css/hud.css", "js/ui/menu-nav.js"]) {
+      const r = sel([f]);
+      const got = new Set([...planned(r), ...[r.coveredByFixedGates, r.coveredByManualOptIn, r.coveredByVmTwin,
+        r.overBudgetSpecs, r.unreachable, r.skipped].flatMap((b) => (b || []).map((x) => x.file))]);
+      for (const x of extraSpecs([f])) assert.ok(got.has(x.spec), `${f}: pick-tests names ${x.spec}, CI never schedules it`);
+    }
+  });
+}
+
+// DURATION-BALANCED FAT PIECES (P8 #4548 row 6). The count shard split each fat
+// spec into equal TEST COUNTS: hud-layout quarters ran 6.1/8.6/11.8/6.3 min at
+// 14 tests each (run 41606130214). tools/ci/fat-shard.mjs LPT-packs the titles
+// by measured seconds and run-playwright.mjs runs each piece as a --test-list.
+const FAT_SPECS = ["career", "career-season", "career-hub", "hud-layout"].map((f) => `tests/specs/${f}.spec.js`);
+const spread = (secs) => Math.max(...secs) / Math.min(...secs);
+const pieceSecsOf = (costs, pieces) => pieces.map((idx) => idx.reduce((t, k) => t + costs[k], 0));
+const fatPieces = (f) => shards(fit([f], 30, { rank: () => 0, db: EMPTY }), EMPTY, new Set())
+  .filter((j) => j.specs === f).length;
+
+test("fat-shard: every fat spec's pieces cover its full title list exactly once, balanced to <= 1.2 by the committed table", () => {
+  const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+  const worstCount = [];
+  for (const f of FAT_SPECS) {
+    const titles = specTitles(f);
+    assert.ok(titles && titles.length, `${f}: the stub lister read its titles`);
+    // declaredTests() may undercount a loop it cannot size (hud-layout: 54 of
+    // the 56 a CI run reports); the lister runs the loops, so never fewer.
+    assert.ok(titles.length >= declaredTests(f), `${f}: ${titles.length} listed titles under the static count ${declaredTests(f)}`);
+    assert.equal(unlistable(titles), null, `${f}: every title round-trips a --test-list line`);
+    const n = fatPieces(f);
+    assert.ok(n >= 2, `${f} runs as pieces`);
+    const plan = fatShardPlan(f, n, db, FAT_UI_SEC_PER_TEST, titles);
+    assert.ok(plan, `${f}: a plan for ${n} pieces`);
+    const union = plan.pieces.flatMap((p) => p.titles);
+    assert.equal(new Set(union).size, union.length, `${f}: no title in two pieces`);
+    assert.deepEqual([...union].sort(), [...titles].sort(), `${f}: the pieces are exactly the spec's titles`);
+    assert.ok(plan.pieces.every((p) => p.titles.length > 0), `${f}: no empty piece`);
+    const secs = plan.pieces.map((p) => p.sec);
+    assert.ok(spread(secs) <= 1.2, `${f}: planned piece seconds ${secs.map(Math.round).join("/")} spread ${spread(secs).toFixed(2)} > 1.2`);
+    worstCount.push(spread(pieceSecsOf(plan.costs, countSplitPieces(titles.length, n))));
+  }
+  // The check discriminates: Playwright's count shard of the same table is over it.
+  assert.ok(Math.max(...worstCount) > 1.2, `count split spreads ${worstCount.map((x) => x.toFixed(2))}: the balance check would not have caught it`);
+});
+
+test("fat-shard: unknown titles are priced at the spec's rate, never dropped", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const db = { specs: { [f]: { t: { "a": [["d", "llvmpipe", 10]], "b": [["d", "llvmpipe", 30]] } } } };
+  assert.deepEqual(titleCosts(f, ["a", "b", "new"], db, 45), [10, 30, 20]);
+  assert.deepEqual(titleCosts(f, ["x", "y"], EMPTY, 45), [45, 45], "no table at all: the fallback rate");
+  // A synthetic 2x skew the count shard keeps and LPT removes.
+  const costs = [60, 60, 60, 60, 20, 20, 20, 20];
+  assert.equal(spread(pieceSecsOf(costs, countSplitPieces(costs.length, 2))), 3);
+  assert.ok(spread(lptPieces(costs, 2).map((p) => p.sec)) <= 1.2);
+});
+
+test("fat-shard: the n rewritten legs select every test exactly once, even one the lister missed", () => {
+  const f = "tests/specs/hud-layout.spec.js";
+  const listed = ["v › one", "v › two", "v › three", "solo", "w › four", "w › five", "w › six"];
+  const real = [...listed, "w › added later"];   // a test the stub could not see
+  const db = { specs: { [f]: { t: Object.fromEntries(listed.map((t, i) => [t, [["d", "llvmpipe", 10 + 7 * i]]])) } } };
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-"));
+  const n = 3;
+  const hits = new Map(real.map((t) => [t, 0]));
+  for (let i = 1; i <= n; i++) {
+    const r = fatShardArgs([f, "--retries=0", `--shard=${i}/${n}`], { db, fallbackSec: 45, outDir, titlesOf: () => listed });
+    assert.ok(!r.args.some((a) => a.startsWith("--shard")), "the count shard is replaced");
+    const flag = r.args.find((a) => a.startsWith("--test-list"));
+    assert.ok(flag && r.args.includes(f) && r.args.includes("--retries=0"), `leg ${i}: ${r.args.join(" ")}`);
+    const [name, file] = flag.split("=");
+    assert.equal(name, i === n ? "--test-list-invert" : "--test-list");
+    const lines = fs.readFileSync(file, "utf8").trim().split("\n");
+    // rootDir-relative (#4812): a repo-relative "tests/specs/…" line matches no test.
+    const head = `specs/hud-layout.spec.js › `;
+    assert.ok(lines.every((l) => l.startsWith(head)), `lines name the rootDir-relative file then the title path: ${lines[0]}`);
+    const named = new Set(lines.map((l) => l.slice(head.length)));
+    for (const t of real) if (named.has(t) !== (name === "--test-list-invert")) hits.set(t, hits.get(t) + 1);
+  }
+  fs.rmSync(outDir, { recursive: true, force: true });
+  assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], "every test runs on exactly one leg");
+  // Left alone: no shard, a non-fat spec, a grep, a list it cannot write.
+  const keep = (args, titlesOf = () => listed) => fatShardArgs(args, { db, fallbackSec: 45, outDir, titlesOf }).args;
+  assert.deepEqual(keep([f]), [f]);
+  assert.deepEqual(keep(["tests/specs/smoke.spec.js", "--shard=1/2"]), ["tests/specs/smoke.spec.js", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--grep=x", "--shard=1/2"]), [f, "--grep=x", "--shard=1/2"]);
+  assert.deepEqual(keep([f, "--shard=1/2"], () => null), [f, "--shard=1/2"], "unlistable spec: Playwright's count shard");
+  assert.deepEqual(keep([f, "--shard=1/2"], () => ["a", "a › b"]), [f, "--shard=1/2"], "a prefix title could claim two tests");
+  // The Playwright the lists are written for still reads them.
+  const program = path.join(ROOT, "node_modules/playwright/lib/program.js");
+  if (fs.existsSync(program)) {
+    const src = fs.readFileSync(program, "utf8");
+    assert.match(src, /--test-list <file>/);
+    assert.match(src, /--test-list-invert <file>/);
+  }
+});
+
+// #4812: the plan above was balanced, yet hud-layout piece 4/4 ran all 56 tests
+// (26-40 min) while 1..3 ran none: the list lines named "tests/specs/…" and
+// Playwright matches them against rootDir-relative paths. Only REAL Playwright
+// can say what a list selects, so this lists each leg with it (no browser:
+// --list loads the config and the spec, ~1 s a call).
+const PW_CLI = path.join(ROOT, "node_modules/@playwright/test/cli.js");
+const pwList = (args) => new Promise((resolve, reject) => {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const kid = spawn(process.execPath, [PW_CLI, "test", ...args, "--list", "--reporter=json"], { cwd: ROOT, env });
+  let out = "", err = "";
+  kid.stdout.on("data", (d) => { out += d; });
+  kid.stderr.on("data", (d) => { err += d; });
+  kid.on("error", reject);
+  kid.on("close", () => {
+    try {
+      const j = JSON.parse(out);
+      const ids = [];
+      const walk = (s, at) => {
+        for (const x of s.suites || []) walk(x, [...at, x.title]);
+        for (const sp of s.specs || []) for (const t of sp.tests || [{}]) ids.push([t.projectName, ...at, sp.title].join(" › "));
+      };
+      for (const s of j.suites || []) walk(s, [s.title]);
+      resolve({ rootDir: j.config.rootDir, ids });
+    } catch (e) { reject(new Error(`playwright --list ${args.join(" ")}: ${e.message}\n${err.slice(-800)}`)); }
+  });
+});
+
+test("#4812 fat-shard: real Playwright runs every fat-spec test on exactly one leg, piece n within 1.5x its share", { skip: !fs.existsSync(PW_CLI) && "no @playwright/test" }, async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "fat-shard-pw-"));
+  try {
+    const db = loadDb(path.join(ROOT, TIMINGS_FILE));
+    await Promise.all(FAT_SPECS.map(async (f) => {
+      const n = fatPieces(f);
+      const all = await pwList([f]);
+      assert.equal(path.relative(ROOT, all.rootDir), PW_ROOT_DIR, "Playwright's rootDir is the one list lines are written against");
+      assert.equal(listFile(f), path.relative(all.rootDir, path.join(ROOT, f)).split(path.sep).join("/"));
+      const legs = await Promise.all(Array.from({ length: n }, (_, k) => {
+        const r = fatShardArgs([f, `--shard=${k + 1}/${n}`], { db, fallbackSec: FAT_UI_SEC_PER_TEST, outDir });
+        assert.ok(r.args.some((a) => a.startsWith("--test-list")), `${f} leg ${k + 1}: ${r.note}`);
+        return pwList(r.args);
+      }));
+      const hits = new Map(all.ids.map((id) => [id, 0]));
+      for (const leg of legs) for (const id of leg.ids) hits.set(id, (hits.get(id) ?? 0) + 1);
+      assert.deepEqual([...hits].filter(([, k]) => k !== 1), [], `${f}: every test on exactly one leg`);
+      const sizes = legs.map((l) => l.ids.length);
+      const share = all.ids.length / n;
+      assert.ok(sizes.every((m) => m > 0), `${f}: no empty leg (${sizes.join("/")})`);
+      assert.ok(sizes[n - 1] <= 1.5 * share, `${f}: piece ${n}/${n} lists ${sizes[n - 1]} of ${all.ids.length} tests (share ${share.toFixed(1)}; legs ${sizes.join("/")})`);
+    }));
+  } finally {
+    fs.rmSync(outDir, { recursive: true, force: true });
+  }
+});
+
+test("W31 row 12: a renderer, loop or vendor edit runs the unpinned shipped-defaults spec", async () => {
+  const { select: sel } = await import("../../tools/ci/select-specs.mjs");
+  const { GAME_REL } = await import("../helpers/game-source.mjs");
+  for (const f of ["js/render/three/tlx.js", GAME_REL, "vendor/three-0.187.0/three.core.min.js"]) {
+    const r = sel(undefined, DEFAULT_BUDGET_MIN, { files: [f] });
+    const got = [r.selected, r.oversize, r.overflow, r.spill, r.overBudgetRun].flatMap((b) => (b || []).map((x) => x.file));
+    assert.equal(got.filter((x) => x === "tests/specs/shipped-defaults.spec.js").length, 1, `${f}: ${got.length} planned`);
+  }
+});
+
+// A CIRCUIT-SCOPED PLAN NEVER CARRIES A ZERO-TEST LEG (#6036). props-over-road is one test per circuit, filtered by
+// APEX_CIRCUITS, but the count billed it for all 52: a Spa-only diff split it into --shard=1/2 + 2/2 of a 1-test
+// run, and the empty 2/2 failed the selected verdict as "ran zero tests" (run 44833050900). The roster now counts
+// the scoped circuits a spec's own loop holds; a spec whose loop holds none (tracks-walls-a for a circuit in b's
+// half) goes to outOfScope instead of a leg.
+test("a roster spec that honours APEX_CIRCUITS is billed for the scoped circuits it holds", () => {
+  const por = "tests/specs/props-over-road.spec.js", tr = "tests/specs/terrain-over-road.spec.js";
+  assert.equal(honoursCircuitScope(por), true);
+  assert.equal(declaredTestsIn(por, ["spa"]), 1);
+  assert.equal(declaredTestsIn(por, ["spa", "monza"]), 2);
+  assert.ok(declaredTests(por) > 40, "unscoped it is still the whole roster");
+  const halves = ["a", "b"].map((h) => declaredTestsIn(`tests/specs/tracks-walls-${h}.spec.js`, ["spa"]));
+  assert.deepEqual(halves.slice().sort(), [0, 1], `spa sits in exactly one tracks-walls half: ${halves}`);
+  assert.equal(honoursCircuitScope(tr), false, "terrain-over-road's audit roster ignores APEX_CIRCUITS");
+  assert.equal(declaredTestsIn(tr, ["spa"]), declaredTests(tr), "so it keeps the whole-roster count");
+});
+// The oracle is NOT the counter: each roster spec's real scoped count, read from js/circuits the way its loop reads it.
+const ROSTER = fs.readdirSync(path.join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
+const half = (i) => { const n = Math.ceil(ROSTER.length / 2); return ROSTER.slice(i * n, (i + 1) * n); };
+const REAL_SCOPED = {
+  "tests/specs/props-over-road.spec.js": (ids) => ROSTER.filter((id) => ids.includes(id)).length,
+  "tests/specs/tracks-walls-a.spec.js": (ids) => half(0).filter((id) => ids.includes(id)).length,
+  "tests/specs/tracks-walls-b.spec.js": (ids) => half(1).filter((id) => ids.includes(id)).length,
+};
+for (const file of ["js/circuits/spa.js", "js/circuits/scenery/spa.js", "js/circuits/bahrain.js"]) {
+  test(`a ${file}-only diff plans no leg that runs zero tests`, () => {
+    for (const budget of [5, DEFAULT_BUDGET_MIN]) {
+      const r = select(undefined, budget, { files: [file], overflowShards: 0 });
+      assert.equal(r.circuits.length, 1, `scoped to one circuit: ${r.circuits}`);
+      for (const j of shards(r)) {
+        const specs = j.specs.split(" ");
+        const real = specs.reduce((n, f) => n + (REAL_SCOPED[f] ? REAL_SCOPED[f](r.circuits) : declaredTests(f) ?? 1), 0);
+        const pieces = j.shard ? Number(j.shard.split("/")[1]) : 1;
+        assert.ok(real >= pieces, `${j.name} (${j.specs} ${j.shard}) runs ${real} test(s) across ${pieces} piece(s)`);
+      }
+      for (const x of r.outOfScope) assert.equal(REAL_SCOPED[x.file](r.circuits), 0, `${x.file} is out of scope`);
+    }
+  });
+}
+
+// THE NO-DROP TAIL (2026-11-21): a wide PR's ready plan dropped routed specs with overflow and spill full
+// (#5978, #5296, #5617), and each drop cost a hand-dispatched browser-group run plus a draft->ready flip.
+test("noDrop: a synthetic wide diff that drops N routed specs under the bounded caps now schedules them all", () => {
+  const all = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js"))
+    .map((f) => "tests/specs/" + f);
+  // Every spec measured at 300 s: far more work than overflow + spill + the over-budget pool can afford.
+  const row = (n) => ({ s: [1, 2, 3].map((i) => [`2026-11-1${i}T00:00:00Z`, "llvmpipe", 300, n]) });
+  const db = { specs: Object.fromEntries(all.map((f) => [f, row(declaredTests(f) || 1)])) };
+  const opts = { db, rank: () => 3 };
+  const bounded = fit(all, DEFAULT_BUDGET_MIN, opts);
+  const dropped = (r) => [...r.skipped, ...r.overBudgetSpecs].map((s) => s.file).sort();
+  const lost = dropped(bounded);
+  assert.ok(lost.length > 5, `fixture: the bounded plan drops several routed specs (${lost.length})`);
+  const tail = fit(all, DEFAULT_BUDGET_MIN, { ...opts, noDrop: true });
+  assert.deepEqual(dropped(tail), [], "nothing routed is dropped");
+  const tailed = [...tail.spill, ...tail.overBudgetRun].filter((s) => s.tail).map((s) => s.file).sort();
+  assert.deepEqual(tailed, lost, "exactly the specs the caps dropped ride the tail");
+  // Everything the bounded plan scheduled is scheduled the same way: the tail only adds.
+  for (const k of ["selected", "overflow", "oversize", "unreachable", "unreadable"])
+    assert.deepEqual(tail[k].map((s) => s.file), bounded[k].map((s) => s.file), `${k} unchanged`);
+  assert.deepEqual(tail.spill.filter((s) => !s.tail).map((s) => s.file), bounded.spill.map((s) => s.file));
+  assert.deepEqual(tail.overBudgetRun.filter((s) => !s.tail).map((s) => s.file), bounded.overBudgetRun.map((s) => s.file));
+  // And shards() gives every tail spec a leg.
+  const planned = new Set(shards(tail, db).flatMap((j) => j.specs.split(" ")));
+  for (const f of lost) assert.ok(planned.has(f), `${f} has a matrix leg`);
+  // A tail over-budget spec keeps its declared per-test figure (its job's kill timer derives from it).
+  for (const s of tail.overBudgetRun.filter((x) => x.tail)) assert.ok(s.ownTimeoutSec > 0, `${s.file} keeps ownTimeoutSec`);
+});
+
+test("noDrop: select() turns it on for every plan but the draft's --overflow-shards 0", () => {
+  const files = ["tests/helpers/fixtures.js"]; // the whole-suite route
+  const dropped = (r) => r.skipped.length + r.overBudgetSpecs.length;
+  // Starve the pools so the bounded cut drops on the committed timings, whatever they say.
+  const tight = { files, overflowShards: 1, overBudgetShards: 0 };
+  const off = select(undefined, DEFAULT_BUDGET_MIN, { ...tight, noDrop: false });
+  assert.ok(dropped(off) > 0, `fixture: the starved bounded plan drops (${dropped(off)})`);
+  const on = select(undefined, DEFAULT_BUDGET_MIN, tight);
+  assert.equal(dropped(on), 0, "the default ready/nightly plan drops nothing");
+  // The draft plan (overflow 0) keeps the bounded cut: its drop only warns, by design.
+  const draft = select(undefined, 5, { files, overflowShards: 0 });
+  const draftBounded = select(undefined, 5, { files, overflowShards: 0, noDrop: false });
+  assert.deepEqual(draft.shards, draftBounded.shards, "the draft plan is unchanged");
+  assert.deepEqual(draft.skipped, draftBounded.skipped);
+  // A small PR's plan has nothing to drain: identical with or without the tail.
+  for (const f of ["js/ui/hud.js", "js/core/log.js"]) {
+    const a = select(undefined, DEFAULT_BUDGET_MIN, { files: [f] });
+    const b = select(undefined, DEFAULT_BUDGET_MIN, { files: [f], noDrop: false });
+    assert.deepEqual(a.shards, b.shards, `${f}: the plan is unchanged`);
+  }
+});
+
+test("noDrop: the plan is deterministic for a given input (same head, base, timings and failed list)", () => {
+  // #5986's second ready run dropped a different set; with no drops the set cannot drift, and for a fixed input the
+  // plan itself must not drift either (what can still differ between runs is the INPUT: the bot/spec-timings
+  // overlay and the .selected-failed.txt cache).
+  const files = ["tests/helpers/fixtures.js"];
+  const a = select(undefined, DEFAULT_BUDGET_MIN, { files });
+  const b = select(undefined, DEFAULT_BUDGET_MIN, { files });
+  assert.deepEqual(a.shards, b.shards, "identical matrix");
+  assert.deepEqual([a.skipped, a.overBudgetSpecs], [[], []], "and a whole-suite route drops nothing");
 });

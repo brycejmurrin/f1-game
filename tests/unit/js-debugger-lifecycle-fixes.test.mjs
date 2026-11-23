@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import vm from "node:vm";
-import { readFileSync, rmSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { readOutputArtifact } from "../../tools/agent/output.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 
@@ -190,4 +191,20 @@ test("large operation values and exceptions remain retrievable after newer runs 
     await session.detach();
     for (const artifact of artifacts) rmSync(artifact, { force: true });
   }
+});
+
+test("attach does not warn about a registered debugger whose pid is a zombie (#4481)", { skip: !existsSync("/proc/self/stat") && "needs /proc" }, async () => {
+  // A python parent forks a child that exits at once and never wait()s: the child stays a zombie, which kill(pid, 0) still reports alive.
+  const parent = spawn("python3", ["-I", "-c", "import os,sys,time\npid=os.fork()\nif pid==0: os._exit(0)\nprint(pid,flush=True)\ntime.sleep(30)"], { stdio: ["ignore", "pipe", "ignore"] });
+  try {
+    const zpid = Number(await new Promise(res => parent.stdout.once("data", d => res(String(d).trim()))));
+    await new Promise(r => setTimeout(r, 200));
+    assert.equal(readFileSync(`/proc/${zpid}/stat`, "utf8").split(") ").pop()[0], "Z");
+    const c = new FakeCdp();
+    c.send = async function (method, params) { this.calls.push({ method, params }); return method === "Runtime.evaluate" && params.expression.includes("__apexDbgClients") ? { result: { value: [{ gen: "z", pid: zpid }] } } : {}; };
+    const s = new DebugSession({ discover: async () => [{ type: "page", id: "t", url: "about:blank", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }], open: async () => c });
+    const st = await s.attach("http://127.0.0.1:9222", "t");
+    assert.equal(st.warning, undefined);
+    await s.detach();
+  } finally { parent.kill("SIGKILL"); }
 });

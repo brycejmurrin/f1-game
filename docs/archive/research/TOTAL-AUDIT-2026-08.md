@@ -164,7 +164,7 @@ Mapped to the waves in docs/archive/research/AUDIT-SYNTHESIS-2026-08.md § RESTR
 4. js/car/car3d.js:2566 — helmet + tally light share the body FINISH remap; whether a chrome car should have a chrome helmet is an art decision, not drift. Amend the two comments if the answer is "intended".
 5. js/data/live.js:201 — dead timeDiff gap-bar; the real fix is fetching OpenF1 /intervals (feature work) vs deleting a wanted feature.
 6. js/data/api.js:69 — localStorage cache has no eviction; a sweep-on-quota is small feature work, not a one-liner.
-7. js/circuits/hungaroring.js:54 — unused api destructures across 12 circuit files; mechanical but 12-file churn needing a convention decision (void-list vs trim). Fold into the docs/ARCHITECTURE-REVIEW.md backlog beside recorded item #23.
+7. js/circuits/hungaroring.js:54 — unused api destructures across 12 circuit files; mechanical but 12-file churn needing a convention decision (void-list vs trim). Fold into the docs/notes/ARCHITECTURE-REVIEW.md backlog beside recorded item #23.
 8. tools/float-audit.cjs:48 — inline VM copy drifted from track-build-vm.cjs; **already recorded as outstanding in track-build-vm.cjs:3-6's own header** — consolidation is a refactor, do it when float-audit is next touched (its :614 --clip deletion in Batch C shrinks the surface first).
 9. spike/capture-m8.mjs:44 — 4-site static-server duplication; spike/ is concluded provenance, and the one divergence that mattered (the :50 traversal guard) is fixed in Batch C. Extract a shared server only if the spikes are ever rerun in anger.
 
@@ -354,10 +354,10 @@ Mapped to the waves in docs/archive/research/AUDIT-SYNTHESIS-2026-08.md § RESTR
 | low | drift | `docs/ARCHITECTURE.md:488` | The parts.js row points readers at a CLAUDE.md "Parts system" section that no longer exists. |
 | low | contradiction | `docs/ARCHITECTURE.md:113` | ARCHITECTURE.md sizes the garage-live-preview extraction candidate at ~303 lines while ARCHITECTURE-REVIEW.md says ~415 lines for the same block, both as 2026-08 measurements. |
 | low | contradiction | `docs/README.md:62` | The research index says "The thirteen that survive here" but its own table lists 14 docs and docs/research/ holds 14 .md files. |
-| low | contradiction | `docs/LAYOUT-AUDIT.md:84` | The doc says "the app has 21 screen roots" but its own top-level table lists 22 screens and the executable SCREENS inventory it defers to holds 24 distinct roots (38 cells). |
+| low | contradiction | `docs/COMPONENTS.md:84` | The doc says "the app has 21 screen roots" but its own top-level table lists 22 screens and the executable SCREENS inventory it defers to holds 24 distinct roots (38 cells). |
 | low | drift | `docs/SCENERY-API.md:21` | The doc says the shared city-dressing system "is summarised in the City & scenery dressing section of CLAUDE.md", but CLAUDE.md has no such section. |
-| low | drift | `docs/SCENERY-GROUNDING.md:318` | The doc says "canopyR(kind, h) in js/track/tracks.js is the single source of truth", but canopyR is defined in js/track/scenery-nature.js. |
-| low | drift | `docs/AGENT-WORLD-API.md:676` | §5k cites "`prog` accumulates from `c._prevS` (`js/game.js:2705`)" but that line is now photomode G-façade accessor code. |
+| low | drift | `docs/SCENERY-API.md:318` | The doc says "canopyR(kind, h) in js/track/tracks.js is the single source of truth", but canopyR is defined in js/track/scenery-nature.js. |
+| low | drift | `docs/DEBUG-HOOKS.md:676` | §5k cites "`prog` accumulates from `c._prevS` (`js/game.js:2705`)" but that line is now photomode G-façade accessor code. |
 | high | drift | `docs/research/ENGINEERING-PRACTICE-NOTES.md:236` | Part 4 presents the store.js silent-swallow data-loss gap as current and unfixed, but js/game/store.js now logs and records every failed localStorage read/write. |
 | high | drift | `.claude/skills/tune-physics/SKILL.md:17` | The tuning table teaches pre-Phase-C values as the shipped defaults — WHEELBASE 3.2 m (:17), STEER_SPEED_REF 60 m/s (:20), PACE 1.0 (:27) — but the steer store overwrites all three |
 | low | contradiction | `docs/README.md:93` | The archive section claims the twelve archive/research investigations are referenced by 'no live doc or source file' (and :86-87 'no live doc depends on it'), but two live research |

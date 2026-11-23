@@ -42,8 +42,8 @@ function run(args, extraEnv = {}) {
 
 test("mcp-smoke --dry-run pokes the two attached shell wrappers and never launches Chromium", () => {
   // The checkout also registers js-debugger; its separate native smoke owns
-  // debugger validation. This legacy smoke pokes the apex and Chrome shells; probe / playwright / tinyfish
-  // wrappers may stay in the plan as CLI probes but are not MCP-attached.
+  // debugger validation. This legacy smoke pokes the apex and Chrome shells; the probe / playwright
+  // wrappers may stay in the plan as CLI probes but are not MCP-attached (tinyfish left the tree 2026-11-03).
   const r = run(["--dry-run"]);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const body = JSON.parse(r.stdout);
@@ -77,11 +77,7 @@ test("smokePlan chrome (and any CLI-only wrapper it still pokes) stays status/he
     assert.ok(pw.argv.includes("status"));
     assert.ok(!pw.argv.includes("run"));
   }
-  const fish = plan.find((s) => s.server === "tinyfish");
-  if (fish) {
-    assert.ok(fish.argv.includes("help"));
-    assert.ok(!fish.argv.includes("ensure"));
-  }
+  assert.equal(plan.find((s) => s.server === "tinyfish"), undefined, "the tinyfish proxy left the tree 2026-11-03");
 });
 
 test("apex-tools-mcp.sh smoke --dry-run delegates", () => {
@@ -104,37 +100,23 @@ test("help names the never-wrap and the write path", () => {
   assert.match(r.stdout, /playwright status only/);
 });
 
-test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
+test("cloud-agent-install clones chrome-devtools and embeds no key", () => {
   const src = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
-  assert.match(src, /TINYFISH_API_KEY/);
-  assert.match(src, /https:\/\/agent\.tinyfish\.ai\/home/);
   assert.match(src, /chrome-devtools-mcp\.sh" clone/);
-  assert.match(src, /tinyfish-mcp\.sh" setup/);
   assert.match(src, /ensure_mcp_clones/);
-  assert.match(src, /APEX_SKIP_TINYFISH_SETUP/);
   assert.ok(!src.includes("sk-" + "tinyfish-"));
   assert.ok(!src.includes("BAKED" + "_KEY"));
 });
 
-test("mcp-smoke names the TinyFish home URL when the key is missing and never reports a fallback", () => {
-  assert.match(fs.readFileSync(SMOKE, "utf8"), /https:\/\/agent\.tinyfish\.ai\/home/);
-  const r = run(["--dry-run"], { TINYFISH_API_KEY: "" });
-  assert.equal(r.status, 0, r.stderr + r.stdout);
-  const body = JSON.parse(r.stdout);
-  // With no key in the shell the only legitimate source is the gitignored
-  // .env file — a "fallback" verdict would mean a tracked key came back.
-  assert.notEqual(body.tinyfishKey.via, "fallback");
-  assert.ok(["env-file", "missing"].includes(body.tinyfishKey.via), body.tinyfishKey.via);
-  if (!body.tinyfishKey.present) {
-    assert.equal(body.tinyfishKey.url, "https://agent.tinyfish.ai/home");
-    assert.match(body.warnings.join("\n"), /https:\/\/agent\.tinyfish\.ai\/home/);
-  }
-});
-
-test("tracked source never embeds a TinyFish key", () => {
+test("mcp-smoke reads no TinyFish key and reports none (the proxy left 2026-11-03)", () => {
   const src = fs.readFileSync(SMOKE, "utf8");
   assert.ok(!src.includes("sk-" + "tinyfish-"));
-  assert.match(src, /TINYFISH_API_KEY/);
+  assert.doesNotMatch(src, /TINYFISH_API_KEY|tinyfish-mcp/);
+  const r = run(["--dry-run"]);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const body = JSON.parse(r.stdout);
+  assert.equal(body.tinyfishKey, undefined);
+  assert.doesNotMatch(body.warnings.join("\n"), /tinyfish/i);
 });
 
 test("smoke --real: tree tools only, judged on ok + a result, exit 0 in mock mode", async () => {
@@ -176,15 +158,15 @@ test("smoke --real --browser adds the browser checks, opt-in, and judges them th
   assert.match(on.stdout, /mcp-smoke --real ok: 3\/3 tools \(tree \+ browser\)/);
 });
 
-test("real smoke supplies fresh-checkout inputs for locations and profile query, then removes its synthetic fixture", () => {
+test("real smoke runs a built-in tree tool for real with its fresh-checkout args and leaves no fixture behind", () => {
   const fixtures = () => fs.existsSync(path.join(ROOT, "scratch")) ? fs.readdirSync(path.join(ROOT, "scratch")).filter(n => n.startsWith("mcp-smoke-")) : [];
   const before = fixtures();
-  const r = run(["--real", "--no-write", "--only=apex_locations,apex_profile_query"], { APEX_MCP_MOCK: "" });
+  const r = run(["--real", "--no-write", "--only=apex_help,apex_catalog"], { APEX_MCP_MOCK: "" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  assert.match(r.stdout, /PASS apex_locations/);
-  assert.match(r.stdout, /PASS apex_profile_query/);
+  assert.match(r.stdout, /PASS apex_help/);
+  assert.match(r.stdout, /PASS apex_catalog/);
   assert.match(r.stdout, /mcp-smoke --real ok: 2\/2/);
-  assert.deepEqual(fixtures(), before, "synthetic profiles must not survive the check");
+  assert.deepEqual(fixtures(), before, "no synthetic fixture survives the check (2026-11-03: none is written any more)");
 });
 
 test("misspelled, empty, unsupported and mixed selections fail before running any tool", () => {
@@ -204,4 +186,79 @@ test("invalid smoke timeouts are errors instead of silently restoring defaults",
     assert.match(r.stderr, /--timeout must be an integer/);
     assert.equal(r.stdout, "");
   }
+});
+
+// W25 (2026-11-10): report.ok was report.apexTools, so a broken lsp, js-debugger or gateway was recorded and ignored,
+// and no .mcp.json launch line was ever started. Now every step counts and every launch line does initialize + tools/list.
+test("the launch plan is .mcp.json exactly: every server, its command and args verbatim", async () => {
+  const { launchPlan, NPM_BACKED } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers;
+  const plan = launchPlan();
+  assert.deepEqual(plan.map((s) => s.server), Object.keys(cfg));
+  for (const s of plan) {
+    assert.equal(s.command, cfg[s.server].command, s.server);
+    assert.deepEqual(s.args, cfg[s.server].args, s.server);
+    assert.equal(s.backend, NPM_BACKED[s.server] ? "npm-package" : "in-repo");
+  }
+  const dry = JSON.parse(run(["--dry-run"]).stdout);
+  assert.deepEqual(dry.launchPlan.map((s) => s.server), Object.keys(cfg), "the dry run shows every launch line");
+  assert.equal(dry.launch, undefined, "a dry run launches nothing");
+});
+
+test("judgeSmoke fails on ANY failed step, not only apex-tools", async () => {
+  const { judgeSmoke } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const okStep = { server: "apex-tools", status: 0 };
+  const okLaunch = { server: "apex-lsp", pass: true, backend: "in-repo" };
+  assert.equal(judgeSmoke({ steps: [okStep], launch: [okLaunch], apexTools: true }).ok, true);
+  const lsp = judgeSmoke({ steps: [okStep, { server: "apex-lsp", status: 1 }], launch: [okLaunch], apexTools: true });
+  assert.equal(lsp.ok, false);
+  assert.deepEqual(lsp.failures, ["apex-lsp: exit 1"]);
+  const gw = judgeSmoke({ steps: [okStep], launch: [{ server: "js-debugger", pass: false, why: "exited 1 before tools/list answered", backend: "in-repo" }], apexTools: true });
+  assert.equal(gw.ok, false);
+  assert.deepEqual(gw.failures, ["launch js-debugger: exited 1 before tools/list answered"]);
+  const npm = judgeSmoke({ steps: [okStep], launch: [{ server: "browserstack", pass: false, why: "timeout", backend: "npm-package", note: "x" }], apexTools: true });
+  assert.deepEqual(npm.failures, ["launch browserstack: timeout [x; a cold npx cache needs the registry]"]);
+  assert.equal(judgeSmoke({ steps: [{ server: "apex-tools", status: null }], launch: [], apexTools: false }).failures.length, 2);
+});
+
+test("mcp-smoke exits 1 on a broken CLI step or a broken launch line, and passes the launch lines that work", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch/mcp-smoke-broken-"));
+  try {
+    // A python3 that fails: the probe steps break while apex-tools still answers (before W25 this reported ok, exit 0).
+    fs.mkdirSync(path.join(dir, "bin"));
+    fs.writeFileSync(path.join(dir, "bin/python3"), "#!/bin/sh\necho broken >&2\nexit 3\n", { mode: 0o755 });
+    const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".mcp.json"), "utf8")).mcpServers;
+    fs.writeFileSync(path.join(dir, "mcp.json"), JSON.stringify({ mcpServers: {
+      "apex-lsp": cfg["apex-lsp"],   // in-repo, no tsc spawn for tools/list
+      broken: { type: "stdio", command: process.execPath, args: ["-e", "process.exit(4)"] },
+    } }));
+    const r = spawnSync(process.execPath, [SMOKE, "--json", `--mcp-json=${path.join(dir, "mcp.json")}`], {
+      encoding: "utf8", cwd: ROOT, env: { ...process.env, PATH: `${path.join(dir, "bin")}:${process.env.PATH}` }, timeout: 60000,
+    });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    const body = JSON.parse(r.stdout);
+    assert.equal(body.ok, false);
+    assert.equal(body.apexTools, true, "apex-tools alone answering is no longer enough");
+    const failures = new Set(body.failures);
+    assert.ok(failures.has("probe: exit 3"), body.failures.join("\n"));
+    assert.ok(failures.has("launch broken: exited 4 before tools/list answered"), body.failures.join("\n"));
+    const lsp = body.launch.find((l) => l.server === "apex-lsp");
+    assert.equal(lsp.pass, true, JSON.stringify(lsp));
+    assert.ok(lsp.tools > 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("--real graph parity measures against a real base, and a reported mismatch is the tool working", async () => {
+  const { parityBase, judgeParity, realCalls } = await import("../../tools/mcp/mcp-smoke.mjs");
+  const { selfParity } = await import("../../tools/mcp/apex-tools-mcp.mjs");
+  const base = parityBase();
+  assert.notEqual(base, "HEAD");
+  assert.equal(selfParity(base), false, `${base} must differ from the tree under js/ (or be unknown, which the CLI reports)`);
+  const call = realCalls([{ name: "apex_graph_parity", annotations: {} }]).find(([n]) => n === "apex_graph_parity");
+  assert.deepEqual(call[1], { base, id: "monza" });
+  assert.equal(judgeParity({ ok: false, exit: 1, stdout: "FAIL monza: x\n0/1 tracks at parity with abc~1" }, 1).pass, true);
+  assert.equal(judgeParity({ ok: false, error: "bad_args", message: "vacuously" }, 1).pass, false, "a refusal is not a run");
+  assert.equal(judgeParity({ ok: true, exit: 0, out: null, stdout: "1/1 tracks at parity with abc~1" }, 0).pass, true);
 });

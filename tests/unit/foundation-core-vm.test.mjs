@@ -1,5 +1,6 @@
 /* foundation-core-vm.test.mjs — the CORE contract that the
- * tests/specs/*-foundation.spec.js files assert, replayed for EVERY circuit in
+ * per-circuit foundation specs assert (tests/specs/circuit-foundation.spec.js and the
+ * ADAPTED tests/specs/*-foundation.spec.js), replayed for EVERY circuit in
  * Tracks.LIST (spec or not) in the Node VM (tools/lib/game-vm.cjs).
  *
  * WHY THIS EXISTS, AND WHAT IT IS NOT.
@@ -50,9 +51,12 @@ const ROSTER = Array.from(require2("../../tools/track/verify-track.cjs")
 
 // Foundation specs whose file stem differs from the Tracks.LIST id.
 const SPEC_DIR = new URL("../specs/", import.meta.url);
-const SPEC_STEMS = fs.readdirSync(SPEC_DIR)
-  .filter((f) => f.endsWith("-foundation.spec.js"))
-  .map((f) => f.replace("-foundation.spec.js", ""));
+// The per-circuit (ADAPTED) files, plus the case modules circuit-foundation.spec.js
+// registers (tests/specs/foundation/<id>.js, TK2-17) — the registry is not a circuit.
+const SPEC_STEMS = [...fs.readdirSync(SPEC_DIR)
+  .filter((f) => f.endsWith("-foundation.spec.js") && f !== "circuit-foundation.spec.js")
+  .map((f) => f.replace("-foundation.spec.js", "")),
+  ...fs.readdirSync(new URL("foundation/", SPEC_DIR)).filter((f) => f.endsWith(".js")).map((f) => f.replace(/\.js$/, ""))];
 const ID_OF = { redbull: "redbull", "albert-park": "albert_park" };
 const trackId = (stem) => ID_OF[stem] || stem;
 
@@ -66,7 +70,7 @@ test("the whole roster is covered, and every foundation spec names a real circui
   assert.ok(ROSTER.length >= 52, `roster shrank to ${ROSTER.length}`);
   for (const stem of SPEC_STEMS) {
     assert.ok(known.has(trackId(stem)),
-      `${stem}-foundation.spec.js names track "${trackId(stem)}", which Tracks.LIST does not have`);
+      `the ${stem} foundation spec/case module names track "${trackId(stem)}", which Tracks.LIST does not have`);
   }
 });
 

@@ -1,6 +1,8 @@
 # Wetness and lighting — workstream plan (2026-09-30)
 
-Status: **OPEN** (checked against the code 2026-10-26) — wet-asphalt mirrors shipped; the continuous-wetness contract (slice A1) was not verified, and `grep -c wetness js/lighting/presets.js` is 0 today (the slice-A1 preset pins are not there).
+Status: **SHIPPED** (re-checked against the code 2026-11-10) — continuous road wetness is `trackWetness()` in js/game.js (the 0.25 / 0.72 ladder), the wet-asphalt mirrors shipped, and the tuner's WETNESS knob (js/lighting/knobs.js) is a diagnostic pin only. Kept here, not archived: files owned by other lanes cite this path (audit W27, 2026-11-10).
+
+Earlier status: **OPEN** (checked against the code 2026-10-26) — wet-asphalt mirrors shipped; the continuous-wetness contract (slice A1) was not verified, and `grep -c wetness js/lighting/presets.js` is 0 today (the slice-A1 preset pins are not there).
 
 Status when written: **PLAN** — docs-only first. Implement (a) continuous track wetness in
 ordered slices after this PR lands; implement (b) lighting grids as small
@@ -61,7 +63,7 @@ hook when a consumer must move onto the shared wetness read.
 | `AiDrive` | No direct weather read; lateral / yaw scales take `gripMult(c)` from game.js. |
 | Characterization | `physics-characterization` / its VM twin do **not** pin weather (default dry). `mechanics-integration-vm.test.mjs` (~35–49) asserts continuous grip through an arc but **does not assert `frame.wetness === roadWetness()`**. |
 
-The September 14 survey (§6 / weather row) and `docs/plans/2026-09-15-racing-depth.md`
+The September 14 survey (§6 / weather row) and `2026-09-15-racing-depth.md (archived)`
 still list "Spatial wetness / drainage / drying / puddles" as pending a
 **shared** surface field. The mechanics-coherence plan claimed "one continuous
 global wetness drives grip and rendered road wetness", but the `LT.wetness`
@@ -133,7 +135,7 @@ look-and-grip equality at sampled times.
 
 **Spatial later (NOT this workstream's ship).** Sector wetness, drainage,
 drying racing line, local puddles / aquaplaning stay deferred
-(`docs/plans/2026-09-15-racing-depth.md` remaining register). The global
+(`2026-09-15-racing-depth.md (archived)` remaining register). The global
 contract is the prerequisite.
 
 ### (b) Preset grids for the twelve

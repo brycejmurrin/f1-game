@@ -1,5 +1,7 @@
 # Concurrent PRs / CI hygiene (2026-09-30)
 
+Summary: Evidence behind the retired AGENTS.md §Concurrent PRs: merge commits only, draft=fast / ready=full, when a sync is worth a full PR run. — superseded by RULEBOOK-REWRITE-2026-10-26.md
+
 Superseded by: [Rulebook rewrite 2026-10-26](RULEBOOK-REWRITE-2026-10-26.md)
 
 Canonical rules: `.claude/rules/fleet-core.md` and AGENTS.md §Concurrent PRs (this note is 2026-09-30 history). Full CI/docs detail:

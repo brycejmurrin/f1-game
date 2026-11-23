@@ -146,3 +146,68 @@ test("stopping the session leaves the phone driving; dropping the phone leaves t
   assert.equal(A.net().active, true, "and the multiplayer session is untouched");
   A.netStop();
 });
+
+/* ── mutation pins (read-only hunt tip 46c86e30c1): HEARTBEAT_MS / FRESH_PAIR_MS ── */
+
+test("PhonePad.HEARTBEAT_MS is 100 ms (padSession beat + link ack cadence)", () => {
+  // Exported so a phone page and the desktop agree on the sample cadence. Mutating
+  // 100 → 500 left phone-pad / netplay-vm / phone-touch green before this pin.
+  assert.equal(S.PhonePad.HEARTBEAT_MS, 100);
+});
+
+// Decision B (#5959): a code this screen just minted admits its first phone with no
+// ALLOW for FRESH_PAIR_MS (5 min). The existing phone-pad suite covers "just minted"
+// and "past 5 min", but not "still fresh at ~2 min" — so FRESH_PAIR_MS → 1 s survived.
+const tick = () => new Promise((r) => setImmediate(r));
+async function settlePad(n = 6) { for (let i = 0; i < n; i++) await tick(); }
+
+function hostFresh(now) {
+  const [padEnd, hostEnd] = S.NetTransport.loopback({ latencyMs: 1, rnd: S.NetTransport.seededRnd(11) });
+  padEnd.pump(0); hostEnd.pump(0);
+  const asks = [];
+  const ui = {
+    said: [], qrs: [], linkedN: 0,
+    say: (t, bad) => ui.said.push((bad ? "!" : "") + t),
+    qr: (url, code) => ui.qrs.push({ url, code }),
+    linked: () => { ui.linkedN++; },
+    hud: () => null,
+  };
+  const room = { onJoiner: null, stop() {} };
+  const ctl = S.PhonePad.host(ui, {
+    rtc: () => hostEnd,
+    prefetchIce: async () => null,
+    makeCode: () => "ABC234",
+    usingPrivateRelay: () => false,
+    createInvite: async () => ({ ok: true, code: "OFFER" }),
+    acceptAnswer: async () => ({ ok: true }),
+    hostRoom: async (o) => { room.onJoiner = o.onJoiner; return { ok: true, stop: room.stop }; },
+    confirm: (text) => {
+      let settleIt;
+      const a = { text, result: new Promise((r) => { settleIt = r; }), dismiss() { settleIt(false); }, answer: (ok) => settleIt(ok) };
+      asks.push(a);
+      return a;
+    },
+    now,
+  });
+  return { ctl, ui, room, asks, padEnd, hostEnd };
+}
+
+test("host(): a pairing ~2 min old is still fresh; one past 5 min asks ALLOW", async () => {
+  const clock = { t: 1_000_000 };
+  const young = hostFresh(() => clock.t);
+  await settlePad();
+  clock.t += 2 * 60_000;                         // ~2 minutes after mint
+  await young.room.onJoiner(null, "ANSWER"); await settlePad();
+  assert.equal(young.asks.length, 0, "still inside FRESH_PAIR_MS (5 min): no ALLOW card");
+  assert.equal(young.ctl.state().phase, "linked");
+  young.ctl.cancel();
+
+  const clock2 = { t: 1_000_000 };
+  const old = hostFresh(() => clock2.t);
+  await settlePad();
+  clock2.t += 5 * 60_000 + 1;                    // just past five minutes
+  await old.room.onJoiner(null, "ANSWER"); await settlePad();
+  assert.equal(old.asks.length, 1, "past FRESH_PAIR_MS: ALLOW / REJECT");
+  assert.equal(old.ctl.state().phase, "confirming");
+  old.ctl.cancel();
+});

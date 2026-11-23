@@ -49,9 +49,8 @@ const DataTelemetry = (function () {
       tray = tray.filter(function (e) { return e.meetingKey == null || e.meetingKey === meta.meetingKey; });
     }
     function trayNeedsBadges() {
-      const byNum = {};
-      for (const e of tray) byNum[e.d.num] = (byNum[e.d.num] || 0) + 1;
-      return tray.some(function (e) { return byNum[e.d.num] > 1; });
+      const counts = DataTabUtils.countsByDriver(tray);
+      return tray.some(function (e) { return counts[e.d.num] > 1; });
     }
 
     function renderTelemetryBody(meta, leftPane, rightPane) {
@@ -73,9 +72,7 @@ const DataTelemetry = (function () {
         title.appendChild(el("span", null, meta.name || meta.type || "Session"));
         if (meta.type && meta.type !== meta.name) title.appendChild(el("span", "dh-live-type", meta.type));
         info.appendChild(title);
-        const place = (typeof F1API !== "undefined" && F1API.placeLabel)
-          ? F1API.placeLabel(meta.circuit, meta.country, " · ")
-          : [meta.circuit, meta.country].filter(Boolean).join(" · ");
+        const place = DataTabUtils.placeLabel(meta.circuit, meta.country, " · ");
         if (place) info.appendChild(el("div", "dh-live-sub", place));
         // Two short lines — a single long ·-joined string was clipped mid-word
         // in the narrow split pane ("drag chart to .").
@@ -113,6 +110,7 @@ const DataTelemetry = (function () {
           }
           const badges = trayNeedsBadges();
           const summary = el("div", "dh-livecard");
+          summary.dataset.hubPart = "lanes";
           summary.appendChild(el("h3", "dh-section", tray.length === 1 ? "SELECTED DRIVER" : "COMPARE DRIVERS (" + tray.length + ")"));
           const laneCols = laneColors(tray);
           tray.forEach(function (e, i) {
@@ -142,6 +140,7 @@ const DataTelemetry = (function () {
               "The first two lanes draw full traces; additional lanes add speed markers."));
           }
           const loadBtn = el("button", "dh-livebtn");
+          loadBtn.dataset.hubPart = "traces";
           loadBtn.textContent = tray.length === 1 ? "LOAD FASTEST LAP" : "COMPARE " + tray.length + " LAPS";
           loadBtn.dataset.block = "full";   // css/data.css .dh-livebtn[data-block]
           loadBtn.type = "button";
@@ -315,7 +314,7 @@ const DataTelemetry = (function () {
       const dupName = DataTabUtils.countsByDriver(tels);
       const label = tels.map(function (t) {
         const nm = t.d.name || dcode(t.d);
-        return (dupName[t.d.num] > 1 && t.sessionLabel) ? nm + " " + t.sessionLabel : nm;
+        return nm + DataTabUtils.sessionSuffix(dupName, t.d.num, t.sessionLabel);
       }).join(" vs ");
       titleEl.appendChild(el("span", null, label));
       const oneSession = tels.every(function (t) { return !t.sessionLabel || t.sessionLabel === tels[0].sessionLabel; });
@@ -333,6 +332,8 @@ const DataTelemetry = (function () {
       hdr.appendChild(titleEl);
       const closeBtn = el("button", "dh-close", "✕");
       closeBtn.type = "button";
+      closeBtn.id = "dh-tpopup-close";
+      overlay.setAttribute("data-esc-close", closeBtn.id);
       // autofocus: showModal's focusing steps then GUARANTEE initial focus here,
       // instead of racing whatever the async body build makes focusable first.
       closeBtn.autofocus = true;
@@ -406,7 +407,7 @@ const DataTelemetry = (function () {
           if (myGen !== telGen) return;
           clear(detail);
           let msg = "Couldn't load telemetry.";
-          if (err && err.message && err.message.indexOf("Live F1 session") !== -1) msg = err.message;
+          if (DataTabUtils.liveLockout(err)) msg = DataTabUtils.LOCKOUT_TITLE + " — " + DataTabUtils.LOCKOUT_MSG;
           const failure = el("div", "dh-error");
           failure.setAttribute("role", "status");
           failure.setAttribute("data-state", "failed");

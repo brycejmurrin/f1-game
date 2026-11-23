@@ -35,36 +35,36 @@ test("apex-memory list/show/retire mutates only a copied throwaway store", (t) =
   const { mem, run, read } = fixture(t);
   const help = run("--help");
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /list\|show\|retire/);
+  assert.equal(help.stdout, "usage: node tools/env/apex-memory.mjs <list|show|retire> [file.md]\n  Shared auto-memory store (.claude/memory/). Every host reads the same files.\n  Coordination rules: AGENTS.md §Coordination. Details: docs/notes/AGENT-MEMORY.md.\n");
   const list = run("list");
   assert.equal(list.status, 0);
-  assert.match(list.stdout, /2 memories in \.claude\/memory\//);
+  assert.equal(list.stdout, "2 memories in .claude/memory/\n- a.md\tA — alpha\n- b.md\tB — beta\n");
   const originalB = read("b.md");
   const show = run("show", "a.md");
   assert.equal(show.status, 0);
   assert.equal(show.stdout, read("a.md"));
   const retired = run("retire", "a.md");
   assert.equal(retired.status, 0, retired.stderr);
-  assert.match(retired.stdout, /retired a\.md; index now 1 entries/);
+  assert.equal(retired.stdout, "retired a.md; index now 1 entries. Commit .claude/memory/ on a memory-change: PR.\n");
   assert.equal(fs.existsSync(path.join(mem, "a.md")), false);
   assert.equal(read("MEMORY.md"), "# idx\n- [B](b.md) — beta\n");
   assert.equal(read("b.md"), originalB);
-  assert.match(run("list").stdout, /1 memories/);
+  assert.equal(run("list").stdout, "1 memories in .claude/memory/\n- b.md\tB — beta\n");
   const missing = run("show", "a.md");
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /not found/);
+  assert.equal(missing.stderr, "not found: .claude/memory/a.md\n");
 });
 
 test("apex-memory retires orphan and dangling index entries; missing/protected requests preserve the store", (t) => {
   const { root, mem, run, read } = fixture(t);
   fs.writeFileSync(path.join(mem, "orphan.md"), "orphan\n");
-  assert.match(run("list").stdout, /orphans .*orphan\.md/);
+  assert.equal(run("list").stdout, "2 memories in .claude/memory/\n- a.md\tA — alpha\n- b.md\tB — beta\norphans (on disk, not in index): orphan.md\n");
   assert.equal(run("retire", "orphan.md").status, 0);
   assert.equal(fs.existsSync(path.join(mem, "orphan.md")), false);
-  assert.match(read("MEMORY.md"), /a\.md/);
+  assert.equal(read("MEMORY.md"), "# idx\n- [A](a.md) — alpha\n- [B](b.md) — beta\n");
   fs.unlinkSync(path.join(mem, "a.md"));
   assert.equal(run("retire", "a.md").status, 0);
-  assert.doesNotMatch(read("MEMORY.md"), /a\.md/);
+  assert.equal(read("MEMORY.md"), "# idx\n- [B](b.md) — beta\n");
   const before = new Map(fs.readdirSync(mem).map((name) => [name, read(name)]));
   for (const [name, code, message] of [
     ["missing.md", 1, /nothing to retire/],

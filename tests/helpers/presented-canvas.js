@@ -2,6 +2,7 @@
 // HeadlessChrome GLX hides #game and blits onto #game-soft; locator("#game").screenshot()
 // is the uncomposited GPU buffer. Import the probe helpers so tools and specs lockstep.
 export {
+  awaitCaptureReady,
   awaitPresentedFrame,
   presentedCanvasClip,
   screenshotPresentedCanvas,

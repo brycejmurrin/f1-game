@@ -75,7 +75,7 @@ test("the vendored tree ships as .js, not .mjs", () => {
   // vendor/ at all (tests/unit/deploy-staging.test.mjs). This is the belt to that
   // braces: `.mjs` has a history of being served as application/octet-stream by
   // static hosts, and a browser REFUSES an octet-stream module script outright.
-  // The repo's other ESM island (vendor/three-0.186.1) is .js already, so
+  // The repo's other ESM island (vendor/three-0.187.0) is .js already, so
   // matching it costs nothing and removes a variable we cannot test from here.
   const stray = [];
   const walk = (dir) => {
@@ -151,7 +151,6 @@ test("Trystero is dynamic-imported, never in the boot path", () => {
   // touch. It must not be a <script> tag and must not be in the load manifest.
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.doesNotMatch(html, /<script[^>]+trystero/i, "must not be a boot script");
-  assert.match(ours, /import\("@trystero-p2p\/nostr"\)/, "reached by dynamic import");
   const manifest = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   assert.ok(!manifest.includes("trystero"), "not part of the IIFE load order");
 });

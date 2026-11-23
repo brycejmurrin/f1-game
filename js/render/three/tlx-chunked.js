@@ -10,6 +10,10 @@
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 
+  // All chunked records in a pass see the same matrix. Camera and shadow
+  // buffers change in place, so compare their values before reusing planes.
+  const _cullVP = new Float64Array(16).fill(NaN);
+
   // Vertex-attribute packing.
   // three keeps the CPU copy of every attribute array forever (measured: 49.8
   // MB of deduped attribute bytes on montreal, against GLX's 17.8 MB, which is
@@ -99,8 +103,8 @@
   // colour and mat would fall back to Float32 (~23 bytes a vertex on WebGL2 vs
   // the full 40 on WebGPU). But a 3-wide channel fits a 4-wide FORMAT with a
   // zero in w, and WebGPU lets a vertex format carry MORE components than the
-  // shader input reads.
-  // tsl-lit.js keeps reading attribute("color", "vec3"); no TSL changes.
+  // shader input reads. Only the NORMAL widens (snorm16x4, below); colour stays
+  // float32x3 (the measured cost is in packAttrSteps).
   //
   // mat is left alone: it is one scalar, float32 is already the narrowest lane
   // WebGPU offers at 1-wide, and padding it to 4 would COST 12 bytes.
@@ -147,6 +151,14 @@
     let ok = src && src.length === len;
     // W2: only a 3-wide 8/16-bit or a 1-wide 16-bit result misses 4 bytes (itemSize 2 of 16 bits is 4 B).
     const pad = fmt24 === false && padding && (itemSize === 3 || itemSize === 1);
+    // TLX3-05: NO HALF ATTRIBUTE ON THE WEBGPU LEG. three r187's WebGPU
+    // createAttribute widens a non-normalized Float16BufferAttribute's
+    // Uint16Array to a Uint32Array yet still names the format float16xN, so
+    // the GPU reads two halves out of every 32-bit lane: garbage. Nothing in
+    // the shipped roster reaches a half under fmt24 today (1- and 3-wide
+    // channels lose their kind below), so this guards a future 2/4-wide
+    // channel: it keeps Float32, the exact source values.
+    const halfOk = fmt24 !== true;
     if (fmt24 && itemSize === 3 && ok && kind === "unit") {
       // Validate and pack in one source pass: no padded Float32 temporary
       // (16 bytes/vertex). fround preserves that temporary's conversion of
@@ -184,8 +196,9 @@
     // So the normal is free at 16 bits and the colour is not free at any width
     // tried. Eight bits costs ~6 % of the frame; three's Float16BufferAttribute
     // costs MORE (~14 %) than the byte does, which is backwards on precision
-    // grounds and says the fault is in how three hands that array to the
-    // WebGPU backend rather than in the encoding — unexplained, so not shipped.
+    // grounds: the fault is in how three hands that array to the WebGPU
+    // backend (r187 widens it to Uint32 under a float16xN format, TLX3-05 at
+    // `halfOk` above), not in the encoding, so it is not shipped.
     // Colour therefore stays float32x3 here and the channel keeps its 12 bytes.
     //
     // Two things fall out of this worth someone's time. The WebGL2 leg DOES
@@ -224,10 +237,14 @@
       const kk = kind || "raw";
       packStats.wideBy[kk] = (packStats.wideBy[kk] || 0) + 1;
       packStats.wideLen[kk] = (packStats.wideLen[kk] || 0) + len;
-      let mx = packStats.wideMax[kk];
-      for (let i = 0; i < len; i++) {
-          if ((i & 8191) === 0) yield; const v = src[i]; if (!(mx >= v)) mx = v; }
-      packStats.wideMax[kk] = mx;
+      // The range max is a diagnostic of WHY a typed channel refused its small type; a kind-less channel (fmt24's
+      // 1- and 3-wide ones) refused nothing, so it skips the full-length scan (hunt 2026-11-18 (2) row 7).
+      if (kind != null) {
+        let mx = packStats.wideMax[kk];
+        for (let i = 0; i < len; i++) {
+            if ((i & 8191) === 0) yield; const v = src[i]; if (!(mx >= v)) mx = v; }
+        packStats.wideMax[kk] = mx;
+      }
       // Out of the small type's range is not the same as needing 32 bits.
       // Colours carry emissive up to 3.4 and MAT ids are not always whole
       // (measured 15.4), but half-float holds both with room to spare and
@@ -237,7 +254,7 @@
       // half-float's 11-bit mantissa is worth about +/-2.6 m and road
       // markings need far better. Non-finite data keeps Float32 as well —
       // half would turn a stray Infinity into a different wrong number.
-      if (finite && THREE.Float16BufferAttribute && (kind === "unorm" || kind === "id")) {
+      if (halfOk && finite && THREE.Float16BufferAttribute && (kind === "unorm" || kind === "id")) {
         packStats.half++;
         const h = new Uint16Array(len);
         for (let i = 0; i < len; i++) { if ((i & 8191) === 0) yield; h[i] = _toHalf(src[i]); }
@@ -284,6 +301,10 @@
       // every id exactly (integers to 2048), is a FLOAT format on both
       // backends, and still halves the 4-byte source; the same path the
       // out-of-range branch above already takes.
+      if (!halfOk) {
+        packStats.wide++;
+        return new THREE.BufferAttribute(yield* f32Steps(src), itemSize);
+      }
       packStats.half++;
       const h = new Uint16Array(len);
       for (let i = 0; i < len; i++) { if ((i & 8191) === 0) yield; h[i] = _toHalf(src[i]); }
@@ -394,7 +415,9 @@
         lampCells.push({ min: bk.mn.slice(), max: bk.mx.slice(), gx, gz });
         const mk = ChunkBins.key(Math.floor(gx / mergeK), Math.floor(gz / mergeK));
         let m = merged.get(mk);
-        if (!m) { m = { parts: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx, gz }; merged.set(mk, m); }
+        if (!m) { m = { parts: [], cells: [], n: 0, mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity], gx, gz }; merged.set(mk, m); }
+        // MIRROR FINE CULL (fineCells below): where this cell's indices sit in the block's index, with the cell's own box.
+        m.cells.push({ o: m.n, n: bk.idx.length, min: lampCells[lampCells.length - 1].min, max: lampCells[lampCells.length - 1].max });
         m.parts.push(bk.idx); m.n += bk.idx.length;
         for (let a = 0; a < 3; a++) { if (bk.mn[a] < m.mn[a]) m.mn[a] = bk.mn[a]; if (bk.mx[a] > m.mx[a]) m.mx[a] = bk.mx[a]; }
       }
@@ -403,7 +426,7 @@
         const idx = new IndexArray(m.n);
         let o = 0;
         for (const part of m.parts) for (let i = 0; i < part.length; i++) { if ((i & 8191) === 0) yield; idx[o++] = part[i]; }
-        buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz });
+        buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz, cells: m.cells.length > 1 ? m.cells : null });
       }
     }
     // DUST MERGE (needs mergeK > 1, so tlxChunkMerge=1 is its off-switch too). Centroid binning leaves cells
@@ -504,7 +527,9 @@
         for (let i = 0; i < idx.length; i++) { if ((i & 8191) === 0) yield; idx[i] = bk.idx[i]; }
       }
       count += idx.length;
-      chunks.push({ idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key) });
+      const out = { idx, min: bk.mn, max: bk.mx, gx: bk.gx !== undefined ? bk.gx : ChunkBins.gxOf(key), gz: bk.gz !== undefined ? bk.gz : ChunkBins.gzOf(key) };
+      if (bk.cells && idx === bk.idx) out.cells = bk.cells;   // a block the dust merge left alone (a dust group has no cells: <= 384 triangles)
+      chunks.push(out);
       yield;
     }
     return { version: 1, config, attributes, chunks, lampCells, cellSize: cell, count };
@@ -553,7 +578,11 @@
         delete prepared.workerPacking;
       }
       const attributes = {};
+      const webgpu = fmt24();
       for (const [name, a] of Object.entries(prepared.attributes)) {
+        // TLX3-05 (packAttrSteps `halfOk`): a half payload never reaches the
+        // WebGPU leg; decode it (a half is exact in f32) rather than draw garbage.
+        if (a.half && webgpu) { attributes[name] = new THREE.BufferAttribute(Float32Array.from(a.array, _fromHalf), a.itemSize); continue; }
         attributes[name] = a.half ? new THREE.Float16BufferAttribute(a.array, a.itemSize)
           : new THREE.BufferAttribute(a.array, a.itemSize, a.normalized);
       }
@@ -574,7 +603,7 @@
         if (!prepared.chunks) return { __tlx: true, chunked: true, geo: makeGeo(prepared.idx), chunks: null, count: prepared.count };
         const chunks = prepared.chunks.map(c => {
           const geo = makeGeo(c.idx, c.min, c.max);
-          return { geo, count: c.idx.length, min: c.min, max: c.max, gx: c.gx, gz: c.gz, wrap: { __tlx: true, geo } };
+          return { geo, count: c.idx.length, min: c.min, max: c.max, gx: c.gx, gz: c.gz, cells: c.cells || null, wrap: { __tlx: true, geo } };
         });
         if (data._keepFullGeometry === false) data.nrm = data.col = data.mat = data.trk = null;
         if (!data._keepPositions) data.pos = data.idx = null;
@@ -600,18 +629,183 @@
     // RETURNED n is the contract (every caller loops j < n), entries past it are
     // stale references to a live world's chunks, and free() still empties it.
     const _visList = [];
-    function cull(mesh, vp, eye, cullDist, fog) {
+    const _ic = new Int32Array(1024);
+    // One geometry per pass slot (0 main, 1 mirror) holding the visible chunks'
+    // indices. The chunks already share vertex attributes, so concatenating
+    // indices draws the same triangles. A repeated visible set returns the
+    // cached geometry and does not touch the index buffer.
+    function mergeVisible(mesh, n, slot) {
+      const vis = _visList;
+      // A lone chunk draws on its own geometry; a lone CELL (fineCells: mesh.attrs) has no geometry to draw on.
+      if (!mesh || !mesh.chunks || !(n > 1 || (n === 1 && mesh.attrs))) return null;
+      const slots = mesh._tlxMv || (mesh._tlxMv = []);
+      const si = slot | 0;
+      let s = slots[si];
+      if (s && s.n === n) {
+        let same = true;
+        for (let i = 0; i < n; i++) if (s.ids[i] !== vis[i]) { same = false; break; }
+        if (same) return s.geo;
+      }
+      let cnt = 0, Ctor = null;
+      const ic = n <= _ic.length ? _ic : new Int32Array(n);
+      for (let i = 0; i < n; i++) {
+        const ix = vis[i] && vis[i].geo && vis[i].geo.index, a = ix && ix.array;
+        if (!a) return null;
+        const c = ix.count != null ? ix.count : (a.length / (ix.itemSize || 1));
+        ic[i] = c; cnt += c;
+        if (!Ctor || a.BYTES_PER_ELEMENT > Ctor.BYTES_PER_ELEMENT) Ctor = a.constructor;
+      }
+      if (!s) s = slots[si] = { n: 0, ids: [], geo: null, arr: null, res: [], rc: [], rn: 0, rb: 0, r2: [], c2: [] };
+      const g = s.geo || (s.geo = new THREE.BufferGeometry());
+      if (!g.boundingSphere) {
+        g.boundingSphere = new THREE.Sphere();
+        const src = mesh.attrs || vis[0].geo;   // fineCells: a cell's geometry carries its index only
+        for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
+      }
+      let tot = mesh._tlxIdxTotal;
+      if (!(tot > 0)) {
+        tot = 0;
+        for (let k = 0; k < mesh.chunks.length; k++) {
+          const ch = mesh.chunks[k], ix = ch.geo && ch.geo.index;
+          ch._tlxCi = k;   // record order, which cull lists in: the run search below is one merge walk
+          if (ix) tot += ix.count;
+        }
+        mesh._tlxIdxTotal = tot;
+      }
+      // GPU hunt 3 (#4272 item 3; census 41030658536: 200-920 KB index rewrites when the FIRST visible chunk
+      // changed): a sliding window. The chunks the buffer holds (s.res from offset s.rb, drawn or not) keep their
+      // offsets; the new set keeps its longest run shared with them in place and writes only the chunks before and
+      // after it, so a head chunk leaving uploads nothing and one entering uploads itself. The GPU draws the same
+      // indices in the same order from a moved drawRange.start. A fresh array, or a set that does not fit around
+      // its run, rewrites from scratch, centred.
+      let fresh = !s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor, made = null;
+      if (fresh) {
+        // 1.5x headroom (capped at the record's whole index count): the window's slack, and a widening view
+        // replaces the buffer O(log) times, not on every new high.
+        const grow = s.arr && s.arr.constructor === Ctor ? s.arr.length : 0;
+        const cap = Math.max(cnt, Math.min(tot, Math.ceil(Math.max(cnt, grow) * 1.5)));
+        const old = g.index;
+        s.arr = new Ctor(cap);
+        const ia = made = new THREE.BufferAttribute(s.arr, 1);
+        // The vendor's narrow-index opt-in (PATCHES §20), as packIndex marks every
+        // chunk's own index: unmarked, three's WebGPU backend swaps ia.array for a
+        // Uint32 copy at creation, every later write below lands in the orphaned
+        // s.arr, and each changed visible set re-uploads the FIRST set's indices.
+        if (s.arr instanceof Uint16Array) ia.__apexUint16Index = true;
+        g.setIndex(ia);
+        // The replaced index's GPU buffer, now held by nothing but the GC.
+        if (old && ctx && ctx.releaseAttribute) ctx.releaseAttribute(old);
+      }
+      const dst = s.arr, res = s.res, rc = s.rc;
+      let bi = 0, bj = 0, bl = 0, bc = 0, P = 0;   // longest shared run: res[bi..], vis[bj..], bl chunks, bc indices at P
+      for (let i = 0, j = 0, o = s.rb, ri = 0, rj = 0, rl = 0, rn = 0, rp = 0; !fresh && i < s.rn && j < n;) {
+        const a = res[i], b = vis[j];
+        if (a === b && rc[i] === ic[j]) {
+          if (rl > 0 && ri + rl === i && rj + rl === j) { rl++; rn += ic[j]; } else { ri = i; rj = j; rl = 1; rn = ic[j]; rp = o; }
+          if (rn > bc) { bc = rn; bi = ri; bj = rj; bl = rl; P = rp; }
+          o += rc[i]; i++; j++;
+        } else if (a._tlxCi < b._tlxCi) { o += rc[i]; i++; } else j++;
+      }
+      let pre = 0;
+      for (let i = 0; i < bj; i++) pre += ic[i];
+      let start = P - pre;
+      if (!(bl > 0 && start >= 0 && start + cnt <= dst.length)) {
+        // A set drifting off one end restarts at the other, so a steady drive along the arc (record order) spends
+        // the whole slack before the next rewrite. Even: a Uint16 range starts 4-byte aligned.
+        start = P = (bl > 0 ? (start < 0 ? dst.length - cnt : 0) : (dst.length - cnt) >> 1) & ~1;
+        fresh = true; bi = bj = bl = bc = pre = 0;
+      }
+      const end = start + cnt, post = end - (P + bc);
+      let o = start, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      for (let i = 0; i < n; i++) {
+        const ch = vis[i], a = ch.geo.index.array, c = ic[i];
+        if (i < bj || i >= bj + bl) {
+          if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
+          else for (let k = 0; k < c; k++) dst[o + k] = a[k];
+        }
+        o += c; s.ids[i] = ch;
+        const mn = ch.min, mx = ch.max;
+        if (!mn || !mx) continue;
+        if (mn[0] < x0) x0 = mn[0]; if (mn[1] < y0) y0 = mn[1]; if (mn[2] < z0) z0 = mn[2];
+        if (mx[0] > x1) x1 = mx[0]; if (mx[1] > y1) y1 = mx[1]; if (mx[2] > z1) z1 = mx[2];
+      }
+      // What the buffer now holds: the new set, plus the old chunks on a side it did not write (still intact).
+      const r2 = s.r2, c2 = s.c2;
+      let m = 0, rb = start;
+      if (bl > 0 && pre === 0) { rb = s.rb; for (let i = 0; i < bi; i++) { r2[m] = res[i]; c2[m++] = rc[i]; } }
+      for (let i = 0; i < n; i++) { r2[m] = vis[i]; c2[m++] = ic[i]; }
+      if (bl > 0 && post === 0) for (let i = bi + bl; i < s.rn; i++) { r2[m] = res[i]; c2[m++] = rc[i]; }
+      s.res = r2; s.rc = c2; s.r2 = res; s.c2 = rc; s.rn = m; s.rb = rb; s.n = n;
+      g.setDrawRange(start, cnt);
+      // three r186 uploads each queued range with its own writeBuffer / bufferSubData, in list order, then clears
+      // the list (both backends): a range still queued never reached the GPU (the pass did not draw), so it stays.
+      // A new attribute queues none: three's create uploads the whole array and leaves the ranges for the NEXT
+      // update to re-send.
+      const attr = g.index, ur = attr.updateRanges || (attr.updateRanges = []);
+      if (attr !== made && (pre > 0 || fresh)) ur.push({ start, count: fresh ? cnt : pre });
+      if (post > 0 && !fresh) ur.push({ start: end - post, count: post });
+      if (ur.length > 4) {   // many owed ranges: one span covers them
+        let a = Infinity, b = 0;
+        for (const r of ur) { if (r.start < a) a = r.start; if (r.start + r.count > b) b = r.start + r.count; }
+        ur.length = 0; ur.push({ start: a, count: b - a });
+      }
+      if (ur.length) attr.needsUpdate = true;   // a set inside what the buffer holds moves the draw range alone
+      const bs = g.boundingSphere, cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5, cz = (z0 + z1) * 0.5;
+      const ct = bs.center || (bs.center = new THREE.Vector3());
+      ct.x = cx; ct.y = cy; ct.z = cz;
+      bs.radius = Math.hypot(x1 - cx, y1 - cy, z1 - cz) || 0;
+      return g;
+    }
+    // MIRROR FINE CULL (docs/notes/RENDER-FRAME-COST-2026-11-18.md). A draw chunk is a k x k block of cells, culled
+    // on the block's box: one cell inside the mirror's draw-distance cap drew the whole block (monaco, phone tier:
+    // 96,079 mirror triangles into 138x39, 24,510 when each cell is culled on its own box). fineCells(mesh) is the
+    // same record as its cells: a list cull() and mergeVisible() take in place of mesh.chunks, built on first use.
+    // Each cell needs only its block index subarray and count for mergeVisible. The merged draw owns the
+    // THREE geometry and attributes, so the individual cell records can stay plain JS objects. A record whose
+    // blocks carry no cells (merge factor 1, a prepared build from before this field) returns null.
+    function fineCells(mesh) {
+      if (!mesh || !mesh.chunks) return null;
+      if (mesh._tlxFine !== undefined) return mesh._tlxFine;
+      let any = false;
+      const list = [];
+      for (let i = 0; i < mesh.chunks.length; i++) {
+        const ch = mesh.chunks[i], cs = ch.cells, ix = ch.geo && ch.geo.index;
+        // An uncelled block rides as its own entry (not the chunk object: mergeVisible stamps _tlxCi per list).
+        if (!cs || !ix || !ix.array || ix.array.length < ch.count) { list.push({ geo: ch.geo, count: ch.count, min: ch.min, max: ch.max }); continue; }
+        any = true;
+        for (let k = 0; k < cs.length; k++) {
+          const c = cs[k];
+          const geo = { index: { array: ix.array.subarray(c.o, c.o + c.n), count: c.n } };
+          list.push({ geo, count: c.n, min: c.min, max: c.max });
+        }
+      }
+      return (mesh._tlxFine = any ? { chunks: list, _tlxMv: null, _tlxIdxTotal: 0, attrs: mesh.chunks[0].geo } : null);
+    }
+    function cull(mesh, vp, eye, cullDist, fog, refineRoad) {
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
-      Frustum.extractPlanes(vp, _fcPlanes);
+      for (let i = 0; i < 16; i++) {
+        if (_cullVP[i] !== vp[i]) {
+          Frustum.extractPlanes(vp, _fcPlanes);
+          _cullVP.set(vp);
+          break;
+        }
+      }
       const cd = cullDist > 0 ? cullDist : 0, cf = fog || null,
             ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
+      const radial = cd > 0 || !!(cf && cf[0] > 0);
       let n = 0;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
-        if (Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
-        _visList[n++] = ch;
+        if (radial && Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
+        if (refineRoad && ch.sections) {
+          for (const section of ch.sections) {
+            if (!Frustum.aabbInFrustum(_fcPlanes, section.min, section.max)) continue;
+            if (radial && Frustum.radialCulled(section.min, section.max, ex, ey, ez, cd, cf)) continue;
+            _visList[n++] = section;
+          }
+        } else _visList[n++] = ch;
       }
       return n;
     }
@@ -625,7 +819,7 @@
      * A ZERO-LENGTH VIEW, NOT null. Every three site that touches .array after
      * upload wants a PROPERTY OF THE TYPE, never the data, and each one is a
      * null dereference away from taking the renderer down (all four verified
-     * against vendor/three-0.186.1/three.webgpu.min.js):
+     * against vendor/three-0.187.0/three.webgpu.min.js):
      *
      *   node builder      attribute.array.constructor, on every pass it has not
      *                     compiled before — the env probe threw on 41 WebGL2 /
@@ -649,7 +843,16 @@
      * never use one. */
     function releaseMirrors(mesh) {
       if (!mesh || !mesh.chunks || !mesh.chunks.length || mesh._mirrorsFreed) return;
-      mesh._mirrorsFreed = true;
+      mesh._mirrorsFreed = true;   // the release is DECIDED (once per mesh); _mirrorsKept says it kept them
+      // NOT ON THE WEBGPU BACKEND (r187). Every pipeline (re-)resolve builds the vertex-layout cache key from
+      // EVERY attribute's array: WebGPUAttributeUtils.getVertexBufferLayout reads
+      // `geometryAttribute.array.BYTES_PER_ELEMENT` and _getVertexFormat `array.constructor`, uploaded or not.
+      // A never-seen chunk entering the frustum, or a parked shadow-pool mesh taking a chunk geometry, is a new
+      // RenderObject, so a nulled array throws a TypeError there — caught, but the shadow map switches off for
+      // the session or the main pass falls down its ladder. The zero-length view three would accept is barred
+      // by the hardware A/B below (gpu-census 26 vs 27), so WebGPU keeps the mirrors. WebGL2 reads the array
+      // only at first upload (WebGLAttributeUtils.createAttribute), which every shared attribute has passed.
+      if (ctx && ctx.isWebGPU && ctx.isWebGPU()) { mesh._mirrorsKept = true; return; }
       // NULL, matching what shipped. Read the r185 SOURCE (not the minified
       // bundle) before touching this: src/renderers/webgpu/utils/
       // WebGPUAttributeUtils.js and its webgl-fallback sibling.
@@ -678,7 +881,7 @@
       // Releasing chunk mirrors is therefore only sound if EVERY chunk has been
       // uploaded first. Nothing establishes that today.
       const atts = mesh.chunks[0].geo.attributes;
-      for (const k in atts) if (atts[k]) atts[k].array = null;
+      for (const k in atts) if (atts[k]) { if (ctx && ctx.noteNulled) ctx.noteNulled(atts[k]); atts[k].array = null; }
       // The per-chunk INDEX arrays stay. three's WebGPU backend sizes the index
       // buffer from the array's byte length, so freeing them yields a ZERO-BYTE
       // index buffer: "Index range ... does not fit in index buffer size (0)",
@@ -687,24 +890,72 @@
       // carries the same rule and the same reason.
     }
 
-    function free(mesh) {
+    // Dispose a set of freed geometries that SHARE their vertex attributes (every chunk and merge slot of a mesh
+    // holds the same attribute objects). r187's geometry dispose (Geometries.initGeometry onDispose) deletes only
+    // the attributes the geometry STILL holds, and only for a geometry three initialised (drew), so stripping the
+    // attributes first — what releases the CPU arrays — left the shared GPU vertex buffers alive whenever no
+    // drawn, unstripped geometry was disposed after them (a mesh drawn only through its merge slots). Each shared
+    // attribute is disposed ONCE here: BufferAttribute.dispose() fires the listener three's Attributes armed at
+    // upload (Attributes.update), which destroys the buffer; a never-uploaded attribute has none and is a no-op.
+    // The index stays on the geometry, so g.dispose() still frees it.
+    function disposeShared(geos) {
+      const attrs = new Set();
+      for (const g of geos) {
+        if (!g || !g.attributes) continue;
+        for (const k in g.attributes) if (g.attributes[k]) attrs.add(g.attributes[k]);
+      }
+      for (const a of attrs) { try { if (typeof a.dispose === "function") a.dispose(); } catch (_) { /* already gone */ } }
+      for (const g of geos) {
+        if (!g) continue;
+        if (g.attributes) { const names = Object.keys(g.attributes); for (let k = 0; k < names.length; k++) delete g.attributes[names[k]]; }
+        try { g.dispose(); } catch (_) { /* already gone */ }
+      }
+      return attrs.size;
+    }
+
+    function free(mesh, freedGeos) {
       if (!mesh) return;
+      const mark = (g) => { if (g && freedGeos) freedGeos.add(g); };
+      const owned = [];   // unbatched: disposed together at the end (disposeShared), merge slots and chunks alike
+      const dropGeo = (g) => {
+        if (!g) return;
+        mark(g);
+        releaseGeometry(g);
+        if (!freedGeos) owned.push(g);   // batched: tlx.js flushChunkedOwnership disposes the whole batch
+      };
+      const fine = mesh._tlxFine;   // fineCells' list: its merge slots are freed like the record's own
+      mesh._tlxFine = undefined;
+      const mv = fine && fine._tlxMv ? (mesh._tlxMv || []).concat(fine._tlxMv) : mesh._tlxMv;
+      if (fine) { fine._tlxMv = null; fine.chunks = null; fine.attrs = null; }
+      if (mv) {
+        mesh._tlxMv = null;
+        for (let i = 0; i < mv.length; i++) {
+          const g = mv[i] && mv[i].geo;
+          if (!g) continue;
+          // The merged draw's wrapper is keyed on THIS geometry, not a chunk.
+          // three r186 drops a RenderObject only when the object or the material
+          // dispatches "dispose" (a geometry dispose only clears vertex state),
+          // so geometry.dispose() alone left the wrapper in the pool and the
+          // previous circuit's merge slot in renderer._objects on the next race.
+          dropGeo(g);
+          mv[i].geo = null;
+        }
+      }
       _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
+          if (ch.geo) { dropGeo(ch.geo); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
-        return;
-      }
-      if (mesh.geo) { releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
+      } else if (mesh.geo) { dropGeo(mesh.geo); mesh.geo = null; }
+      if (owned.length) disposeShared(owned);
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
-    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free };
+    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, disposeShared, mergeVisible, fineCells };
   }
 
   // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh
@@ -724,6 +975,26 @@
         for (let a = 0; a < 3; a++) { const p = pos[v + a]; if (p < min[a]) min[a] = p; if (p > max[a]) max[a] = p; }
       }
       out.push({ min, max, start: s, count: e - s });
+    }
+    return out;
+  }
+  // Build both road resolutions in one vertex scan. The parent bounds exactly match
+  // the original split; only visible parents need any finer rear-view tests.
+  function roadRanges(pos, idx, coarseTris, sectionTris) {
+    const fine = splitRanges(pos, idx, sectionTris);
+    const out = [], per = coarseTris / sectionTris;
+    for (let i = 0; i < fine.length; i += per) {
+      const sections = fine.slice(i, i + per);
+      const min = sections[0].min.slice(), max = sections[0].max.slice();
+      let count = 0;
+      for (const section of sections) {
+        count += section.count;
+        for (let a = 0; a < 3; a++) {
+          min[a] = Math.min(min[a], section.min[a]);
+          max[a] = Math.max(max[a], section.max[a]);
+        }
+      }
+      out.push({ start: sections[0].start, count, min, max, sections });
     }
     return out;
   }
@@ -768,5 +1039,5 @@
     { chunked, idleYield, chunkPrepareConfig, validPrepareConfig, samePrepareConfig, prepareChunks, prepareChunksSteps,
       makeFrustumPlanes: Frustum.makeFrustumPlanes,
       aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2,
-      packAttr, packIndex, packStats, splitRanges, mergeRuns });
+      packAttr, packIndex, packStats, splitRanges, roadRanges, mergeRuns });
 })();

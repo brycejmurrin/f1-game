@@ -6,16 +6,14 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["shanghai"] =
   function (api) {
-      const { K, out, track, n, px, pz, py, hw, pyMin, hash, vadd,
-        place, prop, groundYAt, anchor, addBox, addCyl, addCone, seat,
-        addFrustum, addPrism, addPyramid, along, every,
-        building, house, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
-        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
-        forestEdge, cross, norm, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
+      const { K, out, track, n, hash, vadd,
+        place, groundYAt, anchor, addBox, addCyl, addCone, seat,
+        addFrustum, along,
+        building, house, motorhome, cityFront, grandstandEx, billboard, gantry, marshalPost,
+        wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier, MAT, runoffApron, modelGroup, overheadSpan, onTrack,
         waterSurface, groundPatch, terrainYAt, frameAt,
         cameraTower, broadcastCompound, sponsorHoarding,
-        groundUnder, indexSolid,
-      } = api;
+        groundUnder, indexSolid } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (16 per build here,
@@ -419,7 +417,7 @@
         // Outer Yu / T1 red-roof houses — seat.box so feet stay on grade
         // (sheet-03 overview showed floating red roofs near T1).
         for (const [s, sd, d, w, h, len] of [
-          [sl(0.055), -1, 108, 11, 5.5, 9],
+          [sl(0.038), -1, 88, 11, 5.5, 9],
           [sl(0.075), -1, 122,  9, 5.0, 8],
           [sl(0.095), -1, 105,  8, 4.2, 7],
           [sl(0.115), -1, 128, 10, 5.5, 8],
@@ -451,7 +449,7 @@
 
       (function snailRunoff() {
         // Stepped apron pads outside the decreasing-radius right — spiral read
-        // at speed. Racing-frame T1–T3 (turns 0.037 / 0.088 / 0.129); raw
+        // at speed. Racing-frame T1–T4 (turns 0.038 / 0.088 / 0.102 / 0.129); raw
         // authored 0.05..0.11 sat past T3 after sceneryStartFrac drift.
         const pads = [
           [sl(0.040),  1, 3.5, [22, 0.32, 38]],
@@ -459,7 +457,7 @@
           [sl(0.060),  1, 6.0, [34, 0.32, 50]],
           [sl(0.072),  1, 8.0, [30, 0.32, 42]],
           [sl(0.084),  1, 10,  [26, 0.32, 36]],
-          [sl(0.096),  1, 12,  [22, 0.32, 30]],
+          [sl(0.096),  1, 8,   [12, 0.32, 30]],
           [sl(0.108),  1, 14,  [18, 0.32, 26]],
           [sl(0.068), -1, 4.0, [14, 0.30, 28]],
           [sl(0.090), -1, 5.5, [16, 0.30, 24]],
@@ -849,7 +847,9 @@
       sponsorHoarding(0.58, 0.72, 1, 9, {
         step: 14, palette: [RED, WHITE, YELLOW, STEEL], postCol: DARK,
       });
-      fence(0.58, 0.72, 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      // 10.3, not 8: no wall in front, so a car's side reached 10.1 m and drove
+      // 2.1 m into this catch fence. Stands behind sit at gap ≥ 29 m (#6007).
+      fence(0.58, 0.72, 1, 10.3, 3.0, [0.70, 0.72, 0.76]);
       cameraTower(K(0.615), 1, 22, { h: 16, col: STEEL });
       cameraTower(K(0.695), -1, 30, { h: 14, col: SEAT });
       marshalPost(K(0.605), -1, 22);
@@ -868,7 +868,8 @@
       // the old layout's spacing (r = the old raw frac) and seats it ~0.10 lap
       // earlier, on the straight itself; the first fence run covers the rest.
       const BS = (r) => sl(r - 0.10);
-      fence(sl(0.606), sl(0.67), 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      // 10.3, not 8: same run-off clearance as the 0.58–0.72 fence (#6007).
+      fence(sl(0.606), sl(0.67), 1, 10.3, 3.0, [0.70, 0.72, 0.76]);
       billboard(K(BS(0.76)), 1, 10, 18, 5, RED);
       billboard(K(BS(0.82)), 1, 10, 18, 5, YELLOW);
       billboard(K(BS(0.79)), 1, 10, 18, 5, RED);
@@ -901,7 +902,7 @@
         addBox(out, vadd(a.c, a.u, 9.6), [0.55, 0.28, 0.55], LAMP_GLOW, b);
       });
 
-      // T14 hairpin (built 0.8227, right-hand R13): racing frame through sl().
+      // T14 hairpin (built 0.8227, right-hand, FIA T14 = turns[13]): racing frame through sl().
       // These were raw authored 0.88-0.93 = racing 0.97-1.02, on the start
       // straight; the hairpin itself was bare. Outside of a right-hander = -1.
       grandstandEx(sl(0.800), -1, 34, 30, null, null,
@@ -1042,7 +1043,9 @@
         }
       })();
 
-      hedge(sl(0.80), sl(0.855), -1, 100, 3.0, TREE_G);
+      // Leave an opening where the two hedge panels fold together behind T14.
+      hedge(sl(0.80), sl(0.829), -1, 100, 3.0, TREE_G);
+      hedge(sl(0.832), sl(0.855), -1, 100, 3.0, TREE_G);
       for (let i = 0; i < 4; i++) {
         tree(K(sl(0.805 + i * 0.014)), -1, 96 + (i % 2) * 6, 7 + hash(i) * 3, TREE_G);
       }

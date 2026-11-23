@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["indianapolis"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
-        px, pz, hw, tree, bush, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, hw, tree, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, prop, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, terrainYAt, modelGroup, waterSurface,
         floodMast, cameraTower, sponsorHoarding, signDigit, indexSolid,
-        bleacher, scaffoldStand, seat, groundedSegments,
-        addBox, addCyl, addCone, addPrism, addFrustum } = api;
+        bleacher, scaffoldStand, seat, recordBarrier,
+        addBox, addCyl, addFrustum } = api;
 
       const LEAF = [0.22, 0.44, 0.20], LEAF_D = [0.16, 0.36, 0.17];
       const CONC = [0.74, 0.73, 0.70];
@@ -307,10 +306,11 @@
       billboard(K(0.110), OUT, 16, 12, 4.5, IMS_NAVY);
       billboard(K(0.500), -1, 12, 14, 4.5, IMS_RED);
 
-      groundPatch(K(0.300), 1, 8, [22, 0.18, 28], [0.66, 0.62, 0.50],
+      // Outside of the right-hander, with the tyre barrier beyond the gravel.
+      groundPatch(K(0.300), -1, 10, [22, 0.18, 28], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-a", samples: 6 });
-      tyreWall(0.286, 0.316, 1, 4, [0.86, 0.20, 0.18]);
-      marshalPost(K(0.305), -1, 9);
+      tyreWall(0.286, 0.316, -1, 22, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.305), 1, 9);
 
       groundPatch(K(0.500), -1, 5, [24, 0.18, 32], [0.66, 0.62, 0.50],
         { id: "indy-infield-gravel-b", samples: 6 });
@@ -380,13 +380,19 @@
       // Alternate slabs sit 3 cm apart radially: where the walk bunches on
       // the bend, neighbours' road faces would otherwise share one plane
       // (coplanar-audit, 3 pairs on the first outside pass, 2026-10-05).
+      // Collision (#6004): the slabs are raw addBox (visual only). Without
+      // recordBarrier the driving limit stays at the 9 m run-off default and
+      // the car centre can pass ~7.6 m behind the 1.4 m face. fence() below
+      // is geometry-only (indexBarrier) by design and must not tighten barL.
+      const OVAL_WALL_S0 = 0.765, OVAL_WALL_S1 = 0.140, OVAL_WALL_GAP = 1.4;
+      recordBarrier(OVAL_WALL_S0, OVAL_WALL_S1, OUT, OVAL_WALL_GAP);
       let slab = 0;
-      along(0.765, 0.140, 9, (k, spacing) => {
-        const a = anchor(k, OUT, 1.4 + (slab++ & 1) * 0.03);
+      along(OVAL_WALL_S0, OVAL_WALL_S1, 9, (k, spacing) => {
+        const a = anchor(k, OUT, OVAL_WALL_GAP + (slab++ & 1) * 0.03);
         addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, spacing], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
       });
       // Catch fence just behind it, in front of the stand bank (gap 18).
-      fence(0.765, 0.140, OUT, 4, 5, [0.74, 0.76, 0.80]);
+      fence(OVAL_WALL_S0, OVAL_WALL_S1, OUT, 4, 5, [0.74, 0.76, 0.80]);
       for (const s of [0.28, 0.36, 0.44, 0.58, 0.66, 0.74]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
@@ -482,9 +488,9 @@
             if (h < 0.30) continue;
             const p = vadd(vadd(a.c, a.t, (i % 5 - 2) * 7), a.r, Math.floor(i / 5) * 8 - 2);
             if (onTrack(p[0], p[2], 10)) continue;
-            // Foot at grade (seat.box idiom): centre-anchored addBox would
-            // bury half the car in the asphalt patch.
-            addBox(out, vadd(p, a.u, 0.55), [2.0, 1.1, 4.2],
+            // The asphalt follows the terrain beneath each parking space.
+            p[1] = terrainYAt(p[0], p[2]) ?? p[1];
+            seat.box(out, p, [2.0, 1.1, 4.2],
               h < 0.5 ? [0.15, 0.18, 0.35] : (h < 0.75 ? [0.72, 0.72, 0.74] : IMS_RED), b);
           }
         }
@@ -535,9 +541,8 @@
           { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
       });
 
-      // Turn 1 outside viewing — bleachers instead of grandstandEx so
-      // crowdBank/rejBox on the banked bend cannot suppress the whole stand
-      // (Stand H / J sector per indymotorspeedway.com road-course seating).
+      // Infield bleachers from T3 toward T4. The first stand spans the T3
+      // apex (0.1925); the second ends 40 m before the T4 apex (0.2419).
       bleacher(0.190, 0.210, 1, 18, {
         rows: 8, step: 9, density: 0.42,
         plankCol: [0.72, 0.72, 0.74], frameCol: [0.58, 0.59, 0.62],
@@ -548,9 +553,7 @@
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],
         crowd: [[0.86, 0.86, 0.84], [0.30, 0.42, 0.66], [0.72, 0.20, 0.18]],
       });
-      // Infield mid-course bleacher (side +1 matches the gravel apron at 0.300).
-      // Authored rise/setback are positive; world-space "beyond" is contaminated
-      // here by the nearby oval ribbon, so do not flip side from a distance probe.
+      // T7 infield bleacher. Its 0.392–0.408 window straddles the apex at 0.3974.
       bleacher(0.392, 0.408, 1, 24, {
         rows: 7, step: 8, density: 0.40,
         plankCol: [0.70, 0.71, 0.74], frameCol: [0.60, 0.61, 0.64],

@@ -1,5 +1,5 @@
-// apex-extras.mjs — the session, job, UI, car and track-audit handlers behind apex-tools-mcp.mjs.
-// @doc Handlers for apex_track (track session), apex_job_* (background CLIs), apex_ui_*, apex_car_audit, apex_track_audit.
+// apex-extras.mjs — the session, job and UI handlers behind apex-tools-mcp.mjs.
+// @doc Handlers for apex_track (track session), apex_job_* (background CLIs), apex_profile and apex_ui_fit / apex_ui_shot.
 // @skill check-changes
 //
 // The catalog entries stay in apex-tools-mcp.mjs (agent-surface.test.mjs reads
@@ -11,11 +11,12 @@
 //                 (102 s), livery-contrast (95 s a team) outlive any client's
 //                 tool timeout; a job returns an id at once and runs on.
 //   apex_ui_*   — one menu screen × viewport: geometry numbers or PNG + DOM, ~15 s.
-//   apex_car_audit / apex_track_audit — the offline checks agents ran by hand.
+//   (apex_car_audit / apex_track_audit left on 2026-11-03: their CLIs print JSON already.)
 import fs from "node:fs";
 import path from "node:path";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { profileOptionProblem } from "../perf/lib.mjs";
 import { sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import { loadSurveyDesigns } from "../lib/custom-survey-locations.mjs";
 import {
@@ -37,7 +38,7 @@ import { processTree, killTreeAndWait, alive } from "../lib/process-tree.mjs";
 export { processTree, killTreeAndWait } from "../lib/process-tree.mjs";
 import { DIAGNOSTIC_JOB_KINDS, diagnosticsJobSpec } from "./diagnostics-tools.mjs";
 import { carFilterArgv } from "./catalog-discovery.mjs";
-import { jobOwnerGone, publishJobManifest, takeJobAdmission } from "./job-admission.mjs";
+import { jobOwnerGone, publishJobFileOnce, publishJobManifest, takeJobAdmission, processBirth, compareBirth } from "./job-admission.mjs";
 
 /** An MCP image block for a PNG: a 640-px JPEG thumbnail, so an agent sees the
  *  frame in the result instead of spending a Read on it. */
@@ -190,7 +191,7 @@ export function createExtras(ctx) {
     }
     let tracks, customDesigns;
     try {
-      customDesigns = args.designs ? loadSurveyDesigns(path.resolve(ROOT, args.designs)) : null;
+      customDesigns = args.designs ? loadDesigns(args.designs).designs : null;
       tracks = normalizeSurveyTracks(args).map((id) => customDesigns?.locations.has(id) ? id : needTrack(id));
     } catch (e) {
       if (e.refuse) return e.refuse;
@@ -359,6 +360,41 @@ export function createExtras(ctx) {
   const JOB_DIR = path.join(ROOT, "artifacts", "logs", "apex-jobs");
   const jobs = new Map();
   let failedAdmissionRelease = null;
+  /** The exact id shape jobStart mints: <kind>-<base36 ms>-<pid>-<12 hex>. Anything else names no job. */
+  const validJobId = (id) => {
+    const m = JOB_ID_RE.exec(String(id ?? ""));
+    return Boolean(m && JOB_KINDS.includes(m[1]));
+  };
+  const badJobId = (id) => refuse("bad_args", `jobId ${JSON.stringify(String(id ?? "").slice(0, 80))} is not a job id`,
+    "Pass a jobId exactly as apex_job_start returned it; apex_job_status {} lists them.");
+  /** A file under artifacts/ or scratch/ (realpath, so a symlink cannot leave the tree), else null. It must exist,
+   *  unless mayBeMissing: then its directory must (an .exit file not written yet). */
+  const confined = (p, { mayBeMissing = false } = {}) => {
+    if (typeof p !== "string" || !p) return null;
+    let real;
+    const abs = path.resolve(ROOT, p);
+    try { real = fs.realpathSync(abs); }
+    catch (e) {
+      if (!mayBeMissing || e.code !== "ENOENT") return null;
+      try { real = path.join(fs.realpathSync(path.dirname(abs)), path.basename(abs)); } catch { return null; }
+    }
+    const within = (base) => {
+      let b; try { b = fs.realpathSync(path.join(ROOT, base)); } catch { return false; }
+      const rel = path.relative(b, real);
+      return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+    };
+    return within("artifacts") || within("scratch") ? real : null;
+  };
+  /** designs: a collection under artifacts/ or scratch/; a parse failure says so without quoting the file. */
+  const loadDesigns = (p) => {
+    const abs = confined(String(p));
+    if (!abs) throw Object.assign(new Error("designs"), { refuse: refuse("path_escaped", "designs must be an existing file under artifacts/ or scratch/", "Copy the collection under scratch/ and pass that repo-relative path.") });
+    try { return { abs, designs: loadSurveyDesigns(abs) }; }
+    catch (e) {
+      if (e instanceof SyntaxError) throw Object.assign(new Error("designs"), { refuse: refuse("bad_args", "designs file is not valid JSON", "Export the collection from the track designer again.") });
+      throw e;
+    }
+  };
   const list = (v, what) => {
     if (v == null || v === "") return null;
     const s = Array.isArray(v) ? v.join(",") : String(v);
@@ -371,9 +407,11 @@ export function createExtras(ctx) {
     switch (kind) {
       case "survey_track": return { browser: true, argv: nodeArgv("track/survey-track.mjs", needTrack(a.track), ...(a.oblique ? ["--oblique"] : [])) };
       case "shot_survey": {
-        let tracks;
+        let tracks, designsAbs;
         try {
-          const custom = a.designs ? loadSurveyDesigns(path.resolve(ROOT, a.designs)) : null;
+          const loaded = a.designs ? loadDesigns(a.designs) : null;
+          const custom = loaded?.designs;
+          designsAbs = loaded?.abs;
           tracks = normalizeSurveyTracks({
             track: a.track,
             tracks: a.tracks == null ? undefined : (Array.isArray(a.tracks) ? a.tracks : String(a.tracks).split(",")),
@@ -394,7 +432,7 @@ export function createExtras(ctx) {
           "--label", label,
           "--out", out,
           ...(a.profile ? ["--profile", String(a.profile)] : []),
-          ...(a.designs ? ['--designs', path.resolve(ROOT, a.designs)] : []),
+          ...(designsAbs ? ['--designs', designsAbs] : []),
           ...(a.select ? ['--select', a.select.join(',')] : []),
           ...(a.seed != null ? ["--seed", String(a.seed)] : []),
           ...(a.resume ? ["--resume"] : []),
@@ -428,6 +466,8 @@ export function createExtras(ctx) {
       case "profile": {
         const mode = String(a.mode || "spans");
         if (!["spans", "cpu", "hitch", "trace"].includes(mode)) throw Object.assign(new Error("mode"), { refuse: refuse("bad_args", "mode must be spans|cpu|hitch|trace", 'e.g. {"kind":"profile","mode":"spans"}.') });
+        const problem = profileOptionProblem(mode, ["frames", "repeat", "base"].filter(name => Object.hasOwn(a, name)));
+        if (problem) throw Object.assign(new Error("profile options"), { refuse: refuse("bad_args", problem, "Omit controls unsupported by the selected profile mode.") });
         const argv = nodeArgv("perf/profile.mjs", needTrack(a.track || "vegas"), "--mode", mode);
         if (a.frames != null) argv.push("--frames", String(Math.max(10, Math.min(600, Math.trunc(Number(a.frames)) || 40))));
         if (a.repeat != null) argv.push("--repeat", String(Math.max(1, Math.min(7, Math.trunc(Number(a.repeat)) || 1))));
@@ -496,7 +536,7 @@ export function createExtras(ctx) {
     try {
       publishManifest(j.id, {
         id: j.id, kind: j.kind, state: j.state, exit: j.exit, pid: j.child?.pid || j.pid || null,
-        browser: j.browser, started: j.started, ended: j.ended, argv: j.argv,
+        birth: j.birth || null, browser: j.browser, started: j.started, ended: j.ended, argv: j.argv,
         log: path.relative(ROOT, j.log), stderr: path.relative(ROOT, j.err),
       });
       return true;
@@ -513,22 +553,6 @@ export function createExtras(ctx) {
   const cleanupPending = (j) => {
     const marker = readCancellation(j.id);
     return Boolean(marker?.cleanup && !marker.cleanup.complete);
-  };
-  const processBirth = (pid) => {
-    try {
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
-      const start = stat.slice(stat.lastIndexOf(")") + 2).split(/\s+/)[19];
-      const boot = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
-      if (start && boot) return `proc:${boot}:${start}`;
-    } catch { /* portable fallback below */ }
-    try {
-      const start = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
-        encoding: "utf8", timeout: 5000, env: { ...process.env, TZ: "UTC0", LC_ALL: "C", LANG: "C" },
-      }).trim();
-      // Version the canonical format: old ps records inherited TZ/locale, so a
-      // mismatch with them cannot prove that the original process has exited.
-      return start ? `ps-utc-v1:${start}` : null;
-    } catch { return null; }
   };
   const ownerGone = (owner) => jobOwnerGone(owner, processBirth);
   const takeAdmission = () => {
@@ -585,12 +609,14 @@ export function createExtras(ctx) {
     let exit = meta.exit;
     let recordedExit = false;
     try {
-      const code = Number(fs.readFileSync(exitFileFor(path.join(ROOT, meta.log)), "utf8"));
+      const exitAbs = typeof meta.log === "string" ? confined(exitFileFor(meta.log), { mayBeMissing: true }) : null;
+      const code = exitAbs ? Number(fs.readFileSync(exitAbs, "utf8")) : NaN;
       if (Number.isInteger(code)) { exit = code; recordedExit = true; }
     } catch { /* no exit file: a job from before the wrapper, or the sh itself was killed */ }
-    if (!recordedExit && alive(meta.pid)) return meta;
+    // A live PID whose start differs from the launch record is a reused PID: the job is gone.
+    if (!recordedExit && alive(meta.pid) && compareBirth(meta.birth, processBirth(meta.pid)) !== "different") return meta;
     if (exit == null) try {
-      const text = fs.readFileSync(path.join(ROOT, meta.log), "utf8");
+      const text = fs.readFileSync(confined(meta.log), "utf8");
       const last = text.trim().split("\n").filter(Boolean).pop() || "";
       if (/"ok"\s*:\s*true/.test(last)) exit = 0;
       else if (/"ok"\s*:\s*false/.test(last) || last) exit = exit ?? 1;
@@ -602,8 +628,10 @@ export function createExtras(ctx) {
     return meta;
   };
   const loadDiskJob = (id) => {
+    if (!validJobId(id)) return null;
     try {
       const raw = JSON.parse(fs.readFileSync(jobManifestPath(id), "utf8"));
+      if (!raw || raw.id !== id) return null;
       return refreshDiskJob(raw);
     } catch { return null; }
   };
@@ -612,28 +640,29 @@ export function createExtras(ctx) {
   const JOB_TTL_MS = 7 * 86400000;
   const pruneJobs = () => {
     let files = [];
-    try { files = fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")); } catch { return; }
+    try { files = fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json") && validJobId(f.slice(0, -5))); } catch { return; }
     for (const f of files) {
       try {
         const mf = path.join(JOB_DIR, f);
         const m = JSON.parse(fs.readFileSync(mf, "utf8"));
-        if (!["done", "failed", "cancelled"].includes(m.state) || cleanupPending(m)) continue;
-        const logAbs = m.log ? path.join(ROOT, m.log) : "";
-        const exitAbs = logAbs ? exitFileFor(logAbs) : "";
+        if (m.id !== f.slice(0, -5) || !["done", "failed", "cancelled"].includes(m.state) || cleanupPending(m)) continue;
+        // Only files under artifacts/ or scratch/ are ever removed or read.
+        const logAbs = confined(m.log) || "";
+        const exitAbs = typeof m.log === "string" ? confined(exitFileFor(m.log)) || "" : "";
         if (m.ended && Date.now() - m.ended > JOB_TTL_MS) {
-          for (const x of [mf, logAbs, m.stderr ? path.join(ROOT, m.stderr) : "", exitAbs, jobCancelPath(m.id)]) if (x) fs.rmSync(x, { force: true });
+          for (const x of [mf, logAbs, confined(m.stderr), exitAbs, jobCancelPath(m.id)]) if (x) fs.rmSync(x, { force: true });
           continue;
         }
         if (m.state === "failed" && logAbs && !fs.existsSync(exitAbs)) {
           const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8")).out;
-          if (o && o.ok === true) { m.state = "done"; m.exit = 0; fs.writeFileSync(mf, JSON.stringify(m, null, 2) + "\n"); }
+          if (o && o.ok === true) { m.state = "done"; m.exit = 0; publishJobManifest(mf, m); }
         }
       } catch { /* unreadable manifest: leave it */ }
     }
   };
   const listDiskJobs = () => {
     try {
-      return fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json")).map((f) => loadDiskJob(f.slice(0, -5))).filter(Boolean);
+      return fs.readdirSync(JOB_DIR).filter((f) => f.endsWith(".json") && validJobId(f.slice(0, -5))).map((f) => loadDiskJob(f.slice(0, -5))).filter(Boolean);
     } catch { return []; }
   };
   /** A finished survey's parsed result can run past 100 KB (hud_survey: every cell); a client then drops the whole reply.
@@ -675,10 +704,11 @@ export function createExtras(ctx) {
     const v = { jobId: j.id, kind: j.kind, state: j.state, exit: j.exit, elapsedMs: (j.ended || Date.now()) - j.started,
       log: logRel, stderr: errRel, argv: j.argv, durable: true, ...(cleanupPending(j) ? { cleanupPending: true } : {}) };
     if (full) {
-      const logAbs = path.join(ROOT, logRel);
-      const errAbs = errRel ? path.join(ROOT, errRel) : "";
-      v.tail = [tail(logAbs, 30), errAbs ? tail(errAbs, 20) : ""].filter(Boolean).join("\n--- stderr ---\n");
-      if (j.state !== "running") {
+      // A manifest's log names are data: read them only under artifacts/ or scratch/.
+      const logAbs = confined(logRel);
+      const errAbs = confined(errRel);
+      v.tail = [logAbs ? tail(logAbs, 30) : "", errAbs ? tail(errAbs, 20) : ""].filter(Boolean).join("\n--- stderr ---\n");
+      if (j.state !== "running" && logAbs) {
         try {
           const o = ctx.splitOut(fs.readFileSync(logAbs, "utf8"));
           if (o.out != null) v.out = capJobOut(o.out, logRel);
@@ -783,7 +813,9 @@ export function createExtras(ctx) {
     // runs, and refreshDiskJob would otherwise have to guess the verdict from the log's last line.
     fs.closeSync(logFd); fs.closeSync(errFd);
     try { child.unref(); } catch { /* */ }
-    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started, ended: null, log, err };
+    // The launch identity: cancel signals this PID only while its start time still matches.
+    const birth = processBirth(child.pid);
+    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, birth, state: "running", exit: null, started, ended: null, log, err };
     jobs.set(id, j);
     // The wrapper waits on stdin until running publication succeeds. If the
     // owner dies in the spawn/publication window, EOF prevents any workload.
@@ -829,6 +861,7 @@ export function createExtras(ctx) {
       return toolResult({ ok: true, jobs: all.slice(0, limit).map((j) => jobView(j)), total: all.length, ...(all.length > limit ? { hint: `${all.length - limit} older job(s) not shown; pass limit (max 200) or state.` } : {}) });
     }
     const id = String(args.jobId);
+    if (!validJobId(id)) return badJobId(id);
     const j = reconcileCancellation(jobs.get(id)) || loadDiskJob(id);
     if (!j) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists in-memory and disk manifests under artifacts/logs/apex-jobs/.");
     return toolResult({ ok: j.state !== "failed", ...jobView(j, true) }, { isError: j.state === "failed" });
@@ -838,7 +871,7 @@ export function createExtras(ctx) {
    *  call to the background on its own (it did at ~120 s for garage shots), so keep waits modest. */
   function jobStatusWait(args) {
     const wait = Math.min(Math.max(Number(args.wait) || 0, 0), 300);
-    if (!wait || !args.jobId) return jobStatus(args);   // synchronous, as before: only a wait returns a promise
+    if (!wait || !args.jobId || !validJobId(args.jobId)) return jobStatus(args);   // synchronous, as before: only a wait returns a promise
     return waitForJob(args, wait);
   }
   async function waitForJob(args, wait) {
@@ -857,21 +890,31 @@ export function createExtras(ctx) {
   }
   async function jobCancel(args) {
     const id = String(args.jobId || "");
+    if (!validJobId(id)) return badJobId(id);
     let j = jobs.get(id);
     const disk = !j ? loadDiskJob(id) : null;
     if (!j && !disk) return refuse("unknown_job", `no job ${id}`, "apex_job_status {} lists them.");
     if (!j && disk) {
-      j = { ...disk, child: { pid: disk.pid }, log: path.join(ROOT, disk.log), err: path.join(ROOT, disk.stderr || disk.log.replace(/\.log$/, ".err")) };
+      j = { ...disk, child: { pid: disk.pid }, log: path.join(ROOT, String(disk.log)), err: path.join(ROOT, String(disk.stderr || String(disk.log).replace(/\.log$/, ".err"))) };
     }
     let survivors;
     reconcileCancellation(j);
     if (jobActive(j)) {
       // Snapshot before signalling: descendants can be reparented as soon as
       // the root exits. Keep the snapshot durable if this canceller dies.
-      const tree = [...new Set([...(readCancellation(j.id)?.cleanup?.pids || []), ...processTree(j.child?.pid || j.pid)])];
+      // Signal the root's tree only while the root is provably the process jobStart launched (birth recorded
+      // at launch). An unproven root with no earlier cleanup record is refused; a reused PID is never signalled.
+      const prior = readCancellation(j.id);
+      const rootPid = j.child?.pid || j.pid;
+      const root = Number.isInteger(rootPid) && rootPid > 0 && alive(rootPid) ? compareBirth(j.birth, processBirth(rootPid)) : "gone";
+      if (root === "unknown" && !prior) {
+        return refuse("job_identity_unknown", `job ${j.id} has no launch identity matching pid ${rootPid}; nothing was signalled`,
+          "Check the process by hand (ps) before stopping it; jobs started by this server record their identity.");
+      }
+      const tree = [...new Set([...(prior?.cleanup?.pids || []), ...(root === "same" ? processTree(rootPid) : [])])];
       const marker = { state: "cancelled", ended: Date.now(), exit: j.exit ?? null, cleanup: { pids: tree, identities: tree.map((pid) => ({ pid, birth: processBirth(pid) })), complete: false } };
-      try { fs.writeFileSync(jobCancelPath(j.id), JSON.stringify(marker) + "\n", { flag: "wx" }); }
-      catch (e) { if (e.code !== "EEXIST") throw e; }
+      // First canceller wins; a peer canceller reads the complete marker or none (#5695).
+      publishJobFileOnce(jobCancelPath(j.id), marker);
       j.cancelTree = readCancellation(j.id)?.cleanup?.pids || tree;
       reconcileCancellation(j);
       const cancellation = readCancellation(j.id);
@@ -882,9 +925,7 @@ export function createExtras(ctx) {
       survivors = remaining.length;
       const finished = { ...cancellation, cleanup: { ...cleanup, complete: survivors === 0, survivors: remaining } };
       // Atomic replacement prevents other owners observing a truncated marker.
-      const temporary = `${jobCancelPath(j.id)}.${randomUUID()}.tmp`;
-      try { fs.writeFileSync(temporary, JSON.stringify(finished) + "\n", { flag: "wx" }); fs.renameSync(temporary, jobCancelPath(j.id)); }
-      finally { fs.rmSync(temporary, { force: true }); }
+      publishJobManifest(jobCancelPath(j.id), finished);
       j.ended = Date.now();
       writeJobManifest(j);
       if (survivors === 0) releaseJobLock(j);
@@ -985,52 +1026,6 @@ export function createExtras(ctx) {
     } finally { releaseLock(); }
   }
 
-  // ── apex_car_audit / apex_track_audit: offline checks, no browser ─────────
-  async function carAudit(args, { signal }) {
-    const check = String(args.check || "");
-    let argv;
-    if (check === "ladder") {
-      try { argv = nodeArgv("car/parts-ladder.mjs", "--json", ...carFilterArgv(args)); }
-      catch (e) { return refuse("bad_args", e.message, "Use canonical category and team ids from apex_catalog."); }
-    }
-    else if (check === "crest") {
-      const teams = (args.teams || []).map(String);
-      if (teams.some((t) => !/^[a-z]{2,20}$/.test(t))) return refuse("bad_args", "teams are team ids", "e.g. [\"haas\",\"audi\"]");
-      argv = nodeArgv("car/crest-sweep.mjs", ...teams, "--json");
-    } else return refuse("bad_args", "check must be ladder or crest", "parts-sweep and livery-contrast take minutes: apex_job_start {kind:\"parts_sweep\"|\"livery_contrast\"}.");
-    if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
-    if (mockMode()) return toolResult({ ok: true, mock: true, argv });
-    // Exit 1 = the check found rows to look at — a verdict, not a crash.
-    return runSpawn(argv, { timeoutMs: 120000, allowExit: new Set([0, 1]), signal });
-  }
-  const AUDIT_CHECKS = ["verify", "float", "clip", "coplanar", "props", "ground"];
-  async function trackAudit(args, { signal }) {
-    let track; try { track = needTrack(args.track); } catch (e) { return e.refuse; }
-    // `checks` → tools/track/audit-circuit.cjs: every per-circuit audit against
-    // its baseline in one call (~16 s for all six on monza, 2026-10-05). The
-    // bare call keeps the original verify + float pair.
-    if (args.checks !== undefined) {
-      const checks = Array.isArray(args.checks) ? args.checks.map(String) : [];
-      if (!checks.length || checks.some((c) => !AUDIT_CHECKS.includes(c))) return refuse("bad_args", `checks must be a non-empty list of ${AUDIT_CHECKS.join(" | ")}`, 'e.g. {"track":"monza","checks":["clip","coplanar"]}');
-      const argv = nodeArgv("track/audit-circuit.cjs", track, "--json", "--checks", [...new Set(checks)].join(","));
-      if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv });
-      if (mockMode()) return toolResult({ ok: true, mock: true, argv });
-      // Exit 1 = a check over its baseline — a verdict, not a crash.
-      const r = bodyOf(await runSpawn(argv, { timeoutMs: 180000, allowExit: new Set([0, 1]), signal }));
-      return toolResult({ ok: r.ok, track, audit: r.out, stderr: r.ok ? undefined : String(r.stderr || "").slice(-800),
-        hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !r.ok });
-    }
-    const va = nodeArgv("track/verify-track.cjs", track, "--quiet"), fa = nodeArgv("track/float-audit.cjs", track, "--json");
-    if (args.dryRun) return toolResult({ ok: true, dryRun: true, argv: [va, fa] });
-    if (mockMode()) return toolResult({ ok: true, mock: true, argv: [va, fa] });
-    const [v, f] = (await Promise.all([runSpawn(va, { timeoutMs: 120000, signal }), runSpawn(fa, { timeoutMs: 120000, allowExit: new Set([0, 1]), signal })])).map(bodyOf);
-    const ok = v.ok && f.ok;
-    return toolResult({ ok, track,
-      verify: { ok: v.ok, exit: v.exit, line: (v.stdout || "").split("\n")[0], stderr: v.ok ? undefined : v.stderr.slice(-800) },
-      float: { ok: f.ok, exit: f.exit, out: f.out, stderr: f.ok ? undefined : f.stderr.slice(-800) },
-      hint: "Suspect fracs go to apex_track op shot (orbit el 20, dist 25) to confirm." }, { isError: !ok });
-  }
-
   return {
     thumbBlock,
     sessionInfo,
@@ -1056,18 +1051,18 @@ export function createExtras(ctx) {
         const r = jobStart({ ...a, kind: "profile" });
         let b; try { b = JSON.parse(r.content[0].text); } catch { return r; }
         if (b.ok === false || b.dryRun || b.mock) return r;
-        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then apex_profile_query on the artifact named in the log." });
+        return toolResult({ ...b, routed: "apex_job_start profile", hint: "Runs in the background: apex_job_status {jobId, wait:100} until state is done; then `node tools/perf/query.mjs` on the artifact named in the log." });
       },
       apex_job_status: (a) => jobStatusWait(a),
       apex_job_cancel: (a) => jobCancel(a),
       apex_ui_fit: (a, o) => uiFit(a, o),
       apex_ui_shot: (a, o) => uiShot(a, o),
-      apex_car_audit: (a, o) => carAudit(a, o),
-      apex_track_audit: (a, o) => trackAudit(a, o),
     },
   };
 }
 
+/** jobStart's id: kind, Date.now() base36, owner pid, 12 hex of a UUID. */
+const JOB_ID_RE = /^([a-z][a-z0-9_]{0,39})-([0-9a-z]{1,12})-([1-9][0-9]{0,9})-([0-9a-f]{12})$/;
 export const JOB_KINDS = [...DIAGNOSTIC_JOB_KINDS, "survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

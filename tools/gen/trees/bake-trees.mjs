@@ -2,8 +2,10 @@
 /**
  * bake-trees.mjs — bake three species × two LODs to AX26 v3 under artifacts/trees/.
  * @doc Manual tool: `npm i --no-save @dgreenheck/ez-tree three` (never a package.json
- *   dependency). Seeded, deterministic. Fails if any LOD exceeds tools/gen/trees/caps.mjs.
- *   Does not write assets/pack/** or the asset manifest (placement slice owns that).
+ *   dependency; ez-tree is still required for the palm path). Seeded, deterministic.
+ *   Pine/tree use a hand-authored crown (#6037) so foliage ≥ wood and crown width ≥ ~30 %
+ *   of height under tools/gen/trees/caps.mjs. Fails if any LOD exceeds those caps.
+ *   Does not write assets/pack/** or the asset manifest (`install-trees.mjs` does).
  * @skill scenery-dress
  *
  *   node tools/gen/trees/bake-trees.mjs
@@ -233,70 +235,139 @@ function mergeMeshes(a, b) {
 function trisOf(mesh) { return mesh.idx.length / 3; }
 
 /**
- * If ez-tree overshoots the cap, rebuild a deterministic leaf-card + trunk
- * stand-in (plan: ~8 cards + short trunk) that stays under the cap.
+ * Hand-authored crown under LOD caps (#6037 / #6035).
+ * The 2026-10 ez-tree bake used branch.levels:0 + near-vertical leaf cards, so
+ * pine_lod0 was a 0.64 m trunk with six slivers (wood ≫ foliage). This builder
+ * keeps the frozen triangle caps in caps.mjs and guarantees:
+ *   - foliage surface area ≥ wood surface area
+ *   - crown width ≥ ~30 % of height
+ * Pine: tapered trunk + stacked cone tiers. Tree: trunk + horizontal leaf discs.
+ * Palm: top frond cards (already had a crown; kept for the budget path).
  */
-function budgetFallback(species, lod, cap, seed) {
+function crownMesh(species, lod, cap, seed) {
   const rand = mulberry32(seed + lod * 17);
-  // Plan shape: short trunk + leaf cards. Size so 2*sides*seg + 2*cards ≤ cap.
-  const trunkSeg = lod === 0 ? 3 : 2;
-  const trunkSides = lod === 0 ? 4 : 3;
-  const trunkTris = trunkSeg * trunkSides * 2;
-  const maxCards = Math.max(2, Math.floor((cap - trunkTris) / 2));
-  const want = lod === 0
-    ? (species === "palm" ? 9 : species === "tree" ? 8 : 6)
-    : (species === "palm" ? 5 : species === "tree" ? 4 : 3);
-  const cards = Math.min(want, maxCards);
   const pos = [], nrm = [], col = [], mat = [], sway = [], idx = [];
   const H = species === "palm" ? 14 : species === "tree" ? 12 : 10;
-  const R = species === "palm" ? 0.22 : 0.32;
-  const y0 = H * 0.35, y1 = H * 1.05;
+  const trunkR = species === "palm" ? 0.22 : species === "tree" ? 0.28 : 0.22;
+  const trunkH = species === "palm" ? H * 0.9 : H * 0.45;
+  const y0 = H * (species === "palm" ? 0.85 : 0.35);
+  const y1 = H * 1.05;
   function vert(x, y, z, nx, ny, nz, wood) {
     const i = pos.length / 3;
     pos.push(x, y, z); nrm.push(nx, ny, nz);
     if (wood) {
       col.push(0.32, 0.22, 0.13); mat.push(MAT_WOOD); sway.push(0);
     } else {
-      const w = Math.max(0, Math.min(1, (y - y0) / (y1 - y0)));
+      const w = Math.max(0, Math.min(1, (y - y0) / Math.max(1e-6, y1 - y0)));
       col.push(0.18, 0.42, 0.16); mat.push(MAT_FOLIAGE + w * SWAY_FRAC); sway.push(w);
     }
     return i;
   }
-  for (let s = 0; s < trunkSeg; s++) {
-    const yA = (s / trunkSeg) * H * 0.55;
-    const yB = ((s + 1) / trunkSeg) * H * 0.55;
-    const rA = R * (1 - 0.35 * s / trunkSeg);
-    const rB = R * (1 - 0.35 * (s + 1) / trunkSeg);
-    for (let i = 0; i < trunkSides; i++) {
-      const a0 = (i / trunkSides) * Math.PI * 2;
-      const a1 = ((i + 1) / trunkSides) * Math.PI * 2;
-      const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
-      const i0 = vert(c0 * rA, yA, s0 * rA, c0, 0, s0, true);
-      const i1 = vert(c1 * rA, yA, s1 * rA, c1, 0, s1, true);
-      const i2 = vert(c1 * rB, yB, s1 * rB, c1, 0, s1, true);
-      const i3 = vert(c0 * rB, yB, s0 * rB, c0, 0, s0, true);
-      idx.push(i0, i1, i2, i0, i2, i3);
+  function addTrunk(sides, segs) {
+    for (let s = 0; s < segs; s++) {
+      const yA = (s / segs) * trunkH;
+      const yB = ((s + 1) / segs) * trunkH;
+      const rA = trunkR * (1 - 0.4 * s / segs);
+      const rB = trunkR * (1 - 0.4 * (s + 1) / segs);
+      for (let i = 0; i < sides; i++) {
+        const a0 = (i / sides) * Math.PI * 2;
+        const a1 = ((i + 1) / sides) * Math.PI * 2;
+        const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+        const i0 = vert(c0 * rA, yA, s0 * rA, c0, 0, s0, true);
+        const i1 = vert(c1 * rA, yA, s1 * rA, c1, 0, s1, true);
+        const i2 = vert(c1 * rB, yB, s1 * rB, c1, 0, s1, true);
+        const i3 = vert(c0 * rB, yB, s0 * rB, c0, 0, s0, true);
+        idx.push(i0, i1, i2, i0, i2, i3);
+      }
     }
   }
-  const crownY = H * (species === "palm" ? 0.92 : 0.55);
-  for (let c = 0; c < cards; c++) {
-    const ang = (c / cards) * Math.PI * 2 + rand() * 0.2;
-    const lift = crownY + (rand() - 0.5) * H * 0.08;
-    const reach = (species === "palm" ? 3.2 : 1.8) * (0.85 + rand() * 0.3);
-    const hw = species === "palm" ? 0.55 : 0.9;
-    const hh = species === "palm" ? 2.4 : 1.1;
-    const cx = Math.cos(ang) * reach * 0.35;
-    const cz = Math.sin(ang) * reach * 0.35;
-    const rx = Math.cos(ang), rz = Math.sin(ang);
-    const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
-    const vi = corners.map(([u, v]) => {
-      const x = cx + rx * u * 0.15;
-      const y = lift + v * 0.5 + (species === "palm" ? -Math.abs(u) * 0.4 : 0);
-      const z = cz + rz * u * 0.15;
-      return vert(x, y, z, rx * 0.2, 0.9, rz * 0.2, false);
-    });
-    idx.push(vi[0], vi[1], vi[2], vi[0], vi[2], vi[3]);
+  /** Open cone shell (N tris): apex above a base ring — one pine tier. */
+  function addConeTier(yBase, yApex, radius, sides) {
+    const apex = vert(0, yApex, 0, 0, 1, 0, false);
+    for (let i = 0; i < sides; i++) {
+      const a0 = (i / sides) * Math.PI * 2;
+      const a1 = ((i + 1) / sides) * Math.PI * 2;
+      const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+      // outward-ish normal from the face
+      const mx = (c0 + c1) * 0.5, mz = (s0 + s1) * 0.5;
+      const len = Math.hypot(mx, 0.35, mz) || 1;
+      const i0 = vert(c0 * radius, yBase, s0 * radius, mx / len, 0.35 / len, mz / len, false);
+      const i1 = vert(c1 * radius, yBase, s1 * radius, mx / len, 0.35 / len, mz / len, false);
+      idx.push(apex, i0, i1);
+    }
   }
+  /** Horizontal leaf disc (2 tris) — broadleaf canopy card facing up. */
+  function addLeafDisc(cx, cy, cz, hw, hd, yaw) {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const corners = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]].map(([u, v]) => {
+      const x = cx + c * u - s * v;
+      const z = cz + s * u + c * v;
+      return vert(x, cy, z, 0, 1, 0, false);
+    });
+    idx.push(corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]);
+  }
+  /** Palm frond: large angled card near the top. */
+  function addFrond(ang, lift, reach, hw, hh) {
+    const cx = Math.cos(ang) * reach * 0.25;
+    const cz = Math.sin(ang) * reach * 0.25;
+    const rx = Math.cos(ang), rz = Math.sin(ang);
+    const corners = [[-hw, 0], [hw, 0], [hw, hh], [-hw, hh]].map(([u, v]) => {
+      const x = cx + rx * u + rx * v * 0.55;
+      const y = lift - v * 0.85 - Math.abs(u) * 0.15;
+      const z = cz + rz * u + rz * v * 0.55;
+      return vert(x, y, z, rx * 0.15, 0.85, rz * 0.15, false);
+    });
+    idx.push(corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]);
+  }
+
+  if (species === "pine") {
+    // Cap-fit: lod0 ≤45 → trunk 3×2×2=12 + 5 tiers × 6 = 30 → 42; lod1 ≤22 → 6+3×5=21.
+    const trunkSides = 3;
+    const trunkSegs = lod === 0 ? 2 : 1;
+    const tiers = lod === 0 ? 5 : 3;
+    const sides = lod === 0 ? 6 : 5;
+    addTrunk(trunkSides, trunkSegs);
+    const crownBottom = trunkH * 0.55;
+    const crownTop = H * 0.98;
+    for (let t = 0; t < tiers; t++) {
+      const f0 = t / tiers;
+      const f1 = (t + 1) / tiers;
+      const yBase = crownBottom + (crownTop - crownBottom) * f0;
+      const yApex = crownBottom + (crownTop - crownBottom) * Math.min(1, f1 + 0.08);
+      // Lower tiers wider: base radius ~2.4 m → crown width ≥ 48 % of H=10.
+      const radius = (lod === 0 ? 2.4 : 2.0) * (1 - f0 * 0.72) * (0.92 + rand() * 0.08);
+      addConeTier(yBase, yApex, radius, sides);
+    }
+  } else if (species === "tree") {
+    // Cap-fit: lod0 ≤51 → trunk 3×2×2=12 + ≤18 discs×2=36 → 48; lod1 ≤25 → 6+9×2=24.
+    const trunkSides = 3;
+    const trunkSegs = lod === 0 ? 2 : 1;
+    addTrunk(trunkSides, trunkSegs);
+    const discs = lod === 0 ? 18 : 9;
+    const crownY = trunkH * 0.85;
+    for (let c = 0; c < discs; c++) {
+      const ring = Math.floor(c / 6);
+      const onRing = c % 6;
+      const ang = (onRing / 6) * Math.PI * 2 + ring * 0.35 + rand() * 0.15;
+      const reach = (1.1 + ring * 0.55) * (0.9 + rand() * 0.15);
+      const lift = crownY + ring * 1.15 + (rand() - 0.5) * 0.35;
+      const hw = (lod === 0 ? 1.55 : 1.35) * (0.9 + rand() * 0.2);
+      const hd = hw * (0.85 + rand() * 0.2);
+      addLeafDisc(Math.cos(ang) * reach, lift, Math.sin(ang) * reach, hw, hd, ang + rand());
+    }
+  } else {
+    // Palm: tall trunk + top fronds (same look family as the prior bake; already crowned).
+    const trunkSides = lod === 0 ? 5 : 4;
+    const trunkSegs = lod === 0 ? 3 : 2;
+    addTrunk(trunkSides, trunkSegs);
+    const fronds = lod === 0 ? 9 : 5;
+    for (let c = 0; c < fronds; c++) {
+      const ang = (c / fronds) * Math.PI * 2 + rand() * 0.12;
+      addFrond(ang, H * 0.92 + (rand() - 0.5) * 0.3, 3.4 * (0.9 + rand() * 0.2),
+        0.55, 2.6 * (0.9 + rand() * 0.15));
+    }
+  }
+
   const mesh = {
     pos: Float32Array.from(pos),
     nrm: Float32Array.from(nrm),
@@ -306,7 +377,7 @@ function budgetFallback(species, lod, cap, seed) {
     idx: Uint32Array.from(idx),
   };
   if (trisOf(mesh) > cap) {
-    throw new Error(`fallback ${species} lod${lod} still ${trisOf(mesh)} > cap ${cap}`);
+    throw new Error(`crownMesh ${species} lod${lod} still ${trisOf(mesh)} > cap ${cap}`);
   }
   return mesh;
 }
@@ -314,21 +385,29 @@ function budgetFallback(species, lod, cap, seed) {
 async function bakeOne(Tree, TreeType, species, lod) {
   const caps = LOD_CAPS[species];
   const cap = lod === 0 ? caps.lod0 : caps.lod1;
-  const opts = speciesOptions(species, lod, TreeType);
-  const tree = new Tree();
-  applyOpts(tree, opts);
-  tree.generate();
-  const bark = tree.branchesMesh.geometry;
-  const leaves = tree.leavesMesh.geometry;
-  const yMin = 0, yMax = opts.branch.length[0] || 12;
-  let mesh = mergeMeshes(
-    geoToMesh(bark, MAT_WOOD, yMin, yMax),
-    geoToMesh(leaves, MAT_FOLIAGE, yMax * 0.35, yMax * 1.05),
-  );
-  let source = "ez-tree";
-  if (trisOf(mesh) > cap) {
-    mesh = budgetFallback(species, lod, cap, opts.seed);
-    source = "leaf-card-fallback";
+  // #6037: pine/tree always use the hand crown (ez-tree levels:0 had no canopy).
+  // Palm still prefers ez-tree when it fits; crownMesh is the budget path.
+  let mesh, source;
+  if (species === "pine" || species === "tree") {
+    mesh = crownMesh(species, lod, cap, species === "pine" ? 101 : 202);
+    source = "hand-crown";
+  } else {
+    const opts = speciesOptions(species, lod, TreeType);
+    const tree = new Tree();
+    applyOpts(tree, opts);
+    tree.generate();
+    const bark = tree.branchesMesh.geometry;
+    const leaves = tree.leavesMesh.geometry;
+    const yMin = 0, yMax = opts.branch.length[0] || 12;
+    mesh = mergeMeshes(
+      geoToMesh(bark, MAT_WOOD, yMin, yMax),
+      geoToMesh(leaves, MAT_FOLIAGE, yMax * 0.35, yMax * 1.05),
+    );
+    source = "ez-tree";
+    if (trisOf(mesh) > cap) {
+      mesh = crownMesh(species, lod, cap, opts.seed);
+      source = "hand-crown";
+    }
   }
   const tris = trisOf(mesh);
   if (tris > cap) throw new Error(`${species} lod${lod}: ${tris} tris > cap ${cap}`);

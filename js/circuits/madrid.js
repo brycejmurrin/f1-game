@@ -4,6 +4,7 @@
 
   (window.TrackDefs = window.TrackDefs || []).push({
     id: "madrid",
+    revision: 2,
     name: "MADRID",
     gp: "Spanish GP",
     country: "Spain",
@@ -12,7 +13,13 @@
     street: false,
     reverse: false,
     sceneryCoordinates: "racing",
-    lengthKm: 5.47,   // official Madring length; the OSM trace builds 5.343 km
+    // 5.47 is the pre-homologation figure; formula1.com's circuit guide gives
+    // 5.416 km and the 2026 race ran 57 laps. 5.47 stays because the announcer
+    // reads lengthKm aloud and every baked voice pack has "5.470 kilometres"
+    // (tests/unit/voice-pack.test.mjs); change it with a voice re-bake. Alone
+    // it derived 56 laps, so the race distance is authored. OSM builds 5.343 km.
+    lengthKm: 5.47,
+    gpLaps: 57,
     tyreSeverity: 1.18,  // New 2026 Madring asphalt; street-circuit band 1.1–1.25 (no measured Chronicle rate yet)
     baseHW: 7,
     terrainOuter: 56,
@@ -22,10 +29,22 @@
     ownPitStraight: true,
     banked: true,
     bankZones: [
-      { frac: 0.75, angleDeg: 13.5, widthM: 180 }, // 24% grade = atan(0.24)
-      { frac: 0.0524, angleDeg: 3.0, widthM: 180 },
-      { frac: 0.3990, angleDeg: 3.5, widthM: 110 },
-      { frac: 0.5711, angleDeg: 3.0, widthM: 90 },
+      // La Monumental = madring.com Curve 12 (547.82 m, 24 % banking), the
+      // semicircle straight after the Curve 10/11 chicane (built R 0.378 /
+      // L 0.398) and before Curve 13, the slow ~84° corner (built L 0.572,
+      // 82°). On this trace that is the 207° right built 2246-2666 m (0.4205-
+      // 0.4991), which `turns` splits into two apexes, T10 0.433 / T11 0.447.
+      // 0.456 is the arc's middle pulled to within 60 m of T11
+      // (corner-frames). widthM is the real curve's length (547.82 m), the
+      // designer's convention; the bank is a cosine window, so it peaks
+      // mid-arc. It sat at 0.75, on an ordinary 67° left, until 2026-11-18
+      // (#5316 CIRC2-02).
+      { frac: 0.456, angleDeg: 13.5, widthM: 548 }, // La Monumental, T10/T11 in this list; 24% grade = atan(0.24)
+      // madring.com/en/circuit gives Curve 2 at 1%, Curve 11 at 2% adverse,
+      // and Curve 13 at 4%. Convert crossfall percentages with atan.
+      { frac: 0.0524, angleDeg: 0.57, widthM: 180 },
+      { frac: 0.3990, angleDeg: -1.15, widthM: 110 },
+      { frac: 0.5711, angleDeg: 2.29, widthM: 90 },
       { frac: 0.6557, angleDeg: 3.0, widthM: 180 },
       { frac: 0.9296, angleDeg: 3.0, widthM: 90 },
     ],
@@ -55,7 +74,7 @@
       // precinct zones so each zone states its full kind set (the
       // new-hooks Madrid foundation spec pins these two zones).
       { kinds: ["city", "foliage"], s0: 0.95, s1: 0.06 },
-      { kinds: ["city", "foliage", "lighting"], s0: 0.68, s1: 0.83 },
+      { kinds: ["city", "foliage", "lighting"], s0: 0.41, s1: 0.51 },  // La Monumental bowl
     ],
     pal: {
       zenith: [0.30, 0.58, 0.90],
@@ -65,7 +84,6 @@
       sun: [1.0, 0.91, 0.70],
       sunColor: [1.0, 0.98, 0.94],
     },
-    crossover: true,   // road crosses itself: terrain-over-road scans the other deck by mesh provenance
     elevations: [
       { s: 0.40, halfM: 520, rise: 18 },
       { s: 0.52, halfM: 360, rise: -8 },

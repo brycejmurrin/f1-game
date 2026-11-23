@@ -91,7 +91,7 @@ function boot({ dragAnchor = true } = {}) {
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js",
-    "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const canvasL = {};
@@ -131,6 +131,25 @@ test("offset dot tracks horizontal drag and clamps at full lock", () => {
   onCanvas("touchmove", { changedTouches: [{ identifier: 2, clientX: pastLock, clientY: 200 }] });
   assert.equal(dragOff(dragEl), range + "px");
   assert.equal(Input.debugState().touchSteer, 1);
+});
+
+test("a held drag only repaints the indicator when its visible offset changes", () => {
+  const { Input, onCanvas, dragEl } = boot();
+  Input.setSteerMode("touch");
+  const touch = (type, x) => onCanvas(type, { changedTouches: [{ identifier: 1, clientX: x, clientY: 200 }] });
+  touch("touchstart", 100);
+  let writes = 0;
+  const count = { set(style, k, v) { writes++; style[k] = v; return true; } };
+  dragEl.style = new Proxy(dragEl.style, count);
+  const dot = dragEl.children[0];
+  dot.style = new Proxy(dot.style, count);
+  for (const x of [101, 102, 103, 400, 410, 420]) touch("touchmove", x);
+  assert.equal(writes, 1, "dead-band and clamped positions share one transform change");
+  assert.equal(Input.debugState().touchSteer, 1);
+  touch("touchend", 420);
+  touch("touchstart", 180);
+  assert.equal(dragEl.style.left, "180px");
+  assert.equal(dragOff(dragEl), "0px");
 });
 
 test("the drag range reads the viewport on resize, not on every touch (B·H11)", () => {
@@ -176,16 +195,51 @@ test("no-op without #drag-anchor or outside TOUCH steer mode", () => {
   assert.ok(!classOn.has("on"));
 });
 
-test("follows the touch that is actually steering (last press wins)", () => {
+// Clean-room fix 61: a finger takes the steering once it drags past the dead
+// zone, not on press, so a resting second finger cannot steal it.
+test("follows the touch that is actually steering (last drag wins, a resting press does not)", () => {
   const { Input, onCanvas, dragEl } = boot();
   Input.setSteerMode("touch");
   onCanvas("touchstart", { changedTouches: [{ identifier: 10, clientX: 80, clientY: 120 }] });
   onCanvas("touchstart", { changedTouches: [{ identifier: 11, clientX: 520, clientY: 640 }] });
+  assert.equal(dragEl.style.left, "80px", "a fresh press does not take the steering");
+  onCanvas("touchmove", { changedTouches: [{ identifier: 11, clientX: 522, clientY: 640 }] });
+  assert.equal(dragEl.style.left, "80px", "jitter inside the dead zone does not take it either");
+  onCanvas("touchmove", { changedTouches: [{ identifier: 11, clientX: 540, clientY: 640 }] });
   assert.equal(dragEl.style.left, "520px");
   assert.equal(dragEl.style.top, "640px");
   onCanvas("touchend", { changedTouches: [{ identifier: 11, clientX: 520, clientY: 640 }] });
   assert.equal(dragEl.style.left, "80px");
   assert.equal(dragEl.style.top, "120px");
+});
+
+test("two thumbs can exchange steering repeatedly while both stay on the canvas (#6062)", () => {
+  const { Input, onCanvas, dragEl } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  const touch = (event, identifier, clientX, clientY) =>
+    onCanvas(event, { changedTouches: [{ identifier, clientX, clientY }] });
+  const steering = (direction, anchor) => {
+    assert.equal(Math.sign(Input.steer()), direction);
+    assert.equal(dragEl.style.left, anchor + "px");
+  };
+
+  touch("touchstart", 1, 250, 200);
+  touch("touchmove", 1, 320, 200);
+  steering(1, 250);
+  touch("touchstart", 2, 550, 200);
+  touch("touchmove", 2, 552, 200);
+  steering(1, 250);
+  touch("touchmove", 2, 480, 200);
+  steering(-1, 550);
+  touch("touchmove", 1, 320, 230); // vertical movement of the first thumb
+  steering(-1, 550);
+  touch("touchmove", 1, 350, 230);
+  steering(1, 250);
+  touch("touchmove", 2, 460, 200);
+  steering(-1, 550);
+  touch("touchend", 2, 460, 200);
+  steering(1, 250);
 });
 
 test("hides while a menu overlay is open", () => {
@@ -233,4 +287,90 @@ test("a rotation drops a drag whose anchor lives in the old screen space (B·H20
   onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 744, clientY: 200 }] });   // the same physical spot, mirrored x
   for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
   assert.equal(Input.steer(), 0, "a finger that did not move reads no steer after a rotation");
+});
+
+test("a rotation zeroes the touch ramp at once, not over KEY_RAMP_OUT", () => {
+  // onScreenRotate used to clear touches/touchActive but leave touchSteerVal at
+  // full lock, so steer() unwound for ~125 ms after the fingers were gone.
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  assert.equal(Input.steer(), 1, "precondition: full lock");
+  for (const f of listeners.orientationchange || []) f({});
+  clock.t += 1;   // one sample, nowhere near a KEY_RAMP_OUT unwind
+  assert.equal(Input.steer(), 0, "rotation snaps the wheel to centre");
+});
+
+test("the saved floating wheel centers on contact and shows the signed steering command", () => {
+  const { Input, onCanvas, dragEl, classOn, sb, listeners } = boot();
+  let selected = "wheel", notify;
+  sb.GameStore = { store: {
+    get: (key, fallback) => key === "touchSteeringGuide" ? selected : fallback,
+    subscribe: fn => { notify = fn; },
+  } };
+  const guideModule = "js/input/touch-button-actions.js";
+  vm.runInContext(read(guideModule), sb, { filename: absSrc(guideModule) });
+  assert.equal(dragEl.dataset.steeringGuide, "wheel");
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  const touch = (event, x, y) => onCanvas(event, {
+    changedTouches: [{ identifier: 7, clientX: x, clientY: y }],
+  });
+  const angle = () => parseFloat(dragEl.style.getPropertyValue("--drag-turn"));
+  touch("touchstart", 300, 150);
+  assert.equal(dragEl.style.left, "300px");
+  assert.equal(dragEl.style.top, "150px");
+  assert.ok(classOn.has("on"));
+  touch("touchmove", 302, 150);
+  assert.equal(angle(), 0);
+  touch("touchmove", 250, 120);
+  assert.ok(angle() < 0 && angle() > -120);
+  assert.ok(Math.abs(angle() - Input.steer() * 120) < 0.001);
+  touch("touchmove", 700, 120);
+  assert.equal(angle(), 120);
+  touch("touchend", 700, 120);
+  assert.ok(!classOn.has("on"));
+  touch("touchstart", 30, 60);
+  assert.equal(dragEl.style.left, "30px");
+  assert.equal(angle(), 0);
+  for (const f of listeners.blur) f({});
+  assert.ok(!classOn.has("on"));
+  touch("touchstart", 400, 100);
+  Input.setSteerMode("buttons");
+  assert.ok(!classOn.has("on"));
+  selected = "ring";
+  notify({ key: "touchSteeringGuide" });
+  assert.equal(dragEl.dataset.steeringGuide, undefined);
+  Input.setSteerMode("touch");
+  touch("touchstart", 300, 150);
+  touch("touchmove", 320, 150);
+  assert.equal(dragOff(dragEl), "15px");
+});
+
+test("held drag updates at speed without another move, tracks the thumb under pause and resets on regrip", () => {
+  const { Input, onCanvas, sb, classOn } = boot();
+  Input.setSteerMode("touch"); Input.setAnalogSpeedMix(0); Input.setAdaptiveButtons(1);
+  Input.setTouchSpeedMix(1); Input.setSteerSpeedRef(41.7); Input.setSpeedStd(0);
+  let paused = false;
+  sb.UiLayers = { anyOpen: () => paused, inRace: () => true };
+  Input.poll();
+  const touch = (type, x) => onCanvas(type, { changedTouches: [{ identifier: 1, clientX: x, clientY: 60 }] });
+  touch("touchstart", 100); touch("touchmove", 155.64);
+  const partial = Input.steer(0.016);
+  Input.setSpeedStd(41.7);
+  assert.ok(Math.abs(Input.steer(0.016) - partial / 2) < 1e-6);
+  Input.setDragSmoothing(2);
+  touch("touchmove", 900);
+  assert.equal(Input.steer(0.016), 1);
+  paused = true; Input.poll();
+  assert.equal(classOn.has("on"), false);
+  touch("touchmove", 100);
+  paused = false; Input.poll();
+  assert.equal(Input.steer(0.016), 0, "resume starts where the thumb is now");
+  touch("touchmove", 900);
+  assert.ok(Input.steer(0.016) > 0);
+  touch("touchend", 900); touch("touchstart", 150);
+  assert.equal(Input.steer(0.016), 0, "fresh press between physics steps starts centered");
 });

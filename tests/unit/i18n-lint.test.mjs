@@ -23,6 +23,12 @@ import {
   MIGRATED,
   ALLOWLIST,
 } from "../../tools/check/i18n-lint.mjs";
+import {
+  extractMessageCalls,
+  readStringLiteral,
+  deadLocaleKeys,
+  generate,
+} from "../../tools/gen/gen-locales.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const FIX = path.join(ROOT, "tests/fixtures/i18n");
@@ -141,4 +147,48 @@ test("allowlist file exists and is reviewed-shape (no silent hide)", () => {
   assert.equal(typeof doc.sites, "object");
   // Ship tree has no non-en locales yet — lists stay empty on purpose.
   assert.equal(doc.keep.length + doc.identical.length + doc.unknown.length, 0);
+});
+
+test("gen-locales extractMessageCalls keeps tr/hT and comma-heavy I18n.t defaults", () => {
+  assert.deepEqual(readStringLiteral(`"a\\"b"`, 0), { value: 'a"b', end: 6 });
+  const src = `
+    I18n.t("hud.damage.label", { parts: out.length ? out.join(", ") : I18n.t("hud.damage.none", null, "none") }, "Car damage: {parts}");
+    tr("results.stints.label", { stints: description }, "Tyre stints: {stints}");
+    hT("hud.brakeBias", { pct: bb.slice(3) }, "Brake bias {pct} front");
+    I18n.t("hud.tyre.lapsLeft", { n }, "about {n, plural, one {# lap} other {# laps}} left");
+    I18n.t("hud.inputs." + dirKey, null, dirKey);
+  `;
+  const got = extractMessageCalls(src);
+  assert.equal(got.get("hud.damage.label"), "Car damage: {parts}");
+  assert.equal(got.get("hud.damage.none"), "none");
+  assert.equal(got.get("results.stints.label"), "Tyre stints: {stints}");
+  assert.equal(got.get("hud.brakeBias"), "Brake bias {pct} front");
+  assert.equal(got.get("hud.tyre.lapsLeft"), "about {n, plural, one {# lap} other {# laps}} left");
+  assert.equal(got.has("hud.inputs."), false, "dynamic key concat is skipped");
+});
+
+test("ship locales/en.json has no dead keys and includes remaining hud aria keys", () => {
+  assert.deepEqual(deadLocaleKeys(ROOT), [], "hand-edited keys not produced by generate()");
+  const want = JSON.parse(generate(ROOT)["locales/en.json"]);
+  const have = JSON.parse(fs.readFileSync(path.join(ROOT, "locales/en.json"), "utf8"));
+  for (const k of Object.keys(want)) assert.deepEqual(have[k], want[k], k);
+  for (const k of [
+    "hud.brakeBias",
+    "hud.overtake.active",
+    "hud.overtake.caution",
+    "hud.overtake.lowGrip",
+    "hud.overtake.openingLap",
+    "hud.overtake.waitingLeader",
+    "hud.overtake.unavailable",
+    "hud.overtake.ready",
+    "hud.overtake.earned",
+    "hud.overtake.pending",
+    "hud.aero.autoStraight",
+    "hud.aero.auto",
+    "hud.aero.none",
+    "hud.aero.straight",
+    "hud.aero.manual",
+  ]) {
+    assert.equal(typeof have[k], "string", k);
+  }
 });

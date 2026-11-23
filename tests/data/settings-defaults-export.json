@@ -719,6 +719,7 @@
    },
    "camMode": 19,
    "pitCamAuto": false,
+   "pitEntryShot": true,
    "camTune": {},
    "camTuneGlobal": {},
    "camComfort": {},
