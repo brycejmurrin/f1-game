@@ -112,6 +112,11 @@ const InputHoldButtons = (function () {
     function wireHold(id, apply, level, opts) {
       const el = document.getElementById(id);
       if (!el) return;
+      if (opts?.button === "gas" || opts?.button === "brake") {
+        // WebKit can open its loupe on tap-then-hold despite the HUD's CSS
+        // (bug 296492). Cancel that gesture here. Pointer events drive the pedal.
+        el.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
+      }
       const axis = (opts && opts.axis) === "x" ? "x" : "y";
       const dir = (opts && opts.dir) || 1;
       const ids = new Set();

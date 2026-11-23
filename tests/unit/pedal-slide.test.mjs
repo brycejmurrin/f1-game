@@ -27,7 +27,11 @@ function boot(mode) {
     const on = {};
     const e = {
       id, hidden: false, disabled: false, isConnected: true, parentElement: null,
-      addEventListener: (t, f) => { (on[t] ||= []).push(f); },
+      listenerOptions: new Map(),
+      addEventListener(t, f, options) {
+        (on[t] ||= []).push(f);
+        this.listenerOptions.set(t, options);
+      },
       fire(t, ev) { (on[t] || []).forEach((f) => f({ pointerId: 1, pointerType: "touch", isTrusted: true, preventDefault() {}, ...ev })); },
       setAttribute() {}, removeAttribute() {}, getBoundingClientRect: () => box,
       setPointerCapture() {}, releasePointerCapture() {},
@@ -53,6 +57,26 @@ function boot(mode) {
 }
 // pointermove goes to whichever button holds the pointer; the landing button forwards it.
 const move = (els, x, y) => els.get("gas").fire("pointermove", { clientX: x, clientY: y });
+
+test("pedal touches cancel the native gesture while independent pointer holds keep driving", () => {
+  const { els, lv } = boot({ v: "instant" });
+  for (const id of ["gas", "brake", "left"]) {
+    const button = els.get(id);
+    let prevented = false;
+    button.fire("touchstart", { preventDefault() { prevented = true; } });
+    assert.equal(prevented, id !== "left", id);
+    assert.equal(button.listenerOptions.get("touchstart")?.passive, id === "left" ? undefined : false);
+    assert.equal(lv[id], 0, "touchstart does not actuate " + id);
+  }
+  const gas = els.get("gas"), steer = els.get("left");
+  gas.fire("pointerdown", { pointerId: 1, clientX: 50, clientY: 250 });
+  steer.fire("pointerdown", { pointerId: 2, clientX: 50, clientY: 50 });
+  assert.deepEqual([lv.gas, lv.left], [1, 1]);
+  gas.fire("pointerup", { pointerId: 1 });
+  assert.deepEqual([lv.gas, lv.left], [0, 1]);
+  steer.fire("pointercancel", { pointerId: 2 });
+  assert.equal(lv.left, 0);
+});
 
 test("INSTANT: sliding GAS onto BRAKE arrives at full brake (shipped behaviour)", () => {
   const { els, lv } = boot({ v: "instant" });
