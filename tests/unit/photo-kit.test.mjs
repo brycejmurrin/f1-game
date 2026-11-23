@@ -183,7 +183,7 @@ test("mountLookControls lists every preset in the free-camera panel", () => {
 });
 
 test("Photo Studio binds looks to free-camera lifetime so exit restores the snapshot", () => {
-  const studio = fs.readFileSync(path.join(ROOT, "js/ui/photo-studio-ui.js"), "utf8");
+  const studio = fs.readFileSync(path.join(ROOT, "js/ui/photo-studio.js"), "utf8");
   assert.match(studio, /PhotoKit\.createLookSession/);
   assert.match(studio, /PhotoKit\.mountLookControls/);
   assert.match(studio, /MutationObserver/);

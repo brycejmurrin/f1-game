@@ -79,7 +79,7 @@ function needsBundle() {
   if (phoneDetail()) return option("heroCar", false);
   return detail() >= 2 || option("rivalLiveryLod", false) || Object.keys(overrides()).some(n => FEATURES[n] >= 2 && overrides()[n] === true);
 }
-function feature(name, building = false) {
+function feature(name, building = false, ignoreShed = false) {
   if (automaticEffects.has(name)) {
     if (phoneDetail()) return false;
     if (automaticByPreset === undefined) {
@@ -95,7 +95,7 @@ function feature(name, building = false) {
   const have = detail() + (_cinema && detail() >= 2 ? 1 : 0);
   if (!option(name, have >= need) || (need === 3 && !_cinema && !building)) return false;
   const i = SHED_ORDER.indexOf(name);
-  return i < 0 || i < SHED_ORDER.length - _shed || _holdExtras();
+  return ignoreShed || i < 0 || i < SHED_ORDER.length - _shed || _holdExtras();
 }
 // The governor's upper ladder: n extras shed (0..SHED_ORDER.length), last in SHED_ORDER first.
 function setShed(n) { _shed = Math.max(0, Math.min(SHED_ORDER.length, n | 0)); return _shed; }
@@ -276,6 +276,7 @@ function set(id, opts = {}) {
   if (!p) return false;
   const prev = presetById(curId);
   curId = p.id;
+  automaticByPreset = p.tier === 0;
   Log.info("game", `GfxQuality.set ${curId}` + (raw.id !== curId ? ` (capped from ${raw.id})` : ""));
   const st = gstore();
   if (st) st.set("gfxPreset", curId);
@@ -330,6 +331,7 @@ function init() {
   const st = gstore();
   const rawId = (st && st.get("gfxPreset", null)) || defaultId(isMobile);
   curId = capId(presetById(rawId) ? rawId : defaultId(isMobile), isMobile);
+  automaticByPreset = current().tier === 0;
   // Persist the cap so a stored "ultra" on a phone does not keep reappearing
   // as the unresolved preference on the next boot
   if (st && rawId !== curId) st.set("gfxPreset", curId);
@@ -357,6 +359,8 @@ if (typeof document !== "undefined") {
 return {
   init, set, cycle, syncPack, current: () => current().id, defaultId,
   maxId, capId, isIPhone, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE, EXTREME_NOTE,
+  hasShedExtras: () => detail() > 0 || (!phoneDetail() && SHED_ORDER.some(name => overrides()[name] === true)),
+  shedFeature: name => SHED_ORDER.includes(name) && feature(name, false, true) && !feature(name),
   detail, feature, option, supportsOption, choicesKey, needsBundle, setShed, setCinema, forceDetail, holdExtras, shed: () => _shed, cinema: () => _cinema, FEATURES, SHED_ORDER,
 };
 })();

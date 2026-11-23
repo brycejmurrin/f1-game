@@ -26,6 +26,7 @@ const SCALE_EPS = 0.02;   // GLX/TLX setRenderScale dead zone (see perf-governor
 function rig(preset, opts = {}) {
   const raw = new Map(), kv = new Map();
   if (preset) kv.set("gfxPreset", preset);
+  if (opts.choices) kv.set("gfxFeatureOverrides", opts.choices);
   const store = {
     raw: (k) => (raw.has(k) ? raw.get(k) : null), rawSet: (k, v) => raw.set(k, String(v)), rawDel: (k) => raw.delete(k),
     get: (k, d) => (kv.has(k) ? kv.get(k) : d), set: (k, v) => kv.set(k, v),
@@ -200,4 +201,13 @@ test("setTierHold pins the upper ladder too (measurement pin)", () => {
   r.PerfGov.setTierHold(true);
   r.run(extrasCost, 3000);
   assert.equal(r.PerfGov.extrasShed(), 0);
+});
+
+test("explicit desktop extras at High can be shed under load", () => {
+  const r = rig("high", { tlx: true, choices: { ssgi: true } });
+  assert.equal(r.GQ.detail(), 0);
+  assert.equal(r.on(), 1);
+  r.run((i, s) => i % 20 === 0 ? 10 : 12 + 19 * s.on, 1800);
+  assert.equal(r.on(), 0);
+  assert.equal(r.GQ.shedFeature("ssgi"), true);
 });

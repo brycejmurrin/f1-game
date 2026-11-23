@@ -12,7 +12,7 @@
 "use strict";
 
 const XrUi = (function () {
-  let _btn = null;
+  let _btn = null, _status = null;
   let _mounted = false;
   let _unsub = null;
   let _msgTimer = 0;
@@ -36,6 +36,8 @@ const XrUi = (function () {
   function flashMessage(msg) {
     ensureButton();
     _btn.textContent = msg;
+    _btn.setAttribute("aria-label", msg);
+    if (_status) _status.textContent = msg;
     _btn.disabled = true;
     if (_msgTimer) clearTimeout(_msgTimer);
     _msgTimer = setTimeout(() => {
@@ -49,6 +51,7 @@ const XrUi = (function () {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     if (typeof XrSession === "undefined") return;
     if (_btn && _btn.disabled) return;
+    if (_status) _status.textContent = "";
     if (XrSession.isPresenting()) {
       await XrSession.end();
       return;
@@ -116,6 +119,11 @@ const XrUi = (function () {
     const host = parent || document.body;
     ensureButton();
     host.appendChild(_btn);
+    _status = document.createElement("span");
+    _status.id = "xr-entry-status";
+    _status.setAttribute("role", "status");
+    host.appendChild(_status);
+    _btn.setAttribute("aria-describedby", _status.id);
     _mounted = true;
     if (typeof XrSession !== "undefined") {
       _unsub = XrSession.on((ev) => {
@@ -140,6 +148,8 @@ const XrUi = (function () {
     if (_unsub) { try { _unsub(); } catch (_) { /* */ } _unsub = null; }
     if (_msgTimer) { clearTimeout(_msgTimer); _msgTimer = 0; }
     if (_btn && _btn.parentNode) _btn.parentNode.removeChild(_btn);
+    _status?.parentNode?.removeChild(_status);
+    _btn = _status = null;
     _mounted = false;
     _enterPrompt = false;
   }

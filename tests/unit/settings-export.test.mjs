@@ -139,12 +139,15 @@ function bootImportUI(opts = {}) {
   b.SettingsExport.create(b.G);
   const button = dom.byId("pm-settings-load");
   return { ...b, dom, button,
-    choose(promise) {
+    choose(promise, confirm = true) {
       const before = opens;
-      button.click(); button.click();
+      button.click();
       if (opens === before) return false;
       const picker = dom.document.querySelector("input");
       picker.files = [opts.fileReader ? { pending: promise } : { text: () => promise }]; picker.onchange();
+      if (confirm) promise.then(() => {
+        if (button.textContent === "APPLY SETTINGS FILE") button.click();
+      }, () => {});
     },
     reloads: () => reloads,
     flushTimers() { for (const [id, t] of timers) { timers.delete(id); t.fn(); } },
@@ -312,16 +315,16 @@ test("Saves & Data offers keyboard tab navigation and arrangeable actions only i
   assert.equal(b.reloads(), 0);
 });
 
-test("leaving Restore disarms its overwrite confirmation", () => {
+test("leaving Restore discards the selected file without changing settings", async () => {
   const b = bootImportUI();
   b.dom.byId("pm-files-show-restore").click();
-  b.button.click();
-  assert.match(b.button.textContent, /OVERWRITE SETTINGS/);
+  b.choose(Promise.resolve(volumeFile(0.5)), false);
+  await Promise.resolve();
+  assert.equal(b.button.textContent, "APPLY SETTINGS FILE");
   b.dom.byId("pm-files-show-save").click();
   assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
   b.dom.byId("pm-files-show-restore").click();
-  b.button.click();
-  assert.equal(b.dom.document.querySelector("input"), null, "returning requires a fresh confirmation");
+  assert.equal(b.disk.has("apex26.volMusic"), false);
 });
 
 test("Files share feedback stays visible and accessible with Undo instructions", () => {
@@ -1773,7 +1776,8 @@ test("M6: the SPEC resMode default is UiScale.defaultResMode() when scale.js shi
 });
 
 function pickerFile(b, button, file) {
-  button.click(); button.click();
+  button.click();
+  if (button !== b.button) button.click();
   const picker = b.dom.document.querySelector("input");
   picker.files = [file]; picker.onchange();
 }
@@ -1785,8 +1789,8 @@ test("SEC2-2: LOAD SETTINGS / CAREER FILE refuse an oversized file before readin
   assert.equal(careerBtn.id, "cr-career-load");
   let read = 0;
   const big = (size) => ({ size, text: () => { read++; return Promise.resolve("{}"); } });
-  pickerFile(b, b.button, big(2 * 1024 * 1024));
-  assert.equal(read, 0, "settings: 2 MB is never read");
+  pickerFile(b, b.button, big(b.SettingsExport._core.SETTINGS_MAX_BYTES + 1));
+  assert.equal(read, 0, "an oversized settings file is never read");
   assert.match(b.button.textContent, /FILE TOO LARGE/, "the size cap says so, not NOT A JSON FILE (#5743 S5)");
   pickerFile(b, careerBtn, big(5 * 1024 * 1024 + 1));
   assert.equal(read, 0, "career: past CareerBackup.MAX_BYTES is never read");
@@ -1901,25 +1905,21 @@ test("future preflight retains legacy migration, scope and slot/selection revisi
 });
 
 
-test("leaving backup settings clears overwrite confirmation without duplicating lifecycle handlers", () => {
+test("leaving backup settings clears the reviewed file without duplicating lifecycle handlers", async () => {
   const leave = [];
   const b = bootImportUI({ globals: { SettingsNav: { onLeave: fn => leave.push(fn) } } });
   assert.equal(leave.length, 1);
   b.SettingsExport.ensureMounted();
   b.SettingsExport.create(b.G);
   assert.equal(leave.length, 1);
-  b.button.click();
-  assert.match(b.button.textContent, /OVERWRITE SETTINGS/);
+  b.choose(Promise.resolve(volumeFile(0.4)), false);
+  await Promise.resolve();
+  assert.equal(b.button.textContent, "APPLY SETTINGS FILE");
   leave[0]("audio");
-  assert.match(b.button.textContent, /OVERWRITE SETTINGS/, "unrelated page leaves do not affect confirmation");
+  assert.equal(b.button.textContent, "APPLY SETTINGS FILE");
   leave[0]("files");
   assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
-  b.button.click();
-  assert.match(b.button.textContent, /OVERWRITE SETTINGS/, "reopening requires fresh confirmation");
-  assert.equal(b.dom.document.querySelector("input"), null, "first click after returning does not open a file chooser");
-  leave[0]("files");
-  b.flushTimers();
-  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+  assert.equal(b.disk.has("apex26.volMusic"), false);
 });
 
 
@@ -2455,4 +2455,83 @@ test("retrying a mixed settings and progress backup saves cache-only merges befo
   const again = b.loadSettings(file);
   assert.deepEqual([again.applied, again.skipped, again.failed], [1, 3, 0]);
   assert.equal(progressWrites, before, "already-durable progress is left alone");
+});
+
+test("sharing a throttle-only change preserves other hold modes on the recipient", () => {
+  const donor = boot({ disk: { "apex26.holdMode": JSON.stringify({ throttle: "toggle", lookBack: "hold" }),
+    "apex26.ttlb.monza": JSON.stringify([{ t: 85 }]), "apex26.onboarded": "1" } });
+  loadProgressBackup(donor.sb);
+  const receiver = boot({ disk: { "apex26.holdMode": JSON.stringify({ lookBack: "toggle" }) } });
+  const share = donor.collect("preferences");
+  assert.equal(share.ttlb, undefined);
+  assert.equal(share.progress, undefined);
+  receiver.loadSettings(share);
+  assert.deepEqual(JSON.parse(receiver.disk.get("apex26.holdMode")), { lookBack: "toggle", throttle: "toggle" });
+  receiver.loadSettings(donor.collect("all"));
+  assert.deepEqual(JSON.parse(receiver.disk.get("apex26.holdMode")), { lookBack: "hold", throttle: "toggle" });
+});
+
+test("a partial restore previews the season replacement and retains the circuit refusal after reload", async () => {
+  const receipts = new Map();
+  const globals = {
+    sessionStorage: { setItem: (k,v) => receipts.set(k,v), getItem: k => receipts.get(k) },
+    CustomTracks: { importCollection: () => ({ ok: false, reason: "full", limit: 24 }) },
+  };
+  const device = bootImportUI({ globals, realStore: true });
+  loadProgressBackup(device.sb);
+  const file = { format: device.SettingsExport.FORMAT, settings: { audio: { volMusic: 0.4 } },
+    progress: { seasonCfg: { laps: 5 }, circuits: { items: [] } } };
+  device.choose(Promise.resolve(JSON.stringify(file)), false);
+  await Promise.resolve();
+  assert.match(device.dom.byId("pm-restore-result").textContent, /season setup replaced/);
+  assert.equal(device.disk.has("apex26.volMusic"), false);
+  device.button.click();
+  assert.match(device.dom.byId("pm-restore-result").textContent, /library limit 24/);
+  device.flushReloads();
+  assert.equal(device.reloads(), 1);
+  const after = bootImportUI({ globals });
+  assert.match(after.dom.byId("pm-restore-result").textContent, /library limit 24/);
+});
+
+test("the actual downloaded bytes for a busy profile pass the file picker and restore each board", async () => {
+  let download;
+  const donor = bootImportUI({ realStore: true, globals: { NativeDownload: {
+    viable: () => true, saveBlob(blob) { download = blob; }, isCancelled: () => false,
+  } } });
+  for (let t = 0; t < 32; t++) {
+    for (let c = 0; c < 6; c++) for (let n = 0; n < 10; n++) {
+      donor.GameStore.ttBoardAddResult("track-" + t, {
+        t: 80 + c + n / 100, context: JSON.stringify({ class: c, setup: "x".repeat(520) }),
+      });
+    }
+  }
+  await donor.dom.byId("pm-settings-changed").onclick();
+  assert.ok(download.size < 1024 * 1024, "compact export fits even the historical picker limit");
+  const receiver = bootImportUI({ realStore: true });
+  pickerFile(receiver, receiver.button, download);
+  await new Promise(setImmediate);
+  assert.equal(receiver.button.textContent, "APPLY SETTINGS FILE");
+  receiver.button.click();
+  for (let t = 0; t < 32; t++) {
+    const id = "track-" + t;
+    assert.equal(JSON.stringify(receiver.GameStore.ttBoard(id)), JSON.stringify(donor.GameStore.ttBoard(id)));
+  }
+});
+
+test("preferences-only camera and lighting edits merge down to individual overrides", () => {
+  const donor = boot({ disk: {
+    "apex26.camTuneTrack": JSON.stringify({ monza: { modes: { chase: { height: 2 } } } }),
+    "apex26.lightTune": JSON.stringify({ "monza|day|dry": { exposure: 1 } }),
+  } });
+  const receiver = boot({ disk: {
+    "apex26.camTuneTrack": JSON.stringify({ spa: { comfort: { bob: 1 } }, monza: { modes: { chase: { side: 3 } } } }),
+    "apex26.lightTune": JSON.stringify({ "monza|day|dry": { sun: 2 }, "spa|night|wet": { rain: 3 } }),
+  } });
+  receiver.loadSettings(donor.collect("preferences"));
+  assert.deepEqual(JSON.parse(receiver.disk.get("apex26.camTuneTrack")), {
+    monza: { modes: { chase: { height: 2, side: 3 } } }, spa: { comfort: { bob: 1 } },
+  });
+  assert.deepEqual(JSON.parse(receiver.disk.get("apex26.lightTune")), {
+    "monza|day|dry": { exposure: 1, sun: 2 }, "spa|night|wet": { rain: 3 },
+  });
 });

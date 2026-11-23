@@ -152,7 +152,11 @@ function apply(bag) {
     else {
       let res = null;
       try { res = CustomTracks.importCollection(bag.circuits); } catch (_) { res = null; }
-      if (!res || !res.ok) r.rejected++;
+      if (!res || !res.ok) {
+        r.rejected++;
+        r.circuitNote = res && res.reason === "full" ? "Custom circuits omitted (library limit " + res.limit + ")"
+          : "Custom circuits omitted (" + ((res && res.reason) || "unavailable") + ")";
+      }
       else if (!res.durable) r.failed++;
       else if (res.added || res.retried) r.applied++;
       else r.skipped++;

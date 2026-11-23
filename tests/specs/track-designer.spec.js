@@ -20,7 +20,7 @@ const LANDSCAPE = { width: 1180, height: 720 };
 
 test.describe("Touch designer workspace", () => {
   test.use({ hasTouch: true, isMobile: true });
-  const cells = [[734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
+  const cells = [[852, 283, 70], [734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
     [393, 659, 150], [734, 343, 150], [852, 344, 150], [844, 390, 150],
     [393, 659, 200], [852, 344, 200], [844, 390, 200], [1194, 834, 200], [390, 844, 100], [844, 390, 100]];
   for (const [width, height, scale] of cells) test(`short and scaled phones keep both views and every workspace reachable at ${width}x${height}@${scale}`, async ({ page }, testInfo) => {
@@ -59,7 +59,7 @@ test.describe("Touch designer workspace", () => {
       if (chips.chips.some((c) => c.clipX > 1 || c.clipY > 1)) await page.screenshot({ path: testInfo.outputPath(`chips-clipped-${width}x${height}-${scale}-${mode}.png`) });
       for (const c of chips.chips) {
         expect(c.clipX <= 1 && c.clipY <= 1, `${width}x${height}@${scale} ${mode}: "${c.label}" is clipped inside its chip (${c.clipX}x${c.clipY} px)`).toBe(true);
-        expect(Math.min(c.w, c.h), `${width}x${height}@${scale} ${mode}: "${c.label}" is under the ${chips.tap} px painted tap floor (--tap-paint)`).toBeGreaterThanOrEqual(chips.tap - 2);
+        expect(Math.min(c.w, c.h), `${width}x${height}@${scale} ${mode}: "${c.label}" is under the ${chips.tap} px painted tap floor (--tap-paint)`).toBeGreaterThanOrEqual(Math.max(44, chips.tap) - 2);
       }
       await expect.poll(() => root.evaluate((e) => {
         const stage = e.querySelector(".td-stage").getBoundingClientRect();

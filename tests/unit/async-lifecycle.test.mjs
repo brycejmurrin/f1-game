@@ -127,6 +127,7 @@ function audioPanelHarness({ voiceUI = false } = {}) {
     for (const id of ['as-voices','as-ann-voice']) { const host = makeNode('div'); host.appendChild(makeNode('p')); nodes.set(id,host); }
     G.radio = { available:()=>true, voiceList:()=>voices, tuneFor:ch=>({name:'',pitch:1,rate:1,...tunes[ch]}),
       setTune:(ch,patch)=>{tunes[ch]={...tunes[ch],...patch};}, setPackOn:v=>{recorded=v;}, packOn:()=>recorded,
+      recordedVoices:()=>[{id:"local",name:"Local"}], recordedVoice:()=>"local",
       setEnabled(){}, unlock(){}, stop(){}, setVolume:v=>v, preview:ch=>{calls.push('preview:'+ch);} };
     G.announcer = {available:()=>true,enabled:()=>false,stop(){},setEnabled(){},sample(){calls.push('ann-sample');}};
   }
@@ -733,26 +734,48 @@ test('voice volume and auditions remain available with automatic radio and annou
   nodes.get('as-v-coach-test').onclick(); assert.ok(calls.includes('preview:coach'));
 });
 
-test('choosing a system voice for a race channel switches source, but the announcer pick leaves it alone', () => {
-  // Every race channel has a recorded voice (RadioVoice.PACK_VOICE), so a pick
-  // for any of them is choosing SYSTEM; the announcer's pick reads the pre-race
-  // show, and RECORDED keeps the recorded commentator in the race.
-  for (const ch of ['radio','coach','control']) {
-    const {G,nodes,wired,tunes}=audioPanelHarness({voiceUI:true});
-    G.soundOn=true; wired.get('as-radio').write('off');
-    const ann=nodes.get('as-v-announcer');ann.value='First';ann.onchange();
-    assert.equal(G.radio.packOn(),true, 'announcer pick keeps RECORDED');
-    const sel=nodes.get('as-v-'+ch);sel.value='First';sel.onchange();
-    assert.equal(G.radio.packOn(),false, ch+' pick selects SYSTEM'); assert.equal(tunes[ch].name,'First');
+function voiceChoices(select) {
+  return select.children.flatMap(group => group.children).map(option => option.value);
+}
+
+test("race voice source controls the race selectors independently of the announcer", () => {
+  const { G, nodes, wired, tunes } = audioPanelHarness({ voiceUI: true });
+  G.soundOn = true;
+  wired.get("as-radio").write("off");
+  const announcer = nodes.get("as-v-announcer");
+  announcer.value = "First";
+  announcer.onchange();
+  assert.equal(G.radio.packOn(), true);
+
+  const channels = ["radio", "coach", "control"];
+  for (const channel of channels) {
+    assert.deepEqual(voiceChoices(nodes.get("as-v-" + channel)), ["recorded:local"]);
   }
+  wired.get("as-rpack").write("sys");
+  for (const channel of channels) {
+    const select = nodes.get("as-v-" + channel);
+    assert.ok(voiceChoices(select).includes("First"));
+    assert.ok(!voiceChoices(select).includes("recorded:local"));
+    select.value = "First";
+    select.onchange();
+    assert.equal(tunes[channel].name, "First");
+    assert.equal(G.radio.packOn(), false);
+  }
+  wired.get("as-rpack").write("rec");
+  assert.equal(G.radio.packOn(), true);
+  assert.ok(voiceChoices(nodes.get("as-v-radio")).includes("recorded:local"));
+  assert.ok(voiceChoices(nodes.get("as-v-announcer")).includes("First"));
 });
 
-test('same-size voice-list replacements refresh both settings selectors', () => {
-  const {G,nodes,wired,voices}=audioPanelHarness({voiceUI:true});
-  G.soundOn=true; wired.get('as-radio').write('off');
-  voices[0]={name:'Replacement',lang:'en-GB'};
-  wired.get('as-radio').write('off');
-  for(const id of ['as-v-radio','as-v-announcer']) assert.ok(nodes.get(id).children.flatMap(o=>o.children || [o]).some(o=>o.value==='Replacement'),id);
+test("same-size voice-list replacements refresh both settings selectors", () => {
+  const { G, nodes, wired, voices } = audioPanelHarness({ voiceUI: true });
+  G.soundOn = true;
+  wired.get("as-rpack").write("sys");
+  voices[0] = { name: "Replacement", lang: "en-GB" };
+  wired.get("as-radio").write("off");
+  for (const id of ["as-v-radio", "as-v-announcer"]) {
+    assert.ok(voiceChoices(nodes.get(id)).includes("Replacement"), id);
+  }
 });
 
 // W23 #4: the badge used a guessed length (race 4 h, others 2 h) though OpenF1

@@ -526,7 +526,7 @@ function lobbyG() {
     setNetRoom: () => {},
     store: { get: (k, dflt) => dflt, set: () => {} },
     // Real members a test sets, or beginRace writes, later (the fake is closed, #5982).
-    openQualiForNet: undefined, seed: 0, flow: undefined,
+    openQualiForNet: undefined, seed: 0, flow: undefined, duel: false,
   });
   REC.set(G, r);
   return G;

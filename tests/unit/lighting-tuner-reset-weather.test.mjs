@@ -81,6 +81,7 @@ function bootTuner(weather = "wet", saved = null) {
   const defs = [...DEFS, { id: "perChunkLights", def: 0, min: 0, max: 1 },
     { id: "roadChunkLamps", def: 1, min: 0, max: 1 }]
     .map((d) => ({ ...d, group: "LAMPS", label: d.id, step: 0.1 }));
+  defs.push({ id: "wetOverride", group: "Wet", label: "Wetness", fmt: "auto", def: -0.05, min: -0.05, max: 1, step: 0.005, help: "Negative uses weather." });
   const h = loadStore(weather, saved, defs), nodes = new Map(), storage = new Map();
   const element = () => ({ children: [], dataset: {}, textContent: "", hidden: false,
     classList: { toggle() {}, add() {}, remove() {} }, attrs: {},
@@ -133,6 +134,30 @@ test("the exact lighting field commits once through the knob setter and follows 
   assert.equal(h.writes.length, 1, "dragging does not persist on each tick");
   h.$("lt-reset").onclick();
   assert.equal(field.value, "0");
+});
+
+test("wetness announces Auto and help after reset, and precise entry retains focus in the row", () => {
+  const h = bootTuner(), range = h.$("lt-in-wetOverride"), field = h.$("lt-num-wetOverride");
+  assert.equal(range.getAttribute("aria-valuetext"), "AUTO");
+  assert.equal(field.dataset.padStep, range.step);
+  assert.equal(field.getAttribute("aria-describedby"), range.getAttribute("aria-describedby"));
+  assert.equal(h.$(range.getAttribute("aria-describedby")).textContent, "Negative uses weather.");
+  let focused = field;
+  range.focus = () => { focused = range; };
+  const key = (key) => field.onkeydown({ key, stopPropagation() {}, preventDefault() {} });
+  field.valueAsNumber = 0.005; field.validity = { valid: true };
+  field.reportValidity = () => field.validity.valid;
+  key("Enter");
+  assert.equal(range.getAttribute("aria-valuetext"), "0.005");
+  assert.equal(focused, range);
+  focused = field; field.validity.valid = false; field.value = "42";
+  key("Enter");
+  assert.equal(focused, field);
+  key("Escape");
+  assert.equal(focused, range);
+  assert.equal(field.value, "0.005");
+  h.$("lt-reset").onclick();
+  assert.equal(range.getAttribute("aria-valuetext"), "AUTO");
 });
 
 test("lighting-1: drag updates profile count and returning to baseline restores defaults without persistence", () => {

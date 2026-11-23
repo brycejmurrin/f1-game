@@ -108,8 +108,8 @@ const AppearanceStudio = (function () {
   function takeBody() {
     if (body || typeof AppearanceStudioBody === "undefined") return body;
     body = AppearanceStudioBody;
+    for (const listener of pendingListeners.splice(0)) listener.remove = body.onSceneChange(listener.fn);
     if (pendingHooks) { body.attach(pendingHooks); pendingHooks = null; }
-    while (pendingListeners.length) body.onSceneChange(pendingListeners.shift());
     return body;
   }
 
@@ -120,7 +120,8 @@ const AppearanceStudio = (function () {
       Log.warn("ui", "appearance studio body is not in this build");
       return Promise.resolve(false);
     }
-    _load = ScriptLoader.create().load(["js/ui/appearance-studio-ui.js"], [], { strict: true }).then(() => {
+    const presets = typeof SettingsNav !== "undefined" && SettingsNav.presets ? SettingsNav.presets() : null;
+    _load = Promise.all([ScriptLoader.create().load(["js/ui/appearance-studio-ui.js"], [], { strict: true }), presets]).then(() => {
       if (!takeBody()) { _load = null; Log.warn("ui", "appearance studio body did not load"); return false; }
       return true;
     }).catch((e) => {
@@ -149,8 +150,15 @@ const AppearanceStudio = (function () {
     if (typeof fn !== "function") return () => {};
     const b = takeBody();
     if (b) return b.onSceneChange(fn);
-    pendingListeners.push(fn);
-    return () => { const i = pendingListeners.indexOf(fn); if (i >= 0) pendingListeners.splice(i, 1); };
+    const listener = { fn, remove: null };
+    pendingListeners.push(listener);
+    return () => {
+      if (listener.remove) listener.remove();
+      else {
+        const i = pendingListeners.indexOf(listener);
+        if (i >= 0) pendingListeners.splice(i, 1);
+      }
+    };
   }
   function setScene(mode, motion) {
     const b = takeBody();
@@ -175,7 +183,13 @@ const AppearanceStudio = (function () {
         if (JSON.stringify(before[k]) === JSON.stringify(next[k])) continue;
         if (store().set(k, k === "motion" && next[k] === null ? undefined : clone(next[k])) === false) durable = false;
       }
-    } catch (e) { Log.warn("ui", "Appearance apply: " + e.message); }
+    } catch (e) { durable = false; Log.warn("ui", "Appearance apply: " + e.message); }
+    const applied = snapshot();
+    if (["homeScene", "homeCamera", "backgroundMotion", "motion"].some(key => before[key] !== applied[key])) {
+      for (const { fn } of pendingListeners.slice()) {
+        try { fn(scene()); } catch (e) { Log.warn("ui", "Appearance scene listener: " + e.message); }
+      }
+    }
     return { ok: true, durable };
   }
   function notify(message) {
@@ -220,10 +234,18 @@ const AppearanceStudio = (function () {
     }
   } catch (e) { Log.warn("ui", "orientation watch: " + e.message); }
 
-  if (typeof document !== "undefined") {
-    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(initUI) : initUI()), { once: true });
-    else initUI();
-  }
+  if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
+    { id: "appearance-menu-customization", label: "Menu customization", page: "appearance", target: "pm-tl-edit", aliases: "main home title buttons layout move size width arrange portrait landscape" },
+    { id: "title-button-style", label: "Title button style", page: "appearance", target: "pm-titlebuttonstyle-sel", aliases: "main menu home racing angled flat straight auto portrait landscape" },
+    { id: "appearance-theme", label: "Theme", page: "appearance", target: "pm-uitheme-sel", aliases: "dark light system endurance drafting colour color" },
+    { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "pm-menuaccent-sel", aliases: "colour color highlight brand team custom" },
+    { id: "appearance-text-size", label: "Text size", page: "appearance", target: "pm-textsize-sel", aliases: "larger bigger words readability" },
+    { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "pm-contrast-sel", aliases: "readability sunlight outlines" },
+    { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "pm-hudaccent-sel", aliases: "race colour color" },
+    { id: "appearance-home-scene", label: "Home scene", page: "appearance", target: "as-homeScene", aliases: "garage night studio circuit pitlane background" },
+    { id: "appearance-home-camera", label: "Home camera", page: "appearance", target: "as-homeCamera", aliases: "hero front side rear view" },
+    { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
+  ]);
 
   return Object.freeze({
     PROFILE_KEY, DEFAULTS, VISUAL_KEYS, SCREEN_KEYS, PRESETS, PRESET_PRESERVE,

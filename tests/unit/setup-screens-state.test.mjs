@@ -198,7 +198,7 @@ function backupPickerUi(readerKind) {
   h.G.announce = (message) => notices.push(message);
   h.ui.openSlots();
   const clickImport = (index = 0) => {
-    const button = h.$("cr-left").querySelectorAll('[data-cr-act="import"]')[index];
+    const button = h.$(index ? "cr-right" : "cr-left").querySelector('[data-cr-act="import"]');
     assert.ok(button);
     button.onclick({ stopPropagation() {} });
   };
@@ -276,7 +276,7 @@ for (const readerKind of ["File.text", "FileReader"]) {
     assert.deepEqual(h.notices, []);
     const current = h.choose("current.json");
     await h.settle(current);
-    assert.match(texts(h.$("cr-left"), ".cr-note").join(" "), /File: current\.json/);
+    assert.match(texts(h.$("cr-right"), ".cr-note").join(" "), /File: current\.json/);
     h.clickImport(1);
     assert.equal(h.applied[0].filename, "current.json");
   });
@@ -286,17 +286,17 @@ for (const readerKind of ["File.text", "FileReader"]) {
     h.clickImport();
     await h.settle(h.choose("first.json"));
     assert.equal(h.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
-    const next = h.$("cr-left").querySelectorAll('[data-cr-act="import"]')[1];
+    const next = h.$("cr-right").querySelector('[data-cr-act="import"]');
     empty(h.dom, "cr-left", "cr-right");
     next.onclick({ stopPropagation() {} });
     const replacement = h.choose("replacement.json");
     const buttons = h.$("cr-left").querySelectorAll('[data-cr-act="import"]');
-    assert.ok(buttons.every((button) => button.textContent === "IMPORT"), "the old confirmation is gone during the read");
+    assert.ok(buttons.every((button) => button.textContent === "RESTORE DRIVER CAREER SAVES"), "the old confirmation is gone during the read");
     assert.doesNotMatch(texts(h.$("cr-left"), ".cr-note").join(" "), /first\.json|Review restore/);
     assert.deepEqual(h.applied, []);
     await h.settle(replacement);
-    assert.equal(h.$("cr-left").querySelectorAll('[data-cr-act="import"]').filter((button) => button.textContent === "IMPORT?").length, 1);
-    assert.match(texts(h.$("cr-left"), ".cr-note").join(" "), /File: replacement\.json/);
+    assert.equal(h.$("cr-right").querySelectorAll('[data-cr-act="import"]').filter((button) => button.textContent === "IMPORT?").length, 1);
+    assert.match(texts(h.$("cr-right"), ".cr-note").join(" "), /File: replacement\.json/);
     h.clickImport(1);
     assert.equal(h.applied.length, 1);
     assert.equal(h.applied[0].filename, "replacement.json");

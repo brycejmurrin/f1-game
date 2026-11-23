@@ -152,7 +152,7 @@ const SCREENS = [
      const rr = document.getElementById('rotate-race'); if (rr) rr.click();
      document.getElementById('pausemenu').hidden = false;
      document.getElementById('pm-settings').click();
-     document.getElementById('pm-open-display').click();
+     document.getElementById('pm-open-visual').click();
      document.querySelector('#pm-visual-tuners > summary').click();
      document.getElementById('pm-lighting').click();
      await until('#lt-rows .tune-row', 6000).catch(() => {});

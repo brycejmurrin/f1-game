@@ -132,3 +132,22 @@ test("phone detail switches apply independently and only hero geometry fetches t
     assert.equal(h.loads.includes(HI[0]), hero);
   }
 });
+
+test("automatic desktop effects follow live high/low transitions and keep explicit overrides", () => {
+  const { Q } = boot({ preset: "high", choices: { gravelDebris: true } });
+  const active = () => ["adaptiveModels", "brakeLightSpill", "gravelDebris"].map(name => Q.feature(name));
+  assert.deepEqual(active(), [true, true, true]);
+  Q.set("low", { noReload: true });
+  assert.deepEqual(active(), [false, false, true]);
+  Q.set("high", { noReload: true });
+  assert.deepEqual(active(), [true, true, true]);
+});
+
+test("a temporarily shed extra is distinct from a disabled choice", () => {
+  const { Q } = boot({ preset: "extreme", choices: { superSample: false } });
+  Q.setShed(Q.SHED_ORDER.length);
+  assert.equal(Q.shedFeature("ssgi"), true);
+  assert.equal(Q.shedFeature("superSample"), false);
+  Q.setShed(0);
+  assert.equal(Q.shedFeature("ssgi"), false);
+});

@@ -198,11 +198,11 @@ const SPEC = [
   { k: "camMode", lane: "json", group: "camera", def: 19, src: "js/camera/mode-switch.js (index into CAM_MODES)" },
   { k: "pitCamAuto", lane: "json", group: "camera", def: false, src: "js/camera/extra-rigs.js (opt-in auto-cut to PIT WALL in pits)" },
   { k: "pitEntryShot", lane: "json", group: "camera", def: true, src: "js/camera/extra-rigs.js PIT ENTRY SHOT (feel.js row; #4745)" },
-  { k: "camTune", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
-  { k: "camTuneGlobal", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
-  { k: "camComfort", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
-  { k: "camTuneTrack", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js per-track framing/comfort overrides (track > car > mode/global)" },
-  { k: "camTuneCar", lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js per-car framing/comfort overrides (track > car > mode/global)" },
+  { k: "camTune", mergeDepth: 2, lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js CAM_TUNE_DEFS (geometric knobs def 0; cornerLead def 0.54; the file holds {mode:{knob:value}} edits)" },
+  { k: "camTuneGlobal", mergeDepth: 1, lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js global baseline layered under every mode (same knob ids as camTune)" },
+  { k: "camComfort", mergeDepth: 1, lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js COMFORT_DEFS (fovBias/speedFov/bob/rollLean — independent of MOTION: REDUCED)" },
+  { k: "camTuneTrack", mergeDepth: 4, lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js per-track framing/comfort overrides (track > car > mode/global)" },
+  { k: "camTuneCar", mergeDepth: 4, lane: "json", group: "camera", def: {}, src: "js/camera/offsets.js per-car framing/comfort overrides (track > car > mode/global)" },
   { k: "blurNotch", lane: "json", group: "camera", def: 1, src: "js/camera/cam-comfort.js MOTION BLUR (1 = off)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
   { k: "motionBlur", lane: "json", group: "camera", def: 5, src: "js/camera/cam-comfort.js legacy MOTION BLUR notch before #5990 (never drew; inert since blurNotch, kept so old files round-trip)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
   { k: "speedLines", lane: "json", group: "camera", def: 5, src: "js/camera/cam-comfort.js SPEED LINES (1 = off)", oneOf: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
@@ -218,7 +218,7 @@ const SPEC = [
   { k: "lookBackLatch", lane: "json", group: "camera", def: false, src: "js/camera/feel.js LOOK BACK LATCH (hold vs press-to-latch)" },
   { k: "speedVignette", lane: "json", group: "camera", def: false, src: "js/camera/feel.js SPEED VIGNETTE (off by default)" },
   // LIGHTING TUNER (js/lighting)
-  { k: "lightTune", lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
+  { k: "lightTune", mergeDepth: 2, lane: "json", group: "lighting", def: {}, src: "js/lighting/knobs.js TUNE_DEFS (the file holds {\"track|tod|weather\":{knob:value}} edits)" },
   // DRIVING / RACE RULES (js/game.js, js/race/race-control.js)
   { k: "steerMode", lane: "json", group: "driving", def: "buttons", oneOf: ["tilt", "buttons", "touch"], src: "js/game.js" },
   { k: "manual", lane: "json", group: "driving", def: false, src: "js/game.js" },
@@ -482,7 +482,7 @@ const GARAGE_STR_MAX = 64;              // ids, names, enum pills
 // (a livery row is never under ~48 bytes, so 1 MB cannot hold more than this). Rows that fail the shape check are
 // counted and reported by applyGarage (droppedLiveries), never lost quietly.
 const GARAGE_LIVERIES_MAX = Math.floor(GARAGE_MAX_BYTES / 48);
-const SETTINGS_MAX_BYTES = 1024 * 1024; // LOAD SETTINGS: a real file is tens of KB; refused before f.text()
+const SETTINGS_MAX_BYTES = 8 * 1024 * 1024; // Includes legacy backups with expanded time-trial contexts. Checked before f.text() and download.
 const CAREER_BAG_KEYS_MAX = 16;         // 6 slots + the live pointer are all a real file holds
 const GARAGE_KEYS_MAX = 64;             // entries per parts sheet
 // FIELDS PER LIVERY follow the schema: Liveries.FIELDS had 62 rows against a literal 64, so the next slices' fields

@@ -148,15 +148,46 @@ test("every live Settings row left off its value comes back after a reload (pers
   const after = await snapRows(page);
   const lost = Object.keys(set).filter((id) => !(id in TRANSIENT) && after[id] !== set[id]).map((id) => `${id}: ${set[id]} -> ${after[id]}`);
   expect(lost, "rows that did not come back after the reload").toEqual([]);
-  expect(set["ps-samples"]).toBe("8");
-  expect(after["ps-samples"]).toBe("1");
   // The allowlist stays honest: a transient row that starts persisting should leave the list.
   const nowPersist = Object.keys(TRANSIENT).filter((id) => id in set && set[id] !== before[id] && after[id] === set[id]);
   expect(nowPersist, "TRANSIENT rows that now persist (drop them from the list)").toEqual([]);
 });
 
+test("Photo Studio capture quality resets on reload", async ({ page }) => {
+  async function openStudio() {
+    await boot(page);
+    await page.locator("#mb-photo").dispatchEvent("click");
+    const samples = page.locator("#ps-samples");
+    await expect(samples).toHaveValue("1", { timeout: BOOT_MS });
+    return samples;
+  }
+  await page.goto("/");
+  const samples = await openStudio();
+  await samples.selectOption("8");
+  await expect(samples).toHaveValue("8");
+  await page.reload();
+  await openStudio();
+});
+
 test.describe("individual desktop graphics", () => {
   test.use({ viewport: { width: 1366, height: 768 }, hasTouch: false, isMobile: false });
+  test("updates open detail rows after an edit from another tab", async ({ page, context }) => {
+    const peer = await context.newPage();
+    for (const tab of [page, peer]) {
+      await tab.goto("/");
+      await boot(tab);
+      await tab.locator("#mb-settings").click();
+      await tab.locator("#pm-open-graphics").click();
+      await tab.getByText("Graphics details", { exact: true }).click();
+    }
+    const hdr = tab => tab.getByRole("combobox", { name: "HDR output", exact: true });
+    const trees = tab => tab.getByRole("combobox", { name: "High-detail trees", exact: true });
+    await hdr(page).selectOption("on");
+    await expect(hdr(peer)).toHaveValue("on");
+    await trees(peer).selectOption("on");
+    await expect(trees(page)).toHaveValue("on");
+    await expect(hdr(page)).toHaveValue("on");
+  });
   test("saves independent effects across a reload and restores preset choices", async ({ page }) => {
     async function openDetail() {
       await page.locator("#mb-settings").click();

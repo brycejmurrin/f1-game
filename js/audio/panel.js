@@ -135,7 +135,7 @@ var AudioPanel = (() => {
     const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"]];
     const slangNow = () => { const v = String(store.get("spokenLang", "auto")); return SLANG_VALUES.some((x) => x[0] === v) ? v : "auto"; };
     if (store.get("spokenLang", "auto") !== slangNow()) store.set("spokenLang", "auto", { migration: true });
-    const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
+    const packNow = () => ((G.radio && G.radio.packOn ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
 
@@ -454,7 +454,7 @@ var AudioPanel = (() => {
         // js/audio/radio-voice.js): say so, and name the setting that avoids it.
         if (radioLive && dbg && dbg.synth && dbg.synth.slow > 0) {
           note += " This browser's speech engine held the game up (worst " + Math.round(dbg.synth.maxMs) +
-            " ms). RADIO VOICE: RECORDED never uses it.";
+            " ms). The RECORDED race voice source uses local recordings.";
         }
         setText(rnote, note);
       }
@@ -493,7 +493,7 @@ var AudioPanel = (() => {
       const anote = $("as-ann-note");
       setText(anote, !annReady ? "This browser has no speech voices, so the loading card stays written."
         : !G.soundOn ? MASTER_HINT
-        : packNow() === "rec" ? "The introduction and race commentary use your recorded announcer. Unrecorded story details stay on the loading card."
+        : recordedFor("announcer") ? "The introduction and race commentary use your recorded announcer. Unrecorded story details stay on the loading card."
         : "The introduction and race commentary use your system voice; network-only voices are used during the introduction. VOICE VOLUME sets the level.");
       SettingRow.paint($("as-master"), G.soundOn ? "on" : "off", ONOFF);
       syncNowPlaying();
@@ -696,9 +696,10 @@ var AudioPanel = (() => {
         const o = document.createElement("option"); o.value = "recorded:" + v.id; o.textContent = v.name;
         recGroup.appendChild(o);
       }
-      if (recorded.length) sel.appendChild(recGroup);
+      if (recorded.length && (ch === "announcer" || recordedFor(ch))) sel.appendChild(recGroup);
       const sysGroup = document.createElement("optgroup"); sysGroup.label = "SYSTEM";
-      sysGroup.appendChild(auto); sel.appendChild(sysGroup);
+      sysGroup.appendChild(auto);
+      if (ch === "announcer" || !recordedFor(ch)) sel.appendChild(sysGroup);
       for (const v of list) {
         const o = document.createElement("option");
         o.value = v.name; o.textContent = v.name;
@@ -767,7 +768,6 @@ var AudioPanel = (() => {
 
     const setTune = (ch, patch) => {
       if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch);
-      if (ch !== "announcer" && G.radio && G.radio.setPackOn) G.radio.setPackOn(false);
       syncAudioPanel();
     };
     // TEST is an explicit audition, independent of the automatic speech switch.
@@ -808,8 +808,8 @@ var AudioPanel = (() => {
       restoreFocus();
       const note = $("as-voices-note");
       if (note) {
-        note.textContent = packNow() === "rec" ? "Recorded voices are generated speech. Common calls play as complete recordings. Choosing a system race voice switches race channels to SYSTEM; pitch and rate apply there."
-          : n + " system voices available. Choosing a recorded race voice returns race channels to RECORDED. The pre-race announcer has its own voice choice.";
+        note.textContent = packNow() === "rec" ? "Recorded voices are generated speech. Common calls play as complete recordings. Choose SYSTEM under Race voice source to adjust pitch and rate."
+          : n + " system voices available. Pitch and rate apply to each race channel separately. The pre-race announcer has its own voice choice.";
       }
     }
 
