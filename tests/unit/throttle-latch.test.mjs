@@ -509,6 +509,30 @@ test("sliding one thumb from GAS up onto BRAKE brakes and drops the throttle; sl
   for (const el of [gas, brake]) assert.equal("data-slid" in el.attrs, false);
 });
 
+test("re-pressing Gas with a steering finger held respects the visible pedal in an overlap", () => {
+  const { sb, gas, brake, left, mid, lift, btn } = bootDock();
+  brake.getBoundingClientRect = () => ({ left: 700, top: 180, width: 90, height: 115 });
+  const shared = { pointerId: 3, clientX: 740, clientY: 285 };
+  let visible = gas;
+  sb.document.elementFromPoint = () => visible;
+
+  left.fire("pointerdown", { ...mid("btn-steer-left"), pointerId: 1 });
+  gas.fire("pointerdown", { ...mid("btn-throttle"), pointerId: 2 });
+  lift("btn-throttle", 2);
+  assert.deepEqual([btn().left, btn().throttleVal], [true, 0]);
+  gas.fire("pointerdown", shared);
+  gas.fire("pointermove", shared);
+  assert.deepEqual([btn().left, btn().throttleVal, btn().brakeVal], [true, 1, 0]);
+
+  visible = brake;
+  gas.fire("pointermove", shared);
+  assert.deepEqual([btn().left, btn().throttleVal, btn().brakeVal], [true, 0, 1]);
+  brake.fire("pointermove", shared);
+  assert.equal(btn().brakeVal, 1);
+  lift("btn-brake", 3);
+  assert.deepEqual([btn().left, btn().brakeVal], [true, 0]);
+});
+
 test("sliding one thumb from the left arrow onto the right steers right (#5575)", () => {
   const { Input, left, right, mid, lift, btn, clock } = bootDock();
   Input.setSteerMode("buttons");
