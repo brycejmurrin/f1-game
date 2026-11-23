@@ -32,7 +32,7 @@ import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
 
-const { SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
+const { SW_LEARN, SW_LOCALES } = createRequire(import.meta.url)("../../tools/manifest.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
@@ -347,4 +347,28 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
     assert.equal(fs.existsSync(path.join(dest, "assets/atlases")), false);
     assert.equal(fs.existsSync(path.join(dest, "assets/pack/mat-albedo-128.png")), true);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("Grip & Braking frame and its local dependencies stage with bare offline URLs", () => {
+  const entry = "learn/braking/index.html";
+  const assets = [entry, ...Array.from(read(entry).matchAll(/(?:href|src)="([^":]+)"/g),
+    ([, rel]) => path.posix.join("learn/braking", rel))];
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "grip-stage-"));
+  const root = path.join(tmp, "source"), dest = path.join(tmp, "site");
+  try {
+    for (const dir of STAGE_DIRS) fs.mkdirSync(path.join(root, dir), { recursive: true });
+    for (const name of STAGE_ROOT_FILES) fs.writeFileSync(path.join(root, name), "");
+    for (const asset of assets) {
+      fs.mkdirSync(path.dirname(path.join(root, asset)), { recursive: true });
+      fs.copyFileSync(path.join(ROOT, asset), path.join(root, asset));
+    }
+    stageSite(dest, { root, build: false });
+    for (const asset of assets) {
+      assert.equal(fs.readFileSync(path.join(dest, asset), "utf8"), read(asset), asset);
+    }
+    const cacheEntries = new Set(Array.from(sw.matchAll(/^\s*"([^"\n]+)",$/gm), ([, url]) => url));
+    assert.deepEqual(assets.filter(asset => !SW_LEARN.includes(asset) || !cacheEntries.has(asset)), []);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

@@ -729,8 +729,12 @@ async function precacheAssetLists() {
     "js/race/real-replay.js",
     "js/race/real-race-pace.js",
     "js/race/real-race.js",
-    // LEARN — the Learn modal and bare Aero Lab assets
+    // LEARN — the Learn modal and bare lesson assets
     "js/ui/learn-door.js",
+    "learn/appearance.js",
+    "learn/braking/index.html",
+    "learn/braking/style.css",
+    "learn/braking/lab.js",
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",

@@ -1905,7 +1905,11 @@ const MOVED = {
 // Learn's modal loads only after the title door is used. The iframe requests
 // its standalone page and lesson assets without a ScriptLoader version query.
 const LAZY_LEARN = ["js/ui/learn-door.js"];
-const SW_LEARN = ["learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js"];
+const SW_LEARN = [
+  "learn/appearance.js",
+  "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",
+  "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js",
+];
 
 /** Locale manifest only (English players need no locale JSON fetch). */
 const SW_LOCALES = ["locales/manifest.json"];

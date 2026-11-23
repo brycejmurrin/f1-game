@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grip &amp; Braking · Apex 26 Learn</title>
+<link rel="stylesheet" href="style.css">
+<script src="../appearance.js" defer></script>
+<script src="lab.js" defer></script>
+</head>
+<body>
+<main>
+<h1 id="lessonTitle">Grip &amp; Braking</h1>
+<header class="lesson-intro">
+  <h2 id="question">How hard can I brake while turning?</h2>
+  <p>Keep the same cornering force and ease off the brake until both demands fit.</p>
+</header>
+<div id="learn-studio">
+  <div data-as="controls">
+    <section data-as="box" aria-labelledby="setup-title">
+      <h2 id="setup-title" data-as="heading">Force demand</h2>
+      <label for="brake">Brake demand <span id="brakeValue" aria-hidden="true">8.0 kN</span></label>
+      <input id="brake" type="range" min="0" max="100" step="1" value="80">
+      <label for="turn">Lateral demand <span id="turnValue" aria-hidden="true">0.0 kN</span></label>
+      <input id="turn" type="range" min="0" max="100" step="1" value="0">
+      <fieldset>
+        <legend>Surface preset</legend>
+        <div class="surface">
+          <label><input type="radio" name="surface" value="dry" checked> Dry · 10 kN</label>
+          <label><input type="radio" name="surface" value="damp"> Damp · 7 kN</label>
+        </div>
+      </fieldset>
+      <div class="actions">
+        <button id="try-turn" type="button">Try 8 kN lateral</button>
+        <button id="reset" type="button">Reset</button>
+      </div>
+      <p class="scale-note">Both sliders span 0–10 kN on either surface.</p>
+    </section>
+    <section data-as="box" aria-labelledby="corner-title">
+      <h2 id="corner-title" data-as="heading">Corner entry</h2>
+      <div class="stages" role="group" aria-label="Corner entry phase">
+        <button type="button" data-stage="0" aria-pressed="true">Approach</button>
+        <button type="button" data-stage="1" aria-pressed="false">Turn-in</button>
+        <button type="button" data-stage="2" aria-pressed="false">Apex</button>
+      </div>
+      <ol class="trace" id="trace" aria-label="Brake and lateral force by phase"></ol>
+      <p id="phase-tip">Braking in a straight line leaves more force available for braking.</p>
+    </section>
+  </div>
+  <section data-as="preview-side" aria-labelledby="force-title">
+    <h2 id="force-title" data-as="heading">Tyre force budget</h2>
+    <p id="plot-help">Drag the request on the plot or use the two sliders.</p>
+    <div class="instrument">
+      <div class="chart" aria-hidden="true">
+        <span class="axis-y">Lateral force (kN)</span>
+        <span class="axis-x">Braking force (kN)</span>
+        <div class="plot">
+          <div class="dry-reference"></div>
+          <div class="envelope"></div>
+          <div class="guide"></div>
+          <i class="ray requested"></i><i class="ray achieved"></i>
+          <i class="point requested"></i><i class="point achieved"></i>
+          <i class="point limit"></i>
+          <span class="tick x-start">0</span><span class="tick x-mid">5</span><span class="tick x-end">10</span>
+          <span class="tick y-mid">5</span><span class="tick y-end">10</span>
+        </div>
+      </div>
+      <div class="readings">
+        <div class="budget">
+          <span>Requested grip</span>
+          <strong id="utilization">80.0%</strong>
+          <meter id="usage-meter" aria-label="Share of available tyre force" min="0" max="1" value=".8"></meter>
+        </div>
+        <dl>
+          <div><dt>Delivered brake / lateral</dt><dd id="delivered">8.0 / 0.0 kN</dd></div>
+          <div><dt>Delivered as share of dry peak</dt><dd id="achieved">80.0% / 0.0%</dd></div>
+          <div><dt>Turning limit at this brake</dt><dd><span id="turnLimit">60.0%</span> <span class="unit" id="turnLimitForce">6.0 kN</span></dd></div>
+          <div><dt>Brake limit at this turn</dt><dd><span id="brakeLimit">100.0%</span> <span class="unit" id="brakeLimitForce">10.0 kN</span></dd></div>
+        </dl>
+      </div>
+    </div>
+    <p class="legend"><span>○ Dashed · Requested</span><span>◆ Solid · Delivered</span><span>□ Dotted · Same-turn brake limit</span></p>
+    <p id="status" role="status">Within the tyre force budget.</p>
+    <p id="collision-explanation">There is 2.0 kN of resultant headroom before the tyre reaches the limit.</p>
+  </section>
+</div>
+<section data-as="box" class="scenario" aria-labelledby="cases-title">
+  <h2 id="cases-title">Compare two inputs</h2>
+  <div class="case-list">
+    <button type="button" data-case="hold"><strong>Hold the brake</strong><span>Dry · 8 kN brake + 8 kN lateral</span></button>
+    <button type="button" data-case="release"><strong>Release into turn-in</strong><span>Dry · 6 kN brake + 8 kN lateral</span></button>
+    <button type="button" data-case="damp"><strong>Meet a damp patch</strong><span>Damp · same 6 kN + 8 kN request</span></button>
+  </div>
+  <p id="case-effect" role="status">Keep lateral demand at 8 kN and compare the first two inputs. Then change only the surface.</p>
+</section>
+<section data-as="box" class="scenario" aria-labelledby="predict-title">
+  <h2 id="predict-title">Make a prediction</h2>
+  <p>On dry asphalt, the car needs 8 kN to turn in. What is the most braking the tyre can deliver while keeping that lateral force?</p>
+  <div class="actions" role="group" aria-label="Prediction choices">
+    <button type="button" data-answer="8" aria-pressed="false">8 kN</button>
+    <button type="button" data-answer="6" aria-pressed="false">6 kN</button>
+    <button type="button" data-answer="2" aria-pressed="false">2 kN</button>
+  </div>
+  <p id="answer" role="status">Choose a force to see how the model checks it.</p>
+  <button id="show-answer" type="button" hidden>Plot the 6 kN limit</button>
+</section>
+<details>
+  <summary>Model and sources</summary>
+  <p>The horizontal axis shows the magnitude of rearward tyre force. The vertical axis shows the magnitude of sideways tyre force. The plot holds both axes at 0–10 kN so a surface change visibly shrinks the force budget. The 10 kN dry and 7 kN damp caps are illustrative values with equal pure-brake and pure-turn limits.</p>
+  <p>Required resultant = √(brake² + lateral²). If the resultant exceeds the surface cap, the model shortens the force arrow without changing its direction. To hold 8 kN lateral on dry asphalt, brake force can reach √(10² − 8²) = 6 kN. On the damp preset an 8 kN lateral request exceeds the 7 kN cap even with the brake released.</p>
+  <p>This lab uses an illustrative force envelope at a fixed load. Apex’s driving model estimates combined slip and force separately at the front and rear axles. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
+</details>
+</main>
+</body>
+</html>
