@@ -257,6 +257,114 @@ function thisDesktop(G) {
   try { if (document.body.classList) return document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
   return G && G.gfx && typeof G.gfx.isMobile === "boolean" ? !G.gfx.isMobile : null;
 }
+// Backup groups predate the settings navigation. Reset scopes follow the visible
+// pages instead: Controls must include the input keys historically filed as driving.
+const RESET_INFO = {
+  controls: "Steering input and feel, touch pedals and button layout, keyboard bindings, and all controller mappings and calibration.",
+  advanced: "Steering response, curves, smoothing, dead zones, sensitivity, handling, overall speed and feedback.",
+  driving: "Driving assistance, gears, throttle and active aero. Race rules and circuit setup stay saved.",
+  display: "HUD layout and visibility, camera framing, helmet and visor settings.",
+  appearance: "Menu appearance, sizing and layouts. Saved appearance profiles and personal photos stay saved.",
+  a11y: "Accessibility, captions, text size, contrast and hold/toggle controls. Reduced motion returns to the device setting.",
+  audio: "Music, sound, radio, volumes and audio tuning. Connected music accounts stay connected.",
+  graphics: "Graphics quality, renderer, resolution and feature overrides. Defaults adapt to this device.",
+  files: "All game preferences, control bindings and controller profiles. Saves, best laps, garage builds, photos, favourite circuits and saved appearance profiles stay saved.",
+};
+const RESET_INPUT = new Set("autoThrottle steerMode mirrorControls dockLayout tiltCurve touchSteeringGuide touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padSaturation padLabels padAxes padProfiles padRest throttleLatch pedalSlide touchButtonProfiles holdMode lookBackLatch hudBtnScale hudBotKeep hudBtnOpacity hudBtnShape".split(" "));
+const RESET_AIDS = new Set("manual autoThrottle aeroMode drivingCoach conditionCues brakeCue gripSteer audioCues drivingHelp raceLine".split(" "));
+const RESET_ACCESS = new Set("textSize uiContrast cvdMode captions captionSize captionPos captionBg captionSpeakerInk".split(" "));
+const RESET_UI = new Set("uiScale hudScale hudPanelOpacity portraitOk".split(" "));
+const RESET_ADVANCED = new Set("tiltCurve touchCurve padCurve touchRange touchDragSpeed dragSmooth digitalRate analogSpeedSteer haptics triggerHaptics padDeadzone padSaturation".split(" "));
+function resetInfo(section) { return Object.hasOwn(RESET_INFO, section) ? RESET_INFO[section] : null; }
+function resetOwns(row, section) {
+  if (row.info || row.k === "favTracks" || row.k === "appearanceProfiles") return false;
+  if (section === "files") return true;
+  const steering = row.group === "steering" && !RESET_AIDS.has(row.k);
+  if (section === "advanced") return steering || RESET_ADVANCED.has(row.k);
+  if (section === "controls") return steering || row.group === "controls" || RESET_INPUT.has(row.k);
+  if (section === "driving") return row.k === "preset" || RESET_AIDS.has(row.k);
+  if (section === "a11y") return row.group === "a11y" || RESET_ACCESS.has(row.k);
+  if (section === "appearance") return (row.group === "appearance" && !RESET_ACCESS.has(row.k)) || row.k === "uiScale";
+  if (section === "display") return (row.group === "hud" || row.group === "camera" || RESET_UI.has(row.k)) && row.k !== "uiScale" && !RESET_INPUT.has(row.k);
+  if (section === "graphics") return row.group === "display" && !RESET_UI.has(row.k) && !RESET_INPUT.has(row.k);
+  return section === "audio" && row.group === "audio";
+}
+function resetSettings(section) {
+  if (!resetInfo(section)) return { ok: false, reason: "Unknown reset section", applied: 0, failed: 0 };
+  // Remove overrides rather than copying defaults: boot owns adaptive/device
+  // defaults and migrations. Never enumerate storage or touch progress stores.
+  const writes = SPEC.filter(row => resetOwns(row, section)).map(row => [row, null]);
+  try {
+    const result = writePreferences(writes);
+    return { ...result, ok: result.failed === 0, reason: result.failed ? "Storage refused the reset; preferences were restored where possible." : null };
+  } catch (_) { return { ok: false, applied: 0, failed: 1, reason: "Storage is unavailable. Nothing was reset." }; }
+}
+
+/** @type {null | (() => void)} */
+let resetPrompt = null;
+let resetLeave = false;
+function resetRow(section, button) {
+  const scope = resetInfo(section);
+  if (!scope || !button?.parentNode) return;
+  if (resetPrompt) resetPrompt();
+  const host = document.createElement("div"), note = document.createElement("p");
+  const confirm = document.createElement("button"), cancel = document.createElement("button");
+  note.className = "adv-help"; note.setAttribute("data-help", "keep"); note.setAttribute("role", "status");
+  note.textContent = scope + " The game reloads after resetting, ending the current race. Saved progress is kept.";
+  confirm.type = cancel.type = "button";
+  confirm.textContent = "CONFIRM RESET & RELOAD"; cancel.textContent = "CANCEL";
+  confirm.setAttribute("aria-label", "Confirm reset. " + scope + " Reload ends the current race.");
+  const clear = () => { host.remove(); resetPrompt = null; };
+  cancel.onclick = () => { clear(); button.focus(); };
+  confirm.onclick = () => {
+    confirm.disabled = cancel.disabled = true;
+    const result = resetSettings(section);
+    if (!result.ok) {
+      note.textContent = result.reason; confirm.disabled = cancel.disabled = false; return;
+    }
+    location.reload();
+  };
+  host.append(note, confirm, cancel); button.parentNode.insertBefore(host, button.nextSibling);
+  resetPrompt = clear;
+  if (!resetLeave && typeof SettingsNav !== "undefined" && SettingsNav.onLeave) {
+    SettingsNav.onLeave(() => { if (resetPrompt) resetPrompt(); }); resetLeave = true;
+  }
+  confirm.focus();
+}
+
+function writePreferences(writes) {
+  const stored = (k) => (GameStore.store.getStored ? GameStore.store.getStored(k) : GameStore.store.get(k, undefined));
+  const before = writes.map(([row]) => [row, row.lane === "raw" ? GameStore.store.raw(`apex26.${row.k}`) : stored(row.k)]);
+  let applied = 0, failed = 0;
+  for (const [row, v] of writes) {
+    try {
+      // A write storage refused (full quota, private mode) is not APPLIED:
+      // counting it reloaded the page into the values it had lost.
+      let stored = true;
+      if (row.lane === "raw") {
+        if (v === null) stored = GameStore.store.rawDel(`apex26.${row.k}`) !== false;
+        else stored = GameStore.store.rawSet(`apex26.${row.k}`, String(v)) !== false;
+      } else {
+        // An unset row exports as null; storing it wrote the literal "null",
+        // so readers got null instead of their own default. undefined removes.
+        stored = GameStore.store.set(row.k, v === null ? undefined : v) !== false;
+      }
+      if (stored) applied++; else failed++;
+    } catch (_) { failed++; }
+  }
+  if (failed) {
+    for (const [row, prev] of before) {
+      try {
+        if (row.lane !== "raw") GameStore.store.set(row.k, prev);   // undefined removes the key
+        else if (prev === null || prev === undefined) GameStore.store.rawDel(`apex26.${row.k}`);
+        else GameStore.store.rawSet(`apex26.${row.k}`, prev);
+      } catch (_) { /* storage is refusing: the key keeps whatever it could */ }
+    }
+    return { applied: 0, failed };
+  }
+  return { applied, failed };
+}
+
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   // A file is player input: a non-object `settings` or group is "nothing here",
@@ -321,40 +429,9 @@ function applySettings(file, G) {
     const sparse = file.mode === "changes" && depth && isObj(v);
     writes.push([row, sparse ? mergeChangedFields(readStored(row), v, depth) : v]);
   }
-  // ALL OR NOTHING (#5005). A write storage refuses (a nearly full phone) used to leave the keys before and
-  // after it written: half old, half new after the next launch. Snapshot every key first; any refusal puts
-  // them all back and the time-trial merge below never starts.
-  // Read through the store, so a value it holds only in memory (an earlier refused write) is what comes back;
-  // getStored, never get: a key the player never set must go back to unset, not to a written-out default.
-  const stored = (k) => (GameStore.store.getStored ? GameStore.store.getStored(k) : GameStore.store.get(k, undefined));
-  const before = writes.map(([row]) => [row, row.lane === "raw" ? GameStore.store.raw(`apex26.${row.k}`) : stored(row.k)]);
-  let applied = 0, failed = 0;
-  for (const [row, v] of writes) {
-    try {
-      // A write storage refused (full quota, private mode) is not APPLIED:
-      // counting it reloaded the page into the values it had lost.
-      let stored = true;
-      if (row.lane === "raw") {
-        if (v === null) stored = GameStore.store.rawDel(`apex26.${row.k}`) !== false;
-        else stored = GameStore.store.rawSet(`apex26.${row.k}`, String(v)) !== false;
-      } else {
-        // An unset row exports as null; storing it wrote the literal "null",
-        // so readers got null instead of their own default. undefined removes.
-        stored = GameStore.store.set(row.k, v === null ? undefined : v) !== false;
-      }
-      if (stored) applied++; else failed++;
-    } catch (_) { failed++; }
-  }
-  if (failed) {
-    for (const [row, prev] of before) {
-      try {
-        if (row.lane !== "raw") GameStore.store.set(row.k, prev);   // undefined removes the key
-        else if (prev === null || prev === undefined) GameStore.store.rawDel(`apex26.${row.k}`);
-        else GameStore.store.rawSet(`apex26.${row.k}`, prev);
-      } catch (_) { /* storage is refusing: the key keeps whatever it could */ }
-    }
-    return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
-  }
+  const result = writePreferences(writes);
+  let { applied, failed } = result;
+  if (failed) return { ok: true, applied: 0, skipped, failed, rejectedTtlb: 0, reason: null };
   const preferences = { applied, skipped, failed };
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
@@ -1105,7 +1182,7 @@ function create(G) {
 function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }
 
 return { collect, collectGarage, collectCareer, collectTtlb, ttlbParseBoard, applySettings, applyGarage, applyCareer,
-         applyTtlb, resetGarage, create, ensureMounted,
+         applyTtlb, resetGarage, resetSettings, resetInfo, resetRow, create, ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };
 })();
