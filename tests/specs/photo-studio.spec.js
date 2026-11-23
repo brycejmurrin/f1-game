@@ -232,7 +232,8 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   });
   await clickLive(page, "pausebtn");
   await clickLive(page, "pm-photo");
-  await expect(page.getByRole("region", { name: "PLACE YOUR CAR" })).toBeHidden();
+  await expect(page.getByRole("region", { name: "PLACE YOUR CAR" })).toBeVisible();
+  for (const id of ["ps-car-position", "ps-car-offset", "ps-car-rotation"]) await expect(page.locator("#" + id)).toBeEnabled();
   await page.evaluate(() => { __apex.uiScale(200); __apex.headless(false); });
   for (const [name, viewport] of [["race-landscape-200", LANDSCAPE], ["race-portrait-200", PORTRAIT]]) {
     await page.setViewportSize(viewport);
