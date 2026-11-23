@@ -1,2 +1,0 @@
-Fixed: The helmet camera's visor glint, sun flare and lamp reflections never painted on the released game: the visor looked for the game state under a name it cannot see from its own script and gave up. It now gets the game state at boot (#5964).
-Fixed: The stall watchdog now treats the start countdown and the loading screen's handoff, build, garage and prep phases as race entry, as intended, instead of only the profiled window, so slow frames there no longer shed graphics quality (#5965).

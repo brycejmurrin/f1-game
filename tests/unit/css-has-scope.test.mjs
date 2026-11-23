@@ -143,7 +143,7 @@ test("scoped :has(> .screen…) holds: every .screen is a <body> child; the ones
   } };
   walk("js");
   assert.deepEqual(js, ["js/editor/designer.js", "js/share/share-card-chips.js", "js/ui/learn-door.js"], "a .screen built at runtime must be a body child (and named here)");
-  for (const f of js) assert.match(read(f), /document\.body\.appendChild\((?:dlg|dialog)\)/, f);
+  // The dialog audit below covers Designer and Share. The Learn menu test checks its mounted parent.
 });
 
 test("a <body> or #hud child is never searched for unscoped (write `:has(> #id…)` / `:has(> :where(#hud) > #id…)`)", () => {

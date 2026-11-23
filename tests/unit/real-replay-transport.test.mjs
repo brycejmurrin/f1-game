@@ -8,6 +8,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { ROOT, line, transportReplay, visibleTransportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 test("WATCH steps from the same retirement slot after a paused seek or continuous playback", () => {
   for (const path of ["play", "seek", "seek twice"]) for (const direction of [-1, 1]) {
@@ -379,9 +380,8 @@ test("a short automatic forward cut does not re-fire a radio event inside the ne
 });
 
 test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {
-  const element = () => ({ children: [], dataset: {}, style: {}, textContent: "", classList: { add() {}, remove() {}, toggle() {} },
-    appendChild(n) { this.children.push(n); return n; }, setAttribute() {}, addEventListener() {}, removeEventListener() {}, querySelector() { return null; } });
-  const tower = element(), document = { body: element(), createElement: element, getElementById: (id) => id === "bc-tower" ? tower : null };
+  const { document } = makeDom();
+  const tower = document.getElementById("bc-tower");
   const { replay, G, drivers } = transportReplay({ document });
   drivers[0].laps = [10, 10];
   replay.tick(0.1);
@@ -802,7 +802,10 @@ test("WATCH bar docks its secondary controls into the ⋯ popover on the phone b
   assert.equal(find("chapters").open, true, "the chapter row shows inside the popover (its own summary is hidden by CSS)");
   assert.equal(more.open, false, "the popover is the player's to open");
   assert.equal(body.style.props["--wt-h"], "63.5px", "the bar's painted height reaches CSS");
-  assert.match(css, /#bc-tower\s*\{[^}]*max-height:\s*calc\(100svh - var\(--wt-h, 180px\)/, "the tower cap reads the measured bar height");
+  assert.match(css, /\[data-spectator="watch"\]\s*\{\s*--spectator-foot:\s*var\(--wt-h, 180px\)/,
+    "WATCH uses the measured transport height");
+  assert.match(css, /#bc-tower\s*\{[^}]*max-height:\s*calc\(100dvh - var\(--spectator-foot\)/,
+    "the tower cap reserves the spectator footer");
   for (const px of ["100px", "150px", "260px"]) assert.ok(!new RegExp("#bc-tower \\{ max-height: calc\\(100svh - " + px).test(css), "no per-band tower guess of " + px);
   assert.match(css, /\[data-wt="more-box"\]\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;[^}]*bottom:\s*calc\(100% \+ var\(--gap\)\)/, "the popover hangs above the chip, right-aligned");
   // every control still answers: the DOM walk the toolbar test does finds each key

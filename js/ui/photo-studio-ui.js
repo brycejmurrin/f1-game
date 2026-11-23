@@ -777,6 +777,9 @@ function create(G, deps) {
   // on an iPhone 14. The shot renders at renderScale 1 (the native backing
   // size). Small garage views target Full HD. The optional 4K draw applies in any scene.
   async function fullRes(run, highRes) {
+    // A first Home photo draw may still own the garage's reduced scale. Hand
+    // it back before capture takes ownership, so that draw cannot undo it.
+    if (st.source === "home") deps.garage?.prepareCapture?.();
     const gfx = G.gfx, prev = gfx && gfx.getRenderScale && gfx.setRenderScale ? gfx.getRenderScale() : 1;
     let size = null;
     const release = () => {

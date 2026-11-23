@@ -58,6 +58,7 @@ const WatchTransport = (function () {
       // The ⋯ chip. Hidden until the phone band docks the secondary controls into its box
       // (dock() below); its `open` is the player's, the band only decides where the nodes live.
       const more = node("details", "more");
+      more.id = "watch-more";
       const moreTab = node("summary", null, "⋯");
       moreTab.setAttribute("aria-label", "More replay controls: speed, camera, director, photo, event chapters");
       more.appendChild(moreTab);

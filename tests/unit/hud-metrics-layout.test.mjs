@@ -357,11 +357,11 @@ function assertPlainHidesWin(id) {
 }
 const hudCssRules = () => cssRules().filter((r) => r.file === "hud.css");
 
-test("F-13 slice 1: a replay hides #hud-sectors and #hud-limits in ONE rule", () => {
-  for (const id of ["hud-sectors", "hud-limits"]) {
-    const bc = hudCssRules().filter((r) => /^body\.bc-on /.test(r.sel) && subjectHas(r.sel, id) && /^none/.test(displayOf(r.body) || ""));
-    assert.equal(bc.length, 1, `#${id} has one bc-on hide: ${bc.map((r) => r.sel).join(" | ")}`);
-  }
+test("F-13 slice 1: one spectator rule hides both sector and track-limit clusters with the rest of the driving HUD", () => {
+  const bc = hudCssRules().filter((r) =>
+    r.sel === "body:is(.bc-on, .watch-controls-on, [data-spectator]) #hud > :not(#bc-tower, #bc-pip)"
+    && /^none/.test(displayOf(r.body) || ""));
+  assert.equal(bc.length, 1);
 });
 
 test("F-13 slice 2: #hud-delta hides in plain display:none, and nothing could beat it", () => {

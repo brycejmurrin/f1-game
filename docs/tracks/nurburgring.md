@@ -33,10 +33,10 @@ isolated cosine bumps with flat plateaus between them.
 |------|------|----------|-----------------|
 | 0.00 | R | near | Pit block: six masonry bays — a ground-floor **arcade of square piers**, recessed garages behind, deep eaves cornice, twin steep slate pitches |
 | 0.00 | L | near | Main grandstand, dark steel, cantilever roof, 150 m; second concrete stand at 0.96 |
-| 0.028 | R | near | **Haug-Haken** (T1) gravel + red tyre wall — downhill hairpin runoff |
+| 0.028 | L | near | **Haug-Haken** (T1) gravel + red tyre wall outside the downhill right-hand hairpin |
 | 0.99 | R | near | Race control: squat glazed **drum** on a stone core with a conical cap and mast |
 | 0.97/0.99 | R | far | **ring°boulevard**: two barrel-vaulted glazed halls on raking steel masts |
-| 0.968 | R | near | **Coca-Cola Kurve** (T15) gravel + red tyre wall + compact open terrace |
+| 0.855–0.860 | L | near | **Coca-Cola Kurve** (T15) gravel + red tyre wall + compact open terrace outside the final right-hander |
 | 0.92 | R | far | Broadcast compound + paddock office blocks; motorhome rows behind |
 | 0.11 | R | near | **Mercedes-Arena** hero stand: dark steel, two tiers, cantilever roof, lit window band |
 | 0.10–0.21 | both | near | Arena seat walls closing the bowl — continuous, R deeper than L; the complex must read enclosed |
@@ -52,6 +52,7 @@ isolated cosine bumps with flat plateaus between them.
 | — | ring | far | Three rings of forested Eifel mountains at 240/300/440 m, rising to ~190 m |
 
 ## 5. Track features
+- The first and final corners are both right-handers. [Grand Prix circuit guide](https://coachdaveacademy.com/tutorials/nurburgring-grand-prix-circuit-track-guide/)
 - The Mercedes-Arena: three slow corners inside a grandstand bowl, half-width pinched to 6.2 m.
 - Banked corners are gentle: Castrol-S 3.5°, Ford Kurve 4.5°, Bit-Kurve 3°, Schumacher-S 4°.
 - Dunlop-Kehre and the Veedol chicane both narrow to ~6.3–6.4 m.

@@ -3534,35 +3534,98 @@ for (const failure of ["texture-1", "texture-2", "upload-1", "upload-2", "view-1
   });
 }
 
-// createMesh road pieces (hasTrk, > 4095 pulled verts): an allocation failure
-// on piece k used to leak pieces 0..k-1 — `pieces` was scoped inside the
-// branch, so the catch could not see it — and the failing piece's own vertex
-// buffer (_meshFromPull uploaded it before its attr bind group threw). Every
-// buffer the failed call made must be destroyed, and the call degrades to an
-// inert count-0 mesh.
-test("createMesh road-piece OOM destroys every piece already uploaded", async () => {
+function roadMeshData(triangles = 3000) {
+  const pos = [], nrm = [], col = [], trk = [], mat = [], idx = [];
+  for (let t = 0; t < triangles; t++) {
+    const x = (t % 60) * 2, z = Math.floor(t / 60) * 2, v = pos.length / 3;
+    pos.push(x, 0, z, x + 1, 0, z, x, 0, z + 1);
+    for (let k = 0; k < 3; k++) { nrm.push(0, 1, 0); col.push(1, 1, 1); trk.push(z, 0, 7); mat.push(16); }
+    idx.push(v, v + 1, v + 2);
+  }
+  return { pos, nrm, col, trk, mat, idx };
+}
+
+test("createMesh road-LUT failure returns an inert mesh, frees the buffer and permits a retry", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const road = roadMeshData(1);
+  const start = h.buffers.length;
+  h.failNextBindGroup();
+  const failed = gfx.createMesh(road);
+  assert.equal(failed.count, 0);
+  assert.equal(failed.vbuf, null);
+  const made = h.buffers.slice(start);
+  assert.equal(made.length, 1, "failure was in the LUT, before the vertex upload");
+  assert.equal(made[0].destroyed, true);
+  const retried = gfx.createMesh(road);
+  assert.equal(retried.count, road.idx.length);
+  assert.equal(retried.lutSbuf.destroyed, false);
+});
+
+for (const failures of [1, 2]) {
+  test(`createChunkedMesh recovers from ${failures} road-LUT bind failures without dropping the source`, async () => {
+    const h = makeGpuHarness();
+    const gfx = await h.create();
+    const road = roadMeshData();
+    const { idx, trk } = road;
+    road._keepFullGeometry = false;
+    const createBindGroup = h.device.createBindGroup;
+    let remaining = failures;
+    h.device.createBindGroup = (...args) => {
+      if (remaining > 0) {
+        remaining--;
+        h.failNextBindGroup();
+      }
+      return createBindGroup(...args);
+    };
+    const start = h.buffers.length;
+    const fallback = gfx.createChunkedMesh(road, 72);
+    assert.equal(remaining, 0);
+    assert.equal(fallback.chunks, null);
+    if (failures === 1) {
+      assert.equal(fallback.pieces.reduce((sum, piece) => sum + piece.count, 0), idx.length);
+    } else {
+      assert.equal(fallback.count, 0);
+      assert.equal(fallback.vbuf, null);
+    }
+    assert.equal(road.idx, idx);
+    assert.equal(road.trk, trk);
+    const failedBuffers = h.buffers.slice(start, start + failures);
+    assert.equal(failedBuffers.length, failures);
+    assert.ok(failedBuffers.every((buffer) => buffer.destroyed));
+
+    const retried = gfx.createChunkedMesh(road, 72);
+    assert.ok(retried.chunks.length > 1);
+    assert.equal(retried.chunks.reduce((sum, chunk) => sum + chunk.count, 0), idx.length);
+    assert.equal(retried.sbuf.destroyed, false);
+    assert.equal(road.idx, null);
+    assert.equal(road.trk, null);
+  });
+}
+
+// A road split into pieces allocates several buffers before a later piece
+// can fail. Free all of them and keep the currently installed LUT usable.
+test("createMesh road-piece OOM destroys every piece already uploaded and preserves the live LUT", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
   assert.equal(gfx.begin({}), true);
-  const TRIS = 3000;                         // 9000 pulled verts -> 3 pieces
-  const pos = [], nrm = [], col = [], trk = [], mat = [], idx = [];
-  for (let t = 0; t < TRIS; t++) {
-    const x = (t % 60) * 2, z = Math.floor(t / 60) * 2, v = pos.length / 3;
-    pos.push(x, 0, z, x + 1, 0, z, x, 0, z + 1);
-    for (let k = 0; k < 3; k++) { nrm.push(0, 1, 0); col.push(1, 1, 1); trk.push(z, x - 60, 7); mat.push(0); }
-    idx.push(v, v + 1, v + 2);
-  }
+  const live = gfx.createMesh(roadMeshData(1));
+  assert.ok(live.lutSbuf);
   const start = h.buffers.length;
   // Bind groups in order: the road LUT, piece 0, piece 1 <- fail here.
   h.failNextBindGroup(3);
-  const mesh = gfx.createMesh({ pos, nrm, col, trk, mat, idx });
+  const mesh = gfx.createMesh(roadMeshData());
   h.clearFailures();
   assert.equal(mesh.count, 0, "failed upload degrades to an inert mesh");
   const made = h.buffers.slice(start);
   assert.ok(made.length >= 4, `fixture reached the pieces (made ${made.length} buffers)`);
   const leaked = made.filter((b) => !b.destroyed);
   assert.equal(leaked.length, 0, `${leaked.length} of ${made.length} buffers leaked on the failed createMesh`);
+  assert.equal(live.lutSbuf.destroyed, false);
+  const props = roadMeshData(1);
+  delete props.trk;
+  assert.equal(gfx.createMesh(props).sbuf, null, "the existing road LUT still serves non-road meshes");
 });
 
 // THE COCKPIT'S LIVE MIRROR GLASS on WGX (drawMirrorGlass): DECAL's module

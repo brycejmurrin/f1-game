@@ -9,7 +9,7 @@ import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 
 installThreeGlobals();
-for (const file of ["tsl-chunks.js", "tsl-post.js"]) {
+for (const file of ["tsl-chunks.js", "tsl-post.js", "tsl-aa.js"]) {
   vm.runInThisContext(fs.readFileSync(new URL(`../../js/render/three/${file}`, import.meta.url), "utf8"), { filename: absSrc(`js/render/three/${file}`) });
 }
 
@@ -29,9 +29,9 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
       chunks: window.TLXShaders.chunks(THREE, THREE.TSL), blackTex: tex(), whiteTex: tex(),
       sceneTex: tex(), sceneDepthTex: tex(), trackMaterial: m => materials.push(m),
     });
-    const slots = [p.fxaa.mirTex, p.fxaa.bendTex, p.fxaa.lightTex];
-    assert.equal(new Set(slots.map(node => node.value.uuid)).size, 3,
-      "warmed with optics off, the mirror, bend and light keep independent sampler uniforms");
+    const slots = [p.fxaa.mirTex, p.fxaa.bendTex, p.fxaa.lightTex, p.fxaa.waterTex];
+    assert.equal(new Set(slots.map(node => node.value.uuid)).size, 4,
+      "warmed with optics off, mirror, bend, light and wet field keep independent sampler uniforms");
     p.fxaa.mirTex.value = tex();
     const Builder = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
     const builder = new Builder(new THREE.QuadMesh(p.fxaa.mat), renderer);
@@ -56,6 +56,16 @@ for (const language of ["WGSL", "GLSL"]) test(`folded mirror: ${language} sample
     assert.doesNotMatch(branch, /\b(?:textureSample|texture)\s*\(/, "no implicit sample in the inset branch");
     const rest = shader.slice(end);
     assert.match(rest, /^\s*else\s*\{/, "FXAA runs only outside the inset (else of the same guard)");
+    // Compile the same wet-surface function through every final presentation route.
+    window.TLXAA.taa(THREE, THREE.TSL, { ldrTex: tex(), depthTex: tex(), waterUV: p.fxaa.waterUV,
+      trackMaterial: m => materials.push(m), runPass() {}, ownRT: rt => { targets.push(rt); return rt; } });
+    for (const material of [p.sgsr.mat, materials.find(m => m.name === "tlx-post-traa-out")]) {
+      const wetBuilder = new Builder(new THREE.QuadMesh(material), renderer);
+      wetBuilder.camera = new THREE.PerspectiveCamera(); wetBuilder.scene = new THREE.Scene(); wetBuilder.build();
+      const wetNodes = Array.from(wetBuilder.nodes).filter(node => node.isTextureNode && node.uvNode && node.value === p.fxaa.waterTex.value);
+      assert.ok(wetNodes.length > 0, "final resolve binds the shared production water texture");
+      assert.ok(wetNodes.every(node => node.levelNode?.value === 0), "water samples explicitly select mip zero");
+    }
     const sampler = branch.match(new RegExp(`${grad}\\(\\s*(\\w+)`))[1];   // throws unless the gradient call is in the branch
     assert.doesNotMatch(shader, new RegExp(`\\b(?:textureSample|texture)\\(\\s*${sampler}\\b`), "no additional fullscreen mirror sample");
   } finally {

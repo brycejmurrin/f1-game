@@ -916,7 +916,14 @@ declare const RealRace: GameModuleFactory;
 declare const RealRaceBody: GameModuleFactory;
 declare const FlyingStart: GameModuleFactory;
 declare const JumpStartPenalty: GameModuleFactory;
-declare const Broadcast: GameModuleFactory;
+declare const Broadcast: {
+  SHOTS: readonly string[];
+  SHOT_MIN_S: number;
+  SHOT_MAX_S: number;
+  battles: <T>(cars: { key: T; prog: number; speed: number }[], vScale?: number) => { key: T; ahead: T; gapS: number; score: number }[];
+  shotFor: (kind: string | null, onAir: string | null, n: number) => string | null;
+};
+declare const ReplayBroadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const UiExperience: GameModuleFactory;

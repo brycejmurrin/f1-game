@@ -971,7 +971,7 @@ __apex.lightCopy({ undo: r.undo });        // …never mind
 The per-frame facts the HELMET visor overlay (`js/fx/visor-optics.js`) reads at ~15 Hz, as LIVE REFERENCES into the
 frame (no copies — read, never write): the camera basis, the sun, the exposure, the sky ambient and this frame's culled
 stride-15 lamp list (`lights`, null by day; `tailStart` is where the car tail-lights begin inside it). `VisorOptics.lightMap(visorScene(), w, h)`
-is the pure mapping behind the glints; `VisorOptics.stats()` reports paint counts and ms.
+is the pure mapping behind the glints; `VisorOptics.stats()` reports paint counts and ms. The hook returns `null` until the race-session visor payload loads.
 
 ## Baked asset pack
 

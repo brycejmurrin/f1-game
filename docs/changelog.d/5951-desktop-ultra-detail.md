@@ -1,1 +1,0 @@
-Improved: GRAPHICS: ULTRA on a desktop now looks sharper than HIGH: finer sun and car shadows, crisper road and wall textures at shallow angles, live reflections on car paint, and rival cars keep their full detail twice as far away (#5951).

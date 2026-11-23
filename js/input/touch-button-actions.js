@@ -13,6 +13,9 @@ const TouchButtonActions = (() => {
   if (typeof window !== "undefined") {
     window.addEventListener?.("blur", cancelAll);
     window.addEventListener?.("pagehide", cancelAll);
+    window.addEventListener?.("resize", cancelAll);
+    window.addEventListener?.("orientationchange", cancelAll);
+    window.screen?.orientation?.addEventListener?.("change", cancelAll);
   }
   function bindControl(el, id) {
     if (!el) return;
