@@ -67,7 +67,57 @@ const DAY = { eye: [0, 1, 0], tgt: [0, 1, -10], fov: 62, sunDir: [0.3, 0.7, -0.6
 const NIGHT = { ...DAY, sunDir: [0, -0.4, 0.9], sunColor: [0.02, 0.02, 0.03], ambientSky: [0.01, 0.01, 0.02] };
 // One stride-15 lamp at (x, z), 10 m up, aimed down: [x,y,z, r,g,b, rad, dir, cosInner, cosOuter, bleed, vol, glare].
 // The colour is the fixture's energy (track-lights.js ePhys sizes a flood in the thousands).
-const lamp = (x, z, rgb = [12000, 11500, 10000]) => [x, 10, z, ...rgb, 40, 0, -1, 0, 0.9, 0.5, 0.1, 0, 1];
+const lamp = (x, z, rgb = [12000, 11500, 10000]) => [x, 10, z, ...rgb, 40, 0, -1, 0, 0.9, 0.5, 0.1, 1, 1];
+
+test("cached refraction stops on LOW, shedding and lifecycle exits, then recovers", () => {
+  const arm = load({ apex: { visorScene: () => DAY }, refraction: "medium" });
+  const { V, calls, ctx, live } = arm;
+  let quality = "high", pressure = 0;
+  ctx.GfxQuality.current = () => quality;
+  ctx.GLX = { isMobile: true };
+  ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false };
+  const active = () => calls.attrs["data-visor-bend-active"] === "1";
+  V.tick(1 / 60, true, 0, false);
+  assert.equal(active(), true);
+  assert.equal(calls.bendMaps, 1);
+  quality = "low";
+  V.tick(0, true, 0, false);
+  assert.equal(active(), false, "LOW disables an already-created CSS displacement map");
+  quality = "high";
+  V.tick(0, true, 0, false);
+  assert.equal(active(), true);
+  pressure = 2;
+  V.tick(0, true, 0, false);
+  assert.equal(active(), false);
+  pressure = 0;
+  for (const exit of [() => V.tick(0, false, 0, false), () => { live.helmet = false; V.tick(0, true, 0, false); }, () => { live.visor = "off"; V.tick(0, true, 0, false); }, () => V.clear()]) {
+    live.helmet = true; live.visor = "clear";
+    V.tick(0, true, 0, false);
+    assert.equal(active(), true);
+    exit();
+    assert.equal(active(), false);
+  }
+  assert.equal(calls.bendMaps, 1, "recovery reuses the displacement map");
+  assert.match(read("css/helmet-visor.css"), /body\[data-helmet-cam\]\[data-visor-bend-active\]:not/, "CSS uses the same activation gate as the shader");
+});
+
+test("paused visor setting edits repaint once without advancing the scene", () => {
+  const { V, ctx, listeners } = load({ apex: { visorScene: () => DAY } });
+  let beams = 1, reflections = "light";
+  ctx.CockpitOpts.visorBeams = () => beams;
+  ctx.CockpitOpts.visorReflections = () => reflections;
+  V.tick(1 / 60, true, 0, false);
+  let paints = V.stats().paints;
+  for (const setting of ["visorBeams", "visorReflections"]) {
+    if (setting === "visorBeams") beams = 2;
+    else reflections = "strong";
+    for (const notify of listeners) notify(setting);
+    V.tick(0, true, 0, false);
+    assert.equal(V.stats().paints, ++paints, `${setting} refreshes the paused preview`);
+    V.tick(0, true, 0, false);
+    assert.equal(V.stats().paints, paints, "an unchanged paused preview does not repaint");
+  }
+});
 
 test("visor public surface drops the unused _reset test hook", () => {
   const { V } = load();
@@ -173,6 +223,21 @@ test("visor mapping: the sun's glint sits where the sun is and slides across as 
   assert.equal(V.lightMap(DAY, 844, 390, { level: 1 }).rays, null, "a sun past the frame edge has no rays");
 });
 
+test("visor sun rays and ghost fade beyond the frame without moving their source onto the rim", () => {
+  const { V } = load();
+  const at = (degrees) => {
+    const a = degrees * Math.PI / 180;
+    return V.lightMap({ ...DAY, sunDir: [0, Math.sin(a), -Math.cos(a)] }, 852, 393, { level: 1.6, beams: 2 });
+  };
+  const edge = at(31), justOutside = at(31.1), outside = at(35), gone = at(38);
+  assert.ok(justOutside.rays && justOutside.ghost, "crossing the edge retains both effects");
+  assert.ok(Math.abs(justOutside.rays.k - edge.rays.k) < 0.01, "no full-strength ray pop at the boundary");
+  assert.ok(outside.rays.k < justOutside.rays.k && outside.ghost.k < justOutside.ghost.k, "both fade as the source leaves");
+  assert.ok(outside.rays.y < outside.sun.y, "rays stay at the actual source beyond the clamped rim glow");
+  assert.equal(outside.ghost.y, 393 - outside.rays.y, "ghost mirrors the actual source");
+  assert.equal(gone.rays, null); assert.equal(gone.ghost, null);
+});
+
 test("visor sun-behind (A·W46): no glare from a sun behind the eye; lamps glint against the daylight they compete with", () => {
   const { V } = load();
   // sunFacing: the sun direction's forward component → how much of it reaches the shield.
@@ -217,6 +282,24 @@ test("visor mapping: a bright flood leaves a beam along its aim; BLOOM AMOUNT an
   assert.equal(many.glints.filter((g) => g.star).length, 3, "stars on the three brightest only");
   const dim = V.lightMap({ ...NIGHT, lights: new Float32Array(lamp(0, -40, [150, 150, 150])) }, 844, 390, { level: 1 });
   assert.ok(dim.glints.length === 0 || !dim.glints[0].beam, "a weak glint carries no beam");
+});
+
+test("visor lamps honor fixture halo and volume weights and keep bright-source controls distinct", () => {
+  const { V } = load();
+  const fixture = lamp(0, -24), fill = lamp(3, -24);
+  fill[14] = 0;
+  assert.equal(V.lightMap({ ...NIGHT, lights: fill }, 852, 393).glints.length, 0, "fixture-less fill produces no phantom glint");
+  const map = (record, level = 1) => V.lightMap({ ...NIGHT, lights: record }, 852, 393, { level }).glints[0];
+  const dimHalo = fixture.slice(); dimHalo[14] = 0.25;
+  assert.ok(map(dimHalo).k < map(fixture).k, "the source halo weight affects brightness");
+  const noVolume = fixture.slice(); noVolume[13] = 0;
+  assert.equal(map(noVolume).beam, null, "a source without volumetric scattering has no aimed wedge");
+  assert.ok(map(noVolume).star && map(noVolume).k === map(fixture).k, "visor diffraction and the core remain independent of volume");
+  const weakVolume = fixture.slice(); weakVolume[13] = 0.25;
+  assert.ok(map(weakVolume).beam.k < map(fixture).beam.k, "the fixture scattering weight scales its wedge");
+  const strengths = [0.6, 1, 1.6].map((level) => map(fixture, level).k);
+  assert.ok(strengths[0] < strengths[1] && strengths[1] < strengths[2], "a bright nearby lamp retains light, medium and strong settings");
+  assert.ok(strengths[2] <= 1.2, "the strongest setting remains bounded");
 });
 
 test("visor beams: VISOR BEAMS scales the lamp beams, the sun's rays and the star flares, and OFF keeps the glints alone", () => {
@@ -712,4 +795,34 @@ test("maximum visor effects keep flood halos and beams local to their sources", 
   const sun = V.lightMap({ ...DAY, sunDir: [0, 0.1, -0.995] }, 852, 393, { level: 1.6, beams: 2 });
   assert.ok(sun.rays && sun.rays.len < Math.hypot(852, 393) * 0.5);
   assert.ok(sun.ghost.k < sun.sun.k * 0.2);
+});
+
+
+test("visor lamp glare follows distance and height fog without changing clear weather", () => {
+  const { V } = load();
+  const source = { ...NIGHT, lights: new Float32Array(lamp(0, -80, [2000, 2000, 2000])) };
+  const map = (fogDensity, fogHeight = 0) => V.lightMap({ ...source, fogDensity, fogHeight }, 844, 390);
+  const clear = V.lightMap(source, 844, 390), zero = map(0), mist = map(0.008), fog = map(0.025);
+  assert.equal(clear.glints.length, 1);
+  assert.equal(zero.glints[0].k, clear.glints[0].k, "fog disabled preserves the existing lamp response");
+  assert.ok(mist.glints.length === 1 && mist.glints[0].k < clear.glints[0].k, "mist attenuates the point source");
+  assert.equal(fog.glints.length, 0, "a distant lamp hidden by fog cannot retain its sharp visor glint");
+  const high = map(0.025, 0.3);
+  assert.ok(high.glints.length === 1 && high.glints[0].k > mist.glints[0].k, "an elevated fixture above shallow fog retains more direct light");
+  const near = V.lightMap({ ...source, lights: new Float32Array(lamp(0, -20, [2000, 2000, 2000])), fogDensity: 0.025 }, 844, 390);
+  assert.ok(near.glints.length === 1, "nearby lamps remain visible in the same fog");
+});
+
+test("live visor scene uses the renderer's effective fog settings, including zero overrides", () => {
+  const { V, ctx } = load();
+  const G = { camEye: NIGHT.eye, camTgt: NIGHT.tgt, camFov: 62,
+    frame: { ...NIGHT, fogDensity: 0.02, fogHeight: 0.04 } };
+  assert.equal(V.sceneFromG(G).fogDensity, 0.02);
+  assert.equal(V.sceneFromG(G).fogHeight, 0.04);
+  ctx.LightTune = { LT: { fogDensityMul: 2, fogHeight: 0.12 } };
+  assert.equal(V.sceneFromG(G).fogDensity, 0.04);
+  assert.equal(V.sceneFromG(G).fogHeight, 0.12);
+  ctx.LightTune.LT = { fogDensityMul: 0, fogHeight: 0 };
+  assert.equal(V.sceneFromG(G).fogDensity, 0);
+  assert.equal(V.sceneFromG(G).fogHeight, 0);
 });

@@ -51,6 +51,7 @@ const VisorOptics = (function () {
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
+  let _settingsDirty = false;
   let _budget = 0, _paintHz = HZ, _lastHaze = null;
   let _portKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
@@ -217,11 +218,13 @@ const VisorOptics = (function () {
           const k = clampTo(2.0 * key * sunUp * gain * fade, 0, 1.4);
           const x = clampTo(p.x, -0.08 * w, 1.08 * w), y = clampTo(p.y, -0.08 * h, 1.08 * h);
           out.sun = { x, y, k, r: base * 0.12 * (1 + 0.5 * (1 - fade)), rgb };
-          // The double-reflection ghost: mirrored through the centre, larger and fainter (lens-flare geometry).
-          if (over === 0) out.ghost = { x: w - x, y: h - y, k: k * 0.15, r: base * 0.18, rgb };
-          // God rays: a sun in the frame streaks across the shield's micro-scratches and the tear-off film —
-          // radial, longest when the sun sits low in the frame (a low sun ahead is what blinds a driver).
-          if (over === 0 && bm > 0) out.rays = { x, y, k: k * bm * 0.35, len: Math.hypot(w, h) * 0.35 * (0.7 + 0.3 * bm), rgb };
+          // Fade the scratch rays and ghost over six degrees beyond the view instead of popping at its edge.
+          // Keep their true projected source: the clamped rim glow must never drag a ray origin onto the frame.
+          const edge = clampTo(over / (6 * Math.PI / 180), 0, 1);
+          const rayFade = 1 - edge * edge * (3 - 2 * edge);
+          if (rayFade > 0) out.ghost = { x: w - p.x, y: h - p.y, k: k * 0.15 * rayFade, r: base * 0.18, rgb };
+          // These are visor diffraction spokes, independent of the world's volumetric god-ray pass.
+          if (rayFade > 0 && bm > 0) out.rays = { x: p.x, y: p.y, k: k * bm * 0.35 * rayFade, len: Math.hypot(w, h) * 0.35 * (0.7 + 0.3 * bm), rgb };
         }
       }
       // Fresnel rim sheen: the inner rim is seen at grazing angles, where reflectance climbs, and it is lit on
@@ -247,6 +250,9 @@ const VisorOptics = (function () {
       const eye = scene.eye, f = (h / 2) / Math.tan((scene.fov || 62) * Math.PI / 360);
       _glintBuf.length = 0;
       for (let i = 0; i + LIGHT_STRIDE <= L.length; i += LIGHT_STRIDE) {
+        // Match the world's fixture halo contract: synthetic road fills have no visible lens to reflect.
+        const glareW = L[i + 14];
+        if (!(glareW > 0) || !Number.isFinite(glareW)) continue;
         const dx = L[i] - eye[0], dy = L[i + 1] - eye[1], dz = L[i + 2] - eye[2];
         const z = dx * basis.fwd[0] + dy * basis.fwd[1] + dz * basis.fwd[2];
         if (z < 1) continue;                                  // behind, or at the eye
@@ -265,15 +271,21 @@ const VisorOptics = (function () {
         // the law the road obeys; the square root compresses a 100× energy range into glints of one family.
         const dl = Math.sqrt(d2), cosT = -(dx * L[i + 7] + dy * L[i + 8] + dz * L[i + 9]) / dl;
         const beam = clampTo((cosT - L[i + 11]) / Math.max(1e-3, L[i + 10] - L[i + 11]), 0, 1);
-        const kl = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * edgeFade * lampVis;
-        if (kl < 0.15) continue;                                // below this a glint would not read; the road gets little from it either
+        const energy = LAMP_GAIN * Math.sqrt(Math.max(0, lum([L[i + 3], L[i + 4], L[i + 5]]) * exp) / d2) * (0.5 + 0.5 * beam) * glareW;
+        // Compress fixture energy BEFORE the user's gain, so bright floods retain distinct strength settings.
+        // Adaptation and edge fading follow the compression so they can still extinguish a very bright source.
+        const fogDistance = dl * Math.max(0, scene.fogDensity || 0) * Math.exp(-Math.max(0, dy) * Math.max(0, scene.fogHeight || 0));
+        const transmission = Math.exp(-fogDistance * fogDistance);
+        const kl = energy / (1 + energy) * edgeFade * lampVis * transmission;
+        if (kl < 0.15) continue;                                // distant fixtures disappear into the same fog as the world
         const m = Math.max(1e-3, L[i + 3], L[i + 4], L[i + 5]);
         // The fixture's aim on screen (its cone): a faint beam leaves each glint that way — the floods' light
         // seen in the haze and on the shield, pointing where the lamp points.
         const bx = L[i + 7] * basis.right[0] + L[i + 8] * basis.right[1] + L[i + 9] * basis.right[2];
         const by = -(L[i + 7] * basis.up[0] + L[i + 8] * basis.up[1] + L[i + 9] * basis.up[2]);
         const bl = Math.hypot(bx, by);
-        _glintBuf.push({ x, y, k: kl, d: dl, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam });
+        const vol = Number.isFinite(L[i + 13]) ? clampTo(L[i + 13], 0, 2) : 0;
+        _glintBuf.push({ x, y, k: kl, d: dl, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam, vol });
       }
       _glintBuf.sort((a, b) => b.k - a.k);
       const n = Math.min(MAX_GLINTS, Math.max(0, glintLimit | 0), _glintBuf.length);
@@ -284,7 +296,7 @@ const VisorOptics = (function () {
         const r = base * clampTo(0.035 + 1.5 / Math.max(8, g.d), 0.035, 0.10) * (0.8 + 0.2 * out.bloom);
         out.glints.push({ x: g.x, y: g.y, k, r, rgb: g.rgb,
           // The fixture's beam, seen in the air and on the shield: longer and brighter the harder the lamp hits the eye.
-          beam: bm > 0 && k > 0.25 ? { dx: g.bx, dy: g.by, len: base * (0.16 + 0.24 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.24 * bm } : null,
+          beam: bm > 0 && k > 0.25 && g.vol > 0 ? { dx: g.bx, dy: g.by, len: base * (0.16 + 0.24 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.24 * bm * g.vol } : null,
           // A star flare on the brightest three: the shield's micro-scratches split a hard point source into spokes.
           star: bm > 0 && i < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.2 * bm } : null });
         sceneLight += g.k * 0.6;
@@ -411,7 +423,7 @@ const VisorOptics = (function () {
     // tick measured the layout before lookup; size a newly acquired canvas for its first paint.
     _sizeLightCanvas(_w, _h);
     // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
-    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name === "visorColor") _portKey = ""; _acc = 1; } });
+    if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name === "visorColor") _portKey = ""; _settingsDirty = true; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
     return _cv;
   }
@@ -706,25 +718,34 @@ const VisorOptics = (function () {
     g.globalCompositeOperation = "source-over";
   }
 
+  // One authority for both the folded shader and CSS fallback. A cached SVG map
+  // must not leave world refraction running after LOW, budget shedding or exit.
+  function _syncBend(on) {
+    if (on === _bendActive) return;
+    _bendActive = on;
+    if (!document.body) return;
+    if (on) document.body.setAttribute("data-visor-bend-active", "1");
+    else document.body.removeAttribute("data-visor-bend-active");
+  }
+
   /** Once per rendered frame (from Droplets.tick). on: an onboard camera, racing, not photo mode. dt 0 = paused
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
-    _bendActive = false;
     const helmet = _helmet();
-    if (!helmet) { _syncBudget(0); _show(false); return; }
+    if (!helmet) { _syncBend(false); _syncBudget(0); _show(false); return; }
     const visor = _opt("visor", "off");
     const resized = visor !== "off" && _size();
     _port(visor);                                              // OFF clears the aperture without measuring the viewport
     const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
-    if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
+    if (visor === "off" || !on || _low() || _shed) { _syncBend(false); _show(false); return; }
     const budget = BUDGETS[_budget];
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const refraction = _budget < 2 ? _opt("visorRefraction", "off") : "off";
     if (BEND[refraction]) {
       _bend(refraction);
-      _bendActive = !!bendField.data && _bendW === _w && _bendH === _h;
     }
+    _syncBend(!!BEND[refraction] && !!bendField.data && _bendW === _w && _bendH === _h);
     if (t2 && _bendActive && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (!(level > 0)) { _show(false); return; }
@@ -736,7 +757,8 @@ const VisorOptics = (function () {
     const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
     if (!newSizeOrCanvas && _acc < 1 / hz) return;
-    if (!(dt > 0) && !newSizeOrCanvas && !changed) return;              // a paused profile change still refreshes once
+    if (!(dt > 0) && !newSizeOrCanvas && !changed && !_settingsDirty) return;              // a paused profile change still refreshes once
+    _settingsDirty = false;
     _acc = newSizeOrCanvas || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
@@ -798,15 +820,19 @@ const VisorOptics = (function () {
     document.body.toggleAttribute("data-visor-folded", !!on);
     document.body.toggleAttribute("data-visor-light-folded", on === 2);
   }
-  function clear() { _bendActive = false; folded(false); _syncBudget(0); _show(false); }
+  function clear() { _syncBend(false); folded(false); _syncBudget(0); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
+    const tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
     return {
       // The lens the world was drawn with: G.lens.fovY is the fitted FOV, not the raw camFov (#5018).
       eye: G.camEye, tgt: G.camTgt, fov: G.lens && G.lens.fovY > 0 ? G.lens.fovY * 180 / Math.PI : G.camFov, roll: G.camRoll || 0,
       sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
+      // Match the rendered scene's height fog, including a user tuning override of zero.
+      fogDensity: (G.frame.fogDensity || 0) * (tune?.fogDensityMul ?? 1),
+      fogHeight: tune?.fogHeight ?? G.frame.fogHeight ?? 0,
     };
   }
 
