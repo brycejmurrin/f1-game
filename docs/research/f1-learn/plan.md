@@ -94,3 +94,17 @@ Give safety and governance their own reading path. Pair a documented incident wi
 ## Research appendices
 
 [Sporting rules](sport.md) · [Technical and power-unit rules](tech.md) · [History, safety and governance](history.md) · [Vehicle dynamics and model fixtures](physics.md) · [Data Hub architecture](hub.md) · [Gameplay systems and reuse](game.md)
+
+## Session designs after the first Aero Lab
+
+The first lesson opens with two cars 10 m apart. At the same gap, switching to the fast corner preserves wake exposure and removes the usable tow. Moving four metres off-line restores the game's clean-air grip baseline. The next lessons should give players similarly short, reproducible comparisons.
+
+| Build order | Session and test of understanding | Design brief |
+|---|---|---|
+| Next | **Spend grip through a braking zone.** Release enough braking demand to make a corner, then repeat under a different grip limit. | [Driving sessions](driving-sessions.md) |
+| Next | **Box under VSC.** Choose a pit window, identify which part of the time loss changes, and replay a different end to the neutralisation. | [Race decisions](race-sessions.md) |
+| Then | **Follow water and temperature.** Compare two stints on a changing surface and explain why the crossover changes. **Build the grid.** Apply a deleted lap, a tie and a penalty, checking classification before the start grid. | [Driving sessions](driving-sessions.md) · [Race decisions](race-sessions.md) |
+| First era comparison | **What replaced DRS?** Replay a Las Vegas straight under two seasons' rules. Ask separately who may change wing state and who has earned extra deployment. | [Era sessions](era-sessions.md) |
+| Further sessions | Reconstruct a steward decision and rescore the result. Compare floor designs, hybrid architectures, safety layers or development budgets across eras. | [Race decisions](race-sessions.md) · [Era sessions](era-sessions.md) |
+
+Use the worked values and transfer questions in each brief as acceptance fixtures. Preserve the year and event on every source-backed example; label teaching values in the same view as their outputs.
