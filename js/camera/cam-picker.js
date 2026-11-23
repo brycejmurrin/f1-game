@@ -145,7 +145,7 @@ const CamPicker = (function () {
         if (camPicker.visible()) { camPicker.hide(); return; }
         cycleCam();
       };
-      if (typeof InputHoldButtons !== "undefined") InputHoldButtons.secondaryTap(b, {
+      if (typeof InputHoldButtons !== "undefined") InputHoldButtons.hudTouchTap(b, {
         cancel: cancelHold,
         activate: e => { if (held && e.timeStamp - downTs < HOLD_MS) held = false; b.click(); },
       });

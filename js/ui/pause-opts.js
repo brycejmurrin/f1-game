@@ -342,7 +342,7 @@ const PauseOpts = (function () {
     const pm = hasDoc ? document.getElementById("pausemenu") : null;
     if (!pm || pm._pauseOptsWired) return;
     pm._pauseOptsWired = true;
-    if (typeof InputHoldButtons !== "undefined") InputHoldButtons.secondaryTap(document.getElementById("pausebtn"), {
+    if (typeof InputHoldButtons !== "undefined") InputHoldButtons.hudTouchTap(document.getElementById("pausebtn"), {
       beforeActivate: e => {
         // The synthetic activation must still arm the real modal's ghost-tap shield.
         let blocked = false;
