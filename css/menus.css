@@ -211,7 +211,7 @@
 @media (hover: hover) and (pointer: fine) {
   #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:hover::before { opacity: 1; }
 }
-#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:is(:active, :focus-visible)::before { opacity: 1; }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active { box-shadow: var(--press-lit); }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
@@ -232,8 +232,8 @@
   #mb-career:hover { background: var(--grad-primary); }
   #mb-career:hover::before { opacity: 1; }
 }
-#mb-career:active { background: var(--grad-primary); }
-#mb-career:active::before { opacity: 1; }
+#mb-career:is(:active, :focus-visible) { background: var(--grad-primary); }
+#mb-career:is(:active, :focus-visible)::before { opacity: 1; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
 #menu-brand, #menu-meta { display: flex; flex-direction: column; align-items: inherit; }

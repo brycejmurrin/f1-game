@@ -160,13 +160,23 @@ window.SettingRow = (function () {
     const write = opts.write;
     const fresh = !p.sel._srLive;
     p.sel._srLive = { read, write, wrap: opts.wrap !== false };
-    if (fresh) p.sel.addEventListener("change", (e) => {
-      if (e && e.stopPropagation) e.stopPropagation();
-      const cur = p.sel._srLive;
-      const v = p.sel.value;
-      if (v !== S(cur.read())) cur.write(v);
-      paint(p.el, cur.read());
-    });
+    if (fresh) {
+      p.sel.addEventListener("change", (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const cur = p.sel._srLive;
+        const v = p.sel.value;
+        if (v !== S(cur.read())) cur.write(v);
+        paint(p.el, cur.read());
+      });
+      p.sel.addEventListener("keydown", (e) => {
+        if (p.sel.disabled || e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        const dir = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+        if (!dir) return;
+        e.preventDefault();
+        const cur = p.sel._srLive;
+        step(p, dir, cur.read, cur.write);
+      });
+    }
     const stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
     if (p.prev) p.prev.onclick = (e) => { stop(e); step(p, -1, read, write); };
     if (p.next) p.next.onclick = (e) => { stop(e); step(p, 1, read, write); };

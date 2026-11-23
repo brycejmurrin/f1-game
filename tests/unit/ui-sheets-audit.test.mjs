@@ -1023,6 +1023,27 @@ test("SettingRow wrap:false clamps the LAPS chevrons at the ends", () => {
   assert.equal(laps, 57);
   built.prev.click();
   assert.equal(laps, 5);
+  function press(key, extra) {
+    let handled = false;
+    built.sel.dispatchEvent({ type: "keydown", key, preventDefault() { handled = true; }, ...extra });
+    return handled;
+  }
+  assert.equal(press("ArrowRight"), true);
+  assert.equal(laps, 57);
+  assert.equal(press("ArrowRight"), true);
+  assert.equal(laps, 57);
+  assert.equal(press("ArrowLeft", { altKey: true }), false);
+  assert.equal(press("ArrowDown"), false);
+  assert.equal(press("ArrowLeft"), true);
+  assert.equal(laps, 5);
+  SettingRow.wire(built.row, {
+    values: [[3, "3"], [5, "5"], [57, "57 (FULL)", true]],
+    read: () => laps,
+    write: (v) => { laps = +v; },
+  });
+  press("ArrowRight");
+  assert.equal(laps, 3, "horizontal input skips disabled options and uses the latest wrap policy");
+
 });
 
 // Flow B item 4: a WATCHED real race (REAL REPLAY / HIGHLIGHTS) re-runs the replay, so its button must not say RACE AGAIN.

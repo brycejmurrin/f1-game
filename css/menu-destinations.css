@@ -370,6 +370,7 @@ body #overlay #menu-buttons #menu-secondary > .bigbtn {
   body #overlay #menu-buttons :is(#menu-primary, #mb-garage) .mb-sub { display: none; }
   body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) { min-height: var(--hrow); }
 }
+#overlay #menu-buttons .bigbtn:focus-visible { border-color: var(--steel); }
 @media (hover: hover) and (pointer: fine) {
   #overlay #menu-buttons .bigbtn:hover { border-color: var(--steel); }
 }
