@@ -912,7 +912,7 @@ test("the real picker scopes profile apply and reset to Results, shared popup st
   const pick = id => { picker.value = id; dom.dispatch(picker, { type: "change" }); };
   const hint = panel.querySelector("#appearance-arrange-help");
   pick("hud");
-  assert.match(hint.textContent, /sample readouts/);
+  assert.equal(hint.textContent, "Preview the race HUD with sample readouts. Apply or Cancel returns to Appearance.");
   pick("touch-controls");
   assert.equal(button("Arrange Touch controls").disabled, true);
   racing = true;

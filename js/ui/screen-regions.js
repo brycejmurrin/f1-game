@@ -364,7 +364,8 @@ window.ScreenRegions = (function () {
   }
   // Wait for this registry and the sibling bundle modules to publish first.
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+    // Parser-deferred companion scripts still run before DOMContentLoaded, even at "interactive".
+    if (document.readyState === "loading" || (document.readyState === "interactive" && document.currentScript?.defer && !document.currentScript.async)) document.addEventListener("DOMContentLoaded", install, { once: true });
     else queueMicrotask(install);
   }
   return screens;

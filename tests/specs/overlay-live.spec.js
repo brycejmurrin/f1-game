@@ -93,6 +93,12 @@ test.describe("stream overlay — live same-browser feed", () => {
 
 test("broadcast tower Width reflows a painted timing row", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
+  // Let the first paint happen before the last deferred script arrives.
+  await page.route("**/js/ui/screen-arranger.js*", async route => {
+    await page.waitForFunction(() => "ScreenRegions" in window);
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await route.continue();
+  });
   await page.goto("/overlay.html?arrange=broadcast");
   const editor = page.locator("#screen-arranger");
   await editor.getByRole("button", { name: "Controls", exact: true }).click();
