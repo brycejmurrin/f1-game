@@ -60,7 +60,7 @@ function detail() {
 const optInEffects = new Set(["garageProbeParallax", "rainCurtains", "rivalLiveryLod", "circuitSurfaces", "tyreWearVisual"]);
 const automaticEffects = new Set(["adaptiveModels", "brakeLightSpill", "gravelDebris"]);
 let automaticByPreset;
-const phoneEffects = new Set(["anisotropy", "skyAtmo", "meshHi", "heroCar", "rivalLod", "garageHi", "crewHi",
+const phoneEffects = new Set(["garageProbeParallax", "anisotropy", "skyAtmo", "meshHi", "heroCar", "rivalLod", "garageHi", "crewHi",
   "crowd3d", "treesHi", "kerbProfile", "farTerrain", "density", "propsHi"]);
 function phoneDetail() { return typeof GLX !== "undefined" && GLX.isMobile; }
 function supportsOption(name) { return !phoneDetail() || phoneEffects.has(name); }

@@ -2,10 +2,10 @@
   "_doc": "EXTREME garage detail pins (tests/unit/garage-hi-detail.test.mjs). off = the setup room after removing the eight solid neighbor facade blocks (e3f7c72195) and every bay crew look from dce9a300, built with tests/helpers/garage-hi-harness.mjs; on.tris = GfxQuality garageHi + crewHi with js/garage/hi-prims.js resident.",
   "off": {
     "room": {
-      "sha256": "6e35e7c251e45a72cc0669a25e8271d0602d20a353129445d391691a0bae52a3",
+      "sha256": "9b62a09bf15f53807afe56e7b0008fcb6fe9816e76709d13f92e4b3df5eb28ae",
       "meshes": 20,
-      "verts": 26634,
-      "tris": 19530
+      "verts": 26705,
+      "tris": 19626
     },
     "crew": {
       "classic": {
@@ -41,7 +41,7 @@
     }
   },
   "off_tris": {
-    "room": 19530,
+    "room": 19626,
     "crew": {
       "classic": 3960,
       "sculpted": 5276,
@@ -52,7 +52,7 @@
   },
   "on": {
     "tris": {
-      "room": 79196,
+      "room": 79292,
       "crew": {
         "classic": 16560,
         "sculpted": 22152,

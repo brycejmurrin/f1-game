@@ -227,7 +227,7 @@ test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube 
   assert.deepEqual(decide(false, false, false, true, false), [false, true, false]);
   assert.deepEqual(decide(true, false, false, true, false), [true, false, false]);
   assert.deepEqual(decide(false, true, false, true, false), [true, true, true]);
-  assert.deepEqual(decide(false, true, true, true, false), [false, true, false]);
+  assert.deepEqual(decide(false, true, true, true, false), [true, true, true]);
   assert.deepEqual(decide(false, true, false, false, false), [false, true, false]);
   assert.deepEqual(decide(false, true, false, true, true), [false, true, false]);
   const optOutBody = TLX.match(/get envProbeOptOut\(\) \{([^}]+)\}/)[1];
