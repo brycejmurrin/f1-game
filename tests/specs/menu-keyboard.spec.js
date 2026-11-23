@@ -890,3 +890,29 @@ test('native modal opening order survives reverse DOM order and reopen', async (
   expect((await seen()).top).toBe(dialogs[0]);
   await page.evaluate(ids => { for (const id of ids) { const el = document.getElementById(id); el.hidden = true; el.close(); } }, dialogs);
 });
+
+test("Keyboard focus lights the title plate and arrows step the title style setting", async ({ page }) => {
+  await page.setViewportSize(DESKTOP);
+  await page.addInitScript(() => localStorage.setItem("apex26.titleButtonStyle", JSON.stringify("racing")));
+  await page.goto("/");
+  await waitReady(page);
+
+  const race = page.locator("#mb-race");
+  await page.keyboard.press("Tab");
+  await race.focus();
+  await expect(race).toBeFocused();
+  await expect.poll(() => race.evaluate(button => getComputedStyle(button, "::before").opacity)).toBe("1");
+
+  await page.locator("#mb-settings").click();
+  await page.locator("#pm-open-appearance").click();
+  await page.locator("#pm-titlescreen-sum").click();
+  const style = page.locator("#pm-titlebuttonstyle-sel");
+  await expect(style).toHaveValue("racing");
+  await style.press("ArrowRight");
+  await expect(style).toHaveValue("flat");
+  await expect(page.locator("html")).toHaveAttribute("data-title-button-style", "flat");
+  await style.press("ArrowRight");
+  await expect(style).toHaveValue("auto");
+  await style.press("ArrowLeft");
+  await expect(style).toHaveValue("flat");
+});

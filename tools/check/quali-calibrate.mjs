@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Qualifying calibration (VM): drives the clear-air AI field per circuit, writes `tests/data/quali-calibration.json`.
+ * @doc Qualifying calibration (VM): measures solo flying laps and writes `tests/data/quali-calibration.json`.
  * @skill race-weekend
  *
  *   node tools/check/quali-calibrate.mjs --update [--jobs 3] [--track monza,spa]   # drive + model, rewrite the file
@@ -9,9 +9,10 @@
  *
  * THE MEASUREMENT behind the per-circuit factor of js/race/quali-model.js (CALIB). Per circuit and level
  * (easy, normal, hard) it boots the real game in the Node VM (tools/lib/game-vm.cjs; no browser) at the shipped
- * PACE and drives two thinned AI-only fields in clear air (grid slots i % 4 == 1 and i % 4 == 3, the rest
- * retired and lifted off the road), each car's best of LAPS timed laps. Beside every driven lap it records the
- * model's UNCALIBRATED lap for the same car (Quali.carLap(c, track, grip, true)).
+ * PACE, reads the works cars in grid slots i % 4 == 1 or 3, and gives each one a solo run from the
+ * production qualifying rolling start. Every measured lap begins with the first line crossing and
+ * ends at the second. Beside it records the uncalibrated lap for the same car and starting grip
+ * (Quali.carLap(c, track, grip, true)).
  *
  * The file is a measurement, not a build product: about 30 CPU-minutes for the calendar, so it is NEVER part of
  * `npm run gen` or CI. `tools/gen/gen-quali-calib.mjs` (which IS in gen and gen:check) turns the file into the
@@ -35,63 +36,73 @@ const require = createRequire(import.meta.url);
 const SELF = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(SELF), "../..");
 export const DATA = "tests/data/quali-calibration.json";
-export const METHOD = Object.freeze({ pace: 0.8396, seed: 1, slots: [1, 3], laps: 3, hz: 60, levels: ["easy", "normal", "hard"] });
-const CAP_S = 900;
+export const METHOD = Object.freeze({ pace: 0.8396, seed: 1, slots: [1, 3], laps: 1, start: "qualifying-rolling", hz: 60, levels: ["easy", "normal", "hard"] });
+const CAP_S = 240;
 
 export function circuits(root = ROOT) {
   return fs.readdirSync(path.join(root, "js/circuits")).filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
 }
 
-/** One circuit, every level: { level: [[gridIndex, code, bestFrames|null, modelMs], …] } sorted by grid index.
- *  `driven` (the file's rows for this circuit) skips the driving and keeps its frame counts. */
+/** Drive one works car through a real qualifying session with the AI keeping control. */
+export async function flyingLap(g, track, ai) {
+  const { apex, G } = g;
+  G.teamIdx = g.sandbox.Teams.LIST.indexOf(ai.team);
+  G.driverIdx = ai.seat;
+  G.session = "quali";
+  apex.seed(METHOD.seed);
+  await G.startRace();
+  const car = G.player;
+  if (G.state !== "count" || G.cars.length !== 1 || car?.driverId !== ai.driverId) {
+    throw new Error(`${track}: qualifying did not stage ${ai.driverId} alone`);
+  }
+  // The local seat loads player setup channels. Use its works-car AI values,
+  // including the tuned AI ERS deployment and regeneration, through the lap.
+  for (const key of ["tierV", "skill", "aeroLoad", "ersDeploy", "ersRegen", "tread", "lane", "lanePref"]) {
+    car[key] = ai[key];
+  }
+  const setCarRole = G.setCarRole;
+  G.setCarRole = (c, human, local) => setCarRole(c, c === car ? false : human, local);
+  try {
+    g.step(1, 1 / METHOD.hz);
+    if (G.state !== "race" || !G.flyingStart.owns(car) || !(car.prog < 0 && car.speed > 0) || car.lap !== 0) {
+      throw new Error(`${track} ${ai.code}: qualifying rolling start did not arm`);
+    }
+    for (let f = 1; f <= CAP_S * METHOD.hz; f++) {
+      g.step(1, 1 / METHOD.hz);
+      if (car.lap === 2 && Number.isFinite(car.best) && !car.qualiCut) return Math.round(car.best * METHOD.hz);
+      if (car.retired || car.finished || G.state !== "race") break;
+    }
+    throw new Error(`${track} ${ai.code}: no valid qualifying lap (lap ${car.lap}, cut ${car.qualiCut}, state ${G.state})`);
+  } finally {
+    G.setCarRole = setCarRole;
+  }
+}
+
+/** One circuit and every difficulty, sorted by grid slot. The model-only mode preserves driven frames. */
 async function measure(track, driven) {
   const { createGame } = require("../lib/game-vm.cjs");
   const out = {};
   for (const difficulty of METHOD.levels) {
-    const rows = new Map();
-    for (const keep of METHOD.slots) {
-      const g = await createGame({ track, carMeshes: false, storage: { difficulty }, search: "?seed=" + METHOD.seed });
-      try {
-        const a = g.apex, G = g.G;
-        a.headless(true);
-        await g.race(track, "day", "dry", { laps: METHOD.laps + 2 });
-        if (G.difficulty !== difficulty) throw new Error(`${track}: level ${difficulty} did not take`);
-        if (Math.abs(G.PACE - METHOD.pace) > 0.001) throw new Error(`${track}: PACE ${G.PACE}, want the shipped ${METHOD.pace}`);
-        const quali = g.sandbox.Quali.create(G);
-        const idx = [];
-        G.cars.forEach((c, i) => { if (!c.isPlayer && i % 4 === keep) idx.push(i); });
-        // The model column first, on the staged grid: nothing below may move it.
-        for (const i of idx) { const c = G.cars[i]; rows.set(i, [i, c.code, null, Math.round(quali.carLap(c, G.track, G.gripMult(c), true) * 1000)]); }
-        if (driven) continue;
-        g.aiOnly();
-        G.cars.forEach((c, i) => { if (!c.retired && i % 4 !== keep) a.retire(i, "bench"); });
-        // Off the road, not parked on it (tests/unit/quali-pace-parity-vm.test.mjs, #5510).
-        G.cars.forEach((c) => { if (c.retired) { c.x = (c.x >= 0 ? 1 : -1) * 500; c.xVis = c.x; c.parkedOnRoad = false; } });
-        const live = []; G.cars.forEach((c, i) => { if (!c.retired) live.push(i); });
-        const cars = live.map((i) => G.cars[i]);
-        const seen = cars.map((c) => c.lap || 0), last = cars.map(() => null), laps = cars.map(() => []);
-        for (let f = 1; f <= CAP_S * METHOD.hz && laps.some((l) => l.length < METHOD.laps); f++) {
-          g.step(1, 1 / METHOD.hz);
-          cars.forEach((c, i) => { if ((c.lap || 0) > seen[i]) { if (last[i] != null) laps[i].push(f - last[i]); last[i] = f; seen[i] = c.lap; } });
-        }
-        live.forEach((i, j) => {
-          const c = G.cars[i];
-          const row = rows.get(i) || [i, c.code, null, Math.round(quali.carLap(c, G.track, G.gripMult(c), true) * 1000)];
-          row[2] = laps[j].length ? Math.min(...laps[j]) : null;
-          rows.set(i, row);
-        });
-      } finally { g.close(); }
-    }
-    const list = [...rows.values()].sort((x, y) => x[0] - y[0]);
-    if (driven) {
-      const was = new Map((driven[difficulty] || []).map((r) => [r[0], r]));
-      for (const r of list) {
-        const w = was.get(r[0]);
-        if (!w || w[1] !== r[1]) throw new Error(`${track} ${difficulty}: grid slot ${r[0]} is ${r[1]}, the file has ${w ? w[1] : "no row"} — the grid changed, run --update`);
-        r[2] = w[2];
+    const g = await createGame({ track, carMeshes: false, storage: { difficulty }, search: "?seed=" + METHOD.seed });
+    try {
+      const { apex, G } = g;
+      apex.headless(true);
+      await g.race(track, "day", "dry", { laps: 3 });
+      if (G.difficulty !== difficulty) throw new Error(`${track}: level ${difficulty} did not take`);
+      if (Math.abs(G.PACE - METHOD.pace) > 0.001) throw new Error(`${track}: PACE ${G.PACE}, want the shipped ${METHOD.pace}`);
+      const quali = g.sandbox.Quali.create(G);
+      const sample = Array.from(G.cars.entries()).filter(([i, c]) => !c.isPlayer && METHOD.slots.includes(i % 4));
+      const rows = sample.map(([i, c]) => [i, c.code, null, Math.round(quali.carLap(c, G.track, G.gripMult(c), true) * 1000)]);
+      const previous = driven && new Map(driven[difficulty].map((row) => [row[0], row]));
+      for (const [j, [i, c]] of sample.entries()) {
+        if (previous) {
+          const was = previous.get(i);
+          if (was?.[1] !== c.code) throw new Error(`${track} ${difficulty}: slot ${i} changed drivers; run --update`);
+          rows[j][2] = was[2];
+        } else rows[j][2] = await flyingLap(g, track, c);
       }
-    }
-    out[difficulty] = list;
+      out[difficulty] = rows;
+    } finally { g.close(); }
   }
   return out;
 }
@@ -104,7 +115,7 @@ export function render(cells) {
   const body = ids.map((id) => `    ${JSON.stringify(id)}: {\n` + METHOD.levels.map((lv) =>
     `      ${JSON.stringify(lv)}: [\n` + cells[id][lv].map((r) => "        " + JSON.stringify(r)).join(",\n") + "\n      ]").join(",\n") + "\n    }").join(",\n");
   return "{\n" +
-    `  "_about": "MEASURED by node tools/check/quali-calibrate.mjs --update (never by hand, never in CI). Rows: [grid slot, driver, best driven lap in 1/60 s frames, the model's uncalibrated lap in ms]. tools/gen/gen-quali-calib.mjs turns it into CALIB in js/race/quali-model.js.",\n` +
+    `  "_about": "MEASURED by node tools/check/quali-calibrate.mjs --update (never by hand, never in CI). Rows: [grid slot, driver, qualifying flying lap in 1/60 s frames, the model's uncalibrated lap in ms]. tools/gen/gen-quali-calib.mjs turns it into CALIB in js/race/quali-model.js.",\n` +
     `  "method": ${JSON.stringify(METHOD)},\n` +
     `  "cells": {\n${body}\n  }\n}\n`;
 }
@@ -158,9 +169,15 @@ async function main() {
   }
   const all = circuits();
   const ids = val("--track") ? val("--track").split(",") : all;
+  if (new Set(ids).size !== ids.length) throw new Error("A circuit may appear only once in --track");
   for (const id of ids) if (!all.includes(id)) throw new Error("unknown circuit " + id);
   const file = path.join(ROOT, DATA);
-  const cells = fs.existsSync(file) ? read().cells : {};
+  const existing = fs.existsSync(file) ? read() : null;
+  const sameMethod = JSON.stringify(existing?.method) === JSON.stringify(METHOD);
+  if (!sameMethod && (modelOnly || ids.length !== all.length)) {
+    throw new Error("The measurement method has changed; run a full calendar --update first");
+  }
+  const cells = sameMethod ? existing.cells : {};
   if (modelOnly) for (const id of ids) if (!cells[id]) throw new Error(`${id}: no driven laps in ${DATA}; run --update`);
   Object.assign(cells, await pool(ids, jobs, modelOnly ? "model" : "drive"));
   fs.writeFileSync(file, render(cells));
