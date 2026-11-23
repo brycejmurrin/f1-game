@@ -1,0 +1,63 @@
+:root {
+  font: var(--fs-3, 16px)/1.4 var(--font-ui, system-ui);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; color: var(--text); background: var(--bg); }
+main { max-width: 70rem; margin: auto; padding: var(--pad, 1rem); }
+main > h2 { margin: 0 0 var(--gap, .75rem); }
+#learn-studio [data-as="box"],
+#learn-studio [data-as="preview-side"] { min-width: 0; }
+#learn-studio [data-as="preview-side"] { order: 0; }
+h3, p { margin: 0 0 .65em; }
+p:last-child { margin-bottom: 0; }
+
+button, select {
+  min-height: var(--tap, 44px);
+  padding: .45em .75em;
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  color: inherit;
+  background: var(--plate);
+  font: inherit;
+}
+button { cursor: pointer; }
+button:hover { background: var(--surf-3); }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.actions { display: flex; flex-wrap: wrap; gap: var(--gap, .75rem); }
+#box { background: var(--red); color: var(--menu-accent-ink, var(--text)); }
+#variants select, #variants button { display: block; max-width: 100%; margin-top: .4em; }
+
+.lane { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2em .7em; margin-bottom: .65em; }
+.track { width: 100%; height: .65em; background: var(--surf-3); border: 1px solid var(--card-line); }
+.track i { display: block; height: 100%; background: var(--text); }
+.lane:first-child .track i { background: var(--red); }
+
+#projection, #rejoin { margin-top: .65em; }
+dl { margin: 0 0 .65em; }
+dt { font-weight: 700; }
+dd { margin: 0 0 .25em; }
+fieldset { margin: 0; padding: .4em .65em; border: 1px solid var(--card-line); }
+fieldset label { display: block; padding-block: .35em; }
+input { accent-color: var(--red); }
+details { margin-top: .75em; }
+details > p { margin-block: .5em; }
+summary { padding-block: .4em; font-weight: 700; cursor: pointer; }
+a { color: inherit; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 46rem) {
+  #learn-studio { grid-template-columns: minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"] { position: static; }
+}

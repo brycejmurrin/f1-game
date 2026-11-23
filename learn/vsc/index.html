@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSC Pit Strategy · Apex 26 Learn</title>
+<link rel="stylesheet" href="style.css">
+<script src="model.js" defer></script>
+<script src="lab.js" defer></script>
+</head>
+<body>
+<main>
+<h1 id="lesson-title">VSC Pit Strategy</h1>
+<h2>When is a pit stop cheaper?</h2>
+<div id="learn-studio">
+<div data-as="controls">
+<section data-as="box" aria-labelledby="decision-heading">
+<h3 id="decision-heading" data-as="heading">Your pit call</h3>
+<p><strong>Lap 12 of 58 · Virtual Safety Car</strong></p>
+<p>You’re on Mediums. The car behind is 14 s back. If you box now, you’ll change to Hards.</p>
+<p id="conditions">A long stint on Hards costs pace late in the race.</p>
+<p>In this worked example, pit loss is 22 s under green or 12 s if VSC lasts through the timing segment.</p>
+<div id="choices" class="actions"><button id="box" type="button">Box now</button><button id="stay" type="button">Stay out</button></div>
+<p id="choice" hidden></p>
+</section>
+<section id="variants" data-as="box" hidden aria-labelledby="variants-heading">
+<h3 id="variants-heading" data-as="heading">Try another case</h3>
+<label for="fixture">Replay conditions</label>
+<select id="fixture">
+<option value="default">Default</option>
+<option value="hardLife">Hard tyres hold pace</option>
+<option value="earlyGreen">Hard tyres hold pace · VSC ends early</option>
+<option value="traffic">Hard tyres hold pace · VSC ends early · Traffic</option>
+</select>
+<button id="replay" type="button">Replay from pit entry</button>
+</section>
+</div>
+<section class="timing" data-as="preview-side" aria-labelledby="timing-heading">
+<h3 id="timing-heading" data-as="heading" tabindex="-1">Pit timing</h3>
+<p id="step-label">Waiting for your pit call.</p>
+<div id="timing-paths" hidden>
+<div class="lane">
+<span>Pit lane and service</span><strong id="pit-time"></strong>
+<div class="track" aria-hidden="true"><i id="pit-bar"></i></div>
+</div>
+<div class="lane">
+<span id="track-label">Track under VSC</span><strong id="track-time"></strong>
+<div class="track" aria-hidden="true"><i id="track-bar"></i></div>
+</div>
+<div class="lane">
+<span>Track under green</span><strong id="green-time"></strong>
+<div class="track" aria-hidden="true"><i id="green-bar"></i></div>
+</div>
+<p id="loss" hidden></p>
+</div>
+<p id="rejoin" hidden></p>
+<div id="transport" class="actions" hidden><button id="next" type="button">Next marker</button><button id="play" type="button">Play steps</button></div>
+<div id="projection" hidden>
+<h3 id="projection-heading" tabindex="-1">Projected loss at the finish</h3>
+<dl><dt>Box now</dt><dd id="box-total"></dd><dt>Stay out</dt><dd id="stay-total"></dd></dl>
+<p id="verdict"></p>
+<p id="compound-check">Both plans use Medium and Hard. Hard is a mandatory race specification in this example.</p>
+<fieldset id="check">
+<legend>Why was the stop cheaper under VSC?</legend>
+<label><input name="reason" type="radio" value="track"> The car on track took longer.</label>
+<label><input name="reason" type="radio" value="service"> The tyre change took less time.</label>
+</fieldset>
+<p id="feedback" role="status"></p>
+</div>
+<span id="announcement" class="sr-only" role="status"></span>
+</section>
+</div>
+<details id="history" hidden>
+<summary>What happened in Australia?</summary>
+<p>At the 2026 Australian Grand Prix, Mercedes switched Russell and Antonelli from Mediums to Hards on lap 12 under VSC. Ferrari kept Leclerc and Hamilton out until laps 25 and 28. Mercedes finished first and second, ahead of both Ferraris.</p>
+<p>Timing recorded Russell and Antonelli’s pit sequences at 17.794 s and 20.985 s. Relative pit loss also depends on the time taken by a car on track.</p>
+<p><a href="https://www.formula1.com/en/results/2026/races/1279/australia/pit-stop-summary" target="_blank" rel="noopener">Pit-stop summary</a> · <a href="https://www.formula1.com/en/results/2026/races/1279/australia/race-result" target="_blank" rel="noopener">Race result</a></p>
+</details>
+<details>
+<summary>Model and rules</summary>
+<p>The timeline compares the pit path and the track path between equivalent timing markers. The fictional pit path takes 4 s at entry, 18 s in transit, 2.5 s for service and 5.5 s at exit. The finish projection uses illustrative tyre-pace and traffic costs.</p>
+<p>Under VSC, cars slow to a minimum sector time and overtaking is generally restricted. In the race, cars can enter the pits under VSC for a tyre change. A physical Safety Car gathers the field into a queue.</p>
+<p><a href="https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_09_-_2026-10-01.pdf" target="_blank" rel="noopener">2026 FIA Sporting Regulations, B5.12–13 and B6.3.6</a></p>
+</details>
+</main>
+</body>
+</html>

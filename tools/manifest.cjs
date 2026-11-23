@@ -1676,7 +1676,10 @@ const MOVED = {
 
 // Learn's iframe is a separate document. It requests these assets without
 // the game shell's ScriptLoader version query, including the shared constants.
-const SW_LEARN = ["learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js", "js/physics/consts.js"];
+const SW_LEARN = [
+  "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js", "js/physics/consts.js",
+  "learn/vsc/index.html", "learn/vsc/style.css", "learn/vsc/model.js", "learn/vsc/lab.js",
+];
 
 /** Locale manifest only (English players need no locale JSON fetch). */
 const SW_LOCALES = ["locales/manifest.json"];

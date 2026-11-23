@@ -566,11 +566,15 @@ async function precacheAssetLists() {
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
-    // LEARN — Aero Lab iframe and its bare dependencies
+    // LEARN — lesson iframes and their bare dependencies
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",
     "js/physics/consts.js",
+    "learn/vsc/index.html",
+    "learn/vsc/style.css",
+    "learn/vsc/model.js",
+    "learn/vsc/lab.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional
