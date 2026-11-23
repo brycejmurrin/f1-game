@@ -62,7 +62,7 @@ function boot(options = {}) {
       out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: options.setTimeout || (() => 0), clearTimeout: () => {}, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     AppearanceStudio: { setScene(mode) { scene.value = mode; return { durable: true }; } },
-    NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
+    VisorOptics: options.visorOptics, NativeDownload: options.nativeDownload, GLX: { isMobile: !!options.mobile },
     LightTune: options.noLightTune ? undefined : {
       LT,
       TUNE_DEFS: options.tuneDefs || [
@@ -102,6 +102,30 @@ function boot(options = {}) {
   return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("photo visor lighting is opt-in and baked once before cropping, saving or downloading", async () => {
+  const calls = [], b = boot({ visorOptics: { captureLight(image, G, options) {
+    calls.push({ width: image.width, height: image.height, options: { ...options }, G });
+  } } });
+  b.api.open({ source: "race" });
+  assert.equal(b.dom.byId("ps-group-visor").hidden, false);
+  assert.equal(await b.api.capture(), true); assert.equal(calls.length, 0);
+  for (const [key, value] of [["level", "strong"], ["beams", "off"], ["style", "compact"]]) {
+    const el = b.dom.byId("ps-visor-" + key); el.value = value; b.dom.dispatch(el, { type: "change" });
+  }
+  assert.equal(b.dom.byId("ps-message").textContent, "Press Capture to preview the new visor lighting.");
+  assert.equal(await b.api.capture(), true);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].options, { level: "strong", beams: "off", style: "compact" });
+  assert.deepEqual([calls[0].width, calls[0].height], [160, 90]);
+  assert.equal(calls[0].G, b.G);
+  const frame = b.dom.byId("ps-aspect"); frame.value = "square"; b.dom.dispatch(frame, { type: "change" });
+  await b.api.exportPhoto(); await b.api.savePhoto(); b.dom.byId("ps-background").click();
+  assert.equal(calls.length, 1, "recomposition and outputs reuse the same lit pixels");
+  b.api.close(false); b.api.open({ source: "garage" });
+  assert.equal(b.dom.byId("ps-group-visor").hidden, true, "garage has its own lighting pipeline");
+  await b.api.capture(); assert.equal(calls.length, 1);
+});
 
 test("a garage still waits for a fresh capture draw even when a previous photo exists", async () => {
   const b = boot();

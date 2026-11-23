@@ -86,6 +86,9 @@ test("Title circuit photo provides a car to place without starting a race", asyn
   await present(page);
   await evidence(page, info, "title-circuit-desktop");
   expect((await page.evaluate(() => __apex.physState())).s).toBeCloseTo(placed.s);
+  await page.locator("#ps-visor-level").selectOption("medium");
+  await page.locator("#ps-visor-beams").selectOption("strong");
+  await page.locator("#ps-visor-style").selectOption("scratches");
   await clickLive(page, "ps-capture");
   await page.waitForFunction(() => PhotoStudio.state().captured && !PhotoStudio.state().busy,
     null, { polling: 100, timeout: BOOT_MS });

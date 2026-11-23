@@ -426,6 +426,17 @@ function create(G, deps) {
   ]);
   const sampleRow = select("Capture quality", [["1", "Instant"], ["8", "8 samples"], ["32", "32 samples"]],
     () => String(st.samples), (v) => { if (!st.busy && !G.netPlay?.active?.()) st.samples = +v; }, "ps-samples");
+  const photoVisor = { level: "off", beams: "medium", style: "classic" };
+  const visorRow = (key, label, choices) => select(label, choices, () => photoVisor[key], v => {
+    if (st.busy || st.closing) return;
+    photoVisor[key] = v; say("Press Capture to preview the new visor lighting.");
+  }, "ps-visor-" + key);
+  const strengths = [["off", "Off"], ["light", "Light"], ["medium", "Medium"], ["strong", "Strong"]];
+  const visorGroup = group("visor", "VISOR LIGHTING", [
+    visorRow("level", "Reflections", strengths), visorRow("beams", "Beams", strengths),
+    visorRow("style", "Style", [["classic", "Classic"], ["compact", "Compact"], ["scratches", "Short rays"]]),
+    mk("p", { className: "adv-help", textContent: "Light effects over any angle, without the helmet frame. Capture previews them and includes them in downloads, saved photos and backgrounds. Driving settings stay unchanged." }),
+  ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
@@ -435,6 +446,7 @@ function create(G, deps) {
       condGroup,
       lineGroup,
       lightGroup,
+      visorGroup,
       looksGroup,
       group("composition", "COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
@@ -572,7 +584,7 @@ function create(G, deps) {
     st.open = true; st.generation++; root.hidden = false;
     SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
     SettingRow.disable(sampleRow, online);
-    carGroup.hidden = !hasCar();
+    carGroup.hidden = !hasCar(); visorGroup.hidden = isGarage();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
       const c = st.source === "race" && hasCar() ? G.player : null;
       const value = !c ? 0 : id === "ps-car-position" ? ((c.s % G.track.total + G.track.total) % G.track.total) / G.track.total * 100
@@ -738,7 +750,7 @@ function create(G, deps) {
     }
     return canvas;
   }
-  function options() { return { maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
+  function options() { return { visor: isGarage() ? { level: "off" } : { ...photoVisor }, maxEdge: st.highRes ? 3840 : 2048, aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
   function recompose() {
     if (!raw || !capturedOptions) return;
     last = compose(raw, { ...capturedOptions, aspect: st.aspect, postcard: st.postcard });
@@ -866,7 +878,11 @@ function create(G, deps) {
     if (!st.open || st.busy) return false;
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
-      const source = await fullRes(() => sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge), st.highRes); if (gen !== st.generation) return false;
+      const source = await fullRes(async () => {
+        const image = await sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge);
+        if (gen === st.generation && opts.visor.level !== "off") VisorOptics.captureLight(image, G, opts.visor);
+        return image;
+      }, st.highRes); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }
