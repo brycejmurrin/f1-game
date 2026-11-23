@@ -8458,7 +8458,7 @@ function render(dt) {
   }
   // EXHAUST HEAT HAZE: the marked anchor through this frame's view-proj -> {u, v, str} for the composite warp (COMPOSITE_FS uHaze*). Off on memory-limited phones.
   po.haze = haze ? haze.at(_mVP) : null;
-  po.visorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens() : null;
+  po.readVisorLens = !photoMode && !_xrEyes && typeof VisorOptics !== "undefined" ? VisorOptics.frameLens : null;
   po.visorFolded = false;
   armBackendProbe();
   if (!XrBoot.present(gfx, _xrEyes, po)) gfx.present(po);

@@ -359,9 +359,27 @@ test("visor tick: a Pages build WITHOUT the dev API (__apex null) still paints t
   assert.equal(calls.inserted.hidden, false, "the light layer shows once a scene painted");
 });
 
+test("visor paints the live bloom value without the developer API", () => {
+  const { V, ctx, calls } = load({ beams: 0 });
+  const tune = ctx.LightTune = { LT: { bloomMul: 0, glareStr: 0.12 } };
+  V.bind({ camEye: NIGHT.eye, camTgt: NIGHT.tgt, camFov: NIGHT.fov, _lastFloodEmit: 1,
+    frame: { ...NIGHT, lights: lamp(0, -30), tailStart: 1 } });
+  const gradients = () => {
+    const before = calls.gradients;
+    V.tick(1 / 15, true, 55, false);
+    assert.equal(V.stats().glints, 1);
+    return calls.gradients - before;
+  };
+  const zero = gradients();
+  tune.LT.bloomMul = 1;
+  assert.equal(gradients(), zero + 1, "one bloom halo for the visible lamp");
+  tune.LT.bloomMul = 0;
+  assert.equal(gradients(), zero, "turning bloom off takes effect on the next paint");
+});
+
 test("visor tick: a bad knob or a throwing canvas never reaches the render loop", () => {
-  const apex = { visorScene: () => DAY, lightTune: () => ({ bloomMul: "nope", glareStr: null }) };
-  const { V } = load({ apex });
+  const { V, ctx } = load({ apex: { visorScene: () => DAY } });
+  ctx.LightTune = { LT: { bloomMul: "nope", glareStr: null } };
   V.tick(1 / 60, true, 0, false);
   assert.ok(V.stats().paints === 1 && V.stats().errors === 0, "a non-numeric knob falls back to the shipped default");
   const boom = load({ apex: { visorScene: () => ({ ...DAY, sunColor: [NaN, NaN, NaN] }) } });
@@ -454,6 +472,32 @@ test("visor refraction builds and resizes with reflections OFF in a fresh helmet
   V.tick(0, true, 0, false);
   assert.equal(calls.bendMaps, 2, "paused resize rebuilds the map for the new aperture");
   assert.equal(V.stats().paints, 0, "reflections stay off after resize");
+});
+
+test("sky-only reflections keep the painted bitmap until its pixels or canvas change", () => {
+  const scene = { ...DAY, tgt: [0, 1, 10] };
+  const { V, win, live } = load({ apex: { visorScene: () => scene } });
+  const paint = () => { V.tick(1 / 15, true, 40, false); return V.stats().paints; };
+  assert.equal(paint(), 1);
+  scene.tgt = [0.05, 1, 10];
+  assert.equal(paint(), 1, "a moving camera still sees the same sky gradient");
+  scene.ambientSky = [0.1, 0.1, 0.2];
+  assert.equal(paint(), 2, "sky brightness changed");
+  win.innerHeight++;
+  assert.equal(paint(), 3, "viewport changed");
+  scene.tgt = DAY.tgt;
+  assert.equal(paint(), 4, "a sun glint appeared");
+  scene.tgt = [0, 1, 10];
+  assert.equal(paint(), 5, "remove the glint from the canvas");
+  live.visor = "off";
+  paint();
+  live.visor = "clear";
+  assert.equal(paint(), 6, "restore the cleared reflection canvas");
+  scene.ambientSky = [0, 0, 0];
+  assert.equal(paint(), 6, "an unlit shield needs no reflection paint");
+  assert.equal(V.stats().shown, false);
+  scene.ambientSky = DAY.ambientSky;
+  assert.equal(paint(), 7, "sky light returns");
 });
 
 test("only visible optics fold into the final scene, with draining water above world refraction", () => {

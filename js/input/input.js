@@ -2337,6 +2337,7 @@ const Input = (function () {
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
+    InputHoldButtons.hudTouchTap(document.getElementById("hud-restore"));
     wireHold("btn-steer-left", function (v) {
       if (v && !btnSteerLeft) btnSteerLeftSeq = ++btnSteerSeq;
       btnSteerLeft = v; if (!v) btnSteerLeftVal = 0;
