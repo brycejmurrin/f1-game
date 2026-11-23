@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-VMF6uP14Kg8GwtzOtyH82ERR+8x+fYM82m69FLVFliw=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-o+Yf98lzGmWXYL+YEyaFHijcUl6dy+lziQU9e3qzZiI=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-H3jM1cXo65kaB5BeVHiiu1pAYxxRxlhV8jz5xQsqoX8=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -228,7 +228,7 @@
   }
   #utility-options button:nth-child(2) { align-self: flex-start; }
   #utility-options [data-aimed] { outline: 3px solid var(--team-c); }
-  #layout-sheet { position: absolute; inset: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  #layout-sheet { position: fixed; inset: 0; margin: 0; width: 100%; height: 100%; max-width: none; max-height: none; color: inherit; border: 0; z-index: 4; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
                   display: flex; flex-direction: column; gap: 10px; background: var(--bg);
                   padding: calc(10px + var(--sat)) calc(14px + var(--sar)) calc(12px + var(--sab)) calc(14px + var(--sal)); }
   #layout-sheet[hidden] { display: none; }
@@ -276,7 +276,6 @@
   #ctl [data-wheel-shape="paddle-right"] { border-radius: 12% 50% 50% 12%; }
   #ctl [data-wheel-shape="leaf"] { border-radius: 50% 12% 50% 12%; }
   @media (pointer: coarse), (hover: none) { #arrange-bar :is(#arr-select, #arr-shape) { font-size: 16px; } }
-  body.arranging #ctl > .screen-arrange-entry { visibility: hidden; }
   body.arranging #ctl :is(#gas,#b-aero) { pointer-events: auto; }
   #lay-transfer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   #lay-transfer :is(button,input) { min-height: 44px; max-width: 100%; }
@@ -522,6 +521,7 @@
 <link rel="stylesheet" href="css/screen-arranger.css?v=dev">
 </head>
 <body>
+<a id="companion-appearance-return" href="./?settings=appearance" hidden>Back to Appearance</a>
 <section id="pair" class="grain">
   <div id="pair-copy">
   <h1>APEX 26 <span>·</span> PHONE CONTROLLER</h1>
@@ -630,7 +630,7 @@
   </div>
   <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
 </section>
-<div id="layout-sheet" role="dialog" aria-modal="true" aria-labelledby="lay-title" hidden>
+<dialog id="layout-sheet" aria-labelledby="lay-title" hidden>
   <div id="lay-head"><h2 id="lay-title">WHEEL LAYOUT</h2><button id="lay-done" class="bigbtn" type="button">DONE</button></div>
   <details id="pedal-responses"><summary>Pedal response</summary><div id="pedal-response-fields"></div></details>
   <div id="lay-presets" role="group" aria-label="Layout presets">
@@ -657,7 +657,7 @@
     <button id="lay-flick-shifts" type="button">FLICK TO SHIFT</button>
     <button id="lay-arrange" type="button">MOVE &amp; SIZE BUTTONS</button>
   </div>
-</div>
+</dialog>
 <div id="arrange-bar" role="toolbar" aria-label="Move and size buttons" hidden>
   <select id="arr-select" aria-label="Wheel region"></select>
   <button id="arr-adjust" type="button" aria-expanded="false" aria-controls="arr-tools">Controls</button>
@@ -683,6 +683,7 @@
   </div>
 </div>
 <!-- @gen-shell:controller -->
+<script defer crossorigin="anonymous" src="js/ui/companion-return.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dev-flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>
@@ -784,13 +785,15 @@ window.addEventListener("DOMContentLoaded", function () {
     var auto = /[?&]demo=auto\b/.test(location.search) ? (PhonePad.DASH.gearsAuto | PhonePad.DASH.throttleAuto | PhonePad.DASH.aeroAuto) : 0;
     var still = /[?&]still\b/.test(location.search);   // &still: rim level, for a screenshot
     var menu = /[?&]demo=menu\b/.test(location.search);
-    // A tap arms the real sensor (iOS asks inside the tap): the demo rim then
-    // follows the phone in the hand instead of the sine wave.
+    // The driving demo can follow real tilt. Layout previews and menu navigation
+    // use the sample dash and have no reason to request a motion permission.
     var live = false;
-    document.addEventListener("pointerdown", function () {
-      if (live) return;
-      ctl.armSensor().then(function (ok) { live = ok; if (ok) $("link").textContent = "DEMO · TILT THE PHONE"; });
-    }, { once: false });
+    if (!menu && !new URLSearchParams(location.search).has("arrange")) {
+      document.addEventListener("pointerdown", function (event) {
+        if (live || document.body.classList.contains("arranging") || event.target.closest("#b-layout, #layout-sheet, #arrange-bar")) return;
+        ctl.armSensor().then(function (ok) { live = ok; if (ok) $("link").textContent = "DEMO · TILT THE PHONE"; });
+      });
+    }
     var t0 = performance.now();
     var demo = function () {
       var t = (performance.now() - t0) / 1000, rev = (Math.sin(t * 1.7) + 1) / 2;

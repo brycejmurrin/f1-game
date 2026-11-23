@@ -21,6 +21,24 @@
    queries are zoom-blind and aspect is not width, so the only switch left
    is the sheet's own width: two columns from 52rem (832 own px), below. */
 #appearance-studio { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); align-items: start; }
+#appearance-arrange {
+  grid-column: 1 / -1;
+  order: -2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  padding: var(--pad);
+  min-width: 0;
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+  background: var(--surf-1);
+}
+#appearance-arrange > label { font-weight: 700; }
+#appearance-arrange > select { flex: 1 1 14rem; min-width: 0; max-width: 100%; }
+#appearance-arrange > button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+#appearance-arrange > p { flex-basis: 100%; margin: 0; color: var(--dim); }
+#appearance-arrange > p:empty { display: none; }
 #appearance-studio [data-as="photo-picker"] { margin-top: var(--gap); min-width: 0; }
 #appearance-studio [data-as="photo-picker"] select { flex: 1 1 12ch; width: 100%; min-width: 0; max-width: 100%; }
 #appearance-studio [data-as="photo-preview"] { display: block; max-width: 100%; width: min(100%, 320px); max-height: 180px; object-fit: contain; margin-block: var(--gap); border-radius: var(--r-sm); }

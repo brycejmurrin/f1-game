@@ -325,6 +325,7 @@ const DataRealRace = (function () {
       ["LAP", "LEADER", "WHAT HAPPENED", "FASTEST", ""].forEach((h) => hr.appendChild(el("th", null, h)));
       thead.appendChild(hr); table.appendChild(thead);
       const tbody = el("tbody");
+      const expanded = new Set();
       book.forEach((b) => {
         const tr = el("tr");
         tr.appendChild(el("td", null, "L" + b.lap));
@@ -356,10 +357,18 @@ const DataRealRace = (function () {
         tr.setAttribute("aria-expanded", "false");
         let open = null;
         const toggle = () => {
-          if (open) { open.hidden = !open.hidden; tr.setAttribute("aria-expanded", open.hidden ? "false" : "true"); return; }
-          open = boardRow(script, b.lap);
-          tr.setAttribute("aria-expanded", "true");
-          if (tr.nextSibling) tbody.insertBefore(open, tr.nextSibling); else tbody.appendChild(open);
+          const previous = Array.from(expanded).at(-1);
+          if (previous) delete previous.dataset.hubPart;
+          if (open) {
+            open.hidden = !open.hidden;
+          } else {
+            open = boardRow(script, b.lap);
+            if (tr.nextSibling) tbody.insertBefore(open, tr.nextSibling); else tbody.appendChild(open);
+          }
+          tr.setAttribute("aria-expanded", String(!open.hidden));
+          if (open.hidden) expanded.delete(open); else expanded.add(open);
+          const selected = Array.from(expanded).at(-1);
+          if (selected) selected.dataset.hubPart = "selected-lap";
         };
         tr.addEventListener("click", toggle);
         tr.addEventListener("keydown", (e) => { if (e.target === tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(); } });

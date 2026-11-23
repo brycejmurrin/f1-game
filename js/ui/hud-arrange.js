@@ -180,7 +180,7 @@ const HudArrange = (() => {
       nameEl = document.createElement("output");
       nameEl.id = "hud-arrange-name";
       nameEl.setAttribute("aria-label", "Selected element size");
-      nameEl.style.cssText = "flex:none;font-weight:800;white-space:nowrap;max-width:64px;overflow:hidden;text-overflow:ellipsis;";
+      nameEl.style.cssText = "flex:none;font-weight:800;max-width:14ch;line-height:1.15;overflow-wrap:anywhere;";
       hintEl = document.createElement("span");
       hintEl.id = "hud-arrange-hint";
       hintEl.setAttribute("aria-live", "polite");
@@ -375,6 +375,7 @@ const HudArrange = (() => {
       return pairs.map((p) => p.map((id) => (id[0] === "#" ? id.slice(1).toUpperCase() : id)));
     }
     function after(message) {
+      if (typeof RetiredCard !== "undefined") RetiredCard.preview(editing && selected === "finish");
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
       const rects = rectsNow();
       paintBar(markClashes(rects), message, rects);
@@ -607,7 +608,7 @@ const HudArrange = (() => {
         colorElement = undefined;
         picker.textContent = "";
         for (const [id, label] of rows) {
-          if (!visible(elOf(id)) && !HudLayout.visibility(id)) continue;
+          if (id !== "finish" && !visible(elOf(id)) && !HudLayout.visibility(id)) continue;
           const option = document.createElement("option"); option.value = id; option.textContent = label;
           picker.appendChild(option);
         }
@@ -616,6 +617,7 @@ const HudArrange = (() => {
         after();
       }
       if (!editing && was) {
+        if (typeof RetiredCard !== "undefined") RetiredCard.preview(false);
         flush();
         HudLayout.colors?.finish(accept);
         HudLayout.endArrangeDraft(accept, context.set, context.profile, initial);
@@ -667,7 +669,10 @@ const HudArrange = (() => {
       const t = e.target;
       if (bar && bar.contains(t)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      const id = idAt(t);
+      // A small readout may only fit one fingertip. Keep the first finger's
+      // selection when the second lands on the empty race surface.
+      const background = t === document.body || t.id === "game" || t.id === "hud";
+      const id = drag && !pinch && e.pointerType === "touch" && background ? drag.id : idAt(t);
       const dock = $("hud-dock");
       if (!id) {
         // A press on a touch control while arranging must not drive the car (THROTTLE = LATCH).
@@ -677,7 +682,7 @@ const HudArrange = (() => {
       e.preventDefault();
       if (e.stopImmediatePropagation) e.stopImmediatePropagation();
       if (drag && drag.id === id && !pinch) {
-        // second finger on the same piece: a pinch
+        // Start from the current painted size, including any pending drag.
         paint();
         const p0 = pointers.get(drag.pid);
         pinch = { id, pid: e.pointerId, d0: p0 ? dist(p0, { x: e.clientX, y: e.clientY }) : 0, s0: current(id).s };

@@ -792,6 +792,8 @@ test("tuner windows reflow at zoom and reserve the same width for adjacent camer
   vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
   for (const id of ["lighting", "camtune", "flyby", "freecam", "garrival"]) {
     const screen = window.ScreenRegions[id];
+    assert.equal(Object.hasOwn(screen.regions, "tools"), id !== "freecam");
+    assert.equal(Object.hasOwn(screen.regions, "editorActions"), id !== "freecam");
     assert.equal(screen.regions.window.selector, "#" + id + "-inner");
     assert.equal(screen.regions.heading.selector, id === "freecam" ? "#fc-head" : ".ew-toolbar");
     const { model, sheets } = bootPlacement(true, window.ScreenRegions);

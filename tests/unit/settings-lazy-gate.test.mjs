@@ -67,7 +67,6 @@ const CASES = [
   { file: "js/ui/appearance-opts.js", half: "COLOUR VISION / APP ICON / TEXT SIZE rows", marker: { id: "pm-contrast" } },
   { file: "js/ui/appearance-studio.js", half: "APPEARANCE studio", marker: { id: "pm-panel-appearance" } },
   { file: "js/ui/setting-deps.js", half: "SettingDeps listeners + observer", marker: { listener: "change" } },
-  { file: "js/ui/save-health.js", half: "STORAGE HEALTH section", marker: { id: "pm-panel-files" } },
   { file: "js/camera/cockpit-opts.js", half: "COCKPIT fold", marker: { id: "pm-panel-display" } },
   { file: "js/ui/post-fx-opts.js", half: "POST FX rows", marker: { row: "any" } },
   { file: "js/ui/driving-line-opts.js", half: "DRIVING LINE rows", marker: { row: "pm-linebrakecue" },
@@ -96,14 +95,16 @@ test("KeyBinds re-renders its tables at the gate, not in the DCL task (#4798)", 
   assert.match(src, /addEventListener\("DOMContentLoaded", \(\) => \(typeof SettingsNav !== "undefined" && SettingsNav\.lazy \? SettingsNav\.lazy\(rerender\) : rerender\(\)\)/);
 });
 
-test("SettingsExport mounts at the gate, queued after SaveHealth as at eval (#4798)", () => {
-  const src = read("js/ui/settings-export-body.js");   // the mount lives in the LAZY_SAVES_DATA body (#4748)
-  assert.match(src, /readyState !== "complete"\) document\.addEventListener\("DOMContentLoaded", \(\) => \(typeof SettingsNav !== "undefined" && SettingsNav\.lazy \? SettingsNav\.lazy\(mount\) : mount\(\)\)/);
-  const shell = read("index.html");
-  assert.ok(shell.indexOf('src="js/ui/save-health.js') < shell.indexOf('src="js/game.js?v='),
-    "SaveHealth's DCL listener registers (eval) before game.js runs SettingsExport.create, so its section stays first");
-  assert.ok(!shell.includes('src="js/ui/settings-export-body.js'),
-    "the body is LAZY_SAVES_DATA: it lands after boot, so SaveHealth's section is always mounted first");
+test("Files mounts health with its export body; neither loads at title paint", () => {
+  const shell = read("index.html"), sw = read("sw.js"), spec = read("js/roster.js");
+  const roster = vm.runInNewContext(spec + ";self.ApexRoster", { self: {} }, { filename: absSrc("js/roster.js") });
+  for (const file of ["js/ui/save-health.js", "js/ui/settings-export-body.js"]) {
+    assert.equal(shell.includes('src="' + file), false);
+    assert.ok(roster.LAZY_SAVES_DATA.includes(file));
+    assert.ok(sw.includes(file), "offline coverage for " + file);
+  }
+  assert.ok(roster.LAZY_SAVES_DATA_EDGES.some(([first, second]) =>
+    first === "js/ui/save-health.js" && second === "js/ui/settings-export-body.js"));
 });
 
 // Row 1 part 3: the three DCL initialisers left after #5477 (screen-looks search

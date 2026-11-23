@@ -437,13 +437,3 @@ test("page keys over a pane that does not scroll reach its ends and stay inside 
   assert.equal(key("PageUp"), true);
   assert.equal(dom.document.activeElement, doors[0], "from the layer, PageUp reaches the layer's first item");
 });
-
-test("Down from the sheet footer reaches the editor below and outside its column", () => {
-  const { step } = loadMenuNav();
-  const options = el("options", 350, 350, 500, 40);
-  const start = el("rs-go", 620, 700, 140, 40, { closest: selector => selector === ".sheet-foot" ? {} : null });
-  const arrange = el("race-settings-arrange-entry", 1040, 754, 180, 40, {
-    classList: { contains: name => name === "screen-arrange-entry" },
-  });
-  assert.equal(step(start, 0, 1, [options, start, arrange]), arrange);
-});

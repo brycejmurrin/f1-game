@@ -192,7 +192,7 @@ not tabled: they move with every edit and nothing reads them.
 | `tune-` | `settings.css` | `components.css`, `garage-experience.css`, `photo-studio.css`, `race-setup.css`, `settings-controls.css`, `tuner.css` |  |
 | `vs-` | `overlays.css` | — |  |
 | `screen-` | `screen-arranger.css` | — | Contextual layout editor entry |
-| `watch-` | `watch-transport.css` | `helmet-visor.css`, `hud.css`, `screen-arranger.css` | WATCH replay transport and its race layout context |
+| `watch-` | `watch-transport.css` | `helmet-visor.css`, `hud.css` | WATCH replay transport and its race layout context |
 | *(unprefixed)* | `overlays.css` | most files | state classes (below) |
 
 `.pad-ring` (`responsive.css`) is the PHONE CONTROLLER's focus ring: `PhonePad`
@@ -240,8 +240,8 @@ missing class, a file that left, or a file that joined.
 
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
-- `.screen` — `carsetup` + `components` + `dialog-platform` + `dialogs` + `experience` + `hud` + `overlays` + `responsive` + `screen-arranger` + `watch-transport`. The full-viewport overlay primitive.
-- `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `screen-arranger` + `select` + `settings` + `settings-controls` + `tokens`
+- `.screen` — `carsetup` + `components` + `dialog-platform` + `dialogs` + `experience` + `hud` + `overlays` + `responsive` + `watch-transport`. The full-viewport overlay primitive.
+- `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `select` + `settings` + `settings-controls` + `tokens`
 - `.sheet-head` — `career` + `carsetup` + `components` + `data` + `dialogs` + `editor` + `overlays` + `photo-studio` + `race-setup` + `screen-arranger` + `select` + `settings`
 - `.sheet-foot` — `appearance-studio` + `career` + `carsetup` + `components` + `dialogs` + `overlays` + `photo-studio` + `race-setup` + `select` + `settings` + `tuner`. The most-shared component class in the project.
 - `.sheet-body` — `career` + `components` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.
@@ -282,7 +282,6 @@ missing class, a file that left, or a file that joined.
 - `.dh-tab` / `.dh-row` / `.dh-pill` / `.dh-dchip` / `.dh-sortbtn` / `.dh-race-sub` / `.dh-error-msg` — `components` + `data`
 - `.dh-card` — `data` + `dialog-platform` + `screen-arranger`
 - `.dh-tpopup` / `.dh-tpopup-card` — `data` + `screen-arranger`
-- `.watch-transport` — `watch-transport` + `screen-arranger`
 - `.sf-b` — `components` + `data`. ScrollFade's more-below class; `data` paints an inset box-shadow on `.dh-content.sf-b` because the shared mask fade is too weak on the translucent hub panel (phones).
 - `.sf-scroll` — `components` + `data` + `menu-destinations` + `photo-studio` + `race-setup` + `tuner`
 - `.cs-liv-swatch` — `carsetup` + `tokens`

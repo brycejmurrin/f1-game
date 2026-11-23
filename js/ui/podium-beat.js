@@ -31,6 +31,7 @@ const PodiumBeat = (function () {
       host = Dom.el("div");
       host.id = HOST_ID;
       host.setAttribute("role", "dialog");
+      host.setAttribute("data-esc-close", CONTINUE_ID);
       host.setAttribute("aria-label", "Podium");
       (document.body || document.documentElement).appendChild(host);
     }
@@ -56,6 +57,7 @@ const PodiumBeat = (function () {
       cont.hidden = true;
       foot.appendChild(cont);
     }
+    if (typeof TopModal !== "undefined") TopModal.wireLayer(host);
     return host;
   }
 
@@ -95,6 +97,7 @@ const PodiumBeat = (function () {
       cont.hidden = false;
       continueHandler = typeof o.onContinue === "function" ? o.onContinue : null;
       cont.addEventListener("click", onContinueClick);
+      cont.focus({ preventScroll: true });
     }
     mounted = { host, order };
     return mounted;

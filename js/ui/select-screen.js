@@ -60,12 +60,23 @@ const setSaveCollapsed = (on) => {
     saveDismiss.textContent = on ? "NOT SAVING" : "DISMISS";
   }
 };
+let healthLoading = false;
+const mountWarningHealth = () => {
+  if (typeof SaveHealth !== "undefined") { SaveHealth.mount(saveWarning, { store }); return; }
+  if (healthLoading || typeof SettingsExport === "undefined" || !SettingsExport.ready) return;
+  healthLoading = true;
+  SettingsExport.ready().then(ok => {
+    healthLoading = false;
+    if (ok && !saveWarning.hidden && typeof SaveHealth !== "undefined") SaveHealth.mount(saveWarning, { store });
+  });
+};
 const showSaveWarning = (reason) => {
   if (!saveWarning) return;
   saveWarning.hidden = false;
   saveWarningDetail.textContent = "Progress will be lost when this page closes or reloads"
     + (reason ? " (" + reason + ")." : ".");
   sayOnce("Saving unavailable. Progress will be lost when this page closes or reloads.");
+  mountWarningHealth();
 };
 const hideSaveWarning = () => {
   if (!saveWarning) return;
@@ -146,7 +157,6 @@ const exportRecovery = async () => {
 };
 if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
-if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
 // At boot, only a persisted reset explains a reload. In-page recovery
 // calls showCtxLostNotice directly even if session storage is unavailable.

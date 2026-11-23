@@ -103,6 +103,40 @@ test("Title circuit photo provides a car to place without starting a race", asyn
   expect(pageErrors).toEqual([]);
 });
 
+test("Appearance prepares a Photo Studio subject and keeps its captured preview through layout edits", async ({ page, pageErrors }) => {
+  await boot(page);
+  await clickLive(page, "mb-settings");
+  await clickLive(page, "pm-open-appearance");
+  await page.getByLabel("Screen to arrange").selectOption("photo-studio");
+  await page.getByLabel("Choose page state first").check();
+  await page.locator(".arrange-route").tap();
+  const start = page.getByRole("button", { name: "Start arranging" });
+  await expect(start).toBeVisible();
+  await page.locator("#ps-subject").selectOption("circuit");
+  await page.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track",
+    null, { polling: 100, timeout: BOOT_MS });
+  await expect(start).toBeVisible();
+  await present(page);
+  await clickLive(page, "ps-capture");
+  const photo = page.locator("#ps-preview");
+  await expect(photo).toHaveJSProperty("complete", true);
+  await expect.poll(() => photo.evaluate(img => img.naturalWidth), { timeout: BOOT_MS }).toBeGreaterThan(0);
+  const before = await photo.evaluate(img => img.getBoundingClientRect().width);
+  const source = await photo.evaluateHandle(img => img.currentSrc);
+  await start.tap();
+  const editor = page.locator('#screen-arranger[data-editing-screen="photo-studio"]');
+  await editor.getByLabel("Region", { exact: true }).selectOption("preview");
+  await editor.getByRole("button", { name: "Controls", exact: true }).tap();
+  await editor.getByRole("button", { name: "Width −", exact: true }).tap();
+  await expect.poll(() => photo.evaluate(img => img.getBoundingClientRect().width)).toBeLessThan(before);
+  await editor.getByRole("button", { name:"Cancel", exact:true }).tap();
+  await expect(editor).toHaveCount(0);
+  expect(await photo.evaluate(img => img.getBoundingClientRect().width)).toBeCloseTo(before, 1);
+  expect(await photo.evaluate((img, original) => img.currentSrc === original, source)).toBe(true);
+  await source.dispose();
+  expect(pageErrors).toEqual([]);
+});
+
 test("Home photo retains its shot across rotation at 200%, captures, and returns its camera", async ({ page, pageErrors }, info) => {
   await boot(page);
   await page.evaluate(() => {
@@ -404,17 +438,22 @@ test("Photo Studio sizes the actual movement and look sticks independently", asy
     __apex.go();
   });
   await clickLive(page, "pausebtn");
-  await clickLive(page, "pm-photo");
-  const launch = page.locator('#photo-studio [data-arrange-screen="photo-controls"]');
+  async function arrangeSticks() {
+    await expect(page.locator("#pm-settings")).toBeVisible();
+    await clickLive(page, "pm-settings");
+    await clickLive(page, "pm-open-appearance");
+    await page.getByLabel("Screen to arrange").selectOption("photo-controls");
+    await page.locator(".arrange-route").tap();
+    await expect(page.locator('#screen-arranger[data-editing-screen="photo-controls"]')).toBeVisible();
+  }
+  await arrangeSticks();
   const editor = page.locator('#screen-arranger[data-editing-screen="photo-controls"]');
   const region = editor.getByLabel("Region", { exact: true });
   const diameter = (id) => page.locator(id).evaluate(el => el.getBoundingClientRect().width);
   const move = () => diameter("#pc-move");
   const look = () => diameter("#pc-look");
   const action = name => editor.getByRole("button", { name, exact: true }).tap();
-  await expect(launch).toBeVisible();
   const shippedMove = await move(), shippedLook = await look();
-  await launch.tap();
   await region.selectOption("move");
   await action("Controls");
   await editor.getByRole("button", { name: /Diameter.*\+/i }).tap();
@@ -426,7 +465,7 @@ test("Photo Studio sizes the actual movement and look sticks independently", asy
   const narrower = await look();
   expect(narrower).toBeLessThan(shippedLook);
   await action("Apply");
-  await expect(launch).toHaveText("Arrange camera sticks");
+  await expect(editor).toHaveCount(0);
   expect(await move()).toBeCloseTo(wider, 1);
   expect(await look()).toBeCloseTo(narrower, 1);
   for (const id of ["pc-move", "pc-look"]) {
@@ -437,7 +476,8 @@ test("Photo Studio sizes the actual movement and look sticks independently", asy
     })).toBe(true);
   }
   await evidence(page, info, "photo-studio-custom-sticks");
-  await launch.tap();
+  await clickLive(page, "ps-close");
+  await arrangeSticks();
   await region.selectOption("move");
   await action("Controls");
   await action("Reset region");

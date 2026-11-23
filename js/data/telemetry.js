@@ -330,7 +330,6 @@ const DataTelemetry = (function () {
         if (sub) titleEl.appendChild(el("span", "dh-tpopup-sub", sub + " · cross-session"));
       }
       hdr.appendChild(titleEl);
-      if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(overlay, hdr, "telemetry-detail", "Arrange");
       const closeBtn = el("button", "dh-close", "✕");
       closeBtn.type = "button";
       closeBtn.id = "dh-tpopup-close";
