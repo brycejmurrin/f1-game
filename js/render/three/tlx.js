@@ -580,6 +580,7 @@ const TLX = (function () {
       })();
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
+      let _captureDraw = false, _captureSource = null;
       let _blitRT = null, _softImg = null, _softBlitGen = 0;
       // Soft-present / capturePixels LDR unstride pool (audit #3): one grow-only
       // Uint8ClampedArray reused across presents so a 1280×720 soft blit does not
@@ -4992,6 +4993,7 @@ const TLX = (function () {
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         presentW = Math.max(1, Math.round(cw * dpr));
         presentH = Math.max(1, Math.round(ch * dpr));
+        if (cssSizeCache?.photoSize) { presentW = cssSizeCache.photoSize.width; presentH = cssSizeCache.photoSize.height; }
         // Clamp to the WebGPU device's texture ceiling, exactly as WGX resize()
         // does: requestDevice() asks for no requiredLimits, so
         // maxTextureDimension2D is the WebGPU DEFAULT 8192, and with dpr capped
@@ -5097,6 +5099,9 @@ const TLX = (function () {
       const noopMesh = () => ({ __tlx: true, count: 0 });
 
       function _captureRT() {
+        // A garage frame bypasses post even when the race chain is allocated.
+        if (_captureSource === "blit") return _blitRT;
+        if (_captureSource !== "post") return null;
         // captureTarget includes direct-to-canvas FXAA. Older chains expose
         // their last offscreen target, including the ?viz= destination.
         if (post && typeof post.captureTarget === "function") return post.captureTarget();
@@ -5363,17 +5368,21 @@ const TLX = (function () {
           if (gl && xrLayer.framebuffer) {
             try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* */ }
           }
+          _captureSource = null;
           return;
         }
-        if (_softBlit) {
+        if (_softBlit || _captureDraw) {
           const rt = _ensureBlitRT(W, H);
           renderer.setRenderTarget(rt);
-          _renderTimed(scene, camera);
-          _queueSoftBlit(rt);
+          try { _renderTimed(scene, camera); }
+          finally { if (!_softBlit) renderer.setRenderTarget(null); }
+          _captureSource = "blit";
+          if (_softBlit) _queueSoftBlit(rt);
           return;
         }
         renderer.setRenderTarget(null);
         _renderTimed(scene, camera);
+        _captureSource = "canvas";
       };
       const dropTo = (mode, mat) => {
         _drawMatMode = mode;
@@ -5452,6 +5461,7 @@ const TLX = (function () {
           if (Math.abs(v - renderScale) < 0.02) return false;   // PerfGov contract
           renderScale = v; resizeNow(); return true;
         },
+        setPhotoCaptureSize(size) { cssSizeCache.photoSize = size; resizeNow(); },
         getRenderScale() { return renderScale; },
         maxRenderScale() { return _ssCeil(); },
         mirrorMax: _mirHi ? [_mirCapW, _mirCapH] : null,   // mirrorHi: mirror-pass.js targetSize's cap (GLX/WGX: none, 1024x512)   // superSample / ss2x ceiling (1 everywhere else): the governor's climb
@@ -6331,6 +6341,14 @@ const TLX = (function () {
         },
         // Screenshot counterparts of WGX capturePixels / awaitSoftPresent.
         // WebGL2 reads the backbuffer. WebGPU reads a render target asynchronously.
+        renderCaptureFrame(draw) {
+          // Make just this draw readable. Direct garage frames bypass the race
+          // post chain, and a shader warm may skip the requested draw entirely.
+          _captureSource = null;
+          _captureDraw = isWebGPU();
+          try { draw(); return _captureSource !== null; }
+          finally { _captureDraw = false; }
+        },
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
@@ -7055,6 +7073,7 @@ const TLX = (function () {
                 if (post.depthEnd) post.depthEnd();
                 _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
+                _captureSource = "post";
                 // Replaced only when it changes: a fresh object per healthy frame was GC churn for a debug getter.
                 if (_postHealth.state !== "healthy" || _postHealth.attempts !== _postStrikes) {
                   _postHealth = { state: "healthy", attempts: _postStrikes, maxAttempts: 3, reason: "" };

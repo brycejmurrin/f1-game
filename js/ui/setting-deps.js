@@ -129,16 +129,6 @@ const SettingDeps = (function () {
         const id = CamModes.CAM_MODES && CamModes.CAM_MODES[idx | 0] && CamModes.CAM_MODES[idx | 0].id;
         return id ? (id === "cockpit" || id === "visor" || id === "helmet") : null;
       } },
-    // USE AS MENU BACKGROUND only paints when Appearance Scene is My photo.
-    // No capture yet → leave alone so EXPLAIN can say "CAPTURE a photo first".
-    { key: "photo-scene", ids: ["ps-background"], runtime: true, reason: "Needs My photo scene",
-      when: () => {
-        if (typeof GameStore === "undefined" || !GameStore.store) return null;
-        if (GameStore.store.get("homeScene", "static") === "photo") return true;
-        const prev = byId("ps-preview");
-        if (prev && prev.hidden) return null;
-        return false;
-      } },
   ]);
 
   /* EXPLAIN: { key, ids?, sel?, text?, why, link? }. `ids` and/or `sel` (a CSS
@@ -186,8 +176,6 @@ const SettingDeps = (function () {
     { key: "why-season-quali", ids: ["rs-quali"], why: "Set by SEASON SETUP" },
     // PHOTO STUDIO, APPEARANCE
     { key: "why-photo", ids: ["ps-save", "ps-export", "ps-background"], why: "CAPTURE a photo first", link: "ps-message" },
-    // Library tile MENU BACKGROUND: owner greys when Scene is not My photo (photo-studio.js).
-    { key: "why-photo-lib-bg", sel: "button.ps-use-bg", why: "Needs My photo scene" },
     { key: "why-ap-profile", ids: ["ap-profile-apply", "ap-profile-delete"], why: "Pick a saved PROFILE first" },
     { key: "why-ap-photo", ids: ["ap-photo-select", "ap-photo-choose"],
       why: (s) => (s.off("ap-photo-select") ? "No saved photos yet" : "Select a saved photo first") },
