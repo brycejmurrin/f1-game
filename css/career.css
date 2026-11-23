@@ -645,9 +645,8 @@
    a slot is one more card in a column full of them — it just happens to be the
    one that changes which career you are in. */
 .cr-slot {
-  /* Full-width summary, then EXPORT / IMPORT / DELETE as a tap-tall row.
-     Side-by-side autos cramped SLOT 1's copy into a sliver (apex8). */
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Full-width summary, then slot recovery and delete. */
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch; gap: 6px; margin-bottom: 6px;
 }
 .cr-slot-main {
@@ -701,7 +700,8 @@
    [data-cr-act] is EXPORT / IMPORT on the same card: same quiet chrome, no new
    class token (cssClasses ratchet), and .cr-slot-del stays DELETE-only so
    career.spec.js's `.cr-slot .cr-slot-del` stays a single match. */
-.cr-slot > .cr-note { grid-column: 1 / -1; }
+.cr-slot > .cr-note,
+.cr-slot.empty > [data-cr-act="recover"] { grid-column: 1 / -1; }
 .cr-slot-del,
 [data-cr-act] {
   min-width: 0;

@@ -783,7 +783,11 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await expect(page.locator('#pm-uiscale'), `${device.name}: UI SIZE minimum`).toHaveAttribute('min', String(uiMin));
         await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); e.dispatchEvent(new Event('change',{bubbles:true})); }, pct);
         await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
-        await press('#pm-settings-close'); await press('#pm-open-driving');
+        await press('#pm-settings-close');
+        const drivingDoor = page.locator('#pm-open-driving');
+        await expect(drivingDoor).toBeVisible();
+        await drivingDoor.scrollIntoViewIfNeeded();
+        await press('#pm-open-driving');
         await expect(page.locator('#pm-panel-driving')).toBeVisible();
         await page.waitForFunction(() => document.getElementById('pmsettings-inner').dataset.shape, null, {polling:100});
         // The shipped coach default is generated policy and may be ON. This

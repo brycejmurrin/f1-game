@@ -443,3 +443,37 @@ test("Utility wheel dispatches the released choice once, cancels outside, and ti
     assert.deepEqual(actions(), ['camera','radio']);
   } finally { ctl.cancel(); }
 });
+
+test("Wheel Layout keeps keyboard focus in the open sheet and restores its launcher", () => {
+  const L = vm.runInContext("PhonePadPage", boot().ctx);
+  const ui = makeDom(), sheet = ui.byId("sheet"), stage = ui.byId("ctl");
+  sheet.open = false;
+  sheet.showModal = () => { sheet.open = true; };
+  sheet.close = () => { sheet.open = false; };
+  const open = ui.makeElement("button"), done = ui.makeElement("button"), arrangeBtn = ui.makeElement("button");
+  stage.appendChild(open);
+  for (const el of [done, arrangeBtn]) {
+    el.tabIndex = 0;
+    el.getClientRects = () => [{}];
+    sheet.appendChild(el);
+  }
+  L.layout({ stage, open, sheet, done, arrangeBtn, doc: ui.document, body: ui.body });
+  open.click();
+  assert.equal(sheet.open, true);
+  assert.equal(ui.document.activeElement, done);
+  ui.dispatch(sheet, { type: "keydown", key: "Tab", shiftKey: true, currentTarget: sheet, target: done });
+  assert.equal(ui.document.activeElement, arrangeBtn);
+  ui.dispatch(sheet, { type: "keydown", key: "Tab", currentTarget: sheet, target: arrangeBtn });
+  assert.equal(ui.document.activeElement, done);
+  arrangeBtn.focus(); arrangeBtn.click();
+  assert.equal(sheet.hidden, true);
+  function escape() {
+    ui.document.dispatchEvent({type:"keydown", key:"Escape", preventDefault() {}, stopPropagation() {}});
+  }
+  escape();
+  assert.equal(sheet.hidden, false);
+  assert.equal(ui.document.activeElement, arrangeBtn);
+  escape();
+  assert.equal(sheet.open, false);
+  assert.equal(ui.document.activeElement, open);
+});

@@ -3793,9 +3793,14 @@
       "roster": "tag"
     },
     {
+      "path": "js/lighting/tuner-boot.js",
+      "global": "LightingTunerDoor",
+      "roster": "tag"
+    },
+    {
       "path": "js/lighting/tuner-panel.js",
       "global": "TunerPanel",
-      "roster": "tag"
+      "roster": "LAZY_CAM_EDITOR"
     },
     {
       "path": "js/net/bytes.js",

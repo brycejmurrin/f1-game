@@ -562,8 +562,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `lighting.js` | `LightTune` | tag | LightTune, the lighting façade every consumer addresses. |
 | `profiles.js` | `LightStore` | tag | LIGHTING PROFILE STORE (LightStore.create(G)): the resolution and persistence half of the lighting tuner. js/lighting/knobs.js owns the registry (TUNE_DEFS +… |
 | `atmosphere.js` | `Atmosphere` | tag | session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/dusk/day… |
-| `tuner-panel.js` | `TunerPanel` | tag | the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help… |
+| `tuner-boot.js` | `LightingTunerDoor` | tag | The lighting editor is a Visual Studio destination. |
 | `presets.js` | `LightPresets` | LAZY_RACE | — (no header comment) |
+| `tuner-panel.js` | `TunerPanel` | LAZY_CAM_EDITOR | the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help… |
 
 **`js/garage/`**
 

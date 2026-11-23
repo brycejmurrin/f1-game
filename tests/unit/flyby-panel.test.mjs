@@ -23,19 +23,61 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotErrors as bakeShotErrors, FOV as bakeFov, bake, render, DEFAULT_RE, parseLiteral }
   from "../../tools/gen/bake-flyby.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-test("flyby shot tabs label the shared rows panel after rebuilds", () => {
-  const src = read("js/camera/flyby-editor.js");
-  assert.match(src, /const activeTab = \$\("fb-tab-" \+ sel\);/,
-    "refreshChips resolves the selected tab after rebuilding the rail");
-  assert.match(src, /if \(activeTab\) host\.setAttribute\("aria-labelledby", activeTab\.id\);/,
-    "the selected shot names the shared tabpanel");
-  assert.match(src, /else host\.removeAttribute\("aria-labelledby"\);/,
-    "an empty or invalid list does not leave a stale tab reference");
+test("selecting a flyby shot retains focus and names its panel after the selected tab", () => {
+  const { document, byId } = makeDom();
+  const sb = { document, FlybyPanel: FP, FlybySeq: { DEFAULT: goodList() }, Log: { info() {} } };
+  const editor = vm.runInNewContext(read("js/camera/flyby-editor.js") + "\nFlybyEditor", sb, { filename: absSrc("js/camera/flyby-editor.js") });
+  const rail = byId("fb-shots"), panel = byId("fb-rows");
+  // The mini DOM does not implement the textContent setter's child removal.
+  Object.defineProperty(rail, "textContent", { set() { while (rail.firstChild) rail.removeChild(rail.firstChild); } });
+  rail.setAttribute("aria-label", "Flyby shots");
+  editor.create({ $: byId, store: { get: () => null } });
+  editor.refresh();
+  const second = byId("fb-tab-1");
+  second.focus(); second.click();
+  assert.equal(document.activeElement, byId("fb-tab-1"));
+  assert.equal(document.activeElement.getAttribute("aria-selected"), "true");
+  assert.equal(panel.getAttribute("aria-labelledby"), "fb-tab-1");
+  assert.equal(rail.getAttribute("aria-labelledby"), null);
+  assert.equal(rail.getAttribute("aria-label"), "Flyby shots");
+  document.activeElement.onkeydown({ key: "ArrowRight", preventDefault() {}, stopPropagation() {} });
+  assert.equal(document.activeElement, byId("fb-tab-0"));
+  assert.equal(panel.getAttribute("aria-labelledby"), "fb-tab-0");
+  sb.__apex = { flybyCam: () => ({ u: 0, shot: "one", index: 0, eye: [0, 0, 0], fov: 40, onRoad: true, lat: null }) };
+  byId("fb-tab-0").click();
+  assert.match(byId("fb-status").textContent, /OFF THE TRACK/);
+  assert.equal(byId("fb-status").classList.contains("fb-inside"), true);
+});
+
+test("an unavailable flyby preview retries on reopening without repeated requests during edits", async () => {
+  const { document, byId } = makeDom();
+  const sb = { document, FlybyPanel: FP, FlybySeq: { DEFAULT: goodList() }, Log: { info() {}, warn() {} } };
+  const editor = vm.runInNewContext(read("js/camera/flyby-editor.js") + "\nFlybyEditor", sb, { filename: absSrc("js/camera/flyby-editor.js") });
+  const api = editor.create({ $: byId, store: { get: () => null }, els: { pmsettings: byId("pmsettings") }, snapGameCam() {} });
+  byId("flyby").hidden = true;
+  byId("fb-rows").dataset.built = "1";
+  let attempts = 0;
+  api.setApiLoader(() => {
+    attempts++;
+    if (attempts === 2) sb.__apex = { flybyCam: () => null };
+  });
+  api.openFlyby();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(byId("fb-status").textContent, "Preview unavailable. Reopen the editor to retry.");
+  byId("fb-u").oninput();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(attempts, 1);
+  api.closeFlyby(false);
+  api.openFlyby();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(attempts, 2);
+  assert.equal(byId("fb-status").textContent, "no track built yet — start a race, then pause");
 });
 
 /** FlybyPanel's module surface, evaluated on its own. `const` at top level is

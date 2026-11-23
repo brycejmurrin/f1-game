@@ -170,7 +170,7 @@ function create(G) {
   let importing = false;
   async function runImport(pending, otherConfirmed) {
     if (importing) return null;
-    ++backupReadGeneration;
+    const generation = ++backupReadGeneration;
     const { envelope, focusFlavour, rawText, revisions } = pending;
     importing = true;
     let result;
@@ -184,7 +184,14 @@ function create(G) {
       rawText,
       recovery: !!pending.recovery,
       expectedSeasonRevision: pending.seasonRevision,
-    }); } finally { importing = false; }
+    }); } catch (error) {
+      Log.warn("ui", "Career restore failed: " + error);
+      result = { ok: false, reason: "restore unavailable — keep your backup" };
+    } finally { importing = false; }
+    if (generation !== backupReadGeneration) {
+      G.refreshCareerButton();
+      return result;
+    }
     if (result.ok) {
       G.refreshCareerButton();
       pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
@@ -272,105 +279,7 @@ function create(G) {
       build();
     };
     card.appendChild(open);
-    // EXPORT dumps ALL six slots (the backup envelope). Same action on every
-    // used card so a player never has to hunt for a separate toolbar. Style via
-    // [data-cr-act] (same rules as .cr-slot-del) — never reuse cr-slot-del; that
-    // class selects DELETE in career.spec.js and must stay unambiguous.
-    if (s.used && typeof CareerBackup !== "undefined") {
-      const exp = el("button", "", "EXPORT");
-      exp.type = "button";
-      exp.setAttribute("data-cr-act", "export");
-      exp.setAttribute("aria-label", `Export all career saves (backup from ${modeName} slot ${s.i + 1})`);
-      exp.onclick = (ev) => {
-        if (exp.disabled) return;
-        ev.stopPropagation();
-        if (G.soundOn) GameAudio.uiTick();
-        armedDelete = "";
-        exp.disabled = true;
-        CareerBackup.exportAll().then((r) => {
-          announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED");
-        }).catch((e) => announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "EXPORT CANCELLED" : "EXPORT FAILED"))
-          .finally(() => { exp.disabled = false; });
-      };
-      card.appendChild(exp);
-    }
-    if (typeof CareerBackup !== "undefined") {
-      const id = `${s.flavour}:${s.i}`;
-      const otherArmed = armedImport === `${s.flavour}:other` && pendingImport
-        && pendingImport.focusFlavour === s.flavour;
-      const armed = armedImport === id || otherArmed;
-      const imp = el("button", armed ? "armed" : "",
-        otherArmed ? "ALL MODES?" : (armedImport === id ? "IMPORT?" : "IMPORT"));
-      imp.type = "button";
-      imp.setAttribute("data-cr-act", "import");
-      // The backup restores ITS saved slots (empty rows leave a slot alone);
-      // the card only picks the mode, so the label must not name this slot.
-      imp.setAttribute("aria-label", otherArmed
-        ? `Confirm: import the other career mode too`
-        : (armedImport === id ? `Confirm: restore the backup's ${modeName} saves`
-          : `Import career backup: restores its ${modeName} saves`));
-      imp.onclick = (ev) => {
-        if (writerRefused()) return;
-        ev.stopPropagation();
-        if (G.soundOn) GameAudio.uiTick();
-        armedDelete = "";
-        if (otherArmed && pendingImport) {
-          runImport(pendingImport, true);
-          return;
-        }
-        if (armedImport === id && pendingImport && pendingImport.focusFlavour === s.flavour) {
-          runImport(pendingImport, false);
-          return;
-        }
-        pickBackupFile((obj, err, text, filename) => {
-          if (err === "too-large") { announce("IMPORT FAILED — TOO LARGE"); return; }
-          if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
-          const recovery = obj.format === "apex26-recovery-v1";
-          const v = recovery ? CareerBackup.recoveryEnvelope(obj, { flavour: s.flavour, i: s.i }, text) : CareerBackup.validate(obj, text);
-          if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
-          pendingImport = { envelope: v.envelope || obj, focusFlavour: s.flavour, rawText: text, filename, revisions: expectedRevisions(),
-            recovery, seasonRevision: recovery && GameStore.store.keyRevision ? GameStore.store.keyRevision("season") : null };
-          armedImport = id;
-          build();
-        });
-      };
-      card.appendChild(imp);
-      if (armed && pendingImport) {
-        const target = otherArmed ? (s.flavour === "driver" ? "myteam" : "driver") : s.flavour;
-        const mode = target === "myteam" ? "My Team" : "Driver career";
-        const preview = CareerBackup.preview(pendingImport.envelope, {
-          flavours: [target], includeProgressExtras: !otherArmed,
-        });
-        const summary = (c, incoming) => {
-          if (!c) return "Empty";
-          const team = teamById(c.team);
-          const identity = c.team === "custom" && (c.myTeamIdentity || (incoming && pendingImport.envelope.myTeam));
-          const teamName = identity && identity.customTeam && identity.customTeam.name;
-          const round = Number.isInteger(c.season && c.season.round) ? Math.max(0, c.season.round) : 0;
-          return `${c.year | 0 || 2026} · ${teamName || (team ? team.name : c.team || "Team unspecified")} · ${round} rounds completed`;
-        };
-        if (pendingImport.filename) card.appendChild(el("div", "cr-note", `File: ${pendingImport.filename}`));
-        card.appendChild(el("div", "cr-note", `Review restore — press ${otherArmed ? "ALL MODES?" : "IMPORT?"} to apply`));
-        for (const row of preview.slots || []) {
-          card.appendChild(el("div", "cr-note", `${mode} · Destination slot ${row.i + 1}`));
-          card.appendChild(el("div", "cr-note", "Current: " + summary(row.current)));
-          card.appendChild(el("div", "cr-note", "Backup: " + summary(row.incoming, true)));
-        }
-        for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
-        card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
-        if (pendingImport.recovery) {
-          if (pendingImport.envelope.season) {
-            const current = GameStore.store.get("season", null), incoming = pendingImport.envelope.season;
-            card.appendChild(el("div", "cr-note", `Standalone season: current ${current ? current.round | 0 : 0} rounds completed; recovery ${incoming.round | 0} rounds completed. Newer local progress is kept.`));
-          }
-          card.appendChild(el("div", "cr-note", `Recovery file targets this ${mode} slot only. Keep the original file until saving is confirmed.`));
-          const cancel = el("button", "", "CANCEL IMPORT");
-          cancel.type = "button"; cancel.setAttribute("data-cr-act", "import-cancel");
-          cancel.onclick = (ev) => { ev.stopPropagation(); armedImport = ""; pendingImport = null; build(); };
-          card.appendChild(cancel);
-        }
-      }
-    }
+    appendImport(card, s.flavour, s.i);
     if (s.used) {
       const id = `${s.flavour}:${s.i}`;
       const revision = Career.slotRevision(s.flavour, s.i);
@@ -403,6 +312,106 @@ function create(G) {
     return card;
   }
 
+  function exportAllButton() {
+    const exp = el("button", "sel-chip", "EXPORT ALL CAREER SAVES");
+    exp.type = "button";
+    exp.setAttribute("data-cr-act", "export");
+    exp.title = "Includes all Driver career and My Team slots.";
+    exp.onclick = (ev) => {
+      if (exp.disabled) return;
+      ev.stopPropagation();
+      if (G.soundOn) GameAudio.uiTick();
+      armedDelete = "";
+      exp.disabled = true;
+      CareerBackup.exportAll().then((r) => {
+        announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED");
+      }).catch((e) => announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "EXPORT CANCELLED" : "EXPORT FAILED"))
+        .finally(() => { exp.disabled = false; });
+    };
+    return exp;
+  }
+
+  function appendImport(card, flavour, slot) {
+    if (typeof CareerBackup === "undefined") return;
+    const modeName = flavour === "myteam" ? "My Team" : "Driver career";
+    const id = `${flavour}:${slot}`;
+    const otherArmed = slot == null && armedImport === `${flavour}:other` && pendingImport
+      && pendingImport.focusFlavour === flavour;
+    const armed = armedImport === id || otherArmed;
+    const label = slot == null ? "RESTORE " + modeName.toUpperCase() + " SAVES" : "RECOVER SLOT " + (slot + 1);
+    const imp = el("button", armed ? "armed" : "", otherArmed ? "ALL MODES?" : armed ? "IMPORT?" : label);
+    imp.type = "button";
+    imp.setAttribute("data-cr-act", slot == null ? "import" : "recover");
+    imp.title = slot == null ? "Restore the saved slots for this mode from a career backup."
+      : "Restore an apex26 recovery file into this slot.";
+    imp.onclick = (ev) => {
+      if (writerRefused()) return;
+      ev.stopPropagation();
+      if (G.soundOn) GameAudio.uiTick();
+      armedDelete = "";
+      if (otherArmed && pendingImport) {
+        runImport(pendingImport, true);
+        return;
+      }
+      if (armedImport === id && pendingImport && pendingImport.focusFlavour === flavour) {
+        runImport(pendingImport, false);
+        return;
+      }
+      pickBackupFile((obj, err, text, filename) => {
+        if (err === "too-large") { announce("IMPORT FAILED — TOO LARGE"); return; }
+        if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
+        if (typeof SettingsExport !== "undefined" && obj.format && obj.format === SettingsExport.CAREER_FORMAT) {
+          announce("USE LOAD CAREER FILE IN SAVES & DATA FOR THIS FILE"); return;
+        }
+        const recovery = obj.format === "apex26-recovery-v1";
+        if (recovery && slot == null) { announce("CHOOSE RECOVER SLOT FOR A RECOVERY FILE"); return; }
+        if (!recovery && slot != null) { announce("USE RESTORE " + modeName.toUpperCase() + " SAVES FOR A CAREER BACKUP"); return; }
+        const v = recovery ? CareerBackup.recoveryEnvelope(obj, { flavour, i: slot }, text) : CareerBackup.validate(obj, text);
+        if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
+        pendingImport = { envelope: v.envelope || obj, focusFlavour: flavour, rawText: text, filename, revisions: expectedRevisions(),
+          recovery, seasonRevision: recovery && GameStore.store.keyRevision ? GameStore.store.keyRevision("season") : null };
+        armedImport = id;
+        build();
+      });
+    };
+    card.appendChild(imp);
+    if (armed && pendingImport) {
+      const target = otherArmed ? (flavour === "driver" ? "myteam" : "driver") : flavour;
+      const mode = target === "myteam" ? "My Team" : "Driver career";
+      const preview = CareerBackup.preview(pendingImport.envelope, {
+        flavours: [target], includeProgressExtras: !otherArmed,
+      });
+      const summary = (c, incoming) => {
+        if (!c) return "Empty";
+        const team = teamById(c.team);
+        const identity = c.team === "custom" && (c.myTeamIdentity || (incoming && pendingImport.envelope.myTeam));
+        const teamName = identity && identity.customTeam && identity.customTeam.name;
+        const round = Number.isInteger(c.season && c.season.round) ? Math.max(0, c.season.round) : 0;
+        return `${c.year | 0 || 2026} · ${teamName || (team ? team.name : c.team || "Team unspecified")} · ${round} rounds completed`;
+      };
+      if (pendingImport.filename) card.appendChild(el("div", "cr-note", `File: ${pendingImport.filename}`));
+      card.appendChild(el("div", "cr-note", `Review restore — press ${otherArmed ? "ALL MODES?" : "IMPORT?"} to apply`));
+      for (const row of preview.slots || []) {
+        card.appendChild(el("div", "cr-note", `${mode} · Destination slot ${row.i + 1}`));
+        card.appendChild(el("div", "cr-note", "Current: " + summary(row.current)));
+        card.appendChild(el("div", "cr-note", "Backup: " + summary(row.incoming, true)));
+      }
+      for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
+      card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
+      if (pendingImport.recovery) {
+        if (pendingImport.envelope.season) {
+          const current = GameStore.store.get("season", null), incoming = pendingImport.envelope.season;
+          card.appendChild(el("div", "cr-note", `Standalone season: current ${current ? current.round | 0 : 0} rounds completed; recovery ${incoming.round | 0} rounds completed. Newer local progress is kept.`));
+        }
+        card.appendChild(el("div", "cr-note", `Recovery file targets this ${mode} slot only. Keep the original file until saving is confirmed.`));
+        const cancel = el("button", "", "CANCEL IMPORT");
+        cancel.type = "button"; cancel.setAttribute("data-cr-act", "import-cancel");
+        cancel.onclick = (ev) => { ev.stopPropagation(); armedImport = ""; pendingImport = null; build(); };
+        card.appendChild(cancel);
+      }
+    }
+  }
+
   function modeColumn(pane, flavour) {
     const my = flavour === "myteam";
     pane.appendChild(head(my ? "MY TEAM" : "DRIVER CAREER"));
@@ -411,6 +420,7 @@ function create(G) {
         + "team-mate, pay their wages, and build the car both of you race."
       : "Sign for a team that will have you, hit what they ask of you, and earn a "
         + "better seat. You are paid; the car is somebody else's."));
+    appendImport(pane, flavour, null);
     for (const s of Career.slots(flavour)) pane.appendChild(slotCard(s));
 
     const guide = el("button", "cr-card cr-record");
@@ -435,6 +445,10 @@ function create(G) {
     delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
 
+    if (used && typeof CareerBackup !== "undefined") {
+      left.appendChild(exportAllButton());
+      left.appendChild(el("div", "cr-note", "Includes all six Driver career and My Team slots. Restore this backup by mode below."));
+    }
     modeColumn(left, "driver");
     modeColumn(right, "myteam");
 

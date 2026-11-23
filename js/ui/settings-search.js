@@ -28,7 +28,7 @@ const SettingsSearch = (function () {
     ["hold-gas", "Gas hold / toggle (keyboard / pad)", "a11y", "pm-hold-throttle-sel", "throttle accelerator hold toggle accessibility"],
     ["hold-lookback", "Look back hold / toggle (keyboard / pad)", "a11y", "pm-hold-lookback-sel", "rear view mirror hold toggle accessibility"],
     ["assist", "Steer assist", "driving", "pm-linemode-sel", "steering help racing line"],
-    ["wheel-lock", "Wheel lock & ABS", "driving", "pm-wheelmodel-sel", "abs traction control tc brake lock wheelspin wheel state"],
+    ["wheel-lock", "Wheel lock & ABS", "driving", "pm-wheelmodel-sel", "abs anti lock traction control tc brake lock wheelspin wheel state"],
     ["line", "Steering line bias", "advanced", "pm-line", "steer assist inside outside racing line offset"],
     ["throttle", "Throttle mode", "controls", "pm-throttlemode-sel", "automatic manual pedals"],
     ["handedness", "Left-handed controls", "controls", "pm-mirror-sel", "mirror touch pedals hand"],
@@ -87,11 +87,14 @@ const SettingsSearch = (function () {
     ["rivals-level", "Rivals engine level", "audio", "as-t-rivals", "volume sound other cars opponents"],
     ["boost-level", "Boost sound level", "audio", "as-t-boost", "ers deploy volume electric whine whoosh"],
     ["boost-pitch", "Boost pitch / rev lift", "audio", "as-t-boostlift", "ers deploy engine tone high ringy"],
+    ["save-backup", "Save a backup", "files", "pm-files-show-save", "export settings garage career save file preferences"],
+    ["restore-backup", "Restore a backup", "files", "pm-files-show-restore", "import load settings garage career save file"],
+    ["share-code", "Import a share code", "files", "pm-files-show-share", "share settings paste code"],
     ["radio", "Team radio", "audio", "as-radio-sel", "voice engineer speech"],
   ].map((r) => Object.freeze({ id: r[0], label: r[1], page: r[2], target: r[3], aliases: r[4] })));
   // Owners register descriptors only; re-registering replaces that owner's rows.
   const owners = new Map(), subscribers = new Set();
-  const PAGES = new Set(["controls", "driving", "display", "appearance", "a11y", "advanced", "audio", "files"]);
+
   // Cached: concat and option walks ran per keystroke.
   let rowCache = null;
   const optionText = new Map();
@@ -106,7 +109,7 @@ const SettingsSearch = (function () {
     if (typeof owner !== "string" || !owner || !Array.isArray(descriptors)) throw new TypeError("Settings search owner and descriptors required");
     const rows = descriptors.map((r) => {
       if (!r || typeof r.id !== "string" || !/^[a-z0-9_-]+$/i.test(r.id) || typeof r.label !== "string" || !r.label.trim()
-          || typeof r.target !== "string" || !/^[a-z][a-z0-9_-]*$/i.test(r.target) || (!PAGES.has(r.page) && typeof r.navigate !== "function")) throw new TypeError("Invalid settings search descriptor");
+          || typeof r.target !== "string" || !/^[a-z][a-z0-9_-]*$/i.test(r.target) || (typeof r.navigate !== "function" && (typeof SettingsNav === "undefined" || !Object.hasOwn(SettingsNav.routes, r.page)))) throw new TypeError("Invalid settings search descriptor");
       return Object.freeze({ ...r, aliases: String(r.aliases || ""), owner });
     });
     if (new Set(rows.map((r) => r.id)).size !== rows.length) throw new TypeError("Duplicate settings search id");
@@ -115,6 +118,20 @@ const SettingsSearch = (function () {
     rowCache = null;
     for (const fn of subscribers) fn();
     return () => { if (owners.get(owner) === rows) { owners.delete(owner); rowCache = null; for (const fn of subscribers) fn(); } };
+  }
+  function registerRaceSettings(settingsNav, raceSettings) {
+    const navigate = (arrived) => raceSettings.openSettingSearch(() => settingsNav.returnToSearch(), () => {
+      settingsNav.invalidate();
+      arrived();
+    });
+    register("race-settings", [
+      { id: "tyre-wear", label: "Tyre wear", page: "race-settings", target: "rs-tyres-sel",
+        aliases: "tires degradation pit stops", options: "off light real",
+        unavailableReason: "Tyre wear is chosen in Race Settings before starting a solo race.", navigate },
+      { id: "driving-line-overlay", label: "Driving line overlay", page: "race-settings", target: "rs-line-sel",
+        aliases: "racing line visual guide", options: "off corners full",
+        unavailableReason: "Choose the driving line overlay in Race Settings before starting a solo race.", navigate },
+    ]);
   }
   function optionsOf(row) {
     // Labels only (no select/change/lazy load); cached per row.
@@ -131,7 +148,7 @@ const SettingsSearch = (function () {
     return labels + " " + extra;
   }
   function find(query) {
-    const words = String(query || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const words = String(query || "").replace(/[-_]/g, " ").trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (!words.length) return [];
     const out = [];
     for (const r of allRows()) {
@@ -212,7 +229,7 @@ const SettingsSearch = (function () {
       if (slot.row === row) return;
       slot.row = row;
       const route = typeof SettingsNav !== "undefined" && SettingsNav.routes && SettingsNav.routes[row.page];
-      const label = row.label + " · " + (route ? route.title : row.page.toUpperCase());
+      const label = row.label + " · " + (route ? route.title : row.page.replace(/-/g, " ").toUpperCase());
       if (slot.button.textContent !== label) slot.button.textContent = label;
       slot.button.onclick = () => {
         clearFeedback();
@@ -225,7 +242,7 @@ const SettingsSearch = (function () {
           last = row.id; fromSearch = true;
           if (o.onSelect) o.onSelect(row.page);
           const el = document.querySelector("#" + row.target);
-          if (row.page === "files" && el?.getAttribute("role") === "tab") el.click();
+          if (el && el.getAttribute("role") === "tab" && el.getAttribute("aria-selected") === "false") el.click();
           const placed = reveal(el), why = !placed && depBlock(el);
           if (why) { clearFeedback(); note.textContent = row.label + " is off: " + why; return true; }
           if (!placed) unavailable(row);
@@ -254,7 +271,18 @@ const SettingsSearch = (function () {
       }
       while (list.children.length > keep.length) list.children[list.children.length - 1].remove();
     }
-    input.oninput = paint;
+    let loadingGraphics = false;
+    input.oninput = () => {
+      paint();
+      if (!input.value.trim()) return;
+      if (typeof DesktopGraphics !== "undefined") { DesktopGraphics.indexSearch(); return; }
+      if (loadingGraphics || typeof ScriptLoader === "undefined") return;
+      loadingGraphics = true;
+      ScriptLoader.create().load(["js/ui/desktop-graphics.js"], [], { strict: true })
+        .then(ok => { if (ok && typeof DesktopGraphics !== "undefined") DesktopGraphics.indexSearch(); })
+        .catch((error) => Log.warn("ui", "Graphics search options unavailable: " + error))
+        .finally(() => { loadingGraphics = false; });
+    };
     subscribers.add(paint);
     paint();
     return Object.freeze({
@@ -287,5 +315,5 @@ const SettingsSearch = (function () {
     window.addEventListener("keydown", onEscape, true);
     window.addEventListener("cancel", onEscape, true);
   }
-  return Object.freeze({ CATALOG, register, find, reveal, create, onEscape });
+  return Object.freeze({ CATALOG, register, registerRaceSettings, find, reveal, create, onEscape });
 })();

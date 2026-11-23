@@ -435,6 +435,7 @@ test("XrUi.mount creates hidden #xr-enter until capability probe says yes", () =
   const document = {
     body,
     createElement(tag) {
+      if (tag === "span") return { setAttribute(k, v) { this[k] = v; } };
       assert.equal(tag, "button");
       const el = {
         id: "",
@@ -471,13 +472,19 @@ test("XrUi.mount creates hidden #xr-enter until capability probe says yes", () =
   vm.runInContext(read("js/xr/xr-ui.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/xr/xr-ui.js") });
   const btn = ctx.XrUi.mount(body);
   assert.equal(btn.id, "xr-enter");
-  assert.equal(kids.length, 1);
+  assert.equal(kids.length, 2);
+  assert.equal(kids[1].role, "status");
+  assert.equal(btnStore.attrs["aria-describedby"], kids[1].id);
   assert.equal(btnStore.hidden, true);
   ctx.XrUi.show(true);
   assert.equal(btnStore.hidden, false);
   assert.match(btnStore.text, /ENTER VR/i);
+  ctx.setTimeout = () => 1; ctx.clearTimeout = () => {};
+  ctx.XrUi.flashMessage("Headset unavailable");
+  assert.equal(kids[1].textContent, "Headset unavailable");
+  assert.equal(btnStore.attrs["aria-label"], "Headset unavailable");
   ctx.XrUi.unmount();
-  assert.equal(kids.length, 1); // removed from parent, not from our push list
+  assert.notEqual(ctx.XrUi.mount(body), btn, "a transient failure cannot disable the remounted entry");
 });
 
 // Browser-independent WebXR ownership and reference-space contract. This models

@@ -483,6 +483,15 @@ const AppearanceOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
+    function hudLink(help, text, target, setting) {
+      help.textContent = text + " ";
+      const button = document.createElement("button");
+      button.type = "button"; button.className = "adv-more-btn";
+      button.dataset.settingsJump = "display"; button.dataset.jumpTarget = target;
+      const page = typeof SettingsNav !== "undefined" ? SettingsNav.routes.display.title : "HUD & CAMERA";
+      button.textContent = page + " › " + setting;
+      help.appendChild(button);
+    }
     // COLOUR VISION row is runtime-built (shellNodes at ceiling) — insert after
     // HIGH CONTRAST so READABILITY stays one fold.
     if (!byId("pm-cvd")) {
@@ -492,7 +501,7 @@ const AppearanceOpts = (function () {
         const help = document.createElement("p");
         help.className = "adv-help";
         help.id = "pm-cvd-help";
-        help.textContent = "Remaps green/red HUD and menu ink for colour vision deficiency. The driving line still has its own COLOUR-BLIND palette under DISPLAY › HUD.";
+        hudLink(help, "Remaps green/red HUD and menu ink. Choose the driving line palette separately.", "pm-linecolor-sel", "Driving line colour");
         const after = contrastRow.nextElementSibling;
         // Skip the contrast help <p> so CVD sits under it.
         const insertBefore = after && after.tagName === "P" && after.id === "pm-contrast-help"
@@ -544,10 +553,12 @@ const AppearanceOpts = (function () {
     wireHexPair("pm-hudaccent-hex", "pm-hudaccent-hextext", setHudHex);
     syncCustomRows();
     applyReadability();   // the eval-time apply ran before #hud-speed's unit label existed
+    const uiHelp = byId("pm-uiscale-help");
+    if (uiHelp) hudLink(uiHelp, "100% uses the default menu size for this window. Resize the race HUD separately.", "pm-hudscale", "HUD size");
     // TEXT SIZE help: menus AND a HUD digit nudge.
     const tsHelp = byId("pm-textsize-help");
     if (tsHelp) {
-      tsHelp.textContent = "Bigger words in the menus and settings, and a nudge to race HUD digits. HUD SIZE under DISPLAY still zooms the whole race chrome.";
+      hudLink(tsHelp, "Sizes menu text and race HUD digits. Resize the entire race HUD separately.", "pm-hudscale", "HUD size");
     }
   }
 

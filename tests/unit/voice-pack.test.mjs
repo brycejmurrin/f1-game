@@ -1305,6 +1305,15 @@ test("a stalled pack body times out, releases staged tiers, and respects retry d
   now = 120000; P.ensure("george"); await drain(); assert.equal(calls.length, 6);
 });
 
+test("selecting a channel's saved recording preserves the shared race voice source", () => {
+  const r = radio();
+  r.v.setPackOn(false);
+  assert.equal(r.v.setRecordedVoice("radio", "michael"), true);
+  assert.equal(r.v.recordedVoice("radio"), "michael");
+  assert.equal(r.v.packOn(), false);
+  assert.equal(r.saved.get("radioPack"), false);
+});
+
 test("a voice picked over, or the recorded radio switched off, frees the packs no channel speaks from (#3110)", async () => {
   const r = radio();
   assert.equal(r.v.setRecordedVoice("radio", "michael"), true);

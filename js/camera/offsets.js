@@ -80,11 +80,11 @@ const COMFORT_BY_ID = {};
 for (const d of COMFORT_DEFS) COMFORT_BY_ID[d.id] = d;
 
 // Built-in framing packs. Modes keyed like camTune; `global` is the baseline
-// layered under every mode; `comfort` is optional. STOCK clears everything.
+// layered under every mode; `comfort` is optional. STOCK restores the unscoped baseline.
 const PRESETS = Object.freeze({
   stock: Object.freeze({
     label: "STOCK",
-    help: "Shipped framing on every camera — clears per-mode edits, the global baseline and comfort knobs.",
+    help: "Restore the base framing and comfort for all cameras. Saved track and car overrides still apply.",
     modes: null, global: null, comfort: null,
   }),
   close: Object.freeze({
@@ -311,6 +311,36 @@ function storedScoped(scope, mode, id) {
   return !!(prof && typeof prof[id] === "number");
 }
 
+// Describe the slider at its editing layer and the live rig after higher layers apply.
+function editorValue(scope, mode, id) {
+  const framing = mode != null;
+  const layer = !framing && scope === "mode" ? "global" : scope;
+  const fields = [["global", framing ? _global : _comfort]];
+  if (framing) fields.push(["mode", _store[mode]]);
+  for (const key of ["car", "track"]) {
+    const entry = scopeEntry(key, false);
+    fields.push([key, entry && (framing ? entry.modes[mode] : entry.comfort)]);
+  }
+  let source = "factory", value = (framing ? DEF_BY_ID : COMFORT_BY_ID)[id].def;
+  let editSource, editValue;
+  for (const [name, profile] of fields) {
+    if (profile && typeof profile[id] === "number") { source = name; value = profile[id]; }
+    if (name === layer) { editSource = source; editValue = value; }
+  }
+  return { layer, editSource, editValue, source, value };
+}
+
+function clearField(scope, mode, id) {
+  const entry = scopeEntry(scope, false);
+  const modes = scope === "mode" ? _store : entry && entry.modes;
+  const profile = mode ? modes && modes[mode] : entry && entry.comfort;
+  if (!profile || !Object.hasOwn(profile, id)) return;
+  delete profile[id];
+  if (mode && !Object.keys(profile).length) delete modes[mode];
+  pruneScope(scope);
+  touch();
+}
+
 // Resolved chase/far/drone corner lead: null = use the rig's shipped default.
 function cornerLead(mode) {
   if (mode !== "chase" && mode !== "far" && mode !== "drone") return null;
@@ -515,7 +545,6 @@ function applyPreset(id) {
   else if (p.global) _global = sanitizeProf(p.global);
   if (p.comfort === null) _comfort = {};
   else if (p.comfort) _comfort = sanitizeComfort(p.comfort);
-  if (id === "stock") { _tracks = {}; _cars = {}; }
   return true;
 }
 
@@ -734,7 +763,7 @@ function apply(mode, eye, tgt, fov) {
 return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SHARE_MAGIC,
          MAX_SHARE_CHARS, MAX_DECODED_BYTES,
          KEY, KEY_GLOBAL, KEY_COMFORT, KEY_TRACK, KEY_CAR,
-         apply, values, get, getModeOnly, getGlobal, getScoped, stored, storedGlobal, storedScoped, cornerLead, cornerHang,
+         apply, values, get, editorValue, clearField, getModeOnly, getGlobal, getScoped, stored, storedGlobal, storedScoped, cornerLead, cornerHang,
          exportEdits, exportGlobal, exportPack,
          set, setGlobal, setScoped, reset, resetGlobal, resetScoped, resetAll,
          count, countGlobal, countScoped, tunedModes, load, loadGlobal, loadComfort, loadTrack, loadCar, persist,

@@ -234,6 +234,8 @@ window.SettingRow = (function () {
     field.min = range.min; field.max = range.max; field.step = range.step;
     field.inputMode = Number(range.min) < 0 ? "text" : Number.isInteger(Number(range.step)) ? "numeric" : "decimal";
     field.disabled = range.disabled;
+    field.required = true;
+    field.dataset.padStep = range.step;
     field.dataset.editEscape = "cancel";
     field.setAttribute("aria-label", range.getAttribute("aria-label") + " exact value");
     const restore = () => { field.value = String(read()); };
@@ -251,7 +253,7 @@ window.SettingRow = (function () {
         if (!field.reportValidity()) return;
         commit();
       } else restore();
-      field.blur();
+      range.focus({ preventScroll: true });
     };
     restore();
     return field;

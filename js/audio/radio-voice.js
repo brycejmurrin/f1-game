@@ -1021,10 +1021,9 @@ var RadioVoice = (function () {
         tune[speaker] = Object.assign({}, tune[speaker], { pack: id });
         if (speaker === "announcer") tune[speaker].source = "recorded";
         G.store.set("voiceTune", tune);
-        if (speaker !== "announcer") { packOn = true; G.store.set("radioPack", true); }
         // Fetch the pack this channel SPEAKS from (bella on the radio is
         // "bella-radio"), not the voice's own-channel pack (#3110).
-        if (pack) pack.ensure(recordedPack(speaker));
+        if (pack && (speaker === "announcer" || packOn)) pack.ensure(recordedPack(speaker));
         releaseUnused();
         return true;
       },

@@ -277,7 +277,7 @@ const _camEdLoaded = new Set();
 function ensureCamEditor() {
   if (typeof FlybyEditor !== "undefined" && typeof CamTunerEditor !== "undefined") return Promise.resolve(true);
   if (_camEdLoad) return _camEdLoad;
-  const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAM_EDITOR) || [];
+  const files = ((typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAM_EDITOR) || []).filter(file => file !== "js/lighting/tuner-panel.js");
   const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAM_EDITOR_EDGES) || [];
   if (!files.length || typeof ScriptLoader === "undefined") {
     Log.warn("game", "camera editor bundle is not in this build");
@@ -298,7 +298,7 @@ function ensureCamEditor() {
 // finish after BACK, resume or a newer door; only that visit may reveal a dock.
 let _pendingUiOpen = null;
 function createEditorOpener(G, buttonId, ensure, method) {
-  let pending = null;
+  let pending = null, doorLabel = null;
   function cancel() {
     const request = pending;
     pending = null;
@@ -332,7 +332,14 @@ function createEditorOpener(G, buttonId, ensure, method) {
       const changed = request.observer && request.observer.takeRecords().length > 0;
       const allowed = !fromUi || (!changed && visible() && G.state === request.state && G.paused === request.paused);
       cancel(); // real.open hides Settings itself; release its observer first.
-      if (allowed && real && typeof real[method] === "function") real[method]();
+      if (!allowed) return;
+      if (real && typeof real[method] === "function") {
+        if (doorLabel && button) { button.textContent = doorLabel; doorLabel = null; }
+        real[method]();
+      } else if (fromUi && button) {
+        doorLabel ||= button.textContent;
+        button.textContent = doorLabel + " · RETRY";
+      }
     }, (error) => {
       if (pending === request) cancel();
       Log.warn("game", "camera editor did not open", error);

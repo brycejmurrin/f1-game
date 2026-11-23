@@ -1209,6 +1209,7 @@ const PhonePadPage = (function () {
         pick(ids[0] || null);
       } else {
         pick(null);
+        if (dom.sheet?.contains?.(opener)) show(true);
         (opener?.getClientRects?.().length ? opener : dom.open)?.focus?.();
       }
     }
@@ -1315,16 +1316,21 @@ const PhonePadPage = (function () {
     dom.undo?.addEventListener("click", () => { stopDrag(true); if (history.length) restore(history.pop()); });
     dom.resetOne?.addEventListener("click", () => { if (picked) edit(() => put(picked, {x:0,y:0,s:100}, false)); });
     dom.resetAll?.addEventListener("click", () => edit(() => restore(LAYOUT_PRESETS.classic)));
-    dom.bar?.addEventListener("keydown", e => {
+    function wrapTab(e) {
       if (e.key !== "Tab") return;
-      const controls = Array.from(dom.bar.querySelectorAll("button,select")).filter(el => !el.disabled && el.getClientRects().length);
+      const controls = Array.from(e.currentTarget.querySelectorAll("button,select,input,summary")).filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
       const first = controls[0], last = controls[controls.length - 1];
       if (e.shiftKey ? e.target === first : e.target === last) {
         e.preventDefault(); (e.shiftKey ? last : first).focus();
       }
-    });
+    }
+    dom.sheet?.addEventListener?.("keydown", wrapTab);
+    dom.bar?.addEventListener("keydown", wrapTab);
     dom.doc?.addEventListener?.("keydown", e => {
-      if (arranging() && e.key === "Escape") { e.preventDefault(); e.stopPropagation(); arrange(false, false); }
+      if (e.key !== "Escape" || (!arranging() && (!dom.sheet || dom.sheet.hidden))) return;
+      e.preventDefault(); e.stopPropagation();
+      if (arranging()) arrange(false, false);
+      else show(false);
     }, true);
     if (typeof window !== "undefined") {
       for (const name of ["blur", "resize"]) window.addEventListener(name, () => stopDrag(false));

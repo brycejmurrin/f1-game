@@ -130,6 +130,19 @@ test("D-pad on UI SIZE (40–200, step 0.25) moves a visible amount per press, o
   assert.equal(fine.value, "6", "a coarse slider never moves less than its own step");
 });
 
+test("wetness D-pad steps are coarse on the slider and precise on its exact field", () => {
+  const { Input, sb, fire, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  for (const [type, expected] of [["range", "0.025"], ["number", "0.005"]]) {
+    const el = { tagName: "INPUT", type, min: "-0.05", max: "1", step: "0.005", value: "0",
+      dataset: type === "number" ? { padStep: "0.005" } : {}, dispatchEvent: () => true };
+    sb.document.activeElement = el;
+    press(15); Input.poll(); release(15); Input.poll();
+    assert.equal(el.value, expected);
+  }
+});
+
 test("D-pad Left/Right on a focused slider steps within min/max; a button gets the plain arrow", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);

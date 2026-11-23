@@ -166,9 +166,13 @@ test("recorded voice choices, radio presets and previews work in the settings pa
     { timeout: 30000 }).toBe(true);
   await page.locator("#as-rpreset-sel").selectOption("vintage");
   expect(await page.evaluate(() => GameAudio.radioPreset())).toBe("vintage");
+  await expect(page.locator('#as-v-radio option[value=""]')).toHaveCount(0);
+  await page.locator("#as-rpack-sel").selectOption("sys");
   await page.locator("#as-v-radio").selectOption("");
   await expect(page.locator("#as-v-radio-pitch")).toBeEnabled();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.radioPack")))).toBe(false);
+  await expect(page.locator('#as-v-radio option[value="recorded:george"]')).toHaveCount(0);
+  await page.locator("#as-rpack-sel").selectOption("rec");
   await page.locator("#as-v-radio").selectOption("recorded:george");
   await page.locator("#as-v-announcer").selectOption("recorded:fable");
   await page.locator("#as-rpreset-sel").selectOption("modern");
