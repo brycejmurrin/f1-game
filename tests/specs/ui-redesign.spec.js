@@ -1231,3 +1231,38 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await lesson.click();
   await expect(lab.locator("#state")).toHaveText("Tow available");
 });
+
+test("Learn Grip & Braking lets the player release brake into the force envelope", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-learn").click();
+  const lesson = page.locator("#learn-open-braking");
+  await lesson.click();
+  const lab = page.frameLocator("#learn-lab");
+  await expect(lab.locator("#turnLimit")).toHaveText("60.0%");
+  const brake = lab.getByRole("slider", { name: "Brake demand" });
+  const turn = lab.getByRole("slider", { name: "Lateral demand" });
+  await lab.getByRole("button", { name: "Try 80% turning" }).click();
+  await expect(lab.locator("#utilization")).toHaveText("113.1%");
+  await expect(lab.locator("#achieved")).toHaveText("70.7% / 70.7%");
+  await expect(lab.locator("#brakeLimit")).toHaveText("60.0%");
+  await brake.fill("60");
+  await expect(lab.getByRole("status")).toHaveText("At the grip limit.");
+  await expect(lab.locator("#achieved")).toHaveText("60.0% / 80.0%");
+  await turn.fill("0");
+  await brake.fill("100");
+  await expect(lab.locator("#achieved")).toHaveText("100.0% / 0.0%");
+  await brake.fill("0");
+  await expect(lab.locator("#achieved")).toHaveText("0.0% / 0.0%");
+  await turn.fill("100");
+  await expect(lab.locator("#achieved")).toHaveText("0.0% / 100.0%");
+  await page.evaluate(() => {
+    AppearanceOpts.setTheme("light");
+    AppearanceOpts.setMenuAccent("cyan");
+  });
+  await expect(lab.locator("html")).toHaveCSS("background-color", "rgb(240, 240, 244)");
+  await expect(brake).toHaveCSS("accent-color", "rgb(0, 163, 224)");
+  await lab.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(lab.locator("#achieved")).toHaveText("80.0% / 0.0%");
+  await brake.press("Escape");
+  await expect(lesson).toBeFocused();
+});

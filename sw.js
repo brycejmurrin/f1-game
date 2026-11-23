@@ -731,6 +731,9 @@ async function precacheAssetLists() {
     // LEARN — the Learn modal and bare lesson assets
     "js/ui/learn-door.js",
     "learn/appearance.js",
+    "learn/braking/index.html",
+    "learn/braking/style.css",
+    "learn/braking/lab.js",
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",

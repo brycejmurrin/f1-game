@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grip &amp; Braking · Apex 26 Learn</title>
+<link rel="stylesheet" href="style.css">
+<script src="../appearance.js" defer></script>
+<script src="lab.js" defer></script>
+</head>
+<body>
+<main>
+<h1 id="lessonTitle">Grip &amp; Braking</h1>
+<div id="learn-studio">
+  <div data-as="controls">
+    <section data-as="box" aria-labelledby="question">
+      <h2 id="question">How hard can I brake while turning?</h2>
+      <label for="brake">Brake demand <span id="brakeValue" aria-hidden="true">80%</span></label>
+      <input id="brake" type="range" min="0" max="100" value="80">
+      <label for="turn">Lateral demand <span id="turnValue" aria-hidden="true">0%</span></label>
+      <input id="turn" type="range" min="0" max="100" value="0">
+      <div class="actions">
+        <button id="try-turn" type="button">Try 80% turning</button>
+        <button id="reset" type="button">Reset</button>
+      </div>
+    </section>
+    <section data-as="box" aria-labelledby="corner-title">
+      <h2 id="corner-title" data-as="heading">Corner entry</h2>
+      <div class="stages" role="group" aria-label="Corner entry phase">
+        <button type="button" data-stage="0" aria-pressed="true">Approach</button>
+        <button type="button" data-stage="1" aria-pressed="false">Turn-in</button>
+        <button type="button" data-stage="2" aria-pressed="false">Apex</button>
+      </div>
+      <p id="phase-tip">Try adding turn-in demand while holding the brake.</p>
+    </section>
+  </div>
+  <section data-as="preview-side" aria-labelledby="force-title">
+    <h2 id="force-title" data-as="heading">Tyre force budget</h2>
+    <div class="instrument">
+      <div class="chart" aria-hidden="true">
+        <span class="axis-y">Lateral</span>
+        <span class="axis-x">Brake</span>
+        <div class="plot">
+          <div class="envelope"></div>
+          <i class="ray requested"></i><i class="ray achieved"></i>
+          <i class="point requested"></i><i class="point achieved"></i>
+        </div>
+      </div>
+      <div class="readings">
+        <dl>
+          <div><dt>Requested grip</dt><dd id="utilization">80.0%</dd></div>
+          <div><dt>Achieved brake / lateral</dt><dd id="achieved">80.0% / 0.0%</dd></div>
+          <div><dt>Turning limit at this brake</dt><dd id="turnLimit">60.0%</dd></div>
+          <div><dt>Brake limit at this turn</dt><dd id="brakeLimit">100.0%</dd></div>
+        </dl>
+        <p id="status" role="status">Within the tyre force budget.</p>
+      </div>
+    </div>
+    <p class="legend"><span>○ Dashed · Requested</span><span>◆ Solid · Achieved</span></p>
+  </section>
+</div>
+<details>
+  <summary>Model and sources</summary>
+  <p>Each axis is a percentage of its own peak force. Load and surface stay fixed. The shaded quarter circle shows feasible demand pairs. For an overloaded request, the model scales brake and lateral force by the same proportion until the combined demand fits. The two limit readouts hold the other axis fixed.</p>
+  <p>The circle illustrates shared capacity. Actual tyres respond to slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
+</details>
+</main>
+</body>
+</html>
