@@ -245,8 +245,9 @@ test("desktop scene effects are independent opt-ins, including in cinema mode", 
       const q = vm.runInNewContext(src + ";GfxQuality", { GameStore: { store }, GLX: { isMobile: mobile } });
       q.setCinema(true);
       for (const name of names) {
-        assert.equal(q.supportsOption(name), !mobile);
-        assert.equal(q.feature(name), !mobile && name === selected);
+        const supported = !mobile || name === "garageProbeParallax";
+        assert.equal(q.supportsOption(name), supported);
+        assert.equal(q.feature(name), supported && name === selected);
       }
     }
   }

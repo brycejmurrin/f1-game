@@ -1806,7 +1806,7 @@ const TLX = (function () {
       let _envOptOut = true;
       try { const ep = GameStore.store.raw("apex26.tlxEnvProbe"); _envOptOut = !_detailOpt("envProbe", ep === "1" || (ep !== "0" && _ultra && !softwareGL)); } catch (_) { /* no store: stay opted out */ }
       const raceProbeOff = _envOptOut;
-      const garageProbeRequested = !isMobile && isWebGPU() && !softContent("env") && _gfxx("garageProbeParallax");
+      const garageProbeRequested = isWebGPU() && !softContent("env") && _gfxx("garageProbeParallax");
       if (garageProbeRequested) _envOptOut = false; // either producer can own the one cube
       if (!_envOptOut) try {
         const envHdr = !!(post && post.hdrOk());
