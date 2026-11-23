@@ -202,3 +202,26 @@ test("PWA recovery origin serves production SW bytes and fails worker-owned requ
     assert.equal(await (await fetch(`${server.origin}/sw.js?v=91002`)).text(), SW_SOURCE + "\n// PWA recovery fixture release 91002\n");
   } finally { await server.close(); }
 });
+
+test("standalone Telemetry Detective scripts reuse the shell’s exact pinned version offline", async () => {
+  const mat4 = "js/core/mat4.js";
+  const model = "js/data/telemetry-model.js";
+  const pinMat4 = "0123456789ab";
+  const pinModel = "abcdef012345";
+  const shell = '<meta name="apex-build" content="321">' +
+    '<script src="' + mat4 + '?v=' + pinMat4 + '"></script>' +
+    '<script type="application/json" id="apex-lazy-v">' + JSON.stringify({ [model]: pinModel }) + '</script>';
+  const h = createHarness();
+  h.stores.set("apex26-321", new Map([
+    [`${ORIGIN}/index.html`, new Response(shell)],
+    [`${ORIGIN}/${mat4}?v=${pinMat4}`, new Response("pinned math")],
+    [`${ORIGIN}/${model}?v=${pinModel}`, new Response("pinned model")],
+    [`${ORIGIN}/${model}?v=111111111111`, new Response("other model revision")],
+    [`${ORIGIN}/${model}`, new Response("stale bare model")],
+  ]));
+  for (const [path, expected] of [[mat4, "pinned math"], [model, "pinned model"]]) {
+    const response = h.fetchEvent(new Request(`${ORIGIN}/${path}`));
+    assert.equal(await (await response.responsePromise).text(), expected);
+    await Promise.all(response.lifetimes);
+  }
+});

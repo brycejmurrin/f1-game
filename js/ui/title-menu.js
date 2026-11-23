@@ -180,7 +180,7 @@ const TitleMenu = (function () {
     }, 0);
   }
 
-  function wireLearn(G) {
+  function wireLearn(G, openDataHub) {
     const menu = G.$("menu-buttons");
     if (!menu) return;
     const door = document.createElement("button");
@@ -207,14 +207,14 @@ const TitleMenu = (function () {
           return;
         }
       }
-      LearnDoor.open(door);
+      LearnDoor.open(door, openDataHub);
     });
   }
 
-  function create(G) {
+  function create(G, openDataHub) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
-    wireLearn(G);
+    wireLearn(G, openDataHub);
     organize(typeof document !== "undefined" ? document : null);
     // The doors paint from the shell seconds before game.js wires them (Slow 4G:
     // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
