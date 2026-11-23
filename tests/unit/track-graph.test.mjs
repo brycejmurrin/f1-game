@@ -793,3 +793,77 @@ test("published world blockers match fused and instanced boxes without prism hul
   }
   assert.deepEqual(summaries[0],summaries[1]);
 });
+
+test("visor tree surfaces block crowns but preserve sky gaps and finite light segments", () => {
+  const records = [], foliage = { _mat: TrackGeom.MAT.FOLIAGE };
+  TrackGeom.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
+  const track = { _lightOccluders: TrackGeom.lightIndex(records) };
+  const hit = (eye, dx, dy, dz, max = Infinity) => TrackGeom.lightBlocked(track, eye, dx, dy, dz, max);
+  assert.equal(hit([0, 4, 0], 0, 0, 1), true, "opaque crown hides the source");
+  assert.equal(hit([2.5, 7, 0], 0, 0, 1), false, "empty corner inside crown bounds remains sky");
+  assert.equal(hit([0, 1, 0], 0, 0, 1), false, "gap below the crown stays open");
+  assert.equal(hit([0, 4, 0], 0, 0, 5, 1), false, "a lamp before the tree stays visible");
+  assert.equal(hit([0, 4, 0], 0, 0, 20, 1), true, "a lamp behind the tree is blocked");
+  assert.equal(TrackGeom.lightBlocked(structuredClone(track), [0, 4, 0], 0, 0, 1, Infinity), true);
+  const ignored = [];
+  TrackGeom.lightPrimitive(ignored, { ...foliage, _dryRun: true }, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
+  assert.equal(ignored.length, 0, "rejected placement probes retain no silhouette");
+});
+
+test("tree blocker publication agrees for fused, instanced and staged crowns", async () => {
+  const { createRequire } = await import("node:module");
+  const { buildContext } = createRequire(import.meta.url)("../../tools/track/verify-track.cjs");
+  const summaries = [];
+  for (const instancing of [false, true]) {
+    const Tracks = buildContext(undefined, { instancing });
+    const def = { ...Tracks.LIST.find(d => d.id === "monaco") };
+    def.scenery = api => {
+      api.out._preferInstance = instancing;
+      const emit = { addCone: api.addCone };
+      api.track.graph.instance("visor-crown", AT([10000, 20, 10000]), rec => {
+        rec.mat(TrackGeom.MAT.FOLIAGE, [0, 6]);
+        rec.cone([0, 0, 0], 3, 6, [.2, .4, .1], 7);
+      }, {}, emit, api.out);
+      api.out._preferInstance = false;
+      for (const [i, accept] of [[1, false], [2, true]]) {
+        const center = [10000 + i * 20, 23, 10000];
+        api.modelGroup("visor-tree-stage-" + i, { center, size: [6, 6, 6] }, stage => {
+          stage._mat = TrackGeom.MAT.FOLIAGE;
+          api.addCone(stage, [center[0], 20, center[2]], 3, 6, [.2, .4, .1], 7);
+          return accept;
+        });
+      }
+    };
+    const track = Tracks.build(def), geom = Tracks._vmContext.TrackGeom;
+    for (const i of [0, 1, 2]) {
+      assert.equal(geom.lightBlocked(track, [10000 + i * 20, 22, 9980], 0, 0, 1, 40), i !== 1,
+        `${instancing ? "instanced" : "fused"} crown ${i}: only accepted surfaces block`);
+    }
+    const data = track._lightOccluders.boxes, selected = [];
+    for (let n = 0; n < data.length; n += 18) if (data[n] > 9000) selected.push(Array.from(data.slice(n, n + 18)));
+    summaries.push(selected);
+  }
+  assert.deepEqual(summaries[0], summaries[1]);
+});
+
+
+test("distant forests do not add work to a local visor ray", () => {
+  const records = [], foliage = { _mat: TrackGeom.MAT.FOLIAGE };
+  for (let i = 0; i < 1000; i++)
+    TrackGeom.lightPrimitive(records, foliage, "cone", [[500 + i * 10, 2, 100], 3, 6, [.2, .4, .1], 7]);
+  TrackGeom.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
+  const index = TrackGeom.lightIndex(records);
+  assert.equal(TrackGeom.lightBlocked({ _lightOccluders: index }, [0, 4, 0], 0, 0, 1, Infinity), true);
+  assert.ok(index.tests <= 7, "only the local crown's triangles enter the narrow phase");
+});
+
+
+test("baked tree blockers use the rendered mesh placement transform", () => {
+  const mesh = buf();
+  TrackGeom.addCone(mesh, [2, 0, 0], 2, 6, [.2, .4, .1], 7);
+  const records = [];
+  TrackGeom.lightMesh(records, mesh, { x: 10, y: 3, z: 20, rotY: Math.PI / 2, scale: 2 });
+  const track = { _lightOccluders: TrackGeom.lightIndex(records) };
+  assert.equal(TrackGeom.lightBlocked(track, [10, 5, 0], 0, 0, 1, Infinity), true);
+  assert.equal(TrackGeom.lightBlocked(track, [13.5, 14, 0], 0, 0, 1, Infinity), false, "transformed crown corner remains transparent");
+});

@@ -1,0 +1,1 @@
+Fixed: Helmet visor sunlight and lamp glare shining through opaque tree crowns and trunks. Tree surfaces now participate in the existing spatially indexed light-visibility checks, including instanced and high-detail trees, while gaps remain visible.

@@ -377,8 +377,51 @@ const TrackGeom = (function () {
 
   // Exact architectural box primitives, not enclosing prop bounds: gaps and rotated corners stay open.
   // Records are built once, survive worker transfer, and avoid retaining the city triangle soup.
-  const LIGHT_CELL = 64, LIGHT_STRIDE = 18;
+  const LIGHT_CELL = 16, LIGHT_STRIDE = 18;
   const lightCellKey = (x, z) => x * 65536 + z;
+  // Opaque tree surfaces, not enclosing boxes. Tessellate once at build time;
+  // runtime queries reuse the cell index and the visor's bounded disk samples.
+  const lightScratch = { pos: [], nrm: [], col: [], idx: [], mat: [] };
+  function lightPrimitive(records, out, kind, args) {
+    const mat = Math.floor((out._mat || 0) + 0.5);
+    if (out._dryRun || (mat !== MAT.FOLIAGE && mat !== MAT.WOOD)) return;
+    for (const key of ["pos", "nrm", "col", "idx", "mat"]) lightScratch[key].length = 0;
+    const fn = kind === "cone" ? addCone : kind === "cyl" ? addCyl : addFrustum;
+    fn(lightScratch, ...args);
+    lightMesh(records, lightScratch);
+  }
+  function lightMesh(records, mesh, transform) {
+    const p = mesh.pos, idx = mesh.idx, cs = Math.cos(transform?.rotY || 0), sn = Math.sin(transform?.rotY || 0);
+    const scale = transform?.scale ?? 1;
+    for (let i = 0; i < idx.length; i += 3) {
+      const v = [];
+      for (let j = 0; j < 3; j++) {
+        const n = idx[i + j] * 3, x = p[n] * scale, y = p[n + 1] * scale, z = p[n + 2] * scale;
+        v.push(x * cs + z * sn + (transform?.x || 0), y + (transform?.y || 0), -x * sn + z * cs + (transform?.z || 0));
+      }
+      // A zero last row distinguishes triangles from invertible box transforms. Shared
+      // stride/bounds keep worker transfer and accepted-stage publication intact.
+      records.push(...v, 0, 0, 0,
+        Math.min(v[0], v[3], v[6]), Math.min(v[1], v[4], v[7]), Math.min(v[2], v[5], v[8]),
+        Math.max(v[0], v[3], v[6]), Math.max(v[1], v[4], v[7]), Math.max(v[2], v[5], v[8]));
+    }
+  }
+  function lightTriangle(data, n, eye, dx, dy, dz, maxT) {
+    const ax = data[n], ay = data[n + 1], az = data[n + 2];
+    const ex = data[n + 3] - ax, ey = data[n + 4] - ay, ez = data[n + 5] - az;
+    const fx = data[n + 6] - ax, fy = data[n + 7] - ay, fz = data[n + 8] - az;
+    const px = dy * fz - dz * fy, py = dz * fx - dx * fz, pz = dx * fy - dy * fx;
+    const det = ex * px + ey * py + ez * pz;
+    if (Math.abs(det) < 1e-10) return false;
+    const tx = eye[0] - ax, ty = eye[1] - ay, tz = eye[2] - az;
+    const u = (tx * px + ty * py + tz * pz) / det;
+    if (u < 0 || u > 1) return false;
+    const qx = ty * ez - tz * ey, qy = tz * ex - tx * ez, qz = tx * ey - ty * ex;
+    const v = (dx * qx + dy * qy + dz * qz) / det;
+    if (v < 0 || u + v > 1) return false;
+    const t = (fx * qx + fy * qy + fz * qz) / det;
+    return t > 1e-6 && t < maxT - 1e-6;
+  }
   function lightBox(records, out, c, size, basis) {
     const mat = Math.floor((out._mat || 0) + 0.5);
     if (out._dryRun || out._matAt || mat === MAT.GLASS || mat === MAT.FOLIAGE || mat === MAT.FLAG || mat === MAT.FABRIC) return;
@@ -432,7 +475,11 @@ const TrackGeom = (function () {
       if(ids)for(let q=0;q<ids.length;q++){
         const id=ids[q];if(index.stamp[id]===gen)continue;index.stamp[id]=gen;index.tests++;
         const n=id*LIGHT_STRIDE,ox=eye[0]-data[n],oy=eye[1]-data[n+1],oz=eye[2]-data[n+2];
-        let lo=0,hi=maxT;
+          if (data[n + 9] === 0 && data[n + 10] === 0 && data[n + 11] === 0) {
+            if (lightTriangle(data, n, eye, dx, dy, dz, maxT)) return true;
+            continue;
+          }
+          let lo=0,hi=maxT;
         for(let a=0;a<3;a++){
           const o=n+3+a*3,origin=data[o]*ox+data[o+1]*oy+data[o+2]*oz,dir=data[o]*dx+data[o+1]*dy+data[o+2]*dz;
           if(Math.abs(dir)<1e-12){if(origin< -1||origin>1){hi=-1;break;}}
@@ -446,6 +493,6 @@ const TrackGeom = (function () {
     return false;
   }
 
-  return { lightBox, lightIndex, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
+  return { lightPrimitive, lightMesh, lightBox, lightIndex, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();
