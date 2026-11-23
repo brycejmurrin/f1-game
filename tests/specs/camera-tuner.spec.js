@@ -6,6 +6,7 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { CAM_MODE_IDS } from "../helpers/camera-modes.mjs";
 
 /* Two cases here outrun the project's shared 120 s budget, and say so rather
    than reporting a bare "Test timeout exceeded".
@@ -269,8 +270,8 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside
   // it is what has a box), so assert on the inner panel.
   await expect(page.locator("#camtune-inner")).toBeVisible();
-  // One tab per CamModes mode: 20 = 14 base + TRACKSIDE + RIVAL / PIT WALL / DRONE + TV + HELMET (appended 2026-10-03, deliberate).
-  expect(await page.locator("#ct-modes .lt-tab").count()).toBe(20);
+  const modeTabs = await page.locator("#ct-modes .lt-tab").evaluateAll(tabs => tabs.map(tab => tab.getAttribute("data-mode")));
+  expect(modeTabs).toEqual(CAM_MODE_IDS);
   // 8 framing sliders exist (#ct-in-*); CORNER LEAD (chase/far/drone) and CORNER
   // HANG (chase/drift/reverse/overhead/broadcast) do not apply to HOOD, so their
   // rows are hidden and the six geometric knobs show. Comfort rows (#ct-cin-*)
