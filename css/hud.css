@@ -2164,17 +2164,13 @@ body.lt-open .touchbtn { display: none !important; }
    broadcast: the tower, the PiP and the replay bar stay. The driving HUD
    does not — timing band, map, gaps, speed, gear, energy, tyres, overtake,
    aero, bias, sectors, flags, mirror, the helmet visor and the touch pads.
-   display:none, not visibility, so a placed chip (data-hl) cannot punch
-   back through. The same list under body.watch-controls-on lives in
-   css/watch-transport.css (that class stays in one file). Pause stays.
-   The race camera chip and the radio card stand down; the replay bar has
-   its own camera control. The timing tower and the PiP stay. */
+   Display:none keeps placed chips from punching through. Pause, the
+   timing tower and PiP stay. The replay transport owns the camera picker. */
 body:is(.bc-on, .watch-controls-on, [data-spectator]) #hud > :not(#bc-tower, #bc-pip),
-body:is(.bc-on, .watch-controls-on, [data-spectator]) :is(.touchbtn, #announce, #lights),
-body:is(.watch-controls-on, [data-spectator="watch"]) :is(#campicker, #btn-cam),
+body:is(.bc-on, .watch-controls-on, [data-spectator]) :is(.touchbtn, #announce, #lights) { display: none !important; }
+body:is(.watch-controls-on, [data-spectator="watch"]) :is(#campicker, #btn-cam) { display: none !important; }
 body[data-race-ceremony="cooldown"] #hud > :not(#hud-dock),
-body[data-race-ceremony="cooldown"] #hud .hud-bottom,
-body[data-race-ceremony="cooldown"] #announce,
+body[data-race-ceremony="cooldown"] :is(#hud .hud-bottom, #announce) { display: none !important; }
 body:is([data-race-ceremony="parcFerme"], [data-race-ceremony="podium"]) :is(#hud, #announce) {
   display: none !important;
 }
