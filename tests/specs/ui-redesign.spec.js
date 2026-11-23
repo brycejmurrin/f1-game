@@ -1168,3 +1168,19 @@ test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked fo
   expect(fit.right, "CLOSE's skewed right corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
 });
 });
+
+test("Learn opens the wake lesson and returns keyboard focus to its title door", async ({ page }) => {
+  await waitReady(page);
+  const door = page.locator("#mb-learn");
+  await door.click();
+  const lab = page.frameLocator("#learn-lab");
+  await expect(lab.locator("#wake")).toHaveText("86%");
+  await lab.getByLabel("Fast corner").check();
+  await expect(lab.locator("#state")).toHaveText("Cornering in wake");
+  await lab.getByLabel("Move follower 4 m off-line").check();
+  await expect(lab.locator("#grip")).toHaveText("100%");
+  await lab.locator("#gap").press("Escape");
+  await expect(door).toBeFocused();
+  await door.click();
+  await expect(lab.locator("#state")).toHaveText("Tow available");
+});
