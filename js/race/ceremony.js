@@ -76,15 +76,19 @@ var RaceCeremony = (function () {
     // The beat modules (slices 2-4) are optional lazies: a missing one degrades to a timer-only phase.
     const cool = typeof CooldownLap !== "undefined" ? CooldownLap.create(G) : null;
     const parc = typeof ParcFerme !== "undefined" ? ParcFerme.create(G) : null;
+    const resultsCamera = () => deps?.resultsCam?.();
     const podium = typeof RacePodium !== "undefined" ? RacePodium.create(G, {
-      resultsCam: { startOrbit: () => { const r = deps && deps.resultsCam && deps.resultsCam(); return !!(r && r.startOrbit && r.startOrbit()); } },
+      resultsCam: { startOrbit: () => {
+        const camera = resultsCamera();
+        return !!(camera && (camera.live() || camera.onFlag()) && camera.startOrbit());
+      } },
     }) : null;
     let phase = "idle";
     let age = 0;
     let skipped = false;
     let order = null;
     let meta = null;
-    let sessionEligible = false;
+    let sessionEligible = false, parkPainted = false;
 
     function liveMeta() {
       return meta || { duel: !!duelOn(), watch: !!isWatch() };
@@ -102,6 +106,9 @@ var RaceCeremony = (function () {
     function showSheet() {
       if (G.els && G.els.results) G.els.results.hidden = false;
     }
+    const cameraPhase = () => phase === "cooldown" || phase === "parcFerme" ? phase : null;
+    const needsWorldFrame = () => phase === "cooldown" || (phase === "parcFerme" && (!parkPainted || (parc && !parc.staticView())));
+    const worldPresented = () => { parkPainted = true; };
     const playerDrives = () => phase === "cooldown" && cool?.driveAllowed();
     function stepResultsField(cars, dt, updateCar) {
       if (!playerDrives()) return;
@@ -143,8 +150,11 @@ var RaceCeremony = (function () {
       if (p === "podium" && podiumCount(order, meta) < 3) p = "results";
       endBeats();
       phase = p;
-      age = 0;
+      age = 0; parkPainted = false;
       publish();
+      const camera = resultsCamera();
+      if (cameraPhase()) camera?.reset();
+      if (p === "cooldown") deps?.snapCooldown?.();
       if (p === "cooldown" && cool) {
         const h = cooldownHost();
         if (cool.start({ force: true }) && h) {
@@ -155,7 +165,10 @@ var RaceCeremony = (function () {
         }
       } else if (p === "parcFerme" && parc) parc.start({ onSkip: () => skip() });
       else if (p === "podium" && podium) podium.start(order, meta, () => { if (phase === "podium") enter("results"); });
-      if (p === "results") showSheet();
+      if (p === "results") {
+        if (camera && !camera.live()) camera.onFlag();
+        showSheet();
+      }
       return p;
     }
     function nextAfter(p) {
@@ -216,9 +229,9 @@ var RaceCeremony = (function () {
       sessionEligible = false;
       publish();
     }
-    function live() { return status().live; }
+    function live() { return phase !== "idle" && phase !== "results"; }
 
-    _api = { start, status, playerDrives, stepResultsField, seek, skip, tick, reset, live, eligible: () => eligible(G, liveMeta()) };
+    _api = { start, status, cameraPhase, needsWorldFrame, worldPresented, playerDrives, stepResultsField, seek, skip, tick, reset, live, eligible: () => eligible(G, liveMeta()) };
     return _api;
   }
 

@@ -10,6 +10,50 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, host, scriptIn, line, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+
+test("WATCH opens a late lap on a running car when the selected driver's trace has ended", () => {
+  const { replay, G, cars, drivers, options, snaps } = transportReplay();
+  drivers[0].lapStart[1] = 18;
+  assert.equal(replay.start({ ...options, startLap: 2, follow: "BBB" }), true);
+  assert.equal(replay.status().follow, "AAA");
+  assert.equal(G.player, cars[0]);
+  assert.equal(cars[1].retired, true);
+  assert.equal(snaps.at(-1), 900);
+});
+
+test("WATCH rebuilds TV cards on a paused seek without treating the jump as a pass", () => {
+  const { document } = makeDom();
+  const { replay, G, cars, options, ctx } = transportReplay({ document }, { completeSubject: true });
+  for (const file of ["js/overlay/feed.js", "js/race/tv-graphics.js"]) {
+    vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), ctx, { filename: absSrc(file) });
+  }
+  G.hudProfile = "broadcast";
+  options.traces.cars[1] = line(50, 45, 0, 0, 30);
+  options.traces.cars[2] = line(0, 55, 0, 0, 30);
+  options.script.fastest = { t: 2, num: 2 };
+  cars[0].best = 80;
+  G.ranked = cars.slice();
+  replay.start(options);
+  replay.tick(0);
+  const lower = document.getElementById("tvg-lower"), fastest = document.getElementById("tvg-fastest");
+  assert.equal(fastest.hidden, true, "a roster time does not set a replay record");
+  G.ranked = [cars[1], cars[0]];
+  replay.tick(6);
+  assert.equal(lower.hidden, false);
+  assert.equal(fastest.textContent, "FASTEST LAP  ·  BBB");
+
+  replay.setPaused(true);
+  replay.seek(0);
+  assert.equal(lower.hidden, true);
+  assert.equal(fastest.hidden, true);
+  replay.seek(8);
+  assert.equal(lower.hidden, true);
+  assert.equal(fastest.textContent, "FASTEST LAP  ·  BBB");
+  replay.setPaused(false);
+  replay.tick(0.25);
+  assert.equal(lower.hidden, true);
+});
 
 test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds, restart and reel cuts", () => {
   const { replay, G, options } = transportReplay({}, { completeSubject: true });

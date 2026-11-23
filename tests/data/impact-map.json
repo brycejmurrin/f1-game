@@ -11541,6 +11541,9 @@
       "battle": [
         "tests/unit/overlay-feed.test.mjs"
       ],
+      "codeOf": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
       "createDiffer": [
         "tests/unit/overlay-feed.test.mjs"
       ],
@@ -13734,7 +13737,11 @@
         "tests/unit/race-ceremony.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
+      "live": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
       "reset": [
+        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "resetLive": [
@@ -15211,6 +15218,7 @@
       "setPaused": [
         "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/real-replay-audio-focus.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/real-replay-captions.test.mjs",
         "tests/unit/real-replay-vm.test.mjs"
       ],
@@ -15519,10 +15527,14 @@
       ]
     },
     "js/race/tv-graphics.js": {
+      "codeOf": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
       "create": [
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/tv-graphics.test.mjs"
       ],
       "diff": [
@@ -15531,14 +15543,17 @@
         "tests/unit/tv-graphics.test.mjs"
       ],
       "status": [
-        "tests/unit/real-race-lazy.test.mjs"
+        "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "stop": [
         "tests/unit/real-race-lazy.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/tv-graphics.test.mjs"
       ],
       "tick": [
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/real-replay-broadcast.test.mjs",
         "tests/unit/tv-graphics.test.mjs"
       ]
     },

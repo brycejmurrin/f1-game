@@ -5022,8 +5022,9 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
-  assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
-    "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
+  const resultsFreeze = /if \(state === "results" && !resultsCam\.live\(\) && !ceremony\?\.needsWorldFrame\(\)\) return;/;
+  assert.match(game, resultsFreeze,
+    "results keeps the last world frame unless the ceremony needs a new frame or ResultsCam is live");
   // endRace's OWN call: over all of game.js the match began at startRaceBody's
   // rainShow(false), so deleting endRace's still passed (audit 2026-09-29).
   assert.match(fnSource(game, "function endRace(forcedOrder)"), /Particles\.rainShow\(false\);\s*if \(soundOn\) GameAudio\.finish\(\);/,
@@ -5035,7 +5036,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   }
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn && !heldWarm) {"),
     "the visibility gate precedes the garage-preview return");
-  const resultsGate = renderBody.search(/if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/);
+  const resultsGate = renderBody.search(resultsFreeze);
   assert.ok(resultsGate >= 0 && resultsGate < renderBody.indexOf("if (setupPreviewOn && !heldWarm)"),
     "results freeze precedes the garage-preview return");
   assert.match(renderBody, /!resultsCam\.live\(\)/,

@@ -327,7 +327,10 @@ const Broadcast = (function () {
     // baseline — not a "viewer change" that would hand the picture back for 20 s.
     function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; eventUntil = -Infinity; syncCamera(); } return auto; }
     function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; eventUntil = -Infinity; syncCamera(); } return locked; }
-    function resetTiming() { shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity; setPip(null); }
+    function resetTiming() {
+      shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity;
+      setPip(null); graphics?.reset();
+    }
     /** The director has the picture: AUTO and not waiting out a viewer's choice. */
     function autoOn() { return on && auto && !locked && wall >= manualUntil; }
 
@@ -485,7 +488,15 @@ const Broadcast = (function () {
       fastCode = fastestCode(st.script, st.T);
       if (graphics) graphics.tick(dt);
     }
-    function refresh(st) { if (on && st) { paintTower(st); pipTick(st); } }
+    function refresh(st, seek = false) {
+      if (!on || !st) return;
+      paintTower(st); pipTick(st);
+      if (seek && graphics) {
+        // The physics ranking can still describe the pre-seek field while paused.
+        fastCode = fastestCode(st.script, st.T);
+        graphics.tick(0, true, st.running().map(row => row.key));
+      }
+    }
     function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
                                       pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 

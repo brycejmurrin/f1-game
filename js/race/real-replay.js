@@ -340,9 +340,9 @@ const RealReplay = (function () {
       pose(true);
       if (run.onTimeline) run.onTimeline(run.T);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
-      let follow = null;
-      for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
-      if (!follow) for (const [c, f] of cars) if (f.tr && !follow) follow = c;
+      const running = runningOrder();
+      const follow = running.find(c => cars.get(c).d.code === o.follow) || running[0]
+        || [...cars].find(([, f]) => f.tr)?.[0];
       setFollow(follow);
       if (bc) bc.start({ auto, tower: o.tower !== false });
       if (reel && reel.length) cutTo(reel[0]);
@@ -468,7 +468,7 @@ const RealReplay = (function () {
         if (!(picture && (picture.locked || picture.manual))) liveSubject();
       }
       if (!continuous && G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
-      if (bc) bc.refresh(bcState);
+      if (bc) bc.refresh(bcState, !continuous);
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
       if (transport) transport.paint();
