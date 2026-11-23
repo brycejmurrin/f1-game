@@ -15212,6 +15212,9 @@
       "setAuto": [
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
+      "setCamera": [
+        "tests/unit/real-replay-broadcast.test.mjs"
+      ],
       "setFollow": [
         "tests/unit/real-replay-vm.test.mjs"
       ],

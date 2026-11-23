@@ -65,6 +65,9 @@ test("WATCH director buttons expose their visible names and retain keyboard cont
   const lock = page.getByRole("button", { name: /^FOLLOW LOCK: keep following/ });
   await expect(auto).toBeVisible();
   await expect(lock).toBeVisible();
+  await page.locator('[data-wt="camera"]').selectOption("tcam");
+  await expect(page.getByRole("region", { name: "On-camera driver" })).toContainText("T-CAM");
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
   await lock.focus();
   await lock.press("Enter");
   await expect(lock).toHaveAttribute("aria-pressed", "true");

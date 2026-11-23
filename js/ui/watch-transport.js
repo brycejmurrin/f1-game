@@ -65,11 +65,7 @@ const WatchTransport = (function () {
       more.hidden = true;
       top.appendChild(more);
       const cameras = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
-      select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), (id) => {
-        if (id === "tv") { replay.setAuto(true); return; }   // WATCH owns its director; the live-race TV rig is inactive here
-        const idx = cameras.findIndex((c) => c.id === id);
-        if (idx >= 0 && G.setCamMode) { G.setCamMode(idx, { persist: false }); replay.setLocked(true); if (G.snapGameCam) G.snapGameCam(true); }
-      });
+      select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), id => replay.setCamera(id));
       action(top, "auto", "AUTO: let the TV director choose the driver and camera", "AUTO", () => replay.setAuto(true));
       action(top, "lock", "FOLLOW LOCK: keep following the selected driver and camera", "FOLLOW LOCK", () => replay.setLocked(true));
       const photo = action(top, "photo", "Open photo mode", "PHOTO", () => { if (G.openWatchPhoto) G.openWatchPhoto(); });

@@ -13,7 +13,8 @@ const Broadcast = (function () {
   const DELTA_S = 6;         // a place change keeps its arrow this long (wall seconds)
   // The TV shots the director rotates through (CamModes ids; an unknown id is skipped).
   const SHOTS = ["side", "heli", "tcam", "chase", "cinematic", "low"];
-  const EVENT_SHOTS = { pass: ["side", "heli", "chase"], pit: ["heli", "side"], out: ["heli", "side"], fastest: ["tcam", "chase", "side"] };
+  const EVENT_SHOTS = { pass: ["side", "heli", "chase"], pit: ["heli", "side"], out: ["heli", "side"], fastest: ["tcam", "chase", "side"],
+    battle: ["heli", "chase", "side"], recover: ["chase", "heli"], sc: ["heli", "side"], ending: ["heli", "side"], green: ["heli", "chase"] };
   const EVENT_RANK = { out: 4, pass: 3, fastest: 2, pit: 1 };
   // THE PICTURE-IN-PICTURE: a second car in a corner inset (the mirror's camera,
   // js/render/shared/mirror-pass.js). Held at least SHOT_MIN_S; dropped once
@@ -386,7 +387,7 @@ const Broadcast = (function () {
       rowsEl = [];
       clickBound = (e) => {
         const t = e.target && e.target.closest ? e.target.closest("[data-code]") : null;
-        if (t && t.dataset.code) { manual(); if (replay.follow) replay.follow(t.dataset.code); return; }
+        if (t && t.dataset.code) { if (replay.follow?.(t.dataset.code)) manual(); return; }
         if (e.target && e.target.closest && e.target.closest(".bc-head")) {
           mode = mode === "gap" ? "interval" : "gap"; towerT = 0;
           head.setAttribute("aria-label", mode === "gap" ? "Timing tower: show intervals between drivers" : "Timing tower: show gaps to leader");
@@ -415,7 +416,8 @@ const Broadcast = (function () {
       paintTowerRows(rows, st.script.laps | 0, st.followNum, st.colourOf);
       if (viewer) {
         const car = st.follow, row = rows.find(r => r.num === st.followNum);
-        viewer.paint(car, row, { mode: st.reel ? "HIGHLIGHTS" : "RACE REPLAY",
+        const mode = st.reel ? "HIGHLIGHTS" : "RACE REPLAY";
+        viewer.paint(car, row, { mode: st.cameraLabel ? mode + " · " + st.cameraLabel : mode,
           flag: G.cautionLevel?.(), name: st.nameOf?.(car) || row?.code || car?.code || "—" },
         st.kphOf?.(car));
       }
@@ -481,13 +483,14 @@ const Broadcast = (function () {
       const age = wall - lastCut;
       if (age < SHOT_MIN_S) return;
       if (st.T < eventUntil) return;   // do not leave a pass before it happens, including at slow replay rates
-      const ev = nextEvent(st.list, st.T, shown, EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
+      const ev = nextEvent(st.list, st.T, shown, EVENT_LEAD_S * Math.max(1, st.speed), st.canFeature || (num => !st.isOut(num)));
       if (ev) { shown.add(ev.i); eventUntil = ev.h.t + EVENT_HOLD_S; cut(st.carOf(ev.h.num), ev.h.kind, st.T); return; }
       if (age < SHOT_MAX_S) return;
       const running = st.running();
-      const fight = battles(running)[0];
+      const neutralized = G.cautionLevel?.() >= 2;
+      const fight = neutralized ? null : battles(running)[0];
       const next = fight ? fight.key : running.length ? running[cuts % Math.min(3, running.length)].key : null;
-      cut(next, fight ? "pass" : null, st.T);
+      cut(next, fight ? "battle" : neutralized ? "sc" : null, st.T);
     }
     function cut(c, kind, T) {
       lastCut = wall; cuts++;
@@ -522,7 +525,7 @@ const Broadcast = (function () {
     function pipTick(st) {
       const follow = st.follow;
       const running = st.running();
-      const ev = nextEvent(st.list, st.T, new Set(), EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
+      const ev = nextEvent(st.list, st.T, new Set(), EVENT_LEAD_S * Math.max(1, st.speed), st.canFeature || (num => !st.isOut(num)));
       let evCar = ev ? st.carOf(ev.h.num) : null;
       // The director is already on the event's car: the inset takes the other one
       // (the car being passed).
@@ -547,7 +550,7 @@ const Broadcast = (function () {
       towerT -= dt;
       if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
       fastCode = fastestCode(st.script, st.T);
-      if (graphics) graphics.tick(dt);
+      if (graphics) graphics.tick(dt, false, st.field);
     }
     function refresh(st, seek = false) {
       if (!on || !st) return;
@@ -555,7 +558,7 @@ const Broadcast = (function () {
       if (seek && graphics) {
         // The physics ranking can still describe the pre-seek field while paused.
         fastCode = fastestCode(st.script, st.T);
-        graphics.tick(0, true, st.running().map(row => row.key));
+        graphics.tick(0, true, st.field);
       }
     }
     function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,

@@ -76,6 +76,43 @@ test("WATCH plate follows the recorded driver and keeps trace speed during a pau
   assert.equal(document.querySelector("#bc-viewer"), null);
 });
 
+test("WATCH identifies the angle and hides speed across an unrecorded position gap", () => {
+  const { document } = makeDom();
+  const { replay, G, options, ctx } = transportReplay({ document, HudReadouts: {
+    spdPlate: kph => ({ n: Math.round(kph), unit: "KPH" }),
+  } });
+  const modes = vm.runInContext("CamModes.CAM_MODES", ctx);
+  for (const mode of modes) mode.label = mode.id.toUpperCase();
+  options.traces.cars[1] = { t: [0, 1, 25, 26], prog: [0, 50, 900, 950], x: [0, 0, 0, 0] };
+  replay.start(options);
+  replay.setPaused(true);
+  replay.seek(15);
+  const plate = document.querySelector("#bc-viewer");
+  assert.equal(plate.children[2].hidden, true);
+  const picks = [];
+  G.setCamMode = (index, options) => { G.camMode = index; picks.push(options); };
+  assert.equal(replay.setCamera("heli"), true);
+  assert.equal(plate.children[0].textContent, "RACE REPLAY · HELI");
+  assert.equal(picks[0].persist, false);
+  assert.ok(picks[0].owner);
+  replay.seek(25.5);
+  assert.equal(plate.children[2].textContent, "180 KPH");
+});
+
+test("clicking a timing row without current footage leaves AUTO in control", () => {
+  const { document } = makeDom();
+  const { replay } = transportReplay({ document });
+  const tower = document.getElementById("bc-tower");
+  replay.seek(15);
+  const buttons = tower.querySelectorAll("button");
+  const out = buttons.find(button => button.dataset.code === "BBB");
+  assert.ok(out, "the classification still includes the retired driver");
+  out.setAttribute("data-code", out.dataset.code); // Mini DOM does not reflect dataset into selector attributes.
+  tower.dispatchEvent({ type: "click", target: out });
+  assert.equal(replay.status().follow, "AAA");
+  assert.equal(replay.autoOn(), true);
+});
+
 test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds, restart and reel cuts", () => {
   const { replay, G, options } = transportReplay({}, { completeSubject: true });
   const seen = [], cards = [];
