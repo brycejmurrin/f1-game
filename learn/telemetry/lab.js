@@ -217,12 +217,12 @@
     inputs.forEach(input => input.addEventListener("click", () => {
       inputs.forEach(choice => choice.setAttribute("aria-pressed", String(choice === input)));
       get(id).textContent = feedback[input.getAttribute(attribute)];
-      afterChoice?.();
+      afterChoice?.(input.getAttribute(attribute));
     }));
   }
 
   const baseAnalysis = analyze(lanes, from, to);
-  const exitGap = Math.abs(baseAnalysis.change).toFixed(2) + " s";
+  const exitGap = Math.abs(baseAnalysis.deltaAfter).toFixed(2) + " s";
   const conclusion = "B brakes later but drops to 126 km/h while A stays at or above 144 km/h. A reaches 90 m about " + exitGap + " sooner.";
   choose("data-answer", "prediction", {
     a: "Correct. " + conclusion,
@@ -233,6 +233,21 @@
     pressure: "The feed gives a binary brake state. Pedal pressure would require a separate measurement.",
     state: "Correct. The sample reports pressed or released. It has no brake pressure or force value.",
     force: "The feed gives a binary brake state. Force at the tyres depends on more than that signal.",
+  });
+  const equalTime = readAt(lanes, 0.75, "time");
+  const [distanceA, distanceB] = equalTime.lanes.map(reading => reading.distance);
+  const equalDistance = readAt(lanes, distanceA, "distance");
+  choose("data-alignment", "alignment-feedback", {
+    time: "At 0.75 s A has travelled " + distanceA.toFixed(1) + " m and B " + distanceB.toFixed(1) +
+      " m. Those are different positions. Compare arrival times at A’s distance to get a time gap.",
+    distance: "Correct. At " + distanceA.toFixed(1) + " m, A arrives in " + equalDistance.lanes[0].t.toFixed(2) +
+      " s and B in " + equalDistance.lanes[1].t.toFixed(2) + " s. B reaches that point " +
+      Math.abs(equalDistance.delta).toFixed(2) + " s earlier.",
+  }, next => {
+    reference = 0;
+    get("reference").value = String(reference);
+    buildComparison();
+    selectAxis(next, next === "time" ? 0.75 : distanceA);
   });
   get("show-exit").addEventListener("click", () => { selectAxis("distance", to); scrub.focus(); });
   get("extend").addEventListener("click", () => {

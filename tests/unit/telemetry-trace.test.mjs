@@ -122,6 +122,10 @@ test("Telemetry Detective compares the same distance and flips the delta with th
   assert.equal(atTime.lanes[1].distance, 30);
   assert.equal(atTime.delta, null);
   assert.ok(lesson.readAt(lanes, 30).delta < 0);
+  const alignedLesson = lesson.readAt(lanes, 0.75, "time");
+  assert.deepEqual([alignedLesson.lanes[0].distance, alignedLesson.lanes[1].distance], [40, 42.5]);
+  const samePlace = lesson.readAt(lanes, alignedLesson.lanes[0].distance, "distance");
+  assert.ok(Math.abs(samePlace.delta + 0.05) < 1e-9);
   const atExit = lesson.readAt(lanes, to);
   assert.equal(atExit.lanes[0].distance, to);
   assert.equal(atExit.lanes[1].distance, to);

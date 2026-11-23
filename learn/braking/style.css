@@ -147,3 +147,9 @@ a { color: inherit; }
   .point.achieved { forced-color-adjust: none; background: CanvasText; }
   .envelope { border-color: CanvasText; }
 }
+
+.load-diagram { display: grid; grid-template-columns: max-content 1fr; gap: calc(var(--gap) / 2); align-items: center; margin-block: var(--gap); }
+.load-diagram div { height: .8em; border-radius: var(--r-sm); background: var(--surf-3); overflow: hidden; }
+.load-diagram i { display: block; height: 100%; background: var(--red); }
+.load-values { display: flex; flex-wrap: wrap; gap: var(--gap); }
+.load-values dd { font-weight: 700; margin-inline-start: 0; }

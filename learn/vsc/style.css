@@ -99,3 +99,8 @@ a { color: inherit; }
   .lane { margin-bottom: .4em; }
   .track { height: 1.05em; }
 }
+
+.regime-compare { margin-top: var(--gap); }
+.regime-compare table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.regime-compare th, .regime-compare td { padding: calc(var(--gap) / 3); text-align: start; border-block-end: 1px solid var(--plate-line); }
+.regime-compare tbody th { font-weight: 600; }

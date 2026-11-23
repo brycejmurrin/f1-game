@@ -187,6 +187,39 @@
     get("case-effect").textContent = "Keep lateral demand at 8 kN and compare the first two inputs. Then change only the surface.";
   });
 
+  const deceleration = get("deceleration");
+  const cgHeight = get("cg-height");
+  function updateAxleLoads() {
+    const g = Number(deceleration.value);
+    const height = Number(cgHeight.value);
+    const weight = 800 * 9.81;
+    const loadShift = weight * g * height / 3.4;
+    const front = weight * .47 + loadShift;
+    const rear = weight - front;
+    get("deceleration-value").textContent = g.toFixed(1) + " g";
+    get("cg-value").textContent = height.toFixed(2) + " m";
+    deceleration.setAttribute("aria-valuetext", g.toFixed(1) + " g");
+    cgHeight.setAttribute("aria-valuetext", height.toFixed(2) + " metres");
+    get("front-load").textContent = (front / 1000).toFixed(2) + " kN";
+    get("rear-load").textContent = (rear / 1000).toFixed(2) + " kN";
+    get("load-shift").textContent = Math.round(loadShift) + " N";
+    get("front-load-bar").style.width = percent(front / weight);
+    get("rear-load-bar").style.width = percent(rear / weight);
+    return loadShift;
+  }
+  deceleration.addEventListener("input", updateAxleLoads);
+  cgHeight.addEventListener("input", updateAxleLoads);
+  document.querySelectorAll("[data-load-answer]").forEach(button => {
+    button.addEventListener("click", () => {
+      deceleration.value = "1";
+      cgHeight.value = ".3";
+      const loadShift = updateAxleLoads();
+      get("load-feedback").textContent = (button.dataset.loadAnswer === "front" ? "Correct. " : "Check the bars. ") +
+        "In this 1 g stop, " + Math.round(loadShift) + " N shifts from rear to front. Total normal load stays the same.";
+    });
+  });
+
   LearnAppearance.mount();
   update();
+  updateAxleLoads();
 })();

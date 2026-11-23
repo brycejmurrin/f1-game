@@ -18,6 +18,7 @@
 <input id="gap" type="range" min="5" max="45" step="1" value="10" aria-describedby="gap-instructions">
 <p id="gap-instructions" class="hint">Drag car B along the diagram, or use this slider with your arrow keys.</p>
 <div class="limits"><span>5 m</span><span>45 m</span></div>
+<p id="gap-formula" class="hint"></p>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
 <label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
 </section>
@@ -25,7 +26,22 @@
 <h2 id="active-aero-title" data-as="heading">2026 F1 ACTIVE AERO</h2>
 <p><strong>Straight Mode · low drag.</strong> In dry conditions, the front and rear flaps can open in FIA-designated activation zones when enabled.</p>
 <p><strong>Corner Mode · high downforce.</strong> Flaps return to their higher-downforce positions for corners.</p>
-<p><a href="https://www.fia.com/news/f1s-new-era-everything-you-need-know-about-how-fia-making-formula-1-more-competitive-more" target="_blank" rel="noopener">FIA guide to 2026 active aero</a></p>
+<p>In declared Low Grip Conditions, partial activation is limited to the front wing in the designated Low Grip Activation Zones.</p>
+<label for="aero-zone">Where is the car?</label>
+<select id="aero-zone">
+  <option value="normal">Full activation zone</option>
+  <option value="low">Declared Low Grip · Low Grip Activation Zone</option>
+  <option value="outside">Outside an activation zone</option>
+</select>
+<label class="check"><input type="checkbox" id="aero-enabled" checked> Activation enabled by control electronics</label>
+<button type="button" id="aero-request">Request Straight Mode</button>
+<div class="wing-modes" id="wing-modes" aria-label="Illustrative wing configurations">
+  <div><span>Front wing</span><i id="front-flap" aria-hidden="true"></i><strong id="front-mode">Corner Mode</strong></div>
+  <div><span>Rear wing</span><i id="rear-flap" aria-hidden="true"></i><strong id="rear-mode">Corner Mode</strong></div>
+</div>
+<p id="aero-verdict" role="status"></p>
+<p class="hint">This wing exercise uses the FIA’s activation rules. The Apex wake readouts use the independent gap and track section controls.</p>
+<p><a href="https://www.fia.com/system/files/documents/fia_2026_f1_regulations_-_section_b_sporting_-_iss_09_-_2026-10-01.pdf" target="_blank" rel="noopener">FIA 2026 Sporting Regulations, B7.1</a></p>
 </section>
 </div>
 <section data-as="preview-side" aria-label="Live wind tunnel">

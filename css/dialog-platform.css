@@ -54,6 +54,10 @@ dialog.screen.dim::backdrop {
   :root:not([data-motion="reduce"]) dialog.screen.dim[open]::backdrop { animation: scrim-in 0.16s ease-out; }
 }
 
+#learn nav { display: grid; gap: var(--pad); }
+#learn nav h3 { margin: 0 0 var(--gap); font-size: var(--fs-3); }
+#learn nav .pm-doors { display: grid; gap: var(--gap); grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); }
+
 /* The header stays reachable while the lesson scrolls inside its own frame. */
 #learn > .sheet {
   /* Keep the embedded document and its pointer hit targets in one pixel space. */
