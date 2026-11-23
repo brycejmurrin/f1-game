@@ -1239,6 +1239,13 @@ test("Learn Grip & Braking lets the player release brake into the force envelope
   await lesson.click();
   const lab = page.frameLocator("#learn-lab");
   await expect(lab.locator("#turnLimit")).toHaveText("60.0%");
+  const firstScreen = await lab.locator(".plot").evaluate(plot => {
+    const bounds = plot.getBoundingClientRect();
+    const controls = document.querySelector("[data-as=controls]").getBoundingClientRect();
+    return { plotLeft: bounds.left, plotBottom: bounds.bottom, controlsRight: controls.right, viewportHeight: innerHeight };
+  });
+  expect(firstScreen.plotLeft).toBeGreaterThan(firstScreen.controlsRight);
+  expect(firstScreen.plotBottom).toBeLessThanOrEqual(firstScreen.viewportHeight);
   const brake = lab.getByRole("slider", { name: "Brake demand" });
   const turn = lab.getByRole("slider", { name: "Lateral demand" });
   await lab.getByRole("button", { name: "Try 8 kN lateral" }).click();

@@ -116,9 +116,15 @@ details { margin-block-start: var(--gap); padding: var(--pad); border: 1px solid
 details p { margin-block-start: .65em; }
 summary { cursor: pointer; color: var(--text); }
 a { color: inherit; }
-#learn-studio [data-as="preview-side"] { position: static; }
+#learn-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap, 12px);
+  align-items: start;
+}
+#learn-studio [data-as="preview-side"] { position: static; order: -1; }
 
-@media (min-width: 641px) {
+@media (min-width: 580px) {
   #learn-studio { grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr); }
   #learn-studio [data-as="preview-side"] { order: 0; }
 }
@@ -129,8 +135,10 @@ a { color: inherit; }
   dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@media (min-width: 641px) and (max-height: 430px) {
+@media (min-width: 580px) and (max-height: 430px) {
   main { padding: .45rem; }
+  .lesson-intro { margin-block-end: .4rem; }
+  .instrument { grid-template-columns: minmax(0, 1fr) minmax(7.75rem, .8fr); gap: .5rem; }
   .chart { max-width: 175px; }
   #learn-studio [data-as="box"], #learn-studio [data-as="preview-side"] { padding: .55rem; }
 }
