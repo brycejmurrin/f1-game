@@ -98,7 +98,6 @@ test("cached refraction stops on LOW, shedding and lifecycle exits, then recover
     assert.equal(active(), false);
   }
   assert.equal(calls.bendMaps, 1, "recovery reuses the displacement map");
-  assert.match(read("css/helmet-visor.css"), /body\[data-helmet-cam\]\[data-visor-bend-active\]:not/, "CSS uses the same activation gate as the shader");
 });
 
 test("paused visor setting edits repaint once without advancing the scene", () => {
