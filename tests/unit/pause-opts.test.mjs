@@ -712,7 +712,7 @@ test("dialog backdrop animations respect the explicit in-game reduced-motion pre
 
 test("secondary PAUSE wires once and preserves trusted gesture metadata for the modal shield", () => {
   const registered = [], seen = []; let block = false;
-  const h = load({ secondary: { secondaryTap: (el, opts) => registered.push({ el, opts }) },
+  const h = load({ secondary: { hudTouchTap: (el, opts) => registered.push({ el, opts }) },
     modalShield: { onClickShield(e) { seen.push(e); if (block) e.preventDefault(); } } });
   h.M.initUI(); h.M.initUI();
   assert.equal(registered.length, 1, "pause bridge registration is idempotent");
