@@ -499,3 +499,28 @@ for (const geo of LIVE_GEOS) {
     });
   });
 }
+
+test("Wheel Layout keeps keyboard focus inside and Escape returns to the wheel", async ({ page }) => {
+  await page.setViewportSize({ width: 852, height: 393 });
+  await page.goto("/controller.html?demo=wheel");
+  const opener = page.getByRole("button", { name: "Wheel layout", exact: true });
+  await opener.click();
+  const sheet = page.getByRole("dialog", { name: "WHEEL LAYOUT" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "DONE", exact: true })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  // Native dialogs may put focus on the document at the boundary, but their
+  // inert background must never receive wheel input.
+  expect(await page.evaluate(() => !!document.activeElement?.closest("#ctl"))).toBe(false);
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await expect(opener).toBeFocused();
+});
+
+test("the companion fallback opens Appearance and consumes its return parameter", async ({ page }) => {
+  await page.goto("/?settings=appearance&testreturn=1");
+  await expect(page.getByLabel("Screen to arrange", { exact:true })).toBeVisible({ timeout: BOOT_MS });
+  const url = new URL(page.url());
+  expect(url.searchParams.has("settings")).toBe(false);
+  expect(url.searchParams.get("testreturn")).toBe("1");
+});

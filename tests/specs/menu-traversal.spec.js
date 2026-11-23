@@ -270,14 +270,14 @@ test.describe("Menu traversal — keyboard and controller", () => {
             null, { polling: 100, timeout: BOOT_MS }
           );
         }
-        if (door === "#pm-open-visual") await expect(page.locator("#pmsettings-arrange-entry")).toHaveCount(0);
+        await expect(page.locator("#pmsettings").getByRole("button", { name: "Arrange this screen", exact: true })).toHaveCount(0);
         await openFolds(page);
       };
       await open();
       const { all, seed } = await walk(page, "pmsettings");
       if (door === "#pm-open-visual") {
         expect(all.slice().sort()).toEqual([
-          "#pm-visual-tuners-sum", "#pm-garrival", "#pm-arrange-current", "#pm-settings-close",
+          "#pm-visual-tuners-sum", "#pm-garrival", "#pm-settings-close",
         ].sort());
         for (const id of ["pm-lighting", "pm-camtune", "pm-flyby"])
           await expect(page.locator("#" + id)).toBeDisabled();

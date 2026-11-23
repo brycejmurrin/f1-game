@@ -100,26 +100,13 @@ const SettingsNav = (function () {
   // a failed load logs and the next call retries. presets() resolves true once LayoutPresets exists.
   let presetsLoad = null;
   const presetsLoaded = new Set();
-  async function arrangeScreen(id, button, stillOpen, label = "Arrange this screen") {
-    button.disabled = true;
-    try {
-      if (!window.ScreenArranger) {
-        await presets();
-        if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
-      }
-      if (stillOpen()) button.textContent = window.ScreenArranger?.open(id, button) ? label : "Retry layout editor";
-    } catch (error) {
-      Log.warn("ui", "Layout editor unavailable: " + error);
-      if (stillOpen()) button.textContent = "Retry layout editor";
-    } finally { button.disabled = false; }
-  }
   function presets() {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
-    if (typeof LayoutPresets !== "undefined") return Promise.resolve(true);
     if (presetsLoad) return presetsLoad;
+    if (typeof LayoutPresets !== "undefined" && window.AppearanceArrangementPicker) return Promise.resolve(true);
     if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
     const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
-    const files = ["js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/look-avail.js", "js/ui/layout-presets.js"];
+    const files = R.LAZY_UI_PRESETS.filter(file => !["js/ui/screen-arranger.js", "js/ui/hud-arrange.js", "js/ui/hud-layout-editor.js", "js/ui/desktop-graphics.js"].includes(file));
     presetsLoad = ScriptLoader.create().load(files, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
       .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
     return presetsLoad;
@@ -160,16 +147,29 @@ const SettingsNav = (function () {
     }
     if (id === "graphics") graphicsDetails();
   });
-  if (typeof document !== "undefined" && typeof GameStore !== "undefined" && typeof ScriptLoader !== "undefined") {
-    const restoreSavedLayout = () => {
-      if (typeof ScreenPlacement !== "undefined" || !GameStore.store.get("screenPlacement", null)) return;
-      ScriptLoader.create().load(["js/ui/screen-regions.js", "js/ui/screen-placement.js"],
-        [["js/ui/screen-regions.js", "js/ui/screen-placement.js"]], { strict: true, loaded: presetsLoaded })
-        .catch(e => Log.warn("ui", "Saved screen layout unavailable: " + e));
-    };
-    restoreSavedLayout();
-    GameStore.store.subscribe?.(change => {
-      if (change.key === "screenPlacement" || change.key === null) restoreSavedLayout();
+  if (typeof document !== "undefined" && document.addEventListener) {
+    const owners = ["js/ui/screen-regions.js", "js/ui/screen-placement.js"];
+    const loadPlacement = (files) => ScriptLoader.create().load(files, [[owners[0], owners[1]]], { strict: true, loaded: presetsLoaded });
+    if (typeof GameStore !== "undefined" && typeof ScriptLoader !== "undefined") {
+      const restoreSavedLayout = () => {
+        if (typeof ScreenPlacement !== "undefined" || !GameStore.store.get("screenPlacement", null)) return;
+        loadPlacement(owners).catch(error => Log.warn("ui", "Saved layout could not load: " + error.message));
+      };
+      restoreSavedLayout();
+      GameStore.store.subscribe?.(change => {
+        if (change.key === "screenPlacement" || change.key === null) restoreSavedLayout();
+      });
+    }
+    document.addEventListener("apex:spotify-arrange-return", async () => {
+      try {
+        if (!await loadPlacement([...owners, "js/ui/screen-arranger.js"])) return;
+        const player = document.getElementById("spotifypanel");
+        if (!player || player.hidden) return;
+        const navigation = window.ScreenRegions[Symbol.for("apex.arrangementRoute")];
+        navigation.prepare = false;
+        navigation.pending = "spotifypanel";
+        navigation.reveal("spotifypanel");
+      } catch (error) { Log.warn("ui", "Player arrangement could not load: " + error.message); }
     });
   }
 
@@ -425,24 +425,6 @@ const SettingsNav = (function () {
         index.insertBefore(heading, first);
       }
     }
-    const backDoor = document.getElementById("pm-settings-close");
-    if (backDoor?.parentElement) {
-      const footer = backDoor.parentElement;
-      let arrange = footer.querySelector("#pm-arrange-current");
-      if (!arrange) {
-        arrange = document.createElement("button");
-        arrange.type = "button";
-        arrange.id = "pm-arrange-current";
-        arrange.className = "bigbtn alt";
-        arrange.textContent = "Arrange this screen";
-        footer.appendChild(arrange);
-      }
-      arrange.onclick = () => {
-        const request = generation;
-        const screen = current === "home" ? "pmsettings" : "pm-panel-" + current;
-        return arrangeScreen(screen, arrange, () => request === generation && !document.getElementById("pmsettings")?.hidden);
-      };
-    }
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;
@@ -489,7 +471,7 @@ const SettingsNav = (function () {
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
-    lazy, flushLazy, presets, arrangeScreen, graphicsDetails,
+    lazy, flushLazy, presets, graphicsDetails,
   };
 })();
 Object.freeze(SettingsNav);

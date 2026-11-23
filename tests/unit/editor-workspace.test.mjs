@@ -275,47 +275,9 @@ test("stopping a toolbar-launched garage preview returns to visible edit control
   assert.equal(toggle.getAttribute("aria-pressed"), "false");
 });
 
-test("a first visit offers arrangement in the live tuner and preserves its camera controls", async () => {
+test("the live tuner toolbar keeps preview and camera controls available", () => {
   const h = boot(true, false, true, true);
   const toolbar = h.sheet.querySelector(".ew-toolbar");
-  const button = toolbar.querySelectorAll("button").find(el => el.textContent === "Arrange this screen");
-  assert.ok(button);
-  assert.equal(h.workspace.arrangeDoor(h.root, toolbar), button);
-  h.root.hidden = false;
-  button.isConnected = true;
-  button.getClientRects = () => [{}];
-  let ready;
-  h.nav.arrangeScreen = (id, opener, stillOpen) => {
-    assert.equal(id, "camtune");
-    assert.equal(opener, button);
-    ready = stillOpen;
-  };
-  await button.onclick();
-  assert.equal(Boolean(ready()), true);
-  h.root.hidden = true;
-  assert.equal(Boolean(ready()), false, "leaving the tuner during loading cancels the edit");
-  assert.equal(h.sheet.dataset.editorView, "edit");
   assert.equal(h.doc.getElementById("pc-toggle").parentNode, toolbar);
-});
-
-test("Photo Mode and Free Camera's shared toolbar opens the stick layout editor", () => {
-  const h = boot(), controls = h.doc.getElementById("photo-controls"), bar = h.doc.getElementById("pc-bar");
-  controls.ownerDocument = h.doc;
-  controls.appendChild(bar);
-  h.workspace.init(h.doc);
-  h.workspace.init(h.doc);
-  const buttons = bar.querySelectorAll('[data-arrange-screen="photo-controls"]');
-  assert.equal(buttons.length, 1);
-  const door = buttons[0];
-  assert.equal(door.textContent, "Arrange camera sticks");
-  door.getClientRects = () => [{}];
-  let eligible;
-  h.nav.arrangeScreen = (id, invoker, visible) => {
-    assert.equal(id, "photo-controls"); assert.equal(invoker, door);
-    eligible = visible;
-  };
-  door.onclick();
-  assert.ok(eligible());
-  controls.hidden = true;
-  assert.equal(eligible(), false, "exit while loading cannot reopen the sticks editor");
+  assert.equal(toolbar.querySelectorAll("button").some(el => el.textContent === "Arrange this screen"), false);
 });

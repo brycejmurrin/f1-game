@@ -847,6 +847,7 @@
     "js/ui/hud-arrange.js",
     "js/ui/look-avail.js",
     "js/ui/layout-presets.js",
+    "js/ui/appearance-arrangement-picker.js",
     "js/ui/appearance-studio-ui.js",
     "js/ui/photo-studio-ui.js"
   ],
@@ -856,15 +857,29 @@
       "js/ui/screen-placement.js"
     ],
     [
+      "js/ui/screen-regions.js",
+      "js/ui/appearance-arrangement-picker.js"
+    ],
+    [
+      "js/ui/appearance-arrangement-picker.js",
+      "js/ui/appearance-studio-ui.js"
+    ],
+    [
       "js/ui/appearance-studio-ui.js",
       "js/ui/photo-studio-ui.js"
     ]
   ],
     LAZY_SAVES_DATA: [
+    "js/ui/save-health.js",
     "js/ui/progress-backup.js",
     "js/ui/settings-export-body.js"
   ],
-    LAZY_SAVES_DATA_EDGES: [],
+    LAZY_SAVES_DATA_EDGES: [
+    [
+      "js/ui/save-health.js",
+      "js/ui/settings-export-body.js"
+    ]
+  ],
     LAZY_RESULTS_SHEET: [
     "js/share/share-card-data.js",
     "js/share/share-card-layout.js",

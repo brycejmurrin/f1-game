@@ -220,7 +220,7 @@ test('WHEEL LAYOUT (#5801): presets and per-key picks move the face keys between
     const keys = Object.fromEntries(L.LAYOUT_KEYS.map((k) => [k, element()])), home = box();
     for (const k of L.LAYOUT_KEYS) home.appendChild(keys[k]);
     const presets = ['classic', 'right', 'left', 'mirror'].map((p) => { const e = element(); e.dataset.preset = p; return e; });
-    const dom = { body: element(), keys, home, grips: { L: box(), R: box() }, sheet: element(), open: element(), done: element(), rows: box(),
+    const dom = { body: element(), keys, home, grips: { L: box(), R: box() }, sheet: Object.assign(element(), { showModal() { this.open = true; }, close() { this.open = false; } }), open: element(), done: element(), rows: box(),
       swapBtn: element(), utilityBtn: element(), utilityTrigger: element(), utilityStore: box(), presets, doc: { createElement: () => box() } };
     return { dom, api: L.layout(dom, { store }) };
   };
@@ -247,7 +247,12 @@ test('WHEEL LAYOUT (#5801): presets and per-key picks move the face keys between
   emit(a.dom.utilityBtn, 'click');
   const b = mk();
   assert.deepEqual([b.api.get(), b.dom.body.dataset.swap, ids(b.dom, b.dom.grips.L)], [a.api.get(), '1', ['overtake', 'boost', 'aero']], 'a reload restores the saved layout');
-  emit(b.dom.open, 'click'); assert.equal(b.dom.sheet.hidden, false); emit(b.dom.done, 'click'); assert.equal(b.dom.sheet.hidden, true);
+  emit(b.dom.open, 'click'); assert.equal(b.dom.sheet.open, true);
+  const escape = emit(b.dom.sheet, 'cancel');
+  assert.ok(escape.defaultPrevented);
+  assert.equal(b.dom.sheet.open, false);
+  assert.equal(b.dom.sheet.hidden, true);
+  emit(b.dom.open, 'click'); emit(b.dom.done, 'click'); assert.equal(b.dom.sheet.hidden, true);
   const phoneBtn = element(); phoneBtn.dataset.preset = 'phone';
   // PHONE STYLE: tall BRAKE | GAS side by side, OT/BOOST/AERO in a column beside them.
   const e2 = (() => { const keys = Object.fromEntries(L.LAYOUT_KEYS.map((k) => [k, element()])), home = box(); for (const k of L.LAYOUT_KEYS) home.appendChild(keys[k]);
@@ -442,6 +447,9 @@ test("Utility wheel dispatches the released choice once, cancels outside, and ti
 test("Wheel Layout keeps keyboard focus in the open sheet and restores its launcher", () => {
   const L = vm.runInContext("PhonePadPage", boot().ctx);
   const ui = makeDom(), sheet = ui.byId("sheet"), stage = ui.byId("ctl");
+  sheet.open = false;
+  sheet.showModal = () => { sheet.open = true; };
+  sheet.close = () => { sheet.open = false; };
   const open = ui.makeElement("button"), done = ui.makeElement("button"), arrangeBtn = ui.makeElement("button");
   stage.appendChild(open);
   for (const el of [done, arrangeBtn]) {
@@ -451,7 +459,7 @@ test("Wheel Layout keeps keyboard focus in the open sheet and restores its launc
   }
   L.layout({ stage, open, sheet, done, arrangeBtn, doc: ui.document, body: ui.body });
   open.click();
-  assert.equal(stage.inert, true);
+  assert.equal(sheet.open, true);
   assert.equal(ui.document.activeElement, done);
   ui.dispatch(sheet, { type: "keydown", key: "Tab", shiftKey: true, currentTarget: sheet, target: done });
   assert.equal(ui.document.activeElement, arrangeBtn);
@@ -466,6 +474,6 @@ test("Wheel Layout keeps keyboard focus in the open sheet and restores its launc
   assert.equal(sheet.hidden, false);
   assert.equal(ui.document.activeElement, arrangeBtn);
   escape();
-  assert.equal(stage.inert, false);
+  assert.equal(sheet.open, false);
   assert.equal(ui.document.activeElement, open);
 });

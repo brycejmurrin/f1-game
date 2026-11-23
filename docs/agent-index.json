@@ -1621,6 +1621,7 @@
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/quali-persist.test.mjs",
+        "tests/unit/race-arrangement-routes.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
@@ -4867,6 +4868,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/appearance-arrangement-picker.js",
+      "global": "AppearanceArrangementPicker",
+      "roster": "LAZY_UI_PRESETS"
+    },
+    {
       "path": "js/ui/appearance-opts.js",
       "global": "AppearanceOpts",
       "roster": "tag"
@@ -4890,6 +4896,11 @@
       "path": "js/ui/captions.js",
       "global": "Captions",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/companion-return.js",
+      "global": null,
+      "roster": "OVERLAY_PAGE"
     },
     {
       "path": "js/ui/condition-cue-controls.js",
@@ -5149,7 +5160,7 @@
     {
       "path": "js/ui/save-health.js",
       "global": "SaveHealth",
-      "roster": "tag"
+      "roster": "LAZY_SAVES_DATA"
     },
     {
       "path": "js/ui/scale.js",

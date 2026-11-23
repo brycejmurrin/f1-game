@@ -75,7 +75,6 @@ async function openPopup(drs = 12) {
       observe(node) { (this.targets ||= new Set()).add(node); }
       disconnect() { this.disconnected = true; }
     },
-    SettingsNav: { arrangeScreen(id, opener, ready) { if (ready()) context.arranged = { id, opener }; } },
     F1API: {
       sessionDrivers: async () => drivers,
       fastestLap: async () => ({ dateStart: new Date(1e12).toISOString(), lapDuration: 80, lapNumber: 3, s1: 25, s2: 25, s3: 30 }),
@@ -86,7 +85,7 @@ async function openPopup(drs = 12) {
   });
   seedDom(context);
   for (const file of [
-    "js/ui/editor-workspace.js", "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
+    "js/core/mat4.js", "js/data/tab-utils.js", "js/data/telemetry-model.js", "js/data/telemetry-render.js",
     "js/data/telemetry-player.js", "js/data/telemetry-view.js", "js/data/telemetry.js"
   ]) {
     vm.runInContext(readFileSync(file, "utf8"), context, { filename: absSrc(file) });
@@ -144,14 +143,8 @@ test("a lap with no DRS values gets no DRS gauge or legend toggle; a lap with th
   assert.equal(labels(some).filter((t) => t === "DRS").length, 1);
 });
 
-test("the telemetry popup opens its own arranger and column-only resizing refits the map", async () => {
-  const { popup, observers, context, frames } = await openPopup();
-  const door = popup.querySelector('[data-arrange-screen="telemetry-detail"]');
-  assert.ok(door && popup.open);
-  door.getClientRects = () => [{}];
-  door.click();
-  assert.equal(context.arranged.id, "telemetry-detail");
-  assert.equal(context.arranged.opener, door);
+test("column-only resizing refits the telemetry map", async () => {
+  const { popup, observers, frames } = await openPopup();
   const main = popup.querySelector(".dh-telem-main"), side = popup.querySelector(".dh-telem-side");
   const observer = observers.find(item => item.targets.has(side));
   assert.ok(observer && observer.targets.has(main));

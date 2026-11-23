@@ -306,14 +306,23 @@ const TitleMenu = (function () {
     };
     const dailyBtn = $("mb-daily");
     if (dailyBtn) dailyBtn.onclick = () => G.openTimeTrialPicker({ kind: "daily" });
-    // #5010: an installed app resumed on the title after midnight kept yesterday's DAILY door
-    // while a tap opened today's plan. Repaint when the page comes back and the day has moved.
-    let paintedDay = G.daily && G.daily.dayKey ? G.daily.dayKey() : null;
-    if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState !== "visible" || !G.daily || !G.daily.dayKey) return;
-      const day = G.daily.dayKey();
-      if (day !== paintedDay) { paintedDay = day; refresh(); }
-    });
+    // Keep the visible challenge and Continue card on the local date they launch,
+    // both across a foreground midnight and after a suspended phone wakes.
+    if (doc && G.daily?.dayKey) {
+      let paintedDay = G.daily.dayKey(), rolloverTimer;
+      const clock = doc.defaultView;
+      function syncDay() {
+        clock?.clearTimeout(rolloverTimer);
+        if (doc.visibilityState !== "visible") return;
+        const day = G.daily.dayKey();
+        if (day !== paintedDay) { paintedDay = day; refresh(); }
+        const now = new Date(), midnight = new Date(now.getTime());
+        midnight.setHours(24, 0, 0, 0);
+        rolloverTimer = clock?.setTimeout(syncDay, midnight.getTime() - now.getTime());
+      }
+      doc.addEventListener("visibilitychange", syncDay);
+      syncDay();
+    }
 
     return { refresh };
   }

@@ -30,8 +30,6 @@ function setup(disk = new Map()) {
     if (tag === "iframe") el.contentWindow = {CockpitPreviewFrame:{set:(state)=>delivered.push(state),dispose:()=>disposed.push(el)}};
     return el;
   };
-  vm.runInContext(read("js/ui/editor-workspace.js"),ctx, { filename: absSrc("js/ui/editor-workspace.js") });
-  ctx.SettingsNav = {arrangeScreen(id, button) {ctx.arranged = {id, button};}};
   vm.runInContext(read("js/camera/cockpit-preview.js") + ";this.preview=CockpitPreview",ctx, { filename: absSrc("js/camera/cockpit-preview.js") });
   const fold = create("details"); fold.open=true; dom.body.appendChild(fold);
   const host = create("div"); host.ownerDocument=dom.document; fold.appendChild(host);
@@ -48,9 +46,6 @@ test("preview open, angle changes and close preserve race state and custom saved
   assert.equal(s.delivered.at(-1).wheel,"yoke"); assert.equal(s.delivered.at(-1).units,"mph");
   for (const button of s.host.querySelector("#ckpreview-angles").querySelectorAll("button").filter(b => b.dataset.angle)) button.onclick();
   assert.equal(s.delivered.at(-1).angle,"above");
-  const arrange=s.host.querySelector('[data-arrange-screen="cockpit-preview"]');
-  arrange.onclick();
-  assert.equal(s.ctx.arranged.id,"cockpit-preview");
   const editor=s.dom.document.body.appendChild(s.dom.makeElement("dialog","screen-arranger"));
   s.dom.document._listeners.get("keydown")[0]({key:"Escape",target:editor});
   assert.equal(s.host.querySelector("iframe"),frame,"closing the arranger retains the player’s live cockpit preview");

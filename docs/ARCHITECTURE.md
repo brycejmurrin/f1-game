@@ -230,7 +230,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
-| `save-health.js` | `SaveHealth` | tag | SaveHealth — on-demand measurements and cache-only cleanup. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
 | `loading-card.js` | `LoadingCard` | tag | LOADING CARD MODEL. |
 | `loading-screen.js` | `LoadingScreen` | tag | PRE-RACE LOADING SCREEN. |
@@ -289,6 +288,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `controller-profile-controls.js` | `ControllerProfileControls` | tag | Explicit current-device reset; Input owns automatic per-device selection. |
 | `condition-cue-controls.js` | `ConditionCueControls` | tag | Cue targets that account for current driving conditions: ON by default since the #2177 calibration (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md); the… |
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
+| `companion-return.js` | `—` | OVERLAY_PAGE | Companion previews open separately so a running session stays in the game tab. |
 | `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `hud-inputs.js` | `HudInputs` | LAZY_RACE_SESSION | the opt-in INPUTS trace for GameHud (learning braking points). |
 | `touch-button-settings.js` | `TouchButtonSettings` | LAZY_NET | Shared response editor for in-game touch buttons and the phone controller. |
@@ -301,8 +301,10 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-arrange.js` | `HudArrange` | LAZY_UI_PRESETS | Live race HUD arrangement. |
 | `look-avail.js` | `LookAvail` | LAZY_UI_PRESETS | LookAvail: the APPEARANCE folds' settings-only half of js/ui/screen-looks.js — the peek stand-ins and the availability lines. |
 | `layout-presets.js` | `LayoutPresets` | LAZY_UI_PRESETS | LayoutPresets: one tap, the whole UI's layout, LIVE (gap G9 of the 2026-10-30 UI layout program). |
+| `appearance-arrangement-picker.js` | `AppearanceArrangementPicker` | LAZY_UI_PRESETS | Appearance-only screen picker. |
 | `appearance-studio-ui.js` | `AppearanceStudioBody` | LAZY_UI_PRESETS | AppearanceStudioBody — LAZY_UI_PRESETS (#4978 row 5). |
 | `photo-studio-ui.js` | `PhotoStudioBody` | LAZY_UI_PRESETS | PhotoStudioBody — LAZY_UI_PRESETS (#4978 row 5). |
+| `save-health.js` | `SaveHealth` | LAZY_SAVES_DATA | SaveHealth — on-demand measurements and cache-only cleanup. |
 | `progress-backup.js` | `ProgressBackup` | LAZY_SAVES_DATA | ProgressBackup: the `progress` section of the SAVES & DATA settings file (#5992). |
 | `settings-export-body.js` | `SettingsExportBody` | LAZY_SAVES_DATA | SAVES & DATA body (SettingsExportBody, LAZY_SAVES_DATA, #4748): collect / apply for the SETTINGS, GARAGE and CAREER files, the optional time-trial ttlb… |
 | `results-sheet.js` | `GameResultsSheet` | LAZY_RESULTS_SHEET | results / time-trial / championship-standings DOM builders for js/game.js. |

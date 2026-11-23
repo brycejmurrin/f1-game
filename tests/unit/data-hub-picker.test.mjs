@@ -23,7 +23,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], sessions, scheduleOnline = true,
-                   emptyMeeting = null, emptyYear = null, clock = null, arrangeScreen } = {}) {
+                   emptyMeeting = null, emptyYear = null, clock = null } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -126,10 +126,6 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   }
   const files = ["js/ui/dom.js", "js/data/schedule.js", "js/data/standings.js", "js/data/tab-utils.js", "js/data/results.js", "js/data/live.js"];
   if (realTelemetry) files.push("js/data/telemetry-model.js", "js/data/telemetry.js");
-  if (arrangeScreen) {
-    ctx.SettingsNav = { arrangeScreen };
-    files.push("js/ui/editor-workspace.js");
-  }
   files.push("js/data/hub.js");
   for (const f of files)
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
@@ -979,16 +975,10 @@ test("LIVE: a batch served from a stale cache copy keeps the old stamp and says 
   h.DataHub.close();
 });
 
-test("the Data Hub header arranges the standings tab on a first visit", async () => {
-  let opened;
-  const h = harness({ arrangeScreen(id, door, ready) { if (ready()) opened = { id, door }; } });
+test("the standings header ends with Close", async () => {
+  const h = harness();
   h.DataHub.open("standings"); await h.drain();
-  const door = h.root.find(el => el.getAttribute("data-arrange-screen") === "datahub");
-  assert.ok(door && door.parentNode.classList.contains("sheet-head"));
-  assert.equal(door.parentNode.lastChild.id, "dh-close-btn", "Close stays at the end of the header after Arrange");
-  door.getClientRects = () => [{}];
-  door.onclick();
-  assert.equal(opened.id, "datahub");
-  assert.equal(opened.door, door);
+  const close = h.root.find(el => el.id === "dh-close-btn");
+  assert.equal(close.parentNode.lastChild, close);
   assert.equal(h.root.find(el => el.id === "dh-tab-standings").getAttribute("aria-selected"), "true");
 });

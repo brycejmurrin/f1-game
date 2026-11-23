@@ -259,39 +259,17 @@ test("the shipped Settings index groups every door under a task heading", () => 
   });
 });
 
-test("the in-flow Arrange action edits the current page without adding to its back stack", async () => {
+test("the Settings footer keeps its Back action on every page", () => {
   const { ctx, dom, nav } = boot({ ensure: () => true, stub: false, prepare(dom) {
     const footer = dom.makeElement("div");
     dom.byId("pmsettings").appendChild(footer);
     footer.appendChild(dom.byId("pm-settings-close"));
   } });
-  const arrange = dom.byId("pm-settings-close").parentElement.querySelector("#pm-arrange-current");
-  const calls = [];
-  ctx.window.ScreenArranger = { open: (id, trigger) => { calls.push(id); assert.equal(trigger, arrange); return true; } };
+  const back = dom.byId("pm-settings-close");
   for (const page of Object.keys(ctx.SettingsNav.routes)) {
     nav.show(page);
-    await arrange.onclick();
-    assert.equal(calls.at(-1), page === "home" ? "pmsettings" : "pm-panel-" + page);
-    assert.equal(nav.current(), page);
+    assert.deepEqual(back.parentElement.children, [back]);
   }
-  nav.show("home");
-  dom.byId("pm-open-controls").onclick();
-  await arrange.onclick();
-  assert.equal(nav.back(), false);
-  assert.equal(nav.current(), "home");
-  // A previous request completing after Back must never open another editor.
-  delete ctx.window.ScreenArranger;
-  ctx.LayoutPresets = {};
-  let loaded;
-  ctx.ScriptLoader = { create: () => ({ load: () => new Promise(resolve => { loaded = resolve; }) }) };
-  nav.show("controls");
-  const opening = arrange.onclick();
-  await tick();
-  nav.show("home");
-  ctx.window.ScreenArranger = { open: () => assert.fail("a stale route opened its editor") };
-  loaded(true);
-  await opening;
-  assert.equal(arrange.disabled, false);
 });
 
 test("a cross-link returns through nested pages with each launcher's focus and scroll", () => {
@@ -443,4 +421,69 @@ test("Graphics details can be retried after a failed load without changing the p
   loads.shift()(true); await tick();
   assert.equal(mounted, 1); assert.equal(nav.current(), "audio");
   assert.ok(!host.children.includes(retry));
+});
+
+test("a cold menu restores saved placement separately and loads the picker only on Appearance", async () => {
+  const placement = ["js/ui/screen-regions.js", "js/ui/screen-placement.js"];
+  const picker = "js/ui/appearance-arrangement-picker.js";
+  const modules = [...placement, picker];
+  for (const customized of [false, true]) {
+    const dom = makeDom();
+    const calls = [];
+    dom.document.getElementById = id => dom.document.querySelector("#" + id);
+    const context = vm.createContext({
+      window: {}, document: dom.document, location: { search: "" }, URLSearchParams,
+      queueMicrotask, requestAnimationFrame: fn => fn(), MutationObserver: class { observe() {} },
+      Log: { info() {}, warn() {} }, LayoutPresets: {},
+      GameStore: { store: { get: () => customized ? { v: 1, screens: {} } : null, subscribe() {} } },
+      ApexRoster: { LAZY_UI_PRESETS: modules, LAZY_UI_PRESETS_EDGES: [[placement[0], picker]] }
+    });
+    const loaded = new Set();
+    context.ScriptLoader = { create: () => ({ async load(files) {
+      calls.push(Array.from(files));
+      for (const file of files) if (!loaded.has(file)) {
+        vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), context, { filename: absSrc(file) });
+        loaded.add(file);
+      }
+      return true;
+    } }) };
+    vm.runInContext(source, context, { filename: absSrc("js/ui/settings-tabs.js") });
+    await tick();
+    for (const type of ["pointerdown", "keydown", "click"]) dom.document.dispatchEvent({ type, target: dom.body });
+    assert.deepEqual(calls, customized ? [placement] : []);
+    assert.equal(!!context.window.ScreenPlacement, customized);
+    assert.equal(context.window.AppearanceArrangementPicker, undefined);
+    const nav = context.SettingsNav.create(null, () => {});
+    nav.show("appearance", false);
+    await tick();
+    assert.deepEqual(calls.at(-1), modules);
+    assert.equal(typeof context.window.AppearanceArrangementPicker.attach, "function");
+    assert.ok(Object.keys(context.window.ScreenRegions).every(id => !!context.window.ScreenRegions[id].regions));
+    assert.equal(context.window.ScreenRegions[Symbol.for("apex.arrangementRoute")].acceptsDoor("select", "mb-practice"), true);
+    assert.equal(context.window.ScreenArranger, undefined);
+  }
+});
+
+test("Spotify's authenticated return loads only the placement and editor owners on a cold menu", async () => {
+  const { dom, ctx } = boot({ ensure: () => true });
+  const player = dom.byId("spotifypanel");
+  let resolve, requested;
+  const opened = [];
+  ctx.ScriptLoader = { create: () => ({ load(files) {
+    requested = Array.from(files);
+    return new Promise(done => { resolve = done; });
+  } }) };
+  const route = { reveal(id) { opened.push(id); } };
+  ctx.window.ScreenRegions = { [Symbol.for("apex.arrangementRoute")]: route };
+  player.hidden = true;
+  dom.document.dispatchEvent({type:"apex:spotify-arrange-return"});
+  player.hidden = false;
+  resolve(true); await tick();
+  assert.deepEqual(requested, ["js/ui/screen-regions.js", "js/ui/screen-placement.js", "js/ui/screen-arranger.js"]);
+  assert.deepEqual(opened, ["spotifypanel"]);
+  assert.equal(route.pending, "spotifypanel");
+  dom.document.dispatchEvent({type:"apex:spotify-arrange-return"});
+  player.hidden = true;
+  resolve(true); await tick();
+  assert.deepEqual(opened, ["spotifypanel"], "closing while the scripts load abandons the return");
 });

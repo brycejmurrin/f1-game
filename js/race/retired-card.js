@@ -1,8 +1,9 @@
 /* Solo post-finish shortcut. Use the pause menu’s handler for settlement. */
 var RetiredCard = (function () {
   "use strict";
+  if (RetiredCard) return RetiredCard; // HUD preview and race entry share the same card.
   const STALE_MS = 400;   // no tick for this long: not in a running race any more
-  let shown = false, lastTick = 0, watch = 0, title = null;
+  let shown = false, previewing = false, lastTick = 0, watch = 0, title = null;
 
   // The pure rule. A solo Grand Prix (not a room, not WATCH, not a lone lap)
   // whose player can leave the remaining field to the classification rules.
@@ -25,11 +26,13 @@ var RetiredCard = (function () {
     const sub = document.createElement("span"); sub.textContent = "The race runs on to the flag.";
     const btn = document.createElement("button"); btn.id = "retired-skip"; btn.type = "button"; btn.textContent = "SKIP TO RESULTS";
     btn.addEventListener("click", () => {
+      if (previewing || document.body.hasAttribute?.("data-hud-arrange")) return;
       const skip = document.getElementById("pm-skip-results");
       if (skip) skip.click();   // the pause menu's handler: one path to the results
     });
     card.append(title, sub, btn);
     document.body.appendChild(card);
+    if (typeof HudLayout !== "undefined") HudLayout.apply();
     return card;
   }
 
@@ -39,10 +42,22 @@ var RetiredCard = (function () {
     if (!card) return;
     if (on && title) title.textContent = finished ? "FINISHED" : "RETIRED";
     shown = on;
-    card.hidden = !on;
+    card.hidden = !on && !previewing;
     document.body.toggleAttribute("data-retired-wait", on);
     Log.info("ui", "RetiredCard " + (on ? "shown" : "hidden"));
     if (on) arm();
+  }
+
+  // A HUD editor sample uses the real button and its saved geometry. It
+  // never marks a live finish or hides the driving controls.
+  function preview(on) {
+    if (previewing === on) return;
+    const card = els();
+    if (!card) return;
+    previewing = on;
+    card.hidden = !(on || shown);
+    if (on && !shown) title.textContent = "FINISHED";
+    if (on) card.setAttribute("data-hl-arr", "");
   }
 
   function arm() {
@@ -70,6 +85,6 @@ var RetiredCard = (function () {
     tick(view);
   }
 
-  return { wanted, tick, tickG, hide: () => show(false), get shown() { return shown; } };
+  return { wanted, tick, tickG, preview, hide: () => show(false), get shown() { return shown; } };
 })();
 Object.freeze(RetiredCard);

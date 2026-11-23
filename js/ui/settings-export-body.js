@@ -1085,7 +1085,7 @@ function create(G) {
     return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
-  // #4798 gate (after SaveHealth's)
+  // #4798 Settings gate. The body mounts the health disclosure inside the Files page.
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => (typeof SettingsNav !== "undefined" && SettingsNav.lazy ? SettingsNav.lazy(mount) : mount()), { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");

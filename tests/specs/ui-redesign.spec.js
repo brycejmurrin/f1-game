@@ -1031,7 +1031,11 @@ test("settings offers concise throttle help and separate backup actions", async 
     }
   }
   }
-  const arrange = page.locator("#pmsettings").getByRole("button", { name: "Arrange this screen", exact: true });
+  await expect(page.locator("#pmsettings").getByRole("button", { name: "Arrange this screen", exact: true })).toHaveCount(0);
+  await page.click("#pm-settings-close");
+  await page.click("#pm-open-appearance");
+  await page.getByLabel("Screen to arrange").selectOption("pm-panel-files");
+  const arrange = page.locator(".arrange-route");
   await arrange.click();
   const editor = page.locator("#screen-arranger");
   await editor.getByRole("button", { name: "Controls", exact: true }).click();
@@ -1042,7 +1046,10 @@ test("settings offers concise throttle help and separate backup actions", async 
   await region.selectOption("settings-load");
   await expect(page.locator("#pm-settings-load")).toHaveText("LOAD SETTINGS FILE");
   await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(editor).toHaveCount(0);
   await expect(arrange).toBeFocused();
+  await page.click("#pm-settings-close");
+  await page.click("#pm-open-files");
   await expect(page.locator("#pm-files-show-share")).toHaveAttribute("aria-selected", "true");
   await page.locator("#pm-share-code-in").fill("harmless invalid fixture");
   await page.locator("#pm-share-code-import").click();

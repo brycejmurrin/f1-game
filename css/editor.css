@@ -796,9 +796,7 @@
 #trackdesigner[data-foot="in"] .td-foot [data-role="workspace-status"] { grid-column: 1 / -1; flex-wrap: wrap; }
 #trackdesigner[data-foot="in"] .td-foot .td-msg { display: block; flex-basis: 100%; overflow: visible; -webkit-line-clamp: unset; line-clamp: unset; }
 #trackdesigner[data-foot="in"] .td-foot .td-msg:empty { display: none; }
-/* The screen arranger's entry floats at the tucked foot's end, 9rem wide (css/screen-arranger.css). */
-#trackdesigner[data-foot="in"] .td-foot .td-msg { padding-inline-end: calc(9rem + var(--gap) / 2); }
-#trackdesigner[data-foot="in"] > .td-body { grid-row: 2; grid-column: 1; }   /* placed: the entry shares this cell */
+#trackdesigner[data-foot="in"] > .td-body { grid-row: 2; grid-column: 1; }
 #trackdesigner[data-foot="in"] .td-foot .sel-edit, #trackdesigner[data-foot="in"] .td-foot .sel-chip,
 #trackdesigner[data-foot="in"] .td-foot [data-role="file-menu"] > summary { padding-inline: calc(var(--gap) / 3); min-width: 0; }
 

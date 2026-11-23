@@ -547,6 +547,7 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
   const SKIP = {
     overlay: "title page is role=main (pinned below), not a region-over-itself",
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
+    "ceremony-podium": "the built podium is checked by podium-beat.test.mjs",
     "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
     // Pre-race plate: role=status (not region/dialog); named via aria-label.
     loading: "status plate — announces once, not a navigable region",
@@ -592,6 +593,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   const NO_DOOR = { overlay: "the title has nothing to go back to", "rotate-device": "CSS-gated blocker; Escape falls through to pause" };
   assert.ok(loadLayerIds().includes("loading"), "#loading is in UiLayers.LAYER_IDS so Escape/anyOpen see it");
   for (const id of loadLayerIds()) {
+    if (id === "ceremony-podium") continue;   // podium-beat.test.mjs checks the rendered Continue door
     if (id === "screen-arranger") continue;   // the live dialog's door: appearance-orientation.spec.js
     if (id === "hud-arrange-bar") {
       assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
@@ -682,6 +684,7 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
     "rotate-device": "CSS-gated, never toggled by `hidden`; two buttons, no scroll region, no selected state",
     "photo-controls": "no scroll region; its buttons are actions, none carries a selected class",
     "screen-arranger": "mounted on demand, native overflow and native region and step selects",
+    "ceremony-podium": "dynamic story and Continue action; no scroll pane or selectable chips",
     "hud-arrange-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
     loading: "status plate — no scroll region, no selected chips",
   };

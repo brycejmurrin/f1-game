@@ -729,6 +729,15 @@ for (const device of [
       await press("#pm-settings-close");
       await sessionPage("pm-review");
       await expect(page.locator("#pm-coach-summary")).toContainText(/no tips|0 tips/i);
+      const trace = page.locator('#pm-driving-trace');
+      await expect(trace).toBeHidden();
+      await press('#pm-technical-data > summary');
+      await expect(trace).toBeVisible();
+      await trace.scrollIntoViewIfNeeded();
+      const fits = await trace.evaluate(e => e.scrollWidth <= e.clientWidth + 1 && e.scrollHeight <= e.clientHeight + 1);
+      expect(fits).toBe(true);
+      await press('#pm-technical-data > summary');
+      await expect(trace).toBeHidden();
       await press("#pm-settings-close");
       await expect(page.locator("#pausemenu")).toBeVisible();
       await press("#pm-howto");
@@ -798,73 +807,35 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
           const zoom=sheet.currentCSSZoom || 1;
           const focusables=[...e.querySelectorAll('select,button,summary,a[href]')].filter(n => n.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
           const overflow=focusables.filter(n => { const b=n.getBoundingClientRect(); return b.left < pr.left-1 || b.right > pr.right+1; })
-            // The arranger's door sits after the sheet, not in its pane (css/screen-arranger.css): held to the viewport below.
-            .filter(n=>!n.closest('.sheet-foot') && !n.classList.contains('screen-arrange-entry')).map(n=>n.id || n.tagName);
-          const offscreen=focusables.filter(n=>n.classList.contains('screen-arrange-entry')).filter(n => { const b=n.getBoundingClientRect(); return b.left < -1 || b.right > innerWidth+1 || b.top < -1 || b.bottom > innerHeight+1; }).map(n=>n.id);
+            .filter(n=>!n.closest('.sheet-foot')).map(n=>n.id || n.tagName);
           return { root:selector,zoom,shape:sheet.dataset.shape,density:sheet.dataset.density,
             sheet:{x:r.x,y:r.y,w:r.width,h:r.height},paneHeight:pr.height,
             shortHelpChips:selector === '#howtoplay' && sheet.dataset.density === 'compact'
               ? [...e.querySelectorAll('#htp-contents a')].filter(n=>n.getBoundingClientRect().height<43.5).map(n=>n.textContent) : [],
             smallTargets:focusables.filter(n=>{const b=n.getBoundingClientRect();return b.width<23.5||b.height<23.5;}).map(n=>n.id||n.tagName),
-            overflow,offscreen,docOverflow:document.documentElement.scrollWidth-innerWidth,
+            overflow,docOverflow:document.documentElement.scrollWidth-innerWidth,
             paneOverflow:pane.scrollWidth-pane.clientWidth };
         },root);
         rows.push({pct,...await measure('#pmsettings')});
         const m=rows[rows.length-1];
         expect(m.smallTargets).toEqual([]);
         expect(m.overflow,`${device.name} at ${pct}%`).toEqual([]);
-        expect(m.offscreen,`${device.name} at ${pct}%: the arrange door on screen`).toEqual([]);
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});
-        // Search retains access to unavailable session controls from title,
-        // where their disabled state and explanation still need to fit.
         await press('#pm-settings-close');
-        const searchPage = async id => {
-          await page.getByRole('searchbox', {name:'Find a setting'}).fill(id);
-          await press('[data-setting-result="'+id+'"]');
-        };
-        for (const [id, route] of [['pm-practice-panel','practice'],['pm-pit-panel','strategy']]) {
-          await searchPage(route);
-          await expect(page.locator('#'+id)).toHaveAttribute('open','');
-          if (id === 'pm-practice-panel') {
-            await expect(page.locator('#pm-practice-set')).toBeVisible();
-            await expect(page.locator('#pm-practice-set')).toBeDisabled();
-            // NOT the exact wording. This is a LAYOUT cell — the assertions here
-            // exist so an overflow measurement cannot pass on hidden content —
-            // and the sentence itself belongs to the practice feature, which
-            // rewrote it when checkpoints stopped being Time-Trial-only ("solo
-            // Time Trial" became "a Time Trial, or … armed for practice"). What
-            // this test needs is that the DISABLED case still explains itself,
-            // so match the branch, not the prose.
-            await expect(page.locator('#pm-practice-state')).toContainText(/checkpoints are available/i);
-            await page.locator('#pm-practice-state').scrollIntoViewIfNeeded();
-          } else {
-            await expect(page.locator('#pm-pit-choice-sel')).toBeVisible();
-            await expect(page.locator('#pm-pit-choice-sel')).toBeDisabled();
-            await page.locator('#pm-pit-help').scrollIntoViewIfNeeded();
-          }
-          const expanded=await measure('#pmsettings');
-          expect(expanded.overflow,`${id} at ${pct}%`).toEqual([]);
-          expect(expanded.smallTargets,`${id} at ${pct}%`).toEqual([]);
-          expect(expanded.paneOverflow).toBeLessThanOrEqual(1);
-          await press('#pm-settings-close');
-          await expect(page.locator('#pm-settings-index')).toBeVisible();
+        const search = page.getByRole('searchbox', {name:'Find a setting'});
+        for (const route of ['practice', 'strategy', 'review']) {
+          await search.fill(route);
+          await press('[data-setting-result="'+route+'"]');
+          await expect(page.locator('[data-settings-search] [role="status"]')).toContainText(/pause during a session/i);
+          await expect(page.locator('#pm-panel-'+route)).toBeHidden();
+          await expect(search).toBeVisible();
+          const results = await measure('#pmsettings');
+          expect(results.overflow, route+' at '+pct+'%').toEqual([]);
+          expect(results.smallTargets, route+' at '+pct+'%').toEqual([]);
+          expect(results.paneOverflow).toBeLessThanOrEqual(1);
         }
-        await searchPage('review');
-        await expect(page.locator('#pm-coach-summary')).toContainText(/no tips|0 tips/i);
-        await expect(page.locator('#pm-session-review')).toHaveAttribute('open','');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await expect(page.locator('#pm-technical-data')).not.toHaveAttribute('open','');
-        await press('#pm-technical-data > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeVisible();
-        await page.locator('#pm-driving-trace').scrollIntoViewIfNeeded();
-        const action=await page.locator('#pm-driving-trace').evaluate(e=>({w:e.clientWidth,sw:e.scrollWidth,h:e.clientHeight,sh:e.scrollHeight}));
-        expect(action.sw).toBeLessThanOrEqual(action.w+1); expect(action.sh).toBeLessThanOrEqual(action.h+1);
-        await press('#pm-technical-data > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await press('#pm-settings-close');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
         await page.getByRole('searchbox', {name:'Find a setting'}).fill(''); await expect(page.locator('#pm-settings-index')).toBeVisible();
         await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden();
         // phone-browser-landscape + UI SIZE 200%: #mb-help can resolve while its

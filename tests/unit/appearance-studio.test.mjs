@@ -871,8 +871,9 @@ test("the real picker scopes profile apply and reset to Results, shared popup st
   panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   const screen = width => ({ portrait: { panel: { width } } });
   const layouts = width => ({ v: 1, screens: { results: screen(width), "home-style": screen(width + 2), "pm-panel-graphics": screen(width + 4) } });
-  const { studio, values } = load({ screenPlacement: layouts(60), lookPopups: { dim: "solid" }, homeScene: "garage" }, true, false, doc, {
-    SettingsExport: { normalizePlacement: value => value }
+  const touch = { dockLayout: { buttons: { gap: 32 } }, hudBtnShape: "square", hudBtnScale: 140, hudBtnOpacity: 70 };
+  const { studio, values } = load({ ...touch, screenPlacement: layouts(60), lookPopups: { dim: "solid" }, homeScene: "garage" }, true, false, doc, {
+    DockLayout: { normalize: value => value }, SettingsExport: { normalizePlacement: value => value }
   });
   studio.saveProfile("Earlier arrangements");
   studio.applySnapshot({ ...studio.snapshot(), screenPlacement: layouts(70), lookPopups: { dim: "glass" }, homeScene: "night" });
@@ -888,16 +889,49 @@ test("the real picker scopes profile apply and reset to Results, shared popup st
     }
     return el;
   };
-  const registry = fs.readFileSync(absSrc("js/ui/screen-regions.js"), "utf8");
-  vm.runInNewContext(registry, {
-    window: {}, document: doc, location: { search: "" }, URLSearchParams, queueMicrotask: fn => fn(),
+  let racing = false;
+  const pickerContext = vm.createContext({
+    window: { UiLayers: { inRace: () => racing } }, document: doc, location: { search: "" }, URLSearchParams, queueMicrotask: fn => fn(),
     MutationObserver: class { observe() {} }, CustomEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
     Option: function (text, value) { return Object.assign(create("option"), { text, value }); }
-  }, { filename: absSrc("js/ui/screen-regions.js") });
-  const picker = panel.querySelector('[aria-label="Screen to arrange"]');
+  });
+  for (const file of ["js/ui/screen-regions.js", "js/ui/appearance-arrangement-picker.js"]) {
+    vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), pickerContext, { filename: absSrc(file) });
+  }
+  const picker = panel.querySelector("#appearance-arrange-screen");
+  assert.equal(panel.querySelector("#appearance-studio").firstChild.id, "appearance-arrange");
+  assert.equal(picker.parentElement.querySelector("label").htmlFor, picker.id);
   const button = text => panel.querySelectorAll("button").find(el => el.textContent === text);
   const pick = id => { picker.value = id; dom.dispatch(picker, { type: "change" }); };
+  const hint = panel.querySelector("#appearance-arrange-help");
+  pick("hud");
+  assert.equal(hint.textContent, "Preview the race HUD with sample readouts. Apply or Cancel returns to Appearance.");
+  pick("touch-controls");
+  assert.equal(button("Arrange Touch controls").disabled, true);
+  racing = true;
+  const brake = dom.byId("btn-brake");
+  brake.hidden = true;
+  pick("touch-controls");
+  assert.equal(button("Arrange Touch controls").disabled, true);
+  brake.hidden = false;
+  let dockOpens = 0;
+  dom.byId("pm-dock-reposition").onclick = () => { dockOpens++; };
+  pick("touch-controls");
+  button("Arrange Touch controls").click();
+  assert.equal(dockOpens, 1);
+  racing = false;
   button("THIS SCREEN").click();
+  const tiles = panel.querySelectorAll("button").filter(el => el.dataset.preset);
+  assert.ok(tiles.length && tiles.every(el => el.disabled));
+  assert.equal(studio.applyPreset("paddock", "screen"), false);
+  pick("hud");
+  button("RESET SCOPE").click();
+  for (const [key, value] of Object.entries(touch)) assert.deepEqual(plain(values[key]), value);
+  pick("touch-controls");
+  button("RESET SCOPE").click();
+  for (const key of Object.keys(touch)) assert.equal(values[key], null);
+  button("APPLY PROFILE").click();
+  for (const [key, value] of Object.entries(touch)) assert.deepEqual(plain(values[key]), value);
   pick("results");
   button("APPLY PROFILE").click();
   assert.deepEqual(plain(values.screenPlacement.screens), { ...layouts(70).screens, results: screen(60) });

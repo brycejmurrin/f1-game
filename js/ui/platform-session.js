@@ -252,6 +252,12 @@ function wirePhone() {
       (panel ||= PhonePairingUI.create(G, setPaused, () => loading)).start();
     });
   };
+  if (typeof location !== "undefined" && new URLSearchParams(location.search).get("settings") === "appearance") {
+    const url = new URL(location.href);
+    url.searchParams.delete("settings");
+    history.replaceState(history.state, "", url.href);
+    queueMicrotask(() => openSettingsPage("appearance"));
+  }
   $("mb-steerphone").onclick = () => { openSettingsPage("controls"); if (!active()) button.onclick(); };
 }
 

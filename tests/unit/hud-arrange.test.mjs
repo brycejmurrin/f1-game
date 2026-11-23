@@ -209,6 +209,7 @@ function editor(pieceId = "piece", options = {}) {
     screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   const ctx = { document: doc, window: viewport,
+    RetiredCard: options.previewFinish && { preview: on => options.previewFinish(on, ids) },
     HudElements: elements,
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
     requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
@@ -557,6 +558,21 @@ test('editor: first cleared-map edits adopt its painted origin on the whole-perc
   }
 });
 
+test("a second touch on the race surface resizes a small HUD piece", () => {
+  const e = editor("sectors");
+  e.api.setEditing(true);
+  e.fire("pointerdown", { pointerType: "touch" });
+  e.fire("pointerdown", { pointerType: "touch", pointerId: 2, clientX: 200, target: e.ids.get("hud") });
+  e.fire("pointermove", { pointerId: 2, clientX: 250 });
+  e.tick();
+  assert.equal(e.get("sectors").s, 150);
+  e.fire("pointerup", { pointerId: 2 });
+  e.fire("pointermove", { clientX: 110 });
+  e.tick();
+  assert.equal(e.get("sectors").s, 150);
+  assert.ok(e.get("sectors").x > 0);
+});
+
 test('editor: explicit custom maps never adopt stale automatic clearance', () => {
   const e=editor('map',{snap:true}),map=e.ids.get('map');
   map.setAttribute('data-hl-user','');map.setAttribute('data-hl-v4','');map.style.setProperty('--hud-clear-x','117px');
@@ -825,4 +841,17 @@ test("HUD panel metric selection changes only the chosen dimension and keeps too
   assert.deepEqual(e.get("rel"), {x:0, y:0, s:100, width:21, minHeight:11, textSize:105});
   button("move").onclick();
   assert.equal(metric.hidden, true);
+});
+
+test("selecting the finish card shows its sample and Cancel hides it again", () => {
+  const e = editor("finish", { hidden: true, previewFinish(on, ids) { ids.get("finish").hidden = !on; } });
+  e.api.setEditing(true);
+  const selector = e.ids.get("hud-arrange-element");
+  assert.ok(selector.children.some(option => option.value === "finish"));
+  assert.equal(e.ids.get("finish").hidden, true);
+  selector.value = "finish";
+  selector.onchange();
+  assert.equal(e.ids.get("finish").hidden, false);
+  e.api.setEditing(false, true, false);
+  assert.equal(e.ids.get("finish").hidden, true);
 });

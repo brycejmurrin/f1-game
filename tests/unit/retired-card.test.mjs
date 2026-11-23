@@ -118,3 +118,22 @@ test("ordinary racing leaves the retirement controls unmounted until needed", ()
   RC.tick(v);
   assert.equal(dom.nodes["retired-card"].hidden, false);
 });
+
+test("HUD preview edits the actual finish card without claiming a race finish or settling one", () => {
+  const dom = fakeDom(), { RC } = load(dom);
+  RC.preview(true);
+  const card = dom.nodes["retired-card"];
+  assert.equal(card.hidden, false);
+  assert.equal(card.children[0].textContent, "FINISHED");
+  assert.equal(RC.shown, false);
+  assert.equal(dom.attrs.has("data-retired-wait"), false);
+  dom.nodes["retired-skip"].listeners.click();
+  assert.equal(dom.nodes["pm-skip-results"].clicks, 0);
+  RC.preview(false);
+  assert.equal(card.hidden, true);
+  RC.tick(view());
+  assert.equal(card.hidden, false);
+  assert.equal(card.children[0].textContent, "RETIRED");
+  dom.nodes["retired-skip"].listeners.click();
+  assert.equal(dom.nodes["pm-skip-results"].clicks, 1);
+});

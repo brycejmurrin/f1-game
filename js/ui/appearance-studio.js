@@ -33,7 +33,8 @@ const AppearanceStudio = (function () {
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleButtonStyle", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
     pause: ["lookPause", "pauseLayout", "pauseSide", "pauseDim"], datahub: ["lookDatahub"], select: ["lookSelect"],
     career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
-    hud: ["hudLayout", "dockLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnShape", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    hud: ["hudLayout", "hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    "touch-controls": ["dockLayout", "hudBtnScale", "hudBtnShape", "hudBtnOpacity"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
@@ -115,7 +116,10 @@ const AppearanceStudio = (function () {
   function ensureBody() {
     if (takeBody()) return Promise.resolve(true);
     if (_load) return _load;
-    if (typeof ScriptLoader === "undefined") return Promise.resolve(false);
+    if (typeof ScriptLoader === "undefined") {
+      Log.warn("ui", "appearance studio body is not in this build");
+      return Promise.resolve(false);
+    }
     const presets = typeof SettingsNav !== "undefined" && SettingsNav.presets ? SettingsNav.presets() : null;
     _load = Promise.all([ScriptLoader.create().load(["js/ui/appearance-studio-ui.js"], [], { strict: true }), presets]).then(() => {
       if (!takeBody()) { _load = null; Log.warn("ui", "appearance studio body did not load"); return false; }
@@ -197,7 +201,7 @@ const AppearanceStudio = (function () {
     if (takeBody()) { run(); return; }
     // Do not re-enter SettingsNav.lazy: this initUI is often already the gated
     // callback (#4798), and a second lazy() after flush would never run.
-    ensureBody().then((ok) => { if (ok) run(); });
+    return ensureBody().then((ok) => { if (ok) run(); });
   }
   function setPreviewFrame(url) {
     const b = takeBody();

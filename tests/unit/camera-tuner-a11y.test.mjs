@@ -54,6 +54,17 @@ test("camera tuner readout displays every digit of a framing step", () => {
   }
 });
 
+test("camera tabs that switch the live driving view stay out of arrangement browsing", () => {
+  const { dom, G } = bootPanel();
+  const tabs = [...dom.byId("ct-modes").children];
+  assert.ok(tabs.length >= 2);
+  const selected = [];
+  G.setCamMode = mode => { G.camMode = mode; selected.push(mode); };
+  for (const tab of tabs) assert.equal(tab.dataset.arrangeBrowse, "false");
+  dom.dispatch(tabs[1], { type: "click" });
+  assert.deepEqual(selected, [1]);
+});
+
 test("camera tuner scope buttons expose exactly one aria-pressed after every click", () => {
   const { dom } = bootPanel();
   const btns = dom.byId("ct-scope").children.filter((c) => c.tagName === "BUTTON");
