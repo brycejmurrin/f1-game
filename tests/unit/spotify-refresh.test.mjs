@@ -50,7 +50,7 @@ function load(fetchImpl, opts = {}) {
   };
   const sandbox = {
     console, Promise, Date, Math, JSON, Object, Array, String, Number,
-    URL, URLSearchParams, TextEncoder, Uint8Array, Response,
+    URL, URLSearchParams, TextEncoder, Uint8Array, Response, CustomEvent,
     fetch: fetchImpl,
     setTimeout: (fn) => pending.push(fn),
     clearTimeout: (id) => { if (id > 0) pending[id - 1] = null; },
@@ -67,6 +67,7 @@ function load(fetchImpl, opts = {}) {
         return opts.dom && (opts.dom === "art" || id === "sp-search" || id === "sp-fwd") ? element(id) : null;
       },
       addEventListener() {},
+      dispatchEvent(event) { opts.events?.push(event.type); },
       createElement(tag) {
         if (tag === "script") {
           const script = { onerror: null, src: "" };
@@ -873,4 +874,23 @@ test("an authentication_error check with a clean account reports the player refu
     "playback permission check out. Usually the app is not enabled for the Web Playback SDK, or its owner has no " +
     "active Premium (Spotify requires it for apps in Development Mode). Fix that in the dashboard, then press CONNECT.",
     "the player refusal, never \"Account OK\"");
+});
+
+test("an OAuth arrangement intent belongs to its sign-in state and first player opening", async () => {
+  for (const [intent, leave, expected] of [["st-1", false, 1], ["old-state", false, 0], ["st-1", true, 0]]) {
+    const events = [];
+    let onLeave;
+    const { SpotifyMusic, session } = load(noStreaming([]), {
+      search: "?code=auth-code&state=st-1",
+      session: [["apex26.spotify.verifier", "v-1"], ["apex26.spotify.state", "st-1"], ["apex26.spotify.arrangeState", intent]],
+      globals: { SettingsNav: { onLeave(fn) { onLeave = fn; } } },
+      events
+    });
+    await settle();
+    assert.equal(session.has("apex26.spotify.arrangeState"), false);
+    if (leave) onLeave("audio");
+    SpotifyMusic.openPanel();
+    SpotifyMusic.openPanel();
+    assert.equal(events.filter(type => type === "apex:spotify-arrange-return").length, expected);
+  }
 });

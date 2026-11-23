@@ -25,7 +25,7 @@ window.ScreenRegions = (function () {
     display: parts("pm-", { "hud-details": "HUD settings", hudprofile: "HUD profile", hudmetrics: "Metrics layout", hudmap: "Map", hudmirror: "Mirror", "hud-sample": "HUD preview" }),
     graphics: parts("pm-", { "display-adv": "Renderer settings", res: "Resolution", fullscreen: "Fullscreen", upscale: "Upscaling", "graphics-details-body": "Individual effects" }),
     appearance: { studio: part("#appearance-studio", "Appearance Studio"), ...parts("pm-", { "appearance-menu": "Menu colours", "appearance-hud": "HUD colours", general: "Readability" }),
-      presets: part('[data-as="preset-list"]', "Appearance presets"), scope: part('[data-as="preview-side"]', "Preview and screen picker") },
+      presets: part('[data-as="preset-list"]', "Appearance presets"), scope: part('[data-as="preview-side"]', "Appearance preview"), picker: part("#appearance-arrange", "Screen to arrange") },
     a11y: parts("pm-", { motion: "Reduced motion", focus: "Keyboard focus", cbcues: "Colourblind cues", "hold-throttle": "Gas input", "hold-lookback": "Look back input" }),
     advanced: { pace: part("label[for=pm-pace]", "Overall speed"), more: part("#adv-details", "Advanced handling"), ...parts("pm-", { "tiltdeg-jump": "Tilt setup", "line-jump": "Steer assist" }) },
     audio: parts("as-", { "music-details": "Music", "sound-details": "Sound effects", "radio-details": "Team radio", "ann-details": "Announcers", "engine-details": "Engine" }),
@@ -90,7 +90,7 @@ window.ScreenRegions = (function () {
     heading, content, actions, presets: part("#rs-presets", "Preset buttons"),
     ...parts("rs-preset-", { quick: "Quick race", weekend: "Full weekend", endurance: "Endurance" }),
     ...parts("rs-", { laps: "Laps", weather: "Weather", mixed: "Conditions", time: "Time of day",
-      "fold-field": "Field settings", "fold-assists": "Assists and wear", diff: "Difficulty", quali: "Grid", duel: "Duel",
+      "fold-field": "Field settings", "fold-assists": "Assists and wear", diff: "Difficulty", aipace: "AI pace", quali: "Grid", duel: "Duel",
       caution: "Cautions", reliab: "Reliability", line: "Driving line", tyres: "Tyre wear", dirty: "Dirty air", plan: "Strategy" }),
     back: part("#rs-cancel", "Back"), start: part("#rs-go", "Start race"),
   });
@@ -100,7 +100,7 @@ window.ScreenRegions = (function () {
   };
   // Each row already has stable IDs even when the lap choices or the session flow changes.
   const raceRegions = screens["race-settings"].regions;
-  for (const row of ["laps", "weather", "mixed", "time", "diff", "quali", "caution", "reliab", "line", "tyres", "dirty", "plan"]) {
+  for (const row of ["laps", "weather", "mixed", "time", "diff", "aipace", "quali", "caution", "reliab", "line", "tyres", "dirty", "plan"]) {
     for (const [suffix, label] of [["prev", "Previous"], ["sel", "Value"], ["next", "Next"]]) {
       const id = row + "-" + suffix;
       raceRegions[id] = part("#rs-" + id, raceRegions[row].label + " · " + label);
@@ -131,7 +131,7 @@ window.ScreenRegions = (function () {
     timingSort: part(".dh-sorts", "Timing order"), liveClass: part(".dh-class-rows", "Live classification"), weather: part(".dh-weather", "Session weather"),
     selectedDrivers: part('[data-hub-part="lanes"]', "Selected telemetry drivers"), loadTraces: part('[data-hub-part="traces"]', "Open telemetry"),
     replayControls: part('[data-hub-part="replay"]', "Race replay controls"), lapList: part('[data-hub-part="lap-list"]', "Lap by lap"),
-    lapBoard: part(".dh-lap-board .dh-table", "Selected lap classification"),
+    lapBoard: part('[data-hub-part="selected-lap"] .dh-table', "Selected lap classification"),
   });
   screen("telemetry-detail", "Telemetry detail", {
     heading: part(".dh-tpopup-hdr", "Drivers and session"), traces: part(".dh-tpopup-body", "Telemetry detail panel"),
@@ -153,6 +153,8 @@ window.ScreenRegions = (function () {
     design: part("#td-pane-design", "Design inspector"), library: part("#td-pane-library", "Circuit library"),
     help: part("#td-pane-howto", "Designer guide"), actions: part(".td-foot", "Circuit actions"),
     files: part('[data-role="file-menu"]', "Share and files"), status: part('[data-role="workspace-status"]', "Checks and status") });
+  screen("td-label-ask", "Track Designer · Same circuit", { heading, content, actions,
+    keep: part("#td-label-keep", "Keep mine"), replace: part("#td-label-theirs", "Use theirs") });
   // The guide belongs to the export crop. Only the UI in front of it moves.
   screen("photo-studio", "Photo Studio", { panel: part("#ps-panel", "Studio panel"), ...parts("ps-group-", { subject: "Subject", car: "Car placement", conditions: "Time and weather", line: "Driving line",
       garage: "Garage lighting", lighting: "Photo lighting", composition: "Composition", photo: "Your photo" }),
@@ -215,15 +217,26 @@ window.ScreenRegions = (function () {
   }));
   Object.assign(tunerRegions.flyby, parts("fb-row-", { dur: "Shot duration", ease: "Shot easing", fov0: "Starting field of view", fov1: "Ending field of view" }),
     parts("fb-", { "ann-script": "Announcer script", "ann-play": "Play announcement" }));
+  const workspaceTools = { tools: part("details.ew-tools", "Scope and tools"),
+    editorActions: part('[role="group"][aria-label="Editor actions"]', "Editor actions") };
   for (const [id, label, prefix] of [
     ["lighting", "Lighting", "lt"], ["camtune", "Camera tuning", "ct"], ["flyby", "Flyby", "fb"],
     ["freecam", "Free camera", "fc"], ["garrival", "Garage arrival", "ga"],
   ]) {
     screen(id, label, { window: part("#" + id + "-inner", "Whole window"), heading: part(id === "freecam" ? "#fc-head" : ".ew-toolbar", "Toolbar"),
-    content: part("#" + prefix + "-rows", "Controls"), actions, tools: part("details.ew-tools", "Scope and tools"),
-    editorActions: part('[role="group"][aria-label="Editor actions"]', "Editor actions"), ...tunerRegions[id] });
+    content: part("#" + prefix + "-rows", "Controls"), actions,
+    ...(id === "freecam" ? {} : workspaceTools), ...tunerRegions[id] });
     screens[id].tuner = true;
   }
+
+  for (const [id, hint] of Object.entries({
+    "photo-studio": "Choose a subject, then capture or import a photo to arrange its preview.",
+    lighting: "Open a lighting category, or choose Copy values to show the exported lighting values.",
+    camtune: "Choose the camera and editing scope, or choose Copy values to show the exported camera values.",
+    flyby: "Select a shot, or choose Copy values to show the exported shot list.",
+    freecam: "Choose Copy view to show the camera text.",
+    garrival: "Play a preview and pause it to arrange its playback controls.",
+  })) screens[id].prepareHint = hint;
 
   // TitleLayout already owns the title's placement, group width and scale.
   const homePart = (selector, label) => ({
@@ -250,274 +263,58 @@ window.ScreenRegions = (function () {
   screen("broadcast", "Broadcast overlay", { tower: part(".ov-tower", "Timing tower"), sectors: part(".ov-sectors", "Sector times"),
     battle: part(".ov-battle", "Battle"), caption: part(".ov-caption", "Caption") }, "main#overlay");
 
-  // Appearance keeps its illustrative preview. This button uses the same
-  // launchers a player would press, so their Career slot or race stays theirs.
-  const previewTargets = { garage: "carsetup", race: "race-settings", pause: "pausemenu" };
-  const launchers = { career: "mb-career", carsetup: "mb-garage", select: "mb-race", datahub: "mb-data", "telemetry-detail": "mb-data",
-    "race-settings": "mb-race", "track-detail": "mb-race", "duel-picker": "mb-race", quali: "mb-race", teampicker: "mb-garage", "season-setup": "mb-season",
-    trackdesigner: "mb-designer", "photo-studio": "mb-photo", watch: "mb-watch", vsfriend: "mb-vs", howtoplay: "mb-help" };
-  const flybyDoor = () => document.getElementById("pm-flyby");
-  const visualDoors = {
-    lighting: () => document.getElementById("pm-lighting"),
-    camtune: () => document.getElementById("pm-camtune"),
-    garrival: () => document.getElementById("pm-garrival"),
-    flyby: flybyDoor, freecam: flybyDoor, "photo-controls": flybyDoor,
-  };
-  const separatePages = { pair: "controller.html", menupad: "controller.html", wheel: "controller.html", broadcast: "overlay.html" };
-  let pending;
-  const reentry = new WeakMap();
-  // Screens with tabs, folds or multiple steps can expose different regions
-  // after the first edit. Keep a way back while this screen remains open.
-  function addReentry(id, root) {
-    if (reentry.has(root) || root.hidden) return;
-    const door = document.createElement("button");
-    door.type = "button";
-    door.textContent = "Arrange again";
-    door.onclick = () => window.ScreenArranger.open(id, door);
-    root.querySelector(".sheet-head").appendChild(door);
-    reentry.set(root, door);
-  }
+  // The standalone controller and broadcast pages use these routes without loading Appearance.
+  const navigation = { pending: null, prepare: false, start: startEditor, reveal: tryPending,
+    acceptsDoor: /** @type {((target: string, door: string) => boolean) | null} */ (null) };
+  // A symbol cannot collide with a saved region ID, including a malformed import.
+  Object.defineProperty(screens, Symbol.for("apex.arrangementRoute"), { value: navigation });
+  let controllerOrientation;
   function tryPending(id) {
-    if (pending !== id) return;
+    if (navigation.pending !== id || (id === "menupad" && controllerOrientation?.matches)) return;
     const root = document.querySelector(screens[id].root);
     if (!root || root.hidden || root.tagName === "DIALOG" && !root.open || !root.getClientRects().length) return;
     const focus = Array.from(root.querySelectorAll("button:enabled")).find(el => el.getClientRects().length);
-    if (window.ScreenArranger?.open(id, focus || root)) {
-      pending = null;
-      if (["race-settings", "vsfriend"].includes(id)) addReentry(id, root);
+    if (startEditor(id, focus || root)) {
+      navigation.pending = null;
     }
   }
-  function attachPicker(host) {
-    const preview = host.querySelector('[data-as="preview"]');
-    if (!preview || host.querySelector(".arrange-route")) return;
-    const note = host.querySelector('[data-as="note"]');
-    const target = document.createElement("select");
-    target.setAttribute("aria-label", "Screen to arrange");
-    target.add(new Option("Home", "home"));
-    target.add(new Option("Race HUD", "hud"));
-    for (const [id, def] of Object.entries(screens)) {
-      target.add(new Option(def.label, id));
-    }
-    target.add(new Option("Shared popup style", "popups"));
-    target.add(new Option("Phone wheel", "wheel"));
-    const go = document.createElement("button");
-    go.type = "button";
-    go.className = "arrange-route";
-    host.append(target, go);
-    const atHome = () => document.getElementById("overlay")?.hidden === false && !window.UiLayers?.inRace();
-    function describe() {
-      const id = target.value;
-      const label = target.selectedOptions[0].text;
-      host.dispatchEvent(new CustomEvent("apex:arrangement-target", {detail: {id, label}}));
-      go.textContent = id === "popups" ? "Edit shared popup style" : "Arrange " + label;
-      go.disabled = (id === "home" || id === "home-style") && !atHome();
-      if ((id === "datahub" || id === "telemetry-detail") && !atHome()) {
-        go.disabled = true;
-        note.textContent = "Open Data Hub from Home. Its header and the telemetry detail window each have an Arrange button.";
-        return;
-      }
-      if (id === "campicker" && atHome()) {
-        go.disabled = true;
-        note.textContent = "During a race, hold or right-click the camera button and choose Arrange this screen.";
-        return;
-      }
-      if (visualDoors[id]?.()?.disabled) {
-        go.disabled = !atHome();
-        if (!go.disabled) go.textContent = "Choose a circuit for " + label;
-        note.textContent = "Start a race, then open Pause → Settings → Visual Studio. Choose the tuner and select Arrange this screen.";
-        return;
-      }
-      if (screens[id]?.settingsPage && typeof SettingsNav !== "undefined" && SettingsNav.routes[screens[id].settingsPage]?.scope === "session" && atHome()) {
-        go.disabled = true;
-        note.textContent = "Pause during a session to arrange " + label + ".";
-        return;
-      }
-      note.textContent = id === "telemetry-detail" ? "In Data Hub’s Telemetry tab, choose a session and a driver, then open their fastest-lap trace." : go.disabled ? "Open Appearance from Home to arrange Home." :
-        atHome() && id === "duel-picker" ? "Continue from the circuit list to Race Settings, open Field, and choose your duel rival." :
-        atHome() && id === "teampicker" ? "Select the team card in the Garage to arrange the team picker." :
-        atHome() && id === "quali" ? "In Race Settings, choose a qualifying grid, then start to arrange the qualifying sheet." :
-        id === "freecam" || id === "photo-controls" ? "Choose Free Camera in the Flyby editor to open these controls." :
-        id === "bench" ? "Open the Benchmark dialog from Graphics to arrange its test choices and results." :
-        id === "campicker" ? "During a race, hold or right-click the camera button and choose Arrange this screen." :
-        id === "pausemenu" ? "Edit the Pause menu. Apply or Cancel returns to Appearance." :
-        id === "popups" ? "Shared appearance for popup sheets. Choose Results to arrange its individual regions." :
-        id === "home-style" ? "Edit the title menu’s text and button dimensions." :
-        id === "home" || id === "hud" || id === "pmsettings" ? "" :
-        "The editor opens when " + label + " is on screen.";
-    }
-    let lastPreview;
-    function refresh() {
-      const key = preview.dataset.screen || "home";
-      if (key === lastPreview) return;
-      lastPreview = key;
-      target.value = previewTargets[key] || key;
-      if (!target.value) target.value = "home";
-      describe();
-    }
-    target.addEventListener("change", describe);
-    go.addEventListener("click", async () => {
-      pending = null;
-      const id = target.value;
-      if (id === "popups") {
-        const fold = document.getElementById("pm-look-popups");
-        if (fold) {
-          for (let el = fold; el; el = el.parentElement) if (el.tagName === "DETAILS") el.open = true;
-          fold.querySelector("summary")?.focus();
-        }
-        return;
-      }
-      if (id === "hud") { document.getElementById("pm-hud-arrange")?.click(); return; }
-      const settings = document.getElementById("pmsettings");
-      if (separatePages[id]) {
-        const url = new URL(separatePages[id], location.href);
-        url.searchParams.set("arrange", id);
-        if (id === "menupad" || id === "wheel") url.searchParams.set("demo", id === "menupad" ? "menu" : "wheel");
-        window.open(url, "_blank", "noopener");
-        return;
-      }
-      const fromHome = atHome();
-      const chooseCircuit = fromHome && visualDoors[id]?.()?.disabled;
-      if (id !== "home" && !chooseCircuit && !window.ScreenArranger) {
-        go.disabled = true;
-        try {
-          await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
-        } catch { /* Keep the picker available for retry. */ }
-        describe();
-        if (!window.ScreenArranger) { note.textContent = "Layout editor could not load. Try again."; return; }
-        if (target.value !== id || !go.getClientRects().length) return;
-      }
-      if (id === "pausemenu") {
-        // Keep the Appearance navigation stack. The real pause card can render
-        // its no-race summary at Home without starting or resuming a session.
-        const pause = document.getElementById("pausemenu");
-        const wasInert = pause.inert;
-        const restorePicker = () => {
-          pause.hidden = true;
-          pause.inert = wasInert;
-          // The race can end or resume externally (e.g. a controller).
-          // closeSettings invalidates the route; do not resurrect it.
-          if (SettingsNav.current() !== "appearance") return;
-          settings.hidden = false;
-          // TopModal mirrors hidden onto native dialogs in a microtask.
-          queueMicrotask(() => go.focus({ preventScroll: true }));
-        };
-        pause.inert = true;
-        settings.hidden = true;
-        pause.hidden = false;
-        queueMicrotask(() => {
-          if (!window.ScreenArranger.open(id, go, restorePicker)) {
-            restorePicker();
-            note.textContent = "Pause could not be displayed. Try again.";
-          }
-        });
-        return;
-      }
-      if (visualDoors[id] && !chooseCircuit) {
-        const door = visualDoors[id]();
-        if (door && !door.disabled) SettingsNav.show("visual", false, () => {
-          if (settings.hidden || SettingsNav.current() !== "visual") return;
-          pending = id;
-          door.click();
-          requestAnimationFrame(() => tryPending(id));
-        });
-        return;
-      }
-      if (id === "bench") {
-        SettingsNav.show("graphics", true, () => {
-          if (settings.hidden || SettingsNav.current() !== "graphics") return;
-          // Benchmark mounts its door after the profiling bundle loads. An
-          // early visit still arms the real dialog for a manual first open.
-          pending = id;
-          document.getElementById("pm-bench-open")?.click();
-        });
-        return;
-      }
-      const route = id === "cockpit-preview" ? "display" : screens[id]?.settingsPage;
-      if (route) {
-        // The settings router owns each page's lazy content and availability.
-        SettingsNav.show(route, true, () => {
-          requestAnimationFrame(() => {
-            if (settings.hidden || SettingsNav.current() !== route) return;
-            const fold = id === "cockpit-preview" && document.getElementById("pm-cockpit");
-            const wasOpen = fold && fold.open;
-            if (fold) {
-              fold.open = true;
-              const preview = document.getElementById("pm-ckpreview");
-              if (preview?.getAttribute("aria-expanded") === "false") preview.click();
-            }
-            const returnToPicker = () => {
-              if (settings.hidden || SettingsNav.current() !== route) return;
-              if (fold && !wasOpen) fold.open = false;
-              SettingsNav.show("appearance", false);
-              go.focus({ preventScroll: true });
-            };
-            if (!window.ScreenArranger.open(id, go, returnToPicker)) {
-              returnToPicker();
-              note.textContent = "No visible regions on this page.";
-            }
-          });
-        });
-        return;
-      }
-      const back = document.getElementById("pm-settings-close");
-      if (id === "pmsettings") {
-        back.click();
-        requestAnimationFrame(() => window.ScreenArranger.open(id, document.getElementById("pm-open-appearance")));
-        return;
-      }
-      for (let step = 0; step < 12 && !settings.hidden; step++) back.click();
-      if (!settings.hidden) return;
-      if (chooseCircuit) {
-        requestAnimationFrame(() => document.getElementById("mb-race")?.click());
-        return;
-      }
-      if (id === "home") { TitleLayout.enter(document.getElementById("mb-settings")); return; }
-      pending = id;
-      // TopModal closes the native Settings dialog in a microtask. A lazy
-      // title launcher captures its current owner and abandons navigation if
-      // that owner changes while loading. Invoke it after the close settles.
-      requestAnimationFrame(() => {
-        if (pending !== id) return;
-        if (fromHome && launchers[id]) {
-          const door = document.getElementById(launchers[id]);
-          if (door && id === "telemetry-detail") door.dataset.openTab = "telemetry";
-          door?.click();
-        }
-        tryPending(id);
-      });
-    });
-    refresh();
-    new MutationObserver(refresh).observe(preview, { attributes: true, attributeFilter: ["data-screen"] });
+  function startEditor(id, invoker, onClose) {
+    const editor = window.ScreenArranger;
+    return navigation.prepare ? editor?.prepare(id, invoker, onClose) : editor?.open(id, invoker, onClose);
   }
 
   function install() {
-    document.addEventListener("apex:appearance-picker", event => attachPicker(event.target));
-    const existingPicker = document.querySelector('[data-as="preview-side"]');
-    if (existingPicker) attachPicker(existingPicker);
+    document.addEventListener("apex:spotify-authorizing", event => {
+      event.detail.arrange = navigation.pending === "spotifypanel";
+    });
     const query = new URLSearchParams(location.search);
-    if (query.has("arrange") && !document.getElementById("menu-buttons")) pending = query.get("arrange") || "broadcast";
+    if (query.has("arrange") && !document.getElementById("menu-buttons")) {
+      navigation.prepare = query.get("arrange") === "pair" && query.get("prepare") === "1";
+      navigation.pending = query.get("arrange") || "broadcast";
+      if (navigation.pending === "wheel" || navigation.pending === "menupad") controllerOrientation = window.matchMedia("(orientation: portrait)");
+    }
     // A route may span several real screens (e.g. track selection into Race
     // Settings). Backing out or choosing a different Home destination drops it.
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape") pending = null;
+      if (!navigation.pending || event.key !== "Escape") return;
+      // Escape on the track pauses, and Escape on Pause resumes. Neither
+      // leaves the player's route to Results, Photo or the camera picker.
+      if (window.UiLayers?.inRace() && (!window.UiLayers.anyOpen() || window.UiLayers.top()?.id === "pausemenu")) return;
+      navigation.pending = null;
     }, true);
     document.addEventListener("click", event => {
-      if (!pending) return;
+      if (!navigation.pending) return;
       const door = event.target.closest?.("#menu-buttons button");
       const back = event.target.closest?.("[data-esc-close]");
-      if (pending === "campicker" && event.target.closest("button")?.id === "pm-resume") return;
-      if ((door && door.id !== launchers[pending]) ||
-          (back && back.dataset.escClose === event.target.closest("button")?.id)) pending = null;
+      if (window.UiLayers?.inRace() && event.target.closest("button")?.id === "pm-resume") return;
+      if ((door && !navigation.acceptsDoor?.(navigation.pending, door.id)) ||
+          (back && back.dataset.escClose === event.target.closest("button")?.id)) navigation.pending = null;
     }, true);
     const ids = new WeakMap();
     const reveal = (root) => {
       const id = ids.get(root);
-      if (root.hidden && reentry.has(root)) {
-        reentry.get(root).remove();
-        reentry.delete(root);
-      }
       if (!id || root.hidden || document.querySelector("#screen-arranger[open]")) return;
-      if (id === pending) requestAnimationFrame(() => tryPending(id));
+      if (id === navigation.pending) requestAnimationFrame(() => tryPending(id));
       if (window.ScreenPlacement) window.ScreenPlacement.restore(id);
     };
     // Observe layer visibility only. Timing, telemetry and HUD DOM updates
@@ -534,17 +331,22 @@ window.ScreenRegions = (function () {
     for (const [id, def] of Object.entries(screens)) bind(id, document.querySelector(id === "watch" ? ".watch-transport" : def.root));
     const title = document.querySelector("#overlay #menu-buttons");
     const wheel = document.getElementById("ctl");
-    if (wheel && (pending === "wheel" || pending === "menupad")) {
+    if (wheel && (navigation.pending === "wheel" || navigation.pending === "menupad")) {
       const start = () => {
-        if (pending === "menupad") tryPending("menupad");
-        else if (pending === "wheel" && wheel.getClientRects().length) {
+        if (controllerOrientation.matches && navigation.pending) return;
+        if (navigation.pending === "menupad") tryPending("menupad");
+        else if (navigation.pending === "wheel" && wheel.getClientRects().length) {
           document.getElementById("lay-arrange").click();
-          pending = null;
+          navigation.pending = null;
         }
-        if (!pending) observer.disconnect();
+        if (!navigation.pending) {
+          observer.disconnect();
+          controllerOrientation.removeEventListener("change", start);
+        }
       };
       const observer = new MutationObserver(start);
       observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      controllerOrientation.addEventListener("change", start);
       requestAnimationFrame(start);
     }
     if (!title) return;
@@ -562,7 +364,8 @@ window.ScreenRegions = (function () {
   }
   // Wait for this registry and the sibling bundle modules to publish first.
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+    // Parser-deferred companion scripts still run before DOMContentLoaded, even at "interactive".
+    if (document.readyState === "loading" || (document.readyState === "interactive" && document.currentScript?.defer && !document.currentScript.async)) document.addEventListener("DOMContentLoaded", install, { once: true });
     else queueMicrotask(install);
   }
   return screens;

@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -2953,4 +2954,82 @@ test("paired absolute brake uses its full physical length and releases immediate
     sample("pointerup", 120);
     assert.equal(ctl.state().brk, 0);
   } finally { ctl?.cancel(); PedalTravel.resetButtonProfile("brake"); }
+});
+
+test("Appearance controller demos keep editor gestures free of motion permission requests", () => {
+  const scripts = [...read("controller.html").matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  for (const [search, expected] of [["?arrange=wheel&demo=wheel", 0], ["?arrange=menupad&demo=menu", 0],
+    ["?demo=menu", 0], ["?demo=wheel", 1]]) {
+    const dom = makeDom();
+    let start, prompts = 0;
+    const window = { addEventListener(type, fn) { if (type === "DOMContentLoaded") start = fn; } };
+    const ctl = { armSensor() { prompts++; return Promise.resolve(true); } };
+    vm.runInNewContext(scripts.at(-1)[1], {window, document:dom.document, location:{search}, URLSearchParams,
+      performance:{now:() => 0}, requestAnimationFrame(){}, NetTransport:{}, PhonePad:{pad:() => ctl}, PhonePadPage:{layout(){}}},
+      { filename: absSrc("controller.html") });
+    start();
+    for (const target of [dom.byId("b-layout"), dom.byId("arrange-bar"), dom.byId("layout-sheet")]) {
+      dom.dispatch(target, {type:"pointerdown", bubbles:true});
+    }
+    dom.body.classList.add("arranging");
+    dom.dispatch(dom.byId("gas"), {type:"pointerdown", bubbles:true});
+    assert.equal(prompts, 0, search + " editing");
+    dom.body.classList.remove("arranging");
+    dom.dispatch(dom.byId("gas"), {type:"pointerdown", bubbles:true});
+    assert.equal(prompts, expected, search + " driving");
+  }
+});
+
+test("Appearance waits for the landscape wheel or menu pad before opening its editor once", () => {
+  for (const id of ["wheel", "menupad"]) {
+    const dom = makeDom(), events = dom.makeElement("div");
+    const wheel = dom.byId("ctl"), menu = dom.byId("menupad"), launch = dom.byId("lay-arrange");
+    // Both surfaces have boxes even when the portrait rotation card covers them.
+    wheel.getClientRects = menu.getClientRects = () => [{}];
+    dom.body.classList.add("linked");
+    if (id === "menupad") dom.body.classList.add("menu");
+    const originalQuery = dom.document.querySelector;
+    dom.document.getElementById = key => originalQuery("#" + key);
+    const frames = [], mediaEvents = dom.makeElement("div");
+    let portrait = true, opened = 0;
+    launch.onclick = () => { opened++; };
+    const matchMedia = query => ({
+      get matches() { return query.includes("portrait") ? portrait : !portrait; },
+      addEventListener:mediaEvents.addEventListener, removeEventListener:mediaEvents.removeEventListener
+    });
+    const win = { ScreenArranger:{open(target) { assert.equal(target, "menupad"); opened++; return true; }},
+      matchMedia, addEventListener:events.addEventListener, removeEventListener:events.removeEventListener,
+      get innerWidth() { return portrait ? 390 : 844; }, get innerHeight() { return portrait ? 844 : 390; } };
+    const flush = () => { while (frames.length) frames.shift()(); };
+    vm.runInNewContext(read("js/ui/screen-regions.js"), { window:win, document:dom.document, matchMedia,
+      URLSearchParams, location:{search:"?arrange=" + id}, queueMicrotask:fn => fn(), requestAnimationFrame:fn => frames.push(fn),
+      MutationObserver:class { observe(){} disconnect(){} }
+    }, { filename:absSrc("js/ui/screen-regions.js") });
+    flush();
+    assert.equal(opened, 0, "portrait " + id);
+    portrait = false;
+    dom.dispatch(mediaEvents, {type:"change"}); dom.dispatch(events, {type:"resize"});
+    flush();
+    assert.equal(opened, 1, "landscape " + id);
+    dom.dispatch(mediaEvents, {type:"change"}); dom.dispatch(events, {type:"resize"});
+    flush();
+    assert.equal(opened, 1);
+  }
+});
+
+test("companion previews return to the opening game or use the Appearance link when closing is unavailable", () => {
+  const rel = "js/ui/companion-return.js";
+  const script = new vm.Script(read(rel), { filename: absSrc(rel) });
+  for (const [search, canClose] of [["?arrange=pair", true], ["?arrange=broadcast", false], ["?demo=wheel", false]]) {
+    const link = Object.assign(new EventTarget(), { hidden: true, href: "https://game.test/?settings=appearance" });
+    const assigned = [];
+    const window = { closed: false, close() { this.closed = canClose; } };
+    const location = { search, assign: url => assigned.push(url) };
+    script.runInNewContext({ document: { getElementById: () => link }, location, window, URLSearchParams, setTimeout: fn => fn() });
+    const preview = new URLSearchParams(search).has("arrange");
+    assert.equal(link.hidden, !preview);
+    link.dispatchEvent(new Event("click", { cancelable:true }));
+    assert.equal(window.closed, preview && canClose);
+    assert.deepEqual(assigned, preview && !canClose ? [link.href] : []);
+  }
 });

@@ -58,7 +58,7 @@ test("the door builds ARRANGE HUD beside the HUD details summary without loading
   assert.equal(h.ctx.DockLayout.arrangeDoor(h.G, () => null), null, "a second call finds the button and builds no copy");
 });
 
-test("first tap loads hud-arrange.js alone, creates the editor once with G and opens it; later taps toggle", async () => {
+test("first tap loads the HUD editor and its finish-card preview, creates the editor once with G and opens it; later taps toggle", async () => {
   let editor;
   const h = harness((ctx) => { h.define(); return Promise.resolve(true); });
   h.btn.onclick();
@@ -66,7 +66,7 @@ test("first tap loads hud-arrange.js alone, creates the editor once with G and o
   h.btn.onclick();   // a second tap while it loads starts no second fetch
   await h.settle();
   assert.equal(h.loads.length, 1);
-  assert.deepEqual([...h.loads[0].files], ["js/ui/hud-arrange.js"]);
+  assert.deepEqual([...h.loads[0].files], ["js/ui/hud-arrange.js", "js/race/retired-card.js"]);
   assert.equal(h.loads[0].opts.strict, true);
   assert.deepEqual(h.made, [h.G], "create(G) ran once with game.js's G");
   assert.equal(h.btn.getAttribute("aria-busy"), null);

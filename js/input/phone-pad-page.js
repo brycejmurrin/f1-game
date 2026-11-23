@@ -1127,9 +1127,14 @@ const PhonePadPage = (function () {
     if (dom.swapBtn) dom.swapBtn.addEventListener("click", () => set(Object.assign({}, cur, { swap: !cur.swap })));
     if (dom.pedalsBtn) dom.pedalsBtn.addEventListener("click", () => set(Object.assign({}, cur, { pedals: cur.pedals === "side" ? "stack" : "side" })));
     if (dom.stripBtn) dom.stripBtn.addEventListener("click", () => set(Object.assign({}, cur, { strip: cur.strip === "column" ? "row" : "column" })));
+    dom.sheet?.addEventListener("cancel", e => { e.preventDefault(); show(false); });
     function show(on) {
       if (on) dom.closeUtilities?.();
-      if (dom.sheet) dom.sheet.hidden = !on;
+      if (dom.sheet) {
+        if (!on && dom.sheet.open) dom.sheet.close();
+        dom.sheet.hidden = !on;
+        if (on && !dom.sheet.open) dom.sheet.showModal();
+      }
       if (on && dom.responses && typeof TouchButtonSettings !== "undefined") {
         TouchButtonSettings.mount(dom.responses, PedalTravel.phoneButtons, { standalone: true });
       }

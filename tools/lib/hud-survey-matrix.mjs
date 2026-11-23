@@ -160,7 +160,7 @@ export const PRESETS = Object.freeze({
 });
 // HudLayout.ELEMENTS ids and LIM (js/ui/hud-layout.js).
 export const LAYOUT_IDS = Object.freeze(["tower", "map", "gaps", "sectors", "limits", "flag", "mirror", "announce",
-  "gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "inputs"]);
+  "gearbox", "speed", "energy", "tyre", "ot", "aero", "bb", "damage", "rel", "strat", "finish", "inputs"]);
 // null denotes an unbounded endpoint, keeping survey metadata JSON-safe.
 // All values must be finite; the size lower endpoint is exclusive (s > 0).
 export const LIM = Object.freeze({ x: [null, null], y: [null, null], s: [0, null] });

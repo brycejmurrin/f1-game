@@ -2,19 +2,6 @@
 const EditorWorkspace = (function () {
   "use strict";
   const mounted = new WeakMap();
-  function arrangeDoor(root, host, id = root?.id, label = "Arrange this screen") {
-    if (!root || !host || !id) return;
-    const existing = host.querySelector('[data-arrange-screen="' + id + '"]');
-    if (existing) return existing;
-    const doc = root.ownerDocument, button = doc.createElement("button");
-    button.type = "button";
-    button.setAttribute("data-arrange-screen", id);
-    button.textContent = label;
-    button.onclick = () => SettingsNav.arrangeScreen(id, button,
-      () => !root.hidden && button.isConnected && button.getClientRects().length, label);
-    host.appendChild(button);
-    return button;
-  }
   function attach(root, options = {}) {
     if (!root || !root.ownerDocument) return null;
     if (mounted.has(root)) return mounted.get(root);
@@ -61,7 +48,6 @@ const EditorWorkspace = (function () {
     // lives in is folded into the tools disclosure, which would hide the only way into it.
     const entry = options.entry && doc.getElementById(options.entry);
     if (entry) bar.append(entry);
-    arrangeDoor(root, bar);
     const note = make("p", options.note || "Changes save automatically on this device.", "ew-note");
     sheet.prepend(note);
     sheet.prepend(bar);
@@ -166,7 +152,6 @@ const EditorWorkspace = (function () {
     return api;
   }
   function init(doc = document) {
-    arrangeDoor(doc.getElementById("photo-controls"), doc.getElementById("pc-bar"), "photo-controls", "Arrange camera sticks");
     return [
       ["lighting", "lt-rail", "Lighting", "Auto-saved · displayed circuit, time and weather"],
       ["camtune", "ct-rail", "Camera", "Auto-saved · selected camera scope"],
@@ -182,5 +167,5 @@ const EditorWorkspace = (function () {
       launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
     }));
   }
-  return Object.freeze({ attach, init, arrangeDoor });
+  return Object.freeze({ attach, init });
 })();

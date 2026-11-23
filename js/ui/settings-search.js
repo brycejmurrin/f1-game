@@ -14,6 +14,7 @@ const SettingsSearch = (function () {
     ["hud-size", "HUD size", "display", "pm-hudscale", "bigger smaller scale readouts"],
     ["map", "Track map", "display", "pm-hudmap-sel", "minimap"],
     ["gaps", "Gap readouts", "display", "pm-hudgaps-sel", "timing intervals"],
+    ["appearance-arrange-screen", "Arrange a screen", "appearance", "appearance-arrange-screen", "menu arrangement layout screen picker move resize buttons text size"],
     ["ui-size", "Interface size", "appearance", "pm-uiscale", "menus text bigger smaller zoom"],
     ["motion", "Reduce motion", "a11y", "pm-motion-sel", "shake flyby animation comfort"],
     ["focus", "Keyboard focus", "a11y", "pm-focus-sel", "outline ring accessibility"],
@@ -72,6 +73,13 @@ const SettingsSearch = (function () {
     ["pace", "Overall field speed", "advanced", "pm-pace", "pace slower faster whole field"],
     ["spotter", "Spotter", "audio", "as-spot-sel", "nearby cars voice"],
     ["radio-volume", "Radio voice volume", "audio", "as-rvol", "speech engineer loud quiet"],
+    ["files-health", "Storage health and restore points", "files", "pm-files-health", "account storage quota durability cache cleanup recovery history"],
+    ["files-save", "Save a backup file", "files", "pm-files-show-save", "export settings garage career saves backup download"],
+    ["files-restore", "Restore a backup file", "files", "pm-files-show-restore", "import load settings garage career backup"],
+    ["files-share", "Import a share code", "files", "pm-files-show-share", "paste shared code"],
+    ["engine-pitch", "Engine pitch", "audio", "as-t-pitch", "rev tone sound"],
+    ["engineer-chatter", "Engineer chatter", "audio", "as-chat-sel", "team radio talk engineer"],
+    ["battle-tones", "Battle tones", "audio", "as-battle-sel", "cars ahead behind closing opening sounds"],
     ["music-source", "Music source", "audio", "as-src-sel", "soundtrack connection songs"],
     ["music", "Music volume", "audio", "as-mvol", "sound songs soundtrack"],
     ["effects", "Sound effects volume", "audio", "as-svol", "engine tyres tires sounds"],
@@ -208,11 +216,17 @@ const SettingsSearch = (function () {
       if (slot.button.textContent !== label) slot.button.textContent = label;
       slot.button.onclick = () => {
         clearFeedback();
+        if (route?.scope === "session" && !window.UiLayers?.inRace()) {
+          note.textContent = "Pause during a session to open " + row.label + ".";
+          return;
+        }
         // Own navigation only once the lazy race is won.
         const arrived = () => {
           last = row.id; fromSearch = true;
           if (o.onSelect) o.onSelect(row.page);
-          const el = document.querySelector("#" + row.target), placed = reveal(el), why = !placed && depBlock(el);
+          const el = document.querySelector("#" + row.target);
+          if (row.page === "files" && el?.getAttribute("role") === "tab") el.click();
+          const placed = reveal(el), why = !placed && depBlock(el);
           if (why) { clearFeedback(); note.textContent = row.label + " is off: " + why; return true; }
           if (!placed) unavailable(row);
           return placed;

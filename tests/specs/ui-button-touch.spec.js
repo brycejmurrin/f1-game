@@ -1714,12 +1714,13 @@ test.describe("Settings Appearance — preset names at phone landscape", () => {
     await page.locator("#mb-settings").tap();
     await page.locator("#pm-open-appearance").tap();
     const list = page.locator('#appearance-studio [data-as="preset-list"]');
-    await list.waitFor({ state: "attached", timeout: BOOT_MS });
     await expect(page.locator("#pmsettings-inner")).toHaveAttribute("data-density", "compact");
-    await list.locator("button strong").first().waitFor({ state: "attached", timeout: BOOT_MS });
+    // Settings mounts the lazy studio before revealing its panel. Hidden tiles have zero layout width.
+    await list.locator("button[data-preset] strong").first().waitFor({ state: "visible", timeout: BOOT_MS });
+    await page.evaluate(() => document.fonts.ready);
     const m = await list.evaluate((e) => {
       const tap = parseFloat(getComputedStyle(e).getPropertyValue("--tap")) || 0;
-      const tiles = [...e.querySelectorAll("button")];
+      const tiles = [...e.querySelectorAll("button[data-preset]")];
       return {
         tap, cols: getComputedStyle(e).gridTemplateColumns.split(" ").length,
         minW: Math.min(...tiles.map((b) => b.clientWidth)),

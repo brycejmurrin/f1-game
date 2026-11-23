@@ -82,6 +82,10 @@ test("mount paints data-ceremony-phase=podium and CONTINUE hands off", () => {
   assert.equal(podium.children.length, 3);
   const btn = document.querySelector("#" + PodiumBeat.CONTINUE_ID);
   assert.equal(btn.hidden, false);
+  assert.equal(document.activeElement, btn);
+  assert.equal(host.getAttribute("data-esc-close"), btn.id);
+  assert.equal(host.getAttribute("role"), "dialog");
+  assert.equal(host.getAttribute("aria-label"), "Podium");
   btn.click();
   assert.equal(continued, 1);
   PodiumBeat.dismount();
