@@ -702,7 +702,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `windDir` | WIND DIRECTION | -180 … 180 | 35 | — |   | particles.js×4, glx.js×2 |
 | `lightning` | LIGHTNING FREQ | 0 … 2.75 | 1 | — | ✓ | game.js, storm-flash.js×3, glx.js×2 |
 | `lightningFlash` | LIGHTNING FLASH | 0 … 2 | 1 | — |   | storm-flash.js×2 |
-| `lightningDecay` | LIGHTNING DECAY | 0.4 … 19.35 | 8 | — |   | storm-flash.js×4 |
+| `lightningDecay` | LIGHTNING DECAY | 0.4 … 19.35 | 8 | — |   | storm-flash.js×2 |
 | `weatherSunMute` | WEATHER SUN MUTE | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
 
 ## IMAGE & COLOUR  (41)

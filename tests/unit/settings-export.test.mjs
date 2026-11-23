@@ -1966,16 +1966,22 @@ for (const fileReader of [false, true]) test(`switching backup tabs invalidates 
   assert.equal(b.reloads(), 0);
 });
 
-test("garage reset stays on screen when deleting an extra key is not durable", () => {
-  const b = bootImportUI({ disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
-    store: { set(_key, value) { return value !== undefined; } },
-    globals: { GarageDefaults: { file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
+test("garage reset stays on screen when deleting an extra key is not durable", async () => {
+  const b = bootImportUI({ realStore: true, disk: { "apex26.customTeam": JSON.stringify({ name: "Old team" }) },
+    globals: { GarageDefaults: { has: () => false, file: () => ({ format: "apex26-garage-v1", garage: { team: 0 } }) } },
   });
+  const remove = b.sb.localStorage.removeItem;
+  b.sb.localStorage.removeItem = (key) => {
+    if (key === "apex26.customTeam") throw new Error("Removal denied");
+    remove(key);
+  };
   const row = b.SettingsExport.garageRow(); b.dom.body.appendChild(row);
   const reset = b.dom.byId("cs-garage-reset");
-  reset.click(); reset.click();
+  // miniDOM.click dispatches events but intentionally does not return handler promises.
+  await reset.onclick(); await reset.onclick();
   assert.equal(reset.textContent, "RESET GARAGE TO DEFAULTS — STORAGE FULL — 1 NOT SAVED");
   assert.doesNotMatch(reset.textContent, /RELOADING/);
+  assert.equal(reset.disabled, false, "a failed reset leaves the retry control usable");
   b.flushReloads(); assert.equal(b.reloads(), 0);
 });
 

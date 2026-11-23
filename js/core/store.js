@@ -447,7 +447,7 @@ const GameStore = (function () {
   const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
   const AUTHORED_KEY = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
   const AUTHORED_ROW_BYTES = 512 * 1024, AUTHORED_TOTAL_BYTES = 2 * 1024 * 1024, AUTHORED_KEYS = 96;
-  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, inFlight: 0, settled: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
+  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, inFlight: 0, settled: false, inventoryKnown: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
   let _mirrorHandle = null;
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
@@ -701,18 +701,19 @@ const GameStore = (function () {
   // must neither win here nor overwrite the row when the queue flushes.
   function mirrorRestore() {
     const epoch = _foreignEpoch, foreignKeys = new Map(_foreignKeys);
-    let canRestore = false;
-    try { canRestore = typeof indexedDB !== "undefined" && !!indexedDB && typeof localStorage !== "undefined"; }
+    let canRestore = false, absentMirror = false;
+    try { absentMirror = typeof indexedDB === "undefined" || !indexedDB; canRestore = !absentMirror && typeof localStorage !== "undefined"; }
     catch (_) { /* storage global denied: boot without mirror restore */ }
-    if (!canRestore) { _restoreDone = mirror.settled = true; return Promise.resolve(0); }
+    if (!canRestore) { mirror.inventoryKnown = absentMirror; _restoreDone = mirror.settled = true; return Promise.resolve(0); }
     return mirrorOpen().then((db) => new Promise((res) => {
-      if (!db) { res([]); return; }
+      if (!db) { res(null); return; }
       let r;
       try { r = db.transaction(MIRROR_STORE, "readonly").objectStore(MIRROR_STORE).getAll(); }
-      catch (e) { mirrorTransactionFailed(db, e); res([]); return; }
+      catch (e) { mirrorTransactionFailed(db, e); res(null); return; }
       r.onsuccess = () => res(r.result || []);
-      r.onerror = () => { mirrorTransactionFailed(db, r.error); res([]); };
+      r.onerror = () => { mirrorTransactionFailed(db, r.error); res(null); };
     })).then((rows) => {
+      if (!rows) return 0;
       const restored = [];
       let authoredTotal = 0, authoredCount = 0;
       for (const row of rows) {
@@ -761,6 +762,7 @@ const GameStore = (function () {
         store._keyRev.set(row.k, (store._keyRev.get(row.k) || 0) + 1);
         restored.push(row.k);
       }
+      mirror.inventoryKnown = true;
       mirror.authoredBytes = authoredTotal; mirror.authoredKeys = authoredCount;
       // Re-seed keys with no row: after a lost database only rewritten keys came back.
       if (epoch === _foreignEpoch) {
@@ -805,6 +807,13 @@ const GameStore = (function () {
   store.mirrorPolicy = Object.freeze({ authoredRowBytes: AUTHORED_ROW_BYTES, authoredTotalBytes: AUTHORED_TOTAL_BYTES, authoredKeys: AUTHORED_KEYS,
     includes: (key) => mirrorKey(fullKey(key)) });
   store.mirrorFlush = mirrorFlush; // flush the debounced batch now (tests; pagehide)
+  // Inventory includes refused session writes and rows that could not restore to disk.
+  // Call after mirror.ready when a destructive operation needs the complete boot inventory.
+  store.knownKeys = () => {
+    const keys = new Set([...store._cache.keys(), ..._writeFails.keys(), ..._mirrorKnown, ..._mirrorPending.keys()]);
+    try { for (let i = 0; i < localStorage.length; i++) keys.add(localStorage.key(i)); } catch (_) { /* retained keys remain available */ }
+    return [...keys].filter((k) => typeof k === "string" && k.startsWith("apex26.")).map(shortKey);
+  };
 
   // Flush before backgrounding or leaving while lifecycle events are available.
   // This is best effort: an asynchronous commit can still be interrupted.

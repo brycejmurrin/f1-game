@@ -1734,7 +1734,7 @@ function prepared(team, liv, getParts, driverIdx, ctx) {
 const roomProbe = {
   centre: [0, CEIL_Y / 2, (Z_DOOR + Z_BACK) / 2],
   half: [HALF_W, CEIL_Y / 2, (Z_DOOR - Z_BACK) / 2],
-  room: null, mood: "",
+  room: null, mood: "", inspection: "", night: false,
   draw() {
     _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
     _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
@@ -1751,6 +1751,10 @@ function reflectionProbe(team, liv, getParts, driverIdx, ctx) {
   rebuild(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx);
   roomProbe.room = shellMesh;
   roomProbe.mood = moodId;
+  // Discrete lighting choices invalidate the static cube; animated flicker and
+  // entrance cues must not restart its six-face capture on every frame.
+  roomProbe.inspection = !ctx.spin && spotName && SPOTS[spotName] ? spotName : "";
+  roomProbe.night = !!ctx.night && !ctx.realExterior;
   return shellMesh ? roomProbe : null;
 }
 
