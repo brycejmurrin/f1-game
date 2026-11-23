@@ -50,6 +50,7 @@ function inspections(report) {
     const i = r?.inspection;
     if (!i || !Array.isArray(i.controls) || i.controls.length > 5000 || i.controls.some(c => !c || typeof c.selector !== 'string')) throw new Error('Invalid or oversized inspection controls');
     if (i.issues != null && (!Array.isArray(i.issues) || i.issues.length > 5000)) throw new Error('Invalid inspection issues');
+    if (i.feedback != null && (!Array.isArray(i.feedback) || i.feedback.length > 5000 || i.feedback.some(f => !f || typeof f !== 'object'))) throw new Error('Invalid or oversized feedback observations');
     if (i.layoutContexts != null && (!Array.isArray(i.layoutContexts) || i.layoutContexts.length > 5000)) throw new Error('Invalid layout contexts');
   }
   return rows;
@@ -74,7 +75,10 @@ export function summarizeUIInspection(report) {
     return { viewport: bounded(r.requestedViewport || i.viewport || null), phase: bounded(r.phase || null),
       settlement: bounded(r.settlement || i.settlement || null), controls: i.controls.length, bindings: counts,
       advisories: bounded((i.issues || []).slice(0, 100)), advisoryTotal: (i.issues || []).length,
-      truncated: (i.issues || []).length > 100 };
+      feedback: { available: Array.isArray(i.feedback), observed: i.feedback?.length ?? null,
+        coverage: bounded(i.coverage?.feedback || null), samples: bounded(i.feedback?.slice(0, 10) ?? null),
+        truncated: (i.feedback?.length || 0) > 10 || (i.coverage?.feedback?.omitted || 0) > 0 },
+      truncated: (i.issues || []).length > 100 || (i.feedback?.length || 0) > 10 || (i.coverage?.feedback?.omitted || 0) > 0 };
   }), limitation: 'Probe completion is not a UI pass. Issues are advisories; unavailable and unmapped bindings are unknown. Catalog setup does not establish player navigation.' };
 }
 

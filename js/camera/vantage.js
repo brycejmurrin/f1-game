@@ -133,13 +133,21 @@ const _head = [0, 0, 0, 0], _headScr = [0, 0, 0, 0];
 function headOffset(mode, extra, out) {
   out[0] = out[1] = out[2] = out[3] = 0;
   if (mode !== "cockpit" && mode !== "visor" && mode !== "helmet") return out;
-  if (mode === "helmet") out[2] = HELMET_EYE_FWD;
+  if (mode === "helmet") {
+    const pose = typeof CockpitOpts !== "undefined" && CockpitOpts.helmetEye ? CockpitOpts.helmetEye() : "standard";
+    const shift = pose === "tucked" ? 0.025 : pose === "upright" ? -0.025 : 0;
+    const mount = typeof CockpitOpts !== "undefined" && CockpitOpts.helmetMount ? CockpitOpts.helmetMount() : "center";
+    out[0] = mount === "left" ? -0.032 : mount === "right" ? 0.032 : 0;
+    out[1] = pose === "high" ? 0.035 : pose === "low" ? -0.035 : -shift;
+    out[2] = HELMET_EYE_FWD + (pose === "forward" ? 0.04 : pose === "back" ? -0.04 : shift);
+  }
   const a = extra.att;
   if (!a || extra.reduceMotion) return out;
-  const k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
+  let k = typeof CamTune !== "undefined" && CamTune.bob ? CamTune.bob() : 1;
+  if (mode === "helmet" && typeof CockpitOpts !== "undefined" && CockpitOpts.helmetHeadMotion) k *= CockpitOpts.helmetHeadMotion();
   const roll = clamp(a.baRoll || 0, -HEAD_ROLL_MAX, HEAD_ROLL_MAX), dive = clamp(a.baPitch || 0, 0, HEAD_DIVE_MAX);
-  out[0] = -roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
-  out[1] = -dive * HEAD_NOD_DOWN * k;
+  out[0] -= roll * HEAD_LAT * k;   // +roll tilts the body's top toward -R (game.js rollTot): the outside
+  out[1] -= dive * HEAD_NOD_DOWN * k;
   out[2] += dive * HEAD_NOD_FWD * k;
   out[3] = dive * HEAD_NOD_AIM * k;
   return out;
@@ -150,20 +158,13 @@ function headState() { return { lat: _head[0], up: _head[1], fwd: _head[2], nod:
 // tangent), origin subtracted along those axes so the eye stays at
 // (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space — or at (fwd, up) when a mode
 // seats it elsewhere (VISOR), which keeps the rig on the CAR while the eye
-// moves inside it. Pitch/roll/lean stay off this basis — those shoved the eye
-// into the carbon. The live head offset (_head) comes off too, so the head
+// moves inside it. Apply the road frame before reconstructing the seat origin.
+// The live head offset (_head) comes off too, so the head
 // shift and the HELMET eye move the view and never the tub.
 // Writes into the caller-owned out* slots; nothing is allocated.
-function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) {
+function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up, bankRoll = 0) {
   const eF = (fwd == null ? COCKPIT_EYE_FWD : fwd) + _head[2], eU = (up == null ? COCKPIT_EYE_UP : up) + _head[1];
-  const cy = Math.cos(yv), sy = Math.sin(yv);
-  for (let i = 0; i < 3; i++) {
-    outF[i] = sF[i] * cy + sR[i] * sy;
-    outR[i] = sR[i] * cy - sF[i] * sy;
-  }
-  outU[0] = outR[1] * outF[2] - outR[2] * outF[1];
-  outU[1] = outR[2] * outF[0] - outR[0] * outF[2];
-  outU[2] = outR[0] * outF[1] - outR[1] * outF[0];
+  M4.roadFrameAxes(sR, sF, yv, bankRoll, outR, outU, outF);
   for (let i = 0; i < 3; i++)
     outP[i] = eye[i] - outR[i] * _head[0] - outU[i] * eU - outF[i] * eF;
 }
@@ -185,81 +186,7 @@ const CHASE_CORNER_LEAD_DEFAULT = 0.54;
 const CHASE_G_DOLLY = 14;    // m of nose-IN per rad of dive (≈0.34 m at full braking)
 const CHASE_G_AIM   = 5;     // m the aim drops per rad of dive, so you watch the car dive
 
-// How the chase rigs decide their vertical framing. Two independent point
-// samples of the centreline (eye `back` m behind, target at the car) would make
-// the rig's pitch a finite DIFFERENCE of the elevation profile over ~12 m — the
-// one operator that AMPLIFIES short wavelengths, and this profile has
-// them on purpose: on top of the authored cosine bumps, buildCenterline adds a
-// "fine surface undulation" of three harmonics at 30-110 m wavelengths
-// (js/track/tracks.js) so the road isn't mathematically flat between corners.
-// The car is meant to ride that. The camera differentiating it is not.
-//
-// On flat road that difference is an invisible constant; on a hill it is not:
-// MEASURED on Monaco's climb out of Sainte Dévote (16 % over the rig's own
-// 5.8 m) two-sample pitch swung ±0.93° in the 10-60 m band — roughly 1-2 Hz at
-// racing speed, reversing every 17 m (the "camera bobs going up the incline").
-//
-// So the rig is built from ONE smoothed height and ONE smoothed gradient rather
-// than from two raw samples:
-//
-//     eyeY = rideY(s) - back * grade + eyeUp
-//
-// The pitch depends only on `grade`, so nothing differentiates the ripple. On
-// flat road and on ANY constant slope this equals the two-sample framing to the
-// millimetre (a Hann average of a straight line is the line); where the profile
-// BENDS it stays within 0.28 m of eye height and 1.0° of pitch on every circuit
-// measured, removes 78-90 % of the pitch bob band (monaco/spa/redbull/suzuka),
-// and GAINS ground-clamp margin (Spa's worst case 0.04 m → 0.15 m).
-//
-// rideY is a 7-tap Hann average 60 m wide: a null at the 30 m harmonic (which
-// carries nearly all the vertical acceleration, bob scaling as amplitude ÷
-// wavelength²) and effectively transparent to real terrain — a 340 m cosine
-// bump like Monaco's loses 7 cm at its crest. RIDE_GRADE is the half-baseline
-// the slope is measured over; ±40 m is long enough to be steady and short
-// enough that the camera pitches for the hill it is ON, not one it can't see.
-// Nothing else changes: the car, the physics, the road mesh and every other
-// camera mode still read the raw profile, so the undulation you feel through
-// the car is untouched. It just stops steering the horizon.
-//
-// Offsets are metres of arc either side; weights are 0.5(1+cos(πd/30)). The two
-// zero-weight end taps are dropped rather than summed for nothing.
-const RIDE_OFF = [-22.5, -15, -7.5, 0, 7.5, 15, 22.5];
-const RIDE_W = [0.1464, 0.5, 0.8536, 1, 0.8536, 0.5, 0.1464];
-const RIDE_WSUM = 4.0;                    // == RIDE_W summed
-const RIDE_SPAN = 60;                     // full window width, for the short-lap guard
-const RIDE_GRADE = 40;                    // half-baseline the road slope is read over
-
-// Centreline height alone at arc `s` — the height component of Tracks.sample
-// without the tangent/right/half-width lerps this never looks at. Called 21x a
-// frame in chase (three times through rideY), which is why it skips sample().
-//
-// CATMULL-ROM, not the lerp Tracks.sample uses. A linear blend between the ~4 m
-// nodes is only C0: the height is continuous but its SLOPE jumps at every node
-// boundary, so the eye's vertical VELOCITY steps ~11 times a second at racing
-// speed. On flat road that is invisible (adjacent nodes are level, so there is
-// no slope to jump) and at the shipped framing it is about a pixel — which is
-// why it survived every earlier measurement. Pull the camera DOWN and IN with
-// the CAMERA TUNER and both of those excuses evaporate: the eye-to-target
-// baseline shortens, and the rig goes near-level so pitch is driven by exactly
-// these small vertical differences instead of a healthy few degrees. MEASURED
-// at HEIGHT -1.5 / DIST -3 on Beau Rivage: 11 pitch reversals in 2.6 s with a
-// worst-to-rms acceleration ratio of 10.2, i.e. plainly discontinuous.
-//
-// Catmull-Rom is C1, so the velocity is continuous and no node rate survives at
-// all. It still passes exactly through every node, and on collinear nodes (flat
-// road, constant slope) it reproduces the straight line to floating-point — so
-// it matches a linear blend anywhere the nodes already lie on a line.
-function crY(p0, p1, p2, p3, t) {
-  const t2 = t * t, t3 = t2 * t;
-  return 0.5 * ((2 * p1) + (-p0 + p2) * t
-    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
-    + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
-}
-// max(v, floor) with a C1 handover across a band of `k` metres. Outside the band
-// it IS the plain max; inside, a quadratic joins the two branches with matching
-// slope at both ends (v = floor+k and v = floor-k), which is what a hard max
-// cannot do. Only ever returns >= floor, so it never weakens the guarantee it
-// implements.
+// Vertical framing (Hann rideY, Catmull-Rom centreY, C1 softFloor) is VantageRide.
 // How far a live camera hangs off the racing line through a bend. +kA is a
 // left-hander, and +right is the outside of it. One-shot solves (no dt) and
 // Reduce Motion return 0 so a parked frame stays the shipped pose. `gain` is
@@ -346,31 +273,11 @@ function hangScale(mode) {
   return v == null ? 1 : v;
 }
 
-function softFloor(v, floor, k) {
-  const d = v - floor;
-  if (d > k) return v;
-  if (d < -k) return floor;
-  const t = (d + k) / (2 * k);
-  return floor + k * t * t;
-}
-function centreY(track, s) {
-  const n = track.n, L = track.total, py = track.py;
-  let v = s % L; if (v < 0) v += L;
-  const fi = v / L * n;
-  const i = Math.floor(fi) % n, f = fi - Math.floor(fi);
-  const a = (i - 1 + n) % n, b = (i + 1) % n, c = (i + 2) % n;
-  return crY(py[a], py[i], py[b], py[c], f);
-}
-function rideY(track, s) {
-  if (!track.py || track.total < RIDE_SPAN * 2) return centreY(track, s);
-  let acc = 0;
-  for (let k = 0; k < RIDE_OFF.length; k++) acc += centreY(track, s + RIDE_OFF[k]) * RIDE_W[k];
-  return acc / RIDE_WSUM;
-}
-function rideGrade(track, s) {
-  if (!track.py || track.total < RIDE_GRADE * 4) return 0;
-  return (rideY(track, s + RIDE_GRADE) - rideY(track, s - RIDE_GRADE)) / (2 * RIDE_GRADE);
-}
+function crY(p0, p1, p2, p3, t) { return VantageRide.crY(p0, p1, p2, p3, t); }
+function softFloor(v, floor, k) { return VantageRide.softFloor(v, floor, k); }
+function centreY(track, s) { return VantageRide.centreY(track, s); }
+function rideY(track, s) { return VantageRide.rideY(track, s); }
+function rideGrade(track, s) { return VantageRide.rideGrade(track, s); }
 
 // AN ONBOARD CAMERA IS BOLTED TO THE CHASSIS, so it inherits what the chassis
 // does. js/physics/body-attitude.js already pitches, rolls and heaves the car BODY
@@ -395,7 +302,7 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
   const heave = a.baHeave || 0, pitch = a.baPitch || 0;
   // REDUCE MOTION drops the rib shiver (a high-frequency oscillation); heave/pitch are the car's own motion.
   const kerb = a.onKerb && !extra.reduceMotion ? Math.sin(s * (2 * Math.PI / KERB_RIB_M)) * KERB_AMP * spN : 0;
-  eye[1] += heave + kerb;
+  eye[1] += heave + kerb * (typeof CockpitOpts !== "undefined" && CockpitOpts.shakeScale ? CockpitOpts.shakeScale(mode, "helmetKerb") : 1);
   // baPitch > 0 is brake DIVE (nose down, the chase rig's convention above), so
   // the aim DROPS with it: the view dips into a braking zone and lifts under
   // power. It was `+ pitch * 24` — the cockpit tilted UP as the car dived.
@@ -403,7 +310,7 @@ function onboardAttitude(mode, eye, tgt, extra, s, spN) {
 }
 
 const _vantEye = [0, 0, 0], _vantTgt = [0, 0, 0];
-const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
+const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60, fovBoost: 0 };
 // The last finite pose, held when a solve goes non-finite: the render damper in game.js
 // is exponential, so ONE NaN frame would poison camEye/camTgt/camFov until the next snap.
 const _goodEye = [0, 1, 0], _goodTgt = [0, 1, 1];
@@ -442,6 +349,17 @@ function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
   if (!isFinite(spd)) spd = 0;
   if (!isFinite(x)) x = 0;
+  // A non-finite arc used to run the whole solve (sample → NaN into cvA → NaN eye)
+  // and only then hit the hold at the end. Hold up front so pooled samples stay
+  // clean and a hitch that fed NaN cannot spend a frame of trig on garbage.
+  if (!isFinite(s)) {
+    if (!_nanWarned) { _nanWarned = true; Log.warn("game", "GameCams.vantage: non-finite pose in mode " + mode + ", holding the last good one"); }
+    _vantEye[0] = _goodEye[0]; _vantEye[1] = _goodEye[1]; _vantEye[2] = _goodEye[2];
+    _vantTgt[0] = _goodTgt[0]; _vantTgt[1] = _goodTgt[1]; _vantTgt[2] = _goodTgt[2];
+    _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = _goodFov; _vantOut.fovBoost = 0; _vantOut.cut = false;
+    publishListenerBasis(mode, _vantEye, _vantTgt);
+    return _vantOut;
+  }
   // The PLAYER's look-back key and free-look glance steer only the player's own camera: a solve
   // without `att` (the PiP inset) or flagged `noLook` (the TV director's shots) must not spin.
   const localLook = !!extra.att && !extra.noLook;
@@ -608,10 +526,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
     eyeS = s + 5.5;
-    eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
+    eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + t[1] * 5.5 + 1.35; eye[2] = p[2] + t[2] * 5.5;
     const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5, extra.snap);
     eye[0] += r[0] * revOut; eye[2] += r[2] * revOut;
-    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] - t[1] * 26 + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
   } else if (mode === "side") {
     // TV tracking: a few metres behind the car, outside the bend, looking
@@ -682,8 +600,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = avT[0]; tgt[1] = avT[1]; tgt[2] = avT[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46 + dep * 2;
   } else if (mode === "rear") {
-    eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] + 1.38; eye[2] = p[2] - t[2] * 0.95;
-    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.7; tgt[2] = p[2] - t[2] * 26;
+    eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] - t[1] * 0.95 + 1.38; eye[2] = p[2] - t[2] * 0.95;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] - t[1] * 26 + 0.7; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(58, 70, spFov) + dep * 2;
   } else if (mode === "drift") {
     // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
@@ -793,6 +711,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   if (mode === "chase" || mode === "far" || mode === "drift" || mode === "reverse")
     _vWallClamp(eye, mode === "far" ? s - 10.5 : mode === "chase" ? s - 5.8 : mode === "drift" ? s - 6.2 : s + 5.5);
   if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
+  let fovBoost = typeof CamFov !== "undefined" ? CamFov.modeBoost(mode, spFov, dep) : 0;   // the dynamic share of `fov` (#5015: CamFovFit caps the base, keeps this)
   // FREE-LOOK (js/camera/feel.js): additive yaw/pitch on bolted-on cams, after
   // CamTune so the tuner offsets stay the base and free-look stacks on top.
   if (localLook && typeof CamFeel !== "undefined") CamFeel.applyFreeLook(eye, tgt);
@@ -806,6 +725,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const _lb = !_xrComfort && localLook && (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld);
   if (_lb) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
+    if (onboard || mode === "tcam") {
+      // Mirror the longitudinal grade with the aim. Preserve lens trim and head pitch.
+      const horizSq = t[0] * t[0] + t[2] * t[2];
+      if (horizSq > 1e-6) tgt[1] -= 2 * t[1] * (dx * t[0] + dz * t[2]) / horizSq;
+    }
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
   }
   // Speed / brake / yaw motion. Before the ground clamp so a dip cannot put
@@ -816,6 +740,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const f0 = fov;
     fov = CamFeel.drive(mode, eye, tgt, fov, extra, spN);
     fov = clamp(fov, Math.min(f0, 20), Math.max(f0, 110));
+    fovBoost += fov - f0;
   }
   // Open-circuit wall / building avoidance for broadcast cams (street circuits
   // already use `corr`). Steps toward the road, then lifts over roofs — see
@@ -922,12 +847,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
     _goodEye[0] = eye[0]; _goodEye[1] = eye[1]; _goodEye[2] = eye[2];
     _goodTgt[0] = tgt[0]; _goodTgt[1] = tgt[1]; _goodTgt[2] = tgt[2]; _goodFov = fov;
   } else {   // hold the last finite pose: see _goodEye
-    eye = _goodEye; tgt = _goodTgt; fov = _goodFov;
+    eye = _goodEye; tgt = _goodTgt; fov = _goodFov; fovBoost = 0;
     if (!_nanWarned) { _nanWarned = true; Log.warn("game", "GameCams.vantage: non-finite pose in mode " + mode + ", holding the last good one"); }
   }
   _vantEye[0] = eye[0]; _vantEye[1] = eye[1]; _vantEye[2] = eye[2];
   _vantTgt[0] = tgt[0]; _vantTgt[1] = tgt[1]; _vantTgt[2] = tgt[2];
-  _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.cut = vantCut;
+  _vantOut.eye = _vantEye; _vantOut.tgt = _vantTgt; _vantOut.fov = fov; _vantOut.fovBoost = fovBoost; _vantOut.cut = vantCut;
   publishListenerBasis(mode, eye, tgt);
   _vTrack = null;   // a per-call input: left set, it pinned the last raced world through the menu
   return _vantOut;

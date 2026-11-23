@@ -12,12 +12,18 @@
 const Menus = (function () {
   "use strict";
 
-function create(G) {
+function create(G, preparePickerTrack = () => G.scheduleFlybyTrack(true)) {
 Log.info("ui", "Menus.create");
+if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) GfxEscalation.noteCleanMenuBoot();
 // Stable helpers from the game.js closure.
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
-const { $, els, store, cssCol, fmtTime, ttBoard, scheduleFlybyTrack } = G;
+const { $, els, store, cssCol, fmtTime, ttBoard } = G;
+// The best-time star counts only laps of the circuit's CURRENT layout: a lap
+// saved before a layout revision (Kyalami's direction flip, revision 2) stays
+// stored but is a lap of a different circuit, so it is not shown as the record.
+const liveBoard = (t) => typeof Ghost === "undefined" ? ttBoard(t.id)
+  : ttBoard(t.id).filter((e) => Ghost.layoutRevision(e.context) === (t.revision || 1));
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -54,12 +60,23 @@ const setSaveCollapsed = (on) => {
     saveDismiss.textContent = on ? "NOT SAVING" : "DISMISS";
   }
 };
+let healthLoading = false;
+const mountWarningHealth = () => {
+  if (typeof SaveHealth !== "undefined") { SaveHealth.mount(saveWarning, { store }); return; }
+  if (healthLoading || typeof SettingsExport === "undefined" || !SettingsExport.ready) return;
+  healthLoading = true;
+  SettingsExport.ready().then(ok => {
+    healthLoading = false;
+    if (ok && !saveWarning.hidden && typeof SaveHealth !== "undefined") SaveHealth.mount(saveWarning, { store });
+  });
+};
 const showSaveWarning = (reason) => {
   if (!saveWarning) return;
   saveWarning.hidden = false;
   saveWarningDetail.textContent = "Progress will be lost when this page closes or reloads"
     + (reason ? " (" + reason + ")." : ".");
   sayOnce("Saving unavailable. Progress will be lost when this page closes or reloads.");
+  mountWarningHealth();
 };
 const hideSaveWarning = () => {
   if (!saveWarning) return;
@@ -140,14 +157,14 @@ const exportRecovery = async () => {
 };
 if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
-if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
-// Graphics context loss: GLX may reload with lighter settings, or game.js may
-// quit to the menu mid-start. Stash apex26.ctxLostNotice before either path;
-// consume it once here so the title explains the hitch instead of looking like
-// a silent kick to the menu.
+// At boot, only a persisted reset explains a reload. In-page recovery
+// calls showCtxLostNotice directly even if session storage is unavailable.
 const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
+const CTX_LOST_NEED_RELOAD_KEY = "apex26.ctxLostNeedReload";
+const CTX_LOST_EXHAUSTED_KEY = "apex26.ctxLostExhausted";
 const CTX_LOST_NOTICE_MSG = "Graphics reset — retrying with lighter settings";
+const CTX_LOST_EXHAUSTED_MSG = "Graphics keep resetting — reload or pick another RENDERER";
 let ctxLostNotice = $("ctx-lost-notice");
 if (!ctxLostNotice) {
   ctxLostNotice = document.createElement("aside");
@@ -171,10 +188,10 @@ if (!ctxLostNotice) {
   dismiss.textContent = "DISMISS";
   dismiss.setAttribute("aria-expanded", "true");
   ctxLostNotice.append(title, detail, retry, dismiss);
-  document.body.appendChild(ctxLostNotice);
+  els.overlay.appendChild(ctxLostNotice);
   // Match #save-warning placement when overlays.css has no dedicated rule yet.
   Object.assign(ctxLostNotice.style, {
-    position: "fixed", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
+    position: "fixed", zoom: "normal", zIndex: "8500", top: "max(8px, env(safe-area-inset-top, 0px))", left: "50%",
     transform: "translateX(-50%)", width: "min(48rem, calc(100vw - 16px))", display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: "8px", padding: "8px",
     border: "1px solid rgba(255, 209, 128, 0.72)", borderRadius: "8px",
@@ -198,30 +215,73 @@ const hideCtxLostNotice = () => {
   }
   ctxLostSpoken = false;
 };
-const showCtxLostNotice = () => {
+const showCtxLostNotice = (onlyIfStashed = false) => {
+  if (!ctxLostNotice || G.state !== "menu") return;
   let pending = false;
   try {
     pending = sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1";
     if (pending) sessionStorage.removeItem(CTX_LOST_NOTICE_KEY);
-  } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
-  if (!pending || !ctxLostNotice || G.state !== "menu") return;
+  } catch (_) { /* no persisted notice */ }
+  if (onlyIfStashed && !pending) return;
   ctxLostNotice.hidden = false;
+  let exhausted = false;
+  try { exhausted = sessionStorage.getItem(CTX_LOST_EXHAUSTED_KEY) === "1"; } catch (_) { /* blocked storage */ }
+  if (exhausted) try { sessionStorage.removeItem(CTX_LOST_EXHAUSTED_KEY); } catch (_) { /* one-shot copy */ }
+  const msg = exhausted ? CTX_LOST_EXHAUSTED_MSG : CTX_LOST_NOTICE_MSG;
   const detail = $("ctx-lost-notice-detail");
-  if (detail) detail.textContent = CTX_LOST_NOTICE_MSG;
+  if (detail) detail.textContent = msg;
   if (!ctxLostSpoken) {
     ctxLostSpoken = true;
-    const said = CTX_LOST_NOTICE_MSG + ". Press Retry to start again.";
+    const said = msg + ". Press Retry to start again.";
     if (typeof LiveRegion !== "undefined") LiveRegion.say(said, "save");
     else if ($("announce-live")) $("announce-live").textContent = said;
   }
-  if (G.announce) G.announce(CTX_LOST_NOTICE_MSG, 5, "info");
+  if (G.announce) G.announce(msg, 5, "info");
 };
 if ($("ctx-lost-dismiss")) $("ctx-lost-dismiss").onclick = () => hideCtxLostNotice();
 if ($("ctx-lost-retry")) $("ctx-lost-retry").onclick = () => {
+  let needReload = false;
+  try { needReload = sessionStorage.getItem(CTX_LOST_NEED_RELOAD_KEY) === "1"; } catch (_) { /* blocked storage */ }
+  if (needReload) {
+    try { sessionStorage.setItem(CTX_LOST_NOTICE_KEY, "1"); } catch (_) { /* explain the reload */ }
+    try { sessionStorage.removeItem(CTX_LOST_NEED_RELOAD_KEY); } catch (_) { /* one reload per click */ }
+    hideCtxLostNotice();
+    try { location.reload(); } catch (_) { /* harness */ }
+    return;
+  }
   hideCtxLostNotice();
   if (G.startRace) G.startRace();
 };
-showCtxLostNotice();
+// Title/menu only: any race entry or state hop off "menu" must drop the card —
+// RETRY/DISMISS are not the only ways out (RACE!, Data Hub daily, quali sheet…).
+const bindCtxLostNoticeOnMenuExit = () => {
+  if (G.startRace) {
+    const raceStart = G.startRace;
+    Object.defineProperty(G, "startRace", {
+      configurable: true,
+      enumerable: true,
+      value(...args) {
+        hideCtxLostNotice();
+        return raceStart.apply(G, args);
+      },
+    });
+  }
+  const stateDesc = Object.getOwnPropertyDescriptor(G, "state");
+  if (stateDesc && stateDesc.get && stateDesc.set) {
+    Object.defineProperty(G, "state", {
+      configurable: true,
+      enumerable: stateDesc.enumerable,
+      get() { return stateDesc.get.call(G); },
+      set(v) {
+        const wasMenu = stateDesc.get.call(G) === "menu";
+        stateDesc.set.call(G, v);
+        if (wasMenu && v !== "menu") hideCtxLostNotice();
+      },
+    });
+  }
+};
+bindCtxLostNoticeOnMenuExit();
+showCtxLostNotice(true);
 
 /** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
 const restoreMenuAfterGraphicsReset = () => {
@@ -276,14 +336,26 @@ const vtReduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion:
 // Touch / coarse pointer: startViewTransition snapshots the title WebGL layer
 // and blocks the main thread on return (D·IP2 BrowserStack iPhone: 1.2 s worst
 // frame title←select). Same direct-apply path as reduced motion — the crossfade
-// is not worth a hitch on the phone Bryce plays on.
+// is not worth a hitch on the phone Bryce plays on (fadeIn below replaces it).
 const vtPhone = window.matchMedia
   ? (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)
   : false;
+// The phone still gets a transition, just not a snapshot: whatever screen the
+// swap reveals fades in over 120 ms (design pass #3, lane 2c's proposal). An
+// opacity animation runs on the compositor, so the WebGL title is never read
+// back, and the swap itself stays synchronous.
+const SHOWN = "#overlay:not([hidden]), .screen:not([hidden])";
+const fadeIn = (fn) => {
+  const before = new Set(document.querySelectorAll(SHOWN));
+  fn();
+  for (const s of document.querySelectorAll(SHOWN)) {
+    if (!before.has(s) && s.animate) s.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: "cubic-bezier(0, 0, 0.2, 1)" });
+  }
+};
 const vt = (fn) => {
   if (!document.startViewTransition || vtReduce.matches
-    || document.documentElement.dataset.motion === "reduce"
-    || vtPhone) { fn(); return; }
+    || document.documentElement.dataset.motion === "reduce") { fn(); return; }
+  if (vtPhone) { fadeIn(fn); return; }
   let applied = false;
   const run = () => { if (applied) return; applied = true; fn(); };
   try {
@@ -324,6 +396,11 @@ function driverLabel(d, placeholderNum) {
   return (placeholderNum && !(d.num > 1)) ? last : "#" + d.num + " " + last;
 }
 
+/** Team-tile crest bitmap edge for a device pixel ratio: 32 CSS px x dpr x 1.5, never under 48 or over 128. */
+function swatchPx(dpr) {
+  const d = +dpr > 0 ? +dpr : 1;
+  return Math.max(48, Math.min(128, Math.round(32 * 1.5 * d)));
+}
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
@@ -341,7 +418,10 @@ function teamSwatch(t) {
   // wall and the car share.
   if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
     const c = document.createElement("canvas");
-    c.width = 48; c.height = 48;
+    // Backing store follows the panel: .tm-colour is a 32 CSS px box (css/select.css), so the fixed 48 px
+    // this used to be put 48 texels on 99 device px on a DPR-3 phone (measured 0.49 px per device px,
+    // docs/notes/PIXEL-TRUTH-HUNT-2026-11-09.md F4). x1.5 covers a zoomed sheet; 128 bounds 22 tiles.
+    c.width = c.height = swatchPx(typeof window !== "undefined" ? window.devicePixelRatio : 1);
     c.setAttribute("aria-hidden", "true");
     LiveryTex.paintSwatch(c.getContext("2d"), crestId, liv || { c1, c2 }, c.width, c.height);
     sw.appendChild(c);
@@ -555,30 +635,33 @@ window.addEventListener("keydown", (e) => {
   e.stopPropagation();
 }, true);
 
-function applyTrackSearch(value) {
+function applyTrackSearch(value, pick) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
   const rows = Array.from(els.selTracks.querySelectorAll(".track-row"));
-  for (const row of rows) row.hidden = !!trackQuery && !row.dataset.search.includes(trackQuery);
-  // A divider introduces the RUN of tiles that follows it (Tracks.LIST interleaves
-  // the groups, so one group owns several dividers): show it only while a tile in
-  // ITS run survives. Testing the whole group left every SEASON divider standing
-  // as an orphan whenever any season circuit matched ("spa" also finds Spain).
+  for (const r of rows) r.hidden = !!trackQuery && !r.dataset.search.includes(trackQuery);
+  // A divider shows while ITS run (not group) has a match ("spa" finds Spain).
   for (const head of els.selTracks.querySelectorAll(".track-group-head")) {
     let live = false;
-    for (let el = head.nextElementSibling; el && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
-      if (el.classList.contains("track-row") && !el.hidden) { live = true; break; }
+    for (let el = head.nextElementSibling; el && !live && !el.classList.contains("track-group-head"); el = el.nextElementSibling) {
+      live = el.classList.contains("track-row") && !el.hidden;
     }
     head.hidden = !live;
   }
   const empty = document.getElementById("sel-track-empty");
-  if (empty) empty.hidden = rows.some((row) => !row.hidden);
+  if (empty) empty.hidden = rows.some((r) => !r.hidden);
+  // Typing hid the active circuit (#5889): take the 1st match.
+  if (pick && trackQuery && !rows.some((r) => r.classList.contains("active") && !r.hidden)) rows.find((r) => !r.hidden)?.click();
   ScrollFadeRefresh();
 }
 
-function trackInFilter(t, filter, favs) {
+// SEASON / CLASSICS follow SeasonCal.list(), not the `classic` flag (W34; select-season-tab.test.mjs).
+const seasonIds = () => calendarIdSet(typeof SeasonCal !== "undefined" ? SeasonCal : null);
+// The CLASSIC badge: a flagged circuit that this season's calendar does not race.
+const classicBadge = (t, ids) => !!t.classic && calendarGroup(t, ids) === "classic";
+
+function trackInFilter(t, filter, favs, ids) {
   if (!t) return false;
-  if (filter === "season") return !(t.classic || t.custom);
-  if (filter === "classic") return !!t.classic;
+  if (filter === "season" || filter === "classic") return calendarGroup(t, ids === undefined ? seasonIds() : ids) === filter;
   if (filter === "custom") return !!t.custom;
   if (filter === "fav") return (favs || favList()).includes(t.id);
   if (filter === "daily-open") return !!(G.daily && t.id === G.daily.plan().trackId);
@@ -591,10 +674,11 @@ function trackInFilter(t, filter, favs) {
 // chip actually shows.
 function snapTrackToFilter(filter = visibleTrackFilter()) {
   const favs = favList();
+  const ids = seasonIds();
   const cur = Tracks.LIST[G.trackIdx];
   if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
-  if (trackInFilter(cur, filter, favs) || pinnedActive(cur)) return;
-  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs));
+  if (trackInFilter(cur, filter, favs, ids) || pinnedActive(cur)) return;
+  const i = Tracks.LIST.findIndex((t) => trackInFilter(t, filter, favs, ids));
   if (i < 0) return;
   G.trackIdx = i;
   store.set("trackId", Tracks.LIST[i].id);
@@ -680,7 +764,7 @@ function trackFilterBar() {
     const selected = !!current && current.day === p.day && current.class === "standard";
     b.className = "sel-chip" + (selected ? " active" : "");
     b.id = "sel-daily";
-    const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
+    const extraBits = [typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase(), p.tod.toUpperCase()];
     if (done && done.best != null) extraBits.push("ALL SETUPS ★ " + fmtTime(done.best));
     b.textContent = (selected ? "DAILY STANDARD" : "TODAY'S CHALLENGE") + " · " + p.trackName.toUpperCase();
     const extra = document.createElement("span");
@@ -688,9 +772,10 @@ function trackFilterBar() {
     b.appendChild(extra);
     b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
     b.setAttribute("aria-pressed", selected ? "true" : "false");
-    b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
+    b.title = "Today's challenge (" + p.day + ", local date): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => {
       e.stopPropagation();
+      trackQuery = "";
       G.daily.select();
       leavePracticePick();
       setTrackFilter("all", false, true);
@@ -708,7 +793,7 @@ function trackFilterBar() {
   search.placeholder = "Search circuit";
   search.setAttribute("aria-label", "Search circuits");
   search.autocomplete = "off";
-  search.oninput = () => applyTrackSearch(search.value);
+  search.oninput = () => applyTrackSearch(search.value, true);
   bar.appendChild(search);
   return bar;
 }
@@ -719,12 +804,16 @@ function trackFilterBar() {
 // spec that names it work on it. data-kind carries night/street/classic for the
 // stylesheet; the .trb badges stay in the DOM (hidden in the strip) because the
 // SEASON filter's "no classics shown" contract is asserted on them.
+/** Pick-mode tile cache — see buildSelect (#4671). */
+const tileCache = { sig: "", rows: null };
+
 function trackTile(t, i, opts) {
+  const classic = classicBadge(t, opts && opts.calIds !== undefined ? opts.calIds : seasonIds());
   const row = document.createElement(opts && opts.readOnly ? "div" : "button");
   if (!(opts && opts.readOnly)) row.type = "button";
   row.className = "track-row" + (opts && opts.active ? " active" : "");
   row.dataset.trackIdx = String(i);
-  row.dataset.kind = t.custom ? "custom" : t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
+  row.dataset.kind = t.custom ? "custom" : classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
   row.setAttribute("aria-label", t.name);
   // The country is the tooltip: five USA tiles and three Italian ones need
   // it, and the strip has no room for a second line of text under each flag.
@@ -752,7 +841,7 @@ function trackTile(t, i, opts) {
   nm.textContent = t.name;
   if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
   if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
-  if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
+  if (classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
   if (t.custom) { const b = document.createElement("span"); b.className = "trb trb-custom"; b.textContent = "CUSTOM"; nm.appendChild(b); }
   row.appendChild(nm);
   return row;
@@ -781,6 +870,9 @@ function revealActiveTile() {
 
 function buildSelect(opts) {
   const inPlace = !!(opts && opts.inPlace);
+  // A menu door (the title is still up) opens a fresh picker: last visit's
+  // search must not reopen it pre-filtered. Returns and in-place rebuilds keep it.
+  if (!inPlace && els.overlay && !els.overlay.hidden) trackQuery = "";
   // ONE QUESTION: WHERE. WHO and WHAT are chosen in the garage via YOUR CAR.
   // NEXT opens race settings. The only thing that differs between modes here
   // is what the screen is called and what the foot button promises next.
@@ -870,19 +962,38 @@ function buildSelect(opts) {
     snapTrackToFilter();
     const favs = favList();
     const filter = visibleTrackFilter();
-    Tracks.LIST.forEach((t, i) => {
-      if (!trackInFilter(t, filter, favs) && !(i === G.trackIdx && pinnedActive(t))) return;
-      const g = t.custom ? "MY CIRCUITS" : t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
+    const calIds = seasonIds();
+    const ttc = ttChrome(), cues = !!(typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn());
+    const shown = [];
+    Tracks.LIST.forEach((t, i) => { if (trackInFilter(t, filter, favs, calIds) || (i === G.trackIdx && pinnedActive(t))) shown.push(i); });
+    // Tiles are cached per roster signature (#4671, re-landed): a re-open re-attaches the same
+    // nodes and flips .active/aria-pressed only, no flag SVG re-parse per tile.
+    const sig = [+ttc, +cues, calIds ? Array.from(calIds).join(",") : "-", shown.map((i) => {
+      const t = Tracks.LIST[i], bd = ttc ? liveBoard(t) : [];
+      return [i, t.id, t.name, t.country, +!!t.night, +!!t.street, +!!t.custom, +favs.includes(t.id), bd.length ? bd[0].t : "-"].join(":");
+    }).join("|")].join("#");
+    if (tileCache.sig === sig && tileCache.rows) {
+      for (const row of tileCache.rows) {
+        const on = row.dataset.trackIdx === String(G.trackIdx);
+        row.classList.toggle("active", on);
+        row.setAttribute("aria-pressed", on ? "true" : "false");
+        row.hidden = false;
+        els.selTracks.appendChild(row);
+      }
+    } else tileCache.rows = shown.map((i) => {
+      const t = Tracks.LIST[i];
+      const grp = calendarGroup(t, calIds);
+      const g = grp === "custom" ? "MY CIRCUITS" : grp === "classic" ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       // Filter chips name the view. A vertical CLASSICS/SEASON divider squeezed
       // the ~500 strip, ate end slack, and clipped the last flag (apex7/11).
-      const row = trackTile(t, i, { active: i === G.trackIdx });
+      const row = trackTile(t, i, { active: i === G.trackIdx, calIds });
       row.dataset.trackGroup = g;
-      row.dataset.search = [t.name, t.country, t.custom ? "custom mine" : t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
+      row.dataset.search = [t.name, t.country, grp === "custom" ? "custom mine" : grp, t.street ? "street" : "", t.night ? "night" : ""]
         .filter(Boolean).join(" ").toLocaleLowerCase();
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
       if (favs.includes(t.id)) row.dataset.fav = "1";   // the ♥ badge (css/menus.css) — no DOM of its own
-      if (ttChrome()) {
-        const board = ttBoard(t.id);
+      if (ttc) {
+        const board = liveBoard(t);
         const rec = board.length ? board[0].t : Infinity;
         const recEl = document.createElement("span");
         recEl.className = "track-row-rec"; recEl.title = "Best across setups and conditions";
@@ -919,10 +1030,12 @@ function buildSelect(opts) {
         // The still IS the preview — nothing is shown behind the sheet. But once
         // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
         // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
-        scheduleFlybyTrack(true);
+        preparePickerTrack();
       };
       els.selTracks.appendChild(row);
+      return row;
     });
+    tileCache.sig = sig;
     const empty = document.createElement("p");
     empty.id = "sel-track-empty";
     empty.className = "season-upcoming-head";
@@ -933,7 +1046,7 @@ function buildSelect(opts) {
     updateTrackPreview();
   }
   // Prepare the initial/current tile too, even when no tile is clicked.
-  if (!seasonComplete && !inPlace) scheduleFlybyTrack(true);
+  if (!seasonComplete && !inPlace) preparePickerTrack();
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the
@@ -964,7 +1077,7 @@ function buildSelect(opts) {
 // screen's preview card and the TRACK DETAIL modal's sparkline. Both were
 // hand-written canvas blocks that agreed line for line except for which element
 // carries the hidden state and what the x variable was called — the shape where
-// a fix lands in one copy and not the other (docs/ARCHITECTURE-REVIEW.md §8).
+// a fix lands in one copy and not the other (docs/notes/ARCHITECTURE-REVIEW.md §8).
 // LOCAL, not a new global: it is one screen's drawing, and Menus already owns it.
 //   cv      the <canvas> to paint
 //   t       the circuit def
@@ -976,19 +1089,31 @@ function drawElevProfile(cv, t, showEl) {
   if (!cv || !target) return false;
   const py = TrackMaps.elevProfile(t);
   if (!(py && py.length > 2 && TrackMaps.elevRange(t) > 2)) { target.hidden = true; return false; }
-  target.hidden = false;
   // The HTML attributes (280x36 / 240x48) were the backing store forever while
   // CSS stretched the element to width: 100% — a 600px panel scaled the buffer
   // 2.5x horizontally and 1.0x vertically, smearing the 8px labels wide. Size
   // the buffer to the measured box times the effective zoom x dpr (the house
   // minimap pattern, capped at 3), and keep drawing in CSS px via the
-  // transform. Falls back to the attributes when hidden (zero box).
-  const boxW = cv.clientWidth || cv.width, boxH = cv.clientHeight || cv.height;
-  const ratio = Math.min(3, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  // transform. A hidden box (display:none: the compact picker, the modal before
+  // its reveal) is NOT drawn: falling back to the buffer multiplied it by dpr on
+  // every pick (280x36 -> 22680x2916, #5062). The next visible pass draws it.
+  let boxW = cv.clientWidth, boxH = cv.clientHeight;
+  if (!(boxW > 0 && boxH > 0)) {
+    target.hidden = false;   // a self-hidden canvas must be able to measure again
+    boxW = cv.clientWidth; boxH = cv.clientHeight;
+    if (!(boxW > 0 && boxH > 0)) return false;
+  }
+  const ratio = Math.min(3, 4096 / boxW, 4096 / boxH, Math.max(1, (cv.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   const bw = Math.max(1, Math.round(boxW * ratio)), bh = Math.max(1, Math.round(boxH * ratio));
   if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
   const ew = boxW, eh = boxH;
-  const eg = cv.getContext("2d");
+  // A canvas keeps its first context type for life: getContext("2d") is null
+  // when another type is already bound, or when the browser will not allocate
+  // a 2D store. setTransform on that null is the race-select overlay (#4469,
+  // three forced to GL on SwiftShader). Hide the sparkline instead.
+  const eg = cv.getContext ? cv.getContext("2d") : null;
+  if (!eg) { target.hidden = true; return false; }
+  target.hidden = false;
   eg.setTransform(ratio, 0, 0, ratio, 0, 0);
   eg.clearRect(0, 0, ew, eh);
   let mn = Infinity, mx = -Infinity;
@@ -1074,6 +1199,15 @@ watchHero(document.getElementById("sel-hero"));
 // glyph; a circuit with no still keeps the hero's own gradient. The token
 // guards a slow decode landing after the player has already moved on.
 let stillToken = 0;
+// Hero ~ full width: a DPR-3 phone takes the 1600 px file (#5223). STILL_1X_ONLY have no 2x file.
+const STILL_SIZES = "100vw";
+const STILL_1X_ONLY = [];
+/** "" = the 800 px file only (no 2x file, Save-Data, 2G). */
+function stillSrcset(id, conn) {
+  if (STILL_1X_ONLY.includes(id) || (conn && (conn.saveData || /2g$/.test(conn.effectiveType || "")))) return "";
+  const base = "assets/stills/" + id;
+  return base + ".webp 800w, " + base + "-1600.webp 1600w";
+}
 function showStill(t) {
   const img = document.getElementById("sel-still");
   if (!img) return;
@@ -1086,7 +1220,15 @@ function showStill(t) {
   img.hidden = true;
   img.dataset.id = t.id;
   img.onload = () => { if (token === stillToken) img.hidden = false; };
-  img.onerror = () => { if (token === stillToken) img.hidden = true; };
+  // A failed 2x load retries the 800 px file once; only a second failure hides the still.
+  img.onerror = () => {
+    if (token !== stillToken) return;
+    if (img.getAttribute("srcset")) { img.removeAttribute("srcset"); img.removeAttribute("sizes"); img.src = src; return; }
+    img.hidden = true;
+  };
+  const set = stillSrcset(t.id, typeof navigator !== "undefined" ? navigator.connection : null);
+  if (set) { img.sizes = STILL_SIZES; img.srcset = set; }
+  else { img.removeAttribute("srcset"); img.removeAttribute("sizes"); }
   img.src = src;
 }
 
@@ -1102,6 +1244,14 @@ function previewMapsCached(t) {
 }
 function previewPathReady(t) {
   return !!(t && !t._metaOnly && t.path && t.path.pts && t.path.pts.length);
+}
+// Hydrate a meta stub, then rerun fn on the same pick. The catch keeps a failed
+// load off index.html's "Promise rejection" overlay.
+function whenCircuit(t, fn) {
+  if (previewPathReady(t) || !G.ensureCircuit) return;
+  const idx = G.trackIdx;
+  G.ensureCircuit(idx).then(() => { if (G.trackIdx === idx && previewPathReady(Tracks.LIST[idx])) fn(); })
+    .catch((e) => Log.warn("track", "could not load circuit " + idx + ": " + ((e && e.message) || e)));
 }
 function fillPreviewMeta(t, crns, dir, elev, dz) {
   const turns = crns && crns.length;
@@ -1136,6 +1286,30 @@ function fillPreviewMeta(t, crns, dir, elev, dz) {
 // used to leave the canvas at its HTML attrs / zero CSS box until idle paint —
 // ui-redesign then saw buffer/CSS skew === 1 ("outline canvas is not
 // CSS-squashed"). Default 520/300 matches the designer attribute aspect; a
+/** The outline's slot in the hero: 62 % wide, ~60 % high, capped at the map
+    free band between the caption and stats (#5656). */
+function previewMapSlot(hero, sheet, map) {
+  const compact = !!(sheet && sheet.dataset.density === "compact");
+  let slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  if (map && hero.clientHeight > 0) slotH = Math.min(slotH, fitPreviewMapBand(map, hero));
+  return { slotW: hero.clientWidth * 0.62, slotH };
+}
+/** Position only the outline in the free band; the entire still remains tappable. */
+function fitPreviewMapBand(map, hero) {
+  const rect = hero.getBoundingClientRect();
+  if (!(rect.height > 0) || !(hero.offsetHeight > 0)) return 0;
+  const k = rect.height / hero.offsetHeight;
+  const top = rect.top + hero.clientTop * k;
+  const box = { top, bottom: top + hero.clientHeight * k, left: rect.left, right: rect.right };
+  const over = [];
+  for (const e of [document.getElementById("sel-hero-cap"), document.getElementById("sel-preview-facts"), document.getElementById("sel-preview-info")]) {
+    if (e) over.push(e.getBoundingClientRect());
+  }
+  const band = previewMapBand(box, over, Math.round(hero.clientHeight * k * 0.025));
+  map.style.setProperty("--map-band-top", band.top / k + "px");
+  map.style.setProperty("--map-band-bottom", band.bottom / k + "px");
+  return Math.max(0, hero.clientHeight - (band.top + band.bottom) / k);
+}
 // cache hit may use TrackMaps.aspect (cheap — compute already memoised).
 function sizePreviewMapBox(t) {
   if (!els.selPreviewMap || !t) return;
@@ -1143,8 +1317,7 @@ function sizePreviewMapBox(t) {
   const sheet = hero && hero.closest(".sheet");
   if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   const map = els.selPreviewMap;
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const { slotW, slotH } = previewMapSlot(hero, sheet, map);
   let a = 520 / 300;
   if (previewMapsCached(t) && typeof TrackMaps !== "undefined" && TrackMaps.aspect) {
     try { a = TrackMaps.aspect(t) || a; } catch (_) { /* keep default */ }
@@ -1175,8 +1348,7 @@ function paintTrackPreviewMaps(t) {
   if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   drawElevProfile(document.getElementById("sel-preview-elev"), t);
   const map = els.selPreviewMap;
-  const compact = !!(sheet && sheet.dataset.density === "compact");
-  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const { slotW, slotH } = previewMapSlot(hero, sheet, map);
   const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, true);
   const ratio = Math.min(3, Math.max(1, (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
   if (ratio > 1.01) {
@@ -1226,16 +1398,7 @@ function updateTrackPreview() {
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
   // Meta stubs have no path — hydrate LAZY_CIRCUIT then redraw (caption paints now).
-  if (t._metaOnly || !(t.path && t.path.pts && t.path.pts.length)) {
-    if (G.ensureCircuit) {
-      const idx = G.trackIdx;
-      // ensureCircuit rejects when the circuit payload fails to load; unhandled,
-      // index.html paints that as a full-screen "Promise rejection" overlay.
-      G.ensureCircuit(idx).then(() => {
-        if (G.trackIdx === idx) updateTrackPreview();
-      }).catch((e) => Log.warn("track", "preview could not load circuit " + idx + ": " + ((e && e.message) || e)));
-    }
-  }
+  whenCircuit(t, updateTrackPreview);
   // Caption ON the still: flag, name, grand prix. No TrackMaps — never hitch.
   const flagEl = document.getElementById("sel-preview-flag");
   if (flagEl) {
@@ -1258,12 +1421,14 @@ function updateTrackPreview() {
     const kinds = [];
     if (t.night) kinds.push(["trb trb-night", "NIGHT RACE"]);
     if (t.street) kinds.push(["trb trb-street", "STREET CIRCUIT"]);
-    if (t.classic) kinds.push(["trb trb-classic", "CLASSIC"]);
+    if (classicBadge(t, seasonIds())) kinds.push(["trb trb-classic", "CLASSIC"]);
     if (t.custom) kinds.push(["trb trb-custom", "CUSTOM CIRCUIT"]);
+    const why = t.custom && typeof CustomTracks !== "undefined" && CustomTracks.badge(t.id, () => { if (Tracks.LIST[G.trackIdx] === t) updateTrackPreview(); });
+    if (why) kinds.push(["trb", "BREAKS TODAY'S RULES", why]);
     if (t.banked) kinds.push(["trb", "BANKED"]);
     factsEl.textContent = "";
-    for (const [cls, label] of kinds) {
-      const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
+    for (const [cls, label, why] of kinds) {
+      const b = document.createElement("span"); b.className = cls; b.textContent = label; if (why) b.dataset.stale = b.title = why; factsEl.appendChild(b);
     }
   }
   const detail = document.getElementById("sel-detail-chip");
@@ -1284,7 +1449,7 @@ function updateTrackPreview() {
       ? "Final standings · " + SeasonCal.rounds() + " rounds"
       : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
   } else {
-    const board = ttBoard(t.id);
+    const board = liveBoard(t);
     const rec = board.length ? board[0].t : Infinity;
     els.selPreviewRec.textContent = isFinite(rec) ? "Best across setups  ★ " + fmtTime(rec)
       : ttChrome() ? "No time set" : "";
@@ -1328,11 +1493,11 @@ function openTrackDetail() {
   if (!t) return;
   const modal = document.getElementById("track-detail");
   if (!modal) return;
+  // A meta stub reads "0 turns", blank map: repaint when it lands (#5890).
+  whenCircuit(t, () => { if (!modal.hidden) openTrackDetail(); });
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
-  // The canvas labels are part of the modal's accessible reading order. Keep
-  // them tied to the selected circuit rather than making every map sound like
-  // the same generic diagram when a player moves between tracks.
+  // Canvas labels name this circuit, so each map reads distinctly to a screen reader.
   const mapCanvas = document.getElementById("track-detail-canvas");
   if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
   const elevCanvas = document.getElementById("track-detail-elev");
@@ -1380,9 +1545,8 @@ function openTrackDetail() {
     paintFav();
   }
 
-  // Legend is built once (like FAVOURITE) so the shell does not pay five
-  // extra nodes. Fast/medium/slow/hairpin reuse tdc-* colour; Sector is the
-  // grey S2 stroke that the 9px canvas key never named.
+  // Legend built once (like FAVOURITE), not in the shell. Fast/medium/slow/hairpin
+  // reuse tdc-* colour; Sector is the grey S2 stroke the canvas key never named.
   const wrap = document.getElementById("track-detail-canvas-wrap");
   let legend = document.getElementById("track-detail-legend");
   if (!legend && wrap) {
@@ -1468,6 +1632,8 @@ function openTrackDetail() {
     // A queued rAF/ResizeObserver delivery may arrive after CLOSE. Never
     // measure and redraw a hidden modal, and never retain its circuit closure.
     if (modal.hidden) return;
+    // The strip was drawn while the modal was display:none (a zero box, so deferred).
+    drawElevProfile(document.getElementById("track-detail-elev"), t, document.getElementById("track-detail-elev-wrap"));
     // Fit the canvas to the wrap in local (pre-zoom) CSS pixels. clientWidth
     // is correct inside `zoom: var(--ui-scale)` sheets; gBCR would mix visual
     // pixels and re-introduce stretch at UI SIZE ≠ 100%.
@@ -1535,6 +1701,41 @@ return {
 };
 }
 
-return { create };
+/** The season calendar's ids, or null (then the `classic` flag decides). */
+function calendarIdSet(cal) {
+  if (!cal || typeof cal.list !== "function") return null;
+  let l;
+  try { l = cal.list(); } catch (_) { return null; }
+  if (!Array.isArray(l) || !l.length) return null;
+  const ids = new Set();
+  for (const t of l) if (t && typeof t.id === "string") ids.add(t.id);
+  return ids.size ? ids : null;
+}
+/** Preview free band (#5656), pure: overlays in `box`'s upper half push the
+    top down, lower half pull the bottom up; empty/outside ones are ignored.
+    Returns top/bottom insets plus `margin`. */
+function previewMapBand(box, over, margin) {
+  const mid = (box.top + box.bottom) / 2;
+  let top = box.top, bot = box.bottom;
+  for (const r of over || []) {
+    if (!r || !(r.bottom > r.top) || !(r.right > r.left)) continue;
+    if (r.bottom <= box.top || r.top >= box.bottom || r.right <= box.left || r.left >= box.right) continue;
+    if ((r.top + r.bottom) / 2 < mid) top = Math.max(top, r.bottom);
+    else bot = Math.min(bot, r.top);
+  }
+  const m = Math.max(0, +margin || 0);
+  const height = box.bottom - box.top;
+  const insetTop = Math.min(height, top - box.top + m);
+  return { top: insetTop, bottom: Math.min(height - insetTop, box.bottom - bot + m) };
+}
+/** "custom", "season" (in `ids`) or "classic"; exactly one per circuit. */
+function calendarGroup(t, ids) {
+  if (!t) return null;
+  if (t.custom) return "custom";
+  if (ids) return ids.has(t.id) ? "season" : "classic";
+  return t.classic ? "classic" : "season";
+}
+
+return { create, calendarIdSet, calendarGroup, previewMapBand };
 })();
 Object.freeze(Menus);

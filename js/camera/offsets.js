@@ -80,11 +80,11 @@ const COMFORT_BY_ID = {};
 for (const d of COMFORT_DEFS) COMFORT_BY_ID[d.id] = d;
 
 // Built-in framing packs. Modes keyed like camTune; `global` is the baseline
-// layered under every mode; `comfort` is optional. STOCK clears everything.
+// layered under every mode; `comfort` is optional. STOCK restores the unscoped baseline.
 const PRESETS = Object.freeze({
   stock: Object.freeze({
     label: "STOCK",
-    help: "Shipped framing on every camera — clears per-mode edits, the global baseline and comfort knobs.",
+    help: "Restore the base framing and comfort for all cameras. Saved track and car overrides still apply.",
     modes: null, global: null, comfort: null,
   }),
   close: Object.freeze({
@@ -120,6 +120,9 @@ const PRESETS = Object.freeze({
 });
 
 let _store = {};
+let _rev = 0;                          // mergedProf memo revision: touch() on every store write (see mergedProf)
+const _merged = Object.create(null);   // mode -> { rev, track, car, prof }
+function touch() { _rev++; }
 let _global = {};
 let _comfort = {};
 let _tracks = {};
@@ -170,11 +173,11 @@ function sanitizeScopes(raw) {
   }
   return out;
 }
-function load(raw) { _store = sanitize(raw); return _store; }
-function loadGlobal(raw) { _global = sanitizeProf(raw); return _global; }
-function loadComfort(raw) { _comfort = sanitizeComfort(raw); return _comfort; }
-function loadTrack(raw) { _tracks = sanitizeScopes(raw); return _tracks; }
-function loadCar(raw) { _cars = sanitizeScopes(raw); return _cars; }
+function load(raw) { touch(); _store = sanitize(raw); return _store; }
+function loadGlobal(raw) { touch(); _global = sanitizeProf(raw); return _global; }
+function loadComfort(raw) { touch(); _comfort = sanitizeComfort(raw); return _comfort; }
+function loadTrack(raw) { touch(); _tracks = sanitizeScopes(raw); return _tracks; }
+function loadCar(raw) { touch(); _cars = sanitizeScopes(raw); return _cars; }
 load(store.get(KEY, null));
 loadGlobal(store.get(KEY_GLOBAL, null));
 loadComfort(store.get(KEY_COMFORT, null));
@@ -194,6 +197,7 @@ function persist(which) {
 
 function setContext(trackId, carId) {
   _ctxRev = -1;   // the next scopeKey re-reads storage over this, as before
+  touch();
   _context = {
     track: typeof trackId === "string" && trackId ? trackId : null,
     car: typeof carId === "string" && carId ? carId : null,
@@ -214,7 +218,8 @@ function refreshStoredContext() {
   const team = store.get("team", 2);
   _storedContext.car = Number.isInteger(team) && list && list[team] ? list[team].id : null;
 }
-function context() {
+const _ctxOut = { track: null, car: null };   // shared: scopeKey reads it a dozen times a chase frame; the public context() copies
+function contextShared() {
   const live = (_readContext ? _readContext() : _context) || {};
   let track = typeof live.track === "string" && live.track ? live.track : null;
   let car = typeof live.car === "string" && live.car ? live.car : null;
@@ -223,11 +228,13 @@ function context() {
     if (!_readContext || !track) track = _storedContext.track || track;
     if (!_readContext || !car) car = _storedContext.car || car;
   }
-  return { track, car };
+  _ctxOut.track = track; _ctxOut.car = car;
+  return _ctxOut;
 }
+function context() { return { ...contextShared() }; }
 function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
 function scopeKey(scope) {
-  const current = context();
+  const current = contextShared();
   return scope === "track" ? current.track : scope === "car" ? current.car : null;
 }
 function scopeEntry(scope, create) {
@@ -246,14 +253,21 @@ function pruneScope(scope) {
   if (!Object.keys(entry.modes || {}).length && !Object.keys(entry.comfort || {}).length) delete map[key];
 }
 
+// Cached per mode on _rev + track/car keys (perf P6, #4622); shared object: read, never mutate.
 function mergedProf(mode) {
+  const ctx = contextShared(), track = ctx.track, car = ctx.car;
+  let c = _merged[mode];
+  if (c && c.rev === _rev && c.track === track && c.car === car) return c.prof;
   // Global baseline < per-mode < car < track.
   const layers = [_global, _store[mode], scopedMode("car", mode), scopedMode("track", mode)];
   const out = {};
   for (const layer of layers) if (layer) for (const d of CAM_TUNE_DEFS) {
     if (typeof layer[d.id] === "number") out[d.id] = layer[d.id];
   }
-  return Object.keys(out).length ? out : null;
+  const prof = Object.keys(out).length ? out : null;
+  if (!c) c = _merged[mode] = { rev: 0, track: null, car: null, prof: null };
+  c.rev = _rev; c.track = track; c.car = car; c.prof = prof;
+  return prof;
 }
 
 // Resolved knob values for one mode — every id present, defaults filled in.
@@ -295,6 +309,36 @@ function getScoped(scope, mode, id) {
 function storedScoped(scope, mode, id) {
   const prof = scopedMode(scope, mode);
   return !!(prof && typeof prof[id] === "number");
+}
+
+// Describe the slider at its editing layer and the live rig after higher layers apply.
+function editorValue(scope, mode, id) {
+  const framing = mode != null;
+  const layer = !framing && scope === "mode" ? "global" : scope;
+  const fields = [["global", framing ? _global : _comfort]];
+  if (framing) fields.push(["mode", _store[mode]]);
+  for (const key of ["car", "track"]) {
+    const entry = scopeEntry(key, false);
+    fields.push([key, entry && (framing ? entry.modes[mode] : entry.comfort)]);
+  }
+  let source = "factory", value = (framing ? DEF_BY_ID : COMFORT_BY_ID)[id].def;
+  let editSource, editValue;
+  for (const [name, profile] of fields) {
+    if (profile && typeof profile[id] === "number") { source = name; value = profile[id]; }
+    if (name === layer) { editSource = source; editValue = value; }
+  }
+  return { layer, editSource, editValue, source, value };
+}
+
+function clearField(scope, mode, id) {
+  const entry = scopeEntry(scope, false);
+  const modes = scope === "mode" ? _store : entry && entry.modes;
+  const profile = mode ? modes && modes[mode] : entry && entry.comfort;
+  if (!profile || !Object.hasOwn(profile, id)) return;
+  delete profile[id];
+  if (mode && !Object.keys(profile).length) delete modes[mode];
+  pruneScope(scope);
+  touch();
 }
 
 // Resolved chase/far/drone corner lead: null = use the rig's shipped default.
@@ -365,37 +409,41 @@ function set(mode, id, v) {
   const d = DEF_BY_ID[id];
   if (!d || !mode || mode === GLOBAL_MODE || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
+  touch();
   const prof = _store[mode] || (_store[mode] = {});
   prof[id] = v;
-  if (!Object.keys(prof).length) delete _store[mode];
   return true;
 }
 function setGlobal(id, v) {
   const d = DEF_BY_ID[id];
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
+  touch();
   if (v === d.def) delete _global[id]; else _global[id] = v;
   return true;
 }
 function setScoped(scope, mode, id, v) {
   const d = DEF_BY_ID[id];
   if (!d || !mode || typeof v !== "number" || !isFinite(v) || !scopeMap(scope) || !scopeKey(scope)) return false;
+  touch();
   const entry = scopeEntry(scope, true);
   const prof = entry.modes[mode] || (entry.modes[mode] = {});
   prof[id] = clamp(v, d.min, d.max);   // explicit defaults override a lower layer
   return true;
 }
-function reset(mode) { Log.info("game", "CamTune.reset " + mode); delete _store[mode]; }
-function resetGlobal() { Log.info("game", "CamTune.resetGlobal"); _global = {}; }
+function reset(mode) { Log.info("game", "CamTune.reset " + mode); touch(); delete _store[mode]; }
+function resetGlobal() { Log.info("game", "CamTune.resetGlobal"); touch(); _global = {}; }
 function resetScoped(scope, mode) {
   const entry = scopeEntry(scope, false);
   if (!entry) return;
+  touch();
   if (mode) delete entry.modes[mode];
   else { entry.modes = {}; entry.comfort = {}; }
   pruneScope(scope);
 }
 function resetAll() {
   Log.info("game", "CamTune.resetAll");
+  touch();
   _store = {}; _global = {}; _comfort = {}; _tracks = {}; _cars = {};
 }
 
@@ -416,6 +464,7 @@ function comfortSet(id, v) {
   const d = COMFORT_BY_ID[id];
   if (!d || typeof v !== "number" || !isFinite(v)) return false;
   v = clamp(v, d.min, d.max);
+  touch();
   if (v === d.def) delete _comfort[id]; else _comfort[id] = v;
   return true;
 }
@@ -427,6 +476,7 @@ function comfortGetScoped(scope, id) {
 function comfortSetScoped(scope, id, v) {
   const d = COMFORT_BY_ID[id];
   if (!d || typeof v !== "number" || !isFinite(v) || !scopeMap(scope) || !scopeKey(scope)) return false;
+  touch();
   const entry = scopeEntry(scope, true);
   entry.comfort[id] = clamp(v, d.min, d.max);   // explicit defaults override a lower layer
   return true;
@@ -447,11 +497,12 @@ function buzzAmp(spV, deploying, reduceMotion, wet) {
 }
 function rollTarget(roadCamRoll, slipSm, baRoll, reduceMotion) {
   if (reduceMotion) return 0;
-  return (roadCamRoll + slipSm * 0.16 + baRoll) * rollLean();
+  return (roadCamRoll + slipSm * 0.16 - baRoll) * rollLean();
 }
 
 function copyFrom(srcMode, dstMode) {
   if (!srcMode || !dstMode || srcMode === dstMode) return false;
+  touch();
   const src = _store[srcMode];
   if (!src || !Object.keys(src).length) {
     delete _store[dstMode];
@@ -462,6 +513,7 @@ function copyFrom(srcMode, dstMode) {
 }
 function applyToAllModes(srcMode) {
   if (!srcMode) return 0;
+  touch();
   const src = _store[srcMode] ? { ..._store[srcMode] } : null;
   let n = 0;
   const modes = (typeof CamModes !== "undefined" && CamModes.CAM_MODES)
@@ -480,6 +532,7 @@ function applyPreset(id) {
   const p = PRESETS[id];
   if (!p) return false;
   Log.info("game", "CamTune.applyPreset " + id);
+  touch();
   if (p.modes === null) _store = {};
   else if (p.modes) {
     _store = {};
@@ -492,28 +545,32 @@ function applyPreset(id) {
   else if (p.global) _global = sanitizeProf(p.global);
   if (p.comfort === null) _comfort = {};
   else if (p.comfort) _comfort = sanitizeComfort(p.comfort);
-  if (id === "stock") { _tracks = {}; _cars = {}; }
   return true;
 }
 
 function importModes(raw) {
   const next = sanitize(raw);
+  touch();
   _store = next;
   return Object.keys(next).length;
 }
 function importGlobal(raw) {
+  touch();
   _global = sanitizeProf(raw);
   return Object.keys(_global).length;
 }
 function importComfort(raw) {
+  touch();
   _comfort = sanitizeComfort(raw);
   return Object.keys(_comfort).length;
 }
 function importTracks(raw) {
+  touch();
   _tracks = sanitizeScopes(raw);
   return Object.keys(_tracks).length;
 }
 function importCars(raw) {
+  touch();
   _cars = sanitizeScopes(raw);
   return Object.keys(_cars).length;
 }
@@ -706,7 +763,7 @@ function apply(mode, eye, tgt, fov) {
 return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SHARE_MAGIC,
          MAX_SHARE_CHARS, MAX_DECODED_BYTES,
          KEY, KEY_GLOBAL, KEY_COMFORT, KEY_TRACK, KEY_CAR,
-         apply, values, get, getModeOnly, getGlobal, getScoped, stored, storedGlobal, storedScoped, cornerLead, cornerHang,
+         apply, values, get, editorValue, clearField, getModeOnly, getGlobal, getScoped, stored, storedGlobal, storedScoped, cornerLead, cornerHang,
          exportEdits, exportGlobal, exportPack,
          set, setGlobal, setScoped, reset, resetGlobal, resetScoped, resetAll,
          count, countGlobal, countScoped, tunedModes, load, loadGlobal, loadComfort, loadTrack, loadCar, persist,

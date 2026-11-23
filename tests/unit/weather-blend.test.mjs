@@ -26,7 +26,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 
-function boot(trackId = "t", { particles = false } = {}) {
+function boot(trackId = "t", { particles = false, saved = {} } = {}) {
   const sandbox = {
     console,
     Assets: { env: () => null },
@@ -49,7 +49,6 @@ function boot(trackId = "t", { particles = false } = {}) {
     rain.init({ drawParticles: (_data, floats, additive) => { if (!additive) drawnRain += floats; } });
   }
   vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
-  const saved = {};
   const G = {
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
     store: { get: (k, d) => (k in saved ? saved[k] : d), set: (k, v) => { saved[k] = JSON.parse(JSON.stringify(v)); } },
@@ -77,7 +76,7 @@ function boot(trackId = "t", { particles = false } = {}) {
     drawnRain = 0; rain.draw();
     return drawnRain;
   };
-  return { G, atmo, ltStore, LT, DEFS, P, snapLt, drawRain };
+  return { G, atmo, ltStore, LT, DEFS, P, snapLt, drawRain, saved };
 }
 const host = (v) => JSON.parse(JSON.stringify(v));
 const sum = (a) => a.reduce((s, v) => s + v, 0);
@@ -310,8 +309,14 @@ function walk(b, track, tod, from, to, fps) {
   const frames = [snapLt()];   // frames[i][j] = knob DEFS[j] at frame i
   G.raceWeather = to; atmo.applyRaceSettings(true);
   frames.push(snapLt());
-  for (let t = 0; t < atmo.WX_BLEND_S + 1; t += 1 / fps) { atmo.tick(1 / fps); frames.push(snapLt()); }
-  return { frames, lightsKept: G.track._lights === lights };
+  // The held lamp knobs land at the fade's end (#5990): judge "kept" on the last
+  // frame still inside the fade, and hand back that frame's knobs too.
+  let lightsKept = true, held = frames[1];
+  for (let t = 0; t < atmo.WX_BLEND_S + 1; t += 1 / fps) {
+    atmo.tick(1 / fps); frames.push(snapLt());
+    if (atmo.wxBlend()) { lightsKept = G.track._lights === lights; held = frames[frames.length - 1]; }
+  }
+  return { frames, lightsKept, held };
 }
 
 test("a weather-arc flip walks every knob monotonically across the 25 s window, and no 60 fps frame moves keyMul > 10 %", () => {
@@ -325,14 +330,18 @@ test("a weather-arc flip walks every knob monotonically across the 25 s window, 
     // 4 fps is enough for the shape (monotonic, held, landed): the fade is a pure
     // function of t, so the frame rate only samples it. The 10 % bound is checked
     // at 60 fps below, on the steepest keyMul ratio this sweep finds.
-    const { frames, lightsKept } = walk(b, track, tod, from, to, 4);
+    const { frames, lightsKept, held } = walk(b, track, tod, from, to, 4);
     const tag = `${track}|${tod} ${from}->${to}`;
     assert.ok(lightsKept, `${tag}: the flip nulled track._lights (a lamp rebuild + re-bake mid-race)`);
     cut.G.track.def.id = track; cut.G.raceTimeOfDay = tod; cut.G.raceWeather = to; cut.atmo.applyRaceSettings();
     const first = frames[0], last = frames[frames.length - 1];
     for (let j = 0; j < b.DEFS.length; j++) {
       const d = b.DEFS[j], id = d.id, a = first[j], z = last[j];
-      if (HELD(d)) { if (z !== a) assert.fail(`${tag}: held knob ${id} moved ${a} -> ${z}`); continue; }
+      if (HELD(d)) {
+        if (held[j] !== a) assert.fail(`${tag}: held knob ${id} moved mid-fade ${a} -> ${held[j]}`);
+        if (z !== cut.LT[id]) assert.fail(`${tag}: held knob ${id} ended on ${z}, not the ${to} preset's ${cut.LT[id]}`);
+        continue;
+      }
       if (z !== cut.LT[id]) assert.fail(`${tag}: ${id} landed on ${z}, not the ${to} preset's ${cut.LT[id]}`);
       if (a === z) { if (!frames.every((f) => f[j] === a)) assert.fail(`${tag}: ${id} wandered`); continue; }
       moved++;
@@ -402,10 +411,10 @@ test("silverstone night dry→wet blends city skyglow, moon and the stamped knob
   const glowLum = (g) => (g ? g[0] + g[1] + g[2] : 0);
   const dryGlow = glowLum(b.G.frameSky.cityGlow);
   const wetGlow = glowLum(cut.G.frameSky.cityGlow);
-  // Dry endpoint is the Silverstone pass-2 skyglow override (2.35), not the
-  // fleet *|night|dry 0.55; wet still inherits *|night|wet 0.88.
-  assert.ok(Math.abs(stampDry.cityGlowMul - 2.35) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
-    "endpoints use silverstone|night|dry cityGlow + *|night|wet stamps");
+  // The owner-export presets (#5977) dropped Silverstone's pass-2 skyglow override (2.35): the dry
+  // endpoint is the fleet *|night|dry 0.55; wet still inherits *|night|wet 0.88.
+  assert.ok(Math.abs(stampDry.cityGlowMul - 0.55) < 1e-6 && Math.abs(stampWet.cityGlowMul - 0.88) < 1e-6,
+    "endpoints use *|night|dry + *|night|wet cityGlow stamps");
   b.G.raceWeather = "wet";
   b.atmo.applyRaceSettings(true);
   const at = (s) => {
@@ -549,6 +558,31 @@ test("FOG weather effective density stays in the readable band on shipped preset
     }
   }
   assert.equal(seen.length, 16);
+});
+
+// The band clamp used to divide the LIVE LT.fogDensityMul back out, while the renderers
+// multiply by the live value: in a clamped FOG session the FOG DENSITY slider moved the
+// picture until the next applyRaceSettings undid it, and a saved value never survived a
+// reload. It now divides out the SHIPPED multiplier (LightStore.shipped), so the player's
+// ratio over the shipped value scales the band and persists. Unedited sessions are
+// bit-identical (shipped === live).
+test("FOG weather: the player's FOG DENSITY survives a re-apply and a reload in a clamped session", () => {
+  const eff = (b) => b.G.frame.fogDensity * b.LT.fogDensityMul;
+  const start = (saved) => {
+    const b = boot("spa", { saved });
+    b.G.frame.fogDensity = 0.0043; b.G.raceTimeOfDay = "day"; b.G.raceWeather = "fog";
+    b.atmo.applyRaceSettings();
+    return b;
+  };
+  const b = start({});
+  const shipped = b.LT.fogDensityMul, base = eff(b);
+  assert.ok(Math.abs(base - 0.006) < 1e-9 || Math.abs(base - 0.0067) < 1e-9, `spa day fog is band-clamped (eff ${base})`);
+  b.ltStore.set("fogDensityMul", shipped * 1.5); b.ltStore.persist();
+  b.atmo.applyRaceSettings();
+  assert.ok(Math.abs(eff(b) / base - 1.5) < 1e-9, `a re-apply must keep the player's x1.5 (got x${eff(b) / base})`);
+  const r = start(b.saved);
+  assert.equal(r.LT.fogDensityMul, shipped * 1.5, "the saved value resolves after a reload");
+  assert.ok(Math.abs(eff(r) / base - 1.5) < 1e-9, `the saved x1.5 must reach the picture after a reload (got x${eff(r) / base})`);
 });
 
 test("FOG BOOST still scales fog: the band follows the knob, so pea-soup stays reachable", () => {

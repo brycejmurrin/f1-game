@@ -12,6 +12,7 @@
 //   await runMenuGallery({ jobs: 2, force: false });
 //
 // CLI: node tools/ui/layout-audit.mjs --gallery | --screen=ID | --list | --report
+import { imageSize } from "./issue-shots.mjs";
 import { menuReady, previewMapSettled } from "./menu-readiness.mjs";
 import fs from "node:fs";
 import { escapeHtml as galleryEscape, screenshotCard, renderGallery } from "../lib/screenshot-gallery.cjs";
@@ -22,6 +23,7 @@ import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
+import { resetToTitleState, titleUsable as isTitleUsable } from "./ui-reset.mjs";
 import {
   SCREENS,
   VIEWPORTS,
@@ -30,6 +32,7 @@ import {
   pickViewports,
   listScreenIds,
   getScreen,
+  seedOwnerProfile,
 } from "./menu-screens.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -65,9 +68,19 @@ export function cellPaths(outDir, screenId, vpName) {
   };
 }
 
-export function cellRecorded(outDir, screenId, vpName) {
+export function cellRecorded(outDir, screenId, vpName, options) {
   const { png, dom } = cellPaths(outDir, screenId, vpName);
-  return fs.existsSync(png) && fs.existsSync(dom);
+  if (!fs.existsSync(png) || !fs.existsSync(dom)) return false;
+  if (!options?.viewport) return true;
+  // A gallery directory may still contain the former 2× iPhone captures.
+  const fd = fs.openSync(png, "r");
+  try {
+    const header = Buffer.alloc(24);
+    if (fs.readSync(fd, header) !== header.length) return false;
+    const size = imageSize(header);
+    const dpr = options.deviceScaleFactor || 1;
+    return size?.type === "png" && size.width === options.viewport.width * dpr && size.height === options.viewport.height * dpr;
+  } finally { fs.closeSync(fd); }
 }
 
 function resolveViewport(name) {
@@ -117,38 +130,13 @@ export async function bootPage(page, base, { hideGame = true, scale = null, time
 
 export async function resetToTitle(page, base, hideGame, lang = null) {
   const url = urlWithLang(base, lang);
-  await page.evaluate((ids) => {
-    for (const id of ids) {
-      const el = document.getElementById(id);
-      if (el) el.hidden = true;
-    }
-    // iOS Add-to-Home tip sits over title buttons on touch UAs; dismiss for harness clicks.
-    const tip = document.getElementById("ios-install");
-    if (tip) tip.hidden = true;
-    const chip = document.getElementById("install-chip");
-    if (chip) chip.hidden = true;
-    const ov = document.getElementById("overlay");
-    if (ov) {
-      ov.hidden = false;
-      ov.style.removeProperty("display");
-    }
-    // Match layout-audit: route body classes survive `hidden=true` on panels and
-    // gate #hud / title hit-testing (photo-mode, lt-open, …).
-    document.body.classList.remove(
-      "in-race", "lt-open", "photo-mode", "photo-studio-open",
-      "pc-nopanel", "pc-uihidden", "rotate-help-open", "manual");
-  }, OVERLAY_IDS);
+  // ONE reset for every layout tool (ui-reset.mjs): each layer leaves through its
+  // own door; `hidden = true` only for what a door could not close, and logged.
+  await resetToTitleState(page, { tag: "menu-capture" });
   await page.waitForTimeout(200);
   // Sized AND hittable (layout-audit 2026-09-30): a covering layer leaves #mb-race
   // full-sized but inert — size-only checks passed and every later click timed out.
-  const titleUsable = await page.evaluate(() => {
-    const b = document.getElementById("mb-race");
-    if (!b) return false;
-    const r = b.getBoundingClientRect();
-    if (!(r.width > 1 && r.height > 1)) return false;
-    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
-  });
+  const titleUsable = await page.evaluate(isTitleUsable);
   if (!titleUsable) {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60000 });
@@ -219,7 +207,7 @@ export async function runMenuShot(opts = {}) {
   const outDir = opts.outDir || DEFAULT_OUT;
   const force = !!opts.force;
 
-  if (!force && cellRecorded(outDir, screen.id, vpTag)) {
+  if (!force && cellRecorded(outDir, screen.id, vpTag, vpOpts)) {
     const paths = cellPaths(outDir, screen.id, vpTag);
     return { ok: true, skipped: true, screen: screen.id, viewport: vpTag, ...paths };
   }
@@ -229,6 +217,7 @@ export async function runMenuShot(opts = {}) {
   try {
     browser = await launchChromium({ args: ["--use-angle=swiftshader", "--hide-scrollbars"] });
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+    await seedOwnerProfile(ctx, resolveViewport(vpName));   // bryce-* cells boot on his live settings export
     const page = await ctx.newPage();
     await bootPage(page, srv.url, { hideGame: opts.hideGame !== false, scale, lang: opts.lang });
     await resetToTitle(page, srv.url, opts.hideGame !== false, opts.lang);
@@ -290,9 +279,11 @@ export async function runMenuGallery(opts = {}) {
   const queue = [];
   for (const vp of viewports) for (const sc of scales) queue.push([vp, sc]);
 
-  async function sweepViewport([baseName, vpOpts, why, insets], scale) {
+  async function sweepViewport(vpEntry, scale) {
+    const [baseName, vpOpts, why, insets] = vpEntry;
     const vpName = baseName + scaleTag(scale);
     const ctx = await browser.newContext({ ...vpOpts, colorScheme: "dark" });
+    await seedOwnerProfile(ctx, vpEntry);   // bryce-* cells boot on his live settings export
     const page = await ctx.newPage();
     let booted = false;
     try {
@@ -310,7 +301,7 @@ export async function runMenuGallery(opts = {}) {
         onCell(`${cell.screen.padEnd(13)} ${vpName.padEnd(28)} SKIPPED: boot failed`);
         continue;
       }
-      if (!force && cellRecorded(outDir, screen.id, vpName)) {
+      if (!force && cellRecorded(outDir, screen.id, vpName, vpOpts)) {
         const paths = cellPaths(outDir, screen.id, vpName);
         cell.shot = paths.relShot;
         cell.dom = paths.relDom;

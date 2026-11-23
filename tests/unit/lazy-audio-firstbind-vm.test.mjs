@@ -28,15 +28,27 @@ async function bootAndGesture(storage) {
   return { g, sb, fa };
 }
 
-test("first gesture + RACE with default settings has an AudioContext and a running engine", async () => {
-  const { g, sb, fa } = await bootAndGesture();
+test("first gesture + RACE with sound enabled has an AudioContext and a running engine", async () => {
+  const { g, sb, fa } = await bootAndGesture({ sound: true });
   try {
     assert.equal(fa.made.length, 1, "title: the first gesture created no AudioContext (title loop silent)");
+    assert.equal(fa.made[0].resumedAtBirth, true, "init() must resume the new (suspended) context in the creating turn");
     await g.race("monza", "day", "dry");
     g.apex.setInput({ throttle: true, steer: 0 });
     g.step(300);
     assert.equal(sb.GameAudio.debug().contextState, "running", "race: no AudioContext");
     assert.equal(sb.GameAudio.debug().engineOn, true, "race: startEngine() returned on a null ctx — silent car");
+  } finally { g.close(); }
+});
+
+test("a fresh install remains muted through the first title gesture", async () => {
+  const { g, sb, fa } = await bootAndGesture();
+  try {
+    assert.equal(g.G.soundOn, false);
+    assert.equal(g.G.musicEnabled, false);
+    assert.equal(fa.made.length, 0);
+    assert.equal(sb.GameAudio.volumes().music, 0.7);
+    assert.equal(sb.GameAudio.volumes().sfx, 0.4);
   } finally { g.close(); }
 });
 
@@ -53,7 +65,7 @@ test("the saved camera's audio mix survives the LAZY_AUDIO reinjection", async (
 test("desktop shell binds LAZY_AUDIO at boot without a title gesture", async () => {
   let fa = null;
   const g = await createGame({
-    carMeshes: false,
+    carMeshes: false, storage: { sound: true },
     onSandbox: (sb) => {
       sb.window.__APEX_NATIVE__ = Object.freeze({ desktop: true });
       fa = install(sb);
@@ -84,7 +96,7 @@ test("the first SOUND click while the bundle loads starts the title music (H22)"
   // stub used to flip soundOn + init() and stop there: the real panel's setSound (title
   // music, MUSIC/SFX control sync) never ran, so SOUND read ON over silence.
   let fa = null;
-  const g = await createGame({ carMeshes: false, storage: { sound: false }, onSandbox: (sb) => { fa = install(sb); } });
+  const g = await createGame({ carMeshes: false, storage: { sound: false, music: true }, onSandbox: (sb) => { fa = install(sb); } });
   const sb = g.sandbox;
   try {
     const music = [];
@@ -114,7 +126,7 @@ test("the first SOUND click while the bundle loads starts the title music (H22)"
 });
 
 test("the saved AUDIO DRIVING CUES level survives the LAZY_AUDIO reinjection", async () => {
-  const { g, sb } = await bootAndGesture({ audioCues: 7 });
+  const { g, sb } = await bootAndGesture({ sound: true, audioCues: 7 });
   try {
     sb.GameAudio.init();
     await g.race("monza", "day", "dry");
@@ -132,7 +144,7 @@ test("an activation-triggering pointerup unlocks a suspended context once the bu
   // touchend/pointerdown/keydown only; the loader's capture listener must resume it on a
   // pointerup (or click) and then step aside.
   let fa = null, inits = 0;
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  const g = await createGame({ carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { fa = install(sb); } });
   const sb = g.sandbox;
   try {
     sb.dispatchEvent({ type: "pointerdown", pointerType: "touch", target: sb.document.body });

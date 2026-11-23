@@ -6,7 +6,7 @@
 //        cinematic, low, tcam, rear, visor, trackside, rival, pitwall, drone, helmet.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { frameContent, frameDelta, screenshotPixels } from "../helpers/visual-oracle.js";
-import { screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
+import { awaitCaptureReady, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 
 test.describe("Apex 26 — player camera modes", () => {
@@ -88,17 +88,12 @@ test.describe("Apex 26 — player camera modes", () => {
     const shots = {};
     await page.evaluate(() => { window.__apex.freeze(true); window.__apex.headless(true); });
     for (const mode of ["chase", "cockpit", "overhead"]) {
-      await page.evaluate(async (m) => {
-        const a = window.__apex;
-        a.camera(m);
-        const ready = GLX.softPresent?.() ? GLX.awaitSoftPresent(60_000) : null;
-        try {
-          a.snapCam(true); // arm and paint exactly this camera
-          a.headless(true); // snapCam(true) enables the live loop; quiet it now
-          if (ready) await ready;
-          else await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        } finally { a.headless(true); }
-      }, mode);
+      // snapCam(true) arms a paint of exactly this camera and leaves the live loop on;
+      // awaitCaptureReady (per-backend present counters) proves a fresh frame was PRESENTED,
+      // then pauses the loop for the read. The old hand-rolled wait quieted the loop straight
+      // after arming and read a never-painted (black) TLX frame, on the deploy tip too.
+      await page.evaluate((m) => { const a = window.__apex; a.camera(m); a.snapCam(true); }, mode);
+      await awaitCaptureReady(page, { timeoutMs: 60_000, pauseRender: true });
       const chrome = await page.addStyleTag({ content: "body > :not(canvas):not(script):not(style) { visibility:hidden !important } dialog::backdrop { background:transparent !important }" });
       try {
         shots[mode] = await screenshotPixels(page, (await screenshotPresentedCanvas(page, { skipAwait: true })).buf);
@@ -150,5 +145,61 @@ test.describe("Apex 26 — player camera modes", () => {
     });
     expect(r.before).toBe("chase");
     expect(r.after).toBe("far");
+  });
+});
+
+test.describe("mobile helmet visor budget", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, deviceScaleFactor: 3 });
+
+  test("severe load suspends reflection and world refraction, then restores while paused", async ({ page, loadTrack }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.forceMobileTier", "1");
+      localStorage.setItem("apex26.gfxBackend", "webgl2");
+      localStorage.setItem("apex26.gfxPreset", JSON.stringify("medium"));
+    });
+    await loadTrack("monza", "day", "dry", { headless: true });
+    const result = await page.evaluate(() => {
+      __apex.camera("helmet");
+      CockpitOpts.setVisor("clear");
+      CockpitOpts.setVisorReflections("light");
+      CockpitOpts.setVisorRefraction("medium");
+      PerfGov.setUserTier(2);
+      VisorOptics.tick(1 / 60, true, 30, false);
+      const port = document.body.style.getPropertyValue("--visor-port");
+      const read = () => ({
+        paints: VisorOptics.stats().paints, shed: VisorOptics.stats().shed,
+        hidden: document.getElementById("fx-visor").hidden,
+        filter: getComputedStyle(document.getElementById("game")).filter,
+        portUnchanged: document.body.style.getPropertyValue("--visor-port") === port,
+        visor: CockpitOpts.visor(), refraction: CockpitOpts.visorRefraction(),
+      });
+      const before = read();
+      // The real governor is frozen. Unit tests drive its pressure inputs; here
+      // exercise the resulting compositor selectors against the shipped CSS.
+      document.body.setAttribute("data-visor-budget", "1");
+      const reducedFilter = read().filter;
+      document.body.setAttribute("data-visor-budget", "2");
+      const minimalFilter = read().filter;
+      document.body.removeAttribute("data-visor-budget");
+      PerfGov.setUserTier(4);   // controlled pressure input; selected preset stays MEDIUM
+      for (let i = 0; i < 600; i++) VisorOptics.tick(1 / 60, true, 30, false);
+      const shed = read();
+      PerfGov.setUserTier(2);
+      VisorOptics.tick(0, true, 30, false);
+      const restored = read();
+      __apex.camera("chase");
+      VisorOptics.tick(0, true, 30, false);
+      return { before, shed, restored, reducedFilter, minimalFilter, mobile: GLX.isMobile, preset: GfxQuality.current(), exitShed: document.body.hasAttribute("data-visor-shed") };
+    });
+    expect([result.mobile, result.preset, result.exitShed]).toEqual([true, "medium", false]);
+    expect(result.before.filter).toContain("visor-bend-medium");
+    expect(result.reducedFilter).toContain("visor-bend-medium");
+    expect(result.minimalFilter).toBe("none");
+    expect([result.shed.paints, result.shed.shed, result.shed.hidden, result.shed.filter]).toEqual([result.before.paints, true, true, "none"]);
+    expect([result.restored.paints, result.restored.shed, result.restored.hidden]).toEqual([result.before.paints + 1, false, false]);
+    expect(result.restored.filter).toContain("visor-bend-medium");
+    for (const state of [result.shed, result.restored]) {
+      expect([state.portUnchanged, state.visor, state.refraction]).toEqual([true, "clear", "medium"]);
+    }
   });
 });

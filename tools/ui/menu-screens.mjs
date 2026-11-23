@@ -5,6 +5,9 @@
 import { CliArgError } from "../lib/cli-args.mjs";
 import { createRequire } from "node:module";
 import { pickCircuit } from "./circuit-axis.mjs";
+import { brycePhone, seedStoreInPage } from "../lib/bryce-phone.mjs";
+const comparisonPhone = brycePhone({ window: "w844", profile: false });
+const ins = (w) => ({ t: w.insets.top, r: w.insets.right, b: w.insets.bottom, l: w.insets.left });
 
 const require = createRequire(import.meta.url);
 const { devices } = require("playwright");
@@ -23,30 +26,26 @@ async function openVisualTuner(p, tunerId, timeout = 15000) {
 }
 
 export const VIEWPORTS = [
-  // DPR overrides below are fast geometry probes, not native phone raster captures.
-  // The 4th element is the SAFE-AREA INSET to inject (see applyInsets): Chromium
-  // reports env(safe-area-inset-*) as 0 under device emulation, so a notch has
-  // to be simulated or it is never tested at all. iPhone 15 Pro, measured:
-  // 59/34 top/bottom upright; on its side the notch moves to the LEADING edge.
-  ["ios-iphone-portrait",   { ...devices["iPhone 15 Pro"], viewport: { width: 393, height: 852 }, screen: { width: 393, height: 852 }, deviceScaleFactor: 2 },
-    "full-screen portrait geometry; browser toolbar excluded", { t: 59, r: 0, b: 34, l: 0 }],
-  ["ios-iphone-landscape",  { ...devices["iPhone 15 Pro landscape"], viewport: { width: 852, height: 393 }, screen: { width: 852, height: 393 }, deviceScaleFactor: 2 },
-    "the shape the game is PLAYED in — 343px of height for everything",
-    { t: 0, r: 59, b: 21, l: 59 }],
-  // The device descriptor's 393px is the FULL-SCREEN/PWA height; landscape
-  // Safari with its collapsed toolbar leaves ~344px, and no cell sat between
-  // 344 and 393 — the matrix hole behind the 2026-08 teampicker arithmetic.
-  ["ios-iphone-landscape-safari", { ...devices["iPhone 15 Pro landscape"],
-      deviceScaleFactor: 2, viewport: { width: 852, height: 344 }, screen: { width: 852, height: 393 } },
-    "landscape Safari with the toolbar collapsed — the shortest real viewport",
-    { t: 0, r: 59, b: 21, l: 59 }],
+  // Native-density iPhone 15 captures. The measured Safari viewport is shorter than its screen.
+  ...[["ios-iphone-portrait", "portrait"], ["ios-iphone-landscape", "standalone"], ["ios-iphone-landscape-safari", "safari"]].map(([name, window]) => {
+    const p = brycePhone({ window, profile: false });
+    return [name, p.contextOptions, p.verified, ins(p), { nativeDensity: true }];
+  }),
   // iPhone 12-14 and most Android phones in landscape: 844x390 full screen. The
-  // 852x344 / 852x393 cells above straddle it but never land ON it, and a
+  // 852x368 / 852x393 cells above straddle it but never land ON it, and a
   // title-screen overlap (INSTALL APP over ANIMATE BACKGROUND) showed only here
   // (found by hand in Chrome DevTools emulation, 2026-10-05).
-  ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: { width: 844, height: 390 }, screen: { width: 844, height: 390 } },
+  ["ios-iphone-landscape-844", { ...devices["iPhone 13 landscape"], viewport: comparisonPhone.viewport, screen: comparisonPhone.contextOptions.screen },
     "iPhone 13 full-screen geometry, 844x390 CSS; browser toolbar excluded",
-    { t: 0, r: 47, b: 21, l: 47 }],
+    ins(comparisonPhone)],
+  // THE OWNER'S PHONE (tools/lib/bryce-phone.mjs, issue #5262). Named `bryce-*` so an `ios-*` glob never picks them
+  // up. The 5th element marks the cell: seedOwnerProfile() then boots it on his live settings export (UI SIZE 70 %),
+  // and layout-audit sets real env() insets and prints the PAINTED sizes (tools/lib/paint-floor.mjs).
+  ...["standalone", "portrait", "safari", "safari-short"].map((w) => {
+    const p = brycePhone({ window: w, profile: false });
+    return [p.name, { ...p.contextOptions }, `Bryce's iPhone, ${w.startsWith("safari") ? "Safari tab" : "Home Screen app"} ${p.viewport.width}x${p.viewport.height}, his live settings export — ${p.verified}`,
+      ins(p), { nativeDensity: true, bryce: w }];
+  }),
   ["ios-ipad-portrait",     { ...devices["iPad Pro 11"], deviceScaleFactor: 1 },
     "wide sheet, tall window: the case that wants bands, not columns"],
   ["ios-ipad-landscape",    { ...devices["iPad Pro 11 landscape"], deviceScaleFactor: 1 },
@@ -55,6 +54,9 @@ export const VIEWPORTS = [
     "a small laptop"],
   ["desktop-1440x900",      { viewport: { width: 1440, height: 900 } },
     "the common desktop"],
+  ["desktop-macbook-pro-16-m4", {
+    viewport: { width: 1728, height: 1117 }, screen: { width: 1728, height: 1117 }, deviceScaleFactor: 2,
+  }, "16-inch MacBook Pro (2024, M4 Pro/Max), full display at default Retina scale", undefined, { nativeDensity: true }],
   ["desktop-1920x1080",     { viewport: { width: 1920, height: 1080 } },
     "full screen on a 1080p monitor"],
   ["desktop-windowed-1920x937", { viewport: { width: 1920, height: 937 } },
@@ -139,6 +141,10 @@ export const SCREENS = [
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-progress");
       await p.waitForSelector("#pm-panel-progress:not([hidden])", { timeout: 15000 }); } },
+  { id: "settingscredits", view: "#pm-panel-credits", name: "About & credits", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-credits");
+      await p.waitForSelector("#pm-panel-credits:not([hidden])", { timeout: 15000 }); } },
   { id: "settingsfiles", view: "#pm-panel-files", name: "Saves & Data", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-files");
@@ -597,6 +603,15 @@ export const OVERLAY_IDS = [
   // click on #mb-race times out on a button that measures perfectly visible
   // (quali SKIPPED behind duelpicker in every sweep, 2026-09-30).
   "duel-picker",
+  // UiLayers layers (js/ui/layers.js DEFS) the list had drifted from: the free
+  // camera, the garage arrival tuner, the TITLE LAYOUT editor bar and the HUD
+  // arrange bar. ui-reset.mjs closes them through their doors; this list is
+  // only its hidden=true FALLBACK. Deliberately absent: #overlay (the title
+  // itself), #rotate-device (CSS-gated on body.in-race + a portrait media
+  // query, never `hidden` — the reset strips in-race instead), and the
+  // #ios-install / #install-chip tips (not layers; ui-reset TIP_IDS).
+  // tests/unit/ui-reset-tap-floor.test.mjs pins this against DEFS.
+  "freecam", "garrival", "ceremony-podium", "tl-editor", "hud-arrange-bar", "screen-arranger",
 ];
 
 export function listScreenIds() {
@@ -626,4 +641,16 @@ export function pickScreens(all, patternArg) {
 
 export function pickViewports(all, patternArg) {
   return pickByName(all, patternArg, ([n]) => n, "--viewports");
+}
+
+/**
+ * Owner cells (`bryce-*`): seed his live settings export before the first script runs, so the cell boots the way his
+ * phone does. A no-op for every other viewport. Call it on the context right after newContext. Returns the preset or null.
+ */
+export async function seedOwnerProfile(ctx, vpEntry) {
+  const mark = vpEntry && vpEntry[4];
+  if (!mark || !mark.bryce) return null;
+  const preset = brycePhone({ window: mark.bryce });
+  await ctx.addInitScript(seedStoreInPage, preset.localStorage);
+  return preset;
 }

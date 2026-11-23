@@ -19,7 +19,6 @@ const TitleWarm = (function () {
   // Why the title warm may not start now; [] means go. `e` is a plain snapshot (see create's env()).
   function blockers(e) {
     const out = [];
-    if (e.state !== "menu") out.push("state");
     if (!e.title) out.push("surface");
     if (e.homeDraws) out.push("home-3d");
     if (!e.warmable) out.push("no-warm");
@@ -58,7 +57,7 @@ const TitleWarm = (function () {
       const s = store();
       if (quietSince === null) quietSince = now();
       return {
-        state: G.state, title: titleShowing() && !G.setupPreviewOn,
+        title: titleShowing() && !G.setupPreviewOn,
         homeDraws: !!(st && st.home), warmable: !!d.warmable(), intro: !!(ov && ov.hasAttribute("data-intro")),
         sheetOpen: GaragePrebuild.sheetOpenNow(), tabHidden: typeof document !== "undefined" && !!document.hidden,
         headless: !!G.headlessMode, saveData: GaragePrebuild.saveData(nav, typeof matchMedia === "function" ? matchMedia : null),
@@ -67,24 +66,40 @@ const TitleWarm = (function () {
       };
     }
     function poll() {
+      if (G.state !== "menu") {
+        // Restart the idle delay on the first menu poll, even after a long race.
+        if (!last || last.why?.[0] !== "state") last = { at: Math.round(now()), why: ["state"] };
+        wanted = false; quietSince = null;
+        return;
+      }
       if (wanted) {
         // The prep runs while the title stays up, and on through the picker / RACE SETTINGS if the player taps RACE
         // (their own current() keeps it). Anywhere else (a race, the garage, career) it was abandoned: re-arm.
         const sel = d.$("select"), rs = d.$("race-settings");
         const menus = titleShowing() || !!(sel && !sel.hidden) || !!(rs && !rs.hidden);
-        if (G.state !== "menu" || !menus) { wanted = false; noisy(); }
+        if (!menus) { wanted = false; noisy(); }
         else if (d.prepReady()) {
           const e = env();
           wanted = false;
           if (e.build && doneBuild !== e.build) { doneBuild = e.build; const s = store(); if (s) s.rawSet("titleWarm", e.build); }
           last = { ...last, done: Math.round(now()) };
           try { Log.info("gfx", "title warm done " + e.build); } catch (_) { /* logging is optional */ }
+          // One per session: drop the 1 Hz poll so an idle title does not keep
+          // waking the main thread for the rest of the visit (phone + desktop).
+          stop();
         }
         return;
       }
-      if (doneBuild) return;   // one per session
+      if (doneBuild) { stop(); return; }   // one per session
       const e = env(), why = blockers(e);
       last = { at: Math.round(now()), why };
+      // A phone that already finished this build will never warm again this
+      // visit: latch and drop the poll (was a permanent 1 Hz env() wake).
+      if (why.indexOf("done-this-build") >= 0) {
+        doneBuild = e.build || "done";
+        stop();
+        return;
+      }
       // Idle counts from the title actually showing: any blocker but the quiet clock itself restarts it.
       if (why.some((w) => w !== "input-recent")) noisy();
       if (why.length) return;
@@ -92,16 +107,18 @@ const TitleWarm = (function () {
       try { Log.info("gfx", "title warm start (build " + e.build + (e.phone ? ", phone" : "") + ")"); } catch (_) { /* optional */ }
       d.schedule();
     }
+    function stop() { if (timer) clearInterval(timer); timer = 0; }
     return {
       start() { if (!timer && typeof setInterval === "function") timer = setInterval(poll, POLL_MS); },
-      stop() { if (timer) clearInterval(timer); timer = 0; },
+      stop,
       poll,
       // scheduleFlybyTrack's current(): a title warm in progress keeps the prep alive on the title.
       wants: () => wanted && titleShowing(),
-      state: () => ({ wanted, doneBuild, last }),
+      state: () => ({ wanted, doneBuild, last, polling: !!timer }),
     };
   }
 
-  return { create, blockers, buildId, POLL_MS };
+  // blockers / buildId / POLL_MS stay module-local — create() is the only external seam.
+  return { create };
 })();
 Object.freeze(TitleWarm);

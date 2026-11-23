@@ -147,7 +147,7 @@ test("C4: the player's look-back key and free-look glance do not spin the PiP or
   assert.ok(Math.abs(aim(solve({ att: {}, noLook: true })) - aim(base)) < 1e-6, "TV shot unmoved by the player's glance");
   assert.ok(Math.abs(aim(solve({ att: {} })) - aim(base)) > 0.1, "the player's own camera still glances (control)");
   const dir = readFileSync(join(ROOT, "js/camera/director.js"), "utf8");
-  assert.match(dir, /att: car, noLook: true/, "director.js flags every TV shot noLook");
+  assert.match(dir, /extra\.noLook = true/, "director.js flags every TV shot noLook");
 });
 
 test("C7: the solved FOV stays inside the documented 20-110 clamp after CamFeel.drive adds its lens delta", () => {

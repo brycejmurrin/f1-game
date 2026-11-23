@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["montreal"] =
   function (api) {
-      const { K, out, n, py, pyMin, place, backdrop, wall, grandstandEx,
+      const { K, out, pyMin, place, backdrop, wall, grandstandEx,
         building, anchor, addBox, addCyl, addCone, addPrism, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         scaffoldStand, broadleafFall, tree, pine, seat, groundUnder, indexSolid,
@@ -109,8 +109,10 @@
 
       for (const side of [-1, 1]) {
         for (const [s0, s1, gap] of [
-          [0.0, 0.05, 2.5], [0.05, 0.09, 3.5], [0.09, 0.55, 2.5],   // foldback bands re-keyed from 0.19-0.23 / 0.69-0.73 (the dropped 0.86 shift)
-          [0.55, 0.59, 3.5], [0.59, 1.0, 2.5],
+          // foldback bands: Senna S (T1-T2) and L'Épingle T10 (built apex turns[9] 0.6178;
+          // was 0.55-0.59, 250 m early on the straight — corner-frames W5).
+          [0.0, 0.05, 2.5], [0.05, 0.09, 3.5], [0.09, 0.60, 2.5],
+          [0.60, 0.64, 3.5], [0.64, 1.0, 2.5],
         ]) wall(s0, s1, side, gap, 1.5, WALL);
       }
 
@@ -128,18 +130,24 @@
       // Right verge: park lawns from Senna S through the Casino complex
       for (let i = 0; i < 14; i++) {
         if ([4, 9, 11, 12].includes(i)) continue; // nearby foldbacks own this ground
-        groundPatch(K(0.08 + i * 0.058), 1, 9, [42, 0.35, 40], GRASS,
+        // The hairpin return comes within 19 m of this verge at the southern end.
+        groundPatch(K(0.08 + i * 0.058), 1, 9, [i === 10 ? 9 : 42, 0.35, 40], GRASS,
           { id: `montreal-park-lawn-r-${i}`, samples: 6 });
       }
       // Left verge: island interior from basin entry to back straight
       for (let i = 0; i < 10; i++) {
-        groundPatch(K(0.10 + i * 0.068), -1, 9, [40, 0.35, 38], GRASS,
+        // The Jean-Doré beach and its service path occupy the outer verge here.
+        const lawnWidth = i === 8 || i === 9 ? 24 : 40;
+        groundPatch(K(0.10 + i * 0.068), -1, 9, [lawnWidth, 0.35, 38], GRASS,
           { id: `montreal-park-lawn-l-${i}`, samples: 6 });
       }
 
       // Continuous low clipped hedge / treeline ribbon framing the verges
-      hedge(0.13, 0.19,  1, 9, 1.6, HEDGE);
-      hedge(0.38, 0.50,  1, 9, 1.4, HEDGE);   // mid-island right verge
+      // Leave openings inside the chicanes where successive hedge blocks overlap.
+      hedge(0.13, 0.162, 1, 9, 1.6, HEDGE);
+      hedge(0.175, 0.19, 1, 9, 1.6, HEDGE);
+      hedge(0.38, 0.46, 1, 9, 1.4, HEDGE);
+      hedge(0.468, 0.50, 1, 9, 1.4, HEDGE);
       hedge(0.62, 0.69, -1, 9, 1.6, HEDGE);
       hedge(0.73, 0.78, -1, 9, 1.6, HEDGE);
       hedge(0.78, 0.885, 1, 9, 1.6, HEDGE);
@@ -153,7 +161,8 @@
       grandstandEx(0.02,  1,  8, 120, null, null,
         { livery: "teal", tiers: 2, roof: "truss", suites: true, endWalls: true, pylons: true });
       grandstandEx(0.0,  -1, 10,  90, null, null, { livery: "steel", roof: "cantilever", endWalls: true });
-      grandstandEx(0.06,  1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
+      // Keep the full seating rake on the approach to T1, before the ground rises.
+      grandstandEx(0.055, 1,  9,  90, null, null, { livery: "alu", roof: "flat", endWalls: true });
       grandstandEx(0.96, -1, 11,  80, null, null, { livery: "teal", roof: "cantilever", endWalls: true });
 
       // Start/finish gantry spanning the main straight + a second timing arch
@@ -480,6 +489,8 @@
               const hv = hash(kk * 31 + r * 13 + c * 7);
               const p = vadd(vadd(a0.c, a0.r, r * 11), a0.t, (c - 1.5) * 11);
               if (onTrack(p[0], p[2], 14)) continue;
+              const gy = groundUnder(p[0], p[2]);
+              if (gy != null) p[1] = gy;
               // Gravel walk under and around each parterre.
               addBox(out, vadd(p, a0.u, 0.22), [10.4, 0.44, 10.4], GRAVEL, b);
               // Clipped green edging, then the massed colour inside it.
@@ -516,7 +527,8 @@
         }
         for (let i = 0; i < 8; i++) {
           const sf = 0.20 + i * 0.075;
-          if (sf > 0.52 && sf < 0.58) continue; // hairpin keep-out
+          if (i === 1) continue; // casino plinth occupies this shed site
+          if (sf > 0.57 && sf < 0.64) continue; // foldback keep-out: the two legs run <35 m apart over 0.585-0.655
           const side = (i % 2) ? 1 : -1;
           const gap = 55 + hash(i * 13) * 28;
           const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
@@ -759,10 +771,11 @@
           }
           prevTop = top; prevBot = bot;
         }
-        // Two main piers descending toward the water below the deck
+        // Main piers connect the underside of the deck to the riverbed.
         for (const off of [-half * 0.55, half * 0.55]) {
-          addBox(out, vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y * 0.4),
-            [6, DECK_Y * 0.8, 6], [0.48, 0.49, 0.52], jb);
+          const underside = vadd(vadd(ja.c, ja.t, off), ja.u, DECK_Y - 1.2);
+          foundation(out, { center: underside, size: [6, 6], top: underside[1],
+            ground: ja.c[1], basis: jb, col: [0.48, 0.49, 0.52] });
         }
       }
 
@@ -862,76 +875,83 @@
       tower(K(0.40), 1, 220, 14, 46,
         { col: [0.78, 0.62, 0.40], seg: 6, cap: true, capCol: [0.8, 0.3, 0.2], mast: 10 });
 
-      // ── L'Épingle (T10) hairpin grandstands — wave-6 required landmark. ─────
-      // Sources: grandprixgrandtours.com/canada-circuit-guide/ (GS 15/21/24
-      // outside the hairpin; GS 34 inside the apex); motorsporttickets.com
-      // grandstand guide. GS 24 is the Lance Stroll stand (not GS 21).
-      // Three tight outside stands in the required group (wider span fails
-      // emitted-footprint on the hairpin curve). GS 34 is on the other side of
-      // the ribbon so it is built into `out` immediately after. No floating
-      // cantilever lips — those floated on the float-audit.
+      // ── L'Épingle (T10) hairpin grandstands — wave-6 required landmark. ─────────
+      // L'Épingle is the FIA turn 10; in THIS def it is turns[9]
+      // (racing frac 0.6178, built |k| 0.062 → r ≈ 16 m, k < 0 = RIGHT-hander),
+      // so its OUTSIDE is side −1 and the inside bulb is side +1. Re-seated
+      // 2026-11-10 from 0.55 (the kit stood ~250 m early on the approach
+      // straight with the sides inverted). Sources: grandprixgrandtours.com/
+      // canada-circuit-guide/ (GS 15/21/24 outside the hairpin; GS 34 inside
+      // the apex); motorsporttickets.com grandstand guide. GS 24 is the Lance
+      // Stroll stand (not GS 21).
+      // Only the apex stand is in the required group: an AABB spanning the
+      // flank stands wraps the r ≈ 16 m hairpin and its emitted footprint
+      // would cover the road, so the flank stands and GS 34 build into `out`.
+      // No floating cantilever lips — those floated on the float-audit.
       {
         const CONC = [0.70, 0.72, 0.74], CONC2 = [0.64, 0.66, 0.68];
         const TEAL_F = [0.18, 0.48, 0.52];
-        const a0 = anchor(K(0.55), 1, 26);
+        const HP = 0.6178;  // def.turns[9] (T10), the hairpin apex
+        const stand = (dst, s, gap, len, rows, fascia) => {
+          const a = anchor(K(s), -1, gap);
+          const b = [a.r, a.u, a.t];
+          dst._mat = MAT.CONCRETE;
+          for (let t = 0; t < rows; t++) {
+            const outLat = -1 * (2.0 + t * 1.5);
+            addBox(dst, vadd(vadd(a.c, a.r, outLat), a.u, 0.7 + t * 1.0),
+              [2.8, 1.0, len - t * 1.5], t & 1 ? CONC : CONC2, b);
+          }
+          dst._mat = MAT.METAL;
+          addBox(dst, vadd(vadd(a.c, a.r, -1.6), a.u, 1.3),
+            [0.28, 0.85, len * 0.9], fascia || TEAL_F, b);
+          dst._mat = 0;
+        };
+        const a0 = anchor(K(HP), -1, 29);
         const b0 = [a0.r, a0.u, a0.t];
         modelGroup("montreal-hairpin-grandstands", {
           center: vadd(a0.c, a0.u, 5),
-          size: [20, 12, 70],
+          size: [14, 12, 40],
           basis: b0,
         }, (stage) => {
-          const stand = (s, gap, len, rows, fascia) => {
-            const a = anchor(K(s), 1, gap);
-            const b = [a.r, a.u, a.t];
-            stage._mat = MAT.CONCRETE;
-            for (let t = 0; t < rows; t++) {
-              const outLat = 1 * (2.0 + t * 1.5);
-              addBox(stage, vadd(vadd(a.c, a.r, outLat), a.u, 0.7 + t * 1.0),
-                [2.8, 1.0, len - t * 1.5], t & 1 ? CONC : CONC2, b);
-            }
-            stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, 1.6), a.u, 1.3),
-              [0.28, 0.85, len * 0.9], fascia || TEAL_F, b);
-            stage._mat = 0;
-          };
-          // Outside cluster (tight span — probed triple-tight passes footprint).
-          stand(0.54, 24, 30, 4, [0.86, 0.24, 0.20]);
-          stand(0.55, 24, 34, 5, TEAL_F);
-          stand(0.56, 24, 30, 4, [0.90, 0.82, 0.22]);
+          stand(stage, HP, 24, 34, 5, TEAL_F);   // apex stand, outside
         }, { required: true });
-        // GS 34 — inside the hairpin apex (cannot share the outside AABB).
+        // Flank stands around the outside of the hairpin (each on its own node).
+        stand(out, HP - 0.004, 24, 30, 4, [0.86, 0.24, 0.20]);
+        stand(out, HP + 0.004, 24, 30, 4, [0.90, 0.82, 0.22]);
+        // GS 34 — in the inside bulb facing the apex (side +1). The bulb is
+        // ~30 m across, so the rows run 10 m along t and step back along +r.
         {
-          const a = anchor(K(0.55), -1, 14);
+          const a = anchor(K(HP), 1, 7);
           const b = [a.r, a.u, a.t];
           out._mat = MAT.CONCRETE;
           for (let t = 0; t < 5; t++) {
-            const outLat = -1 * (1.6 + t * 1.65);
+            const outLat = 1.6 + t * 1.65;
             addBox(out, vadd(vadd(a.c, a.r, outLat), a.u, 0.65 + t * 1.05),
-              [3.0, 1.05, 40 - t * 1.8], t & 1 ? CONC : CONC2, b);
+              [3.0, 1.05, 10 - t * 0.6], t & 1 ? CONC : CONC2, b);
           }
           out._mat = MAT.METAL;
-          addBox(out, vadd(vadd(a.c, a.r, -1.2), a.u, 1.4),
-            [0.30, 0.9, 36], [0.22, 0.42, 0.62], b);
+          addBox(out, vadd(vadd(a.c, a.r, 1.2), a.u, 1.4),
+            [0.30, 0.9, 9], [0.22, 0.42, 0.62], b);
           out._mat = 0;
         }
       }
-      for (const side of [-1, 1]) {
-        for (let j = 0; j < 3; j++) place(K(0.55 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_R : KERB_W);
-      }
-      // Tyre walls + marshal post packed around the slow hairpin apex
-      tyreWall(0.545, 0.565, -1, 3.0, [0.90, 0.85, 0.20]);
-      tyreWall(0.548, 0.568,  1, 3.0, [0.85, 0.30, 0.20]);
-      marshalPost(K(0.55), -1, 9);
-      billboard(K(0.52),  1, 11, 12, 4, [0.24, 0.30, 0.62]);
+      // Apex blocks on the inside only (+1): the outside (−1) is the tyre wall
+      // below, and a gap-3 block there clipped the kit furniture at the apex.
+      for (let j = 0; j < 3; j++) place(K(0.614 + j * 0.004), 1, 3, [3, 0.84, 4], (j % 2) ? KERB_R : KERB_W);
+      // T10 hairpin tyre walls + marshal post: braking-zone and apex OUTSIDE (−1).
+      tyreWall(0.598, 0.607, -1, 4.5, [0.85, 0.30, 0.20]);
+      tyreWall(0.608, 0.628, -1, 4.5, [0.90, 0.85, 0.20]);
+      marshalPost(K(0.605), -1, 9);
+      billboard(K(0.600), -1, 11, 12, 4, [0.24, 0.30, 0.62]);
 
-      // DETAIL 2026-10-05: hairpin stand livery densify + billboards (sheet-04).
-      // Existing GS 15/21/24 + GS 34 keep their stepped banks; add end fascias,
-      // Canadian GP brand boards, and a short teal seat strip on the outside.
+      // DETAIL 2026-10-05: T10 hairpin stand livery densify + billboards (sheet-04).
+      // End fascias on the three outside stands (side −1, same nodes) and
+      // Canadian GP brand boards round the hairpin; re-seated with the stands.
       {
         const TEAL_S = [0.14, 0.46, 0.52], RED_S = [0.86, 0.22, 0.18];
         const YEL_S = [0.90, 0.82, 0.20];
         for (const [sf, side, gap, col] of [
-          [0.535, 1, 22, RED_S], [0.55, 1, 22, TEAL_S], [0.565, 1, 22, YEL_S],
+          [0.6138, -1, 22, RED_S], [0.6178, -1, 22, TEAL_S], [0.6218, -1, 22, YEL_S],
         ]) {
           const a = anchor(K(sf), side, gap), b = [a.r, a.u, a.t];
           if (onTrack(a.c[0], a.c[2], 4)) continue;
@@ -943,10 +963,10 @@
           out._mat = 0;
         }
         for (const [sf, side, gap, col] of [
-          [0.53, 1, 12, [0.88, 0.18, 0.16]],
-          [0.545, -1, 11, [0.14, 0.42, 0.68]],
-          [0.56, 1, 12, [0.90, 0.78, 0.16]],
-          [0.575, -1, 11, [0.10, 0.48, 0.42]],
+          [0.604, 1, 4, [0.88, 0.18, 0.16]],
+          [0.609, -1, 11, [0.14, 0.42, 0.68]],
+          [0.628, 1, 4, [0.90, 0.78, 0.16]],
+          [0.634, -1, 11, [0.10, 0.48, 0.42]],
         ]) {
           billboard(K(sf), side, gap, 11, 3.6, col);
         }
@@ -975,8 +995,9 @@
         density: 0.70, hMin: 8, hMax: 14,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.20
       });
-      // Left verge: infield trees along the Casino straight
-      forestEdge(0.58, 0.65, -1, 28, {
+      // Left verge: infield trees along the Casino straight, split around the
+      // three outside stands at the T10 turns[9] apex (0.6138-0.6218, side −1).
+      for (const [s0, s1] of [[0.58, 0.608], [0.628, 0.65]]) forestEdge(s0, s1, -1, 28, {
         density: 0.60, hMin: 7, hMax: 12,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.15
       });
@@ -984,8 +1005,8 @@
       grandstandEx(0.65, -1, 18, 80, null, null,
         { livery: "teal", tiers: 2, roof: "cantilever", endWalls: true });
 
-      // Short grounded open bank over the −1 m elevation dip at s≈0.72
-      // (elevations[2]); its bottom row meets the island shelf. A tube stand
+      // Short open bank on the Casino Straight. Its bottom row meets
+      // the island shelf. A tube stand
       // (awning + sparse legs) here is an 18 / 10.5 m unsupported cluster.
       {
         const a = anchor(K(0.74), -1, 16);
@@ -1034,12 +1055,17 @@
           { kind: "slab", wall: [0.74, 0.76, 0.80], window: [0.52, 0.64, 0.76], floor: 3 });
       }
 
+      // Final chicane T13-T14 — turns[12] 0.8983 (k < 0, RIGHT, r ≈ 20 m) flicking LEFT
+      // at T14 turns[13] 0.9052 onto the pit straight. Entry outside = −1, exit outside = +1
+      // (the Wall of Champions, below). Re-seated 2026-11-10 from 0.915-0.935.
       for (const side of [-1, 1]) {
-        for (let j = 0; j < 4; j++) place(K(0.92 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_W : KERB_R);
+        // +1 starts one block later: at 0.896 the inside-apex block sank 0.27 m
+        // into the verge (ground-audit buried).
+        for (let j = side > 0 ? 1 : 0; j < 4; j++) place(K(0.896 + j * 0.004), side, 3, [3, 0.84, 4], (j % 2) ? KERB_W : KERB_R);
       }
-      tyreWall(0.915, 0.935, -1, 3.0, [0.90, 0.85, 0.20]);
-      marshalPost(K(0.93), -1, 9);
-      grandstandEx(0.93, -1, 12, 70, null, null, { livery: "alu", roof: "flat" });
+      tyreWall(0.890, 0.902, -1, 3.0, [0.90, 0.85, 0.20]);   // entry-right outside
+      marshalPost(K(0.890), 1, 9);
+      grandstandEx(0.893, -1, 12, 70, null, null, { livery: "alu", roof: "flat" });
 
       // ── Wall of Champions + GS 16 — wave-6 required landmark. ──────────────
       // Sources: Wikipedia Circuit Gilles Villeneuve; grandprixgrandtours.com
@@ -1048,11 +1074,12 @@
       // (Québec blue + white cross) — no lettering (would not read at scale).
       // Stand + Bienvenue panel sit on the OUTSIDE (+1). The concrete WoC
       // barrier itself stays a trackside wall() — putting a gap-1 box in the
-      // required modelGroup fails emitted-footprint. Pit-side (−1) at s≈0.97
-      // is inside the pit / onTrack envelope.
-      wall(0.955, 0.99, 1, 0.8, 3.6, [0.84, 0.85, 0.87], 0.7);
+      // required modelGroup fails emitted-footprint. Pit-side (−1) on the
+      // straight is inside the pit / onTrack envelope. Re-seated 2026-11-10 from
+      // 0.955-0.99 onto the chicane exit (left flick 0.905; outside = +1).
+      wall(0.906, 0.926, 1, 0.8, 3.6, [0.84, 0.85, 0.87], 0.7);
       {
-        const a = anchor(K(0.972), 1, 12);
+        const a = anchor(K(0.917), 1, 12);
         const b = [a.r, a.u, a.t];
         const CONC = [0.70, 0.72, 0.74], CONC2 = [0.64, 0.66, 0.68];
         modelGroup("montreal-wall-of-champions-stand", {
@@ -1072,7 +1099,7 @@
             [0.32, 1.0, 50], [0.18, 0.48, 0.52], b);
           // No floating canopy — a lip at y≈9 without legs failed unsupported.
           // Bienvenue / Québec painted panel (plain, no glyphs) behind the Wall.
-          const ap = anchor(K(0.972), 1, 4.0);
+          const ap = anchor(K(0.917), 1, 4.0);
           const bp = [ap.r, ap.u, ap.t];
           for (const ot of [-8, -2.5, 2.5, 8]) {
             // Posts from slightly below grade so the support chain reaches terrain.
@@ -1088,12 +1115,12 @@
       // Red accent stripe on the WoC concrete face (Bienvenue cue; outside the
       // required group so emitted-footprint stays clear of the ribbon).
       {
-        const aw = anchor(K(0.97), 1, 0.85);
+        const aw = anchor(K(0.917), 1, 0.85);
         addBox(out, vadd(aw.c, aw.u, 1.8), [0.10, 0.60, 20], [0.88, 0.20, 0.18], [aw.r, aw.u, aw.t]);
       }
       billboard(K(0.96), -1, 12, 14, 4, [0.85, 0.30, 0.16]);
       // NIGHT LIGHTING (survey defect 1): def lamp is "none" and the def's lighting
-      // exclusions (0.05-0.09, 0.55-0.59, pinned by montreal-foundation.spec) stay
+      // exclusions (0.05-0.09, 0.60-0.64, pinned by montreal-foundation.spec) stay
       // as they are, so the race lighting is these scenery-only masts, which also
       // register point lights (catalunya / dijon idiom, #1930). Pit straight, Senna S,
       // hairpin approach + apex, the Casino straight and the final chicane.

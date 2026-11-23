@@ -48,6 +48,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -302,21 +303,21 @@ test("quitToMenu() during a race load cancels it: the body does not go on to cou
   } finally { barrier.release(); g.ctx.RaceEntryProfile = profile; g.close(); }
 });
 
-test("a second startRace() after the first passed raceIndex++ joins it: one race, round +1, state stays count", async () => {
+test("a second startRace() while the first is in flight joins it: one race, round +1 once committed, state stays count", async () => {
   const g = await createGame({ track: "monza", carMeshes: false });
   const profile = g.ctx.RaceEntryProfile, barrier = entryBarrier();
   try {
     const G = g.G;
     G.quitToMenu();
     const round0 = G.raceRound;
-    // Mesh warming follows raceIndex++; keep that real entry request pending
-    // while the duplicate arrives, irrespective of the earlier await count.
+    // raceIndex++ commits after the last await (#4484); keep the real entry
+    // request pending at mesh warming while the duplicate arrives.
     g.ctx.RaceEntryProfile = { ...profile, spanAsync(name, fn) {
       return profile.spanAsync(name, name === "warmCarAssets" ? async () => { await barrier.hold(); return fn(); } : fn);
     } };
     const first = G.startRace();
     assert.equal(await g.settle(barrier.entered), true, "the first body has reached mesh warming");
-    assert.equal(G.raceRound, round0 + 1, "the first body is past raceIndex++");
+    assert.equal(G.raceRound, round0, "the first body has not committed its race yet");
     const second = G.startRace();
     assert.equal(second, first, "the in-flight request is shared, not restarted");
     barrier.release();
@@ -353,7 +354,7 @@ test("startRaceBody aborts to the menu when the race-session bundle failed to lo
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("async function startRaceBody()") + 6000);
   assert.match(body, /let sessionOk = await ensureRaceSession\(\);/);   // #2625: a `let`, so RETRY on the loading card can re-run the load
   assert.match(body, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\); announce\("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"\); return false; \}/);
-  assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("await ensureAudio()"), "the abort comes before anything starts the race");
+  assert.ok(body.indexOf("if (!sessionOk)") < body.indexOf("ensureAudio()"), "the abort comes before anything starts the race");
 });
 
 test("RESUME holds a solo race ~1.2 s on the start plate, a pause cancels it, and a net race resumes at once", async () => {
@@ -409,7 +410,9 @@ test("a flag that falls under the pause closes the pause tools: no lt-open / pho
     assert.equal(G.state, "race");
     const tod0 = G.raceTimeOfDay;
     $("pausebtn").onclick();
-    $("pm-lighting").onclick();   // SETTINGS > LIGHTING TUNER, then a preview and FREE CAMERA inside it
+    $("pm-settings").onclick();
+    $("pm-open-visual").onclick();
+    await $("pm-lighting").onclick();   // SETTINGS > LIGHTING TUNER, then a preview and FREE CAMERA inside it
     G.setTimeOfDay(tod0 === "night" ? "day" : "night");
     $("pc-toggle").onclick();
     assert.ok(doc.body.classList.contains("lt-open") && G.photoMode, "precondition: the tuner and photo mode are up");
@@ -488,7 +491,7 @@ test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying she
     const G = g.G;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
     G.raceGrid = "quali";
-    vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+    evalRealRace(g.ctx);
     const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
     const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
     const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -756,7 +759,7 @@ test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before th
       g.sandbox.GLX.makeFrustumPlanes = () => null;   // the VM's stub returns [] (no planes): the menu grid's rivals would index into it
       G.daily.stop(); G.timeTrial = false; G.practice = false;
       G.quitToMenu();   // the hub is opened from the menu (createGame leaves a race running)
-      vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+      evalRealRace(g.ctx);
       const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
       const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
       const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -1031,6 +1034,7 @@ test("the garage's pause never drops the wake lock: the return to the tab re-hol
     assert.ok(await settle(() => h.log.length >= 3, 4000), "the re-acquire on return (the lock was never un-wanted)");
     assert.deepEqual(h.log, ["request:screen", "release", "request:screen"]);
     h.doc.getElementById("cs-back").onclick();      // RETURN TO RACE: closePitWork's own hold coalesces with the held lock
+    h.doc.getElementById("cs-back").onclick();      // BACK plays the pit-out beat (#4745); a second press finishes it
     await h.tick();
     assert.deepEqual(h.log, ["request:screen", "release", "request:screen"], "held, not requested twice");
     assert.equal(g.G.paused, false, "racing again");
@@ -1185,5 +1189,48 @@ test("deferred QUIT completes when the corrected-time opportunity expires, retai
     assert.equal(rival.finished, false);
     assert.equal(p.finPos, 1, "runner had its full penalty interval before snapshot classification");
     assert.ok(G.raceT >= p.finishT + p.penalty);
+  } finally { g.close(); }
+});
+
+// #5892 (clean-room audit A23): the stationary-retirement clock ran only under GREEN, and the
+// caution the stopped car itself raised lasts StoppedCars.STOP_RECOVER (60 s) — so the car sat
+// on the racing line for ~60 s of green after it (retired at ~120 s). The clock now runs under
+// yellow/VSC/SC too (not under a red, which holds the field on purpose).
+test("#5892 a player stopped on the racing line is retired 60 s after it stops, caution or not", async () => {
+  const g = await createGame({ track: "monza" });
+  try {
+    const a = g.apex, G = g.G;
+    a.caution(true);
+    a.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 4);
+    for (let i = 0; i < G.cars.length; i++) if (!G.cars[i].human) a.retire(i);   // no rival to nudge the parked car
+    a.jump(0.3, 0, 0);
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const P = G.player;
+    let t = 0, flagged = false;
+    while (t < 70 && !P.retired) { g.step(60); t++; if (a.caution().level > 0) flagged = true; }
+    assert.ok(flagged, "the stopped car raised a caution (the scenario under test)");
+    assert.ok(P.retired, `still running ${t} s after stopping (stallT ${(P.stallT || 0).toFixed(1)}), level ${a.caution().level}`);
+    assert.ok(t <= 62, `retired ${t} s after stopping, want ~60`);
+  } finally { g.close(); }
+});
+
+// Clean-room fixes 39-41: AI avoidance of a car STOPPED on track. A stopped live car was seen only
+// inside the 2.2 m lateral blocker scan (~40 m out in a corner, then lost mid-avoidance), the pass
+// side flipped as the line drifted, and the side-by-side yield could pin an AI onto it. Measured
+// here before the fix, player parked at Monaco 0.35 for 90 s: 82 hits (Silverstone 0.18: 16); after: 0 and 0.
+test("clean-room 39-41: the field passes a player stopped mid-corner without ramming it", async () => {
+  const g = await createGame({ track: "monaco" });
+  try {
+    const a = g.apex, G = g.G;
+    a.setInput({ throttle: true, steer: 0 });
+    g.step(60 * 4);
+    a.jump(0.35, 0, 0);
+    a.setInput({ throttle: false, brake: false, steer: 0 });
+    const P = G.player, h0 = P.hits | 0;
+    g.step(60 * 55);   // under the 60 s stationary retirement
+    assert.equal(P.retired, false, "the scenario keeps the car parked on the road");
+    const hits = (P.hits | 0) - h0;
+    assert.ok(hits <= 5, `the field hit the parked car ${hits} times in 55 s`);
   } finally { g.close(); }
 });

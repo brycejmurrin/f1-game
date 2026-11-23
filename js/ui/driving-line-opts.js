@@ -29,7 +29,11 @@ const DrivingLineOpts = (function () {
   let cueOn = (() => {
     const v = store.get(K_CUE, null);
     if (v !== null) return v === "on";
-    return store.get(K_CUE_LEGACY, null) === "on";
+    const legacy = store.get(K_CUE_LEGACY, null);
+    if (legacy !== "on" && legacy !== "off") return false;
+    // Leave the shared key to its numeric owner, including concurrent slider updates.
+    store.set(K_CUE, legacy, { migration: true });
+    return legacy === "on";
   })();
 
   DrivingLine.setPalette(store.get(K_PALETTE, "f1"));
@@ -44,11 +48,11 @@ const DrivingLineOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
-    // LINE COLOUR — F1's green/amber/red puts the two ends of the speed cue on
-    // the pair red-green deficiencies cannot separate; COLOUR-BLIND swaps in
-    // the IBM safe triple. Every backend's shader mixes on one flag.
+    // LINE COLOUR — the main (on-pace) colour, F1 GREEN … PINK, plus
+    // COLOUR-BLIND (the IBM safe triple). The ids, labels and order are
+    // DrivingLine.PALETTES, which also carries the colours and the why.
     SettingRow.wire("pm-linecolor", {
-      values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
+      values: DrivingLine.PALETTES.map((p) => [p.id, p.label]),
       read: () => DrivingLine.palette(),
       write: (v) => { DrivingLine.setPalette(v); store.set(K_PALETTE, DrivingLine.palette()); },
     });
@@ -72,7 +76,10 @@ const DrivingLineOpts = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
     else initUI();
   }
 

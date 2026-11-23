@@ -4,7 +4,7 @@
      Commits: memory-leak-debugging, debug-optimize-lcp @ ff5204aaf572725557b4bb2f3f542fa3ead5f6a5
      License: Apache-2.0 -->
 
-Apex uses the box **chrome-devtools** MCP against `http://localhost:3456` (skill **mcp-probe**). Prefer MCP tools over reading raw `.heapsnapshot` files.
+Apex uses the box **chrome-devtools** MCP against `http://localhost:3456` (`.claude/skills/mcp-probe/SKILL.md`). Prefer MCP tools over reading raw `.heapsnapshot` files.
 
 ## Memory (phone / long sessions)
 
@@ -14,7 +14,7 @@ Apex uses the box **chrome-devtools** MCP against `http://localhost:3456` (skill
 4. Suspect detached DOM, closures holding `G`, unremoved listeners, unbounded caches.
 5. `close_heapsnapshot` when done — snapshots are large.
 
-Fix in `js/` only with a measured before/after; census tools in skill **mcp-probe**.
+Fix in `js/` only with a measured before/after; census tools in `.claude/skills/mcp-probe/SKILL.md` §Census tools.
 
 ## LCP / load (PWA shell)
 

@@ -12,6 +12,7 @@ import path from "node:path";
 export const DEFAULT_LOG = path.join("artifacts", "logs", "deploy.log");
 
 export const pidAlive = (pid) => {
+  try { if (/^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, "utf8"))) return false; } catch { /* no /proc: fall through */ }   // a zombie is gone
   try { process.kill(pid, 0); return true; }
   catch (e) { return e.code === "EPERM"; }
 };

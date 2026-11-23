@@ -13,7 +13,9 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
      moment an item changes, not only at a push:
        - [x] done — append the evidence: commit sha, verdict line, file
        - [ ] todo — one verifiable step each; add work you discover as you go
-       - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped
+       - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped;
+             it counts as OPEN for the gate: before the ready flip tick it with its evidence, or
+             move what is left (e.g. "ready CI on <sha>") into the `land:` item
        - [ ] ~~dropped~~ — strike it and say why; never delete an item
        - [~] deferred — work moved to a follow-up issue (or start the text with `Deferred:`); counts as closed
      Tick an item only with its evidence; "should work" is a [ ]. Never add a "merge"
@@ -22,24 +24,20 @@ A PR that changes `.claude/memory/` adds, under this line, `memory-change: <reas
 - [ ]
 - [ ] land: add the `land` label once ready-gate exits 0
 
-The last Plan item keeps that shape: ready-gate ignores an item that starts `land:`, so it stays open until the label is on and GitHub lands the PR (docs/WORKERS.md).
+The last Plan item keeps that shape: ready-gate ignores an item that starts `land:`, so it stays open until the label is on and GitHub lands the PR (skill `steward` §Land).
 
 ## Verified / Not run
-<!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = run passed`.
+<!-- Each check you ran and its verdict line, e.g. `tooling-fast --changed = tooling-fast passed`.
      Every group the change needs that did NOT run, named, with why (AGENTS.md rule 9).
-     The full tiers run on the PR (`run-ci` on a draft; the full tier once ready). -->
+     Draft PRs run the fast tier. Ready PRs run browser jobs when the diff needs them. -->
 
 ## Hand-off
-<!-- The dispatcher parses this block (docs/WORKERS.md): refresh it at every push and
+<!-- The dispatch Action and a takeover read this block (skill `steward`): refresh it at every push and
      when you add `land`, `needs-owner` or `needs-decision`. One value per line, no prose
      outside the fence. A hold is the `hold` label on the PR, not a line here. -->
 ```handoff
-branch: <branch>
 head: <sha>
-owner: <host>:<session or agent id>
-lane: claude | cursor | codex
-verified: <what ran, verdict lines>
-not-run: <groups the change needs that did not run, and why>
+owner: <host>:<session or agent id> until <ISO UTC, ≤ 4 h ahead: skill steward §Lane 3>
 next: <the one next step>
 ```
 

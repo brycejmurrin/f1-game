@@ -1,25 +1,7 @@
-/* Apex 26 — the opt-in RELATIVE box (iRacing-style) for GameHud.
-   SETTINGS › DISPLAY › HUD › RELATIVE (js/ui/hud-elements.js, shipped off),
-   placed by MOVE & SIZE (js/ui/hud-layout.js "rel").
-
-   The two cars AHEAD and two BEHIND on the ROAD — by arc position, not race
-   order, so a backmarker you are about to lap is in it and the leader a lap up
-   behind you is too — with the player's own row between them. Each row:
-   race position, 3-letter code on the team's colour bar, the gap in seconds
-   (- in front, + behind), the tyre letter (PIT while in the lane), and a
-   +1L / -1L marker for a car a lap up (red) or down (blue): text first, colour
-   second, so the meaning never rides on hue alone.
-
-   THE GAP IS THE GAP CHIPS' OWN MEASURE (js/ui/hud.js gapText): metres of arc
-   over max(the player's speed, 0.26 x vTop), smoothed per row (EMA 0.3 at the
-   10 Hz HUD tick) and reset when a row's car changes. Nothing is re-derived
-   from physics, and nothing here writes to a car: the HUD only reads.
-
-   Pure core (unit-tested in tests/unit/hud-relative.test.mjs): relDist,
-   lapsApart, select (fixed slots, allocation-free), fmtGap. tick(G, player)
-   is the one js/ui/hud.js call, at the HUD tick. Rows are built at runtime
-   inside the static #hud-rel (index.html) — no shell nodes per row, no class
-   tokens (data-k / data-lap / data-self attributes; css/hud.css). */
+/* Opt-in RELATIVE HUD. Road position selects two neighbours each side of the player,
+ * including lapped cars. Signed gaps use arc distance over max(speed, 0.26 * vTop),
+ * smoothed per row until its car changes. Lap markers carry both text and colour.
+ * The 10 Hz HUD tick builds rows inside #hud-rel the first time they can be shown. */
 const HudRelative = (function () {
   "use strict";
 
@@ -130,12 +112,12 @@ const HudRelative = (function () {
   /** js/ui/hud.js, once per HUD tick (10 Hz). Reads G; never writes a car. */
   function tick(G, player) {
     if (!doc || !player) return;
-    if (!root && !build()) return;
     const cars = G.cars, track = G.track;
     if (!isOn() || G.timeTrial || !track || !cars || cars.length < 2) { hideAll(); return; }
     const b = doc.body;
     // MINIMAL and the broadcast cameras hide it in CSS — skip the work too.
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
+    if (!root && !build()) return;
     if (root.hidden) root.hidden = false;
     select(cars, player, track.total, rows);
     const vFloor = Math.max(player.speed || 0, (G.vTop ? G.vTop() : 80) * 0.26);
@@ -147,7 +129,9 @@ const HudRelative = (function () {
       // profile and precision boundaries, the rest compare their source values.
       let dirty = false;
       if (i !== SELF) {
-        const raw = Math.abs(r.rel) / vFloor;
+        // Time at a line on the shared clock (#5678), the lapped car at the same track point; distance ÷ speed until both cross one.
+        const gc = typeof HudReadouts !== "undefined" && HudReadouts.gaps, fb = Math.abs(r.rel) / vFloor;
+        const raw = !gc ? fb : r.rel > 0 ? gc.gapOr(car, player, fb, r.laps) : gc.gapOr(player, car, fb, -r.laps);
         if (smWho[i] !== car || !Number.isFinite(sm[i])) { smWho[i] = car; sm[i] = raw; }
         else sm[i] += (raw - sm[i]) * EMA;
         const gap = fmtGap(sm[i], r.rel > 0, G.hudProfile);
@@ -157,7 +141,7 @@ const HudRelative = (function () {
       if (c.who !== car) { c.who = car; dom.code.textContent = car.code || "---"; dirty = true; }
       const team = teamCss(G, car.team);
       if (c.team !== team) { c.team = team; dom.el.style.setProperty("--rel-team", team || "transparent"); }
-      const tyre = car.pitState === "lane" || car.pitState === "box" ? "PIT" : (car.tyre && car.tyre.code) || "-";
+      const tyre = (typeof HudReadouts !== "undefined" ? HudReadouts.inPit : (c) => !!(c && c.pitState && c.pitState !== "none"))(car) ? "PIT" : (car.tyre && car.tyre.code) || "-";
       if (c.tyre !== tyre) { c.tyre = tyre; dom.tyre.textContent = tyre; dirty = true; }
       if (c.lap !== r.laps) {
         c.lap = r.laps; dirty = true;
@@ -200,7 +184,20 @@ const HudRelative = (function () {
   const VOLATILE_CLS = /(^|\s)(ot|ax)-\S*/g;
   /** Everything fitRows reads that is not layout itself: occupied rows, viewport,
    *  HUD scale, the body's mode classes and each clearance control's hidden/class. */
+  // Each clearance control's hidden/class. hud.js's phone stamp keys on it too (aero or the
+  // radio card toggling must re-probe), so it stays live while REL itself is off.
+  function clearSig() {
+    let k = "";
+    if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
+      const c = doc.getElementById(CLEAR_IDS[i]);
+      k += "|" + (c ? (c.hidden ? "h" : "v") + String(c.className || "").replace(VOLATILE_CLS, "") : "-");
+    }
+    return k;
+  }
   function fitKey() {
+    // Off (the default) the card is hidden and fits nothing: the rows, viewport, scale and body
+    // class are skipped, and refit() no longer adds a second pass per phone tick (perf hunt 6).
+    if (!isOn()) return "off" + clearSig();
     let k = "";
     for (let i = 0; i < ROWS; i++) k += rows[i].car ? "1" : "0";
     const w = doc.defaultView || (typeof window !== "undefined" ? window : null);
@@ -210,11 +207,10 @@ const HudRelative = (function () {
     const el = doc.documentElement;
     k += "|" + (el && el.style && el.style.getPropertyValue ? el.style.getPropertyValue("--hud-z-top") : "");
     k += "|" + (doc.body ? doc.body.className : "");
-    if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
-      const c = doc.getElementById(CLEAR_IDS[i]);
-      k += "|" + (c ? (c.hidden ? "h" : "v") + String(c.className || "").replace(VOLATILE_CLS, "") : "-");
-    }
-    return k;
+    // The MOVE & SIZE set is an attribute (body[data-hl-set]): HELMET → chase moves GEAR / SPEED
+    // without a class change, and the 1 Hz net alone left REL slid for the helmet's chips.
+    k += "|" + (doc.body && doc.body.getAttribute ? doc.body.getAttribute("data-hl-set") || "" : "");
+    return k + clearSig();
   }
   // Also clear the bottom cluster / radio card: at HUD 150% REL sat on GEAR /
   // OT / announce (phoneL broadcast survey) while only the pedals were cleared.
@@ -233,7 +229,9 @@ const HudRelative = (function () {
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */
   function fitRows() {
-    fitRowsNow();
+    // A measured fit stripped HudLayout's clearance (below): re-place the readouts from
+    // this slide, so STRATEGY never keeps a spot chosen around a stale REL (HUD SIZE 150 → 100 swap).
+    if (fitRowsNow() && typeof HudLayout !== "undefined" && HudLayout.clearReadouts) HudLayout.clearReadouts();
     geoSeen = built ? geoKey() : null;   // the fitted geometry the 1 Hz net compares against
   }
   function fitRowsNow() {
@@ -248,13 +246,19 @@ const HudRelative = (function () {
     }
     if (root.style && root.style.removeProperty) {
       root.style.removeProperty("left"); root.style.removeProperty("max-height");
+      // HudLayout.clearReadouts' translate and compact rows are its output too: measuring
+      // through them made the slide depend on the previous fit's scale (UI-HUNT-2-HUD).
+      root.style.removeProperty("--hud-clear-x"); root.style.removeProperty("--hud-clear-y");
     }
+    if (root.removeAttribute) { root.removeAttribute("data-col-compact"); root.removeAttribute("data-col-drop"); root.removeAttribute("data-fit-drop"); }
     // An edited card keeps all occupied rows and the geometry the player chose.
     // Restore any rows a previous automatic fit hid before handing ownership back.
     if (root.hasAttribute && root.hasAttribute("data-hl-user")) return;
     const b = doc && doc.body;
     if (b && b.classList && b.classList.contains("desktop")) return;
+    let measured = false;
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
+      measured = true;
       const rootEl = doc.documentElement;
       // The zoom the card paints at: var(--hud-z-top, var(--hud-scale))
       // (css/hud.css). fitHud REMOVES --hud-z-top whenever the cap fits, so
@@ -274,7 +278,7 @@ const HudRelative = (function () {
       for (let pass = 0; pass < 3; pass++) {
         const rr = root.getBoundingClientRect();
         if (!(rr.width && rr.height)) break;
-        let cap = Infinity, slide = 0, hit = false;
+        let cap = Infinity, slide = 0, hit = false, inSteer = false;
         for (let i = 0; i < CLEAR_IDS.length; i++) {
           const el = doc.getElementById(CLEAR_IDS[i]);
           if (!el || el.hidden) continue;
@@ -293,13 +297,15 @@ const HudRelative = (function () {
             && (box.left <= rr.left + 24 || box.right - rr.left < rr.width * 0.7);
           const centreSlide = CENTRE_SLIDE_IDS.indexOf(id) >= 0;
           if (doCap) cap = Math.min(cap, (box.top - rr.top - 6) / z);
+          if (!doCap && id.indexOf("btn-steer") === 0) inSteer = true;
           if (leftish) slide = Math.max(slide, (box.right + 8) / z);
           else if (centreSlide && !doCap) {
             // Slide past OT/aero only while the card stays left of the right dock
             // (unbounded slide landed REL on THROTTLE at phoneL 150%).
             const next = (box.right + 8) / z;
             const w = (doc.defaultView || (typeof window !== "undefined" ? window : null));
-            let limit = w ? ((w.innerWidth || 0) - rr.width - 8) / z : next;
+            const vw = typeof GameHud !== "undefined" && GameHud.vp ? GameHud.vp()[0] : w ? w.innerWidth || 0 : 0;
+            let limit = w ? (vw - rr.width - 8) / z : next;
             const dockIds = ["btn-throttle", "btn-brake", "btn-ot", "btn-aero", "btn-boost"];
             for (let d = 0; d < dockIds.length; d++) {
               const de = doc.getElementById(dockIds[d]);
@@ -311,29 +317,49 @@ const HudRelative = (function () {
           }
         }
         if (!hit) break;
+        // A home that STARTS inside the steer arrows (a taller top band, #5256 D) goes to the allocator, which lifts it
+        // above the pad: the slide parked it mid-screen in INPUTS' column (hud-layout.spec, HUD / BUTTON 150 %).
+        if (inSteer && typeof HudLayout !== "undefined" && HudLayout.clearReadouts) break;
         if (slide > 0) root.style.left = slide.toFixed(1) + "px";
         // Apply any positive doCap (phoneL 150%: OT/aero room is ~6–15px — the
         // old >28 gate left the full card painted on OT after the leftish slide).
         if (Number.isFinite(cap) && cap > 0) root.style.maxHeight = cap.toFixed(1) + "px";
       }
     }
-    if (!(root.clientHeight > 0)) return;
+    if (!(root.clientHeight > 0)) return measured;
+    // Never down to the player's row alone: it carries no gap (HUD 150 % / TEXT LARGER in
+    // HELMET). When one neighbour + self still clip here, undo this slide and cap and hand
+    // the whole card to HudLayout.clearReadouts (a free slot, else one row, else none);
+    // with no allocator the card stands down (css/hud.css data-fit-drop).
     const order = [0, 4, 1, 3];
-    for (let k = 0; k < order.length && root.scrollHeight > root.clientHeight + 1; k++) {
+    let shown = 0;
+    for (let i = 0; i < ROWS; i++) if (!built[i].el.hidden) shown++;
+    for (let k = 0; k < order.length && shown > 2 && root.scrollHeight > root.clientHeight + 1; k++) {
       const dom = built[order[k]];
-      if (dom && !dom.el.hidden) { dom.el.hidden = true; dropped[order[k]] = true; }
+      if (dom && !dom.el.hidden) { dom.el.hidden = true; dropped[order[k]] = true; shown--; }
     }
+    if (root.scrollHeight > root.clientHeight + 1) {
+      if (typeof HudLayout !== "undefined" && HudLayout.clearReadouts && measured) {
+        for (let i = 0; i < ROWS; i++) if (dropped[i]) { dropped[i] = false; built[i].el.hidden = false; }
+        if (root.style && root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
+      } else if (root.setAttribute) root.setAttribute("data-fit-drop", "");
+    }
+    return measured;
   }
   /** The words a screen reader says for one row. */
   function rowLabel(pos, code, self, gap, ahead, tyre, laps) {
     const g = gap.slice(1);
-    const dist = g === "--" ? "gap unknown" : (g === "99+" ? "over 99 seconds " : g + " seconds ") + (ahead ? "ahead" : "behind");
-    const lapWord = (n) => n + (n === 1 ? " lap" : " laps");
-    return pos + " " + (code || "") + (self ? ", you" : ", " + dist)
-      + ", tyre " + tyre + (laps > 0 ? ", " + lapWord(laps) + " up" : laps < 0 ? ", " + lapWord(-laps) + " down" : "");
+    const side = ahead ? "ahead" : "behind";
+    const dist = g === "--" ? I18n.t("hud.rel.gapUnknown", null, "gap unknown")
+      : g === "99+" ? I18n.t("hud.rel.over99." + side, null, "over 99 seconds " + side)
+      : I18n.t("hud.rel.gap." + side, { s: g }, "{s} seconds " + side);
+    const lapWord = (n) => I18n.t("hud.rel.laps", { n }, "{n, plural, one {# lap} other {# laps}}");
+    return pos + " " + (code || "") + (self ? ", " + I18n.t("hud.rel.you", null, "you") : ", " + dist)
+      + ", " + I18n.t("hud.rel.tyre", { tyre }, "tyre {tyre}")
+      + (laps > 0 ? ", " + I18n.t("hud.rel.up", { laps: lapWord(laps) }, "{laps} up") : laps < 0 ? ", " + I18n.t("hud.rel.down", { laps: lapWord(-laps) }, "{laps} down") : "");
   }
 
   /** Re-fit only when something fitKey sees moved since the last fit (or when forced). */
-  function refit(force) { if (force || fitKey() !== fitSeen) fitRows(); }
+  function refit(force) { if (isOn() && (force || fitKey() !== fitSeen)) fitRows(); }
   return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, refit, fitKey, rows });
 })();

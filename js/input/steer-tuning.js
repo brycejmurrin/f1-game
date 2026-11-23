@@ -1,6 +1,165 @@
-/* Apex 26 — steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). Writes the live physics tunables through the ctx faça… */
+/* Apex 26 — steering-tuning sliders, presets and macro levels for the ADVANCED
+   pause-menu page. SteerTuning.create(G) writes the live physics tunables
+   through the game.js façade (store, clamp, $). */
 const SteerTuning = (function () {
   "use strict";
+
+const PACE_MIN = 1, PACE_MAX = 19, PACE_REF = 14, PACE_DEF = 11, PACE_STEP = 1.06;
+function paceFromSlider(v)   { return Math.pow(PACE_STEP, v - PACE_REF); }   // 0.469..1.338, v14 = 1.0
+//
+// This is the only code in the game that OVERWRITES a setting the player chose,
+// which is why it is written as a ladder and not as a flag. `st.get(k, d)`
+// returns the stored value whenever the key exists, so changing a DEFAULT reaches
+// a fresh install and nobody else; a migration is the only way to reach a store
+// that already has the key. Two different acts, and doing only one of them
+// reaches either nobody who has played or nobody at all.
+//
+// A single `st.get("steerSchema", 1) >= STEER_SCHEMA` gate is correct with
+// exactly one version to migrate to and becomes DATA LOSS with two: a store already at 2 falls straight through it on the way to 3
+// and receives V2'S RESET A SECOND TIME, silently discarding a drivingHelp or
+// raceLine the player deliberately set AFTER v2 ran. Hence the ladder — each step
+// declares the schema it brings the store UP TO, and a store at N runs only the
+// steps above N. Same shape as CAREER_MIGRATIONS in js/core/store.js.
+//
+// Every key a step rewrites goes through migSet(), so the rewrite lands in the
+// Log ring buffer whether or not anyone was watching. A migration that quietly
+// changes a player's stored settings and leaves no record is indistinguishable
+// from a bug, both to them and to us.
+const STEER_SCHEMA = 5;
+
+// The v2 pace grid. Kept for ONE reader — v3's regrid, which has to know what a
+// stored notch used to mean. Nothing else may call it.
+function paceFromSliderV2(v) { return v <= 5 ? 0.5 + (v - 1) * 0.125 : 1.0 + (v - 5) * 0.06; }
+
+// old notch (1..10) -> the new notch whose pace is nearest in ABSOLUTE
+// ground-speed terms. Derived from the two mappings rather than typed out, so it
+// cannot drift from either: {1:2, 2:6, 3:9, 4:12, 5:14, 6:15, 7:16, 8:17, 9:18,
+// 10:18}. Worst error is -2.89 % at old 10, under half a new notch, so nobody's
+// car changes character (docs/research/PHASE-C-SLIDER-DESIGN.md has the table).
+// Old 9 and old 10 BOTH land on 18: the top of the v2 range was finer than the
+// even 6 % grid, which is the asymmetry being removed and the one lossy pair.
+// NEAREST IN LOG SPACE, not in absolute pace, and that is not a detail. The new
+// grid is geometric BECAUSE pace is a multiplicative scale on ground speed, so
+// the distance between two settings is the RATIO between them — |ln(a/b)| — and
+// measuring it in absolute m/s would be using the very unit the regrid exists to
+// stop using. Measured, it changes exactly one row and removes the only defect
+// in the table: old notch 10 (1.300) sits 0.0007 of pace nearer to notch 18 than
+// to 19, so absolute distance sends it to 18 where old 9 already is — two
+// settings collapsed into one. In log terms 1.300 is +2.94 % from 18 and −2.86 %
+// from 19, so it lands on 19, the map is INJECTIVE, and no player loses the
+// distinction between the two fastest settings they could previously pick. The
+// price is that the worst-case error over all ten notches goes from 2.89 % to
+// 2.94 % — five hundredths of a percentage point, against a slider whose steps
+// are 6 %.
+const PACE_V2_TO_V3 = (() => {
+  const m = {};
+  for (let o = 1; o <= 10; o++) {
+    let best = PACE_MIN, bd = Infinity;
+    for (let n = PACE_MIN; n <= PACE_MAX; n++) {
+      const d = Math.abs(Math.log(paceFromSlider(n) / paceFromSliderV2(o)));
+      if (d < bd) { bd = d; best = n; }
+    }
+    m[o] = best;
+  }
+  return m;
+})();
+
+function migSet(st, to, key, value, why) {
+  const had = st.get(key, null);
+  st.set(key, value);
+  if (had === value) return;
+  Log.info("game", `steer schema v${to}: ${key} ${had === null ? "(unset)" : had} -> ${value}${why ? " — " + why : ""}`);
+}
+
+const STEER_MIGRATIONS = [
+  //
+  // Changing the drivingHelp default from 6 to 1 only reached a FRESH install, so
+  // every player who had ever opened the settings kept the old always-on assist —
+  // the exact behaviour the rescale was meant to remove, still steering ~0.39 of
+  // every corner for them.
+  //
+  // The slider's MEANING changed too (it used to bottom out at 0.25 and now
+  // bottoms out at a true 0), so an old stored number does not carry over: 6 no
+  // longer denotes what it denoted when it was written. That makes a reset the
+  // honest migration rather than an attempt to rescale the number.
+  //
+  // raceLine is reset for the same reason. It is the other thing that steers the
+  // car toward a line, its mechanism changed too (a positional shove on c.x
+  // became a pure-pursuit steer angle), and the RELAX preset writes raceLine: 2 —
+  // so every player who so much as tried RELAX has a 0.4 line-pull saved and
+  // would keep it forever.
+  //
+  // Both grew with SPEED, which is why the old build felt like holding the gas
+  // made the car adjust itself onto the line: ROAD_FOLLOW carries an
+  // ASSIST_KUS*v^2 term (2.6x stronger at 80 m/s than at rest) and the old racing
+  // line pull scaled by latFac = |speed|/18. Off by default now means off.
+  { to: 2, apply(st) {
+      migSet(st, 2, "drivingHelp", 1, "assist OFF: the rescale gave the slider a true zero, so the old number no longer denotes what it did");
+      migSet(st, 2, "raceLine", 0, "no line pull by default: the mechanism changed with it");
+  } },
+
+  //
+  // The notch numbers stopped meaning what they meant: 1..10 on a piecewise-linear
+  // 0.50..1.30 grid became 1..19 on an even 6 %/notch geometric one. A stored 3
+  // meant 0.750 and now means 0.527, so leaving it alone would hand a quarter of
+  // the player's ground speed away without saying anything.
+  //
+  // A store with NO pace key is left alone on purpose: it has never been chosen,
+  // so the current default applies through st.get() and there is nothing to
+  // migrate. Writing a notch here would be indistinguishable on disk from a
+  // deliberate choice and would pin that player to today's default forever.
+  //
+  // steerSmooth is deliberately NOT touched: SMOOTHING keeps its 1..10 notches and
+  // only what each notch MEANS moved (Hz-linear -> lag-linear), with the default
+  // preserved to a rounding error. A number that still denotes the same position
+  // on the same slider needs no migration.
+  { to: 3, apply(st) {
+      const from = st.get("pace", null);
+      if (from === null) return;                 // never chosen -> the new default stands
+      const to = PACE_V2_TO_V3[from];
+      if (to === undefined) return;              // outside the v2 grid: not ours to reinterpret
+      const err = (paceFromSlider(to) / paceFromSliderV2(from) - 1) * 100;
+      migSet(st, 3, "pace", to,
+        `RACE PACE regrid 1..10 -> 1..19: ${paceFromSliderV2(from).toFixed(3)} -> ${paceFromSlider(to).toFixed(3)} (${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);
+      // A collision, named rather than swallowed — a clamp nobody can see is how
+      // a player's settings get quietly changed. With log-nearest above there is
+      // no such pair today and this never fires; it stays because the guard is
+      // cheap and the next person to re-derive the grid may reintroduce one.
+      const shared = Object.keys(PACE_V2_TO_V3).filter((o) => PACE_V2_TO_V3[o] === to);
+      if (shared.length > 1) {
+        Log.warn("game", `steer schema v3: old pace notches ${shared.join(" and ")} both land on ${to} — the top of the old grid was finer than the new even-6 % one, so those two settings are no longer distinguishable (this one moved ${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);
+      }
+  } },
+
+  { to: 4, apply(st) {
+      const from = st.get("adaptiveButtons", null);
+      if (from === 0) migSet(st, 4, "adaptiveButtons", 1, "OFF stays OFF on the 1..10 strength slider");
+      else if (from === 1) migSet(st, 4, "adaptiveButtons", 6, "old ON becomes mid strength");
+  } },
+
+  // Grip steer is new. Unset stores get OFF (1) via store.get default; a store
+  // that somehow carried a non-number is reset so applySteerTuning never feeds
+  // NaN into GripSteer.assistK. Existing players stay OFF unless they pick
+  // ROOKIE / RELAX (which write 8 / 6).
+  { to: 5, apply(st) {
+      const from = st.get("gripSteer", null);
+      if (from !== null && !(typeof from === "number" && isFinite(from)))
+        migSet(st, 5, "gripSteer", 1, "grip steer OFF: non-number store cleared");
+  } },
+];
+
+
+// LOAD SETTINGS (js/ui/settings-export.js) runs the same ladder over a FILE's steering values (#5004): a file saved
+// at schema 2 carries a v2 PACE notch that means 0.750 there and 0.527 on today's grid. Pure: the input is copied,
+// only keys the file carries are rewritten, and a file at (or past) STEER_SCHEMA comes back unchanged.
+function migrateValues(from, values) {
+  const out = Object.assign({}, values);
+  if (!(Number.isInteger(from) && from >= 1 && from < STEER_SCHEMA)) return out;
+  const has = (k) => Object.prototype.hasOwnProperty.call(out, k) && out[k] !== null && out[k] !== undefined;
+  const st = { get: (k, d) => (has(k) ? out[k] : d), set: (k, v) => { if (has(k)) out[k] = v; } };
+  for (const step of STEER_MIGRATIONS) if (from < step.to) step.apply(st);
+  return out;
+}
 
 function create(G) {
 Log.info("input", "SteerTuning.create");
@@ -8,7 +167,6 @@ Log.info("input", "SteerTuning.create");
 const { $, store, clamp } = G;
 if ((typeof BrakeCue !== "undefined") && BrakeCue.create) BrakeCue.create(G);
 if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.create(G);
-
 
 // GRIP STEER row is injected (not baked into index.html) so shellNodes stays
 // inside its ceiling — same ADVANCED CAR HANDLING group as DRIVING HELP.
@@ -40,7 +198,6 @@ if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.crea
     + '<p class="adv-help">Widens the drag as you go faster, by the same fraction ADAPTIVE BUTTONS slows keys and arrows. The travel that is full lock at a standstill is less lock at speed. 1 is OFF, the fixed range (the default). 10 matches that assist in full. Low speed is unchanged.</p>';
   host.parentNode.insertBefore(item, host.nextSibling);
 })();
-
 
 let hapRepaintWired = false;   // device capability repaint is wired once
 let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
@@ -138,8 +295,7 @@ function speedRefFromSlider(v) { return 15 + (75 - 15) * (v - 1) / 9; } // 15..7
 // defined against, several specs pin it, and __apex.setPhysics({pace:1}) must
 // keep meaning what it means. An anchored grid gets that for free.
 // The DEFAULT is notch 11 = 0.840, independent of the grid's shape.
-const PACE_MIN = 1, PACE_MAX = 19, PACE_REF = 14, PACE_DEF = 11, PACE_STEP = 1.06;
-function paceFromSlider(v)   { return Math.pow(PACE_STEP, v - PACE_REF); }   // 0.469..1.338, v14 = 1.0
+// PACE_MIN..PACE_STEP and paceFromSlider live at module scope (the import migration below needs them).
 // The readout is a PERCENTAGE OF REFERENCE PACE, and deliberately NOT km/h:
 // dashKph divides PACE back out on purpose, so the dial reads 0 -> ~259 km/h at
 // EVERY setting and a km/h label here would contradict the instrument beside it.
@@ -251,7 +407,7 @@ const PRESETS = {
   // missing keys, and an explicit default must still read as STANDARD.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 5, brakeCue: 1, audioCues: 1, gripSteer: 1 },
+              adaptiveButtons: 6, brakeCue: 1, audioCues: 1, gripSteer: 1 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 4, brakeCue: 4, audioCues: 1, gripSteer: 1 },
@@ -282,7 +438,10 @@ const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSli
 // OFF, not LOW: the fold summary and the DRIVING HELP row must name the same
 // state. "LOW is off" in the How to Play copy was the old compromise; the row
 // then said LOW while AIDS · OFF painted red for the same notch.
-const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH" };
+// OFF means OFF: only notch 1 has helpFromSlider === 0. Notches 2-3 (the FINE
+// slider in ADVANCED) steer the car from the road's curvature at 0.08 / 0.16,
+// so they read CUSTOM, never OFF (#5783 J1).
+const HELP_LABEL = { low: "OFF", med: "MEDIUM", high: "HIGH", custom: "CUSTOM" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 // "STEER OFF" (not "LINE OFF"): the setting is STEER ASSIST — Race Settings owns
 // the visual DRIVING LINE. Fold tokens must match the live help/line bands.
@@ -290,14 +449,14 @@ const LINE_FOLD = { off: "STEER OFF", corner: "CORNERS", full: "FULL", custom: "
 // The three FEEL / AIDS setting rows (js/ui/setting-row.js). CUSTOM is a shown
 // but unpickable option: the state the ADVANCED sliders leave behind.
 const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);
-const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]);
+const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]).concat([["custom", HELP_LABEL.custom, true]]);
 // CUSTOM is display-only (like FEEL's CUSTOM): PUSH notches (-5..-1) and any
 // non-named PULL value must not fold into CORNERS, or a later LINE STEERING
 // sync can write PULL 3 over a deliberate PUSH.
 const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"], ["custom", "CUSTOM", true]];
 function helpBand() {
   const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
-  return dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
+  return dh <= 1 ? "low" : dh <= 3 ? "custom" : dh <= 7 ? "med" : "high";
 }
 function lineBand() {
   const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
@@ -312,6 +471,12 @@ function paintRow(id, v, label) {
   const el = $(id), out = $(id + "-v");
   if (el) el.value = v;
   if (out) out.textContent = label === undefined ? String(v) : label;
+}
+function paintPace(v) {
+  const input = $("pm-pace"), label = paceLabel(v);
+  input.value = v;
+  input.setAttribute("aria-valuetext", label);
+  $("pm-pace-v").textContent = label;
 }
 
 function applyPreset(name) {
@@ -369,7 +534,7 @@ function matchSteerLevel() {
 // Mirror the granular store values back onto the simplified controls so the two
 // views never disagree (presets, Advanced edits and macros all stay in sync).
 function refreshMacros() {
-  const ts = clamp(store.get("tiltDeg", 8), SLIDER_MIN, SLIDER_MAX);   // 8, the shipped default (settings-export SPEC and PRESETS.standard); this read kept the pre-2953f79a 6 and made the simple row disagree with the ADVANCED row about the same key
+  const ts = clamp(Number(store.get("tiltDeg", 8)) || 8, SLIDER_MIN, SLIDER_MAX);   // 8: the shipped default (PRESETS.standard); Number(): a stored string reached innerHTML (#5900)
   if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
   const lvl = matchSteerLevel();
   SettingRow.paint($("pm-feel"), lvl || "custom", FEEL_VALUES);
@@ -392,152 +557,10 @@ function refreshMacros() {
   Dom.paintFold($("adv-more"), [["k", "ADVANCED"]]);
 }
 
-//
-// This is the only code in the game that OVERWRITES a setting the player chose,
-// which is why it is written as a ladder and not as a flag. `store.get(k, d)`
-// returns the stored value whenever the key exists, so changing a DEFAULT reaches
-// a fresh install and nobody else; a migration is the only way to reach a store
-// that already has the key. Two different acts, and doing only one of them
-// reaches either nobody who has played or nobody at all.
-//
-// A single `store.get("steerSchema", 1) >= STEER_SCHEMA` gate is correct with
-// exactly one version to migrate to and becomes DATA LOSS with two: a store already at 2 falls straight through it on the way to 3
-// and receives V2'S RESET A SECOND TIME, silently discarding a drivingHelp or
-// raceLine the player deliberately set AFTER v2 ran. Hence the ladder — each step
-// declares the schema it brings the store UP TO, and a store at N runs only the
-// steps above N. Same shape as CAREER_MIGRATIONS in js/core/store.js.
-//
-// Every key a step rewrites goes through migSet(), so the rewrite lands in the
-// Log ring buffer whether or not anyone was watching. A migration that quietly
-// changes a player's stored settings and leaves no record is indistinguishable
-// from a bug, both to them and to us.
-const STEER_SCHEMA = 5;
-
-// The v2 pace grid. Kept for ONE reader — v3's regrid, which has to know what a
-// stored notch used to mean. Nothing else may call it.
-function paceFromSliderV2(v) { return v <= 5 ? 0.5 + (v - 1) * 0.125 : 1.0 + (v - 5) * 0.06; }
-
-// old notch (1..10) -> the new notch whose pace is nearest in ABSOLUTE
-// ground-speed terms. Derived from the two mappings rather than typed out, so it
-// cannot drift from either: {1:2, 2:6, 3:9, 4:12, 5:14, 6:15, 7:16, 8:17, 9:18,
-// 10:18}. Worst error is -2.89 % at old 10, under half a new notch, so nobody's
-// car changes character (docs/research/PHASE-C-SLIDER-DESIGN.md has the table).
-// Old 9 and old 10 BOTH land on 18: the top of the v2 range was finer than the
-// even 6 % grid, which is the asymmetry being removed and the one lossy pair.
-// NEAREST IN LOG SPACE, not in absolute pace, and that is not a detail. The new
-// grid is geometric BECAUSE pace is a multiplicative scale on ground speed, so
-// the distance between two settings is the RATIO between them — |ln(a/b)| — and
-// measuring it in absolute m/s would be using the very unit the regrid exists to
-// stop using. Measured, it changes exactly one row and removes the only defect
-// in the table: old notch 10 (1.300) sits 0.0007 of pace nearer to notch 18 than
-// to 19, so absolute distance sends it to 18 where old 9 already is — two
-// settings collapsed into one. In log terms 1.300 is +2.94 % from 18 and −2.86 %
-// from 19, so it lands on 19, the map is INJECTIVE, and no player loses the
-// distinction between the two fastest settings they could previously pick. The
-// price is that the worst-case error over all ten notches goes from 2.89 % to
-// 2.94 % — five hundredths of a percentage point, against a slider whose steps
-// are 6 %.
-const PACE_V2_TO_V3 = (() => {
-  const m = {};
-  for (let o = 1; o <= 10; o++) {
-    let best = PACE_MIN, bd = Infinity;
-    for (let n = PACE_MIN; n <= PACE_MAX; n++) {
-      const d = Math.abs(Math.log(paceFromSlider(n) / paceFromSliderV2(o)));
-      if (d < bd) { bd = d; best = n; }
-    }
-    m[o] = best;
-  }
-  return m;
-})();
-
-function migSet(to, key, value, why) {
-  const had = store.get(key, null);
-  store.set(key, value);
-  if (had === value) return;
-  Log.info("game", `steer schema v${to}: ${key} ${had === null ? "(unset)" : had} -> ${value}${why ? " — " + why : ""}`);
-}
-
-const STEER_MIGRATIONS = [
-  //
-  // Changing the drivingHelp default from 6 to 1 only reached a FRESH install, so
-  // every player who had ever opened the settings kept the old always-on assist —
-  // the exact behaviour the rescale was meant to remove, still steering ~0.39 of
-  // every corner for them.
-  //
-  // The slider's MEANING changed too (it used to bottom out at 0.25 and now
-  // bottoms out at a true 0), so an old stored number does not carry over: 6 no
-  // longer denotes what it denoted when it was written. That makes a reset the
-  // honest migration rather than an attempt to rescale the number.
-  //
-  // raceLine is reset for the same reason. It is the other thing that steers the
-  // car toward a line, its mechanism changed too (a positional shove on c.x
-  // became a pure-pursuit steer angle), and the RELAX preset writes raceLine: 2 —
-  // so every player who so much as tried RELAX has a 0.4 line-pull saved and
-  // would keep it forever.
-  //
-  // Both grew with SPEED, which is why the old build felt like holding the gas
-  // made the car adjust itself onto the line: ROAD_FOLLOW carries an
-  // ASSIST_KUS*v^2 term (2.6x stronger at 80 m/s than at rest) and the old racing
-  // line pull scaled by latFac = |speed|/18. Off by default now means off.
-  { to: 2, apply() {
-      migSet(2, "drivingHelp", 1, "assist OFF: the rescale gave the slider a true zero, so the old number no longer denotes what it did");
-      migSet(2, "raceLine", 0, "no line pull by default: the mechanism changed with it");
-  } },
-
-  //
-  // The notch numbers stopped meaning what they meant: 1..10 on a piecewise-linear
-  // 0.50..1.30 grid became 1..19 on an even 6 %/notch geometric one. A stored 3
-  // meant 0.750 and now means 0.527, so leaving it alone would hand a quarter of
-  // the player's ground speed away without saying anything.
-  //
-  // A store with NO pace key is left alone on purpose: it has never been chosen,
-  // so the new default (notch 11 = 0.840) applies through store.get() and there is
-  // nothing to migrate. Writing 11 here would be indistinguishable on disk from a
-  // deliberate choice and would pin that player to today's default forever.
-  //
-  // steerSmooth is deliberately NOT touched: SMOOTHING keeps its 1..10 notches and
-  // only what each notch MEANS moved (Hz-linear -> lag-linear), with the default
-  // preserved to a rounding error. A number that still denotes the same position
-  // on the same slider needs no migration.
-  { to: 3, apply() {
-      const from = store.get("pace", null);
-      if (from === null) return;                 // never chosen -> the new default stands
-      const to = PACE_V2_TO_V3[from];
-      if (to === undefined) return;              // outside the v2 grid: not ours to reinterpret
-      const err = (paceFromSlider(to) / paceFromSliderV2(from) - 1) * 100;
-      migSet(3, "pace", to,
-        `RACE PACE regrid 1..10 -> 1..19: ${paceFromSliderV2(from).toFixed(3)} -> ${paceFromSlider(to).toFixed(3)} (${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);
-      // A collision, named rather than swallowed — a clamp nobody can see is how
-      // a player's settings get quietly changed. With log-nearest above there is
-      // no such pair today and this never fires; it stays because the guard is
-      // cheap and the next person to re-derive the grid may reintroduce one.
-      const shared = Object.keys(PACE_V2_TO_V3).filter((o) => PACE_V2_TO_V3[o] === to);
-      if (shared.length > 1) {
-        Log.warn("game", `steer schema v3: old pace notches ${shared.join(" and ")} both land on ${to} — the top of the old grid was finer than the new even-6 % one, so those two settings are no longer distinguishable (this one moved ${err >= 0 ? "+" : ""}${err.toFixed(2)} %)`);
-      }
-  } },
-
-  { to: 4, apply() {
-      const from = store.get("adaptiveButtons", null);
-      if (from === 0) migSet(4, "adaptiveButtons", 1, "OFF stays OFF on the 1..10 strength slider");
-      else if (from === 1) migSet(4, "adaptiveButtons", 6, "old ON becomes mid strength");
-  } },
-
-  // Grip steer is new. Unset stores get OFF (1) via store.get default; a store
-  // that somehow carried a non-number is reset so applySteerTuning never feeds
-  // NaN into GripSteer.assistK. Existing players stay OFF unless they pick
-  // ROOKIE / RELAX (which write 8 / 6).
-  { to: 5, apply() {
-      const from = store.get("gripSteer", null);
-      if (from !== null && !(typeof from === "number" && isFinite(from)))
-        migSet(5, "gripSteer", 1, "grip steer OFF: non-number store cleared");
-  } },
-];
-
 function migrateSteerStore() {
   const from = store.get("steerSchema", 1);
   if (from >= STEER_SCHEMA) return;
-  for (const step of STEER_MIGRATIONS) if (from < step.to) step.apply();
+  for (const step of STEER_MIGRATIONS) if (from < step.to) step.apply(store);
   store.set("steerSchema", STEER_SCHEMA);
 }
 
@@ -555,13 +578,13 @@ function applySteerTuning() {
   const rate    = clamp(store.get("steerRate",  2), SLIDER_MIN, SLIDER_MAX);
   const expo    = clamp(store.get("steerExpo",  6), SLIDER_MIN, SLIDER_MAX);
   const smooth  = clamp(store.get("steerSmooth", 3), SLIDER_MIN, SLIDER_MAX);
-  const tiltdeg = clamp(store.get("tiltDeg",    8), SLIDER_MIN, SLIDER_MAX);   // 8→25° for full lock (tiltDegFromRange: 56.5 - 4.5*(v-1))
+  const tiltdeg = clamp(Number(store.get("tiltDeg", 8)) || 8, SLIDER_MIN, SLIDER_MAX);   // 8→25° for full lock (tiltDegFromRange: 56.5 - 4.5*(v-1))
   const lock    = clamp(store.get("steerLock",  7), SLIDER_MIN, SLIDER_MAX);
   const spdsteer = clamp(store.get("steerSpeed", 7), SLIDER_MIN, SLIDER_MAX);
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
-  const adapt   = clamp(store.get("adaptiveButtons", 5), SLIDER_MIN, SLIDER_MAX);
+  const adapt   = clamp(store.get("adaptiveButtons", PRESETS.standard.adaptiveButtons), SLIDER_MIN, SLIDER_MAX);
   // CAR WEIGHT is the ONE slider of the shipped profile that is device-aware,
   // and it is device-aware because it collides with a measurement rather than
   // with a taste. 10 (YAW_INERTIA 1.0) is what they drive on a PHONE, where the
@@ -663,7 +686,7 @@ function applySteerTuning() {
       ? DrivingCues.labelOf(audioCues) : (audioCues <= 1 ? "OFF" : "CUES " + audioCues);
   }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
-  $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
+  paintPace(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
   paintRow("pm-tiltcurve", tiltCurve);
   paintRow("pm-touchcurve", touchCurve);
@@ -761,7 +784,7 @@ $("pm-help").oninput = (e) => {
 };
 $("pm-pace").oninput = (e) => {
   const v = clamp(+e.target.value, PACE_MIN, PACE_MAX); store.set("pace", v);
-  G.PACE = paceFromSlider(v); $("pm-pace-v").textContent = paceLabel(v);
+  G.PACE = paceFromSlider(v); paintPace(v);
 };
 $("pm-line").oninput = (e) => {
   const v = clamp(+e.target.value, LINE_MIN, LINE_MAX); store.set("raceLine", v);
@@ -775,9 +798,18 @@ if ($("pm-preset-rookie")) $("pm-preset-rookie").onclick = () => {
   if (G.onAssistBundle) G.onAssistBundle();
   if (G.soundOn) GameAudio.uiSelect();
 };
-$("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (G.soundOn) GameAudio.uiSelect(); };
-$("pm-preset-standard").onclick = () => { applyPreset("standard"); if (G.soundOn) GameAudio.uiSelect(); };
-$("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (G.soundOn) GameAudio.uiSelect(); };
+// …and every other bundle hands it back: leaving ROOKIE used to keep THROTTLE on
+// AUTO with the GAS pedal hidden under a chip reading STANDARD (#5575).
+const handBackPreset = (name) => () => {
+  const handBack = store.get("autoThrottle", false) === true;
+  if (handBack) store.set("autoThrottle", false);
+  applyPreset(name);
+  if (handBack && G.onAssistBundle) G.onAssistBundle();
+  if (G.soundOn) GameAudio.uiSelect();
+};
+$("pm-preset-relax").onclick = handBackPreset("relax");
+$("pm-preset-standard").onclick = handBackPreset("standard");
+$("pm-preset-pro").onclick = handBackPreset("pro");
 
 /* One shape for every new row: clamp, store, push to Input, repaint, and drop
    the preset chip IF the row is preset-owned — the same acts each existing
@@ -833,6 +865,21 @@ function paintTriggerHapRow() {
   }
 }
 
+// WHEEL LOCK & ABS (#3983): built at runtime, so the static shell (shellNodes ratchet) does not grow.
+const wheelAnchor = typeof WheelState !== "undefined" && $("pm-linemode-jump");
+if (wheelAnchor && wheelAnchor.parentNode && wheelAnchor.parentNode.parentNode && typeof document !== "undefined") {
+  const WHEEL_VALUES = [["off", "OFF"], ["on", "WHEELS"], ["medium", "ABS/TC MED"], ["full", "ABS/TC FULL"]];
+  const built = SettingRow.build("pm-wheelmodel", "WHEEL LOCK & ABS", WHEEL_VALUES);
+  const item = document.createElement("div"), help = document.createElement("p");
+  item.className = "adv-item"; help.className = "adv-help";
+  help.textContent = "OFF is the classic feel. WHEELS models each axle\u2019s wheel speed, so slicks in the wet really lock or spin; dry driving feels the same. ABS/TC MED and FULL add brake and traction control: FULL keeps the wheels turning most.";
+  item.append(built.row, help);
+  wheelAnchor.parentNode.after(item);
+  SettingRow.wire("pm-wheelmodel", { values: WHEEL_VALUES, read: WheelState.mode, write: (m) => { WheelState.setMode(m); if (G.soundOn) GameAudio.uiSelect(); } });
+  SettingRow.paint(built.row, WheelState.mode(), WHEEL_VALUES);
+}
+// The input mode applies from boot; Controls mounts the pedal and response rows on first open.
+if (typeof Input !== "undefined" && Input.setPedalSlide) Input.setPedalSlide(store.get("pedalSlide", "instant"));
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();
 };
@@ -844,6 +891,7 @@ function applySteerLevel(name) {
 }
 SettingRow.wire("pm-feel", { values: FEEL_VALUES, read: () => matchSteerLevel() || "custom", write: applySteerLevel });
 SettingRow.wire("pm-helplevel", { values: HELP_VALUES, read: helpBand, write: (n) => {
+  if (HELP_LEVELS[n] == null) return;   // CUSTOM is display-only
   store.set("drivingHelp", HELP_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 } });
@@ -871,6 +919,6 @@ applySteerTuning();
 return { applySteerTuning };
 }
 
-return { create };
+return { create, migrateValues, STEER_SCHEMA, defaultPace: paceFromSlider(PACE_DEF) };
 })();
 Object.freeze(SteerTuning);

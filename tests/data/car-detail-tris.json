@@ -1,0 +1,37 @@
+{
+  "_note": "measured player-car triangle counts per desktop detail level (shipped rounded car, mclaren default parts); regenerate with: node tests/unit/car-detail-tiers.test.mjs --update",
+  "detail0": {
+    "body": 9880,
+    "cockpit": 1803,
+    "frontWheel": 784,
+    "rearWheel": 784,
+    "flaps": 424,
+    "player": 13440,
+    "steeringWheel": 7140,
+    "dash": 1336
+  },
+  "ultra": {
+    "body": 16020,
+    "cockpit": 2115,
+    "frontWheel": 1408,
+    "rearWheel": 1408,
+    "flaps": 1624,
+    "player": 23276,
+    "steeringWheel": 7140,
+    "dash": 1336
+  },
+  "extreme": {
+    "body": 98670,
+    "cockpit": 28255,
+    "frontWheel": 2004,
+    "rearWheel": 2004,
+    "flaps": 1624,
+    "player": 108310,
+    "steeringWheel": 26942,
+    "dash": 6832
+  },
+  "extremeNoMeshDetail": {
+    "body": 93414,
+    "cockpit": 28255
+  }
+}

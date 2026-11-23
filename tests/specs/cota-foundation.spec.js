@@ -66,10 +66,19 @@ test.describe("COTA shared-foundation migration", () => {
         if (lat < 13 && lat > hw[k]) hw[k] = lat;
       }
       for (let i = 0; i < M; i++) if (hw[i] < 3) hw[i] = 6;
-      const samples = [];
+      // Broadphase (#3665): samples bucketed on a GRID-metre grid, so each triangle
+      // visits only the cells its padded AABB overlaps instead of all 4500 samples.
+      // Every sample sits in exactly one cell, and any sample inside the padded AABB
+      // lies in an overlapped cell, so the exact test sees the same hits as before.
+      const GRID = 8;
+      const sampleGrid = new Map();
       for (let i = 0; i < M; i++)
-        for (const scale of [-0.75, -0.4, 0, 0.4, 0.75])
-          samples.push({ x: px[i] + rx[i] * scale * hw[i], y: py[i], z: pz[i] + rz[i] * scale * hw[i] });
+        for (const scale of [-0.75, -0.4, 0, 0.4, 0.75]) {
+          const sample = { x: px[i] + rx[i] * scale * hw[i], y: py[i], z: pz[i] + rz[i] * scale * hw[i] };
+          const key = `${Math.floor(sample.x / GRID)},${Math.floor(sample.z / GRID)}`;
+          if (!sampleGrid.has(key)) sampleGrid.set(key, []);
+          sampleGrid.get(key).push(sample);
+        }
       const inside = (x, z, ax, az, bx, bz, cx, cz) => {
         const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = x - ax, v2z = z - az;
         const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z;
@@ -78,26 +87,42 @@ test.describe("COTA shared-foundation migration", () => {
         const u = (d11 * d20 - d01 * d21) / den, v = (d00 * d21 - d01 * d20) / den;
         return u >= -0.02 && v >= -0.02 && u + v <= 1.02 ? { u, v } : null;
       };
-      let propMax = 0;
+      // propMeshes / propPairs count what was measured: a missing props/glass
+      // capture skips the loop and leaves propMax 0, a clean pass over nothing.
+      let propMax = 0, propMeshes = 0, propPairs = 0;
       for (const name of ["props", "glass"]) {
         const mesh = caps[name];
+        if (mesh?.idx?.length) propMeshes++;
         for (let t = 0; mesh && t < mesh.idx.length; t += 3) {
           const ia = mesh.idx[t] * 3, ib = mesh.idx[t + 1] * 3, ic = mesh.idx[t + 2] * 3;
           const ax = mesh.pos[ia], ay = mesh.pos[ia + 1], az = mesh.pos[ia + 2];
           const bx = mesh.pos[ib], by = mesh.pos[ib + 1], bz = mesh.pos[ib + 2];
           const cx = mesh.pos[ic], cy = mesh.pos[ic + 1], cz = mesh.pos[ic + 2];
           if (Math.min(ay, by, cy) > CEIL + 30) continue;
-          for (const sample of samples) {
-            if (sample.x < Math.min(ax, bx, cx) - 0.3 || sample.x > Math.max(ax, bx, cx) + 0.3 ||
-                sample.z < Math.min(az, bz, cz) - 0.3 || sample.z > Math.max(az, bz, cz) + 0.3) continue;
-            const bary = inside(sample.x, sample.z, ax, az, bx, bz, cx, cz);
-            if (!bary) continue;
-            const over = ay + bary.u * (cy - ay) + bary.v * (by - ay) - sample.y;
-            if (over > TOL && over < CEIL) propMax = Math.max(propMax, over);
+          // The triangle's padded bounds, once — not once per sample.
+          const x0 = Math.min(ax, bx, cx) - 0.3, x1 = Math.max(ax, bx, cx) + 0.3;
+          const z0 = Math.min(az, bz, cz) - 0.3, z1 = Math.max(az, bz, cz) + 0.3;
+          const gx0 = Math.floor(x0 / GRID), gx1 = Math.floor(x1 / GRID);
+          const gz0 = Math.floor(z0 / GRID), gz1 = Math.floor(z1 / GRID);
+          // A triangle spanning more cells than are occupied walks the occupied ones instead.
+          const cells = [];
+          if ((gx1 - gx0 + 1) * (gz1 - gz0 + 1) > sampleGrid.size) cells.push(...sampleGrid.values());
+          else for (let gx = gx0; gx <= gx1; gx++) for (let gz = gz0; gz <= gz1; gz++) {
+            const cell = sampleGrid.get(`${gx},${gz}`);
+            if (cell) cells.push(cell);
           }
+          for (const cell of cells)
+            for (const sample of cell) {
+              if (sample.x < x0 || sample.x > x1 || sample.z < z0 || sample.z > z1) continue;
+              const bary = inside(sample.x, sample.z, ax, az, bx, bz, cx, cz);
+              if (!bary) continue;
+              propPairs++;
+              const over = ay + bary.u * (cy - ay) + bary.v * (by - ay) - sample.y;
+              if (over > TOL && over < CEIL) propMax = Math.max(propMax, over);
+            }
         }
       }
-      return { range: high - low, peakFrac, probes, propMax };
+      return { range: high - low, peakFrac, probes, propMax, propMeshes, propPairs };
     });
 
     expect(pageErrors).toHaveLength(0);
@@ -108,7 +133,13 @@ test.describe("COTA shared-foundation migration", () => {
     expect(result.range).toBeLessThan(36);
     expect(result.peakFrac).toBeGreaterThan(0.04);
     expect(result.peakFrac).toBeLessThan(0.12);
+    // A missing props/glass capture leaves propMax 0, so count what was scanned
+    // (headless VM, 2026-11-10: see propPairs below); the hit floor is > 0.
+    expect(result.propMeshes).toBeGreaterThanOrEqual(1);
+    expect(result.propPairs).toBeGreaterThan(0);
     expect(result.propMax).toBeLessThanOrEqual(0.20);
+    // A null overRoad passes the loop below; all 60 probes read terrain (headless VM, 2026-11-10).
+    expect(result.probes.filter((probe) => probe.overRoad != null)).toHaveLength(60);
     for (const probe of result.probes) {
       expect(probe.overRoad == null || probe.overRoad <= 0.18,
         `terrain at ${(probe.frac * 100).toFixed(1)}% lat ${probe.lat}m: overRoad ${probe.overRoad} (gap ${probe.gap})`).toBe(true);

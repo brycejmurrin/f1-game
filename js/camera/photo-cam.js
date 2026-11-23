@@ -1,4 +1,4 @@
-/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its DOM buttons. Photo mode ONLY — the lighting tuner's lt-* buttons (help toggle, RESET, COPY VALUES) live in js/lighting/tuner-panel.js. */
+/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its DOM buttons. Photo mode ONLY — the lighting tuner's lt-* buttons (help toggle, RESET, COPY VALUES) live in js/lighting/tuner-panel.js. #4648. */
 const Photomode = (function () {
   "use strict";
 
@@ -35,11 +35,16 @@ function initPhotoCam() {
 // flew off in that direction until the player pressed the same control again.
 // Split out of initPhotoCam so blur can release the input WITHOUT also
 // re-deriving the pose from the game camera, which would teleport the shot.
+const stickReleases = [];
+function releasePhotoSticks() {
+  for (const release of stickReleases) release();
+}
 const altitudeHeld = { up: false, down: false };
 // Physical aliases own their holds independently: releasing Space cannot
 // cancel a still-held R, nor can one Shift release cancel the other.
 const aliasHeld = { KeyR: false, Space: false, ShiftLeft: false, ShiftRight: false };
 function releasePhotoInput() {
+  releasePhotoSticks();
   altitudeHeld.up = altitudeHeld.down = false;
   for (const code in aliasHeld) aliasHeld[code] = false;
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
@@ -91,22 +96,31 @@ function enterPhotoMode() {
   G.photoMode = true;
   PerfGov.setAutoRes(false);
   G._photoPrevScale = gfx.getRenderScale ? gfx.getRenderScale() : 1;
+  // Full scale while framing (PerfGov may sit at 0.7); exit restores it (#4648).
+  if (gfx.setRenderScale && G._photoPrevScale < 1) gfx.setRenderScale(1);
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
+  paintPhotoLine();
   const t = $("pc-toggle"); if (t) { t.classList.add("on"); t.innerHTML = "● FREE CAMERA"; }
   window.addEventListener("keydown", photoKeyHandler, true);
   window.addEventListener("keyup", photoKeyHandler, true);
   window.addEventListener("blur", releasePhotoInput);
+  window.addEventListener("focusin", photoEditorFocus);
+  window.addEventListener("resize", releasePhotoSticks);
+  window.visualViewport?.addEventListener("resize", releasePhotoSticks);
 }
 function exitPhotoMode() {
   if (!G.photoMode) return;
   Log.info("game", "Photomode.exit");
   G.photoMode = false;
+  releasePhotoInput();
   if (freeCam) freeCam.onPhotoExit();       // resume / quit / the tuner closing take the free-cam panel with them
   G.dbgCam = null;                          // hand the game camera back
   G.snapGameCam();                          // …AT the car: the damped rig otherwise swoops back from wherever the free camera was parked
   document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");
+  DrivingLine.setPhoto(null);               // the LINE button is a per-shot preview, never a saved setting
+  paintPhotoLine();
   $("photo-controls").hidden = true;
   $("lighting-inner").hidden = false;     // un-hide the tuner if it was tucked away
   const pb = $("pc-panel"); if (pb) pb.textContent = "HIDE PANEL";
@@ -114,24 +128,44 @@ function exitPhotoMode() {
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
   window.removeEventListener("blur", releasePhotoInput);
+  window.removeEventListener("focusin", photoEditorFocus);
+  window.removeEventListener("resize", releasePhotoSticks);
+  window.visualViewport?.removeEventListener("resize", releasePhotoSticks);
   if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
   applyResMode();
 }
 function togglePhotoPanel() {
   const p = freeCam && freeCam.isOpen() ? freeCam.panel() : $("lighting-inner"); if (!p) return;
+  releasePhotoSticks();
   const hide = !p.hidden;
   p.hidden = hide;
   document.body.classList.toggle("pc-nopanel", hide);
   const pb = $("pc-panel"); if (pb) pb.textContent = hide ? "SHOW PANEL" : "HIDE PANEL";
   if (G.soundOn) GameAudio.uiTick();
 }
+let lineBtn = null;   // built below; a held reference, not an id lookup (the shell has no #pc-line)
+function paintPhotoLine() {
+  const b = lineBtn; if (!b) return;
+  const on = DrivingLine.shown();
+  b.textContent = on ? "HIDE LINE" : "SHOW LINE"; b.setAttribute("aria-pressed", on ? "true" : "false");
+}
+function togglePhotoLine() {
+  DrivingLine.setPhoto(!DrivingLine.shown());
+  paintPhotoLine();
+  if (G.soundOn) GameAudio.uiTick();
+}
 function setPhotoUiHidden(hide) {
+  if (hide) releasePhotoInput();
   document.body.classList.toggle("pc-uihidden", hide);
   if (G.soundOn) GameAudio.uiTick();
 }
 // Dedicated key handler (not Input.onKey) so photo controls never touch driving.
+function photoEditorFocus(e) {
+  if (e.target?.closest?.("#screen-arranger")) releasePhotoInput();
+}
 function photoKeyHandler(e) {
   const focused = document.activeElement, tag = (focused && focused.tagName) || "";
+  if (focused?.closest?.("#screen-arranger")) return;
   const down = e.type === "keydown";
   // Typing in a slider — but a key-UP always releases: W held while a click
   // moved focus into a slider (or COPY VIEW's textarea) stayed down forever.
@@ -170,42 +204,41 @@ function photoKeyHandler(e) {
 function wirePhotoStick(id, vec) {
   const el = $(id); if (!el) return;
   const nub = el.querySelector(".pc-nub");
-  let pid = null;
-  // The box and zoom are measured ONCE per drag (pointerdown) — the stick
-  // only moves on resize/zoom-cap changes, never mid-hold, and gBCR +
-  // currentCSSZoom per pointermove is a style-system query at up to 240 Hz.
-  let _r = null, _zoom = 1;
+  let pid = null, box = null, travelX = 0, travelY = 0;
   const set = (cx, cy) => {
-    const r = _r || el.getBoundingClientRect();
-    const rad = r.width / 2;
-    let dx = (cx - (r.left + rad)) / rad, dy = (cy - (r.top + rad)) / rad;
-    const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; }
+    let dx = (cx - box.left) / box.width * 2 - 1;
+    let dy = (cy - box.top) / box.height * 2 - 1;
+    const magnitude = Math.hypot(dx, dy);
+    if (magnitude > 1) { dx /= magnitude; dy /= magnitude; }
     vec.x = dx; vec.y = dy;
-    /* Two coordinate spaces meet here. The VECTOR is a ratio of visual px
-       over visual px, so zoom cancels and the drive is correct. The nub's
-       translate() resolves in the element's LOCAL space, while `rad` is
-       VISUAL px (the stick sits inside .pc-stickwrap's zoom) — so the nub
-       travelled 40% of its throw at UI SIZE 40% and flew outside the ring
-       at 200%. Divide the throw back into local px. */
-    const localRad = rad / _zoom;
-    if (nub) nub.style.transform = "translate(" + (dx * localRad * 0.6) + "px," + (dy * localRad * 0.6) + "px)";
+    if (nub) nub.style.transform = "translate(" + dx * travelX + "px," + dy * travelY + "px)";
   };
-  const end = () => { vec.x = 0; vec.y = 0; pid = null; if (nub) nub.style.transform = "translate(0,0)"; };
-  const endIf = (e) => { if (pid === null || e.pointerId === pid) end(); };
-  el.addEventListener("pointerdown", (e) => {
+  const end = () => {
+    if (pid === null) return;
+    const previous = pid;
+    pid = null; box = null;
+    vec.x = vec.y = 0;
+    if (nub) nub.style.transform = "translate(0,0)";
+    window.removeEventListener("pointerup", endIf, true);
+    window.removeEventListener("pointercancel", endIf, true);
+    if (el.hasPointerCapture?.(previous)) el.releasePointerCapture(previous);
+  };
+  stickReleases.push(end);
+  const endIf = e => { if (e.pointerId === pid) end(); };
+  el.addEventListener("pointerdown", e => {
+    if (pid !== null || !G.photoMode) return;
+    // Pointer coordinates and the ring must be in the same viewport space,
+    // including CSS scale and old Safari's zoom. Nub travel is local CSS px.
+    box = window.CssZoom ? window.CssZoom.viewportRect(el) : el.getBoundingClientRect();
+    if (!(box.width > 0 && box.height > 0)) return;
+    if (nub) {
+      travelX = Math.max(0, el.clientWidth - nub.offsetWidth) / 2;
+      travelY = Math.max(0, el.clientHeight - nub.offsetHeight) / 2;
+    }
     pid = e.pointerId;
-    /* THE THROW IS SPEC'D, NOT A BROWSER QUIRK. Pointer Events requires
-       setPointerCapture to throw NotFoundError when the pointerId "does not
-       match any of the active pointers", and the pointer can already be gone by
-       the time this line runs — a touch cancelled between pointerdown and the
-       handler (a rapid tap, a gesture the system claimed) is the documented
-       trigger, and it is not platform-specific. An unguarded throw aborts the
-       handler before set() AND before preventDefault(), so the stick reads zero
-       and the page keeps the gesture. Every other capture in this repo is
-       wrapped (js/input/input.js, js/game.js); this was the one that was not. */
-    try { el.setPointerCapture(pid); } catch (_) { /* the spec'd throw above — the stick still works uncaptured */ }
-    _r = el.getBoundingClientRect();
-    _zoom = el.currentCSSZoom || 1;
+    try { el.setPointerCapture(pid); } catch (_) { /* the window release net still catches an outside lift */ }
+    window.addEventListener("pointerup", endIf, true);
+    window.addEventListener("pointercancel", endIf, true);
     set(e.clientX, e.clientY);
     e.preventDefault();
   });
@@ -286,10 +319,20 @@ $("pc-exit").onclick = () => {
 };
 $("pc-panel").onclick = togglePhotoPanel;
 $("pc-hud").onclick = () => setPhotoUiHidden(true);
+{   // built here, not in index.html: the shell-node ratchet is shrink-only
+  const lb = lineBtn = document.createElement("button");
+  lb.id = "pc-line"; lb.type = "button"; lb.setAttribute("aria-pressed", "true"); lb.textContent = "HIDE LINE";
+  lb.onclick = togglePhotoLine;
+  $("pc-bar").insertBefore(lb, $("pc-hud"));
+}
 $("pc-restore").onclick = () => setPhotoUiHidden(false);
-$("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
+$("pc-fov").oninput = (e) => {
+  // As FreeCam.clampFov: never 0/NaN.
+  const v = +e.target.value;
+  photoCam.fov = (typeof v === "number" && isFinite(v)) ? Math.max(20, Math.min(110, v)) : 60;
+};
 
-return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
+return { updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
 }
 
 return { create };

@@ -126,7 +126,11 @@ function playable() {
   return playList;
 }
 function preview() {
-  if (!apiReady()) { askApi(); status(null, "preview unavailable — loading the dev API…"); return; }
+  if (!apiReady()) {
+    askApi();
+    status(null, _apiState === "failed" ? "Preview unavailable. Reopen the editor to retry." : "preview unavailable — loading the dev API…");
+    return;
+  }
   let r = null;
   try { r = __apex.flybyCam(u, playable()); } catch (e) { status(null, "preview failed: " + (e && e.message)); return; }
   if (!r) { status(null, "no track built yet — start a race, then pause"); return; }
@@ -144,7 +148,7 @@ function status(r, note) {
   // A shot down the ROAD is judged the way tests/unit/flyby-shots.test.mjs
   // judges it: the props' axis-aligned boxes of an angled grandstand cross the
   // straight (Bahrain), so `inside` there is not a defect — being off the road is.
-  const offRoad = !!r.onRoad && !(Math.abs(r.lat) <= 12);
+  const offRoad = !!r.onRoad && (r.lat == null || Math.abs(r.lat) > 12);
   const bad = r.onRoad ? offRoad : !!r.inside;
   const verdict = r.onRoad
     ? (offRoad ? "  ·  ON-ROAD SHOT " + (r.lat == null ? "OFF THE TRACK" : Math.abs(r.lat).toFixed(1) + " m OFF THE ROAD") + " — move this eye"
@@ -363,7 +367,7 @@ function buildRows() {
   const head = document.createElement("h3");
   head.textContent = "SHOT"; head.className = "fb-group";
   host.appendChild(head);
-  numberRow(host, "dur", "DURATION (share of the run)", DUR, (v) => { cur().dur = v; edited(); });
+  numberRow(host, "dur", "DURATION (share of the run)", DUR, (v) => { cur().dur = v; setU(midOf(sel)); edited(); });
   selectRow(host, "ease", "EASING", EASES, (v) => { cur().ease = v; edited(); });
   numberRow(host, "fov0", "FOV FROM", FOV, (v) => { cur().fov[0] = v; edited(); });
   numberRow(host, "fov1", "FOV TO", FOV, (v) => { cur().fov[1] = v; edited(); });
@@ -405,6 +409,7 @@ function refreshChips() {
   // Rebuilt rather than patched: the chips ARE the list, and add / delete /
   // reorder all change its length. A diffing pass here would be three more
   // states to get wrong for no measurable gain on a list of eight.
+  const restoreFocus = host.contains(document.activeElement);
   host.textContent = "";
   list.forEach((s, i) => {
     const b = document.createElement("button");
@@ -431,8 +436,11 @@ function refreshChips() {
   // The tabs are rebuilt after add/delete/reorder, so update this relation here
   // instead of leaving it pointing at a removed tab.
   const activeTab = $("fb-tab-" + sel);
-  if (activeTab) host.setAttribute("aria-labelledby", activeTab.id);
-  else host.removeAttribute("aria-labelledby");
+  const panel = $("fb-rows");
+  if (activeTab) {
+    panel.setAttribute("aria-labelledby", activeTab.id);
+    if (restoreFocus) activeTab.focus();
+  } else panel.removeAttribute("aria-labelledby");
   const prof = $("fb-profile");
   if (prof) {
     let sum = 0;
@@ -452,7 +460,6 @@ function chipKey(i, e) {
   if (next == null) return;
   e.preventDefault(); e.stopPropagation();
   sel = next; setU(midOf(next)); refreshChips(); refreshRows(); preview();
-  const el = $("fb-tab-" + next); if (el && el.focus) el.focus();
 }
 
 function show(id, on) {
@@ -508,22 +515,27 @@ function isOpen() { return !$("flyby").hidden; }
    same deal js/perf/metrics-overlay.js has, and for the same reason: this panel
    reads everything it previews through __apex, which a Pages build does not
    fetch. Asking here rather than widening the boot gate keeps a player who
-   never opens the editor downloading nothing. Asked ONCE: a refused or failed
-   inject leaves the panel degraded with a message, never a retry loop. */
-let _apiLoad = null, _apiAsked = false;
+   never opens the editor downloading nothing. A failed request can be retried
+   on the next visit without requesting scripts on every slider tick. */
+let _apiLoad = null, _apiState = "idle";
 function setApiLoader(fn) {
   _apiLoad = typeof fn === "function" ? fn : null;
   if (_apiLoad && isOpen()) askApi();
 }
 function askApi() {
-  if (_apiAsked || !_apiLoad || apiReady()) return;
-  _apiAsked = true;
-  Promise.resolve(_apiLoad()).then(() => { if (isOpen()) { preview(); refreshRows(); } })
-    .catch((e) => { status(null, "the dev API did not load — preview unavailable"); Log.warn("game", "flyby panel: agent surface failed", e); });
+  if (_apiState !== "idle" || !_apiLoad || apiReady()) return;
+  _apiState = "loading";
+  Promise.resolve().then(() => _apiLoad())
+    .catch((e) => Log.warn("game", "flyby panel: agent surface failed", e))
+    .then(() => {
+      _apiState = apiReady() ? "idle" : "failed";
+      if (isOpen()) { preview(); refreshRows(); }
+    });
 }
 
 function openFlyby() {
   Log.info("game", "FlybyPanel.open");
+  if (_apiState === "failed") _apiState = "idle";
   askApi();
   ensure();
   buildRows();
@@ -536,10 +548,10 @@ function openFlyby() {
   refreshAnn();
   showCard(true);
   els.pmsettings.hidden = true;
-  // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
-  // .hidden survives underneath and reappears the moment pmsettings does.
-  const displayPage = $("pm-panel-display");
-  if (displayPage) displayPage.hidden = true;
+  // Nested under VISUAL STUDIO (#pm-panel-visual): hide that page too, and give
+  // exactly it back on close; never the HUD & CAMERA page (#5066).
+  const visualPage = $("pm-panel-visual");
+  if (visualPage) visualPage.hidden = true;
   refreshChips(); refreshRows(); preview();
 }
 
@@ -574,8 +586,8 @@ function closeFlyby(showPauseMenu) {
   G.snapGameCam();   // at the car, not a swoop back from the last previewed frame (no-op without a player)
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
-    const displayPage = $("pm-panel-display");
-    if (displayPage) displayPage.hidden = false;   // ...specifically its DISPLAY page
+    const visualPage = $("pm-panel-visual");
+    if (visualPage) visualPage.hidden = false;   // ...specifically its VISUAL STUDIO page
   }
 }
 

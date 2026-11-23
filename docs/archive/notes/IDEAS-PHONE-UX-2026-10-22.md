@@ -38,9 +38,9 @@ LEFT-HANDED dock and AUTO throttle (`js/ui/dock-layout.js`,
 Filed already: #1608 (Next-GP tile, .ics), #3339 (garage livery scroll),
 #3263–#3274 (HUD preset and MOVE & SIZE overlaps), #3302 (install chip
 stacking), #3311 (rotation sheds quality tier). Plans:
-`docs/plans/2026-09-30-broadcast-feel.md`,
-`docs/plans/2026-10-04-share-cards.md`,
-`docs/plans/2026-10-04-pwa-shortcuts-calendar.md`,
+`docs/archive/plans/2026-09-30-broadcast-feel.md`,
+`docs/archive/plans/2026-10-04-share-cards.md`,
+`docs/archive/plans/2026-10-04-pwa-shortcuts-calendar.md`,
 `docs/notes/HUD-PHONE-LAYOUT-PLAN-2026-10-10.md`.
 
 ## Research (cited)

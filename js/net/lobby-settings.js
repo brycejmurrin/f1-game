@@ -44,6 +44,7 @@ const LobbySettings = (function () {
     return it;
   }
 
+  let ephemeralId = null;   // id of the one circuit this module pushed
   /** Install a wire design into Tracks.LIST (ephemeral — not written to storage). */
   function installCircuit(design) {
     if (typeof CustomTracks === "undefined" || typeof TrackDef === "undefined" || !Tracks.LIST) return -1;
@@ -53,9 +54,53 @@ const LobbySettings = (function () {
     try { def = TrackDef.fromRaw(CustomTracks.toRaw(it)); }
     catch (_) { return -1; }
     let idx = Tracks.LIST.findIndex((t) => t && t.id === it.id);
-    if (idx >= 0) Tracks.LIST[idx] = def;
+    if (idx >= 0) { Tracks.LIST[idx] = def; return idx; }
+    // The id is a content hash, so a hostile host varying `seed` mints a fresh
+    // id per SETTINGS: reuse the slot of the circuit WE pushed last time
+    // rather than growing Tracks.LIST without bound.
+    const prev = ephemeralId == null ? -1 : Tracks.LIST.findIndex((t) => t && t.id === ephemeralId);
+    if (prev >= 0) { Tracks.LIST[prev] = def; idx = prev; }
     else { Tracks.LIST.push(def); idx = Tracks.LIST.length - 1; }
+    ephemeralId = it.id;
     return idx;
+  }
+
+  function raceRuleRows(G) {
+    const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
+    const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Cloudy", fog: "Fog", storm: "Storm" };
+    const arc = G.raceChangeable && G.wxArcPlan;
+    const wx = (WX_LABEL[G.raceWeather] || "Mixed") + (arc && WX_LABEL[arc.to] ? " → " + WX_LABEL[arc.to] : "");
+    const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
+      ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
+    const display = (v) => {
+      if (!v) return "—";
+      if (v === "catchup") return "Catch-up";
+      if (v === "cfd") return "CFD";
+      return v.charAt(0).toUpperCase() + v.slice(1);
+    };
+    const rows = [
+      ["Circuit", track ? (track.name || track.id) : "—"], ["Laps", G.raceLaps],
+      ["Qualifying lap", G.raceQuali ? "On" : "Off"],
+      ["Grid", GRID_LABEL[G.raceGrid] || (G.raceQuali ? "Qualifying lap" : "Pace order")],
+      ["Weather", wx], ["Conditions", G.raceChangeable ? "Changeable" : "Stable"], ["Time", tod],
+      ["Difficulty", display(G.difficulty)], ["Tyre wear", display(G.raceTyreWear)],
+      ["Reliability", display(G.raceReliability)], ["Dirty air", display(G.raceDirtyAir)], ["AI pace", display(G.aiPace)],
+    ];
+    if (arc && arc.dur) rows.push(["Weather transition", arc.dur + " s"]);
+    return rows;
+  }
+
+  // ROOM RULES ARE IN MEMORY ONLY. G.raceTyreWear / G.raceReliability are
+  // the PERSISTING setters (store "tyreWear" / "reliability"), so a guest's
+  // own saved choice was overwritten for good by any room it joined. The
+  // race reads the in-memory value; the save is put back exactly as it was
+  // (unset stays unset). The other rules' G setters do not touch the store.
+  function roomOnly(st, key, apply) {
+    const before = st && st.get ? st.get(key, undefined) : undefined;
+    apply();
+    if (!st) return;
+    if (before === undefined) { if (st.rawDel) st.rawDel(key); }
+    else if (st.set) st.set(key, before);
   }
 
   function normaliseSettings(d) {
@@ -149,8 +194,9 @@ const LobbySettings = (function () {
     return out;
   }
 
+  // WEATHER / TIME_OF_DAY / DIFFICULTY / GRID stay module-local (normaliseSettings).
   return {
-    WEATHER, TIME_OF_DAY, DIFFICULTY, GRID, GRID_LABEL, RULES, MAX_CIRCUIT_JSON,
+    GRID_LABEL, RULES, MAX_CIRCUIT_JSON, raceRuleRows, roomOnly,
     own, customPicked, circuitPayload, installCircuit, normaliseSettings,
   };
 })();

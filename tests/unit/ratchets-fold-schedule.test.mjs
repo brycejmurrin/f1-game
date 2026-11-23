@@ -16,7 +16,7 @@ function scratch() {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "ratchet-fold-"));
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), text); };
-  for (const t of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs", "tools/hooks/ratchet-reason.mjs"]) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
+  for (const t of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs"]) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
   write(F, "var a = 1;\n");
   write("tests/data/ratchets.json", JSON.stringify({ files: { [F]: { lines: 10 } } }));
   for (const n of ["x", "y", "z"]) write(`tests/data/ratchets.d/${n}.json`, JSON.stringify({ files: { [F]: { lines: 1 } } }));
@@ -56,12 +56,19 @@ test("the workflow is daily + dispatch, starts its own CI, pushes a bot branch t
   assert.match(w, /workflow_dispatch:/);
   assert.match(w, /--fold "--min-fragments=\$MIN_FRAGMENTS"/);
   assert.match(w, /timeout-minutes: \d+/);
-  assert.match(w, /git push --force-with-lease origin bot\/ratchets-fold/);
+  assert.doesNotMatch(w, /force-with-lease/);
   const wf = createRequire(import.meta.url)("yaml").parse(w);
   assert.ok(/^\d+ \d+ \* \* \*$/.test(wf.on.schedule[0].cron), "daily, so fragments do not pile up for a week");
-  assert.ok(wf.jobs.fold.steps.find((st) => st.name === "Fold").run.includes('gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/ratchets-fold'),
-    "a GITHUB_TOKEN PR starts no CI; the dispatch does");
-  assert.equal(wf.permissions.actions, "write");
+  const foldRun = wf.jobs.fold.steps.find((st) => st.name === "Fold").run;
+  const skipRun = wf.jobs.fold.steps.find((st) => st.name === "Skip while a fold PR is open").run;
+  assert.equal(/FOLD_BRANCH="bot\/ratchets-fold-\$\{GITHUB_RUN_ID\}"/.test(foldRun), true);
+  assert.equal(/git -c http\.https:\/\/github\.com\/\.extraheader=.* push origin "\$FOLD_BRANCH"/.test(foldRun), true, "the push carries the token itself (persist-credentials: false)");
+  assert.equal(foldRun.includes('echo "branch=$FOLD_BRANCH"'), true,
+    "the fold step hands its branch to open-bot-pr (LAND_TOKEN PR, or a ci.yml dispatch without it)");
+  assert.equal(/startswith\("bot\/ratchets-fold"\)/.test(skipRun), true,
+    "skip while any open fold PR uses the bot/ratchets-fold prefix");
+  assert.equal(wf.jobs.fold.permissions.actions, "write");
+  assert.equal(wf.permissions.actions, undefined, "actions: write is the job's, not the workflow's");
   assert.doesNotMatch(w, /git push[^\n]*claude\/f1-game-project-26h3ng/, "the protected deploy branch is reached only through the PR");
   assert.match(w, /MIN_FRAGMENTS: \$\{\{ inputs\.min_fragments/, "the dispatch input enters shell via env only");
   assert.doesNotMatch(w, /run:[^\n]*\$\{\{ inputs\./);

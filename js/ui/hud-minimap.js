@@ -17,8 +17,34 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // derived (W,H): 140css@2x and 280css@1x share a
                               // bitmap size but need different path transforms
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
+let _mmKeyNow = "", _mmVw = -1, _mmVh = -1, _mmDpr = -1;   // the last built measure key and its viewport/DPR
+// Attribute watch for that key: dirty after a body class / data-density, root style
+// or #minimap style write. takeRecords() makes it synchronous (a write earlier in
+// this same task counts). No MutationObserver (node VM): always dirty, the old path.
+let _mmObs = null, _mmDirty = true;
+function mmWatchDirty() {
+  if (_mmObs === null) {
+    if (typeof MutationObserver !== "function") return true;
+    _mmObs = new MutationObserver(() => { _mmDirty = true; });
+    _mmObs.observe(document.body, { attributes: true, attributeFilter: ["class", "data-density"] });
+    _mmObs.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    _mmObs.observe(els.minimap, { attributes: true, attributeFilter: ["style"] });
+    return true;
+  }
+  const d = _mmDirty || _mmObs.takeRecords().length > 0;
+  _mmDirty = false;
+  return d;
+}
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
-let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
+let _mmPitP = null, _mmYou = "";   // the "P"'s local px + map node, and the resolved --you; set with the bg
+let minimapBgCues = false, minimapBgPalette = "off";
+const SECTOR_DASH = [[6, 3], [2, 3], [6, 2, 2, 2]];
+// --you before the bg has resolved it: CvdPalette's row for the current mode (#1595).
+const mmYou = () => _mmYou || (typeof CvdPalette !== "undefined" && CvdPalette.hex("you")) || "#fff";
+
+function markerColor(id, fallback) {
+  return (typeof HudLayout !== "undefined" && HudLayout.colors?.value(id)) || fallback;
+}
 
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
@@ -40,11 +66,21 @@ function drawMinimap() {
   // Density selects the 96/140px CSS box; DPR can change without a resize.
   // Keep the bounded retry while the fit has no laid-out box, and the track
   // invalidation path (minimapBg null) so a newly visible map measures afresh.
+  // #3108: the key string (body.className + three style reads) was rebuilt every
+  // HUD tick. It is now rebuilt only after a watched attribute changed (body
+  // class / data-density, root style, the map's style) or the viewport/DPR moved;
+  // the key itself, and so when the map re-measures, is unchanged.
   const root = document.documentElement, body = document.body;
-  const measureKey = vpW() + "x" + vpH() + "|" + body.className
-    + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
-    + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + (window.devicePixelRatio || 1)
-    + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
+  const cbCues = root.dataset.cbCues === "on";
+  const vw = vpW(), vh = vpH(), dpr = window.devicePixelRatio || 1;
+  if (mmWatchDirty() || vw !== _mmVw || vh !== _mmVh || dpr !== _mmDpr || _mmKey === null) {
+    _mmVw = vw; _mmVh = vh; _mmDpr = dpr;
+    _mmKeyNow = vw + "x" + vh + "|" + body.className
+      + "|" + (body.dataset.density || "") + "|" + root.style.getPropertyValue("--hud-scale")
+      + "|" + root.style.getPropertyValue("--hud-z-top") + "|" + dpr
+      + "|" + els.minimap.style.getPropertyValue("--hl-s");   // MOVE & SIZE (js/ui/hud-layout.js)
+  }
+  const measureKey = _mmKeyNow;
   if (_mmKey !== measureKey || deps.fitKey() === "" || !minimapBg) {
     _mmKey = measureKey;
     _mmCssW = els.minimap.clientWidth || 140;
@@ -63,8 +99,11 @@ function drawMinimap() {
   }
   // pre-render the static track outline once; reuse as a cheap blit every HUD frame
   const bgKey = _mmBgKey;   // no string built per HUD tick
-  if (!minimapBg || minimapBgKey !== bgKey) {
+  const palette = typeof CvdPalette !== "undefined" && CvdPalette.mode ? CvdPalette.mode() : "off";
+  if (!minimapBg || minimapBgKey !== bgKey || minimapBgCues !== cbCues || minimapBgPalette !== palette) {
+    minimapBgPalette = palette;
     minimapBgKey = bgKey;
+    minimapBgCues = cbCues;
     minimapBg = document.createElement("canvas");
     minimapBg.width = W; minimapBg.height = H;
     const mc = minimapBg.getContext("2d");
@@ -91,6 +130,7 @@ function drawMinimap() {
       const from = Math.floor(splits[s] * n);
       const to = s === 2 ? n - 1 : Math.max(from, Math.floor(splits[s + 1] * n));
       mc.strokeStyle = SC[s];
+      if (cbCues) mc.setLineDash(SECTOR_DASH[s]);
       mc.beginPath();
       for (let i = from; i <= to; i++) {
         const p = map[i % n];
@@ -102,6 +142,16 @@ function drawMinimap() {
         mc.lineTo(8 + p0[0] * (cssW - 16), 8 + p0[1] * (cssH - 16));
       }
       mc.stroke();
+      if (cbCues) {
+        mc.setLineDash([]);
+        const p = map[Math.floor((from + to) / 2)];
+        const x = Math.max(12, Math.min(cssW - 12, 8 + p[0] * (cssW - 16)));
+        const y = Math.max(8, Math.min(cssH - 8, 8 + p[1] * (cssH - 16)));
+        mc.font = "700 10px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+        mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+        mc.strokeText("S" + (s + 1), x, y); mc.fillText("S" + (s + 1), x, y);
+        mc.lineWidth = 2;
+      }
     }
     mc.globalAlpha = 1;
     // Activation-zone highlight, slightly thicker, in the AERO chip's own blue
@@ -109,7 +159,8 @@ function drawMinimap() {
     // zone in one colour.
     const zones = TrackMaps.drsZones(track.def);
     if (zones && zones.length) {
-      mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+      const zoneInk = palette === "off" ? "rgba(38,165,245,0.9)" : CvdPalette.hex("zone");
+      mc.strokeStyle = zoneInk; mc.lineWidth = 3;
       for (const z of zones) {
         // z.b > 1 for a zone across the line: walk on past n and wrap.
         const from2 = Math.floor(z.a * n), to2 = Math.floor(z.b * n);
@@ -119,6 +170,34 @@ function drawMinimap() {
           mc.lineTo(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16));
         }
         mc.stroke();
+        if (cbCues) {
+          // AERO activation zones share the chip's terminology. Cross-hatches
+          // and text preserve their identity without blue, only in this cached
+          // background: no font work or extra layout reads on steady HUD ticks.
+          mc.strokeStyle = "#fff"; mc.lineWidth = 1;
+          mc.beginPath();
+          let sinceHatch = 6;
+          for (let i = from2; i < to2; i++) {
+            const p = map[i % n], next = map[(i + 1) % n];
+            const dx = (next[0] - p[0]) * (cssW - 16), dy = (next[1] - p[1]) * (cssH - 16);
+            const length = Math.hypot(dx, dy);
+            if (length > 0 && sinceHatch >= 6) {
+              const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+              mc.moveTo(x - dy / length * 4, y + dx / length * 4);
+              mc.lineTo(x + dy / length * 4, y - dx / length * 4);
+              sinceHatch = 0;
+            }
+            sinceHatch += length;
+          }
+          mc.stroke();
+          const start = map[from2 % n];
+          const x = Math.max(20, Math.min(cssW - 20, 8 + start[0] * (cssW - 16)));
+          const y = Math.max(8, Math.min(cssH - 8, 8 + start[1] * (cssH - 16)));
+          mc.font = "700 9px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+          mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+          mc.strokeText("AERO", x, y); mc.fillText("AERO", x, y);
+          mc.strokeStyle = zoneInk; mc.lineWidth = 3;
+        }
       }
     }
     // THE PIT LANE: a light dashed run from where the entry road peels off
@@ -148,7 +227,7 @@ function drawMinimap() {
       // The map's own "--you" (the token the cue and the tyre chip carry the
       // stop in), read once per rebuild: a resolved colour is not a hot read.
       _mmYou = (typeof getComputedStyle === "function"
-        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "#aeea00";
+        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "";
     }
   }
   // Canvas resize resets 2D context state, so the transform is set every
@@ -202,10 +281,15 @@ function drawMinimap() {
       // Skip only the GHOST dot on a bad s — returning here would take the
       // player's own white marker (drawn below) down with it for the session.
       if (gp) {
-        mm.fillStyle = "rgba(120, 220, 255, 0.95)";
-        mm.beginPath();
-        mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
-        mm.fill();
+        const ghostInk = markerColor("map-ghost", palette === "off" ? "rgba(120, 220, 255, 0.95)" : CvdPalette.hex("ghost"));
+        if (cbCues) {
+          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, ghostInk, "G", true);
+        } else {
+          mm.fillStyle = ghostInk;
+          mm.beginPath();
+          mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
+          mm.fill();
+        }
       }
     }
   }
@@ -219,17 +303,18 @@ function drawMinimap() {
   // cue's metres do. The lane and the box turn the player's own disc --you.
   const pits = G.pits, inPit = !!player.pitState && player.pitState !== "none";
   if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
+    const pitColor = markerColor(player.pitArmed ? "map-armed" : "map-approaching", mmYou());
     const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
     if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
-      mm.strokeStyle = _mmYou; mm.lineWidth = 2;
+      mm.strokeStyle = pitColor; mm.lineWidth = 2;
       mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
       mm.stroke();
     }
     if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
-    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
+    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, pitColor);
     mm.globalAlpha = 1;
   }
-  mm.fillStyle = inPit ? _mmYou : "#fff";
+  mm.fillStyle = inPit ? markerColor("map-lane", mmYou()) : "#fff";
   mm.beginPath();
   mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
   mm.fill();
@@ -247,10 +332,11 @@ function mmRun(ctx, map, n, i0, steps, cssW, cssH) {
 }
 /** The "P" disc at the peel-off, radius `r` in local px. Rendered once per
  *  (radius, fill, ratio) into a small canvas and blitted: a per-frame `font`
- *  set + `fillText` was 980 ms of a 30 s window (TLX-PERF-HUNT-5 F1). */
+ *  set + `fillText` was 980 ms of a 30 s window (TLX-PERF-HUNT-5 F1).
+ *  The optional letter/ring reuses that cache for the colourblind ghost cue. */
 const _mmPitGlyph = new Map();
-function mmPitMark(ctx, x, y, r, fill) {
-  const key = r + "|" + fill + "|" + _mmRatio;
+function mmPitMark(ctx, x, y, r, fill, letter = "P", ring = false) {
+  const key = letter + "|" + ring + "|" + r + "|" + fill + "|" + _mmRatio;
   let g = _mmPitGlyph.get(key);
   if (g === undefined) {
     if (_mmPitGlyph.size > 8) _mmPitGlyph.clear();   // fill is --you: a theme change is a new key
@@ -261,19 +347,23 @@ function mmPitMark(ctx, x, y, r, fill) {
     if (gc) {
       const L = cw / _mmRatio, c = L / 2;
       gc.setTransform(_mmRatio, 0, 0, _mmRatio, 0, 0);
-      gc.fillStyle = fill; gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); gc.fill();
+      gc.fillStyle = fill; gc.strokeStyle = fill; gc.lineWidth = 1.5;
+      gc.beginPath(); gc.arc(c, c, r, 0, Math.PI * 2); if (ring) gc.stroke(); else gc.fill();
       gc.fillStyle = "#14161c"; gc.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+      if (ring) gc.fillStyle = fill;
       gc.textAlign = "center"; gc.textBaseline = "middle";
-      gc.fillText("P", c, c + 0.5);
+      gc.fillText(letter, c, c + 0.5);
       g = { cv, L };
     }
     _mmPitGlyph.set(key, g);
   }
   if (g) { ctx.drawImage(g.cv, x - g.L / 2, y - g.L / 2, g.L, g.L); return; }
-  ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = fill; ctx.strokeStyle = fill; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); if (ring) ctx.stroke(); else ctx.fill();
   ctx.fillStyle = "#14161c"; ctx.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+  if (ring) ctx.fillStyle = fill;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText("P", x, y + 0.5);
+  ctx.fillText(letter, x, y + 0.5);
 }
 
 return {

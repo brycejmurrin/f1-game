@@ -33,6 +33,7 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
     const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
       setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
     ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
     const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
@@ -54,13 +55,70 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
   }
 });
 
+// UI hunt 2026-10-29 rows 2-3: a tap whose pointerup queued behind a long frame
+// (timer first) opened the picker; an open picker outlived its hidden button.
+function camHarness() {
+  const dom = makeDom(), timers = new Map(), observers = [];
+  let serial = 0;
+  const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+    setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); },
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(el, opts) { this.el = el; this.opts = opts; } } };
+  ctx.window = ctx; ctx.addEventListener = () => {};
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/pedal-travel.js"), "utf8"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/hold-buttons.js"), "utf8"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
+  ctx.InputHoldButtons = vm.runInNewContext("InputHoldButtons", ctx);
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
+  const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
+  button._rect = { left: 0, top: 0, right: 44, bottom: 44, width: 44, height: 44 };
+  button.click = () => button.onclick();
+  const fire = (type, timeStamp, extra = {}) => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1, timeStamp, clientX: 20, clientY: 20, ...extra });
+  const runTimers = () => { for (const fn of [...timers.values()]) fn(); };
+  return { dom, G, cams, button, fire, runTimers, observers, ctx };
+}
+
+test("End focuses the last camera without changing the current view", () => {
+  const h = camHarness();
+  h.fire("pointerdown", 0); h.runTimers(); h.fire("pointerup", 500);
+  const menu = h.dom.byId("campicker"), before = h.G.camMode;
+  h.dom.dispatch(menu, {type:"keydown", key:"End"});
+  assert.equal(h.dom.document.activeElement, menu.querySelectorAll('[role="menuitemradio"]').at(-1));
+  assert.equal(h.G.camMode, before);
+});
+
+test("CAM hold is judged by event times: a late-delivered short tap cycles, a real hold opens", () => {
+  const h = camHarness();
+  h.fire("pointerdown", 1000); h.runTimers();   // the timer ran first: the up was queued behind a long frame
+  assert.equal(h.dom.byId("campicker").hidden, false);
+  h.fire("pointerup", 1080); h.fire("lostpointercapture");
+  assert.equal(h.dom.byId("campicker").hidden, true, "an 80 ms press is a tap, not a hold");
+  assert.equal(h.G.camMode, 1, "…and the tap cycles the camera");
+  h.fire("pointerdown", 5000); h.runTimers();
+  h.fire("pointerup", 5700); h.fire("lostpointercapture");
+  assert.equal(h.dom.byId("campicker").hidden, false, "a 700 ms press keeps the picker");
+  assert.equal(h.G.camMode, 1);
+});
+
+test("an open CAM picker hides when #btn-cam hides (race end), not only on pause", () => {
+  const h = camHarness();
+  h.fire("pointerdown", 0); h.runTimers(); h.fire("pointerup", 500);
+  assert.equal(h.dom.byId("campicker").hidden, false);
+  const mo = h.observers.find((o) => o.el === h.button);
+  assert.ok(mo && mo.opts.attributeFilter.includes("hidden"), "the button's hidden attribute is observed");
+  h.button.hidden = true; for (const watcher of h.observers.filter(o => o.el === h.button)) watcher.fn([]);   // endRace: els.btnCam.hidden = true
+  assert.equal(h.dom.byId("campicker").hidden, true);
+  assert.equal(h.button.getAttribute("aria-expanded"), "false");
+});
+
 test("setCamMode refuses NaN / Infinity so a poisoned index cannot stick", () => {
   const dom = makeDom();
   const stored = [];
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
     setTimeout() { return 0; }, clearTimeout() {} };
   ctx.window = ctx;
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const G = { $: dom.byId, camMode: 3, store: { set(_k, v) { stored.push(v); } }, state: "race", camCutT: 0 };
   const cams = ctx.CamModes.create(G);
   const n = ctx.CamModes.CAM_MODES.length;
@@ -77,8 +135,8 @@ test("setCamMode refuses NaN / Infinity so a poisoned index cannot stick", () =>
   assert.ok(stored.every((v) => Number.isFinite(v)), "store never receives NaN");
 });
 
-function loadCockpitOpts(disk) {
-  const store = new Map(Object.entries(disk || {}));
+function loadCockpitOpts(disk, extra = {}) {
+  const store = disk instanceof Map ? disk : new Map(Object.entries(disk || {}));
   const ctx = {
     GameStore: {
       store: {
@@ -87,6 +145,7 @@ function loadCockpitOpts(disk) {
       },
     },
     Log: { info() {} },
+    ...extra,
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8") + "\nthis.exported = CockpitOpts;",
@@ -266,13 +325,41 @@ test("VISOR BEAMS is a 0..2 slider factor stored as a percent, with level words 
   assert.ok(!("visorBeams" in O2.CHOICES), "not a choice row: the cockpit panel builds it as a slider");
 });
 
+test("visor droplet size defaults, clamps stored percentages and persists/notifies factors", () => {
+  const key="apex26.helmetVisorDropSize";
+  for (const [stored,want] of [[undefined,1],[null,1],["",1],["  ",1],["bad",1],["Infinity",1],[true,1],["50",0.5],["100",1],["200",2],["20",0.5],["250",2]])
+    assert.equal(loadCockpitOpts({[key]:stored}).visorDropSize(),want,`stored ${String(stored)}`);
+  const disk=new Map(), opts=loadCockpitOpts(disk), seen=[];
+  opts.onWheel((name,value)=>seen.push([name,value]));
+  for (const [factor,want] of [[1.5,1.5],[0.1,0.5],[4,2],[null,1],["",1],["  ",1],[NaN,1],[Infinity,1],[true,1],["bad",1]]) {
+    assert.equal(opts.setVisorDropSize(factor),want);
+    assert.equal(disk.get(key),String(want*100),"raw storage carries percent, not factor");
+    assert.equal(loadCockpitOpts(disk).visorDropSize(),want,"a fresh module reloads the saved setting");
+    assert.deepEqual(seen.at(-1),["visorDropSize",want],"render consumers receive the factor");
+  }
+});
+
+test("Cockpit droplet slider has its own minimum and native input persistence; other sliders keep zero", () => {
+  const dom=makeDom(), doc=dom.document, get=doc.getElementById;
+  doc.body.appendChild(dom.makeElement("div","pm-panel-display"));
+  doc.getElementById=id=>dom.has(id)?get(id):null;
+  doc.createTextNode=text=>({nodeType:3,textContent:text});
+  const disk=new Map(), opts=loadCockpitOpts(disk,{document:doc,SettingRow:{build:()=>({row:doc.createElement("div")}),wire(){},paint(){}}});
+  const slider=doc.getElementById("pm-visor-drop-size");
+  assert.deepEqual([slider.type,slider.min,slider.max,slider.step,slider.value,slider.getAttribute("aria-label")],["range","50","200","1","100","Visor droplet size"]);
+  assert.deepEqual([doc.getElementById("pm-visor-beams").min,doc.getElementById("pm-turnchase").min],["0","0"]);
+  slider.value="170"; slider.oninput();
+  assert.deepEqual([opts.visorDropSize(),disk.get("apex26.helmetVisorDropSize"),doc.getElementById("pm-visor-drop-size-v").textContent],[1.7,"170","170%"]);
+});
+
 // Read off the LOADED CAM_MODES and the cut setCamMode() actually starts: a
 // `id:"cinematic"[\s\S]*cut:0.6` regex matched any later entry's cut too.
 test("broadcast cameras carry per-mode cut ease durations", () => {
   const dom = makeDom();
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   ctx.window = ctx;
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = ctx.CamModes.CAM_MODES, idx = (id) => modes.findIndex((m) => m.id === id);
   assert.equal(modes[idx("cinematic")].cut, 0.6);
   assert.equal(modes[idx("heli")].cut, 0.55);
@@ -476,8 +563,8 @@ test("a modes-only import keeps the global baseline and COMFORT knobs", () => {
   assert.equal(CamTune.bob(), 1, "and without comfort resets it");
 });
 
-// persist() writes localStorage. The sliders fire it on every input event, so it
-// takes the store that changed and leaves the other two alone.
+// persist() writes localStorage. A slider release fires it, so it takes the store
+// that changed and leaves the other two alone.
 test("persist(which) writes only the named CamTune store", () => {
   const disk = new Map();
   const writes = [];
@@ -504,10 +591,7 @@ test("persist(which) writes only the named CamTune store", () => {
   assert.deepEqual(writes.slice().sort(), [CamTune.KEY, CamTune.KEY_COMFORT, CamTune.KEY_GLOBAL].sort(),
     "no argument = all three (presets, import, reset)");
 
-  // The panel's slider handlers name the store they changed.
-  const panel = fs.readFileSync(path.join(root, "js/camera/tuner-panel.js"), "utf8");
-  assert.match(panel, /CamTune\.persist\("comfort"\)/);
-  assert.match(panel, /CamTune\.persist\(_scope === "global" \? "global" : "modes"\)/);
+  // That the panel's sliders name the store they changed, once per drag: camera-tuner-a11y.test.mjs drives them (#5042).
 });
 
 test("CamTune comfort knobs are independent of reduce-motion and default to shipped", () => {
@@ -524,6 +608,7 @@ test("CamTune comfort knobs are independent of reduce-motion and default to ship
   assert.equal(CamTune.rollTarget(0.1, 0, 0, true), 0, "reduce-motion zeroes roll");
   CamTune.comfortSet("rollLean", 0.5);
   assert.equal(CamTune.rollTarget(0.2, 0, 0, false), 0.1);
+  assert.equal(CamTune.rollTarget(0, 0, 0.2, false), -0.1, "onboard camera follows the signed physical chassis lean");
 });
 
 test("CamTune global baseline layers under per-mode; copyFrom and presets work", () => {
@@ -718,16 +803,29 @@ test("helmet inherits the production onboard SSR range and releases it outside r
 test("inverse projection stays current at measured tier 4, through and after the SSR fade", () => {
   // TLX's main-view reconstruction reads _mInvProj even after tier 4 sheds all
   // view-space post, so the update is unconditional (PR #3670).
-  const statement = gameSource().match(/^  M4\.invertTo\(_mInvProj, _mProj\);$/m);
-  assert.ok(statement, "production inverse-projection update exists and is unconditional");
+  // Execute the production run of statements from the view matrix through the
+  // inverse-projection update, not the one line alone: a guard put in front of
+  // that line (`if (tier < 4) M4.invertTo(...)` split over two lines, an `if`
+  // block around it) runs here too, and so goes red, instead of being
+  // stepped past by a one-line extract.
+  const src = gameSource();
+  const head = src.indexOf("\n  M4.lookAtTo(_mView, camEye, camTgt, _camUp);\n");
+  const tailLine = "\n  M4.invertTo(_mInvProj, _mProj);\n";
+  const tail = src.indexOf(tailLine, head);
+  assert.ok(head >= 0 && tail > head && tail - head < 600,
+    "production view → inverse-projection statements exist, adjacent, and the update is unconditional");
+  const statement = [src.slice(head + 1, tail + tailLine.length)];
   const math = {};
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
     "\nthis.exported = M4;", math, { filename: absSrc("js/core/mat4.js") });
   const M4 = math.exported, projection = new Float32Array(16), inverse = new Float32Array(16);
   let calls = 0, tier = 0;
   const ctx = { _mProj: projection, _mInvProj: inverse,
+    _mView: new Float32Array(16), _mVP: new Float32Array(16), _mInvVP: new Float32Array(16),
+    camEye: [0, 2, -6], camTgt: [0, 1, 0], _camUp: [0, 1, 0],
     _roadReflectionTransition: { value: 1 }, PerfGov: { autoTier: () => tier },
-    M4: { invertTo(out, input) { calls++; return M4.invertTo(out, input); } } };
+    M4: { lookAtTo: M4.lookAtTo, mulTo: M4.mulTo,
+      invertTo(out, input) { if (out === inverse) calls++; return M4.invertTo(out, input); } } };
   const run = new vm.Script(statement[0], { filename: absSrc("js/game.js") });
   vm.createContext(ctx);
   const assertCancels = label => {
@@ -771,6 +869,7 @@ test("pending CAM hold is retired on pause/hide/quit, hidden page and blur witho
       addEventListener(type, fn) { listeners.set(type, fn); },
       setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
     ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
     const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
@@ -802,6 +901,7 @@ test("CAM context-menu and late hold cannot open on a paused, hidden or non-race
     const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
       setTimeout(fn) { callback = fn; return 1; }, clearTimeout() {} };
     ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
     ctx.CamModes.create(G);
@@ -816,4 +916,33 @@ test("CAM context-menu and late hold cannot open on a paused, hidden or non-race
     dom.dispatch(button, { type: "contextmenu" });
     assert.equal(button.getAttribute("aria-expanded"), "true", "countdown remains a valid CAM owner");
   }
+});
+
+
+test("CAM secondary contact cycles without a native click and preserves long press", () => {
+  const h = camHarness(), extra = { isPrimary: false };
+  h.fire("pointerdown", 1000, extra); h.fire("pointerup", 1080, extra);
+  assert.equal(h.G.camMode, 1, "a second finger changes camera while the first stays held");
+  h.fire("pointerdown", 2000, extra); h.runTimers(); h.fire("pointerup", 2700, extra);
+  assert.equal(h.G.camMode, 1, "long press opens the picker without cycling");
+  assert.equal(h.dom.byId("campicker").hidden, false);
+  h.cams.hideCamPicker();
+  h.fire("pointerdown", 3000, extra); h.runTimers(); h.fire("pointerup", 3080, extra);
+  assert.equal(h.G.camMode, 2, "an event-time short tap still cycles if a delayed timer fired first");
+  h.fire("pointerdown", 4000, extra); h.fire("pointercancel", 4040, extra); h.fire("pointerup", 4080, extra);
+  assert.equal(h.G.camMode, 2, "cancelled secondary gestures cannot cycle");
+});
+
+test("M4.lookAtTo keeps an orthonormal basis when eye coincides with target", () => {
+  const math = { console, Math, Float32Array };
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/core/mat4.js"), "utf8") +
+    "\nthis.M4 = M4;", math, { filename: absSrc("js/core/mat4.js") });
+  const M4 = math.M4;
+  const out = new Float32Array(16);
+  M4.lookAtTo(out, [5, 1, -2], [5, 1, -2], [0, 1, 0]);
+  const x = Math.hypot(out[0], out[4], out[8]);
+  const y = Math.hypot(out[1], out[5], out[9]);
+  const z = Math.hypot(out[2], out[6], out[10]);
+  assert.ok(Math.abs(x - 1) < 1e-5 && Math.abs(y - 1) < 1e-5 && Math.abs(z - 1) < 1e-5,
+    "eye==target must not collapse the view basis to zeroes");
 });

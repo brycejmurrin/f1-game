@@ -63,3 +63,12 @@ test("checkLiveRun: packages live + warn", async () => {
   assert.equal(r.live.runs.length, 1);
   assert.match(r.warn, /WARN: 1 live ci\.yml run/);
 });
+
+test("liveCiRuns: a repo name containing a dot keeps its full name (#4481)", async () => {
+  for (const url of ["https://github.com/acme/my.repo.js.git", "git@github.com:acme/my.repo.js.git", "https://github.com/acme/my.repo.js/"]) {
+    let asked = "";
+    const fetch = async (u) => { asked = u; return runsPayload([]); };
+    await liveCiRuns({ git: (a) => (a[0] === "rev-parse" ? "b" : url), fetch });
+    assert.equal(asked.split("/actions/")[0], "https://api.github.com/repos/acme/my.repo.js", url);
+  }
+});

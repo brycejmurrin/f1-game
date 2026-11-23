@@ -1,5 +1,7 @@
 # Loading-screen flyby — improvement plan (2026-09-24)
 
+> **Process: AGENTS.md governs.** This plan predates the current loop. Where it says to arm auto-merge, merge on green, sync or push through `deploy.mjs`, or run browser specs locally, ignore it: open a DRAFT PR, CI runs the tiers on it (`node tools/ci/remote-group.mjs <group>` for a whole group), and the `land` label is the only way work lands (AGENTS.md §The loop, §Coordination; skill `steward`).
+
 Status: **OPEN** (checked against the code 2026-10-26) — Phase 0.2/0.3/0.5 shipped; the flyby code is js/camera/flyby-*.js; remaining phases were not re-audited.
 
 Status when written: **IN PROGRESS** — Phase 0.2, 0.3 and 0.5 done on the follow-up branch (see below). Built from the shipped rework (`c001f01`, "Flyby: reframe the

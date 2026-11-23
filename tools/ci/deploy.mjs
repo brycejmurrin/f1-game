@@ -70,12 +70,14 @@ import { githubToken } from "./github-token.mjs";
 import { superviseDeployChild } from "./deploy-child.mjs";
 import { request } from "./github-api.mjs";
 import { changedPaths as diffPaths } from "../lib/changed-files.mjs";
-import { NODE_TEST_TIMEOUT_MS } from "../gen/gen-test-groups.mjs";
+import { NODE_TEST_TIMEOUT_MS, groupFiles } from "../gen/gen-test-groups.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 import { gitRun, gitMust } from "../lib/git-run.mjs";
+import { isBuilt, isRetired } from "../lib/generated-paths.mjs";
+import { applyFragments, EXCLUDED_FILES } from "../check/ratchets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -102,7 +104,7 @@ const must = gitMust;
 // ceiling killed it with no verdict line. Every child now stops at this ceiling, with SIGTERM so
 // tooling-fast can reap the process groups it leads, and run() turns that into a named failure.
 export const CHILD_TIMEOUT_MS = Math.max(1, Number(process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) || 25) * 60e3;
-export async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
+async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
   const stop = { timeoutMs };
   if (!json) return superviseDeployChild(cmd, args, { cwd, env, stdio: "inherit", ...stop });
   const artifact = saveOutputArtifact("", { root, tool: "deploy-child", kind: "log" });
@@ -215,7 +217,7 @@ export function plan() {
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
-      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers, docs/agent-output/catalog.json from gen-output-surface; then `npm run gen` re-derives every generated file on the union, conflict or not, and commits any drift)",
+      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers; then `npm run gen` re-derives every generated file on the union, conflict or not, and commits any drift)",
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
@@ -276,7 +278,7 @@ export function gateNodeSuites() {
  *
  * Both halves of the filter are DERIVED, never retyped: the path pattern is
  * geometry-paths.mjs, the ONE copy ci.yml's grep also reads, and the suite list
- * is read out of package.json's test:sweeps by the same match ci.yml uses.
+ * is test:sweeps' roster in tests/groups.json (groupFiles), the copy ci.yml reads.
  * Each half drifted exactly once by being hand-written — ci.yml's suite list
  * was missing scenery-grounding, and this file's path list still matched
  * debris-world's PRE-RENAME location under js/game/ (tools/manifest.cjs's
@@ -289,12 +291,10 @@ export function gateNodeSuites() {
  * list that parses to nothing THROWS rather than quietly matching nothing. */
 
 export function sweepSuites() {
-  let pkg;
-  try { pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")); }
-  catch (e) { throw new Error("deploy: cannot read package.json — the sweep suite list is undefined: " + e.message); }
-  const suites = String((pkg.scripts && pkg.scripts["test:sweeps"]) || "").match(/tests\/unit\/[^\s]+/g) || [];
-  if (!suites.length) throw new Error("deploy: package.json's test:sweeps names ZERO suites — refusing to derive a geometry filter from nothing.");
-  return suites;
+  // tests/groups.json, not package.json: the test:sweeps line is a wrapper since #5427.
+  // groupFiles throws on a missing group or an empty list — never a filter derived from nothing.
+  try { return groupFiles("test:sweeps"); }
+  catch (e) { throw new Error("deploy: the test:sweeps suite list is undefined — refusing to derive a geometry filter from nothing: " + e.message); }
 }
 
 /** Can THIS set of paths move circuit geometry? Shared by the union check and
@@ -352,15 +352,16 @@ function manifestMoved() {
 }
 
 const RATCHETS = "tests/data/ratchets.json";
+const FRAG_REL = "tests/data/ratchets.d";
+const CEILING_HISTORY = "docs/notes/CEILING-HISTORY.md";
 const TOOLS_README = "tools/README.md";
-const OUTPUT_CATALOG = "docs/agent-output/catalog.json";
 // Generated by gen:docs from the tree; a conflict is two stale renderings (system audit 2026-10-26).
-const DERIVED_DOCS = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md", "docs/TESTING-COVERAGE.md"];
-// The scenery survey cache: its `sourceDigest` hashes every TRACK_VM file, so
-// any two circuit/engine PRs conflict on it (75 real conflicts in 7 days, the
-// tree's top hot spot; system audit 2026-10-26 §7). Its generator takes ~2 min,
-// so it is not in `npm run gen`: the cure path alone runs it.
-const SCENERY_LOCATIONS = "tools/shot/scenery-locations.json";
+const DERIVED_DOCS = ["docs/agent-index.json", "tests/data/impact-map.json", "docs/AGENT-HOOKS.md"];
+// The scenery survey cache. Until 2026-11-10 it carried a `sourceDigest` of every
+// TRACK_VM file, so any two circuit/engine PRs conflicted on it (75 real conflicts
+// in 7 days; system audit 2026-10-26 §7); now only two PRs that move the same
+// rows conflict. Its generator takes ~2 min, so it is not in `npm run gen`: the
+// cure path alone runs it.
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
 export function ratchetMetrics(json) {
@@ -376,10 +377,41 @@ export function ratchetMetrics(json) {
   }
   return out;
 }
-function ratchetStage(n) {
-  const r = git(["show", `:${n}:${RATCHETS}`]);
+function ratchetStage(n, cwd = ROOT) {
+  const r = git(["show", `:${n}:${RATCHETS}`], { cwd });
   if (r.code !== 0) return null;
   try { return ratchetMetrics(JSON.parse(r.out)); } catch (_) { return null; }
+}
+
+/* EFFECTIVE ceilings at a commit (#5870): ratchets.json plus every
+   tests/data/ratchets.d fragment there, composed by ratchets.mjs's own
+   applyFragments. ratchets.json alone under-reads a side that carries a
+   fragment: tip 8bb193ac's eagerBytes was 8015113 in the json but 8016182
+   effective, and four syncs stopped on "union 8016164 > 8015113 + 0". */
+export function effectiveRatchetsAt(ref, cwd = ROOT) {
+  const show = (rel) => git(["show", `${ref}:${rel}`], { cwd });
+  const base = show(RATCHETS);
+  if (base.code !== 0) return null;
+  try {
+    const ls = git(["ls-tree", "--name-only", ref, `${FRAG_REL}/`], { cwd });
+    const names = ls.code === 0 ? ls.out.split("\n").filter((f) => f.endsWith(".json")).sort() : [];
+    const frags = names.map((f) => ({ name: path.posix.basename(f), data: JSON.parse(must(show(f), `git show ${ref}:${f}`)) }));
+    return ratchetMetrics(applyFragments(JSON.parse(base.out), frags));
+  } catch (_) { return null; }
+}
+
+/* `snapped` (absolute ceilings that already include every fragment) minus
+   each fragment's deltas, so ratchets.json + those fragments composes back to
+   `snapped` exactly. PURE. Rows applyFragments drops (EXCLUDED_FILES) are kept
+   as `snapped` had them: this writes ratchets.json, not an effective view. */
+export function unfoldFragments(snapped, frags) {
+  const neg = (bag) => Object.fromEntries(Object.entries(bag || {}).map(([k, v]) => [k, typeof v === "number" ? -v : v]));
+  const negated = frags.map(({ name, data }) => ({ name, data: {
+    files: Object.fromEntries(Object.entries(data.files || {}).map(([f, m]) => [f, neg(m)])),
+    tree: neg(data.tree) } }));
+  const out = applyFragments(snapped, negated);
+  for (const f of EXCLUDED_FILES) if (snapped.files && Object.hasOwn(snapped.files, f)) out.files[f] = snapped.files[f];
+  return out;
 }
 
 /* ratchets.json is DERIVED — `ratchets.mjs --update` measures the tree and
@@ -406,21 +438,50 @@ export function ratchetOverruns(base, ours, theirs, got) {
   return over;
 }
 
-async function cureRatchets() {
-  const base = ratchetStage(1), ours = ratchetStage(2), theirs = ratchetStage(3);
-  must(git(["checkout", "--theirs", "--", RATCHETS]), `checkout --theirs ${RATCHETS}`);
-  await run("node", ["tools/check/ratchets.mjs", "--update", "--absolute"], "snap the ratchets to the merged tree");
-  if (!base || !ours || !theirs) return "ratchets re-measured (no three-way stages to bound it)";
-  let got;
-  try { got = ratchetMetrics(JSON.parse(fs.readFileSync(path.join(ROOT, RATCHETS), "utf8"))); }
+/* The snap (`ratchets.mjs --update --absolute`) folds every ratchets.d
+   fragment into ratchets.json and deletes it, the tip's included, and rewrites
+   their CEILING-HISTORY.md paths (#5870: #5853's sync deleted tip 8bb193ac's
+   fragment). A sync must move only ratchets.json: the fragments the merge
+   left on disk are put back byte-for-byte and subtracted from the snapped
+   absolutes, so the effective ceilings still equal the union's measurement. */
+const snapRatchets = () => run("node", ["tools/check/ratchets.mjs", "--update", "--absolute"], "snap the ratchets to the merged tree");
+
+export async function cureRatchets({ cwd = ROOT, snap = snapRatchets } = {}) {
+  const mb = git(["merge-base", "HEAD", "MERGE_HEAD"], { cwd });
+  const mbRef = mb.code === 0 ? mb.out.trim().split("\n")[0] : null;
+  const side = (ref, n) => (ref && effectiveRatchetsAt(ref, cwd)) || ratchetStage(n, cwd);
+  const base = side(mbRef, 1), ours = side("HEAD", 2), theirs = side("MERGE_HEAD", 3);
+  const fragDir = path.join(cwd, FRAG_REL), historyFile = path.join(cwd, CEILING_HISTORY);
+  const kept = fs.existsSync(fragDir) ? fs.readdirSync(fragDir).filter((f) => f.endsWith(".json")).sort()
+    .map((name) => ({ name, text: fs.readFileSync(path.join(fragDir, name), "utf8") })) : [];
+  const history = fs.existsSync(historyFile) ? fs.readFileSync(historyFile, "utf8") : null;
+  must(git(["checkout", "--theirs", "--", RATCHETS], { cwd }), `checkout --theirs ${RATCHETS}`);
+  await snap();
+  let snapped;
+  try { snapped = JSON.parse(fs.readFileSync(path.join(cwd, RATCHETS), "utf8")); }
   catch (e) { throw new Error(`deploy: ${RATCHETS} is unreadable after --update: ${e.message}`); }
-  const over = ratchetOverruns(base, ours, theirs, got);
-  if (over.length) {
-    throw new Error(`deploy: the merged tree measures MORE than both sides' deliberate raises combined — ` +
-      `the merge looks duplicated, and --update would ratchet that in:\n  ${over.join("\n  ")}\n` +
-      `Resolve ${RATCHETS} by hand and look at the merge before pushing.`);
+  // Whatever fragments the snap left on disk still count toward what it measured against.
+  const left = fs.existsSync(fragDir) ? fs.readdirSync(fragDir).filter((f) => f.endsWith(".json")).sort()
+    .map((name) => ({ name, data: JSON.parse(fs.readFileSync(path.join(fragDir, name), "utf8")) })) : [];
+  const effective = left.length ? applyFragments(snapped, left) : snapped;
+  if (base && ours && theirs) {
+    const over = ratchetOverruns(base, ours, theirs, ratchetMetrics(effective));
+    if (over.length) {
+      throw new Error(`deploy: the merged tree measures MORE than both sides' deliberate raises combined ` +
+        `(effective ceilings: ${RATCHETS} + ${FRAG_REL}) — the merge looks duplicated, and --update would ratchet that in:\n  ${over.join("\n  ")}\n` +
+        `Resolve ${RATCHETS} by hand and look at the merge before pushing.`);
+    }
   }
-  return "ratchets re-measured on the union";
+  // Put the fragments back and keep ratchets.json + fragments == the measurement.
+  const { normalizeRatchets, stableStringify } = await import("../check/merge-hygiene.mjs");
+  const absolute = unfoldFragments(left.length ? effective : snapped, kept.map(({ name, text }) => ({ name, data: JSON.parse(text) })));
+  fs.writeFileSync(path.join(cwd, RATCHETS), stableStringify(normalizeRatchets(absolute)));
+  if (kept.length) fs.mkdirSync(fragDir, { recursive: true });
+  for (const f of left) if (!kept.some((k) => k.name === f.name)) fs.rmSync(path.join(fragDir, f.name), { force: true });
+  for (const { name, text } of kept) fs.writeFileSync(path.join(fragDir, name), text);
+  if (history !== null) fs.writeFileSync(historyFile, history);
+  const tail = kept.length ? `; ${kept.length} ${FRAG_REL} fragment(s) kept` : "";
+  return base && ours && theirs ? `ratchets re-measured on the union${tail}` : `ratchets re-measured (no three-way stages to bound it)${tail}`;
 }
 
 /* Which conflicts a deploy may resolve ON ITS OWN. A file this repo GENERATES
@@ -451,26 +512,25 @@ export function cureableConflicts(conflicted) {
   // package.json does: take either side to give the generator something
   // parseable, then regenerate from the merged sources.
   const toolsF = conflicted.filter((f) => f === TOOLS_README);
-  // docs/agent-output/catalog.json is GENERATED (gen-output-surface.mjs) from
-  // the tools tree, package.json scripts, .mcp.json and policies.json; two PRs
-  // that each add a tool can touch neighbouring rows. Same cure: regenerate.
-  // (policies.json is hand-written, so a conflict THERE still stops the merge.)
-  const catalogF = conflicted.filter((f) => f === OUTPUT_CATALOG);
   // docs/agent-index.json, tests/data/impact-map.json and docs/AGENT-HOOKS.md
-  // (gen-agent-index.mjs) and docs/TESTING-COVERAGE.md (gen-coverage-table.mjs)
-  // are rewritten from the tree; 7 days of merges showed 13/16/6 real conflicts
+  // (gen-agent-index.mjs) are rewritten from the tree; 7 days of merges showed 13/16/6 real conflicts
   // in them that forced hand merges. Same cure: take a side, regenerate.
   const derivedF = conflicted.filter((f) => DERIVED_DOCS.includes(f));
-  // tools/shot/scenery-locations.json (gen-scenery-locations.cjs): same cure,
-  // take ours and regenerate from the merged TRACK_VM sources.
-  const sceneryF = conflicted.filter((f) => f === SCENERY_LOCATIONS);
+  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS, and the
+  // ON_DEMAND_PATHS such as tools/shot/scenery-locations.json since 2026-11-11)
+  // conflicts only as modify/delete: the tip deleted the committed copy, an older
+  // branch regenerated it. Cure: take the deletion (`git rm --cached`); ensure-built
+  // rebuilds the local copy from the merged sources. A RETIRED path (RETIRED_PATHS, e.g.
+  // docs/TESTING-COVERAGE.md since 2026-11-10) conflicts the same way and cures the same way.
+  const builtF = conflicted.filter((f) => isBuilt(f) || isRetired(f));
   // (The gate-ladder figures used to be cured here too; since 2026-09-30 no
   // doc commits them — tools/gen/gen-ladder-figures.mjs only reports — so
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + derivedF.length
+      + builtF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF, derivedF, builtF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -514,6 +574,19 @@ export async function regenerateDerived(cwd = ROOT) {
   return dirty.split("\n").filter(Boolean).map((l) => l.slice(3));
 }
 
+/** Commit the merge in progress with EVERY regenerated file staged (the cures re-run generators after their own
+ *  `git add`, and the git pre-commit hook reads the working tree against the index: "guards: cache miss"). A failed
+ *  commit leaves the merge IN PROGRESS (MERGE_HEAD kept) and says how to finish it by hand. `g` is injectable. */
+export function commitMerge({ cwd = ROOT, g = git } = {}) {
+  must(g(["add", "-A"], { cwd }), "stage the regenerated files");
+  const r = g(["commit", "--no-edit", "-q"], { cwd });
+  if (r.code === 0) return;
+  const e = new Error(`merge commit failed (${(r.err || r.out || `exit ${r.code}`).split("\n")[0]}) — the merge is still in progress (MERGE_HEAD kept). ` +
+    "Recover: fix what the hook named, then `git add -A && git commit --no-edit` (timeout 300000); or `git merge --abort` to start over");
+  e.keepMerge = true;
+  throw e;
+}
+
 export async function mergeDeployTip() {
   assertMergeable("HEAD", `${REMOTE}/${DEPLOY_BRANCH}`);
   const before = git(["rev-parse", "HEAD"]).out.trim();
@@ -537,11 +610,11 @@ export async function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, derivedF, builtF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !derivedF.includes(f) && !builtF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -591,27 +664,17 @@ export async function mergeDeployTip() {
     must(git(["add", TOOLS_README]), "add");
     did.push("tools index regenerated");
   }
-  if (catalogF.length) {
-    // After the package.json cure: the catalog lists npm scripts too.
-    must(git(["checkout", "--ours", "--", OUTPUT_CATALOG]), `checkout --ours ${OUTPUT_CATALOG}`);
-    await run("node", ["tools/gen/gen-output-surface.mjs"], "regenerate the agent output catalog from the merged tree");
-    must(git(["add", OUTPUT_CATALOG]), "add");
-    did.push("agent output catalog regenerated");
-  }
   if (derivedF.length) {
     for (const f of derivedF) must(git(["checkout", "--ours", "--", f]), `checkout --ours ${f}`);
-    if (derivedF.some((f) => f !== "docs/TESTING-COVERAGE.md")) run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
-    if (derivedF.includes("docs/TESTING-COVERAGE.md")) run("node", ["tools/docs/gen-coverage-table.mjs"], "regenerate the coverage table from the merged tests");
+    await run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
     must(git(["add", ...derivedF]), "add");
     did.push("derived docs regenerated");
   }
-  if (sceneryF.length) {
-    must(git(["checkout", "--ours", "--", SCENERY_LOCATIONS]), `checkout --ours ${SCENERY_LOCATIONS}`);
-    run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
-    must(git(["add", SCENERY_LOCATIONS]), "add");
-    did.push("scenery locations regenerated");
+  if (builtF.length) {
+    must(git(["rm", "-q", "--cached", "--", ...builtF]), "untrack the built files (they stay gitignored)");
+    did.push(`built or retired files kept out of git (${builtF.join(", ")})`);
   }
-  must(git(["commit", "--no-edit", "-q"]), "merge commit");
+  commitMerge();
   await installIfLockMoved(before);
   // The cures above re-derive only the files that CONFLICTED; a derived file
   // that merged clean can be stale all the same (see regenerateDerived).

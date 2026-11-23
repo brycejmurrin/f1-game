@@ -3,7 +3,10 @@
  * Copy the stamped staged site into mobile/www, then `npx cap sync android`.
  *
  * Reuses tools/desktop/stage.mjs (the Electron/Pages stager) — do not add a
- * second allow-list. Unstamped `?v=dev` shells are refused unless --dev.
+ * second allow-list. A fresh stage calls stageSiteMinified, the same function
+ * the Pages deploy's `stage.mjs --out _site` runs (terser-minified js/; a
+ * missing terser follows tools/desktop/minify.mjs unminifiedPolicy), then
+ * stampStaged. Unstamped `?v=dev` shells are refused unless --dev.
  * A ship-sync merge alone may not start draft CI (paths-ignore); keep this
  * script among the non-docs paths that force a synchronize gate.
  */
@@ -12,7 +15,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { stageSite, stampStaged } from "../../tools/desktop/stage.mjs";
+import { stageSiteMinified, stampStaged } from "../../tools/desktop/stage.mjs";
+import { writeNotices } from "../../desktop/scripts/notices.mjs";
 
 const { isCurrentStage, repoHead } = createRequire(import.meta.url)("../../desktop/lib/site.cjs");
 
@@ -98,16 +102,17 @@ function resolveSrc(o = {}) {
 
 /**
  * @param {{ root?: string, explicit?: string|null, head?: string|null, clean?: boolean, dev?: boolean,
- *   stage?: typeof stageSite, stamp?: typeof stampStaged }} [o]  test seams; the CLI passes none
+ *   stage?: typeof stageSiteMinified, stamp?: typeof stampStaged }} [o]  test seams; the CLI passes none
+ * @returns {Promise<string>}
  */
-function prepareSrc(o = {}) {
+async function prepareSrc(o = {}) {
   const root = o.root || ROOT;
   const dev = o.dev !== undefined ? o.dev : flag("--dev");
   let src = resolveSrc(o);
   if (!src) {
     const artifacts = path.join(root, "artifacts", "site");
     fs.mkdirSync(path.dirname(artifacts), { recursive: true });
-    (o.stage || stageSite)(artifacts, { root });
+    await (o.stage || stageSiteMinified)(artifacts, { root });
     if (!dev) (o.stamp || stampStaged)(artifacts, { root });
     src = artifacts;
   }
@@ -118,6 +123,11 @@ function prepareSrc(o = {}) {
     );
   }
   return src;
+}
+
+/** The third-party notices ship inside the app, as desktop/electron-builder.config.cjs does for Electron. */
+function writeAppNotices(www, root = ROOT) {
+  return writeNotices(root, path.join(www, "THIRD-PARTY-NOTICES.txt"));
 }
 
 function capSync() {
@@ -141,7 +151,7 @@ function usage() {
   --skip-sync  copy only; do not run npx cap sync android`);
 }
 
-function main() {
+async function main() {
   if (flag("--help") || flag("-h")) {
     usage();
     process.exit(0);
@@ -151,9 +161,10 @@ function main() {
     throw new Error("sync-web: --out requires a directory and --skip-sync (Capacitor uses mobile/www)");
   }
   const www = out ? path.resolve(ROOT, out) : WWW;
-  const src = prepareSrc();
+  const src = await prepareSrc();
   if (out) copyIsolated(src, www);
   else copyTree(src, www);
+  writeAppNotices(www);
   let syncOut = null;
   if (!flag("--skip-sync")) syncOut = capSync();
   const html = fs.readFileSync(path.join(www, "index.html"), "utf8");
@@ -169,10 +180,10 @@ function main() {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  try { main(); } catch (e) {
+  main().catch((e) => {
     console.error(e && e.message ? e.message : e);
     process.exit(1);
-  }
+  });
 }
 
-export { hasDevTags, copyTree, WWW, prepareSrc, resolveSrc };
+export { copyTree, prepareSrc, resolveSrc, writeAppNotices };

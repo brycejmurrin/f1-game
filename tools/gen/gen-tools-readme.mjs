@@ -8,7 +8,8 @@
  * under tools/ (any comment style — `//`, `/* *`, `#`, a Python docstring, an
  * HTML comment) the generator reads three tags: `@doc` (one line, ≤ 120 chars —
  * the index row; required for every non-JSON file; the long story stays in the
- * header below it), `@skill` (the paired skill or skills, omitted → "—") and
+ * header below it), `@skill` (a SUGGESTED skill or skills, omitted → "—"; the generator
+ * checks only that the skill exists, not that it documents the tool) and
  * `@section` (`runner` places the row in the two-column "Test runner &
  * coverage" table). An over-length `@doc` is a defect like a missing one: the
  * generator refuses it, so `--check` exits non-zero and names the file and its
@@ -29,6 +30,7 @@
  *   node tools/gen/gen-tools-readme.mjs            # write
  *   node tools/gen/gen-tools-readme.mjs --check    # exit 1 when committed ≠ generated
  */
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { ROOT, emit, isMain } from "./gen-lib.mjs";
@@ -39,8 +41,20 @@ export const HEADER_LINES = 15;
 
 const TOOL_EXT = /\.(mjs|cjs|js|sh|py|html)$/;
 
-/** Every indexable file under tools/, relative to tools/, sorted. */
+/** Every indexable file under tools/, relative to tools/, sorted. TRACKED files only (`git ls-files`):
+ *  an untracked scratch file under tools/ used to fail `--check` on a clean tree. A file deleted in the
+ *  working tree but not yet staged is skipped too. Outside a git checkout, or one with nothing under tools/
+ *  tracked yet, it falls back to the filesystem walk. */
 export function walkTools() {
+  const skip = (r) => r.split("/").some((seg) => seg.startsWith("_") || seg === "__pycache__") || path.basename(r) === "README.md";
+  const git = spawnSync("git", ["ls-files", "-z", "--", "tools"], { cwd: ROOT, encoding: "utf8" });
+  // Empty listing (a fresh `git init` that has not staged tools/ yet, as deploy-tool.test.mjs builds): walk instead.
+  if (git.status === 0 && git.stdout.includes("tools/")) {
+    return git.stdout.split("\0").filter(Boolean)
+      .map((f) => f.slice("tools/".length))
+      .filter((r) => !skip(r) && fs.existsSync(path.join(ROOT, "tools", r)))
+      .sort();
+  }
   const out = [];
   const walk = (dir, rel) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -186,7 +200,6 @@ export const GROUPS = [
   ["lib", "Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set."],
   ["ci", "The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy."],
   ["check", "Static guards over the source — a red exit here is a defect, not a report."],
-  ["archive", "One-shot probes kept for provenance; each cited only by its dated note (tools/archive/README.md)."],
   ["gen", "Author-time generation: the generated doc blocks, the shell, and the asset bakes."],
   ["docs", "Agent-facing generated pages: the coverage table, the hook index and the static impact map."],
   ["shot", "Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile."],
@@ -198,21 +211,21 @@ export const GROUPS = [
   ["garage", "Blender authoring and deterministic runtime motion exports for the garage crew."],
   ["ui", "Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share."],
   ["lighting", "The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign package."],
-  ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],
+  ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools bridge, the phone report pair."],
   ["viewer", "Self-contained three.js pages of engine-built cars and circuits, for hosts that cannot render an MCP Apps panel."],
   ["net", "WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers."],
-  ["environment", "Canonical F1 environment installation, recovery, plugin packages and lifecycle regressions."],
   ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
   ["desktop", "Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://."],
   ["moves", "Move plans read by gen/move-tree.mjs — data, not code."],
-  ["hooks", "Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason trailer."],
+  ["hooks", "Per-agent PreToolUse hooks the agent cards wire (`hooks:` frontmatter): read-only Bash, the surveyor's and the reviewer's write scopes."],
 ];
 
 const INTRO = `# Apex 26 dev tools
 
 Headless Node scripts for verifying and inspecting the game without a browser
-window. Most pair with a **skill** in \`.claude/skills/\` (which explains when/how
-to use them) — this index is the quick map. Run from the repo root. Disposable
+window. The **Suggested skill** column names the \`.claude/skills/\` skill a tool's
+author pointed at; the generator checks only that the skill exists, so the skill
+may not mention the tool — this index is the quick map. Run from the repo root. Disposable
 output never goes to \`/tmp\`: use \`artifacts/tmp/\` for batch logs/probes and
 \`scratch/\` for human-reviewed captures, renders, and profiles.
 
@@ -266,7 +279,7 @@ export function render() {
     if (!rows.length) continue;
     out.push(`### \`tools/${dir}${dir ? "/" : ""}\`\n`);
     out.push(`${blurb}\n`);
-    out.push("| Tool | Does | Paired skill |\n|---|---|---|");
+    out.push("| Tool | Does | Suggested skill |\n|---|---|---|");
     for (const r of rows) out.push(`| **${r.rel}** | ${cell(r.doc)} | ${cell(r.skill)} |`);
     out.push("");
   }

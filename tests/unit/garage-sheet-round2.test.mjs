@@ -22,7 +22,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
 // `const X = (…)()` is script-scope in a VM: re-declare as var so the sandbox object sees it.
 const src = (f) => read(f).replace(/^const\b/gm, "var");
 
-function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [] } = {}) {
+function harness({ career = false, era = null, unlimited = false, stored = {}, tab = "engine", tdev = 0, team: teamId = "mercedes", tweakTeam, liveries = [], persistence = {}, paintDisk } = {}) {
   const dom = makeDom();
   dom.document.createTextNode = (t) => { const e = dom.document.createElement("span"); e.textContent = t; return e; };
   const saved = [];
@@ -65,13 +65,143 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
     getLiveryId: () => fittedLivery, saveLiveryId: (_team, id) => { fittedLivery = id; }, getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => liveries,
     invalidateDecalTextures: null, teamIdx: sb.Teams.LIST.indexOf(team), driverIdx: 0, soundOn: false,
     careerOwned: () => owned, unlimitedBudget: unlimited, peerSeats: () => [],
-    teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
+    armConfirm: (_button, _label, action) => action(), teamSwatch: () => dom.document.createElement("span"), setTeamPicker() {}, openCustomize() {},
     livDraftOverride: null, _spMeshKey: "", setupPreviewOn: false,
   };
+  Object.assign(G, persistence);
+  let customLiv;
+  if (paintDisk) {
+    sb.localStorage = paintDisk;
+    run("js/career/save-migrate.js");
+    run("js/core/store.js");
+    sb.Liveries = { forTeam: () => [] };
+    run("js/car/custom-liveries.js");
+    customLiv = sb.CustomLiveries.create({ store: sb.GameStore.store });
+    Object.assign(G, { getLiveryId: customLiv.getLiveryId, saveLiveryId: customLiv.saveLiveryId,
+      getCustomLiveries: customLiv.getCustomLiveries, getLiveries: customLiv.getLiveries });
+  }
   vm.runInContext(src("js/garage/setup-sheet.js"), sb, { filename: absSrc("js/garage/setup-sheet.js") });
-  const ui = sb.SetupUI.create(G);
+  const ui = sb.SetupUI.create(G, customLiv);
   return { dom, ui, G, sb, saved, parts, team };
 }
+
+test("browsing a Garage category in the arrangement editor preserves the saved tab and camera", () => {
+  const h = harness({ tab: "team" });
+  const writes = [];
+  h.G.store.set = (key, value) => writes.push([key, value]);
+  let framed = 0;
+  const query = h.dom.document.querySelector;
+  h.dom.document.querySelector = selector => selector === '#cs-stack [data-cs-view="side"]'
+    ? { click() { framed++; } } : query(selector);
+  h.ui.buildSetup();
+  const editor = h.dom.byId("screen-arranger");
+  editor.open = true;
+  h.dom.byId("cs-tab-brakes").onclick();
+  assert.equal(h.dom.byId("cs-options").getAttribute("aria-labelledby"), "cs-tab-brakes");
+  h.dom.byId("cs-tab-team").onclick();
+  assert.deepEqual(writes, []);
+  assert.equal(framed, 0);
+  editor.open = false;
+  h.dom.byId("cs-tab-brakes").onclick();
+  assert.deepEqual(writes, [["garageTab", "brakes"]]);
+  assert.equal(framed, 1);
+});
+
+function paintFixture() {
+  const old = { id: "custom_original", name: "Original", c1: [1, 0, 0], c2: [0, 0, 1] };
+  const rows = "apex26.livery.custom.mercedes", fit = "apex26.livery.mercedes";
+  const disk = new Map([[rows, JSON.stringify([old])], [fit, JSON.stringify(old.id)]]);
+  const storage = { refuse: () => false, getItem: key => disk.get(key) ?? null, removeItem: key => disk.delete(key),
+    setItem(key, text) { if (this.refuse(key, text)) throw new Error("storage refused"); disk.set(key, text); } };
+  function open() {
+    const h = harness({ tab: "livery", paintDisk: storage });
+    const pane = h.dom.byId("cs-options"); let text = "";
+    Object.defineProperty(pane, "textContent", { get: () => text, set(v) { text = v; pane.replaceChildren(); } });
+    h.ui.buildSetup();
+    return { h, pane };
+  }
+  return { open, old, storage, rows, fit };
+}
+
+for (const action of ["cancel", "retry"]) {
+  test(`editing a fitted livery keeps the original after a refused fit and ${action}`, () => {
+    const f = paintFixture(), { pane } = f.open();
+    pane.querySelector(".cs-liv-edit").onclick();
+    const name = pane.querySelector(".cs-liv-ed-name"), save = pane.querySelector(".cs-liv-ed-save");
+    name.value = "Edited"; name.oninput();
+    let fitRefused = false;
+    f.storage.refuse = key => { if (key === f.fit) fitRefused = true; return fitRefused; };
+    save.onclick();
+    assert.equal(save.textContent, "RETRY SAVE & FIT");
+    assert.equal(name.value, "Edited");
+    const fresh = () => f.open().h.G;
+    assert.equal(fresh().getLiveryId("mercedes"), f.old.id);
+    assert.ok(fresh().getCustomLiveries("mercedes").some(row => row.id === f.old.id && row.name === "Original"));
+    save.onclick();
+    assert.equal(fresh().getCustomLiveries("mercedes").length, 2, "repeated refusals retain at most one staged copy");
+    if (action === "cancel") {
+      pane.querySelector(".cs-liv-ed-cancel").onclick();
+      const g = fresh();
+      assert.ok(g.getCustomLiveries("mercedes").some(row => row.id === g.getLiveryId("mercedes") && row.name === "Original"));
+    } else {
+      f.storage.refuse = () => false; save.onclick();
+      const g = fresh(), rows = g.getCustomLiveries("mercedes");
+      assert.equal(rows.length, 1); assert.equal(rows[0].name, "Edited");
+      assert.equal(g.getLiveryId("mercedes"), rows[0].id); assert.notEqual(rows[0].id, f.old.id);
+    }
+  });
+}
+
+test("a refused first write retains a new draft without fitting it; retry saves exactly one copy", () => {
+  const f = paintFixture(), { pane } = f.open();
+  pane.querySelector(".cs-liv-create").onclick();
+  const name = pane.querySelector(".cs-liv-ed-name"), save = pane.querySelector(".cs-liv-ed-save");
+  name.value = "New"; name.oninput(); f.storage.refuse = key => key === f.rows;
+  save.onclick(); assert.equal(save.textContent, "RETRY SAVE & FIT");
+  const before = f.open().h.G;
+  assert.equal(before.getCustomLiveries("mercedes").length, 1); assert.equal(before.getLiveryId("mercedes"), f.old.id);
+  f.storage.refuse = () => false; save.onclick();
+  const after = f.open().h.G; assert.equal(after.getCustomLiveries("mercedes").length, 2);
+  assert.ok(after.getCustomLiveries("mercedes").some(row => row.id === after.getLiveryId("mercedes") && row.name === "New"));
+});
+
+test("a refused cleanup leaves two usable paints and the older copy can be removed", () => {
+  const f = paintFixture(), { h, pane } = f.open(); pane.querySelector(".cs-liv-edit").onclick();
+  const name = pane.querySelector(".cs-liv-ed-name"); name.value = "Edited"; name.oninput();
+  f.storage.refuse = (key, text) => key === f.rows && JSON.parse(text).length === 1;
+  pane.querySelector(".cs-liv-ed-save").onclick();
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /previous copy was kept/.test(el.textContent)));
+  const selected = h.G.getLiveryId("mercedes"); assert.notEqual(selected, f.old.id);
+  const removeOriginal = () => pane.querySelectorAll(".cs-liv-del").find(b => b.title && b.getAttribute("aria-label").includes("Original")).onclick();
+  removeOriginal();
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /Could not delete/.test(el.textContent)));
+  assert.equal(f.open().h.G.getCustomLiveries("mercedes").length, 2);
+  f.storage.refuse = () => false; removeOriginal();
+  const g = f.open().h.G; assert.equal(g.getLiveryId("mercedes"), selected);
+  assert.deepEqual(Array.from(g.getCustomLiveries("mercedes"), row => row.id), [selected]);
+});
+
+test("refusing to move selection off a deleted livery preserves the fitted row after reload", () => {
+  const f = paintFixture(), { pane } = f.open();
+  f.storage.refuse = key => key === f.fit;
+  pane.querySelector(".cs-liv-del").onclick();
+  const g = f.open().h.G;
+  assert.equal(g.getLiveryId("mercedes"), f.old.id);
+  assert.deepEqual(Array.from(g.getCustomLiveries("mercedes"), row => row.id), [f.old.id]);
+});
+
+test("fitting an existing paint after a storage refusal keeps the current selection until retry", () => {
+  const f = paintFixture(), other = { ...f.old, id: "custom_other", name: "Alternate" };
+  f.storage.setItem(f.rows, JSON.stringify([f.old, other]));
+  const { h, pane } = f.open();
+  const row = () => pane.querySelectorAll(".cs-liv").find(b => b.dataset.csLivery === other.id);
+  f.storage.refuse = key => key === f.fit; row().onclick();
+  assert.equal(h.G.getLiveryId("mercedes"), f.old.id);
+  assert.equal(f.open().h.G.getLiveryId("mercedes"), f.old.id);
+  assert.ok(pane.querySelectorAll('[role="status"]').some(el => /Could not fit/.test(el.textContent)));
+  f.storage.refuse = () => false; row().onclick();
+  assert.equal(f.open().h.G.getLiveryId("mercedes"), other.id);
+});
 
 test("G2: an era ban never erases a fitted part from the career garage; a permanent lock still remaps", () => {
   const stored = { engine: "hybrid_max", ers: "overcharge", fuel: "custom_formula" };
@@ -168,11 +298,17 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
   const document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
   const gfx = { createMesh: () => ({}), createTexMesh: () => ({}), freeMesh() {}, freeTexture() {}, createTexture: () => ({}),
     updateTexture() {}, draw() {}, drawDecal() {}, drawGlow() {} };
-  const ctx = vm.createContext({
+  const tuneStore = new Map();
+  const ctx = {
     console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array, Map, Set, isFinite, parseFloat, parseInt, Date,
     document, LiveryTex: {}, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
-  });
-  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
+    GameStore: { store: { get: (k, f) => tuneStore.has(k) ? tuneStore.get(k) : f,
+      set: (k, v) => { if (v === undefined) tuneStore.delete(k); else tuneStore.set(k, v); }, rev: 0 } },
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
+                   "js/garage/setup-tune.js",
                    "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js", "js/garage/scene-dress.js",
                    "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -189,7 +325,7 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
   const getParts = () => ({});
   const c = { track: { id: "monza" }, weather: "dry", tod: "default", night: false, unlimited };
   GarageScene.prepare(team, LIV, getParts, 0, c);
-  return { texts, GarageScene, team, LIV, getParts, c, ctx };
+  return { texts, GarageScene, team, LIV, getParts, c, ctx, tuneStore };
 }
 
 test("G4: the wall BUDGET board reads FREE BUILD when the budget is unlimited", () => {
@@ -222,6 +358,25 @@ test("G5: the wall stat board reads Career.teamStats", () => {
   assert.notDeepEqual([...num(dev)], [...num(flat)]);
 });
 
+test("G5: the wall stat board folds SetupTune.mods the same way the DOM bars do", () => {
+  const flat = sceneBoard();
+  const P = vm.runInContext("Parts", flat.ctx), S = vm.runInContext("SetupTune", flat.ctx);
+  const Dress = vm.runInContext("GarageDress", flat.ctx);
+  const works = Dress.boardInfo(flat.team, flat.getParts, 0, flat.c);
+  S.set(flat.team.id, { arbF: 11, arbR: 1 });   // max front / soft rear → cornering/braking move
+  flat.ctx.GameStore.store.rev++;
+  Dress.releaseDress();
+  const tuned = Dress.boardInfo(flat.team, flat.getParts, 0, flat.c);
+  const want = P.getMods({}, flat.team, S.mods(flat.team.id));
+  for (let i = 0; i < P.STAT_KEYS.length; i++) {
+    const key = P.STAT_KEYS[i].key, base = flat.team.stats[key] || 75;
+    assert.equal(tuned.stats[i].value, Math.round(P.displayStat(base * want[key])),
+      `${key}: wall matches Parts.getMods(..., SetupTune.mods)`);
+  }
+  assert.notDeepEqual(tuned.stats.map((s) => s.value), works.stats.map((s) => s.value),
+    "a mechanical set-up change moves the wall numbers");
+});
+
 test("the setup turntable gives the Legends slot its own helmet key and a per-legend mesh key", () => {
   const cam = read("js/garage/setup-camera.js");
   assert.match(cam, /helmetKey: team\.legends && seat \? seat\.code : undefined/, "Car3D.build gets the legend's code");
@@ -229,7 +384,7 @@ test("the setup turntable gives the Legends slot its own helmet key and a per-le
 });
 
 for (const state of ["race", "menu"]) {
-  test("garage identity is locked only during pit work: " + state, () => {
+  test(`garage identity is locked only during pit work: ${state}`, () => {
     const h = harness({ tab: "team" });
     let picks = 0, edits = 0;
     h.G.state = state;

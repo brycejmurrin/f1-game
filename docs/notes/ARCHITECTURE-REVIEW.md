@@ -1,5 +1,7 @@
 # Apex 26 — architecture review
 
+Summary: The standing assessment: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and the lessons.
+
 A review, not a reference. [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) is the
 module contract and [`AGENTS.md`](../../AGENTS.md) is the working reference; both
 describe the system as it is meant to be. This describes **how it is actually

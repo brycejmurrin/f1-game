@@ -27,7 +27,10 @@ name: Browser group
 #
 # NOT A GATE. Nothing requires it and nothing reads its timings (spec-timings.yml
 # learns from the Pages train only); a PR's own ci.yml run still decides merge.
-# It is a fast answer to "is this group green on my branch?".
+# It is a fast answer to "is this group green on my branch?". ONE READER (#5480):
+# a ready PR's selected verdict counts a spec its plan dropped when a run of this
+# workflow with `pr` ran it green on the same head and base, attempt 1, llvmpipe
+# (each shard's `apex-group` annotation; tools/ci/dropped-group-runs.mjs).
 #
 # Docs: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 #       https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
@@ -56,6 +59,26 @@ on:
         required: false
         default: ""
         type: string
+      pr:
+        description: "open PR number: test its merge ref (refs/pull/<n>/merge) and record the commit pair, so its ready verdict can count a dropped spec (#5480); empty = the branch head"
+        required: false
+        default: ""
+        type: string
+      # THE BLESS ROUTE (#5734, decision A on #5732). A committed perf/physics baseline is measured on the lane that
+      # compares against it, and agents never run a browser test locally (AGENTS.md rule 5), so the writer runs HERE:
+      # `update_baseline` sets APEX_UPDATE_BASELINE=1 (each spec that honours it writes its tests/data/ baseline
+      # instead of comparing) and the "Blessed baselines" step uploads what it wrote, to be committed unchanged.
+      # Dispatch it without `pr`: a bless run compares nothing, so it must never count as a #5480 green.
+      update_baseline:
+        description: "re-bless: run with APEX_UPDATE_BASELINE=1 and upload the baseline the specs write (needs baseline_reason)"
+        required: false
+        default: false
+        type: boolean
+      baseline_reason:
+        description: "with update_baseline: the reason line stamped into the baseline's _blessed block"
+        required: false
+        default: ""
+        type: string
 
 # The group and branch are in the run's name, so the CLI (and a human in the
 # Actions tab) can tell dispatches apart.
@@ -63,6 +86,7 @@ run-name: "browser group ${{ inputs.group }} on ${{ github.ref_name }} (${{ inpu
 
 permissions:
   contents: read
+  pull-requests: read   # the fork check reads a `pr` input's head repository (D-RUNNER)
 
 # A second dispatch of the same group on the same branch supersedes the first.
 # (remote-group.mjs reuses a live or green run of the same sha instead.)
@@ -73,22 +97,80 @@ concurrency:
 jobs:
   group:
     name: "${{ inputs.group }} (${{ matrix.shard }}/${{ matrix.total }})"
-    runs-on: ubuntu-latest
+    # THE RUNNER IS A REPO VARIABLE (D-RUNNER, 2026-11-20). Unset or empty, the shard runs on `ubuntu-latest` exactly as
+    # before; set `APEX_BROWSER_RUNNER` to a managed provider's single `runs-on` label to trial it, delete it to roll
+    # back (docs/TESTING.md §CI runners). Only a `workflow_dispatch` may read it, and only this repo's code runs on
+    # it: a `pr` input whose head is a fork stops at "Fork code never runs on a trial runner" below, before checkout.
+    # tests/unit/ci-runner-variable.test.mjs pins both.
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && vars.APEX_BROWSER_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(inputs.plan).matrix }}
+    # GROUP LANES (#5848, 2026-11-19): every shard joins one of 8 fleet-wide groups with `queue: max`, so at most 8
+    # group shards hold runners at once across every dispatch; the rest wait PENDING, holding no runner. Before this,
+    # nine group runs could fill the account's 40-slot pool and land.yml's gate jobs queued behind them (measured by
+    # tools/ci/pool-share.mjs). remote-group.mjs gives each shard `lane` 1..8 (withLanes, GROUP_LANES); a plan
+    # without one (a hand dispatch) falls back to its shard number. With the shards on APEX_BROWSER_RUNNER (outside
+    # that pool) the dispatcher may raise the count (APEX_GROUP_LANES / --group-lanes, D-LANES): a lane above 8 is
+    # just another group. `queue: max` holds up to 100 pending jobs per
+    # group and cannot be combined with cancel-in-progress in one block; the workflow-level group above still
+    # replaces a superseded dispatch, pending shards included.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+    concurrency:
+      group: browser-group-lane-${{ matrix.lane || matrix.shard }}
+      queue: max
     steps:
+      # `pr` is text from whoever dispatched: digits or nothing, checked before it names a ref (env, never inline).
+      - name: Validate the pr input
+        env:
+          PR: ${{ inputs.pr }}
+        run: |
+          case "$PR" in ""|[1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-9][0-9][0-9][0-9][0-9]) ;; *) echo "::error::pr must be a PR number or empty"; exit 1;; esac
+      # FORK CODE NEVER RUNS ON A TRIAL RUNNER (D-RUNNER). `runs-on` is fixed before any step, so a fork's merge ref
+      # cannot fall back there; it is refused here instead, before checkout, whenever the shard is not on
+      # `ubuntu-latest`. The repo is public and its PRs may come from forks. Unset the variable to test a fork PR.
+      - name: Fork code never runs on a trial runner
+        if: ${{ inputs.pr != '' && vars.APEX_BROWSER_RUNNER != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+          REPO: ${{ github.repository }}
+        run: |
+          head="$(gh api "repos/$REPO/pulls/$PR" --jq .head.repo.full_name)" || { echo "::error::could not read PR #$PR's head repository"; exit 1; }
+          if [ "$head" != "$REPO" ]; then echo "::error::PR #$PR's head is $head, not $REPO: fork code does not run on APEX_BROWSER_RUNNER; unset the variable to test it on ubuntu-latest"; exit 1; fi
+      # With `pr`: the PR's merge ref, so the shard records (base, head) = the merge commit's parents and a ready
+      # verdict on that PR can count this run for a spec its plan dropped (tools/ci/dropped-group-runs.mjs).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.pr != '' && format('refs/pull/{0}/merge', inputs.pr) || '' }}
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # THE PLAN RECORD (#5480): what this shard will run, as an `apex-group-plan` annotation, written BEFORE any
+      # spec or test helper executes. A ready verdict counts only units in it (tools/ci/dropped-group-runs.mjs).
+      - name: Record this shard's plan
+        env:
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
+          GL: ${{ inputs.gl }}
+          GROUP: ${{ inputs.group }}
+          PLAN: ${{ inputs.plan }}
+          SHARD: ${{ matrix.shard }}
+          TOTAL: ${{ matrix.total }}
+          WORKERS: ${{ inputs.workers }}
+        run: node tools/ci/remote-group.mjs --plan-record
       # Cached Chromium (not the Playwright Docker image): restore ≈ install on
       # Linux, and Mesa/Xvfb still need the host runner — see
       # docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md §Docker.
       - name: Playwright Chromium (cached)
         uses: ./.github/actions/playwright-chromium
+      # The webkit group needs Playwright's WebKit build and its OS libraries; the
+      # cached step above is Chromium only (webkit-boot died: "Executable doesn't
+      # exist at …/webkit-NNNN/pw_run.sh"). https://playwright.dev/docs/browsers
+      - name: Playwright WebKit (webkit group only)
+        if: inputs.group == 'webkit'
+        run: npx playwright install --with-deps webkit
       - name: Mesa llvmpipe + Xvfb
         if: inputs.gl != 'swiftshader'
         uses: ./.github/actions/mesa-xvfb
@@ -102,6 +184,9 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           APEX_GL: llvmpipe
+          APEX_UPDATE_BASELINE: ${{ inputs.update_baseline && '1' || '' }}
+          APEX_BASELINE_REASON: ${{ inputs.baseline_reason }}
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
           LIBGL_ALWAYS_SOFTWARE: 1
           GL: llvmpipe
           GROUP: ${{ inputs.group }}
@@ -116,12 +201,29 @@ jobs:
           APEX_FAIL_ON_FLAKY: 1
           APEX_WITH_TWINNED: 1
           GL: swiftshader
+          APEX_UPDATE_BASELINE: ${{ inputs.update_baseline && '1' || '' }}
+          APEX_BASELINE_REASON: ${{ inputs.baseline_reason }}
+          APEX_PR_MERGE: ${{ inputs.pr != '' && '1' || '0' }}
           GROUP: ${{ inputs.group }}
           PLAN: ${{ inputs.plan }}
           SHARD: ${{ matrix.shard }}
           TOTAL: ${{ matrix.total }}
           WORKERS: ${{ inputs.workers }}
         run: node tools/ci/remote-group.mjs --run-shard
+      # The bless route's output: the files the two APEX_UPDATE_BASELINE writers produce (perf-frametime.spec.js,
+      # physics-characterization.spec.js) plus the perf run's own JSON, for a commit. Named, not a glob: a glob also
+      # ships every unrelated committed baseline (run 44298961521 carried four), which hides what was written.
+      - name: Blessed baselines
+        if: always() && inputs.update_baseline
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: blessed-baselines-${{ inputs.group }}-${{ matrix.shard }}
+          path: |
+            tests/data/perf-frametime-baseline.json
+            tests/data/physics-baseline.json
+            artifacts/perf-frametime/
+          retention-days: 7
+          if-no-files-found: error
       - name: Failure artifacts
         if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

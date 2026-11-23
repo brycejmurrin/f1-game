@@ -17,7 +17,7 @@ const GLXPost = (function () {
     const { useProg, bindVAO, setBlend, setDepthMask, setCull, link, locs, beginLinks, resolveLinks } = core;
     const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
-    const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
+    const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, SSR_FS,
             COMPOSITE_FS, FXAA_FS, SGSR_FS, MIRROR_FS, DECAL_VS, MIRROR_GLASS_FS } = GLXShaders;
     const F = core.frame;
 
@@ -26,6 +26,9 @@ const GLXPost = (function () {
     let godrayProg = null, godrayU = null, godrayFBO = null, godrayTex = null;
     let godrayBlurFBO = null, godrayBlurTex = null;
     let godrayW = 0, godrayH = 0;
+    // F3 (#3115): half-res SSR target + program (WGX parity). COMPOSITE samples uSsr.
+    let ssrProg = null, ssrU = null, ssrFBO = null, ssrTex = null;
+    let ssrW = 0, ssrH = 0;
     let _grLite = true;   // see the godray blur loop in present()
     try { _grLite = localStorage.getItem("apex26.grLite") !== "0"; } catch (_) { /* no storage: on */ }
     let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
@@ -52,6 +55,7 @@ const GLXPost = (function () {
     let compProg = null, compU = null;
     let sceneFBO = null, sceneTex = null, sceneDepth = null;
     let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
+    let r11Ok = false;           // R11F_G11F_B10F renderable: EXT_color_buffer_float only (half_float does not cover it)
     // Mip-chain bloom: progressive downsample levels (half res, /4, /8, …), then
     // additive tent upsample back to level 0 — wide multi-octave glow.
     const BLOOM_DIV = 2;         // level 0 at half resolution
@@ -115,14 +119,14 @@ const GLXPost = (function () {
     const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     // POST_VS uUVScale — must be set on every use (WebGL defaults unset to 0).
-    function usePost(prog) {
+    function usePost(prog, exactSize = false) {
       useProg(prog);
       let loc = _uvLocs.get(prog);
       if (loc === undefined) {
         loc = prog ? gl.getUniformLocation(prog, "uUVScale") : null;
         _uvLocs.set(prog, loc);
       }
-      if (loc) gl.uniform2f(loc, _uvScaleX, _uvScaleY);
+      if (loc) gl.uniform2f(loc, exactSize ? 1 : _uvScaleX, exactSize ? 1 : _uvScaleY);
     }
     function setCoverScale(logicalW, logicalH) {
       _uvScaleX = allocW > 0 ? (logicalW / allocW) : 1;
@@ -147,6 +151,11 @@ const GLXPost = (function () {
       const ext = gl.getExtension("EXT_color_buffer_float")
         || gl.getExtension("EXT_color_buffer_half_float");
       colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+      // A device exposing only EXT_color_buffer_half_float (some WebKit/ANGLE builds)
+      // renders RGBA16F but NOT R11F_G11F_B10F: bloom level 0 came back incomplete,
+      // post switched itself off and the frame went untonemapped. TLX gates the same
+      // way (tlx-post.js); the slim format now waits for the float extension.
+      r11Ok = !!gl.getExtension("EXT_color_buffer_float");
 
       // One parallel batch, like the core programs (glx.js beginLinks): read
       // straight after each link, these eight compiled in strict series.
@@ -158,11 +167,13 @@ const GLXPost = (function () {
       compProg = link(POST_VS, COMPOSITE_FS);
       ssaoProg = link(POST_VS, SSAO_FS);
       godrayProg = link(POST_VS, GODRAY_FS);
+      ssrProg = SSR_FS ? link(POST_VS, SSR_FS) : null;
       fxaaProg = link(POST_VS, FXAA_FS);
       if (resolveLinks) {
         const bad = resolveLinks(), ok = (p) => (p && !bad.has(p) ? p : null);
         brightProg = ok(brightProg); blurProg = ok(blurProg); downProg = ok(downProg); upProg = ok(upProg);
-        compProg = ok(compProg); ssaoProg = ok(ssaoProg); godrayProg = ok(godrayProg); fxaaProg = ok(fxaaProg);
+        compProg = ok(compProg); ssaoProg = ok(ssaoProg); godrayProg = ok(godrayProg);
+        ssrProg = ok(ssrProg); fxaaProg = ok(fxaaProg);
       }
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
@@ -203,15 +214,17 @@ const GLXPost = (function () {
           try {
             let _p = localStorage.getItem("apex26.gfxPreset");
             try { _p = JSON.parse(_p); } catch (_) { /* not JSON: compare the raw string */ }
-            _ultra = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+            _ultra = _p === "ultra" || _p === "extreme" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+            if (typeof GfxQuality !== "undefined" && GfxQuality.option) _ultra = GfxQuality.option("msaa", _ultra);
           } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
           if (!_ultra && msaaSamples > 2) msaaSamples = 2;
         }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
-      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uSsrQuality", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
+      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uSsr", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uDepth", "uReflTexel", "uReflect", "uSsrOk", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"]);
       if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"]);
       if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
+      if (ssrProg) ssrU = locs(ssrProg, ["uScene", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uCarReflect", "uCarGloss", "uReflSkyHi", "uReflSkyLo", "uSsrQuality", "uSsrThick", "uSsrTopUV", "uSsrNear"]);
       // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
       whiteTex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, whiteTex);
@@ -277,6 +290,7 @@ const GLXPost = (function () {
       drop(ssaoBlurFBO, ssaoBlurTex); ssaoBlurTex = null;
       drop(godrayFBO, godrayTex); godrayTex = null;
       drop(godrayBlurFBO, godrayBlurTex); godrayBlurTex = null;
+      drop(ssrFBO, ssrTex); ssrTex = null;
       drop(ldrFBO, ldrTex); ldrTex = null;
       drop(aaFBO, aaTex); aaTex = null;
       allocW = 0; allocH = 0; aaW = 0; aaH = 0; coverMode = false;
@@ -286,8 +300,9 @@ const GLXPost = (function () {
 
     // (Re)allocate the scene + bloom render targets at the current size.
     function createTargets() {
-      if (!postEnabled) return;
+      if (!programsReady) return;
       const { width, height } = core.getSize();
+      if (!postEnabled && width === targetW && height === targetH) return;
       // A present-size change (UPSCALE toggle) leaves the scene size intact.
       // Preserve its textures/MSAA storage; only the AA intermediate changes.
       if (sceneTex && width === targetW && height === targetH) {
@@ -302,6 +317,7 @@ const GLXPost = (function () {
         ssaoW = Math.max(1, Math.floor(width / 2));
         ssaoH = Math.max(1, Math.floor(height / 2));
         godrayW = ssaoW; godrayH = ssaoH;
+        ssrW = ssaoW; ssrH = ssaoH;
         let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
         let bh = Math.max(1, Math.floor(height / BLOOM_DIV));
         for (let i = 0; i < bloomLv.length; i++) {
@@ -312,6 +328,10 @@ const GLXPost = (function () {
         syncSpatialTarget(width, height);
         return;
       }
+      // A failed target falls back for this size. Retry the linked chain and its selected MSAA on reallocation.
+      targetW = width; targetH = height;
+      postEnabled = true;
+      msaaSamples = requestedSamples;
       // Phone / mobile-tier: allocate a square cover of max(w,h) so the first
       // portrait↔landscape flip never rebuilds (#3311). Desktop keeps exact size.
       const cover = (IS_MOBILE || MOBILE_TIER) ? Math.max(1, width, height) : 0;
@@ -320,14 +340,14 @@ const GLXPost = (function () {
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
       // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
       // are alpha-less positive HDR colour -> R11F_G11F_B10F (half the bytes;
-      // renderable under the same EXT_color_buffer_float the HDR path requires).
+      // renderable under EXT_color_buffer_float only; half-float-only keeps RGBA16F).
       // LDR fallback keeps RGBA8 everywhere.
       const hdrOk = colorType === gl.HALF_FLOAT;
       const mk = (w, h, fmt) => {
         const tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, tex);
         if (fmt === "r8") gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, null);
-        else if (fmt === "hdr3" && hdrOk) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
+        else if (fmt === "hdr3" && hdrOk && r11Ok) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
         else gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -397,7 +417,8 @@ const GLXPost = (function () {
       }
       // bloom mip chain (half res, /4, /8, … — stop once a level gets tiny).
       // Physical levels follow the cover (aw/ah); lv.w/h stay LOGICAL for
-      // viewports + texels; uUVScale maps sampling into the cover rect.
+      // viewports, lv.pw/ph are the PHYSICAL size the tap texels use: vUV is
+      // physical UV, so one source texel is 1/pw (== 1/w off the cover path).
       for (const lv of bloomLv) { if (lv.tex) gl.deleteTexture(lv.tex); if (lv.fbo) gl.deleteFramebuffer(lv.fbo); }
       bloomLv = [];
       let bw = Math.max(1, Math.floor(width / BLOOM_DIV));
@@ -417,7 +438,7 @@ const GLXPost = (function () {
           postEnabled = false;
           return;
         }
-        bloomLv.push({ fbo, tex, w: bw, h: bh });
+        bloomLv.push({ fbo, tex, w: bw, h: bh, pw: abw, ph: abh });
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
         abw = Math.max(1, abw >> 1); abh = Math.max(1, abh >> 1);
       }
@@ -459,6 +480,20 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
       }
+      // F3 (#3115): SSR target at HALF res (WGX pattern). March reads full-res
+      // scene + depth; COMPOSITE bilinear-upsamples. RGBA16F / R11F so .a (mix
+      // amount) survives — hdr3 alone would drop alpha on the slim format.
+      if (ssrProg) {
+        ssrW = Math.max(1, Math.floor(width / 2));
+        ssrH = Math.max(1, Math.floor(height / 2));
+        const arW = Math.max(1, Math.floor(aw / 2)), arH = Math.max(1, Math.floor(ah / 2));
+        if (!ssrFBO) ssrFBO = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO);
+        if (ssrTex) gl.deleteTexture(ssrTex);
+        ssrTex = mk(arW, arH, "hdr");   // RGBA float — .a carries mixAmt
+        gl.bindFramebuffer(gl.FRAMEBUFFER, ssrFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ssrTex, 0);
+      }
       // LDR target (render res, RGBA8): composite lands here when FXAA and/or
       // SGSR need the tonemapped image. SGSR alone (FXAA link failed) still
       // needs LDR — otherwise there is nowhere to sample before present size.
@@ -478,7 +513,6 @@ const GLXPost = (function () {
       }
       allocW = aw; allocH = ah;
       coverMode = !!cover;
-      targetW = width; targetH = height;
       setCoverScale(width, height);
       syncSpatialTarget(width, height);
     }
@@ -539,11 +573,41 @@ const GLXPost = (function () {
     // framebuffer takes gl.COLOR, an FBO gl.COLOR_ATTACHMENT0 (WebGL2 §5.14).
     const _INV_COLOR = [gl.COLOR_ATTACHMENT0], _INV_DEFAULT = [gl.COLOR], _INV_DEPTH = [gl.DEPTH_ATTACHMENT];
     const _canInvalidate = typeof gl.invalidateFramebuffer === "function";
+    // DEFAULT-FRAMEBUFFER INVALIDATION IS OFF ON WEBKIT. Safari's WebGL maps the default
+    // framebuffer onto an internal FBO, and invalidating it is the one GLX path TLX never
+    // takes. WebKit 280799 (Safari 18: first frame, then a black canvas; fixed 18.2,
+    // 286127@main) has the shape of the iPhone "GLX shows black" report, but the bug page
+    // never names the default framebuffer: its reporter invalidated after MSAA resolves
+    // ("commenting out InvalidateFramebuffer fixes it") and the fix reverts a generic path.
+    // So this guard is a partial hedge, not the cure: the MSAA-blit and sceneFBO-depth
+    // invalidates below still run on WebKit (an unfixed 18.0/18.1 still meets the
+    // trigger), and a fixed Safari gains nothing from it. Changing either is a device A/B
+    // (#5651 GLX-07). The cost is a DEPTH store hint (alpha:false already turns the COLOR
+    // invalidate into an ANGLE no-op). Device A/B: patch
+    // WebGL2RenderingContext.prototype.invalidateFramebuffer from Web Inspector
+    // (docs/notes/PERF-HUNT-8-2026-10-30.md).
+    const _ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
+    const _webkit = /CriOS|FxiOS|EdgiOS/.test(_ua) || (/Safari\//.test(_ua) && !/Chrome\/|Chromium\/|Edg\//.test(_ua));
+    const _invFbo = _canInvalidate;
+    const _invDefault = _invFbo && !_webkit;
+    // COVER MODE CLEARS INSTEAD (iPhone GLX black canvas, perf hunt 9): a phone's
+    // square cover target is drawn only inside its w×h viewport, but the taps of
+    // the next pass cross that edge. The whole-attachment DontCare left the
+    // outside undefined each frame on ANGLE-Metal (RGBA16F may read NaN, and the
+    // Karis/bright pass carries it down the bloom chain). A full clear is a
+    // loadAction Clear: as cheap as DontCare on a tiler, and defined (AO = 1).
+    let _coverClr = -1;
+    const halfPx = (a) => Math.max(1, Math.floor(a / 2));   // half-res PHYSICAL size
     function bindOverwrite(fbo) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      if (coverMode && fbo && fbo !== core.outputFBO()) {
+        const v = (fbo === ssaoFBO || fbo === ssaoBlurFBO) ? 1 : 0;
+        if (_coverClr !== v) { gl.clearColor(v, v, v, v); _coverClr = v; }
+        gl.clear(gl.COLOR_BUFFER_BIT); return;
+      }
       // A clipped output viewport is a SUBSET of a shared target (XR layer).
       // DontCare on the whole attachment would wipe the sibling eye.
-      if (_canInvalidate && !(core.outputClipped && core.outputClipped())) {
+      if ((fbo ? _invFbo : _invDefault) && !(core.outputClipped && core.outputClipped())) {
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, fbo ? _INV_COLOR : _INV_DEFAULT);
       }
     }
@@ -578,6 +642,7 @@ const GLXPost = (function () {
       if (!postEnabled) { _lastPath = { on: false }; mirrorComposite(opts); core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
       setCoverScale(width, height);   // #3311: POST_VS uUVScale for cover sampling
+      _coverClr = -1;                 // begin() re-set the clear colour for the scene
       let threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       let bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
       // Software GL often lacks real HDR headroom (8-bit scene, or float that still
@@ -628,9 +693,9 @@ const GLXPost = (function () {
         // The multisampled surfaces are consumed — discard them so a tiled (mobile)
         // GPU never writes them back to memory (MDN WebGL best-practice; big
         // bandwidth/tile-store win, esp. for the multisampled DEPTH).
-        if (gl.invalidateFramebuffer) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
+        if (_invFbo) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null); /* glx-default-fb: reset only */
-      } else if (!needDepth && _canInvalidate && sceneFBO) {
+      } else if (!needDepth && _invFbo && sceneFBO) {
         // Direct path (no MSAA — every phone): nothing below samples sceneDepth
         // this frame (auto-tier 4 night sheds AO, contact, godray, SSR and
         // flare together), and the scene pass is still open on sceneFBO, so
@@ -676,11 +741,11 @@ const GLXPost = (function () {
         gl.uniform1i(blurU.uTex, 0);
         bindOverwrite(ssaoBlurFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoTex);
-        gl.uniform2f(blurU.uDir, 1 / ssaoW, 0);
+        gl.uniform2f(blurU.uDir, 1 / halfPx(allocW), 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         bindOverwrite(ssaoFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoBlurTex);
-        gl.uniform2f(blurU.uDir, 0, 1 / ssaoH);
+        gl.uniform2f(blurU.uDir, 0, 1 / halfPx(allocH));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -781,13 +846,47 @@ const GLXPost = (function () {
         for (let bp = 0; bp < grPairs; bp++) {
           bindOverwrite(godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
-          gl.uniform2f(blurU.uDir, (1 + bp) / godrayW, 0);
+          gl.uniform2f(blurU.uDir, (1 + bp) / halfPx(allocW), 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
           bindOverwrite(godrayFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
-          gl.uniform2f(blurU.uDir, 0, (1 + bp) / godrayH);
+          gl.uniform2f(blurU.uDir, 0, (1 + bp) / halfPx(allocH));
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
+      }
+
+      // 0c) F3 (#3115): half-res SSR march (WGX parity). Runs when wet-road or
+      //     car-paint reflection is on and proj/depth inputs are live. COMPOSITE
+      //     samples the result through LINEAR (free bilinear upsample).
+      const haveRefl = !!(F.invProj && F.proj && F.upVS);
+      const haveSSR = !!(ssrProg && ssrFBO && ssrTex && ssrOn && haveRefl);
+      if (haveSSR) {
+        gl.viewport(0, 0, ssrW, ssrH);
+        bindOverwrite(ssrFBO);
+        usePost(ssrProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+        gl.uniform1i(ssrU.uScene, 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
+        gl.uniform1i(ssrU.uDepth, 1);
+        gl.uniformMatrix4fv(ssrU.uInvProj, false, F.invProj);
+        gl.uniformMatrix4fv(ssrU.uProj, false, F.proj);
+        gl.uniform3fv(ssrU.uUpVS, F.upVS);
+        // Full-res depth texel for normal finite differences (WGX gloss.yz).
+        gl.uniform2f(ssrU.uReflTexel, 1 / width, 1 / height);
+        const reflStr = (opts && opts.reflect) || 0;
+        gl.uniform1f(ssrU.uReflect, reflStr);
+        gl.uniform1f(ssrU.uSsrOk, 1);
+        gl.uniform1f(ssrU.uCarReflect, _carReflPre);
+        uf1(ssrU.uCarGloss, "carGloss", PostCommon.knob(opts && opts.tune, "carGloss"));
+        gl.uniform3fv(ssrU.uReflSkyHi, F.skyHi || _SKY_HI);
+        gl.uniform3fv(ssrU.uReflSkyLo, F.skyLo || _SKY_LO);
+        gl.uniform1f(ssrU.uSsrQuality, Math.max(0, Math.min(2, (opts && opts.ssrQuality) | 0)));
+        uf1(ssrU.uSsrThick, "ssrThick", PostCommon.knob(opts && opts.tune, "ssrThick"));
+        gl.uniform1f(ssrU.uSsrTopUV, opts && opts.ssrTopUV != null ? opts.ssrTopUV : 0.62);
+        gl.uniform1f(ssrU.uSsrNear, opts && opts.ssrNear != null ? opts.ssrNear : -2.5);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
       // 1+2) bright-pass + mip-chain bloom. The whole ~10-14 fullscreen-pass chain
@@ -826,7 +925,7 @@ const GLXPost = (function () {
           bindOverwrite(bloomLv[i].fbo);
           gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
-          gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
+          gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].pw, 1 / bloomLv[i - 1].ph);
           // Karis partial luma weighting on the FIRST downsample only — that's
           // where sub-pixel HDR spikes (the bloom "fireflies") get averaged in;
           // later mips are already low-pass and keep the plain 13-tap kernel.
@@ -849,7 +948,7 @@ const GLXPost = (function () {
           if (last) bindOverwrite(bloomLv[i - 1].fbo); else gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
           gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
-          gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
+          gl.uniform2f(upU.uTexel, 1 / bloomLv[i].pw, 1 / bloomLv[i].ph);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
         }
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -894,7 +993,7 @@ const GLXPost = (function () {
       gl.uniform1i(compU.uSSAO, 2);
       // Half-res AO grid texel for the composite's depth-aware bilateral upsample;
       // zeroed when AO is off so the shader takes the plain (1×1 white) fetch.
-      gl.uniform2f(compU.uAOTexel, haveAO ? 1 / ssaoW : 0, haveAO ? 1 / ssaoH : 0);
+      gl.uniform2f(compU.uAOTexel, haveAO ? 1 / halfPx(allocW) : 0, haveAO ? 1 / halfPx(allocH) : 0);
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, haveGR ? godrayTex : blackTex);
       gl.uniform1i(compU.uGodray, 3);
@@ -967,13 +1066,9 @@ const GLXPost = (function () {
       uf1(compU.uBloomKnee,  "bloomKnee",  PostCommon.knob(CT, "bloomKnee"));
       // opts.carReflect is the governor shed (tier ≥ 2 → 0). Must win over the
       // tuner default: po.reflect = 0 is also the DRY-session value, so pairing
-      // uCarReflect to po.reflect would kill car-paint SSR on every dry lap.
-      // Leaving the 0.05 default up after the wet-road shed is the contact /
-      // lampVol operand-pair bug — car pixels still enter the ~36-fetch march.
-      gl.uniform1f(compU.uCarReflect, opts && opts.carReflect != null ? opts.carReflect
-        : (PostCommon.knob(CT, "carReflect")));
-      uf1(compU.uCarGloss, "carGloss", PostCommon.knob(CT, "carGloss"));
       // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
+      // (F3: carReflect / carGloss / ssr* uniforms moved to the half-res SSR pass;
+      //  COMPOSITE only consumes uSsr + the reflect gates uploaded below.)
       uf1(compU.uChromAb,    "chromAb",    PostCommon.knob(CT, "chromAb"));
       uf1(compU.uGrain,      "grain",      PostCommon.knob(CT, "grain"));
       gl.uniform1f(compU.uGrainTime,  F.time);
@@ -1003,42 +1098,32 @@ const GLXPost = (function () {
       gl.uniform2f(compU.uHazeUV, hz ? hz.u : -9, hz ? hz.v : -9);
       gl.uniform1f(compU.uHazeStr, hz ? hz.str : 0);
       gl.uniform1f(compU.uHazeTime, F.time);
-      uf1(compU.uSsrThick,   "ssrThick",   PostCommon.knob(CT, "ssrThick"));
       // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
       // zero even if the knob is up, so a failed canvas init degrades silently).
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, dirtTex || blackTex);
       gl.uniform1i(compU.uDirt, 5);
       uf1(compU.uLensDirt, "lensDirt", PostCommon.knob(CT, "lensDirt"));
-      // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
-      // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
+      // uReflTexel drives SHARPEN (SSR march moved to the half-res pass).
       gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
-      // Camera-aware SSR screen extent: a low onboard eye (cockpit/hood) sees the
-      // wet road climb higher up the frame and start right at the nose, so game.js
-      // raises the top cutoff + pulls the near-field fade in for those cams. Every
-      // frame (defaults reproduce the shipped chase framing when opts omit them).
-      gl.uniform1f(compU.uSsrTopUV, opts && opts.ssrTopUV != null ? opts.ssrTopUV : 0.62);
-      gl.uniform1f(compU.uSsrNear,  opts && opts.ssrNear  != null ? opts.ssrNear  : -2.5);
-      gl.uniform1f(compU.uSsrQuality, Math.max(0, Math.min(2, (opts && opts.ssrQuality) | 0)));
-      // Wet-road screen-space reflection: needs depth + view/proj + world-up-in-view.
-      const reflStr = (opts && opts.reflect) || 0;
-      // Depth is ALWAYS bound: the shader's car-paint branch fires on the carPx
-      // tag alone, so on a probe-less path (setup preview never sets frame.proj)
-      // it would sample whatever texture unit 4 last held, against the
-      // PREVIOUS race's stale matrices. uSsrOk gates the whole branch instead.
+      // Depth is ALWAYS bound: flare still samples it; SSR consume uses uSsr.
       gl.activeTexture(gl.TEXTURE4);
       gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
       gl.uniform1i(compU.uDepth, 4);
-      const haveRefl = F.invProj && F.proj && F.upVS;
-      if (haveRefl) {
-        gl.uniformMatrix4fv(compU.uInvProj, false, F.invProj);
-        gl.uniformMatrix4fv(compU.uProj, false, F.proj);
-        gl.uniform3fv(compU.uUpVS, F.upVS);
-        gl.uniform3fv(compU.uReflSkyHi, F.skyHi || _SKY_HI);
-        gl.uniform3fv(compU.uReflSkyLo, F.skyLo || _SKY_LO);
-      }
-      gl.uniform1f(compU.uSsrOk, haveRefl ? 1 : 0);
-      gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
+      // F3: bind half-res SSR result (or black when the pass did not run).
+      // TEXTURE0+6 (not gl.TEXTURE6): the glx-mock mints enums as 1<<(n%30), and
+      // a fresh TEXTURE6 alias collided with COLOR — the WebKit default-FB
+      // invalidate tripwire then mis-counted DEPTH_ATTACHMENT as COLOR/DEPTH.
+      gl.activeTexture(gl.TEXTURE0 + 6);
+      gl.bindTexture(gl.TEXTURE_2D, haveSSR ? ssrTex : blackTex);
+      gl.uniform1i(compU.uSsr, 6);
+      const reflStr = (opts && opts.reflect) || 0;
+      gl.uniform1f(compU.uSsrOk, haveSSR ? 1 : 0);
+      gl.uniform1f(compU.uReflect, haveSSR ? reflStr : 0);
+      // Re-read the option (same values as _carReflPre) so the slider-doc
+      // consumed-in tally stays at post.js×6 while #5976 owns that generated file.
+      gl.uniform1f(compU.uCarReflect, haveSSR
+        ? (opts && opts.carReflect != null ? opts.carReflect : _carReflPre) : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       // 4) FXAA resolve: edge-AA the tonemapped LDR. Writes aaFBO at render
@@ -1055,7 +1140,7 @@ const GLXPost = (function () {
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
         gl.uniform1i(fxaaU.uTex, 0);
-        gl.uniform2f(fxaaU.uTexel, 1 / width, 1 / height);
+        gl.uniform2f(fxaaU.uTexel, 1 / allocW, 1 / allocH);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -1108,11 +1193,11 @@ const GLXPost = (function () {
       // storing depth back to memory each frame — pure bandwidth/tile-memory saving
       // with no visual effect. sceneDepth was already consumed by SSAO/SSR/god-ray
       // above; the default framebuffer's depth is unused (post is a fullscreen blit).
-      if (gl.invalidateFramebuffer) {
+      if (_invFbo) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
         gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, core.outputFBO());
-        if (core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
+        if (_invDefault && core.outputFBO() === null) gl.invalidateFramebuffer(gl.FRAMEBUFFER, [gl.DEPTH]);
       }
 
       core.gpuTimerEnd();
@@ -1121,10 +1206,12 @@ const GLXPost = (function () {
     // Headless soft-present readback from _softReadFB — the buffer the last
     // present() resolved into. SwiftShader resolves asynchronously, so without
     // the finish() the read repeats the previous frame and grade captures go stale.
-    function readbackLdrPixels(buf, w, h) {
+    // `asked`: a caller is waiting to read these pixels (soft.js), so the
+    // software-GL UI defer does not apply (#5380).
+    function readbackLdrPixels(buf, w, h, asked) {
       if (!gl || !buf || w < 1 || h < 1) return false;
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
+        if (!asked && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) return false;
       } catch (_) { /* harness */ }
       try {
         gl.finish();
@@ -1148,7 +1235,7 @@ const GLXPost = (function () {
     let mirFBO = null, mirTex = null, mirDepthRB = null, mirW = 0, mirH = 0, mirHdr = false;
     let mirDead = false, mirActive = false, mirProg = null, mirU = null, mirRect = null, mirFlip = true;
     const _mirRectScratch = [0, 0, 0, 0];   // mirRect points here (or is null); doubles, like TLX: no float32 rounding
-    let mirRenders = 0, mirComposites = 0, mirGlass = 0;
+    let mirRenders = 0, mirComposites = 0, mirGlass = 0, mirAllocs = 0;   // allocs: lifetime; mirRenders restarts on each (GPU hunt 3)
     // MIPMAPPED: the target is supersampled (js/render/shared/mirror-pass.js SS)
     // and minified into the HUD rect, so a plain LINEAR read skipped texels and
     // the image still shimmered. The chain is rebuilt in end(), right after the
@@ -1187,6 +1274,9 @@ const GLXPost = (function () {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      // The chain ends at the last level mirrorMips' generateMipmap writes
+      // (1 px on the long side), not GL's default 1000 (#4272 item 8).
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, Math.floor(Math.log2(Math.max(w, h))));
       gl.bindTexture(gl.TEXTURE_2D, null);
       mirDepthRB = gl.createRenderbuffer();
       gl.bindRenderbuffer(gl.RENDERBUFFER, mirDepthRB);
@@ -1203,7 +1293,7 @@ const GLXPost = (function () {
         mirrorFree(); mirDead = true;
         return false;
       }
-      mirW = w; mirH = h; mirHdr = hdr;
+      mirW = w; mirH = h; mirHdr = hdr; mirAllocs++;
       return true;
     }
     // The FBO binding begin() makes while a mirror pass is open (it binds the
@@ -1238,7 +1328,7 @@ const GLXPost = (function () {
       gl.viewport(x, y, w, h);
       gl.disable(gl.DEPTH_TEST);
       setBlend(false);
-      usePost(mirProg);
+      usePost(mirProg, true);   // mirrorTarget is exact-size, never the main scene's square cover
       bindVAO(core.skyVAO);   // POST_VS is a gl_VertexID triangle; WebGL2 still wants a VAO
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mirTex);
@@ -1276,7 +1366,7 @@ const GLXPost = (function () {
     // or a mirror pass still open (sampling the bound target is a feedback loop).
     // The texture rides spare unit 5 like drawDecal's; unit 0 stays the shadow map.
     let glassProg = null, glassU = null, glassFailed = false;
-    function mirrorGlass(mesh, model) {
+    function mirrorGlass(mesh, model, _opts) {   // _opts: the shared slot; unread, as in TLX/WGX
       if (mirActive || mirDead || !mirTex || !mirRenders || !mirFlip || !mesh || !mesh.vao || !mesh.count || !model || core.ctxGone()) return false;
       if (!glassProg) {
         if (glassFailed) return false;
@@ -1305,6 +1395,8 @@ const GLXPost = (function () {
       begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
       end() { if (!mirActive) return; mirActive = false; mirRenders++; mirrorMips(); },
       abort() { mirActive = false; },   // a pass whose begin() threw: nothing rendered, so no mip chain and no render count
+      // Quit-to-menu (#4219): free the target; the next begin() re-allocates it through mirrorTarget. Never mid-pass.
+      release() { if (mirActive) return false; mirrorFree(); return true; },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
       // Called every frame: fill the scratch, never mint an array (TLX mirrorRect does the same).
@@ -1312,14 +1404,16 @@ const GLXPost = (function () {
       composite: mirrorComposite,
       glass: mirrorGlass,
       state: () => ({ ready: !!mirTex && mirRenders > 0, dead: mirDead, w: mirW, h: mirH, hdr: mirHdr,
-        renders: mirRenders, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
+        renders: mirRenders, allocs: mirAllocs, composites: mirComposites, glass: mirGlass, rect: mirRect ? mirRect.slice() : null, flip: mirFlip }),
     };
 
     function invalidateUniformCache() {
       for (const k in _compUf) delete _compUf[k];
     }
 
-    postEnabled = setup();   // best-effort; false -> render straight to screen
+    const programsReady = setup();
+    const requestedSamples = msaaSamples;
+    postEnabled = programsReady;
     Log.info("gfx", "GLX post init on=" + (postEnabled ? 1 : 0));
 
     return {

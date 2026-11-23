@@ -19,6 +19,7 @@ const WallEndFace = (function () {
   const FACE_DROP = 1.5;      // m: a limit that tightens by more than this in one step is a face
   const FACE_KEEP = 0.2;      // fraction of speed kept per FIXED_DT tick at the face (scaled by dt, so a 1/30 step keeps 0.04)
   const FIXED_DT = 1 / 60;    // PhysicsConsts.FIXED_DT
+  const NOSE_GRAZE = 0.5;     // m: a glancing pit entry can slide onto the lane
   const _prev = { r: 0, l: 0, laneMin: 0, side: 0 };
   const _post = { r: 1e9, l: 1e9, minOut: 0, side: 0 };
 
@@ -29,13 +30,22 @@ const WallEndFace = (function () {
     let ds = c.s - c._prevS;
     const L = track.total;
     if (ds > L / 2) ds -= L; else if (ds < -L / 2) ds += L;
-    if (!(ds > 1e-6) || ds > 20) return false;           // only forward travel, never a teleport
+    if (!(Math.abs(ds) > 1e-6) || Math.abs(ds) > 20) return false;   // forward or reverse travel, never a teleport
     ContactGeometry.wallLimits(track, c._prevS, c.x, _prev, _post);
     const right = c.x > lim.r;
-    if (!right && !(c.x < -lim.l)) return false;
-    const oldLim = right ? _prev.r : _prev.l, newLim = right ? lim.r : lim.l;
-    if (!(oldLim - newLim > FACE_DROP)) return false;
-    if (Math.abs(c.x) > oldLim) return false;            // already outside the old wall: an ordinary pin
+    if (right || c.x < -lim.l) {
+      const oldLim = right ? _prev.r : _prev.l, newLim = right ? lim.r : lim.l;
+      if (!(oldLim - newLim > FACE_DROP)) return false;
+      // A scrape can put the centre past the old barrier during this step.
+      if (Math.abs(c.x) > oldLim) { c.x = right ? oldLim : -oldLim; c.vLat = 0; }
+    } else {
+      // Hold a forward strike on the lane side of the pit-wall nose. Farther
+      // along the wall, at a post, or on a shallow graze the lane pin applies.
+      if (ds <= 0 || !(lim.laneMin - c.x * lim.side > NOSE_GRAZE)
+          || !(lim.laneMin - _prev.laneMin > FACE_DROP)
+          || c.x > _prev.r || c.x < -_prev.l
+          || !ContactGeometry.pitWallX(track, c.s)) return false;
+    }
     c.s = c._prevS;                                       // the face stops the car where it was
     c.speed *= Number.isFinite(dt) && dt > 0 ? Math.pow(FACE_KEEP, dt / FIXED_DT) : FACE_KEEP;   // pow(x, 1) === x: 60 Hz bit-identical
     c.wallT = 0.35;
@@ -43,6 +53,7 @@ const WallEndFace = (function () {
     return true;
   }
 
-  return { apply, FACE_DROP };
+  // FACE_DROP is the apply() threshold only — no external reader.
+  return { apply };
 })();
 Object.freeze(WallEndFace);

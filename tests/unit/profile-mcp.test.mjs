@@ -1,5 +1,6 @@
 /* profile-mcp.test.mjs — the profiler's MCP surface pins its argv (dryRun, no browser): the run is
- * apex_job_start kind "profile" (the guarded door); apex_profile_query reads saved artifacts only.
+ * apex_job_start kind "profile" (the guarded door) or apex_profile; saved artifacts are read by the
+ * plain CLI `node tools/perf/query.mjs` (the apex_profile_query wrap left 2026-11-03).
  * Run: node --test tests/unit/profile-mcp.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -22,9 +23,10 @@ const refused = (r, error, message) => {
   assert.match(j.message, message, r.out);
 };
 
-test("apex_profile is a direct browser tool next to apex_profile_query; the job kind is still listed", () => {
+test("apex_profile is a direct browser tool; apex_profile_query left; the job kind is still listed", () => {
   const names = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).map((t) => t.name);
-  assert.ok(names.includes("apex_profile")); assert.ok(names.includes("apex_profile_query"));
+  assert.ok(names.includes("apex_profile")); assert.ok(!names.includes("apex_profile_query"));
+  assert.equal(JSON.parse(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/x.json" }).out).error, "unknown_tool");
   const js = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).find((t) => t.name === "apex_job_start");
   assert.ok(js.inputSchema.properties.kind.enum.includes("profile"));
 });
@@ -40,12 +42,6 @@ test("profile job refuses a base that looks like a flag and an unknown mode", ()
   refused(call("apex_job_start", { kind: "profile", dryRun: true, mode: "bogus" }), "bad_args", /mode must be one of/);
 });
 
-test("apex_profile_query dryRun: query.mjs, artifacts-only path", () => {
-  const argv = argvOf(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/vegas-spans.json", top: 5 }));
-  assert.ok(argv.some((a) => a.endsWith("perf/query.mjs"))); assert.ok(argv.includes("--top"));
-  refused(call("apex_profile_query", { dryRun: true, file: "package.json" }), "path_escaped", /artifacts\/ or scratch\//);
-});
-
 test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base and mode refused", () => {
   const args = { dryRun: true, track: "monza", repeat: 3, frames: 90, base: "origin/main" };
   const direct = argvOf(call("apex_profile", args));
@@ -54,4 +50,37 @@ test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base a
   refused(call("apex_profile", { dryRun: true, base: "--upload-pack=x" }), "bad_args", /base may not start/);
   refused(call("apex_profile", { dryRun: true, mode: "bogus" }), "bad_args", /mode must be one of/);
   refused(call("apex_profile", { dryRun: true, kind: "ui_matrix" }), "bad_args", /unknown argument kind/); // the kind is not caller-chosen
+});
+
+test("profile typed plans reject unsupported explicit controls before either entrypoint starts a job", () => {
+  const unsupported = { cpu: { frames: 40, repeat: 1, base: "HEAD" }, hitch: { repeat: 1, base: "HEAD" }, trace: { repeat: 1, base: "HEAD" } };
+  for (const tool of ["apex_profile", "apex_job_start"]) for (const [mode, controls] of Object.entries(unsupported)) {
+    for (const [field, value] of Object.entries(controls)) {
+      const r = call(tool, { dryRun: true, mode, [field]: value, ...(tool === "apex_job_start" ? { kind: "profile" } : {}) });
+      const j = JSON.parse(r.out);
+      assert.equal(r.status, 1, "the existing CLI represents a structured tool refusal with exit 1");
+      assert.deepEqual({ ok: j.ok, error: j.error, message: j.message, jobId: j.jobId, argv: j.argv },
+        { ok: false, error: "bad_args", message: `--mode ${mode} does not support --${field}`, jobId: undefined, argv: undefined });
+    }
+  }
+});
+
+test("profile typed plans preserve omitted defaults and supported fields through both entrypoints", () => {
+  for (const tool of ["apex_profile", "apex_job_start"]) {
+    const invoke = args => {
+      const r = call(tool, { dryRun: true, ...args, ...(tool === "apex_job_start" ? { kind: "profile" } : {}) });
+      assert.equal(r.status, 0, r.err); return JSON.parse(r.out);
+    };
+    for (const mode of ["spans", "cpu", "hitch", "trace"]) {
+      const j = invoke({ mode });
+      assert.deepEqual({ ok: j.ok, dryRun: j.dryRun, jobId: j.jobId, argv: j.argv },
+        { ok: true, dryRun: true, jobId: undefined, argv: [process.execPath, path.join(ROOT, "tools/perf/profile.mjs"), "vegas", "--mode", mode] });
+    }
+    for (const mode of ["hitch", "trace"]) {
+      const j = invoke({ mode, track: "monza", frames: 90 });
+      assert.deepEqual(j.argv, [process.execPath, path.join(ROOT, "tools/perf/profile.mjs"), "monza", "--mode", mode, "--frames", "90"]);
+    }
+    const spans = invoke({ mode: "spans", track: "monza", frames: 90, repeat: 3, base: "HEAD" });
+    assert.deepEqual(spans.argv, [process.execPath, path.join(ROOT, "tools/perf/profile.mjs"), "monza", "--mode", "spans", "--frames", "90", "--repeat", "3", "--base", "HEAD"]);
+  }
 });

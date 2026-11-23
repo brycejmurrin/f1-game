@@ -18,9 +18,10 @@ returns four stat multipliers; `getVisualTiers()` feeds `Car3D.build`.
 ## Catalog, presets and finish
 
 **SIGNATURE** (`tag: "SIGNATURE"`, `teams: [id]`) is a cost/physics-identical
-clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** drives **AI meshes
-only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
-car with no parts (every AI) sits at the midpoint. Livery finish is
+clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** is the AI build: its
+mesh AND its `aeroLoad` / ERS deploy-regen (`factory-ai-setup.test.mjs`); only
+the stat `mods` are human-only. ERS/aero axes derive from the catalog
+(`ersProfile` / `aeroLoad`). Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
 `fin` (plate; authored as-is; unset = `c2` or contrast-derived under
 `finHandoff: "contrast"`) and `finArt` (authored as-is; unset clears the plate).
@@ -37,14 +38,14 @@ drives the fin panel ONLY — the crown's gradient wash was removed, so every
 SPINE TOP now stands on bare paint with hard edges; `drawTailGraphic` is called
 on `REGIONS.fin` alone, which is why the garage greys TAIL STYLE under FIN
 SHAPE `none`), `finBadge` (`logo|number|code|none`) and
-`spineLogo` (SPINE TOP, the 19 ids in `SPINE_LOGO_IDS`: `logo|none|wrap|bigmark|saddle|panel|stripe|streaks|twin|chevron|wedge|rungs|tricolour|wordmark|carbon|number|cap|ridge|fade` —
-`wedge` tapers airbox→tail and `rungs` runs bars ACROSS the crown, the one direction nothing else does;
+`spineLogo` (SPINE TOP, the ids in `LiveryTex.SPINE_LOGO_IDS`, which also appends
+`LiveryDesign.PATTERNS` — `wedge` tapers airbox→tail and `rungs` runs bars ACROSS the crown, the one direction nothing else does;
 `wrap` paints one car-space shape into `REGIONS.crest` AND `REGIONS.spineSide` via
 `drawSunWrap`, so a graphic crosses the shoulder — the region↔car maps are documented there;
 painted by `drawSpineTop` into `REGIONS.crest` on BARE paint — the crown carries no
 tail wash; the fin motif stops at the fin — and continued down `REGIONS.tail` by
 `drawTailTop`; the crest and number read top-down, nose up). SPINE SIDE is
-`LiveryTex.SPINE_SIDE_IDS`: `none|number|logo|code|plate|wordmark|duo|ribbon|lockup|title|emblem|band|sash|slash|rake|shoulder|starfield`
+`LiveryTex.SPINE_SIDE_IDS`
 (`wrap` + `duo` is the RB22; `ribbon` is a crease band with the number in it;
 `lockup` the number + mark on the upper third; `band`/`sash`/`rake`/`shoulder` are
 colour fills under the wrap bull, `slash`/`starfield` strokes on the bare flank —

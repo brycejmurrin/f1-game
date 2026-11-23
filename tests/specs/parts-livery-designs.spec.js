@@ -156,9 +156,12 @@ test("all catalog part styles and body shapes are reachable, previewed and saved
 test("an edited design survives one stray Escape or CANCEL: the editor arms, the GARAGE stays", async ({ page }) => {
   const key = await openCreator(page);
   const editor = page.locator(".cs-liv-editor"), cancel = page.locator(".cs-liv-ed-cancel");
+  const panelWidth = await page.locator("#cs-inner").evaluate(el => el.clientWidth);
+  expect(await editor.evaluate(el => el.offsetWidth)).toBeGreaterThan(panelWidth * 0.9);
   // Unedited, CANCEL is one press (nothing to lose).
   await cancel.tap();
   await expect(editor).toBeHidden();
+  await expect(page.locator("#cs-tabs")).toBeVisible();
   await page.locator(".cs-liv-create").evaluate(b => b.click());
   await expect(editor).toBeVisible();
   await page.locator(".cs-liv-ed-name").fill("Escape Test");

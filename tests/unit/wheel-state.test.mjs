@@ -126,7 +126,8 @@ test("combined slip: a cornering rear pays for the same drive with more κ and l
   const straight = run(0), cornering = run(0.11);
   assert.ok(cornering.k > straight.k + 0.01, `κR straight ${straight.k} cornering ${cornering.k}`);
   assert.ok(cornering.lat < straight.lat - 0.03, `latScaleR straight ${straight.lat} cornering ${cornering.lat}`);
-  assert.equal(cornering.short, 0, "still under the combined peak: the drive is delivered");
+  // Rounding only: the runaway settles where Fx = aReq, so 1 − ach/want is 0 to the last ulp.
+  assert.ok(cornering.short < 1e-12, `still under the combined peak: the drive is delivered (shortfall ${cornering.short})`);
 });
 
 test("a placement (speed step > RESYNC_A·dt) re-syncs the rims instead of reading slip", () => {
@@ -188,4 +189,84 @@ test("reverse travel: a rim slower than the body is LOCKED, faster is SPINNING (
   assert.ok(revLock.locked > 0 && revLock.spinning === 0, `reverse slow rim reads locked, got locked=${revLock.locked} spinning=${revLock.spinning}`);
   const revSpin = run(-80, -10);
   assert.ok(revSpin.spinning > 0 && revSpin.locked === 0, `reverse fast rim reads spinning, got locked=${revSpin.locked} spinning=${revSpin.spinning}`);
+});
+
+test("ABS level: default off; medium/full cap front lock vs off (#3983)", () => {
+  const run = (level) => {
+    const { WheelState } = load();
+    WheelState.setEnabled(true, false);
+    if (level) WheelState.setAssistLevel(level);
+    const c = { speed: 55, vwF: 55, vwR: 55, kappaF: 0, kappaR: 0 };
+    let minK = 0;
+    for (let i = 0; i < 120; i++) {
+      WheelState.stepPlayer(c, opts({ braking: true, aReqF: -40, aReqR: -10, muLongF: 20, muLongR: 20 }));
+      c.speed = Math.max(3.5, c.speed - 20 * DT);
+      minK = Math.min(minK, c.kappaF);
+    }
+    return { minK, level: WheelState.assistLevel() };
+  };
+  const off = run(null), med = run("medium"), full = run("full");
+  assert.equal(off.level, "off");
+  assert.ok(off.minK < -0.5, `off locks: ${off.minK}`);
+  assert.ok(med.minK > off.minK + 0.2, `medium sheds lock: ${med.minK} vs ${off.minK}`);
+  assert.ok(full.minK >= med.minK - 1e-9, `full no worse than medium: ${full.minK} vs ${med.minK}`);
+});
+
+test("setAssistLevel rejects junk to off", () => {
+  const { WheelState } = load();
+  assert.equal(WheelState.setAssistLevel("full"), "full");
+  assert.equal(WheelState.setAssistLevel("bogus"), "off");
+});
+
+test("settings row (#3983): mode off|on|medium|full round-trips and persists, default OFF", () => {
+  const mem = {};
+  const ctx = vm.createContext({
+    Math, JSON, Object, Array, Number, isNaN, isFinite, console,
+    localStorage: { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem() {} },
+  });
+  ctx.window = ctx; seedLog(ctx);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/physics/wheel-state.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+  }
+  const W = vm.runInContext("WheelState", ctx);
+  assert.equal(W.mode(), "off", "default OFF: classic feel");
+  for (const m of ["on", "medium", "full", "off"]) {
+    assert.equal(W.setMode(m), m);
+    assert.equal(W.enabled(), m !== "off");
+  }
+  W.setMode("full");
+  assert.deepEqual([mem["apex26.wheelState"], mem["apex26.wheelAssist"]], ["1", "full"]);
+  assert.equal(W.setMode("on"), "on");
+  assert.equal(mem["apex26.wheelAssist"], "off", "plain WHEELS clears the ABS/TC level");
+});
+
+// W26 6a: each axle reads its OWN lateralCurve, with ρ = 1 at that axle's
+// peak — the front's hold-less branch peaks at CURVE_PEAK_X_F, the rear (floor,
+// fall and hold passed, as PlayerForces' Fyr) at CURVE_PEAK_X and holds to
+// CURVE_HOLD_R. Before: both axles called the front-shaped curve at ρ·π/2, so
+// the front was already past its peak at ρ = 1 and the rear lost its hold.
+test("axleStep: Fx(ρ) is the axle's own curve, normalised to 1 at that axle's peak", () => {
+  const { WheelState, TyreModel: TM } = load();
+  // A runaway step keeps the Fx of the state it was handed: κ = kn·KAPPA_PEAK, α = 0.
+  const fxAt = (kn, rear) => {
+    const vx = 30;
+    const o = WheelState.axleStep({ vw: vx * (1 + kn * 0.10) }, { dt: DT, vx, aReq: 1000, muLong: 10, alphaN: 0, rear }, {});
+    return o.fx / 10;
+  };
+  assert.ok(Math.abs(fxAt(1, false) - 1) < 1e-9, `front at its peak: ${fxAt(1, false)}`);
+  assert.ok(Math.abs(fxAt(1, true) - 1) < 1e-9, `rear at its peak: ${fxAt(1, true)}`);
+  const rearCurve = Math.abs(TM.lateralCurve(1.4 * TM.CURVE_PEAK_X, TM.CURVE_FLOOR_R, TM.CURVE_FALL_W_R, TM.CURVE_HOLD_R));
+  const frontCurve = Math.abs(TM.lateralCurve(1.4 * TM.CURVE_PEAK_X_F));
+  assert.equal(rearCurve, 1, "1.4× the rear peak is still inside the rear hold");
+  assert.ok(Math.abs(fxAt(1.4, true) - rearCurve) < 1e-9, `rear past peak follows the rear curve: ${fxAt(1.4, true)}`);
+  assert.ok(Math.abs(fxAt(1.4, false) - frontCurve) < 1e-9, `front past peak follows the front curve: ${fxAt(1.4, false)}`);
+  assert.ok(frontCurve < 0.97, `the front has already started its fall: ${frontCurve}`);
+});
+
+test("stepPlayer passes the rear curve to the rear axle (fxR inside the hold = full μ)", () => {
+  const { WheelState } = load();
+  WheelState.setEnabled(true);
+  const c = { speed: 30, vwF: 30, vwR: 30 * 1.14, kappaF: 0, kappaR: 0.14 };
+  const r = WheelState.stepPlayer(c, opts({ thrOn: true, aReqR: 1000, muLongR: 10 }));
+  assert.ok(Math.abs(r.fxR - 10) < 1e-9, `rear spinning at 1.4× peak κ keeps μ in its hold: fxR ${r.fxR}`);
 });

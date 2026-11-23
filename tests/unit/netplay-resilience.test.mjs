@@ -10,36 +10,30 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { netStubG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
+globalThis.NetIce = eval(src("js/net/ice.js") + ";NetIce");
 globalThis.NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
 const spectatePath = path.join(ROOT, "js/net/spectate.js");
 globalThis.NetSpectate = fs.existsSync(spectatePath)
   ? eval(fs.readFileSync(spectatePath, "utf8") + ";NetSpectate")
   : undefined;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 globalThis.Tracks = { sample: (_track, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };
 
 function stubG(n = 4, local = 0) {
-  const cars = Array.from({ length: n }, (_, i) => ({
-    idx: i, local: i === local, human: i === local, isPlayer: i === local,
-    s: i * 10, x: 0, px: 0, pz: 0, speed: 0, head: 0, lap: 1,
-    name: "D" + i, code: "D" + i, driverId: "drv" + i,
-  }));
-  return {
-    cars, player: local >= 0 ? cars[local] : null,
-    track: { total: 5000, n: 500, def: { id: "monza" } },
-    lapsTarget: 3, raceT: 20, netNow: null, netStart: null, COUNTDOWN_S: 3,
-    wireId: (car) => car.idx,
-    setCarRole(car, human, isLocal) { car.human = human; car.local = isLocal; },
-    worldFromTrack: (s, x) => ({ x, z: s }),
-    announce() {},
-  };
+  const G = netStubG(n, local, { track: { total: 5000, n: 500, def: { id: "monza" } } });
+  for (const c of G.cars) c.lap = 1;
+  return G;
 }
 
 function fakeSession() {
@@ -140,4 +134,16 @@ test("a spectator consumes no grid seat, receives field state, and cannot publis
   assert.equal(watch.sendEvent("lap", { lap: 2 }), false, "a spectator cannot publish race inputs/events");
   assert.equal(watch.ownsRaceControl(), false);
   assert.equal(watch.ownsClassification(), false);
+});
+
+test("host teardown closes every driver and spectator transport", () => {
+  const net = NetPlay.create(stubG(4));
+  const peers = ["driver", "spectator", "driver"].map((kind, i) => {
+    const [wire] = NetTransport.loopback({ latencyMs: 0 });
+    return { id: "peer-" + i, kind, wire, session: NetSession.create({ transport: wire }) };
+  });
+  assert.equal(net.start({ role: "host", session: peers[0].session, sessions: peers, peers }).ok, true);
+  net.tick(1000);
+  assert.equal(net.stop("local"), true);
+  assert.deepEqual(peers.map(({ wire }) => wire.status), ["closed", "closed", "closed"]);
 });

@@ -1,29 +1,32 @@
 /* elevation-tracks-vm.test.mjs — tests/specs/elevation-tracks.spec.js replayed
  * in the Node VM (tools/lib/game-vm.cjs): banking geometry (Tracks.banking on a
- * bare centreline), the chase camera riding the bank, and — for every one of
- * the 40 circuits — slope gravity, the climb, road-following on the grade and
- * the two banked bowls, with the SAME assertions, launches and thresholds.
+ * bare centreline), the chase camera riding the bank, and — for EVERY circuit
+ * in Tracks.LIST (52, TK1-16) — slope gravity, the climb, road-following on the
+ * grade, plus the two banked bowls, with the SAME assertions, launches and
+ * thresholds the browser spec carried.
  *
- * Ported: all 47 tests. The four banking-geometry tests read the `Tracks`
- * engine global from the VM sandbox exactly as the browser reads the page
- * global; the camera test reads camState() (the camera rig runs in the VM —
- * measured roll -13.5 deg on Madrid's bowl). The pageerror guards read the
- * VM's console/rejection record.
- * Not portable: none. This is the heaviest twin because it BUILDS 40 circuits
- * plus ~2,200 physics steps per circuit — still an order of magnitude under
- * the browser group's 40 × 24 s.
+ * SUPERSET OF THE SPEC (TK1-16, #3039). The browser spec used to declare the
+ * same 47 tests; it now keeps only the chase-camera roll and the two banked
+ * bowls (the render()-only cases a VM cannot see), and this file is the sole
+ * carrier of the banking-geometry audits and the per-circuit grade sweep.
+ * tools/ci/twinned-specs.mjs TWIN_SUBSET checks every spec title is a title
+ * here. The four banking-geometry tests read the `Tracks` engine global from
+ * the VM sandbox exactly as the browser reads the page global; the camera test
+ * reads camState() (the camera rig runs in the VM — measured roll -13.5 deg on
+ * Madrid's bowl). The pageerror guards read the VM's console/rejection record.
+ * This is the heaviest twin because it BUILDS every circuit plus ~2,200
+ * physics steps per circuit.
  *
  * FOUR VMs, ONE FILE (2026-09-16). ~70 % of this file was physics stepping at
  * 3.13 ms a step on ONE core (docs/plans/research-2026-09-16/vm-harness.md), and
- * the 42 per-circuit tests are independent races. They now go through
+ * the per-circuit tests are independent races. They now go through
  * tools/lib/game-vm-pool.cjs: each worker boots its own game-vm and runs one
  * circuit's probe from tests/helpers/elevation-probes.cjs — the same recipe,
  * launches and thresholds, with the grade search confirming 12 profile
  * candidates instead of 300 jump+steps — and returns a plain object. EVERY
  * assertion stayed here, so a failure still names the circuit and the number,
- * and the twin is still ONE file with 47 declared tests (tools/ci/twinned-specs
- * .mjs counts them against the spec). Measured on this 4-core box:
- * 400 s serial -> 191-210 s pooled, 47/47 green every run. (The box was shared
+ * and the twin is still ONE file (60 declared tests since TK1-16). Measured on this 4-core box:
+ * 400 s serial -> 191-210 s pooled, 47/47 green every run (40 circuits then). (The box was shared
  * with other agents' suites throughout: the 210 s run averaged load 5.1 of four
  * cores, so the pool held about three of them.) The five geometry / camera
  * tests keep the parent's own boot, because they read `Tracks` and camState()
@@ -32,12 +35,14 @@
  * this file ran before (400 s); tests/unit/game-vm-pool.test.mjs asserts the
  * two paths return the same numbers for two circuits.
  *
- * The browser spec stays the truth until CI has run this twin.
  * Run: node --test tests/unit/elevation-tracks-vm.test.mjs   (~3.5 min, 4 VMs)
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -49,20 +54,19 @@ const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);
 const gte = (a, b, m) => assert.ok(a >= b, m || `${a} >= ${b}`);
 
-// Verbatim from the browser spec.
-const ELEVATION_TRACKS = [
-  "abudhabi", "albert_park", "bahrain", "baku", "cota", "hungaroring", "imola",
-  "interlagos", "jeddah", "madrid", "mexico", "miami", "monaco", "montreal",
-  "monza", "qatar", "redbull", "shanghai", "silverstone", "singapore", "spa",
-  "suzuka", "vegas", "zandvoort",
-  "hockenheim", "nurburgring", "catalunya", "sepang", "istanbul",
-  "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
-  "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
-  "jacarepagua",
-];
+// EVERY circuit (TK1-16, #3039). This was a hand-copied list of 40 ids, the
+// browser spec's, and the twelve circuits added since (fuji ... mosport) were
+// never swept. It is now one id per js/circuits/*.js def — read with a
+// readdirSync of that directory, the form select-budget.mjs resolves
+// statically (circuitDefCount), so the declared count stays exact — and the
+// first test below pins it to Tracks.LIST itself, so a def that is not in the
+// roster (or a roster entry with no def) reds here instead of going unswept.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ELEVATION_TRACKS = fs.readdirSync(path.join(ROOT, "js/circuits"))
+  .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3)).sort();
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 // APEX_CIRCUITS (comma list) narrows the per-circuit launches below — this file
-// is the node gate's slowest (~5.6 min, 40 circuit builds). Unset = every
+// is the node gate's slowest (one build per circuit). Unset = every
 // circuit. ci.yml's node-suites job sets it on a circuit-only pull request
 // (tools/ci/node-plan.mjs); set it locally to check one circuit.
 // APEX_CIRCUIT_SHARD=i/n (2026-09-30) takes every n-th circuit of the scoped
@@ -144,12 +148,19 @@ async function startRace(id) {
   assert.ok(ok, `${id}: elevation profile never showed relief`);
 }
 
+test("the swept roster is Tracks.LIST: every circuit, no stale id", () => {
+  // Array.from: a sandbox array has the VM realm's prototype, which a strict
+  // deepEqual would report as a mismatch even with identical ids.
+  const ids = Array.from(g.sandbox.Tracks.LIST, (entry) => entry.id).sort();
+  assert.deepEqual(ELEVATION_TRACKS, ids, "js/circuits/*.js and Tracks.LIST disagree — the sweep would miss a circuit");
+});
+
 test("banking pivots around the centreline with smooth edge transitions", () => {
   const Tracks = g.sandbox.Tracks;
   const audits = ["zandvoort", "madrid"].map((id) => {
     const def = Tracks.LIST.find((entry) => entry.id === id);
     const track = Tracks.buildCenterline(def);
-    const stepM = 1;
+    const stepM = 1, crossSection = { p: [], t: [], r: [] };
     let maxCentreLift = 0, maxPivotError = 0, maxEdgeGrade = 0;
     for (let s = 0; s < track.total; s += stepM) {
       const centre = Tracks.banking(track, s, 0);
@@ -157,14 +168,14 @@ test("banking pivots around the centreline with smooth edge transitions", () => 
       const leftEdge = Tracks.banking(track, s, -Infinity)?.dy || 0;
       const edge = Tracks.banking(track, s, Infinity)?.dy || 0;
       const nextEdge = Tracks.banking(track, s + stepM, Infinity)?.dy || 0;
-      maxPivotError = Math.max(maxPivotError, Math.abs(leftEdge + edge));
+      maxPivotError = Math.max(maxPivotError, Math.abs(edge - leftEdge - 2 * Tracks.sample(track, s, crossSection).hw * Math.tan(centre?.roll || 0)));
       maxEdgeGrade = Math.max(maxEdgeGrade, Math.abs(nextEdge - edge) / stepM);
     }
     return { id, maxCentreLift, maxPivotError, maxEdgeGrade };
   });
   for (const audit of audits) {
     lt(audit.maxCentreLift, 0.01, `${audit.id} centreline lift`);
-    lt(audit.maxPivotError, 0.01, `${audit.id} edge symmetry`);
+    lt(audit.maxPivotError, 0.01, `${audit.id} cross-section rise`);
     lt(audit.maxEdgeGrade, 0.08, `${audit.id} bank transition grade`);
   }
 });
@@ -173,34 +184,46 @@ test("Zandvoort banking peaks at Hugenholtz and Arie Luyendyk", () => {
   const Tracks = g.sandbox.Tracks;
   const def = Tracks.LIST.find((entry) => entry.id === "zandvoort");
   const track = Tracks.buildCenterline(def);
-  const rollDeg = (frac) => {
-    const bank = Tracks.banking(track, frac * track.total, 0);
+  const rollDeg = (frac, x = 0) => {
+    const bank = Tracks.banking(track, frac * track.total, x);
     return Math.abs((bank?.roll || 0) * 180 / Math.PI);
   };
-  const hugenholtz = rollDeg(def.turns[2]);    // T3, the banked LEFT hairpin
+  const k = Math.round(def.turns[2] * track.n);  // T3, banked left
+  const peak = k / track.n, edge = track.hw[k];
+  const inside = rollDeg(peak, -edge), outside = rollDeg(peak, edge);
   const luyendyk = rollDeg(def.turns[13]);     // T14, the banked final RIGHT
-  const others = def.turns.filter((_, i) => i !== 2 && i !== 13).map(rollDeg);
-  gt(hugenholtz, 15, "Hugenholtz banking");
+  const others = def.turns.filter((_, i) => i !== 2 && i !== 13).map(f => rollDeg(f));
+  closeTo(inside, 4.5, 1, "Hugenholtz inside banking");
+  closeTo(outside, 19, 1, "Hugenholtz outside banking");
   gt(luyendyk, 15, "Arie Luyendyk banking");
   lt(Math.max(...others), 6, "no other corner is banked like a bowl");
 });
 
+// La Monumental is madring.com Curve 12: the long right straight after the
+// Curve 10/11 chicane, built 2246-2666 m on this trace (#5316 CIRC2-02). Until
+// 2026-11-18 the 13.5 degree bank sat on the ordinary left at 0.75.
+const MONUMENTAL_FRAC = 0.456;
 test("Madrid converts La Monumental's 24 percent bank to degrees", () => {
   const Tracks = g.sandbox.Tracks;
   const def = Tracks.LIST.find((entry) => entry.id === "madrid");
   const track = Tracks.buildCenterline(def);
-  const bank = Tracks.banking(track, 0.75 * track.total, 0);
-  const rollDeg = Math.abs((bank?.roll || 0) * 180 / Math.PI);
-  gt(rollDeg, 13);
-  lt(rollDeg, 14);
+  const rollDeg = (frac) => Math.abs((Tracks.banking(track, frac * track.total, 0)?.roll || 0) * 180 / Math.PI);
+  gt(rollDeg(MONUMENTAL_FRAC), 13);
+  lt(rollDeg(MONUMENTAL_FRAC), 14);
+  // The zone is a cosine window (js/track/core/mesh.js paint), so the bank
+  // peaks mid-arc; the arc's quarter points (±83 m) still carry over 8 degrees,
+  // and the left at 0.75 that wore the bank until 2026-11-18 is flat.
+  gt(rollDeg(0.4405), 8, "Curve 12, first quarter");
+  gt(rollDeg(0.4755), 8, "Curve 12, last quarter");
+  lt(rollDeg(0.75), 1, "the left at 0.75");
 });
 
 test("bank roll matches the road surface slope", () => {
   const Tracks = g.sandbox.Tracks;
   const def = Tracks.LIST.find((entry) => entry.id === "madrid");
   const track = Tracks.buildCenterline(def);
-  const s = 0.75 * track.total;
-  const w = track.hw[Math.round(0.75 * track.n) % track.n];
+  const s = MONUMENTAL_FRAC * track.total;
+  const w = track.hw[Math.round(MONUMENTAL_FRAC * track.n) % track.n];
   const leftY = Tracks.banking(track, s, -w)?.dy || 0;
   const rightY = Tracks.banking(track, s, w)?.dy || 0;
   const roll = Tracks.banking(track, s, 0)?.roll || 0;
@@ -213,12 +236,17 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
   const A = g.apex;
   const def = Tracks.LIST.find((entry) => entry.id === "madrid");
   const track = Tracks.buildCenterline(def);
-  const trackRoll = Tracks.banking(track, 0.75 * track.total, 0)?.roll || 0;
-  A.jump(0.75, 30, 0);
+  const trackRoll = Tracks.banking(track, MONUMENTAL_FRAC * track.total, 0)?.roll || 0;
+  A.jump(MONUMENTAL_FRAC, 30, 0);
   A.camera("chase");
   A.snapCam();
   const bankedRoll = A.camState().roll;
-  A.orbit(0.75, 45, 18, 45);
+  for (const mode of ["rear", "reverse"]) {
+    A.camera(mode);
+    A.snapCam();
+    closeTo(A.camState().roll, trackRoll, 4, mode + " mirrors forward bank roll");
+  }
+  A.orbit(MONUMENTAL_FRAC, 45, 18, 45);
   const debugRoll = A.camState().roll;
   A.camera("chase");
   A.jump(0.60, 30, 0);
@@ -237,6 +265,16 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
 for (const id of GRADE_RUNS) {
   test(`${id}: slope gravity behaves + road-following holds on the grade`, async () => {
     const { result: r, errors } = await probed(`grad:${id}`, id, GRADIENT);
+    // A def that opts out of relief (`undulate: false`, today only korea: the
+    // SRTM survey predates construction on Yeongam's tidal flat) has no grade to
+    // sweep — measured 2026-11-11, the probe reads relief:false there. Assert
+    // that it IS flat, so the day it gains a profile this reds and the opt-out
+    // goes, rather than the circuit silently skipping the sweep.
+    if (g.sandbox.Tracks.LIST.find((entry) => entry.id === id)?.undulate === false) {
+      assert.equal(r.relief, false, `${id} declares undulate:false but its profile shows relief — drop the opt-out`);
+      assert.deepEqual(errors, []);
+      return;
+    }
     assert.ok(r.relief, `${id}: elevation profile never showed relief`);
     assert.deepEqual(errors, []);
     assert.equal(r.finite, true);
@@ -245,7 +283,8 @@ for (const id of GRADE_RUNS) {
     gt(r.flatSteps, 30,
       `reference run at frac ${r.flatAt} left the road immediately — no usable reference`);
     gte(r.flatMax, FLAT_LAUNCH, "flat-out reference run was blocked — it lost ground from the launch");
-    lt(r.maxV, r.flatMax * 1.35);                 // no descent runaway past flat top speed
+    gt(r.vTop, FLAT_LAUNCH);                      // the descent starts AT top speed (vmaxNow)
+    assert.ok(r.maxV <= r.vmaxPeak * 1.06 + 1e-3, `descent overspeed ${r.maxV} past vmax*1.06 (vmax ${r.vmaxPeak})`);
     gt(r.climbEnd, CLIMB_LAUNCH * 0.5, "gravity stopped the car dead on the climb");
     lt(r.widest, r.hw + 8);                       // road-following keeps it broadly on the road
   });

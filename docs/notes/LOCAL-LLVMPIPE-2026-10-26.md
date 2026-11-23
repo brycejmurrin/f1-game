@@ -1,5 +1,7 @@
 # Local Mesa llvmpipe in the cloud container — 2026-10-26
 
+Summary: llvmpipe binds in a cloud container with no /dev/dri once libEGL/libGLES are installed (probe table); setup-script and ci.yml recipe
+
 Lane R5 of the system-audit implementation (PR #3785). Question: can this container type (Ubuntu 24.04,
 no `/dev/dri`, Claude Code 2.1.310) run the browser suites on Mesa llvmpipe the way CI does, instead of
 SwiftShader? Measured WITHOUT a browser; the one Chromium probe is left to the coordinator (command below).

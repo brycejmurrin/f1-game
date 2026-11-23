@@ -130,3 +130,20 @@ test("complete carbon car build threads bare surface onto its appended flaps", (
   assert.ok(tail.length > 0 && tail.every((m) => m === M.Car3D.SURFACES.carbon));
   assert.equal(painted.flapInfo.surface, "paint");
 });
+
+// Perf hunt 7 (docs/notes/PERF-HUNT-7-LOAD-MEM-2026-10-30.md): the race-entry car warm solves one recipe per
+// rival, and the hinge search used to rebuild the neighbour element's 33-point line for every one of its
+// ~10^6 clearance samples — 157-1,215 ms a recipe in this VM, ~3 s of race-entry CPU on the macOS census.
+// Every factory recipe at full downforce, each a fresh object (no memo hit), must solve well inside that.
+test("flap hinge solve: every factory recipe solves in well under the pre-hunt cost", () => {
+  let worst = 0, worstId = "";
+  for (const t of M.Teams.LIST) {
+    const st = { ...M.Car3D.aeroStyleOf(t), frontSweep: M.Car3D.aeroStyleOf(t).frontSweep + 1e-9 };   // a new flapSig: no cache hit
+    const t0 = performance.now();
+    const els = M.Car3D.aeroFlaps(4, st);
+    const ms = performance.now() - t0;
+    assert.ok(els.some((e) => e.wing === "front"), `${t.id}: no front flaps solved`);
+    if (ms > worst) { worst = ms; worstId = t.id; }
+  }
+  assert.ok(worst < 400, `slowest recipe ${worstId} took ${worst.toFixed(0)} ms (pre-hunt worst 1,215 ms; after ~60 ms)`);
+});

@@ -18,6 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -37,6 +38,12 @@ async function medianRatio(track, pace) {
     assert.equal(G.PACE, pace, "the pace slider took");
     g.aiOnly();
     G.cars.forEach((c, i) => { if (!c.retired && !KEEP(i)) a.retire(i, "bench"); });
+    // A benched car must be OUT of the world. retireCar parks it against the barrier, and on a street
+    // circuit that is ON the road (#2162: a static body the AI steers round), so eight parked cars lined
+    // the left of Monaco's start straight. A sampled car that brushed one stopped dead for 7 s and the
+    // next two queued behind it (#5510: laps 6-9 s long from a 1 cm change of line): an obstacle course,
+    // not the pace this test compares. Lift every benched car off the circuit.
+    G.cars.forEach((c) => { if (c.retired) { c.x = (c.x >= 0 ? 1 : -1) * 500; c.xVis = c.x; c.parkedOnRoad = false; } });
     const cars = G.cars.filter((c) => !c.retired);
     assert.ok(cars.length >= 4, "a sampled field of " + cars.length);
     const quali = g.sandbox.Quali.create(G);
@@ -55,8 +62,64 @@ async function medianRatio(track, pace) {
   } finally { g.close(); }
 }
 
+// Mutation hunt 2026-11-20: QUALI_TRIM 0.92→0.80 survived the pace-parity suites.
+// AI pole = QUALI_TRIM × raw top lap; the player medal pole is calibrated (no trim).
+test("QUALI_TRIM pins AI pole scale vs player medal pole", { timeout: 120000 }, async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G, sb = g.sandbox;
+    await g.race("monza", "day", "dry", { laps: 3 });
+    g.apex.headless(true);
+    const quali = sb.Quali.create(G);
+    const grip = typeof sb.TyreModel !== "undefined"
+      ? sb.TyreModel.weatherGrip(sb.TyreModel.treadFor(G.raceWeather, G.trackWetness()), G.trackWetness())
+      : G.gripMult();
+    const top = { tierV: sb.Teams.TIER_V[0], skill: 1 };
+    const raw = quali.carLap(top, G.track, grip, true);
+    const ai = quali.referencePole();
+    const medal = quali.referencePole("medal");
+    assert.ok(raw > 0 && ai > 0 && medal > 0);
+    assert.ok(Math.abs(ai / raw - 0.92) < 1e-12, `AI pole ${ai} / raw ${raw} = ${ai / raw}, want QUALI_TRIM 0.92`);
+    // Medal pole stays on the calibrated flying lap (×0.9915), not QUALI_TRIM.
+    assert.ok(Math.abs(medal - 0.9915 * quali.carLap(top, G.track, grip, false)) < 1e-9);
+    assert.ok(Math.abs(ai / medal - (0.92 * raw) / medal) < 1e-12, "AI:medal ratio carries the 0.92 trim only on the AI side");
+  } finally { g.close(); }
+});
+
+// A MODEL CHANGE MOVES THE TARGETS, NEVER A MEDAL ALREADY WON. The medal is decided
+// once, at the line (SessionRecords.finish -> Quali.medalFor(lap, pole)), and stored
+// with the ghost lap beside the pole it was measured against; Ghost.medal() reads that
+// stored string. A refit of referencePole (#5783 Q1) must not take a gold away or
+// hand one out: reload the class against a model whose pole is 10 % quicker and the
+// held medal and its pole are the stored ones.
+test("a stored time-trial medal is not recomputed when the pole model changes", { timeout: 120000 }, async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const G = g.G;
+    G.daily.stop(); G.timeTrial = true; G.raceWeather = "dry";
+    await G.startRace(); g.apex.go(); g.apex.headless(true);
+    const R = G.records, Ghost = vm.runInContext("Ghost", g.ctx);
+    const pole = G.referencePole("medal");
+    assert.ok(pole > 0, "a medal pole");
+    const lap = (t) => { Ghost.startLap(); for (let i = 0; i < 12; i++) Ghost.record(i * t / 12, i * 100, 0); };
+    lap(pole * 0.999);
+    assert.equal(R.finish(pole * 0.999, [], pole), true);
+    assert.equal(Ghost.medal(), "gold", "a lap inside today's pole is gold");
+    // The model changes: the same circuit now models a pole 10 % quicker. A slower
+    // lap against it earns nothing and the gold lap stays the class best.
+    const newPole = pole * 0.9;
+    assert.equal(g.sandbox.Quali.medalFor(pole * 0.999, newPole), null, "against the new pole that lap would hold no medal");
+    lap(pole * 1.01);
+    R.finish(pole * 1.01, [], newPole);
+    assert.equal(Ghost.medal(), "gold", "a later, slower lap does not re-grade the held medal");
+    R.begin();   // a new session on the same class reloads the stored ghost
+    assert.equal(Ghost.medal(), "gold", "the stored medal survives the reload");
+    assert.equal(Ghost.meta().pole, +pole.toFixed(3), "and still names the pole it was won against");
+  } finally { g.close(); }
+});
+
 for (const track of ["monza", "monaco"]) {
-  test(track + ": the modelled field's lap tracks the driven lap at every PACE", { timeout: 240000 }, async (t) => {
+  test(`${track}: the modelled field's lap tracks the driven lap at every PACE`, { timeout: 240000 }, async (t) => {
     const at = {};
     for (const pace of PACES) at[pace] = await medianRatio(track, pace);
     const ref = at[1].ratio;

@@ -46,19 +46,21 @@ const CarFields = (function () {
     ["curvature, tyre-load telemetry, applied speed band, last along-track delta (_alPrevDp), overtake-armed edge (wasArmed), vmax",
       ["kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "wasArmed", "_vmaxNow"]],
     ["surface/pit flags and the driver's own turn-in/steer state (the steerSm seed MUST stay undefined)",
-      ["onKerb", "inPitLane", "kTurn", "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand"]],
+      ["onKerb", "inPitLane", "kTurn", "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand"]],
     ["brake heat, exhaust pop, throttle edge and the last push distance (audio/fx and Collide)",
       ["brakeHeat", "exhaustPop", "wasOnThrottle", "_pushD"]],
     ["sector timing and the pre-collision snapshot Collide restores from",
-      ["_secValid", "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd"]],
+      ["_secValid", "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "_puntGot"]],
+    ["the stopped-car hazard: seconds stationary, the hazard being passed and its committed side (clean-room 39/40)",
+      ["stillT", "_hzOf", "_hzSide"]],
     ["body attitude springs (js/physics/body-attitude.js seed())",
       ["_ba", "baPitch", "baRoll", "baHeave", "baScrape"]],
     ["render side: LOD tier, wheel spin, wheel visibility",
-      ["_lodTier", "wheelSpin", "wheelSpinF", "_whlVis"]],
+      ["_lodTier", "wheelSpin", "_whlVis"]],
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
       ["vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
         "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity",
-        "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
+        "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV"]],
     ["AI overtake planner (game.js ai-drive pass plan/side/best)",
       ["passPlan", "passSide", "passBest"]],
     ["player under-/over-slip dwell timer (player-forces.js)",
@@ -75,6 +77,15 @@ const CarFields = (function () {
       "(race-control.js). Added late, each turned a finished car into a DICTIONARY object for the rest of the race " +
       "(Node 22's V8 normalizes a named add once a map has > 128 mutable out-of-object fields; PERF-HUNT-4 B-F1b)",
       ["_coastHeld", "classified"]],
+    ["netplay wire id: game.js wireId() caches it on the first G.wireId call, which a host makes for every car on its " +
+      "first tick (perf hunt 9: a late add per car per online race)",
+      ["_wireId"]],
+    ["stationary-player retirement timer (game.js checkRetirements, AiDrive.stallStep; W26 row 5)",
+      ["stallT"]],
+    ["written only by __apex.reset() (incident-sim release → _incidentOwned, the slip read-out zero → slipDeg): " +
+      "a reset that ADDED them was a late add on every car, and once stallT took one more slot it dropped all 22 " +
+      "cars to dictionary mode (hunt-apex-aiplace-reset-vm)",
+      ["_incidentOwned", "slipDeg"]],
   ];
 
   const KEYS = [];
@@ -97,16 +108,16 @@ const CarFields = (function () {
       "steerVis", "collideT", "xVis", "rPrevX", "accSm", "corridorAccel", "hitSev", "rPrevYawVis", "aiHead", "aiFam",
       "contactT", "kerbGripSm", "kerbCueT", "towing", "wake", "passT", "passCool", "passFailT", "errT", "pressT",
       "queueT", "trailT", "_trYT", "calm", "sbsT", "runT", "tyreWearF", "tyreWearR", "tyreTs", "tyreTb", "otT", "otE", "rescueT",
-      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain"]],
+      "stuckT", "pitT", "pitOutT", "vLat", "yawRateCur", "hYieldT", "flatSpot", "axEstSm", "paceF", "tyreGrain", "laneClr", "stillT"]],
     ["pre-declared undefined (or makeCars null) and later a number: HeapObject -> Tagged",
       ["rank", "_snapProg", "_snapX", "_snapSpeed", "kCur", "_tyreLoad", "_bandNow", "_alPrevDp", "_vmaxNow", "kTurn",
-      "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
-      "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "skidIntensity", "passSide", "passBest",
+      "wheelLock", "steerSm", "aiHeadV", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
+      "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "_puntGot", "skidIntensity", "passSide", "passBest",
       "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
       "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
-      "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
+      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV", "stallT", "_hzSide"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -164,6 +175,7 @@ const CarFields = (function () {
     if (!("kTurn" in c)) c.kTurn = undefined;
     if (!("wheelLock" in c)) c.wheelLock = undefined;
     if (!("steerSm" in c)) c.steerSm = undefined;
+    if (!("aiHeadV" in c)) c.aiHeadV = undefined;
     if (!("brakeDemand" in c)) c.brakeDemand = undefined;
     if (!("throttleDemand" in c)) c.throttleDemand = undefined;
     if (!("steerCommand" in c)) c.steerCommand = undefined;
@@ -178,6 +190,10 @@ const CarFields = (function () {
     if (!("_preColS" in c)) c._preColS = undefined;
     if (!("_preColX" in c)) c._preColX = undefined;
     if (!("_preColSpd" in c)) c._preColSpd = undefined;
+    if (!("_puntGot" in c)) c._puntGot = undefined;
+    if (!("stillT" in c)) c.stillT = undefined;
+    if (!("_hzOf" in c)) c._hzOf = undefined;
+    if (!("_hzSide" in c)) c._hzSide = undefined;
     if (!("_ba" in c)) c._ba = undefined;
     if (!("baPitch" in c)) c.baPitch = undefined;
     if (!("baRoll" in c)) c.baRoll = undefined;
@@ -185,7 +201,6 @@ const CarFields = (function () {
     if (!("baScrape" in c)) c.baScrape = undefined;
     if (!("_lodTier" in c)) c._lodTier = undefined;
     if (!("wheelSpin" in c)) c.wheelSpin = undefined;
-    if (!("wheelSpinF" in c)) c.wheelSpinF = undefined;
     if (!("_whlVis" in c)) c._whlVis = undefined;
     if (!("vertLoad" in c)) c.vertLoad = undefined;
     if (!("axFrac" in c)) c.axFrac = undefined;
@@ -209,6 +224,11 @@ const CarFields = (function () {
     if (!("_cueConditionGrip" in c)) c._cueConditionGrip = undefined;
     if (!("_cueCornering" in c)) c._cueCornering = undefined;
     if (!("_cueBraking" in c)) c._cueBraking = undefined;
+    if (!("vwF" in c)) c.vwF = undefined;
+    if (!("vwR" in c)) c.vwR = undefined;
+    if (!("kappaF" in c)) c.kappaF = undefined;
+    if (!("kappaR" in c)) c.kappaR = undefined;
+    if (!("_wsV" in c)) c._wsV = undefined;
     if (!("passPlan" in c)) c.passPlan = undefined;
     if (!("passSide" in c)) c.passSide = undefined;
     if (!("passBest" in c)) c.passBest = undefined;
@@ -228,6 +248,10 @@ const CarFields = (function () {
     if (!("_lk" in c)) c._lk = undefined;
     if (!("_coastHeld" in c)) c._coastHeld = undefined;
     if (!("classified" in c)) c.classified = undefined;
+    if (!("_wireId" in c)) c._wireId = undefined;
+    if (!("stallT" in c)) c.stallT = undefined;
+    if (!("_incidentOwned" in c)) c._incidentOwned = undefined;
+    if (!("slipDeg" in c)) c.slipDeg = undefined;
     return c;
   }
 

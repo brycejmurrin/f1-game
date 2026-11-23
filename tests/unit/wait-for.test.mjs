@@ -5,17 +5,75 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC } from "../../tools/ci/wait-for.mjs";
+import { fileURLToPath } from "node:url";
+import { parseArgs, check, waitFor, capForeground, UsageError, FOREGROUND_CAP_SEC, DEFAULT_TIMEOUT_MIN, resolveCondPaths, mergedOnDeploy } from "../../tools/ci/wait-for.mjs";
 import { readStatus, waitStatus, stamp } from "../../tools/lib/deploy-status.mjs";
 
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "wf-"));
 const fakeClock = () => { let t = 0; return { now: () => t, sleep: async (ms) => { t += ms; } }; };
+
+test("resolveCondPaths anchors relative file/log paths to a root; absolute stay", () => {
+  const root = "/repo";
+  const out = resolveCondPaths([
+    { kind: "file", path: "artifacts/logs/x.log" },
+    { kind: "log", path: "a.log", re: /x/ },
+    { kind: "file", path: "/abs/y.log" },
+    { kind: "pid", pid: 1 },
+  ], root);
+  assert.equal(out[0].path, path.resolve(root, "artifacts/logs/x.log"));
+  assert.equal(out[1].path, path.resolve(root, "a.log"));
+  assert.equal(out[2].path, "/abs/y.log");
+  assert.equal(out[3].pid, 1);
+});
+
+test("mergedOnDeploy defaults cwd to the repo root, not process.cwd()", () => {
+  // From /tmp, process.cwd()-based git returned status 128 and the waiter
+  // falsely reported "not yet on deploy" for a tip sha (cwd bug).
+  const seen = [];
+  const run = (_cmd, _args, opts) => {
+    seen.push(opts.cwd);
+    return { status: 0, stdout: "", stderr: "" };
+  };
+  const prev = process.cwd();
+  try {
+    process.chdir("/tmp");
+    assert.equal(mergedOnDeploy("abcdef0", { run }), true);
+  } finally {
+    process.chdir(prev);
+  }
+  assert.equal(seen.length, 2, "fetch + merge-base --is-ancestor");
+  assert.ok(seen.every((c) => path.resolve(c) === REPO_ROOT), `cwd=${seen.join(",")}`);
+  assert.ok(seen.every((c) => path.resolve(c) !== path.resolve("/tmp")));
+});
 
 test("parseArgs: conditions, both flag spellings, defaults", () => {
   const a = parseArgs(["--load-below", "2.8", "--file-nonempty=x.log", "--pid-gone", "42", "--timeout=5"]);
   assert.deepEqual(a.conds, [{ kind: "load", max: 2.8 }, { kind: "file", path: "x.log" }, { kind: "pid", pid: 42 }]);
   assert.equal(a.timeoutMin, 5);
-  assert.equal(parseArgs(["--pid-gone", "1"]).timeoutMin, 30);
+  assert.equal(parseArgs(["--pid-gone", "1"]).timeoutMin, DEFAULT_TIMEOUT_MIN);
+});
+
+test("the default --timeout is foreground-safe: a bare call is not refused (W25 row 13)", () => {
+  // It defaulted to 30 min (1800 s) against its own 590 s foreground cap, so
+  // `wait-for.mjs --pid-gone 1` exited 2 without waiting.
+  const a = parseArgs(["--pid-gone", "1"]);
+  assert.ok(a.timeoutMin * 60 <= FOREGROUND_CAP_SEC, `default ${a.timeoutMin} min exceeds the cap`);
+  assert.equal(capForeground(a.timeoutMin, false).error, undefined);
+  const r = spawnSync(process.execPath, ["tools/ci/wait-for.mjs", "--file-nonempty", "package.json"], { encoding: "utf8", env: { ...process.env, APEX_WAIT_BACKGROUND: "" } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), "= wait held");
+});
+
+test("every example in wait-for.mjs's header parses and passes the foreground cap", () => {
+  const src = fs.readFileSync("tools/ci/wait-for.mjs", "utf8");
+  const ex = [...src.matchAll(/^\/\/ +node tools\/ci\/wait-for\.mjs (.+?)(?:\s+#.*)?$/gm)].map((m) => m[1]);
+  assert.ok(ex.length >= 4, `found ${ex.length} examples`);
+  for (const line of ex) {
+    const argv = [...line.matchAll(/'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2]).map((t) => (t === "<sha>" ? "0da70c389" : t));
+    const a = parseArgs(argv);
+    assert.equal(capForeground(a.timeoutMin, a.background).error, undefined, `header example refused: ${line}`);
+  }
 });
 
 test("parseArgs: unknown flag, no condition, bad numbers are usage errors", () => {
@@ -124,16 +182,16 @@ test("--log-matches: holds once a log line matches; names the missing verdict; b
   assert.throws(() => parseArgs(["--log-matches", "x.log", "("]), UsageError);
 });
 
-test("capForeground: a foreground --timeout over 590 s is clamped and names run_in_background", () => {
+test("capForeground: a foreground --timeout over 590 s is REFUSED (exit 2), never clamped, and names run_in_background", () => {
   assert.equal(FOREGROUND_CAP_SEC, 590);
   assert.deepEqual(capForeground(5, false), { timeoutMin: 5, note: "" });
   const c = capForeground(30, false);
-  assert.equal(c.timeoutMin * 60, 590);
-  assert.ok(/run_in_background/.test(c.note));
-  assert.ok(/--background/.test(c.note));
+  assert.ok(["run_in_background", "--background", "refused"].every((t) => c.error.includes(t)));
   assert.deepEqual(capForeground(45, true), { timeoutMin: 45, note: "" }, "--background lifts the cap");
   assert.equal(parseArgs(["--pid-gone", "1", "--background"]).background, true);
   assert.equal(parseArgs(["--pid-gone", "1"]).background, false);
+  const r = spawnSync(process.execPath, ["tools/ci/wait-for.mjs", "--file-nonempty", "package.json", "--timeout", "30"], { encoding: "utf8", env: { ...process.env, APEX_WAIT_BACKGROUND: "" } });
+  assert.deepEqual([r.status, r.stderr.includes("use --background / run_in_background")], [2, true], "a satisfied condition still exits non-zero: the flag, not the wait, is wrong");
 });
 
 test("--merged <sha>: parsed, polled no faster than 30 s, judged through the deps.merged probe (the sanctioned merge watch)", () => {

@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apex-build" content="dev">
+<!-- @gen-shell:csp -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<!-- /@gen-shell:csp -->
+<meta name="apex-build" content="1695">
 <meta name="theme-color" content="#00000000">
 <title>Apex 26 — broadcast overlay</title>
 <style>
@@ -17,9 +20,9 @@
   body { color: var(--ov-ink); font: 700 15px/1.15 system-ui, sans-serif; letter-spacing: .04em; }
   #overlay { position: fixed; inset: 0; pointer-events: none; transform: scale(var(--ov-scale)); transform-origin: left top; }
   body[data-side="right"] #overlay { transform-origin: right top; }
-  .ov-tower { position: absolute; left: 2.2vw; top: 7vh; width: 250px; height: 680px; }
+  .ov-tower { position: absolute; left: 2.2vw; top: 7vh; width: 250px; height: 748px; }
   body[data-side="right"] .ov-tower { left: auto; right: 2.2vw; }
-  .ov-row { position: absolute; inset: 0 auto auto 0; width: 250px; height: 31px; display: grid;
+  .ov-row { position: absolute; inset: 0 auto auto 0; width: 100%; height: 31px; display: grid;
     grid-template-columns: 31px 5px 1fr 70px 24px; align-items: center; gap: 7px; padding: 0 8px 0 0;
     background: linear-gradient(90deg, rgba(7,8,13,.97), rgba(7,8,13,.82)); border-bottom: 1px solid var(--ov-line);
     transition: transform 220ms cubic-bezier(.2,.8,.2,1), opacity 160ms; font-variant-numeric: tabular-nums; }
@@ -53,12 +56,44 @@
   body[data-only="captions"] .ov-tower, body[data-only="captions"] .ov-battle, body[data-only="captions"] .ov-sectors { display: none; }
   html[data-chroma] .ov-row, html[data-chroma] .ov-battle, html[data-chroma] .ov-caption {
     box-shadow: none; text-shadow: -1px -1px #000, 1px -1px #000, -1px 1px #000, 1px 1px #000; }
-  @media (prefers-reduced-motion: reduce) { .ov-row { transition: none; } }
-  @media (max-width: 700px) { .ov-tower { top: 12px; left: 12px; } .ov-sectors { top: 12px; right: 12px; }
-    .ov-caption { bottom: 12px; } .ov-battle { top: 12px; } }
+  /* The team plate is opaque, so it cannot fringe under a key; an outline would smudge its black digits. */
+  html[data-chroma] .ov-pos { text-shadow: none; }
+  /* Sector flash (render.js sets data-flash for FLASH_MS on a new time); reduced
+     motion keeps the cue as a static outline, no animation. */
+  @media (prefers-reduced-motion: no-preference) { .ov-sectors span[data-flash="1"] { animation: ov-flash 1.2s ease-out; } }
+  @keyframes ov-flash { from { background: rgba(255,255,255,.28); outline: 2px solid currentColor; outline-offset: 2px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .ov-row { transition: none; }
+    .ov-sectors span[data-flash="1"] { animation: none; outline: 2px solid currentColor; outline-offset: -2px; }
+  }
+  /* Narrow broadcasts use a second row for the battle card, below the sectors
+     and opposite the timing tower. Keep the centered desktop composition. */
+  @media (max-width: 1100px) {
+    .ov-battle { top: calc(7vh + 64px); left: auto; right: 3vw; translate: none; }
+    body[data-side="right"] .ov-battle { left: 3vw; right: auto; }
+  }
+  /* Phone portrait (≈393×852): a 250px tower + right-side battle/sectors all
+     claimed the same band. Stack sectors on top, clip the tower above the
+     bottom chrome, and pin battle above the caption. */
+  @media (max-width: 700px) {
+    .ov-sectors { top: 12px; left: 12px; right: 12px; justify-content: flex-end; }
+    .ov-tower { top: 56px; left: 12px; width: min(250px, calc(100vw - 24px));
+      max-height: calc(100vh - 196px); overflow: hidden; }
+    .ov-caption { bottom: 12px; width: min(680px, calc(100vw - 24px)); }
+    .ov-battle { top: auto; bottom: 76px; left: 12px; right: 12px; translate: none;
+      min-width: 0; width: auto; }
+    body[data-side="right"] .ov-battle { left: 12px; right: 12px; }
+  }
+  /* Phone landscape (≈852×393): fixed tower height 748 spills over the
+     caption. Clip the tower to the band above the lower-third. */
+  @media (max-height: 480px) {
+    .ov-tower { max-height: calc(100vh - 14vh - 64px); overflow: hidden; }
+  }
 </style>
+<link rel="stylesheet" href="css/screen-arranger.css?v=dev">
 </head>
 <body data-side="left">
+<a id="companion-appearance-return" href="./?settings=appearance" hidden>Back to Appearance</a>
 <main id="overlay" role="region" aria-label="Apex 26 race broadcast overlay">
   <section class="ov-tower" aria-label="Race timing"></section>
   <section class="ov-battle" aria-live="polite" hidden><strong></strong><span></span></section>
@@ -67,7 +102,14 @@
 </main>
 <script src="js/race/broadcast.js?v=dev"></script>
 <script src="js/overlay/feed.js?v=dev"></script>
-<script src="js/race/tv-graphics.js?v=dev"></script>
+<script src="js/overlay/bridge.js?v=dev"></script>
 <script src="js/overlay/render.js?v=dev"></script>
+<script defer src="js/core/log.js?v=dev"></script>
+<script defer src="js/career/save-migrate.js?v=dev"></script>
+<script defer src="js/core/store.js?v=dev"></script>
+<script defer src="js/ui/companion-return.js?v=dev"></script>
+<script defer src="js/ui/screen-regions.js?v=dev"></script>
+<script defer src="js/ui/screen-placement.js?v=dev"></script>
+<script defer src="js/ui/screen-arranger.js?v=dev"></script>
 </body>
 </html>

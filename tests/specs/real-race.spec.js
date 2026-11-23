@@ -53,6 +53,9 @@ test("WATCH director buttons expose their visible names and retain keyboard cont
   }, SCRIPT);
   await page.waitForFunction(() => __apex.info().track === "baku" && __apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { __apex.go(); __apex.step(1 / 60, 3); });
+  // 844×390 is inside the watch bar's phone band (PHONE_BAR, js/ui/watch-transport.js): AUTO and FOLLOW LOCK dock
+  // into the ⋯ MORE popover there, closed until opened — open it as a player would, then the buttons are visible.
+  await page.evaluate(() => { const m = document.querySelector('[data-wt="more"]'); if (m && !m.hidden) /** @type {HTMLDetailsElement} */ (m).open = true; });
   const auto = page.getByRole("button", { name: /^AUTO: let the TV director/ });
   const lock = page.getByRole("button", { name: /^FOLLOW LOCK: keep following/ });
   await expect(auto).toBeVisible();

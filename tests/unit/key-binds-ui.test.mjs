@@ -17,6 +17,29 @@ test("a phone hides both tables behind one hint until a key or a pad is seen", (
   assert.equal($("pm-pad-section").hidden, false, "gamepadconnected reveals CONTROLLER");
 });
 
+// hunt2 ui-menus: desktop create shows KEYBOARD without a keydown; rerender
+// must unhook the one-shot reveal listener. Behavioural: `pre` wraps the rig's
+// window listener table and records which keydown handlers the module removes.
+function bootKeydownLog(desktop) {
+  const log = { added: [], removed: [] };
+  const ui = bootUi(desktop, {}, null, (sb) => {
+    const add = sb.addEventListener, del = sb.removeEventListener;
+    sb.addEventListener = (t, f, o) => { if (t === "keydown") log.added.push(f); return add(t, f, o); };
+    sb.removeEventListener = (t, f, o) => { if (t === "keydown") log.removed.push(f); return del(t, f, o); };
+  });
+  return { ui, log };
+}
+test("desktop create shows KEYBOARD and rerender unhooks the reveal keydown", () => {
+  const phone = bootKeydownLog(false);
+  assert.equal(phone.ui.$("pm-keys-section").hidden, true, "phone waits for a key");
+  assert.deepEqual(phone.log.removed, [], "the phone keeps its reveal listener armed");
+  const desk = bootKeydownLog(true);
+  assert.equal(desk.ui.$("pm-keys-section").hidden, false, "desktop shows KEYBOARD at create");
+  assert.equal(desk.log.removed.length, 1, "rerender drops exactly one keydown listener");
+  assert.equal(desk.log.added.filter((f) => f === desk.log.removed[0]).length, 1,
+    "the dropped listener is one the module added (the reveal)");
+});
+
 test("an armed slot left behind (BACK / CLOSE / RESUME) never captures the next key in the race", () => {
   // Bug hunt 2026-09-22: nothing disarmed a slot when the page hid, so the
   // first key pressed in the race was swallowed and rebound.
@@ -389,4 +412,22 @@ test("a successful key capture rebuilds once, restores the changed slot's focus,
   assert.match($("pm-keys-note").textContent, /Tap a key slot/);
   assert.match(read("index.html"), /id="pm-keys-note"[^>]*role="status"/,
     "the capture result is exposed as a polite status update");
+});
+
+
+test("clean-room 12: a pointer-kind flip re-renders KEYBOARD after syncPointerKind writes body.desktop", () => {
+  // key-binds subscribes before platform-session, so a synchronous rerender
+  // read the stale class; the deferred one reads the new verdict.
+  let desk = false, flip = null;
+  const { $, Input, flushTimers } = bootUi(false, {}, null, (s) => {
+    s.document.body.classList.contains = (c) => c === "desktop" && desk;
+    s.matchMedia = () => ({ matches: true, addEventListener: (t, f) => { flip = f; } });
+  }, { deferTimers: true });
+  flushTimers();
+  assert.equal($("pm-keys-section").hidden, true, "touch: hidden behind the hint");
+  Input.onPointerKindChange(() => { desk = true; });      // syncPointerKind, subscribed later at boot
+  flip({ matches: false });
+  flushTimers();
+  assert.equal($("pm-keys-section").hidden, false, "desktop class shows the KEYBOARD table");
+  assert.equal($("pm-ctl-hint").hidden, true, "and drops the phone hint");
 });

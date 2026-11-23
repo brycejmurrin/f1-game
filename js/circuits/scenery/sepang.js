@@ -11,7 +11,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterBand,
         sponsorHoarding, cameraTower, seat, terrainYAt, indexSolid,
-        addBox, addCyl, addCone, addPrism, addFrustum, circuitKit } = api;
+        addBox, addCyl, addCone, addPrism, circuitKit } = api;
 
       const PALM_F = [0.16, 0.42, 0.18], PALM_FD = [0.12, 0.34, 0.15];
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
@@ -239,7 +239,7 @@
         motorhome(K(s), 1, gap, 9, 3.6, 5.5,
           { wall: [0.66 + hash(K(s) * 71) * 0.24, 0.66, 0.68] });
       }
-      broadcastCompound(K(0.892), 1, 58, { vans: 3, dishes: 2, mastH: 9 });
+      broadcastCompound(K(0.857), 1, 40, { vans: 3, dishes: 2, mastH: 9 });
       if (circuitKit) {
         circuitKit.hospitality({
           id: "kit:sepang:paddock-hospitality", frac: 0.978, side: 1, gap: 72,
@@ -254,7 +254,7 @@
           size: [18, 9, 40], modules: 4,
         });
         circuitKit.serviceCompound({
-          id: "kit:sepang:paddock-yard", frac: 0.962, side: 1, gap: 98,
+          id: "kit:sepang:paddock-yard", frac: 0.975, side: 1, gap: 78,
           size: [22, 6, 32], vehicles: 6,
         });
       }
@@ -285,9 +285,12 @@
         grandstandEx(s, side, gap, len, null, null, Object.assign(
           { roofCol: TENT_ROOF, fasciaCol: TENT_FASCIA }, opts));
 
-      // K1 Grandstand at Turn 1 & 2 — positive rake (rows rise away from track).
-      // https://www.sepangcircuit.com/k1-grandstand
+      // K1 Grandstand at Turn 1 & 2 approach — positive rake (rows rise away
+      // from track). https://www.sepangcircuit.com/k1-grandstand
       // Outside of the T1 right-hander (side -1); +1 clipped the infield fold.
+      // Stays at K(0.058): moving it toward the apex floats (unsupported 8 m).
+      // "approach" on this head line is load-bearing — corner-frames grants
+      // APPROACH_M for the 72 m run-up before T1 (KIT_M would fail it).
       const emitT1Stand = (stage) => {
         const SHELL = [0.84, 0.85, 0.86];
         const depth = 12, h = 13, len = 40;
@@ -399,9 +402,10 @@
       waterBand(0.18, 0.28, -1, 30, 34, 3, [0.24, 0.32, 0.26], { id: "sepang-drain-north" });
       waterBand(0.62, 0.72, 1, 32, 36, 3, [0.24, 0.32, 0.26], { id: "sepang-drain-south" });
 
-      for (const [s0, s1] of [[0.09, 0.30], [0.36, 0.55], [0.61, 0.75], [0.78, 0.86]]) {
-        guardrail(s0, s1, -1, 9, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 9, [0.80, 0.81, 0.83]);
+      // The first two runs stay on the graded verge above the adjacent slopes.
+      for (const [s0, s1, gap] of [[0.09, 0.30, 6], [0.36, 0.55, 6], [0.61, 0.75, 9], [0.78, 0.86, 9]]) {
+        guardrail(s0, s1, -1, gap, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, gap, [0.80, 0.81, 0.83]);
       }
       guardrail(0.92, 0.07, 1, 4.5, [0.85, 0.85, 0.88]);
       fence(0.93, 0.06, -1, 10, 4, [0.74, 0.76, 0.80]);

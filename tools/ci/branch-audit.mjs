@@ -19,7 +19,7 @@
 //
 // THE EVIDENCE, cheapest and most certain first:
 //   ancestor   the tip is in the deploy history — merged, nothing to lose.
-//   pr-head    the tip IS the head sha of a merged PR (a squash merge).
+//   pr-head    the tip IS the head sha of a PR merged into the audited base (a squash merge).
 //   absorbed   `git merge-tree --write-tree <deploy> <branch>` succeeds and the
 //              result is deploy's own tree: merging it would change NOTHING.
 //              Zero-loss by construction, so prune-branches deletes these too.
@@ -97,14 +97,14 @@ export function addedLines(diff, minLen = MIN_LINE) {
   return out;
 }
 
-/** gh pr list JSON -> Map(branch -> newest PR {number, state, headSha, title, at}). */
+/** gh pr list JSON -> Map(branch -> newest PR {number, state, base, headSha, title, at}). */
 export function indexPrs(list) {
   const m = new Map();
   for (const p of list || []) {
     const name = p.headRefName;
     if (!name) continue;
     const state = p.state === "OPEN" ? "open" : p.mergedAt ? "merged" : "closed";
-    const row = { number: p.number, state, headSha: p.headRefOid || null, title: p.title || "", at: p.mergedAt || p.closedAt || p.createdAt || "" };
+    const row = { number: p.number, state, base: p.baseRefName || null, headSha: p.headRefOid || null, title: p.title || "", at: p.mergedAt || p.closedAt || p.createdAt || "" };
     const prev = m.get(name);
     // An open PR always wins; otherwise the highest number is the newest.
     if (!prev || (row.state === "open" && prev.state !== "open") || (prev.state !== "open" && row.number > prev.number)) m.set(name, row);
@@ -125,10 +125,10 @@ export function indexRuns(list) {
 }
 
 /** The verdict for one audited branch. Pure; order = precedence. */
-export function verdictFor(b, { minAgeDays = 1 } = {}) {
+export function verdictFor(b, { base, minAgeDays = 1 } = {}) {
   const pr = b.pr;
   if (pr && pr.state === "open") return "active";
-  if (b.ancestor || (pr && pr.state === "merged" && pr.headSha === b.sha)) return "merged";
+  if (b.ancestor || (pr && pr.state === "merged" && base && pr.base === base && pr.headSha === b.sha)) return "merged";
   if (!(b.ageDays >= minAgeDays)) return "active";
   if (b.absorbed) return "absorbed";
   if (b.noHistory) return "no-history";
@@ -192,7 +192,7 @@ export function audit(branches, { base, prs = new Map(), runs = new Map(), now =
       }
       row.noHistory = !row.from;
     }
-    row.verdict = verdictFor(row, { minAgeDays });
+    row.verdict = verdictFor(row, { base, minAgeDays });
     rows.push(row);
   }
   return rows;

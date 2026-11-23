@@ -32,14 +32,14 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["fuji"] =
   function (api) {
-      const { out, n, hash, every, anchor, onTrack, K, lapBounds, pyMin,
+      const { n, hash, every, anchor, onTrack, K, lapBounds, pyMin,
         tree, pine, bush, hedge, forestEdge,
         building, tower, motorhome, broadcastCompound, cameraTower,
         grandstandEx, terrace, bleacher, spectatorHill, scaffoldStand,
         guardrail, fence, tyreWall, marshalPost, gantry,
         billboard, sponsorHoarding, groundPatch, prop, backdrop,
         mountain, modelGroup, MAT, seat, vadd,
-        terrainYAt, addMountain, addFrustum } = api;
+        terrainYAt, addMountain, addFrustum, bakedModel } = api;
 
       // ── palette ──────────────────────────────────────────────────────────
       // Sugi cedar: dark and blue-shifted, not European park green. Four
@@ -122,7 +122,7 @@
       //    whole straight, with an open bank behind it for mass, then
       //    hospitality, back-of-house and car parks behind THAT.
       run(0.968, 1360, 152, (s, i) => {
-        grandstandEx(s, -1, 20, 150, null, null,
+        grandstandEx(s, -1, 20, 140, null, null,
           { tiers: 2, h: i % 3 === 1 ? 17.5 : 15, roof: "cantilever",
             roofCol: i % 3 === 1 ? ROOF_D : ROOF,
             fasciaCol: [CLAD, CLAD_L, CLAD_W][i % 3] });
@@ -164,7 +164,8 @@
       gantry(0.004, 7.6, STEEL);
       gantry(0.128, 7.4, STEEL);
       gantry(0.196, 7.4, STEEL);
-      gantry(0.232, 7.4, STEEL);
+      // The solid portal masts support this beam on both sides.
+      gantry(0.232, 7.4, STEEL, { spanSupports: false });
       for (const s of [0.040, 0.100, 0.180]) {
         billboard(K(s), -1, 30, 24, 11, [0.06, 0.07, 0.09], { style: "monopole" });
       }
@@ -252,15 +253,12 @@
       }
 
       // 5. PADDOCK, THEN THE HOTEL AND MOTORSPORTS MUSEUM  [0.150 +1 40]
-      //    Team transporters: sparse near-apron only (a dense double row here
-      //    buried 23 prims into the infield rise; leave the hotel mass clear).
-      // Gap 62 / skip 0.048: hospitality at gap 28 shared a roof plane
-      // (flatCoplanar), and gap 48 landed on the race-control annex at 0.048
-      // (coplanar 22 m² motorhome × neonTower). Transporters sit clear of both.
-      for (const [s, accent] of [
-        [0.068, [0.72, 0.16, 0.16]], [0.098, CLAD_L], [0.128, [0.20, 0.26, 0.52]],
+      // Park the team transporters on the level part of the service yard
+      // behind the final corner; the straight-side apron buries their lower decks.
+      for (const [s, gap, accent] of [
+        [0.947, 68, [0.72, 0.16, 0.16]], [0.950, 80, [0.20, 0.26, 0.52]],
       ]) {
-        motorhome(K(s), 1, 62, 6.5, 3.6, 11, { accent, roof: true });
+        motorhome(K(s), 1, gap, 6.5, 3.6, 11, { accent, roof: true });
       }
       broadcastCompound(K(0.088), 1, 62, { vans: 6, dishes: 3, spacing: 9 });
       // Fuji Speedway Hotel (Hyatt Unbound Collection) + Fuji Motorsports
@@ -357,7 +355,7 @@
         { tiers: 2, h: 18, roof: "cantilever", roofCol: ROOF_D, fasciaCol: CLAD_W });
       terrace(0.196, 0.234, -1, 84, { rows: 8, rise: 1.5, depth: 2.8, density: 0.4,
         conc: CONC_D, concAlt: CONC });
-      // Spectator village behind the T1 bank: food units, toilets, a screen.
+      // Spectator village behind the T1 braking-zone stands: food units, toilets, a screen.
       for (const [s1, g, w, h1, d] of [[0.198, 114, 12, 5, 26], [0.216, 118, 14, 6, 30],
                                        [0.236, 112, 11, 5, 22]])
         building(K(s1), -1, g, w, h1, d, { kind: "hall", wall: CLAD_W, window: GLASS, neon: 0 });
@@ -380,7 +378,7 @@
       forestEdge(0.276, 0.300, 1, 44, { hMin: 15, hMax: 26, col: SUGI_D, col2: SUGI, pineFrac: 0.95, density: 0.2 });
       hedge(0.272, 0.318, 1, 12, 1.5, SCRUB);
       marshalPost(K(0.262), -1, 13);
-      marshalPost(K(0.292), 1, 13);
+      marshalPost(K(0.292), 1, 18);
 
       // 7. COCA-COLA CORNER (80R) AND TOYOPET (100R)
       //    [0.372 -1 20 · 0.412 +1 24]
@@ -502,7 +500,7 @@
       terrace(0.886, 0.944, -1, 42, { rows: 8, rise: 1.5, depth: 2.7, density: 0.45, conc: CONC, step: 12 });
       terrace(0.904, 0.940, -1, 52, { rows: 6, rise: 1.5, depth: 2.7, density: 0.4,
         conc: CONC_D, concAlt: CONC, step: 12 });
-      // Depth behind the last corner's seating.
+      // Hall set back behind the Panasonic terraces (they run on past the apex).
       building(K(0.912), -1, 84, 16, 9, 66, { kind: "hall", wall: CLAD_D, window: GLASS, neon: 0 });
       // Skips 0.866-0.873: the 120 m rank there reaches ~12 m off the 0.771
       // road (the flick doubles back), leaving a culled cedar's crown 18 m up.
@@ -590,4 +588,10 @@
         if (f > 0.02 && f < 0.23) continue;            // the straight has its own
         marshalPost(K(f), i % 2 ? 1 : -1, 13);
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.2823, 0.4397, 0.7073, 0.8337]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
   };

@@ -45,7 +45,7 @@
         tree, bush, hedge, forestEdge,
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
-        billboard, sponsorHoarding, gantry, motorhome, groundPatch,
+        billboard, sponsorHoarding, gantry, groundPatch,
         place, ridge, circuitKit, modelGroup, vadd, addBox, addCyl, addFrustum, seat, MAT, lapBounds, pyMin } = api;
 
       // 1. PALETTE + LOCAL HELPERS
@@ -122,7 +122,9 @@
       const hut = (k, side, dist, col) => safeBox(k, side, dist, [2.6, 2.8, 3.4], col || CREAM);
       // A back rank of broadleaf: guarded, jittered in gap and height, and
       // colour-mixed so the rank never reads as one wall of green.
-      const rank = (f0, f1, side, dist, count, seed, hMin, hMax) => {
+      // `relief` (optional, metres): skip a tree whose 5 m ring of terrain
+      // spans more than this — a trunk seated on a bank buries its low canopy.
+      const rank = (f0, f1, side, dist, count, seed, hMin, hMax, relief) => {
         for (let i = 0; i < count; i++) {
           const t = count < 2 ? 0.5 : i / (count - 1);
           const h = hash(i * 31 + seed);
@@ -131,6 +133,14 @@
           const d = dist + h * 16;
           const a = anchor(k, side, d);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
+          if (relief != null) {
+            let lo = Infinity, hi = -Infinity;
+            for (const [dx, dz] of [[0, 0], [5, 0], [-5, 0], [0, 5], [0, -5]]) {
+              const y = terrainYAt(a.c[0] + dx, a.c[2] + dz);
+              lo = Math.min(lo, y); hi = Math.max(hi, y);
+            }
+            if (hi - lo > relief) continue;
+          }
           tree(k, side, d, hMin + h * (hMax - hMin), LEAVES[Math.floor(g * 6) % 6]);
           if (g > 0.88) bush(k, side, d - 7, LEAF_D);
         }
@@ -168,7 +178,12 @@
       // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
-      building(K(sl(0.968)), 1, 26, 14, 4.8, 108, { col: WALL, roof: ROOF });
+      // Garage run cut to its 52 m line-side half: on the Wheatcroft line the
+      // upstream half of the old 108 m block lost its walls to the pit-complex
+      // guard and left a roof slab 5.5 m over the ground (ground-audit
+      // unsupported, also with gap 24 / depth 11); the engine pit garages
+      // cover that stretch.
+      building(K(sl(0.9748)), 1, 26, 14, 4.8, 52, { col: WALL, roof: ROOF });
       building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
       // Race control / timing over the end of the garage run — still club scale.
       building(K(sl(0.004)), 1, 25, 10, 7.0, 16, { col: CREAM, roof: ROOF_D });
@@ -215,7 +230,9 @@
       building(K(sl(0.972)), -1, 42, 9, 4.2, 16, { col: STEEL, roof: ROOF_D, flat: true });
       groundPatch(K(sl(0.020)), -1, 62, [30, 0.16, 96], GRAVEL);
       carPark(sl(0.960), sl(0.070), -1, 66, 9, 4, 143);
-      rank(sl(0.938), sl(0.088), -1, 86, 22, 720, 9.0, 15.0);
+      // relief 1.5: on the Wheatcroft line this rank reaches the Redgate
+      // bank, where one tree buried 2.4 m into the slope (ground-audit).
+      rank(sl(0.938), sl(0.088), -1, 86, 22, 720, 9.0, 15.0, 1.5);
 
       // 4. s 0.048 +1 34 — EX-DONINGTON COLLECTION (disused)
       //    The Donington Grand Prix Exhibition closed permanently on
@@ -237,7 +254,7 @@
       // --- the closed museum still reads as a SITE: second wing, entrance
       //     block, coach apron and visitor parking (empty hardstanding).
       building(K(0.062), 1, 62, 18, 6.2, 34, { col: CREAM, roof: ROOF_D, flat: true });
-      building(K(0.030), 1, 54, 12, 5.0, 20, { col: BRICK, roof: ROOF_R });
+      building(K(0.030), 1, 54, 10, 5.0, 16, { col: BRICK, roof: ROOF_R });
       safeBox(K(0.050), 1, 40, [11, 3.8, 9], CONCRETE);          // entrance canopy
       groundPatch(K(0.052), 1, 38, [18, 0.16, 46], GRAVEL);      // coach apron
       for (let i = 0; i < 5; i++) safeBox(K(0.038 + i * 0.006), 1, 37, [3.0, 3.6, 12], TRUCKS[i % 5]);
@@ -284,8 +301,11 @@
           }, (stage) => {
             const len = 46;
             const rows = 5;
-            // Pad on terrain (anchor sinks ~0.3 m; seat.box at a.c was buried).
-            const pad = [a.c[0], terrainYAt(a.c[0], a.c[2]) + 0.15, a.c[2]];
+            // Pad on the highest of centre + 4 corners.
+            let padY = terrainYAt(a.c[0], a.c[2]);
+            for (const [rr, tt] of [[-4, -24], [-4, 24], [4, -24], [4, 24]])
+              padY = Math.max(padY, terrainYAt(...[0, 2].map((i) => a.c[i] + a.r[i] * rr + a.t[i] * tt)));
+            const pad = [a.c[0], padY + 0.15, a.c[2]];
             stage._mat = MAT.CONCRETE;
             seat.box(stage, pad, [8, 0.4, len + 2], [0.52, 0.52, 0.50], b);
             for (let t = 0; t < rows; t++) {
@@ -300,8 +320,7 @@
               for (let j = 0; j < cnt; j++) {
                 const h2 = hash(K(sHollywood) * 17 + t * 41 + j * 13);
                 if (h2 < 0.45) continue;
-                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)),
-                                     a.u, 0.2),
+                seat.box(stage, vadd(vadd(foot, a.t, (j / Math.max(1, cnt - 1) - 0.5) * (len - 6)), a.u, 0.2),
                   [0.55, 0.95, 1.3], CROWD[Math.floor(h2 * 97) % CROWD.length], b);
               }
             }
@@ -328,12 +347,14 @@
       // Grass banks clear of the Hollywood stand footprint (was coplanar with
       // the modelGroup pad when the hill ran under s≈0.16–0.19).
       spectatorHill(0.118, 0.148, -1, 30, { h: 6.5, col: GRASS });
-      spectatorHill(0.220, 0.255, -1, 30, { h: 7.0, col: GRASS });
+      // Ends at 0.240 (was 0.255): the S/F stand (sl(0.014), gap 32) now
+      // starts ~0.246 on the Wheatcroft line and its crowd bank z-fought this hill.
+      spectatorHill(0.220, 0.240, -1, 30, { h: 7.0, col: GRASS });
       forestEdge(0.120, 0.250, -1, 52, { col: LEAF, spacing: 15 });
       guardrail(0.120, 0.250, -1, 11, ARMCO);
       fence(0.130, 0.235, -1, 14, 3.2, FENCE_C);
       marshalPost(K(0.1698), -1, 14);
-      sponsorHoarding(0.150, 0.200, -1, 13);
+      sponsorHoarding(0.150, 0.200, -1, 11, { style: "barrierTop" });
       // --- the crowd's own depth: catering row, store block, car park, treeline.
       for (let i = 0; i < 5; i++)
         safeBox(K(0.142 + i * 0.015), -1, 44, [5.4, 3.3, 8], i % 2 ? TENT : CREAM);
@@ -373,19 +394,21 @@
       hut(K(0.300), -1, 24, WALL_2);
 
       // 9. s 0.3342 +1 15 — OLD HAIRPIN (not the lap's low point: that is ~-26 m at 0.6175, Schwantz)
-      // Leave a planting strip behind the full hedge, while preserving the
-      // marshal post and guardrail in the narrower foreground corridor.
+      // Leave breaks in the two hedgerows where the inside of the bend pinches
+      // their offset paths together. Keep the guardrail continuous.
       spectatorHill(0.318, 0.372, 1, 18, { h: 8.0, col: GRASS });
-      hedge(0.314, 0.378, 1, 15, 1.9, HEDGE_C);
+      hedge(0.314, 0.324, 1, 15, 1.9, HEDGE_C);
+      hedge(0.344, 0.378, 1, 15, 1.9, HEDGE_C);
       guardrail(0.310, 0.380, 1, 12, ARMCO);
       marshalPost(K(0.3342), 1, 13);
       for (let i = 0; i < 4; i++) specimen(K(0.330 + i * 0.016), 1, 46, 200 + i * 9);
       // --- behind the viewing bank: a small terrace, a pit-side shed and a
       //     field boundary with a rank of hedgerow oaks beyond it.
-      terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
+      terrace(0.303, 0.331, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
       groundPatch(K(0.340), 1, 36, [20, 0.16, 56], ROUGH);
-      hedge(0.306, 0.386, 1, 54, 2.1, HEDGE_L);
+      hedge(0.306, 0.322, 1, 54, 2.1, HEDGE_L);
+      hedge(0.353, 0.386, 1, 54, 2.1, HEDGE_L);
       rank(0.302, 0.392, 1, 64, 16, 1270, 9.5, 16.0);
 
       // 10. s 0.4552 +1 10 — STARKEY'S BRIDGE (the deck sits mid-descent, y ~ -18.7 m, per survey)
@@ -516,8 +539,9 @@
       rank(0.724, 0.798, -1, 62, 18, 1840, 9.5, 16.0);
 
       // 15. s 0.7887 +1 20 — MELBOURNE HAIRPIN: sparse and rural
+      // Start both hedges beyond the pinch in their inside-offset paths.
       tyreWall(0.780, 0.800, 1, 13, TW_W);   // older grey stacks out at Melbourne
-      hedge(0.770, 0.815, 1, 26, 2.1, HEDGE_C);
+      hedge(0.784, 0.815, 1, 26, 2.1, HEDGE_C);
       marshalPost(K(0.7887), 1, 16);
       slopeRidge(K(0.795), 1, 56, 70, 18, 4.5, ROUGH);
       for (let i = 0; i < 3; i++) specimen(K(0.776 + i * 0.018), 1, 52, 400 + i * 15);
@@ -527,7 +551,7 @@
       building(K(0.812), 1, 70, 10, 4.4, 16, { col: STEEL, roof: ROOF_D, flat: true });
       for (let i = 0; i < 4; i++) safeBox(K(0.784 + i * 0.006), 1, 66, [3.4, 2.4, 4.5], i % 2 ? ROUGH : GRASS_D);
       groundPatch(K(0.792), 1, 44, [24, 0.14, 70], ROUGH);
-      hedge(0.766, 0.822, 1, 60, 1.9, HEDGE_L);
+      hedge(0.787, 0.822, 1, 60, 1.9, HEDGE_L);
       rank(0.762, 0.828, 1, 80, 14, 1950, 9.0, 15.0);
 
       // 16. s 0.8700 -1 30 — MELBOURNE RETURN LEG: the least developed stretch
@@ -546,14 +570,16 @@
       slopeRidge(K(0.890), -1, 58, 90, 22, 4.0, ROUGH);
       rank(0.822, 0.926, -1, 86, 18, 2060, 9.5, 16.0);
 
-      // 17. s 0.9437 +1 13 — GODDARDS, the last corner onto the pit straight
+      // 17. s 0.9437 +1 13 — brief row "Goddards". Since the line moved onto
+      //     the Wheatcroft straight (def startFrac 0.2551) this authored window
+      //     is turn 9 of the racing lap (corner-frames), not the lap's closing corner.
       tyreWall(0.936, 0.954, 1, 13, TW_R);
       // No grandstandEx here — at every gap the crowdBank buried into the
       // Goddards exit berm (ground-audit). Viewing is the spectatorHill below
       // plus the S/F stands; Hollywood is the required landmark this wave.
       sponsorHoarding(0.930, 0.972, -1, 13);
       marshalPost(K(0.9437), 1, 14);
-      building(K(0.962), 1, 24, 9, 5.0, 14, { col: WALL_2, roof: ROOF });
+      building(K(0.962), 1, 24, 8, 5.0, 10, { col: WALL_2, roof: ROOF });
       guardrail(0.925, 0.985, -1, 11.5, ARMCO);
       safeBox(K(0.970), 1, 17, [3.0, 3.4, 12], CONCRETE);
       building(K(0.978), 1, 26, 10, 4.6, 18, { col: BRICK, roof: ROOF_R });
@@ -608,7 +634,9 @@
       hedge(0.600, 0.668, 1, 26, 2.0, HEDGE_C);
       hedge(0.700, 0.745, -1, 26, 2.0, HEDGE_C);
       hedge(0.400, 0.448, 1, 46, 1.8, HEDGE_L);
-      hedge(0.612, 0.664, -1, 30, 1.8, HEDGE_L);
+      // Leave a field entrance where the offset hedge panels converge.
+      hedge(0.612, 0.636, -1, 30, 1.8, HEDGE_L);
+      hedge(0.641, 0.664, -1, 30, 1.8, HEDGE_L);
 
       // Debris fence on the public side of the lap.
       fence(0.545, 0.700, 1, 15, 2.8, FENCE_C);

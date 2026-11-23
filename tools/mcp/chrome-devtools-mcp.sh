@@ -25,12 +25,32 @@ PATCH_CACHE_ROOT="${APEX_CHROME_MCP_CACHE_ROOT:-$ROOT/scratch/chrome-devtools-ru
 # Probe for a Chromium binary. Prints the path and returns 0, or returns 1
 # with no stdout. status/help MUST call this rather than detect_chrome — the
 # latter exits 1, which made `status` unusable on a Mac without /opt/pw-browsers.
+# Prefer a real binary over PATH shell wrappers (Cloud's
+# /usr/local/bin/google-chrome forces a shared profile + debugging port and
+# can hang a bare headless launch; measured 2026-11-18).
 find_chrome() {
-  if [[ -n "${CHROMIUM_PATH:-}" && -x "$CHROMIUM_PATH" ]]; then
-    echo "$CHROMIUM_PATH"; return 0
+  local candidate
+  for candidate in "${CHROMIUM_PATH:-}" "${CHROME:-}" "${PW_CHROMIUM:-}"; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      echo "$candidate"; return 0
+    fi
+  done
+  if [[ -x /opt/google/chrome/chrome ]]; then
+    echo /opt/google/chrome/chrome; return 0
+  fi
+  if [[ -x /usr/bin/google-chrome-stable ]]; then
+    echo /usr/bin/google-chrome-stable; return 0
   fi
   # Shared discovery is read-only: status/help must never write a saved path.
-  node "$ROOT/tools/lib/chromium-path.mjs" --path
+  candidate="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    if head -c 2 "$candidate" 2>/dev/null | grep -q '#!'; then
+      echo "chrome-devtools-mcp: skipping PATH chrome wrapper $candidate (shebang)" >&2
+      return 1
+    fi
+    echo "$candidate"; return 0
+  fi
+  return 1
 }
 
 detect_chrome() {
@@ -70,19 +90,26 @@ wait_chrome() {
 # https) FIRST. That cost an afternoon; it is not a flag problem.
 build_mcp_args() {
   local chrome="$1"
-  # Opt-in: attach to tools/mcp/debug-chrome.sh's browser (one browser shared
+  # Opt-in: attach to tools/mcp/debug-chrome.mjs's browser (one browser shared
   # with js-debugger / browser-use) instead of launching an isolated one. The
   # attached browser already carries the WebGPU/SwiftShader flags.
   if [[ -n "${APEX_CDT_BROWSER_URL:-}" ]]; then
     MCP_ARGS=(--browserUrl "$APEX_CDT_BROWSER_URL" --memoryDebugging)
     return 0
   fi
+  # This launch flag controls CSS dimensions only. Attach to debug-chrome for native-DPR phone captures.
+  local viewport
+  viewport="$(node -p 'const {width,height}=require(process.argv[1]).windows.standalone; width+"x"+height' "$ROOT/tests/data/phone-windows.json")"
   MCP_ARGS=(
     --headless
     --isolated
     ${chrome:+--executablePath "$chrome"}
     --memoryDebugging
-    --viewport "844x390"
+    --viewport "$viewport"
+    # Container floor even if webgpu-chrome-args.cjs is missing: without these,
+    # headless Chrome in a Cloud VM can refuse to start or OOM /dev/shm.
+    --chromeArg=--no-sandbox
+    --chromeArg=--disable-dev-shm-usage
   )
   # WebGPU flags MUST match tools/lib/webgpu-chrome-args.cjs (harness / wgx-shot).
   # --use-angle=swiftshader alone leaves requestAdapter() null in headless Chrome;
@@ -94,7 +121,9 @@ build_mcp_args() {
   _wgpu_file="$(mktemp)"
   node "$ROOT/tools/lib/webgpu-chrome-args.cjs" mcp > "$_wgpu_file"
   while IFS= read -r _wgpu_flag; do
-    [[ -n "$_wgpu_flag" ]] && MCP_ARGS+=("--chromeArg=${_wgpu_flag}")
+    # Skip duplicates of the container floor already on MCP_ARGS.
+    [[ -z "$_wgpu_flag" || "$_wgpu_flag" == "--no-sandbox" ]] && continue
+    MCP_ARGS+=("--chromeArg=${_wgpu_flag}")
   done < "$_wgpu_file"
   rm -f "$_wgpu_file"
   # Extra per-run flags without editing this file: APEX_CHROME_ARGS="--foo --bar".
@@ -150,8 +179,18 @@ run_mcp() {
     # materialized copy directly so signals/exit status flow through this exec.
     # Skip freshness checks for a cached exact pin; cold caches may still fetch.
     # https://docs.npmjs.com/cli/v11/using-npm/config#prefer-offline
-    npx_bin="$(npm exec --yes --prefer-offline --package="$MCP_NPM_PACKAGE" -- bash -c 'command -v chrome-devtools-mcp')"
-    [[ -n "$npx_bin" ]] || { echo "Could not resolve pinned $MCP_NPM_PACKAGE" >&2; exit 1; }
+    # Cold downloads at session start are what make Cursor's tools/list time out
+    # (host stderr 2026-11-18). Bound them so we exit clearly instead of hanging.
+    local timeout_s="${APEX_MCP_NPX_TIMEOUT_S:-45}"
+    local npm_cmd=(npm exec --yes --prefer-offline --package="$MCP_NPM_PACKAGE" -- bash -c 'command -v chrome-devtools-mcp')
+    if ! compgen -G "${npm_config_cache:-$HOME/.npm}/_npx/*/node_modules/${MCP_NPM_PACKAGE%@*}" >/dev/null 2>&1 \
+      && [[ "$timeout_s" != "0" ]] && command -v timeout >/dev/null 2>&1; then
+      echo "chrome-devtools-mcp: $MCP_NPM_PACKAGE not in npx cache; resolve bounded to ${timeout_s}s" >&2
+      npx_bin="$(timeout "$timeout_s" "${npm_cmd[@]}" || true)"
+    else
+      npx_bin="$("${npm_cmd[@]}")"
+    fi
+    [[ -n "$npx_bin" ]] || { echo "Could not resolve pinned $MCP_NPM_PACKAGE (credentials? network? cold cache timeout ${timeout_s}s)" >&2; exit 1; }
     npx_bin="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$npx_bin")"
     source_root="$(cd "$(dirname "$npx_bin")/../../.." && pwd)"
   fi

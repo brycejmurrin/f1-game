@@ -23,7 +23,7 @@ const SCENERY = path.join(ROOT, "js/circuits/scenery/jeddah.js");
 
 test("jeddah SF authored gaps clear night_pass orbit (~27 m lateral)", () => {
   const src = fs.readFileSync(SCENERY, "utf8");
-  const gs = src.match(/grandstandEx\(0\.0,\s*1,\s*(\d+)/);
+  const gs = src.match(/grandstandEx\(sl\(0\.99\),\s*1,\s*(\d+)/);   // the stand beside the line (#5507)
   assert.ok(gs, "S/F grandstandEx gap authored");
   assert.ok(Number(gs[1]) >= 40,
     `S/F grandstandEx gap ${gs[1]} must be ≥ 40 to clear night orbit (~27 m); was 15 in #3315`);

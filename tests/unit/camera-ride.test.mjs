@@ -34,9 +34,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { loadElevationRig, makeElevationTrack } from "../helpers/camera-rig.mjs";
+import { loadElevationRig, makeElevationTrack, loadRig } from "../helpers/camera-rig.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -83,6 +84,62 @@ const RIPPLE = (s) => 0.037 * Math.sin(s * 2 * Math.PI / 30)
                     + 0.075 * Math.sin(s * 2 * Math.PI / 68 + 1.1)
                     + 0.112 * Math.sin(s * 2 * Math.PI / 110 + 2.3);
 
+test("helmet eye position survives reduced motion and leaves the cockpit seat alone", () => {
+  let pose = "standard", mount = "center";
+  const { cams } = loadRig({ CockpitOpts: { helmetEye: () => pose, helmetMount: () => mount, layout: () => ({ eyeF: -0.2, eyeU: 0.82 }), turnChaseLead: () => 0 } });
+  const track = makeElevationTrack(() => 0);
+  const eye = mode => [...cams.vantage(track, mode, 200, 0, 60, 0, { carPos: [0, 200], att: {}, reduceMotion: true }).eye];
+  const stock = eye("helmet"), cockpit = eye("cockpit");
+  pose = "tucked";
+  const low = eye("helmet");
+  pose = "upright";
+  const high = eye("helmet");
+  assert.ok(low[1] < stock[1] && low[2] > stock[2]);
+  assert.ok(high[1] > stock[1] && high[2] < stock[2]);
+  pose = "forward";
+  assert.equal(eye("helmet")[1], stock[1]);
+  assert.ok(eye("helmet")[2] > low[2]);
+  pose = "high";
+  assert.ok(eye("helmet")[1] > high[1]);
+  pose = "low";
+  assert.ok(eye("helmet")[1] < low[1]);
+  pose = "back";
+  const back = eye("helmet");
+  assert.equal(back[1], stock[1]);
+  assert.ok(back[2] < high[2]);
+  mount = "left";
+  const left = eye("helmet");
+  mount = "right";
+  const right = eye("helmet");
+  assert.ok(Math.abs(left[0] - right[0] - 0.064) < 1e-6);
+  assert.deepEqual(right.slice(1), back.slice(1));
+  assert.deepEqual(eye("cockpit"), cockpit);
+});
+
+test("helmet head motion scales the lean and braking nod around the selected eye position", () => {
+  let amount = 1;
+  const { cams } = loadRig({ CockpitOpts: {
+    helmetEye: () => "high", helmetMount: () => "left", helmetHeadMotion: () => amount,
+    layout: () => ({ eyeF: -0.2, eyeU: 0.82 }), turnChaseLead: () => 0,
+  } });
+  const track = makeElevationTrack(() => 0);
+  function head(mode, reduceMotion = false) {
+    cams.vantage(track, mode, 200, 0, 60, 0, { carPos: [0, 200], att: { baRoll: 0.055, baPitch: 0.024 }, reduceMotion });
+    return { ...cams.headState() };
+  }
+  const full = head("helmet"), rest = head("helmet", true), cockpit = head("cockpit");
+  assert.ok(rest.lat < 0 && rest.up > 0, "left-eye mount and raised seat survive reduced motion");
+  amount = 0.35;
+  const partial = head("helmet");
+  for (const key of ["lat", "up", "fwd", "nod"]) {
+    assert.notEqual(full[key], rest[key]);
+    assert.ok(Math.abs(partial[key] - rest[key] - (full[key] - rest[key]) * amount) < 1e-12, key);
+  }
+  amount = 0;
+  assert.deepEqual(head("helmet"), rest);
+  assert.deepEqual(head("cockpit"), cockpit);
+});
+
 test("flat road: the chase rig frames exactly as its constants say", () => {
   const track = makeElevationTrack(() => 7.5);
   const cams = loadElevationRig();
@@ -110,7 +167,7 @@ test("heli and TV side: straight-road pose (eye height, back/out offsets, aim)",
   const pose = (street, mode) => {
     const track = makeElevationTrack(() => Y);
     if (!street) track.def = {};    // open circuit: no street-canyon corridor
-    const cams = loadElevationRig(null, ["js/camera/vantage.js"]);   // vantage alone: the lens asserts below are "no CamFeel"
+    const cams = loadElevationRig(null, ["js/camera/vantage-ride.js", "js/camera/vantage.js"]);   // vantage ride + solver: the lens asserts below are "no CamFeel"
     const v = cams.vantage(track, mode, s, x, 60, 0, { carPos: [x, s], carHead: 0 });
     return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov };
   };
@@ -323,6 +380,7 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
 test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
   // Check the fitted geometry, so a curved bulkhead can replace a square slab.
   const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT,"js/car/cockpit-rig.js"),"utf8"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
   ctx.mesh.init({ createMesh:d=>d });
   const dash=ctx.mesh.getCockpitDash(), x=[], y=[];
@@ -330,6 +388,31 @@ test("VISOR draws the cockpit rig without the steering wheel, and the column and
   assert.ok(Math.min(...x)<=-0.35 && Math.max(...x)>=0.35, "bulkhead spans the tub");
   assert.ok(Math.min(...y)<=-0.24 && Math.max(...y)>=0.07, "bulkhead meets the lower coaming and upper lip");
 
+  // THE DRAW, RUN: the real CarDraw.drawCockpitRig with the VISOR flag (the
+  // `noWheel` game.js passes as visorEye) against the cockpit seat, the player
+  // having picked a real wheel. VISOR must draw the column + bulkhead and no
+  // wheel or wheel-screen readout even though a wheel is selected; the cockpit
+  // draws that wheel and no bulkhead.
+  const v = carDrawVm({ cam: "cockpit" });
+  const { G: vg } = v;
+  v.ctx.CockpitOpts = { haloSize: () => 2, body: () => "standard", wheel: () => "f1", interior: () => "team",
+    layout: () => ({ wheelS: 1, wheelY: 0.5, wheelZ: 0.4 }), wheelHasScreen: () => true };
+  v.ctx.Car3D.cockpitMirrorGlass = () => [];
+  v.ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (q) => q
+    : () => ({ carMesh: String(k) }) });
+  Object.assign(vg, { raceTimeOfDay: "day", track: { total: 5000, def: {} }, dashKph: (sp) => sp * 3.6, raceT: 0 });
+  v.field(() => 1000);
+  const car = Object.assign(vg.player, { gear: 3, rpm: 9000, speed: 50, energy: 0.5 });
+  const drawn = [];
+  vg.gfx.draw = (mesh) => drawn.push(mesh && (mesh.carMesh || mesh.kind));
+  const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const rigDraws = (noWheel) => { drawn.length = 0; v.carDraw.drawCockpitRig(car, base, 1 / 60, {}, noWheel); return [...drawn]; };
+  const visor = rigDraws(true), cockpit = rigDraws(false);
+  assert.ok(visor.includes("getCockpitDash"), "VISOR draws the column and bulkhead: " + visor.join(","));
+  for (const r of ["getCockpitWheel", "getGearDigit", "getLedStrip"]) assert.ok(!visor.includes(r), "VISOR draws no " + r);
+  assert.ok(visor.includes("body"), "VISOR keeps the cockpit bodywork: " + visor.join(","));
+  assert.ok(cockpit.includes("getCockpitWheel"), "cockpit draws the chosen wheel: " + cockpit.join(","));
+  assert.ok(!cockpit.includes("getCockpitDash"), "cockpit draws no bare column/bulkhead");
 });
 
 test("EVERY world-facing camera mode is C1 on a gradient", () => {
@@ -425,6 +508,39 @@ test("the cockpit viewmodel yaws with heading, not the road tangent", () => {
   assert.deepEqual(outF.map((n) => +n.toFixed(6)), [1, 0, 0],
     "+π/2 yawVis (nose right of the road) must rotate the viewmodel, not crab it");
   assert.deepEqual(outR.map((n) => +n.toFixed(6)), [0, 0, -1]);
+});
+
+test("the rear-facing rigs look downhill when the car is climbing", () => {
+  let lookBack = false;
+  const { cams, ctx } = loadRig({ Input: { lookingBack: () => lookBack } });
+  const grade = 0.15, track = makeElevationTrack((s) => s * grade);
+  const sample = ctx.Tracks.sample;
+  ctx.Tracks.sample = (tr, s, out) => {
+    sample(tr, s, out);
+    const norm = Math.hypot(1, grade);
+    out.t[1] = grade / norm; out.t[2] = 1 / norm;
+    return out;
+  };
+  for (const mode of ["rear", "reverse"]) {
+    const pitch = pitchOf(chaseAt(cams, track, 2000, mode));
+    assert.ok(pitch < -8 && pitch > -12, mode + " pitch " + pitch);
+  }
+  const cockpit = () => cams.vantage(track, "cockpit", 2000, 0, 0, 0, { att: {}, carPos: [0, 2000], carHead: 0 });
+  const forward = pitchOf(cockpit());
+  lookBack = true;
+  const backward = pitchOf(cockpit());
+  assert.ok(forward > 7 && backward < -8, "cockpit look-back follows the grade: " + forward + ", " + backward);
+});
+
+test("a banked cockpit keeps its transverse axis on the road and its seat at the eye", () => {
+  const cams = loadElevationRig();
+  const eye = [8, 3, -7], bank = 6 * Math.PI / 180;
+  const r = [], u = [], f = [], origin = [];
+  cams.cockpitViewmodelAxes([-1, 0, 0], [0, 0, 1], 0, eye, r, u, f, origin, -0.2, 0.8, bank);
+  assert.ok(Math.abs(r[1] - Math.sin(bank)) < 1e-6);
+  for (let i = 0; i < 3; i++) {
+    assert.ok(Math.abs(origin[i] + 0.8 * u[i] - 0.2 * f[i] - eye[i]) < 1e-6);
+  }
 });
 
 test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
@@ -542,6 +658,7 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
   const dom = makeDom();
   const mctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   mctx.window = mctx;
+  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/cam-picker.js"), "utf8"), mctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = mctx.CamModes.CAM_MODES, hi = modes.findIndex((m) => m.id === "helmet");
   assert.equal(hi, modes.length - 1, "appended: apex26.camMode is an index");

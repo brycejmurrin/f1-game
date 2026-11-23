@@ -6,16 +6,15 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["silverstone"] =
   function (api) {
-      const { lapBounds, out, MAT, n, ds, px, pz, pyMin, place, every, onTrack, hash, pal,
+      const { lapBounds, out, MAT, n, ds, pyMin, every, onTrack, hash, pal,
               indexSolid,
-              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox,
-              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
+              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, bankedKerbStrip,
               spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt,
-              bush, drapeRun } = api;
+              bush } = api;
       // backdrop() seats green hills on groundYAt (road-extrapolated floor at
       // large dist). Silverstone's mountain rings raise real terrain well above
       // that floor, so engine backdrop tops buried up to 6.8 m (ground-audit
@@ -172,8 +171,9 @@
       hedge(0.86, 0.94, -1, 32, 2.4, COPSE);   // Woodcote infield
       // Maggotts outer enclosure, split around the bend apex: 38 m out on the
       // inside of that turn the anchors bunch to 0.2 m apart (0.105-0.111) and
-      // the hedge folded back through itself; a field gate there is honest.
-      hedge(0.08, 0.104,  1, 38, 2.4, COPSE);
+      // the hedge folded back through itself. End the approach at 0.101,
+      // before the last two hedge boxes overlap on the corrected road profile.
+      hedge(0.08, 0.101,  1, 38, 2.4, COPSE);
       hedge(0.112, 0.12,  1, 38, 2.4, COPSE);
       hedge(0.34, 0.38,  1, 36, 2.4, COPSE);   // Vale/Club outer
       hedge(0.70, 0.76,  1, 30, 2.4, COPSE);   // Aintree / Wellington
@@ -272,7 +272,9 @@
       const M = 1 / 5900;
       for (const [s, side, gap, len, rows] of [
         [0.105, -1, 34, 44, 8], // Maggotts approach
-        [0.145,  1, 30, 46, 7], // Becketts exit
+        // +2 m gap: #4967 lengthened outside-of-bend rows; the front tread
+        // reached 0.53 m under the Becketts bank (ground-audit buried 3 > 2).
+        [0.145,  1, 32, 46, 7], // Becketts exit
         [0.285,  1, 32, 46, 9], // Stowe entry
         [0.325, -1, 26, 46, 7], // Vale
         // +2 m gap: front tread tops were 0.29–0.37 m under the rising
@@ -1389,7 +1391,7 @@
         bakedModel("k_tentlong", k(0.47), 1, 90, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.96), -1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.905), -1, 90, { scale: 2.4 });
-        bakedModel("k_tentlong", k(0.49), 1, 60, { scale: 2.4 });
+        bakedModel("k_tentlong", k(0.49), 1, 78, { scale: 2.4 });  // paddock tent behind the pit garages
         bakedModel("k_tentlong", k(0.62), 1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.1), 1, 60, { scale: 2.4 });
         bakedModel("k_tentlong", k(0.49), -1, 60, { scale: 2.4 });

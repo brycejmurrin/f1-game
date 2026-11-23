@@ -20,7 +20,7 @@ const CLIP_CAP = JSON.parse(
 ).dijon;
 const FLAT_CAP = JSON.parse(
   readFileSync(path.join(ROOT, "tests", "data", "scenery-audit-baseline.json"), "utf8"),
-).flatCoplanar.dijon;
+).flatCoplanar.dijon ?? 0; // The ground audit omits circuits with a zero cap.
 
 function auditDijon() {
   const out = execFileSync(

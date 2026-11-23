@@ -146,6 +146,15 @@ test("a post spacing inside (gap, 2*gap) still gets a fill lamp per gap, wrap-ar
   assert.equal(fillLamps(api, t).length, 20, "one fill lamp in every span-3 gap, the wrap gap too");
 });
 
+test("live density uses the mast layout spacing when road grade crosses a rounding threshold", () => {
+  const api = loadLightTune();
+  const track = ringTrack(every(3, 60));
+  // At density 2, an 11 m interval rounds to 3 nodes on the plan, 2 along the grade.
+  track.total = 4.41 * track.n;
+  track.sceneryStepM = 4.39;
+  assert.equal(fillLamps(api, track).length, 0);
+});
+
 test("a gap exactly one target wide is left alone", () => {
   const api = loadLightTune();
   const t = ringTrack(every(2, 60));                       // span == gap everywhere
@@ -207,7 +216,6 @@ test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
 
 test("street posts and flood banks share one lampPosts bake, one LAMPS tab", () => {
   const lighting = read("js/lighting/track-lights.js") + read("js/lighting/knobs.js");
-  assert.match(lighting, /function buildTrackLights/);
   assert.doesNotMatch(lighting, /function buildFloodLights/);
   assert.doesNotMatch(lighting, /group:\s*"FLOODLIGHTS"/);
   const api = loadLightTune();

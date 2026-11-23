@@ -9,6 +9,14 @@
  *    selection to the first remaining favourite while CIRCUIT DETAIL still
  *    described the old one. The active tile now stays until another is picked.
  *
+ *  - #4671: a re-open re-attaches the cached circuit tiles (re-land).
+ *  - #5889: a search that hides the active circuit selects the first match.
+ *    Only while typing: a rebuild with a query kept (TODAY'S CHALLENGE) must
+ *    not click a match, or the row handler stops the daily it just armed.
+ *  - #5062: CIRCUIT DETAIL drew its elevation strip while the modal was hidden
+ *    (zero box), multiplying the buffer by dpr on every open; it now waits for
+ *    the post-reveal pass.
+ *
  * select-screen.js runs in a Node VM on tests/helpers/mini-dom.mjs.
  * Run: node --test tests/unit/select-screen-fixes.test.mjs
  */
@@ -50,16 +58,16 @@ function boot(disk = {}, o = {}) {
     document: dom.document, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {},
     getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
-    innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0,
+    innerWidth: 1000, innerHeight: 600, requestAnimationFrame: o.raf || (() => 0), devicePixelRatio: o.dpr || 1,
     Tracks: { LIST }, Teams: { LIST: TEAMS }, Flags: { svg: () => "" },
     AppearanceOpts: { applyAll() { appearanceApplied++; } },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: {
+    TrackMaps: Object.assign({
       corners: () => [], direction: () => "CW", elevRange: () => 0,
       drsZones: o.trackMapsDrs || (() => []),
       aspect: () => 1.5, elevProfile: () => null,
       fitCanvas: () => ({ w: 100, h: 60 }), draw() {},
-    },
+    }, o.trackMaps),
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: absSrc("js/ui/select-screen.js") });
@@ -156,6 +164,65 @@ test("M3: unstarring a circuit that is NOT active still filters as before", () =
   assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["1"]);
 });
 
+test("circuit search resets on a menu-door reopen but survives returns and in-place rebuilds", () => {
+  const h = boot({}, { trackIdx: 1 });
+  const search = () => h.dom.byId("sel-track-search");
+  search().value = "spa";
+  search().oninput();
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => r.dataset.trackIdx), ["1"]);
+  h.menus.buildSelect();                            // a return (race setup / garage back): title not up
+  assert.equal(search().value, "spa", "a return keeps the player's search");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "all")
+    .onclick({ stopPropagation() {} });            // in-place chip rebuild
+  assert.equal(search().value, "spa", "an in-place rebuild keeps the search");
+  h.G.els.overlay = { hidden: false };              // entered from the title screen
+  h.menus.buildSelect();
+  assert.equal(search().value, "", "a menu door opens an unfiltered picker");
+  assert.deepEqual(h.tiles().filter((r) => !r.hidden).map((r) => r.dataset.trackIdx), ["0", "1", "2"]);
+});
+
+test("#5889: a search that hides the active circuit selects the first match", () => {
+  const h = boot({}, { trackIdx: 1 });             // Spa active
+  const search = h.dom.byId("sel-track-search");
+  search.value = "monza";
+  search.oninput();
+  assert.equal(h.G.trackIdx, 0, "RACE SETUP must not start the hidden Spa");
+  assert.equal(JSON.parse(h.data.get("trackId")), "monza");
+  assert.equal(h.G.els.selPreviewName.textContent, "Monza", "the preview follows");
+  search.value = "italy";                          // Monza still matches: kept
+  search.oninput();
+  assert.equal(h.G.trackIdx, 0);
+  search.value = "zzz";                            // no match: selection left alone
+  search.oninput();
+  assert.equal(h.G.trackIdx, 0);
+});
+
+function dailyStub(G) {
+  let cur = null;
+  const plan = { day: "2026-11-20", trackId: "spa", trackName: "Spa", weather: "dry", tod: "day" };
+  return {
+    plan: () => plan, today: () => null, current: () => cur, isActive: () => !!cur,
+    select() { cur = { day: plan.day, class: "standard" }; G.trackIdx = 1; },
+    stop() { cur = null; },
+  };
+}
+
+test("#5889 regression: TODAY'S CHALLENGE with a search typed still arms the daily", () => {
+  const h = boot({}, { trackIdx: 1, timeTrial: true });
+  h.G.daily = dailyStub(h.G);
+  h.menus.buildSelect();
+  const search = () => h.dom.byId("sel-track-search");
+  search().value = "monza";
+  search().oninput();
+  assert.equal(h.G.trackIdx, 0, "typing still selects the first match");
+  h.dom.byId("sel-daily").onclick({ stopPropagation() {} });
+  assert.ok(h.G.daily.isActive(), "the daily stays armed");
+  assert.equal(h.G.trackIdx, 1, "the daily circuit stays selected");
+  const chip = h.dom.byId("sel-daily");
+  assert.equal(chip.getAttribute("aria-pressed"), "true");
+  assert.equal(chip.textContent.split(" · ").slice(0, 2).join(" · "), "DAILY STANDARD · SPA");
+});
+
 test("CLASSICS filter refreshes the hero preview when the active circuit is hidden", () => {
   const h = boot({}, { trackIdx: 1 });
   assert.equal(h.G.els.selPreviewName.textContent, "Spa");
@@ -209,3 +276,49 @@ test("track detail names its map and elevation canvases for the selected circuit
   assert.equal(h.dom.byId("track-detail-canvas").getAttribute("aria-label"), "Spa circuit layout diagram");
   assert.equal(h.dom.byId("track-detail-elev").getAttribute("aria-label"), "Spa elevation profile");
 });
+
+// #4671 (re-landed after the Nov 6 rollback): re-opening the picker re-attaches
+// the cached tiles instead of rebuilding every flag SVG and closure.
+test("#4671: a re-open re-uses the circuit tiles and moves only the highlight", () => {
+  const h = boot({}, { trackIdx: 1 });
+  const first = Array.from(h.tiles());
+  assert.ok(first.length >= 2);
+  h.G.trackIdx = 0;
+  h.menus.buildSelect();
+  const again = Array.from(h.tiles());
+  assert.equal(again.length, first.length);
+  again.forEach((row, k) => assert.equal(row, first[k], "tile " + k + " is the same node"));
+  assert.equal(again[0].getAttribute("aria-pressed"), "true");
+  assert.equal(again[1].getAttribute("aria-pressed"), "false");
+  assert.equal(again[1].classList.contains("active"), false);
+});
+
+test("#4671: a changed favourite rebuilds the tiles", () => {
+  const h = boot({}, { trackIdx: 1 });
+  const first = h.tiles()[0];
+  h.data.set("favTracks", JSON.stringify(["monza"]));
+  h.menus.buildSelect();
+  assert.notEqual(h.tiles()[0], first, "a different signature builds fresh tiles");
+  assert.equal(h.tiles()[0].dataset.fav, "1");
+});
+
+test("#5062: CIRCUIT DETAIL's elevation strip does not grow while hidden and draws after the reveal", () => {
+  const frames = [];
+  const h = boot({}, { trackIdx: 1, dpr: 3, raf: (fn) => { frames.push(fn); return frames.length; },
+    trackMaps: { elevRange: () => 10, elevProfile: () => [0, 12, 4, 0], themeColor: () => "#fff" } });
+  const cv = h.dom.document.createElement("canvas");
+  cv.id = "track-detail-elev"; cv.width = 720; cv.height = 144;
+  cv.getContext = () => ({ setTransform() {}, clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {},
+    closePath() {}, fillText() {}, measureText: () => ({ width: 10 }), createLinearGradient: () => ({ addColorStop() {} }) });
+  h.dom.document.body.appendChild(cv);
+  for (let k = 0; k < 3; k++) { h.menus.openTrackDetail(); h.menus.closeTrackDetail(); }
+  assert.equal(cv.width, 720, "no box: the buffer must not be multiplied by dpr");
+  assert.equal(cv.height, 144);
+  h.menus.openTrackDetail();
+  cv._rect = { width: 200, height: 40 };   // the modal is shown: the strip has its box
+  while (frames.length) frames.shift()();
+  assert.equal(cv.width, 600, "the post-reveal pass sizes it to 200 x dpr 3");
+  assert.equal(cv.height, 120);
+  assert.equal(h.dom.byId("track-detail-elev-wrap").hidden, false);
+});
+

@@ -14,10 +14,72 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const require = createRequire(import.meta.url);
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+function boundedScenery(maxVertices = 1000) {
+  const ctx = vm.createContext({ Log: { info() {} } });
+  for (const file of ['js/track/core/geom.js', 'js/track/scenery/graph.js', 'js/track/scenery/region.js'])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8'), ctx, { filename: absSrc(file) });
+  const api = vm.runInContext('({ geo: TrackGeom, region: TrackSceneryRegion, graph: TrackGraph })', ctx);
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  const region = api.region.create({ intersects: (p, r) => Math.abs(p[0]) <= 10 + r && Math.abs(p[2]) <= 10 + r,
+    maxVertices, maxIndices: 3000 }, [out], api.geo);
+  return { out, region, graph: api.graph.create({ raw: api.geo }) };
+}
+
+test('bounded scenery rejects distant primitives before emission but retains intersecting objects whole', () => {
+  const h = boundedScenery();
+  h.region.raw.addBox(h.out, [1000, 1, 0], [2, 2, 2], [1, 1, 1]);
+  assert.equal(h.out.pos.length, 0, 'remote objects allocate no geometry');
+  h.region.raw.addBox(h.out, [12, 1, 0], [4, 2, 4], [1, 1, 1]);
+  assert.ok(h.out.pos.some((v, i) => i % 3 === 0 && v > 10), 'admission retains the complete intersecting box');
+  assert.equal(h.out.idx.length, 36); assert.equal(h.region.stats().rejected, 1);
+});
+
+test('bounded scenery admission follows packed mesh scale, rotation and translation', () => {
+  const h = boundedScenery(), mesh = { pos: [0,0,0, 1,0,0, 0,1,0], nrm: [0,0,1,0,0,1,0,0,1], col: [1,1,1,1,1,1,1,1,1], idx: [0,1,2], mat: [4,4,4] };
+  assert.equal(h.region.addMesh(h.out, mesh, { x: 1000, scale: 2, rotY: Math.PI / 2 }), false);
+  assert.equal(h.out.idx.length, 0);
+  h.region.addMesh(h.out, mesh, { x: 1, scale: 2, rotY: Math.PI / 2 });
+  assert.equal(h.out.idx.length, 3); assert.equal(h.out.mat.length, 3);
+  assert.ok(h.out.pos.every(Number.isFinite));
+});
+
+test('an admitted composite scenery model keeps its distant constituents and restores admission afterward', () => {
+  const h = boundedScenery();
+  h.region.whole({ center: [9,1,0], size: [18,2,2] }, () => {
+    h.region.raw.addBox(h.out, [16,1,0], [2,2,2], [1,1,1]);
+    h.region.raw.addBox(h.out, [2,1,0], [2,2,2], [1,1,1]);
+  });
+  assert.equal(h.out.idx.length, 72, 'both parts of the intersecting model survive');
+  const size = h.out.pos.length;
+  assert.throws(() => h.region.whole({ center: [0,1,0], size: [2,2,2] }, () => { throw Error('abandon'); }), /abandon/);
+  h.region.raw.addBox(h.out, [1000,1,0], [2,2,2], [1,1,1]);
+  assert.equal(h.out.pos.length, size, 'a throwing composite cannot disable later spatial admission');
+});
+
+test('regional graph admission reads recipes without baking unbounded canonical geometry', () => {
+  const h = boundedScenery(), build = rec => rec.box([0,0,0], [2,2,2], [1,1,1]);
+  const model = h.graph.model('region-box', build);
+  for (const name of ['geo', 'aabb', 'verts']) Object.defineProperty(model, name, { get() { throw Error('canonical bake forbidden'); } });
+  const place = x => ({ o: [x,0,0], r: [1,0,0], u: [0,1,0], t: [0,0,1] });
+  let calls = 0;
+  h.region.instance(h.graph, 'region-box', place(1000), build, () => { calls++; });
+  assert.equal(calls, 0, 'remote graph models are rejected without geometry');
+  h.region.instance(h.graph, 'region-box', place(0), build, () => { calls++; h.region.raw.addBox(h.out, [0,0,0], [2,2,2], [1,1,1]); });
+  assert.equal(calls, 1); assert.equal(h.out.idx.length, 36);
+});
+
+test('bounded scenery budget remains failed even if a model emitter catches the first error', () => {
+  const h = boundedScenery(3);
+  assert.throws(() => h.region.raw.addBox(h.out, [0, 1, 0], [2, 2, 2], [1, 1, 1]), /budget exceeded/);
+  assert.throws(() => h.region.check(), /budget exceeded/, 'a caught emitter exception cannot publish partial scenery as ready');
+});
 
 const counts = (Tracks, id) => {
   const def = Tracks.LIST.find((d) => d.id === id);
@@ -78,7 +140,7 @@ test("bakedModel rides the scenery transform like the fallback it replaces", () 
   // so RK() was handed a string and the real k was read as the side — see the
   // behavioural test below for what that cost. This guard now pins the shape the
   // signature actually needs: out of the list, and its own wrapper.
-  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/api-wrap.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const kSide = src.slice(i).match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
@@ -151,8 +213,10 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // backdrop whose spot lies on another leg's hillside above its top (it
   // would be wholly buried; ground-audit buried 30 → 12), and 23 of those
   // calls were ones the guard dropped anyway. Guard margin unchanged.
-  assert.equal(c.backdrop, 24,
-    `spa backdrop drops = ${c.backdrop}, expected 24 — if you changed the ` +
+  // The corrected Eau Rouge profile and mound footprint check skip nine more
+  // buried placements before they reach the guard.
+  assert.equal(c.backdrop, 15,
+    `spa backdrop drops = ${c.backdrop}, expected 15 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
   // And the pre-check must not have changed what redbull SHIPS: it skips the
   // 295 calls the engine refused, and only those (graph-parity proved it).
@@ -217,16 +281,65 @@ test("a run that wraps the start line is not read as contained in an earlier run
 });
 
 test("one tree per spot", () => {
-  const src = read("js/track/scenery/nature.js");
-  assert.match(src, /const spotTaken = \(x, z\)/, "nature.js must carry the planting guard");
-  assert.equal((src.match(/if \(spotTaken\(a\.c\[0\], a\.c\[2\]\)\) return;/g) || []).length, 2,
-    "both pine() and tree() must take the guard — two trees on one spot is one tree drawn twice");
+  // Planted, not grepped: the old pin counted two `if (spotTaken(..)) return;`
+  // lines and stayed green with spotTaken() answering false — every repeat
+  // planting then drew a second tree into the first. Both pine() and tree()
+  // must refuse a spot either of them already holds, and still plant elsewhere.
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const env = vmContext();
+  const base = env.Tracks.LIST.find((d) => d.id === "bahrain");
+  const emitted = {};
+  const FOL = [0.2, 0.4, 0.2];
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      const k = Math.round(api.n * 0.3), kB = (k + 40) % api.n, kC = (k + 80) % api.n;
+      const run = (what, fn) => { const from = env.mark(); fn(); emitted[what] = env.prims.length - from; };
+      run("tree A", () => api.tree(k, 1, 30, 12, FOL));
+      run("tree A again", () => api.tree(k, 1, 30, 12, FOL));
+      run("pine on A", () => api.pine(k, 1, 30, 12, FOL));
+      run("tree B", () => api.tree(kB, 1, 30, 12, FOL));
+      run("pine C", () => api.pine(kC, 1, 30, 12, FOL));
+      run("tree on C", () => api.tree(kC, 1, 30, 12, FOL));
+      run("pine on C again", () => api.pine(kC, 1, 30, 12, FOL));
+    },
+  });
+  env.release(env.Tracks.build(def, {}));
+  for (const first of ["tree A", "tree B", "pine C"])
+    assert.ok(emitted[first] > 0, `${first} on an empty spot must plant (${emitted[first]} prims)`);
+  for (const repeat of ["tree A again", "pine on A", "tree on C", "pine on C again"])
+    assert.equal(emitted[repeat], 0, `${repeat}: a second tree on a planted spot is one tree drawn twice`);
+});
+
+test("a pine the guards refuse holds no spot: a neighbour 0.5 m away still stands (#5699 row 18)", () => {
+  // pine() reserved its TREE_GAP spot BEFORE the onTrack crown guard returned, so a suppressed pine blocked every
+  // neighbour within 1 m. A 40 m pine 5 m off the edge (its 9 m crown reaches the road) is refused; a 4 m pine
+  // 0.5 m further out must plant exactly as it does on an empty stretch.
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const env = vmContext();
+  const base = env.Tracks.LIST.find((d) => d.id === "bahrain");
+  const emitted = {};
+  const FOL = [0.2, 0.4, 0.2];
+  const def = Object.assign({}, base, {
+    scenery(api) {
+      const k = Math.round(api.n * 0.3);
+      const run = (what, fn) => { const from = env.mark(); fn(); emitted[what] = env.prims.length - from; };
+      run("tall", () => api.pine(k, 1, 5, 40, FOL));
+      run("short", () => api.pine(k, 1, 5.5, 4, FOL));
+      run("short again", () => api.pine(k, 1, 5.5, 4, FOL));
+      run("control", () => api.pine((k + 60) % api.n, 1, 5.5, 4, FOL));
+    },
+  });
+  env.release(env.Tracks.build(def, {}));
+  assert.equal(emitted.tall, 0, "the 40 m crown reaches the road: suppressed");
+  assert.equal(emitted.short, emitted.control, "the neighbour plants as on an empty stretch");
+  assert.ok(emitted.short > 0);
+  assert.equal(emitted["short again"], 0, "a pine that LANDED does reserve its spot");
 });
 
 test("a facade draws no rail on its bottom face", () => {
   // The rail at i=0 sits exactly on the section's base, so on every stacked
   // massing it lands in the plane of the rail on the section below.
-  assert.match(read("js/track/scenery/city.js"), /if \(!simple\) for \(let i = 2; i <= rowN; i \+= 2\)/,
+  assert.match(read("js/track/scenery/facade.js"), /if \(!simple\) for \(let i = 2; i <= rowN; i \+= 2\)/,
     "the facade rail loop must start at 2, not 0");
 });
 
@@ -260,11 +373,12 @@ test("abutting runs do not emit their seam node twice", () => {
   // passes one that deliberately omits the stripe colour (the plain slab
   // underneath is what duplicates).
   const src = read("js/track/scenery/structures.js");
+  const stands = read("js/track/scenery/stands.js");
   assert.match(src, /const along = \(s0, s1, stepM, fn, tag\) =>/,
     "along must take a seam tag");
   assert.match(src, /if \(seen\.has\(k\)\) continue;/,
     "and skip a node it has already walked under that tag");
-  const tagged = src.match(/^ {6}\}, `[a-zA-Z]+\|/gm) || [];
+  const tagged = (src + "\n" + stands).match(/^ {6}\}, `[a-zA-Z]+\|/gm) || [];
   assert.ok(tagged.length >= 9,
     `every along-based emitter must pass a tag — found ${tagged.length}`);
   assert.match(read("js/track/scenery/identity.js"), /\}, `canyon\|\$\{side\}\|\$\{gap\}/,
@@ -305,7 +419,7 @@ test("along + wrapped helpers stay on the authored span (imola / spa)", () => {
 });
 
 test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/api-wrap.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const end = src.indexOf("\n  function ", i + 1);

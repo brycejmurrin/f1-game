@@ -63,10 +63,13 @@
   background: var(--surf-1);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
-  outline: none;
   cursor: default;
 }
-.td-stage canvas:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+/* THE FOCUS RING IS AN OUTLINE, never outline:none plus a box-shadow: forced
+   colors strips box-shadow, so a keyboard user in Windows High Contrast lost
+   the canvas's only focus cue. The base :focus-visible ring (css/tokens.css,
+   inset) now applies as is; forced colors recolours an outline, it does not
+   drop it. */
 /* The elevation strip (js/editor/profile.js) under the main canvas: a fixed
    band tall enough for ≥44 px grips; the main canvas keeps the rest. */
 .td-stage > canvas[data-role="profile"] {
@@ -115,7 +118,7 @@
 .td-pane { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .td-group { display: flex; flex-direction: column; gap: calc(var(--gap) / 2); }
 .td-label {
-  font-size: var(--label); font-weight: 700; font-style: italic;
+  font-size: max(var(--label), var(--td-fs-floor)); font-weight: 700; font-style: italic;
   letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
 }
 /* label · − · value · + : the two keys are --tap-sm squares (paired micro-toggles) */
@@ -142,7 +145,7 @@
   padding: 0 var(--gap);
   /* 16px floor: iOS Safari auto-zooms when a focused input is under 16px.
      var(--fs-2) is 15px at the default text scale — one px under the floor. */
-  font: inherit; font-size: 16px; text-transform: uppercase; letter-spacing: var(--ls-2);
+  font: inherit; font-size: max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1)))); text-transform: uppercase; letter-spacing: var(--ls-2);
   color: var(--text);
   background: var(--plate);
   border: 1px solid var(--plate-line);
@@ -660,11 +663,19 @@
 }
 
 /* The editor follows the workflow, while collection and help get full pages. */
-#trackdesigner [data-role="mode-bar"] { display: flex; flex-direction: row; align-items: center; gap: calc(var(--gap) / 2); min-width: 0; }
+#trackdesigner [data-role="mode-bar"] { display: flex; flex-direction: row; align-items: center; gap: calc(var(--gap) / 2); }
 #trackdesigner [aria-label="Designer mode"] { flex: 1; display: flex; flex-wrap: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button { flex: 1 0 auto; white-space: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button::before { content: attr(data-step); color: var(--dim); margin-inline-end: calc(var(--gap) / 3); }
-#trackdesigner .td-rail { scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2); overflow-anchor: none; }
+#trackdesigner .td-rail {
+  scroll-padding-top: calc(var(--tap-paint) + var(--gap) * 2);
+  /* Keep the last inspector chips clear of the SAVE / RACE / TIME TRIAL foot
+     when scrollIntoView / focus lands them at the end of the rail. */
+  scroll-padding-bottom: calc(var(--tap-paint) + var(--gap));
+  padding-bottom: calc(var(--gap) * 1.5);
+  overflow-anchor: none;
+  box-sizing: border-box;
+}
 #trackdesigner [data-role="mode-bar"] [data-role="context-help"] { flex: none; }
 #trackdesigner .td-stage { container-type: inline-size; container-name: designer-map; }
 @media (min-height: 501px) {
@@ -696,7 +707,7 @@
 #trackdesigner [data-role="workspace-status"] { grid-column: 1 / -1; align-items: center; min-width: 0; }
 #trackdesigner [data-role="workspace-status"] .td-msg { grid-column: auto; flex: 1 1 12em; }
 #trackdesigner [data-role="checks-summary"] { flex: none; font-size: var(--fs-micro); }
-#trackdesigner [data-role="checks-summary"][data-level="red"] { border-color: var(--slower); color: var(--slower); }
+#trackdesigner [data-role="checks-summary"][data-level="red"] { border-color: var(--slower); color: var(--slower-ink); }
 #trackdesigner [data-role="checks-summary"][data-level="amber"] { border-color: var(--sec-slow); }
 @media (max-width: 760px) {
   #trackdesigner [data-role="mode-bar"] { flex-wrap: wrap; }
@@ -718,6 +729,9 @@
   #trackdesigner [data-role="workspace-status"] .td-msg { min-width: 0; }
 }
 @media (max-width: 760px) and (orientation: portrait) {
+  /* Map keeps 1.3fr: a 1fr map left the profile canvas overhanging .td-stage at
+     390x844 (track-designer.spec "profile must fit its stage"). The rail's
+     scroll-padding-bottom keeps the last chips clear of the foot instead. */
   #trackdesigner .td-body { grid-template-rows: auto minmax(0, 1.3fr) minmax(0, 1fr); }
 }
 
@@ -736,10 +750,11 @@
 @container designer-shell (max-width: 500px) and (max-height: 600px) {
   #trackdesigner .td-body { min-height: calc(var(--tap) * 12); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
   #trackdesigner [data-role="mode-bar"] { grid-column: 1; grid-row: 1; }
-  #trackdesigner[data-pane="design"] .td-stage { height: calc(var(--tap) * 6); min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
+  /* Let the wrapped toolbar and both canvases contribute to the stage minimum. */
+  #trackdesigner[data-pane="design"] .td-stage { display: flex; min-height: min-content; grid-column: 1; grid-row: 2; }
   #trackdesigner[data-pane="design"] .td-stage > .td-chips[data-role="toolbar"] { position: static; grid-column: 1; grid-row: 1; flex-flow: row wrap; }
-  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; }
-  #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 3; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { flex: 1 0 72px; min-height: 72px; contain: size; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { flex: none; }
   #trackdesigner .td-rail { grid-column: 1; grid-row: 3; }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-body { grid-template-rows: minmax(0, 1fr); }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-rail { grid-row: 1; }
@@ -767,6 +782,9 @@
   min-height: calc(var(--tap) * 5.5); padding-top: 0;   /* UI SIZE past ~150 % scrolls the dialog instead of crushing the rail */
 }
 #trackdesigner[data-foot="in"] .td-stage { grid-column: 1; grid-row: 1 / span 3; min-height: 0; }
+@container designer-shell (max-width: 500px) and (max-height: 600px) {
+  #trackdesigner[data-foot="in"][data-pane="design"] .td-stage { min-height: min-content; }
+}
 #trackdesigner[data-foot="in"] [data-role="mode-bar"] { grid-column: 2; grid-row: 1; padding-right: calc(var(--tap) + var(--gap)); gap: 0; }
 #trackdesigner[data-foot="in"] [aria-label="Designer mode"] > button::before { display: none; }
 #trackdesigner[data-foot="in"] [data-role="mode-bar"] > * { min-width: 0; padding-inline: 0; letter-spacing: 0; font-size: var(--fs-micro); }
@@ -778,8 +796,10 @@
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr); gap: calc(var(--gap) / 2);
   padding: calc(var(--gap) / 2) 0 calc(var(--pad) * 0.4);
 }
-#trackdesigner[data-foot="in"] .td-foot [data-role="workspace-status"] { grid-column: 1 / -1; flex-wrap: nowrap; }
-#trackdesigner[data-foot="in"] .td-foot .td-msg { display: none; }
+#trackdesigner[data-foot="in"] .td-foot [data-role="workspace-status"] { grid-column: 1 / -1; flex-wrap: wrap; }
+#trackdesigner[data-foot="in"] .td-foot .td-msg { display: block; flex-basis: 100%; overflow: visible; -webkit-line-clamp: unset; line-clamp: unset; }
+#trackdesigner[data-foot="in"] .td-foot .td-msg:empty { display: none; }
+#trackdesigner[data-foot="in"] > .td-body { grid-row: 2; grid-column: 1; }
 #trackdesigner[data-foot="in"] .td-foot .sel-edit, #trackdesigner[data-foot="in"] .td-foot .sel-chip,
 #trackdesigner[data-foot="in"] .td-foot [data-role="file-menu"] > summary { padding-inline: calc(var(--gap) / 3); min-width: 0; }
 
@@ -793,12 +813,56 @@
   --tap-min: max(24px, calc(24px / var(--td-zoom)));
   --tap-paint: max(24px, calc(var(--tap-paint-at) / var(--td-zoom)));
 }
+/* The designer has its own zoom, including the default phone size when no
+   Appearance override exists. Keep its controls usable in painted pixels. */
+@media (pointer: coarse) {
+  #trackdesigner[open],
+  :root[data-look-designer-size] #trackdesigner {
+    --td-touch-floor: calc(44px / var(--td-zoom));
+    --tap: max(var(--tap-0), var(--td-touch-floor));
+    --tap-sm: max(30px, var(--td-touch-floor));
+    --tap-paint: max(44px, var(--td-touch-floor));
+    --chip-h: max(40px, var(--td-touch-floor));
+  }
+  #trackdesigner[open] :is(button, summary, .td-input),
+  #trackdesigner[data-foot="in"] [data-role="mode-bar"] > [data-role="context-help"] {
+    min-block-size: var(--td-touch-floor);
+    min-inline-size: var(--td-touch-floor);
+  }
+  #trackdesigner[open] .td-stage > canvas[data-role="profile"] { min-height: var(--td-touch-floor); }
+}
 :root[data-look-designer-split] #trackdesigner[data-foot="in"] .td-body { grid-template-columns: minmax(0, 1fr) minmax(250px, calc(100% - var(--look-designer-split))); }
 @media (min-width: 761px) and (orientation: landscape) {
   :root[data-look-designer-split] #trackdesigner[data-foot="out"] .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, calc(100% - var(--look-designer-split))); }
 }
-:root[data-look-designer-text="small"] #trackdesigner { --fs-2: 14px; --fs-3: 15px; --fs-4: 16px; --fs-5: 17px; --fs-6: 18px; }
-:root[data-look-designer-text="large"] #trackdesigner { --fs-micro: 16px; --fs-2: 17px; --fs-3: 18px; --fs-4: 20px; --fs-5: 21px; --fs-6: 23px; }
+/* 12 PAINTED px text floor (#5235 recipe): --td-zoom multiplies ui-scale by
+   DESIGNER SIZE (phone default 75 %), so the tokens.css ui-scale floor alone
+   still painted UNDO/REDO/FIT at ~7–9 px (0.7 × 0.75 × 16 ≈ 8.4). Re-floor
+   against --td-zoom. Keep these AFTER the look-designer-text knobs so a bare
+   16px LARGE assignment cannot underrun the painted floor again. */
+#trackdesigner {
+  --td-fs-floor: calc(12px / var(--td-zoom));
+  --fs-micro: max(14px, var(--td-fs-floor));
+  --fs-2: max(15px, var(--td-fs-floor));
+  --fs-3: max(16px, var(--td-fs-floor));
+  --fs-4: max(17px, var(--td-fs-floor));
+}
+:root[data-look-designer-text="small"] #trackdesigner {
+  --fs-2: max(14px, var(--td-fs-floor));
+  --fs-3: max(15px, var(--td-fs-floor));
+  --fs-4: max(16px, var(--td-fs-floor));
+  --fs-5: max(17px, var(--td-fs-floor));
+  --fs-6: max(18px, var(--td-fs-floor));
+}
+:root[data-text-size="large"] #trackdesigner,
+:root[data-look-designer-text="large"] #trackdesigner {
+  --fs-micro: max(16px, var(--td-fs-floor));
+  --fs-2: max(17px, var(--td-fs-floor));
+  --fs-3: max(18px, var(--td-fs-floor));
+  --fs-4: max(20px, var(--td-fs-floor));
+  --fs-5: max(21px, var(--td-fs-floor));
+  --fs-6: max(23px, var(--td-fs-floor));
+}
 :root[data-look-designer-profile="short"] #trackdesigner .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 1.6); min-height: var(--tap-paint); }
 :root[data-look-designer-profile="tall"] #trackdesigner .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 3.4); }
 

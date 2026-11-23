@@ -37,6 +37,7 @@ import {
 } from "../lib/harness.mjs";
 import sharp from "sharp";
 import { pixelEvidence, rendererEvidence } from "./capture-contract.mjs";
+import { prefetchCaptureModels, reportCaptureFallbacks } from "./capture-fallbacks.mjs";
 import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPresentedCanvas, requireHardwareWebGpu } from "./probe-page.mjs";
 import {
   SHOT_USAGE,
@@ -202,6 +203,8 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
       seed: a.seed(), renderClock: a.renderClock(), render: a.renderScale(), camera: a.cameraState(), info: a.info() };
   });
   const renderer = rendererEvidence(state.diag, pixels, job.backend);
+  let fallbackLine = "";
+  const fallbacks = await reportCaptureFallbacks(page, job.trackId, (line) => { fallbackLine = line; });
   if (job.capture.gpu === "hardware" && (job.backend === "webgpu" || job.capture.tlxWebgpu)) {
     const gpu = state.diag.env?.backendState;
     const threeWebgpu = job.capture.tlxWebgpu;
@@ -216,7 +219,7 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
     viewport: page.viewportSize(), frame: { camera: frame.camera, clear: frame.clear, dbgCamActive: frame.dbgCamActive,
       traffic: job.traffic ? { count: frame.trafficCount, cars: frame.trafficCars } : null,
       drivingLine: frame.lineMode ?? undefined },
-    job, browser: diagnostics, state, renderer, readiness, pixels,
+    job, browser: diagnostics, state, renderer, fallbacks, readiness, pixels,
     image: { path: job.out, bytes: shot.bytes, via: shot.via, scope: pageScope ? "page" : "scene" } }, null, 2) + "\n");
   if (!renderer.positive) throw new Error(`capture requested ${job.backend} but renderer evidence is not healthy: ${JSON.stringify(renderer)}`);
   const st = await sharp(buf).stats();
@@ -229,7 +232,8 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
     ? "  ⚠ free-cam inactive (chase?)"
     : "";
   console.log(`wrote ${job.out} (${kb} KB, ${job.type}, pixel spread ${spread.toFixed(1)})${camWarn}`);
-  console.log(JSON.stringify({ modelsPrefetch: modelInfo, readiness, pixels, renderer, scope: pageScope ? "page" : "scene", frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models, clear: frame.clear } }, null, 2));
+  console.log(`  ${fallbackLine}`);
+  console.log(JSON.stringify({ modelsPrefetch: modelInfo, fallbacks, readiness, pixels, renderer, scope: pageScope ? "page" : "scene", frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models, clear: frame.clear } }, null, 2));
 }
 
 let trace = null;
@@ -279,15 +283,15 @@ try {
         diagnostics.webgpuAdapter = await requireHardwareWebGpu(page);
       }
       await applyCaptureProfile(page, first.capture);
-      modelInfo = await page.evaluate(async () => {
-        if (typeof Assets === "undefined" || !Assets.loadModels) return { n: 0 };
-        try { const n = await Assets.loadModels(); return { n, ids: Assets.models() }; }
-        catch (e) { return { n: 0, err: String(e) }; }
-      });
+      // #6037 §2: default = models a player's page loads for this track; --all-models opts into the whole pack.
+      modelInfo = await prefetchCaptureModels(page, { trackId: group.trackId, allModels: plan.allModels });
     }
     if (currentTrack !== group.trackId) {
       await raceTrack(page, group.trackId, plan.waitMs);
       currentTrack = group.trackId;
+      if (!plan.allModels) {
+        modelInfo = await prefetchCaptureModels(page, { trackId: group.trackId, allModels: false });
+      }
     }
     for (const job of group.jobs) {
       try { await captureJob(page, job, plan.waitMs, modelInfo, diagnostics); }

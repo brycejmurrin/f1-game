@@ -18,7 +18,6 @@ export const LEVELS = ["compact", "diagnostic", "full"];
 export const RUNNER = ["node", "tools/agent-run.mjs", "--"];
 const OUTPUT_FLAGS = /(?<![\w-])--(?:quiet|verbose|concise|summary|json|full|detail|out|limit|offset|failures-only|stream|format|output-level)(?![\w-])/g;
 const interpreter = { ".mjs": "node", ".cjs": "node", ".js": "node", ".py": "python3", ".sh": "bash" };
-const POLICIES = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/agent-output/policies.json"), "utf8"));
 
 /** Resolve a tool policy row; `@name` preserve strings look up policies.contracts. */
 export function resolveToolPolicy(policies, toolPath) {
@@ -61,7 +60,8 @@ export function npmAgentCommand(name, runner = RUNNER) {
 }
 
 export function collect({ files = walkTools(), read = file => fs.readFileSync(path.join(ROOT, file), "utf8"),
-  scripts, servers, policies = POLICIES } = {}) {
+  scripts, servers, policies } = {}) {
+  policies ??= JSON.parse(fs.readFileSync(path.join(ROOT, "docs/agent-output/policies.json"), "utf8"));
   scripts ??= JSON.parse(read("package.json")).scripts;
   servers ??= JSON.parse(read(".mcp.json")).mcpServers;
   const npmScripts = Object.keys(scripts).sort().map(name => ({ name, command: scripts[name] }));

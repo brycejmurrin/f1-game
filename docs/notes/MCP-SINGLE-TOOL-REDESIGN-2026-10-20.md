@@ -1,5 +1,7 @@
 # MCP context cost: measured; one-tool redesign rejected; gateway trimmed (2026-10-20)
 
+Summary: MCP context cost measured; the one-tool-per-server redesign rejected; the gateway trimmed instead.
+
 Bryce's question (2026-10-20, to OrchB 24): every agent loads every project MCP
 tool description, so should each server expose ONE parameterized tool plus a
 pairing skill? Worker B·W11 measured the listings, read each client's current

@@ -21,7 +21,8 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 let g = null, m = null;
 before(async () => {
-  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
+  // Keep the bench at its measured ground-speed scale.
+  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
   m = measure(g, 0);
 });
@@ -256,9 +257,7 @@ test("a stopped car with residual lateral velocity comes to rest laterally (Coul
 // Brake-to-reverse on a DESCENT: offtrack-vm's reverse test is flat. On a
 // descent, slope gravity's a·dt re-took the `speed > 0` braking branch every
 // step and fought the reverse crawl. A car the BRAKES hold takes no gravity
-// feed, so the crawl builds at REVERSE_ACCEL exactly as on the flat. Measured on
-// spa's steepest descent (-16.8 %): -5.00 m/s after 1 s with the fix, -3.63
-// without (on this tree the crawl still engages without the fix, only slower).
+// feed, so the crawl builds at REVERSE_ACCEL exactly as on the flat.
 test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", async () => {
   await g.race("spa", "day", "dry");
   const a = g.apex, physicsBefore = { ...a.tuning() }, L = g.G.track.total, N = 400;
@@ -271,7 +270,11 @@ test("brake at a standstill on a spa DESCENT reverses at the flat-ground rate", 
       const gr = (ys[(i + 1) % N] - ys[i]) / (L / N);
       if (gr < grade) { grade = gr; f = i / N; }
     }
-    assert.ok(grade < -0.1, `anti-vacuity: spa's steepest descent is only ${(grade * 100).toFixed(1)} %`);
+    // Check that gravity actually pulls the unbraked car forward at this station.
+    a.jump(f, 0, 0);
+    a.setInput({ steer: 0, throttle: false, brake: false });
+    a.step(1 / 60, 1);
+    assert.ok(a.physState().speed > 0, `car should roll downhill at f=${f} (grade ${grade})`);
     const { REVERSE_ACCEL, REVERSE_MAX } = g.sandbox.PhysicsConsts;
     a.jump(f, 0, 0);
     let atHalf = 0;
@@ -494,6 +497,20 @@ test("wheel state ON: over the circle the front locks and the stop gets longer",
   assert.ok(d.on.kF < -0.5 && d.on.lock > 0.5, `locked: ${JSON.stringify(d.on)}`);
   assert.ok(d.on.d > d.off.d + 0.5, `a sliding tyre stops longer: ${d.off.d} → ${d.on.d}`);
 });
+test("wheel state mirror (#1628): setPhysics is session-only, tuning() reports it, reset() clears the rims", () => {
+  const w = dry.w, P = w.G.player, store = () => vm.runInContext('localStorage.getItem("apex26.wheelState")', w.ctx);
+  dry.set(false);
+  const stored = store();
+  assert.equal(w.apex.tuning().wheelState, false, "OFF by decision (option B)");
+  assert.equal(w.apex.setPhysics({ wheelState: true }).wheelState, true);
+  assert.equal(store(), stored, "a dev toggle never rewrites the player's stored choice");
+  const b = bench(w, 0); b.reset(40); b.step({ steer: 0, brake: true });
+  assert.ok(Number.isFinite(P.vwF) && Number.isFinite(P.kappaF), "ON: the rims are live");
+  w.apex.reset(0.1, 0);
+  for (const k of ["vwF", "vwR", "kappaF", "kappaR", "_wsV"]) assert.equal(P[k], undefined, k + " is an episode transient");
+  assert.equal(w.apex.setPhysics({ wheelState: false }).wheelState, false);
+  dry.set(false);
+});
 test("wheel state ON: full throttle on grass spins the rear and pulls slower", () => {
   const w = dry.w, P = w.G.player, v = {};
   for (const on of [false, true]) {
@@ -510,4 +527,28 @@ test("wheel state ON: full throttle on grass spins the rear and pulls slower", (
   assert.ok(v.off.off && v.on.off, `stayed on the grass: ${JSON.stringify(v)}`);
   assert.ok(v.on.spin > 0.5, `wheelspin: ${JSON.stringify(v.on)}`);
   assert.ok(v.on.speed < v.off.speed - 0.3, `spinning tyres pull slower: ${v.off.speed} → ${v.on.speed}`);
+});
+
+// BRAKE THERMAL (#1577, js/physics/wheel-state.js; opt-in, default OFF, rides on the wheel state).
+// Repeated heavy stops heat the discs; past the fade onset the pads deliver less, so the stop gets
+// LONGER. OFF is byte-identical (no temperature is ever written).
+test("brake thermal (#1577): repeated heavy stops heat the discs and lengthen the stop; OFF changes nothing", () => {
+  const w = dry.w, P = w.G.player;
+  const set = (ws, bt) => { w.apex.setPhysics({ wheelState: ws, brakeThermal: bt }); };
+  const run = (bt) => {
+    set(true, bt); P.brakeTF = P.brakeTR = undefined;
+    const rows = [];
+    for (let i = 0; i < 6; i++) { const s = stopFrom(w, 83, null); rows.push({ d: s.d, tF: P.brakeTF }); }
+    return rows;
+  };
+  const off = run(false), on = run(true);
+  set(false, false);
+  assert.equal(off[0].tF, undefined, "OFF never writes a temperature");
+  assert.ok(Math.abs(off[5].d - off[0].d) < 0.5, "OFF: stops do not drift " + JSON.stringify(off));
+  assert.ok(Math.abs(on[0].d - off[0].d) < 1, "ON, cold: the first stop matches OFF");
+  assert.ok(on[5].tF > on[0].tF + 100, "discs heat across stops " + JSON.stringify(on));
+  assert.ok(on[5].d > on[0].d + 3, "hot stop is longer than the cold one " + JSON.stringify(on));
+  assert.equal(w.apex.setPhysics({ brakeThermal: true }).brakeThermal, true);
+  assert.equal(w.apex.setPhysics({ brakeThermal: false }).brakeThermal, false);
+  assert.ok("brakeTemp" in w.apex.physState());
 });

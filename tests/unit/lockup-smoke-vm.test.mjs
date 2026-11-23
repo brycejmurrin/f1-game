@@ -28,15 +28,22 @@ test("a straight-line stop from speed locks a front and the lock reads as skid i
   assert.equal(p.wheelLock || 0, 0, "no lock while coasting");
   p.brakeBias = 0.6;   // forward bias: dry lock is on afF with a speed-aware onset
   g.apex.setInput({ throttle: false, brake: true, steer: 0 });
-  let maxLock = 0, okFrames = 0, frames = 0;
-  for (let i = 0; i < 40 && p.speed > 5; i++) {
+  // Run the whole stop, so the locked frames span the speed range (a lock term
+  // gated on speed would pass a test that only saw the first fast frames).
+  let maxLock = 0, okFrames = 0, lockedFrames = 0, frames = 0, minLockedV = Infinity;
+  const bad = [];
+  for (let i = 0; i < 240 && p.speed > 5; i++) {
     g.step(1); frames++;
     const lock = p.wheelLock || 0;
     maxLock = Math.max(maxLock, lock);
-    if (lock > 0.3 && (p.skidIntensity || 0) >= lock * 0.9 - 1e-6 && p.skidIntensity > 0.25) okFrames++;
+    if (lock <= 0.3) continue;
+    lockedFrames++; minLockedV = Math.min(minLockedV, p.speed);
+    if ((p.skidIntensity || 0) >= lock * 0.9 - 1e-6 && p.skidIntensity > 0.25) okFrames++;
+    else if (bad.length < 4) bad.push(`v ${p.speed.toFixed(1)} lock ${lock.toFixed(3)} skid ${(p.skidIntensity || 0).toFixed(3)}`);
   }
   assert.ok(maxLock > 0.3, `a hard dry stop with forward bias should lock a front (bench ~0.47 at 55 m/s), peak ${maxLock}`);
-  assert.ok(okFrames > 0, `on every locked frame skidIntensity must carry the lock (≥ 0.9 × wheelLock, above the 0.25 mark/smoke threshold); ${okFrames}/${frames}`);
+  assert.ok(lockedFrames > 0, `anti-vacuity: some frames locked (${lockedFrames}/${frames})`);
+  assert.equal(okFrames, lockedFrames, `on every locked frame skidIntensity must carry the lock (≥ 0.9 × wheelLock, above the 0.25 mark/smoke threshold); ${okFrames}/${lockedFrames} locked frames (slowest locked ${minLockedV.toFixed(1)} m/s); first misses: ${bad.join("; ")}`);
 });
 
 test("the smoke site reads the lock and picks a front wheel for it", () => {

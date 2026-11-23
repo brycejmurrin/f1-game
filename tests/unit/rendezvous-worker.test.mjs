@@ -9,7 +9,7 @@ import worker, { Room } from "../../worker/rendezvous.js";
 
 function roomHarness() {
   const records = new Map();
-  const calls = { get: 0, put: 0, alarm: 0, deleteAll: 0 };
+  const calls = { get: 0, put: 0, alarm: 0 };
   const state = {
     storage: {
       async get(key) { calls.get++; return records.get(key); },
@@ -17,10 +17,11 @@ function roomHarness() {
       async setAlarm(at) { calls.alarm++; calls.alarmAt = at; },
       async delete(key) { records.delete(key); },
       async deleteAlarm() { calls.alarmAt = null; },
+      async deleteAll() { calls.deleteAll = (calls.deleteAll || 0) + 1; records.clear(); },
       // SQLite transactions use storage itself; the legacy txn object has no alarm methods.
       async transaction(fn) { return fn({}); },
-      async deleteAll() { calls.deleteAll++; records.clear(); },
     },
+    async blockConcurrencyWhile(fn) { return fn(); },
   };
   return { room: new Room(state), records, calls };
 }
@@ -165,6 +166,33 @@ test("Worker rate-limits room creation before allocating more Durable Objects", 
   assert.equal(ids, 20, "limited requests must not resolve or create a Durable Object");
 });
 
+test("Worker rate-limits junk and legacy paths before they burn request quota", async () => {
+  let ids = 0;
+  const env = { ROOM: { idFromName() { ids++; }, get() { throw new Error("unreachable"); } } };
+  const headers = { "cf-connecting-ip": "198.51.100.42" };
+  let last;
+  for (let i = 0; i < 181; i++) {
+    last = await worker.fetch(new Request(`https://relay.test/v3/r/not-a-room/${i}`, {
+      method: "GET", headers,
+    }), env);
+  }
+  assert.equal(last.status, 429, "junk paths share the read budget");
+  assert.equal(last.headers.get("retry-after"), "60");
+  assert.equal(ids, 0, "junk paths must never name a Durable Object");
+
+  const legacyHeaders = { "cf-connecting-ip": "198.51.100.43" };
+  let legacy;
+  for (let i = 0; i < 21; i++) {
+    legacy = await worker.fetch(new Request(`https://relay.test/r/LEGACY${i}/offer`, {
+      method: "POST",
+      headers: { ...legacyHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ payload: sealed("legacy") }),
+    }), env);
+  }
+  assert.equal(legacy.status, 429, "legacy /r/ writes share the write budget");
+  assert.equal(ids, 0);
+});
+
 test("Worker rate-bucket storage is hard-capped under fresh address churn", async () => {
   const stub = { fetch: async () => new Response('{"ok":true}', { status: 200 }) };
   const env = { ROOM: { idFromName(code) { return code; }, get() { return stub; } } };
@@ -234,10 +262,23 @@ test("Worker keeps the earliest slot expiry and preserves a later live answer", 
     assert.equal(h.records.has("offer"), false);
     assert.equal(h.records.has("answer"), true);
     assert.equal(h.calls.alarmAt, h.records.get("answer").expires);
+    assert.equal(h.calls.deleteAll || 0, 0, "a room with a live slot keeps its storage");
     now = h.calls.alarmAt;
     await h.room.alarm();
     assert.equal(h.records.size, 0);
+    assert.equal(h.calls.deleteAll, 1, "an emptied room drops its whole SQLite database");
+    assert.equal(h.calls.alarmAt, null, "and its alarm (deleteAll keeps alarms before compat 2026-02-24)");
   } finally { Date.now = realNow; }
+});
+
+test("Room alarm skips deleteAll when a write lands between emptying and deletion", async () => {
+  const h = roomHarness();
+  const live = { payload: "v2." + "A".repeat(60), owner: null, expires: Date.now() + 120000 };
+  // The transaction empties the room; a POST then lands before the delete step runs.
+  h.room.state.blockConcurrencyWhile = async (fn) => { h.records.set("offer", live); return fn(); };
+  await h.room.alarm();
+  assert.equal(h.calls.deleteAll || 0, 0);
+  assert.equal(h.records.get("offer"), live, "the racing write survives");
 });
 
 test("Worker rejects malformed v2 encoding and undersized crypto envelopes", async () => {
@@ -261,4 +302,51 @@ test("Worker accepts actual client envelopes including the minimum empty plainte
     assert.equal(res.status, 200, "valid client payload must retain compatibility");
     assert.equal(h.records.get("offer").payload, payload);
   }
+});
+
+test("Worker answers OPTIONS and non-GET/POST before naming a Durable Object", async () => {
+  let ids = 0;
+  const env = { ROOM: { idFromName() { ids++; }, get() { throw new Error("unreachable"); } } };
+  const opt = await worker.fetch(new Request(route, { method: "OPTIONS" }), env);
+  assert.equal(opt.status, 204);
+  assert.equal(opt.headers.get("access-control-allow-origin"), "*");
+  assert.equal(ids, 0);
+  for (const method of ["PUT", "DELETE", "HEAD", "PATCH"]) {
+    const res = await worker.fetch(new Request(route, { method }), env);
+    assert.equal(res.status, 405, method);
+    assert.equal(res.headers.get("allow"), "GET, POST, OPTIONS");
+    assert.equal(ids, 0, method + " must not name a Durable Object");
+  }
+});
+
+test("Room refuses an unknown slot without touching storage", async () => {
+  const h = roomHarness();
+  const res = await h.room.fetch(new Request("https://relay.test/?slot=nope"));
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, "bad_slot");
+  assert.equal(h.calls.get, 0);
+  assert.equal(h.calls.put, 0);
+});
+
+test("Worker rejects malformed owner capabilities and marks responses no-store", async () => {
+  const h = roomHarness();
+  for (const owner of ["short", "has spaces!!", "x".repeat(200), 12, true, {}]) {
+    const res = await h.room.fetch(new Request(url, {
+      method: "POST",
+      body: JSON.stringify({ payload: sealed("owner-check"), owner }),
+    }));
+    assert.equal(res.status, 400, JSON.stringify(owner));
+    assert.equal((await res.json()).error, "bad_owner");
+  }
+  assert.equal(h.calls.put, 0);
+
+  const ok = await h.room.fetch(new Request(url, {
+    method: "POST",
+    body: JSON.stringify({ payload: sealed("owner-ok"), owner: "owner_capability_123456" }),
+  }));
+  assert.equal(ok.status, 200);
+  assert.equal(ok.headers.get("cache-control"), "no-store");
+  const read = await h.room.fetch(new Request(url));
+  assert.equal(read.status, 200);
+  assert.equal(read.headers.get("cache-control"), "no-store");
 });

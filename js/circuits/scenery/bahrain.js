@@ -5,13 +5,18 @@
    tests/unit/load-order.test.mjs hold the lockstep. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["bahrain"] =
-  function (api) {
-      const { def, K, lapBounds, out, MAT, n, ds, px, pz, pyMin, hash, vadd,
-        place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid, addMountain,
+  function (api, stepped = false) {
+    const steps = buildSteps();
+    if (stepped) return steps;
+    while (!steps.next().done) { /* synchronous scenery callers */ }
+
+    function* buildSteps() {
+      const { def, K, lapBounds, out, MAT, n, ds, pyMin, hash, vadd,
+        place, anchor, addBox, addCyl, addFrustum, addPyramid, addMountain,
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
-        modelGroup, groundPatch, bleacher, onTrack, every, terrainYAt,
+        modelGroup, groundPatch, onTrack, every, terrainYAt,
         circuitKit } = api;
 
       // Fractions stay in the scenery frame rooted at sceneryStartFrac.
@@ -29,6 +34,7 @@
       // The old last table entry was T14, with T15 missing; keep these
       // fixtures at that physical bend when the numbering table is corrected.
       const FC = wrapFrac(def.turns[13] - shift);
+      const T4F = wrapFrac(def.turns[3] - shift);
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -88,6 +94,7 @@
 
       const { cx, cz, radius: rad } = lapBounds();
 
+      yield;
       for (const [extra, jit, wMin, hMin, count, forestCol, rockCol] of [
         [140, 55,  220, 24, 72, SAND_DARK,  SAND      ],  // near warm-sand band
         [340, 100, 300, 38, 60, SAND,       SAND_LIGHT],  // far lighter-horizon band
@@ -290,6 +297,7 @@
       building(K(SF), 1,  2, 16, 14, 80,
         { kind: "slab", wall: PIT_CREAM, window: WIN_WARM, lit: true, floor: 4, setback: true });
       // Pit wall + start gantry
+      yield;
       wall(SF - 0.03, SF + 0.04, 1, 3, 1.1, [0.85, 0.85, 0.85]);
       overheadSpan({
         id: "bahrain-start-gantry", frac: SF + 0.005, clearance: 8.5, startLights: true,
@@ -342,6 +350,7 @@
       sakhirTribuna("bahrain-main-tribuna-b", SF + 0.014, -1, 19, 52, false);
       // Victory approach — keep grandstandEx so bahrain-grandstand-rake ≥ 20 calls.
       // gap 44 (was 36): clears flood-mast pool coplanar with crowdBank (ground-audit).
+      yield;
       grandstandEx(SF - 0.03, -1, 44, 48, STAND_CREAM, SEAT_BLUE,
         { roof: "cantilever", endWalls: true, pylons: true });
       // Second pit-side building: timing/media centre with cool lit windows
@@ -396,6 +405,7 @@
       // inside Turn 1 (Turn 1 has its own covered grandstand). Flat capped roof —
       // the cone/sail silhouette is wrong. required:true so a missing emit fails
       // the foundation spec (wave-1 Monaco pattern).
+      yield;
       (function sakhirTower() {
         // Paddock side (+1) of the pit straight, between race control (38 m)
         // and the hospitality kit (100 m). Side 1 gap 62: 19 m past control,
@@ -448,6 +458,7 @@
         }, { required: true });
       })();
 
+      yield;
       cityFront(SF - 0.025, SF + 0.05, 1, 30, {
         minH: 6, maxH: 14, depth: 18, step: 18,
         palette: [HOSP_SAND, HOSP_WARM, [0.80, 0.75, 0.64], [0.86, 0.82, 0.72]],
@@ -468,10 +479,11 @@
       // cannot clear. Length 72 m (was 90) keeps props-tris ≤ ship ratchet.
       // On the real T1 now (outside = LEFT of a right-hander); the two
       // un-named stands below stay on the diagonal they were tuned against.
+      yield;
       grandstandEx(T1F - 0.004, -1, 30, 72, STAND_CREAM, SEAT_BLUE,
         { roof: "truss", suites: true, endWalls: true });
       grandstandEx(0.025,  1, 24, 60, null, null, { livery: "steel", roof: "flat", endWalls: true });
-      grandstandEx(0.065,  1, 28, 72, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
+      grandstandEx(0.071,  1, 22, 60, null, null, { livery: "sandstone", roof: "cantilever", pylons: true });
       cameraTower(K(0.045), -1, 46, { h: 22 });
       // Michael Schumacher Corner marker (T1 renamed 2014 — circuit brief /
       // Wikipedia). Small trackside board facing the braking zone; not a
@@ -494,17 +506,20 @@
         }
       }      // Inside of T1: access road + small pit buildings
       accessBox(K(0.03), -1, 36, 10, 6, 16);
-      lightBank(K(0.06), 1, 36);
+      lightBank(K(0.061), 1, 28);
       billboard(K(0.07), -1, 10, 14, 4, [0.85, 0.12, 0.12]);
       billboard(K(0.08),  1, 10, 12, 3.5, [0.05, 0.45, 0.75]);
       billboard(K(0.10),  1, 11, 12, 4, [0.10, 0.30, 0.70]);
+      yield;
       tyreWall(0.045, 0.085, 1, 4, TYRE_CAP);
+      yield;
       fence(0.03, 0.09, -1, 7, 3.2, [0.70, 0.72, 0.76]);
       marshalPost(K(0.06), 1, 22);
 
       // University stands sit on the DRS straight just before T4 (bahrain.gp
       // map; def.turns[3] = racing 0.2503). Keyed off SF, not a raw frac: the
       // raw 0.18 this replaced landed at racing ~0.44, on T8, not T4.
+      yield;
       const UNI = wrap01(SF + 0.185);
       const UNI_LIVERY = ["steel", "alu"];
       // University Grandstand — three stacked cream slabs + blue seat rake
@@ -564,12 +579,14 @@
       }
       billboard(K(UNI - 0.03), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
       // University / Turn-4 DRS straight (bahrain.gp University stand map).
-      lightBank(K(UNI + 0.005), 1, 28);
+      // Behind the University slabs, clear of their 18 m-wide footprint.
+      lightBank(K(UNI + 0.005), 1, 44);
 
       // Per-wedge setbacks: the 0.11-0.14 and 0.37 legs run 80-140 m to the left
       // of this stretch, so a uniform 64 + 14 i put wedges 0, 1 and 4 on those
       // legs (mountain()'s fit loop cannot shrink a foot that is over the road).
       const WEDGE_GAP = [85, 130, 92, 106, 90, 134];
+      yield;
       for (let i = 0; i < 6; i++) {
         const k = (K(0.27) + i * Math.round(n * 0.015)) % n;
         duneWedge(k, -1, WEDGE_GAP[i], 40 + hash(k) * 28, 3.5 + hash(k * 5) * 3);
@@ -588,21 +605,25 @@
       lightBank(K(0.25), -1, 34);
       lightBank(K(0.27),  1, 34);
       // T4 broadcast vantage — the second of the four hero cameraTower spots.
-      cameraTower(K(0.235), -1, 40, { h: 20 });
-      tyreWall(0.225, 0.255, 1, 4, TYRE_CAP);
-      fence(0.22, 0.29, 1, 6, 3.2, [0.70, 0.72, 0.76]);
-      billboard(K(0.23), -1, 11, 12, 4, [0.85, 0.12, 0.12]);
-      billboard(K(0.27),  1, 11, 12, 4, [0.90, 0.55, 0.05]);
-      marshalPost(K(0.24), -1, 24);
+      // Keyed off T4F (def.turns[3]): the raw 0.22-0.29 this replaced built at
+      // racing 0.48-0.55, on T10, with the tyre wall on its inside. T4 is a
+      // RIGHT, so its run-off / tyre wall / catch fence stand on the LEFT (-1).
+      cameraTower(K(T4F - 0.006), -1, 46, { h: 20 });
+      tyreWall(wrap01(T4F - 0.004), wrap01(T4F + 0.012), -1, 4, TYRE_CAP);
+      fence(wrap01(T4F - 0.010), wrap01(T4F + 0.030), -1, 6, 3.2, [0.70, 0.72, 0.76]);
+      billboard(K(T4F - 0.012), 1, 11, 12, 4, [0.85, 0.12, 0.12]);
+      billboard(K(T4F + 0.020), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
+      marshalPost(K(T4F + 0.004), -1, 24);
 
       // Open desert left + grandstand right. Sparse dry scrub only — no green palms.
+      yield;
       for (let i = 0; i < 8; i++) {
         const k = (K(0.32) + Math.round(i * n * 0.010)) % n;
         const side = (i % 3 === 0) ? 1 : -1;
         const d = 22 + (i % 3) * 10 + hash(k * 7 + i) * 12;
         if (hash(k * 13 + i) > 0.35) bush(k, side, d, SCRUB_DRY);
       }
-      lightBank(K(0.35), -1, 36);
+      lightBank(K(0.35), -1, 22);
       grandstandEx(0.37,  1, 26, 48, STAND_CREAM, SEAT_BLUE, { roof: "cantilever", pylons: true });
       grandstandEx(0.39, -1, 26, 38, null, null, { livery: "alu", endWalls: true });
       fence(0.34, 0.41, 1, 6, 3.0, [0.70, 0.72, 0.76]);
@@ -636,6 +657,7 @@
       // the cheaper mesh the prior lightBank-only marker was waiting for.
       // Sources: https://oversteer48.com/best-seats-bahrain-gp-grandstand-guide/
       //          https://www.bahrain.gp/en/map-of-the-grandstands-24
+      yield;
       {
         const a = anchor(K(0.520), 1, 38), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 18)) {
@@ -684,6 +706,7 @@
       // Desert backdrop slab behind open section — fills the distant horizon
       backdrop(K(0.50), -1, 140, [260, 15, 12], SAND);
 
+      yield;
       for (let i = 0; i < 5; i++) {
         const k = (K(0.58) + i * 3) % n;
         marshalPost(k, -1, 28 + i * 3);
@@ -713,10 +736,12 @@
       // the right-hand fence/tyre run starts past the pit exit and the
       // right-side stands, masts and boards that stood in the pit lane are
       // gone (the 0.82 stand's spot is the Sakhir Tower's now).
+      yield;
       fence(0.805, 0.826, 1, 8, 3.2, [0.70, 0.72, 0.76]);
       tyreWall(0.805, 0.826, 1, 8, TYRE_CAP);
       fence(0.838, 0.88, 1, 8, 3.2, [0.70, 0.72, 0.76]);
       tyreWall(0.838, 0.88, 1, 8, TYRE_CAP);
+      yield;
       guardrail(0.73, 0.90, -1, 8, [0.80, 0.80, 0.82]);
       floodMast(K(0.79), -1, 32, 38);
       lightBank(K(0.86), 1, 36);
@@ -739,10 +764,10 @@
 
       // Pit-exit stand + floods (+1 paddock side), inside the in-game pit window
       // (<= ~110 m + 90 m road after the line, js/track/core/pit.js): SF+0.034 is
-      // ~185 m on. Gap 42 clears the motorhome row (26-34 m) and sits in front of
+      // ~185 m on. Gap 61 clears the hospitality frontage at 30 m and sits in front of
       // the Sakhir Tower (62) and the paddock mast (88). The old 0.912/0.940
       // absolutes and the SF+0.142..0.182 re-key both land on the T3-T4 leg.
-      grandstandEx(SF + 0.034, 1, 42, 36, null, null,
+      grandstandEx(SF + 0.034, 1, 61, 36, null, null,
         { livery: "steel", roof: "flat", endWalls: true });
       floodMast(K(SF + 0.026), 1, 44, 40);
       floodMast(K(SF + 0.044), 1, 44, 40);
@@ -750,6 +775,7 @@
       // Fourth hero broadcast vantage — final corner onto the pit straight.
       cameraTower(K(FC + 0.012), -1, 40, { h: 20 });
 
+      yield;
       wall(SF - 0.038, SF + 0.018, -1, 4, 1.0, [0.85, 0.85, 0.85]);
       // Paddock fin / comms mast (pit-side, not the duplicate slab at old 0.95).
       building(K(SF + 0.048), 1, 68, 22, 24, 28,
@@ -757,12 +783,14 @@
       tower(K(SF + 0.040), 1, 88, 5, 40,
         { col: TOWER_PALE, seg: 6, cap: true, capCol: FLOOD, mast: 6 });
       // Pit-lane furniture along the real pit straight (SF frame).
+      yield;
       tyreWall(SF + 0.004, SF + 0.052, -1, 5, TYRE_CAP);
       guardrail(SF - 0.006, SF + 0.042, 1, 9, [0.80, 0.80, 0.82]);
       // Start-line advertising hoardings
       billboard(K(SF + 0.004), 1, 11, 13, 4, BILLBOARD_LITE);
       billboard(K(SF - 0.010), -1, 11, 12, 4, [0.10, 0.55, 0.30]);
 
+      yield;
       // ── The lighting rig: one registered mast every 55 m ─────────────────
       // These masts carry the night lamp budget (dressingExclusions drops the
       // generic pass). The pit straight (final corner to T1) keeps both sides
@@ -800,6 +828,7 @@
       }
 
       fence(0.10, 0.16,  1, 7, 3.0, [0.70, 0.72, 0.76]);
+      yield;
       fence(0.66, 0.72, -1, 7, 3.0, [0.70, 0.72, 0.76]);
 
       // Dried ochre scrub + sand rocks only — green palms/oases culled for sand-island read.
@@ -831,9 +860,9 @@
             const kk = K(sf);
             const a = anchor(kk, side, gapBase + hash(kk * 5) * 12), b = [a.r, a.u, a.t];
             if (onTrack(a.c[0], a.c[2], 6)) continue;
-            addBox(out, vadd(a.c, a.u, 0.12), [5.5, 0.25, 9.5], SAND_RUNOFF, b);
+            addBox(out, vadd(a.c, a.u, 0.17), [5.5, 0.35, 9.5], SAND_RUNOFF, b);
             if (hash(kk * 11) > 0.55) {
-              addBox(out, vadd(a.c, a.u, 0.28), [2.2, 0.35, 2.0], SAND_ROCK, b);
+              addBox(out, vadd(a.c, a.u, 0.38), [2.2, 0.35, 2.0], SAND_ROCK, b);
             }
             cnt++;
             if (cnt > maxCnt) break;
@@ -914,6 +943,7 @@
         out._mat = 0;
       };
 
+      yield;
       // ── Grandstand video wall — dark frame + bright cool screen face ─────
       const videoWall = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap), b = [a.r, a.u, a.t];
@@ -926,13 +956,14 @@
         out._mat = 0;
       };
 
-      // Pit-straight wind towers, past the pit complex (not the T3-T4 leg).
+      // Pit-straight wind towers, past the pit complex and round the final
+      // corner (an older key put them on the infield leg after the first hairpin).
       windTower(K(SF + 0.060), -1, 58, 16);
       windTower(K(SF + 0.072),  1, 64, 14);
       windTower(K(0.63),  -1, 56, 15);
       windTower(K(0.80),   1, 58, 14);
-      // F1 Village marquee — back straight hospitality terrace only (T4 outside
-      // is open desert beyond the University stand; 0.26 marquee sat in runoff).
+      // F1 Village marquee — pit-straight hospitality terrace, paddock side
+      // (racing ~0.06). A 0.26 marquee sat in runoff beyond the University stand.
       marquee(K(0.80),  1, 40, 12, 44);
       // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
@@ -945,6 +976,7 @@
       grandstandEx(0.68,  1, 26, 46, STAND_CREAM, SEAT_BLUE, { endWalls: true });
       grandstandEx(0.335, 1, 28, 42, null, null, { livery: "sandstone", roof: "flat" });
 
+      yield;
       // ── General-admission terracing behind the main straight ─────────────
       // Poured mass-concrete steps in the sandstone family, sitting between the
       // 118 m hero stand at gap 18 and the Victory-approach stand at gap 36. No
@@ -970,6 +1002,7 @@
       const FROND_DRY = [0.32, 0.36, 0.19];
       const ACACIA     = [0.34, 0.36, 0.20];
       const ACACIA_DRY = [0.40, 0.39, 0.23];
+      yield;
       for (const [sf, side, dist] of [
         [0.305, -1, 44], [0.365,  1, 52], [0.455, -1, 38],
         [0.525,  1, 46], [0.575, -1, 40], [0.655,  1, 42],
@@ -1005,6 +1038,7 @@
         }
       }
 
+      yield;
       // ── THE DRAG STRIP ───────────────────────────────────────────────────
       // BIC is not one circuit, it is a motorsport COMPLEX: six tracks share
       // the site, and the 1.2 km quarter-mile drag strip is the one the locals
@@ -1114,10 +1148,10 @@
         }
       })();
 
-      for (const [sf, side, gap, w, len, h] of [
+      for (const [sf, side, gap, w, len, h, seatHeight = 0.45] of [
         [0.135,  1, 82,  26,  46, 2.6],
         [0.225, -1, 96,  34,  62, 3.4],
-        [0.345,  1, 74,  22,  38, 2.1],
+        [0.345,  1, 74,  22,  38, 2.1, 0.08],
         [0.475, -1, 88,  30,  54, 3.0],
         [0.605,  1, 92,  28,  50, 2.4],
         [0.705, -1, 78,  24,  42, 2.8],
@@ -1134,11 +1168,11 @@
         const k = K(sf), a = anchor(k, side, gap + w * 0.5), b = [a.r, a.u, a.t];
         if (onTrack(a.c[0], a.c[2], 30)) continue;
         // Seat on local sand — road-height a.c buried the scree skirt (#3342).
-        // Lift ~0.3 m so the wide scree top clears uneven terrain; keep the
+        // Seat the wide scree top to clear uneven terrain; keep the
         // scree underside ~0.08 m below the main slab so flatCoplanar stays 0.
         const gy = terrainYAt(a.c[0], a.c[2]);
         const foot = a.c.slice();
-        if (gy != null && Number.isFinite(gy)) foot[1] = gy + 0.45;
+        if (gy != null && Number.isFinite(gy)) foot[1] = gy + seatHeight;
         const hv = hash(k * 41 + gap);
         // Two offset slabs make a stepped ledge rather than a single block.
         addBox(out, vadd(foot, a.u, h * 0.5), [w, h, len],
@@ -1150,6 +1184,7 @@
           [0.56, 0.50, 0.40], b);
       }
 
+      yield;
       // ── DETAIL: desert midfield dress (sheet-01 overview was empty plate) ─
       // Service roads, low sand tech buildings, extra dune berms. Solid boxes
       // only — no shared building() open-face path.
@@ -1200,4 +1235,5 @@
         }
       })();
 
-    };
+    }
+  };

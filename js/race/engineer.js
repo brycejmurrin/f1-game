@@ -363,8 +363,8 @@ var RaceEngineer = (function () {
           const back = (c.prog || 0) - (o.prog || 0);
           if (rejoin != null && back > 0 && back < lossM && (o.prog || 0) < rejoinProg) { rejoin = o.code || "TRAFFIC"; rejoinProg = o.prog || 0; }
         }
-        const now = o.pitStops || 0, prev = b.stops.has(o) ? b.stops.get(o) : now;
-        if (now > prev && pit && pit.lossS != null && !noStop) {
+        const now = o.pitStops || 0, prev = b.stops.get(o);
+        if (prev !== undefined && now > prev && pit && pit.lossS != null && !noStop) {
           // DIVIDED BY OUR OWN PACE, not theirs. This fires on the tick a rival's
           // pitStops increments — the tick that car is STOPPED in its box — so
           // `o.speed` is ~0, the clamp made the divisor 1, and the "gap in
@@ -375,7 +375,7 @@ var RaceEngineer = (function () {
           // tick to the quiet gap or a full card queue was never said at all.
           if (gap > 0 && gap < pit.lossS + 2) b.undercut = { code: o.code || "RIVAL", left: lapS || 90 };
         }
-        b.stops.set(o, now);
+        if (prev !== now) b.stops.set(o, now);
       }
       if (b.undercut && !noStop) rivalBoxed = b.undercut.code;
       // Every field written, in the literal's old order (callFor reads them all).
@@ -387,7 +387,7 @@ var RaceEngineer = (function () {
       out.rejoin = rejoin; out.planned = !!plan;
       out.ahead = noStop ? null : ahead; out.aheadGap = ahead ? aheadGap : null;
       out.setLaps = tyres.lapsLeft ? tyres.lapsLeft(c) : null;
-      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (lapsTarget || 0) - lap + 1);
+      out.stintLeft = noStop ? null : lapsToStop != null ? lapsToStop : Math.max(0, (lapsTarget || 0) - Math.max(1, lap) + 1);
       out.marginS = pit ? pit.marginS : null;
       out.axle = wear >= AXLE_MIN_WEAR && c.tyreWearF != null ? Math.abs(c.tyreWearF - c.tyreWearR) / wear : 0;
       out.front = c.tyreWearF != null ? c.tyreWearF > c.tyreWearR : ax.f < ax.r;
@@ -410,7 +410,7 @@ var RaceEngineer = (function () {
       // the flag. With neither, "box under the caution" is a stop the race
       // does not need, however cheap.
       const stopDue = lapsToStop != null
-        || (out.setLaps != null && lapsTarget > 0 && out.setLaps + 0.5 < lapsTarget - lap + 1);
+        || (out.setLaps != null && lapsTarget > 0 && out.setLaps + 0.5 < lapsTarget - Math.max(1, lap) + 1);
       out.cheapStop = !noStop && stopDue && cautionLvl >= 2 && cautionLvl < 4 && wear >= 0.35;
       out.wet = wantTread > 0;
       out.noStop = noStop; out.finalLap = finalLap;
@@ -532,6 +532,6 @@ var RaceEngineer = (function () {
     return { update, reset, callFor, senseOf, forecast };
   }
 
-  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, DIRECTIONAL, BOX_CALLS };
+  return { create, WEAR_STEPS, AXLE_SPLIT, COLD_CALL, QUIET_S, DIRECTIONAL, BOX_CALLS };
 })();
 Object.freeze(RaceEngineer);

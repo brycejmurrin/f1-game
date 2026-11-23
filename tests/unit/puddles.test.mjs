@@ -183,8 +183,9 @@ test("parity: the mask's field, road weight and growth carry the reference const
   assert.ok(GLX.includes(`smoothstep(plo, plo + ${K.SOFT.toFixed(2)}, pn * pool) * pg * upFace`), "GLX mask");
   assert.ok(WGX.includes(`smoothstep(plo, plo + ${K.SOFT.toFixed(2)}, pn * pool) * pg * upFace * (1.0 - porous)`), "WGX mask");
   assert.ok(TLX.includes(`smoothstep(plo, plo.add(${K.SOFT.toFixed(2)}), pn.mul(pool)).mul(pg).mul(upFace).mul(porous.oneMinus())`), "TLX mask");
-  // GLX gates porous ground on the next line
-  assert.match(read("js/render/glx/shaders/glsl-lit.js"), /puddle \*= 1\.0 - porous;/);
+  // GLX gates porous ground (and zero weights) around the whole block since perf hunt 4: porous is 0|1,
+  // so `porous < 0.5` is the old `puddle *= 1.0 - porous`.
+  assert.match(read("js/render/glx/shaders/glsl-lit.js"), /if \(pg > 0\.0 && upFace > 0\.0 && porous < 0\.5\) \{/);
 });
 
 test("parity: inside a puddle — near-zero roughness, darker albedo, a stronger mirror — on all three", () => {

@@ -2,6 +2,7 @@
    rotation reset (onScreenRotate), neither entered by a unit test before (B·H11 coverage, 2026-10-21). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { boot } from "../helpers/key-binds-rig.mjs";
 
 // Live-path keyboard steer after `ms` of a held RIGHT arrow, on a clock the test owns.
@@ -77,4 +78,232 @@ test("a re-paired phone's tilt starts from its own reading, not the lean the las
   Input.remoteLost("phone");
   t += 5000;
   assert.ok(Math.abs(roll(0, 1)) < 0.02, "the first level sample after a re-pair reads level, not the old lean");
+});
+
+
+function secondaryRig() {
+  const { sb, fire } = boot(), events = new Map();
+  let actions = 0, cancelled = 0, allowed = true, before = null;
+  const el = { hidden: false, disabled: false, isConnected: true,
+    getAttribute: () => null, setPointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 44, bottom: 44 }),
+    addEventListener(type, fn) { const list = events.get(type) || []; list.push(fn); events.set(type, list); },
+  };
+  const helper = vm.runInContext("InputHoldButtons", sb);
+  helper.hudTouchTap(el, { activate: () => actions++, cancel: () => cancelled++, beforeActivate: e => { before = e; return allowed; } });
+  const event = extra => ({ pointerType: "touch", pointerId: 2, isPrimary: false, isTrusted: true,
+    clientX: 20, clientY: 20, timeStamp: 100, target: el, ...extra });
+  const emit = (type, extra) => { const e = event(extra); if (type === "pointerdown" || type === "pointerup") fire(type, e); for (const fn of events.get(type) || []) fn(e); return e; };
+  return { sb, fire, el, emit, event, actions: () => actions, cancelled: () => cancelled, before: () => before, block: () => { allowed = false; } };
+}
+
+test("secondary touch activates once and deduplicates a native click retargeted into a modal", () => {
+  const h = secondaryRig();
+  const primary = secondaryRig();
+  let cancelled = false;
+  primary.emit("touchstart", { preventDefault() { cancelled = true; } });
+  assert.equal(cancelled, true);
+  primary.emit("pointerdown", { isPrimary: true });
+  primary.emit("pointerup", { isPrimary: true });
+  assert.equal(primary.actions(), 1);
+  h.emit("pointerdown", { pointerType: "mouse" });
+  h.emit("pointerup", { pointerType: "mouse" });
+  assert.equal(h.actions(), 0, "mouse remains native");
+  h.emit("pointerdown"); const up = h.emit("pointerup", { timeStamp: 150 });
+  assert.equal(h.actions(), 1); assert.equal(h.before(), up, "the original trusted gesture reaches the owner");
+  let stopped = 0;
+  const click = extra => h.fire("click", h.event({ timeStamp: 160, detail: 1, target: { id: "new-modal-button" }, preventDefault() { stopped++; }, stopImmediatePropagation() {}, ...extra }));
+  click({ detail: 0 }); assert.equal(stopped, 0, "keyboard and AT clicks pass");
+  click({ pointerId: 99 }); assert.equal(stopped, 0, "an unrelated pointer passes");
+  click({}); assert.equal(stopped, 1, "same contact cannot click through the opened layer");
+  h.emit("pointerdown"); h.emit("pointerup", { timeStamp: 250 });
+  h.fire("pointerdown", h.event({ isPrimary: true, pointerId: 3 }));
+  click({}); assert.equal(stopped, 1, "a genuinely new contact releases stale dedup state");
+});
+
+test("secondary touch cancellation, movement, hidden controls and interruptions never activate", () => {
+  for (const ending of ["pointercancel", "lostpointercapture", "move", "outside", "blur", "resize", "orientationchange", "hidden", "disabled", "visibility", "blocked"]) {
+    const h = secondaryRig(); h.emit("pointerdown");
+    if (ending === "move") h.emit("pointermove", { clientX: 40 });
+    else if (["blur", "resize", "orientationchange"].includes(ending)) h.fire(ending);
+    else if (ending === "visibility") { h.sb.document.hidden = true; h.fire("visibilitychange"); }
+    else if (ending === "hidden") h.el.hidden = true;
+    else if (ending === "disabled") h.el.disabled = true;
+    else if (ending === "blocked") h.block();
+    else if (ending !== "outside") h.emit(ending);
+    h.emit("pointerup", ending === "outside" ? { clientX: 100 } : {});
+    assert.equal(h.actions(), 0, ending);
+  }
+});
+
+
+test("secondary actions preserve an independent held pedal and its matching release", () => {
+  const h = secondaryRig(), handlers = new Map(); let held = false;
+  const pedal = { ...h.el, addEventListener: (type, fn) => handlers.set(type, fn) };
+  h.sb.document.getElementById = () => pedal;
+  const helper = vm.runInContext("InputHoldButtons", h.sb);
+  const holds = helper.create({ clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), beforeReleaseAll() {} });
+  holds.wireHold("gas", value => { held = value; });
+  handlers.get("pointerdown")({ pointerId: 1, pointerType: "touch", preventDefault() {} });
+  assert.equal(held, true);
+  h.emit("pointerdown"); h.emit("pointerup", { timeStamp: 150 }); holds.holdReleasePointer(2);
+  assert.equal(h.actions(), 1); assert.equal(held, true, "secondary activation and release leave the primary pedal held");
+  holds.holdReleasePointer(1);
+  assert.equal(held, false, "the primary's own lift still releases reliably");
+});
+
+
+test("cancelled secondary contacts suppress their eventual native click even after retargeting", () => {
+  for (const ending of ["move", "resize", "hidden", "lostpointercapture"]) {
+    const h = secondaryRig(); h.emit("pointerdown");
+    if (ending === "move") h.emit("pointermove", { clientX: 33 });
+    else if (ending === "resize") h.fire("resize");
+    else if (ending === "hidden") h.el.hidden = true;
+    else h.emit("lostpointercapture");
+    const target = ending === "move" ? h.el : { id: "retargeted-layer" };
+    if (ending === "hidden") h.emit("pointerup", { clientX: 33, timeStamp: 200, target });
+    else h.fire("pointerup", h.event({ clientX: 33, timeStamp: 200, target }));
+    assert.equal(h.actions(), 0, ending + " never activates the bridge");
+    let stopped = 0;
+    const click = extra => h.fire("click", h.event({ clientX: 33, timeStamp: 220, target, detail: 1,
+      preventDefault() { stopped++; }, stopImmediatePropagation() {}, ...extra }));
+    click({ detail: 0 }); assert.equal(stopped, 0, "keyboard/AT still pass after " + ending);
+    click({}); assert.equal(stopped, 1, "cancelled native compatibility click is blocked after " + ending);
+    h.fire("pointerdown", h.event({ isPrimary: true, pointerId: 3 }));
+    click({}); assert.equal(stopped, 1, "a new intentional contact still passes after " + ending);
+  }
+});
+
+
+test("a reused canceled pointer ID does not swallow a new contact elsewhere", () => {
+  const h = secondaryRig(); h.emit("pointerdown"); h.emit("pointercancel");
+  const target = { id: "another-control" };
+  h.fire("pointerdown", h.event({ target }));
+  h.fire("pointerup", h.event({ target, timeStamp: 5000 }));
+  let stopped = 0;
+  h.fire("click", h.event({ target, timeStamp: 5020, detail: 1,
+    preventDefault() { stopped++; }, stopImmediatePropagation() {} }));
+  assert.equal(stopped, 0, "fresh contact remains native after pointer ID reuse");
+});
+
+// Audit W26 row 8 (2026-11-10): a REMOTE pedal (phone / XR) is rescaled past its 0.1
+// dead zone the way the gamepad trigger is (padPedalLevel), and a remote steer is
+// clamped where Input reads it.
+const remoteLvl = (v) => (v > 0.1 ? (v - 0.1) / 0.9 : 0);
+
+test("a remote pedal ramps from 0 at its dead zone instead of jumping to 11 % (W26 row 8)", () => {
+  const { Input, sb } = boot();
+  let t = 1000;
+  sb.performance = { now: () => t };
+  const press = (thr, brk) => { t += 16; Input.remoteSample({ source: "phone", roll: null, thr, brk }); };
+  press(0.11, 0);
+  assert.equal(Input.throttle(), true, "past the 0.1 resting-thumb band it is a press");
+  assert.ok(Input.throttleLevel() < 0.02, "an 11 % press is a ~1 % pedal, not 11 %: " + Input.throttleLevel());
+  for (const v of [0.25, 0.55, 0.8]) {
+    press(v, 0);
+    assert.ok(Math.abs(Input.throttleLevel() - remoteLvl(v)) < 1e-12, `throttle ${v} -> ${remoteLvl(v)}, got ${Input.throttleLevel()}`);
+    press(0, v);
+    assert.ok(Math.abs(Input.brakeLevel() - remoteLvl(v)) < 1e-12, `brake ${v} -> ${remoteLvl(v)}, got ${Input.brakeLevel()}`);
+  }
+  press(1, 1);
+  assert.equal(Input.throttleLevel(), 1, "full travel is still exactly 1");
+  assert.equal(Input.brakeLevel(), 1);
+});
+
+test("a remote STEER outside -1..1 is clamped where Input reads it (W26 row 8)", () => {
+  const { Input, sb } = boot();
+  let t = 1000;
+  sb.performance = { now: () => t };
+  for (const [raw, sign] of [[5, 1], [-7, -1], [1e9, 1]]) {
+    t += 16;
+    Input.remoteSample({ source: "xr", steer: raw, thr: 0, brk: 0 });
+    assert.equal(Input.debugState().remote.stick, sign, "the stored stick is clamped: " + raw);
+    const s = Input.steer(1 / 60);
+    assert.ok(Math.abs(s) <= 1 && Math.sign(s) === sign, `steer(${raw}) stays inside full lock: ${s}`);
+  }
+});
+
+// Hold-button teardown pins (M10 / M20 / M19): lostpointercapture release, visibility:hidden
+// as gone, and the hudTouchTap native-click dedupe window — via the create()/hudTouchTap API.
+function holdTeardownRig() {
+  const { sb } = boot();
+  const listeners = {};
+  const button = {
+    id: "gas", hidden: false, disabled: false, isConnected: true,
+    visibility: "visible", display: "block", parentElement: null,
+    addEventListener(t, fn) { listeners[t] = fn; },
+    setPointerCapture() {}, setAttribute() {}, removeAttribute() {}, getAttribute: () => null,
+  };
+  sb.document.getElementById = (id) => (id === "gas" ? button : null);
+  sb.getComputedStyle = (el) => ({
+    display: (el && el.display) || "block",
+    visibility: (el && el.visibility) || "visible",
+  });
+  const helper = vm.runInContext("InputHoldButtons", sb);
+  const holds = helper.create({
+    clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
+    beforeReleaseAll() {},
+  });
+  let held = false;
+  holds.wireHold("gas", (v) => { held = v; });
+  const emit = (type, extra = {}) => {
+    const e = { pointerId: 7, pointerType: "touch", preventDefault() {}, ...extra };
+    listeners[type](e);
+    return e;
+  };
+  return { holds, button, emit, held: () => held };
+}
+
+test("lostpointercapture releases a held button that became hidden mid-hold (M10)", () => {
+  const h = holdTeardownRig();
+  h.emit("pointerdown");
+  assert.equal(h.held(), true, "press holds");
+  assert.equal(h.holds.lostCaptureShouldRelease(h.button, 7), false,
+    "still visible: a capture steal must not drop the hold");
+  h.button.hidden = true;
+  assert.equal(h.holds.lostCaptureShouldRelease(h.button, 7), true,
+    "was visible at press, now gone → teardown");
+  h.emit("lostpointercapture");
+  assert.equal(h.held(), false, "lost capture after hide releases the held button");
+  assert.deepEqual(Array.from(h.holds.pointerCounts()), [0]);
+});
+
+test("holdTargetGone treats visibility:hidden as gone with no pin (M20)", () => {
+  const h = holdTeardownRig();
+  assert.equal(h.holds.holdTargetGone(h.button), false, "a visible connected button is present");
+  h.button.visibility = "hidden";
+  assert.equal(h.holds.holdTargetGone(h.button), true,
+    "visibility:hidden alone counts as gone (no hidden/display pin needed)");
+  h.emit("pointerdown", { isTrusted: false });
+  assert.equal(h.held(), true, "a synthetic press on a hidden control still registers");
+  // Mid-hold hide of a trusted press: visibility:hidden must release via lost capture.
+  const h2 = holdTeardownRig();
+  h2.emit("pointerdown");
+  h2.button.visibility = "hidden";
+  h2.emit("lostpointercapture");
+  assert.equal(h2.held(), false, "visibility:hidden mid-hold is a lost-capture teardown");
+});
+
+test("hudTouchTap dedupes a native click at ~500 ms and lets one after the window through (M19)", () => {
+  const within = secondaryRig();
+  within.emit("pointerdown");
+  within.emit("pointerup", { timeStamp: 1000 });
+  assert.equal(within.actions(), 1);
+  let stopped = 0;
+  within.fire("click", within.event({
+    timeStamp: 1500, detail: 1,
+    preventDefault() { stopped++; }, stopImmediatePropagation() {},
+  }));
+  assert.equal(stopped, 1, "a native click ~500 ms after hudTouchTap is still deduped");
+
+  const after = secondaryRig();
+  after.emit("pointerdown");
+  after.emit("pointerup", { timeStamp: 1000 });
+  assert.equal(after.actions(), 1);
+  let passed = 0;
+  after.fire("click", after.event({
+    timeStamp: 1751, detail: 1,
+    preventDefault() { passed++; }, stopImmediatePropagation() {},
+  }));
+  assert.equal(passed, 0, "a native click after the 750 ms window is not deduped");
 });

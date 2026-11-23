@@ -1,0 +1,1 @@
+Improved: Photo Studio can set a captured or saved photo as the Home background in one step and render a higher-resolution PNG with the new Up to 4K capture setting. Standard garage captures target Full HD on smaller displays, and newly saved Home backgrounds retain capture detail up to 4K.

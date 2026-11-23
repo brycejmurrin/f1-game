@@ -106,3 +106,45 @@ test("an AI whose line runs through a car parked on the road steers round it at 
   assert.ok(live.minDx >= 2.0, `the AI passed ${live.minDx.toFixed(2)} m from the parked car's centre (bodies overlap under 2.0)`);
   assert.ok(live.vPass > 15, `the AI slowed to ${live.vPass.toFixed(1)} m/s to get by`);
 });
+
+// #5539: a ROW of retirements along a street's start straight, at full speed. The aim was only
+// AiDrive.minLatGap (2.2 m at Monaco) off a 2.0 m body and the racing line's slope carried the
+// car past it: HUL reached x -2.65 beside a car parked at -4.50 at 59 m/s, stopped dead for 7 s
+// (t 83.5 s) and two cars queued behind. The repro is the sampled field quali-pace-parity ran
+// before it lifted its benched cars off the circuit: monaco, PACE 1.34, every grid slot not a
+// multiple of four retired where it stands, the first racing lap and the pass that follows it.
+test("monaco: the field passes a row of cars parked on the start straight without touching one", { timeout: 120000 }, async () => {
+  const m = await createGame({ track: "monaco", carMeshes: false });
+  try {
+    const a = m.apex, G = m.G;
+    a.headless(true); a.setPhysics({ pace: 1.34 });
+    await m.race("monaco", "day", "dry", { laps: 3 });
+    a.setPhysics({ pace: 1.34 });
+    m.aiOnly();
+    G.cars.forEach((c, i) => { if (!c.retired && i % 4 !== 0) a.retire(i, "bench"); });
+    const parked = G.cars.filter((c) => c.retired && c.parkedOnRoad), live = G.cars.filter((c) => !c.retired);
+    assert.ok(parked.length >= 6 && live.length >= 4, `the scenario: ${parked.length} parked on the road, ${live.length} racing`);
+    const L = G.track.total;
+    let contact = 0, stopped = 0, minDx = Infinity, passes = 0, t = 0;
+    const was = live.map(() => false);
+    for (let f = 0; f < 100 * 60; f++) {
+      m.step(1, DT); t += DT;
+      if (t < 8) continue;   // off the grid first: the launch is not a pass
+      live.forEach((c, i) => {
+        let near = false;
+        for (const p of parked) {
+          const d = ((p.s - c.s + L / 2) % L + L) % L - L / 2;
+          if (Math.abs(d) < 5.6) { near = true; minDx = Math.min(minDx, Math.abs(c.x - p.x)); }
+        }
+        if (near && !was[i]) passes++;
+        was[i] = near;
+        if (near && c.contactT > 0) contact++;
+        if (c.speed < 1 && !c.inPit && !c.inPitLane) stopped++;
+      });
+    }
+    assert.ok(passes >= live.length * 6, `the field came past the row: ${passes} car-by-car passes`);
+    assert.equal(contact, 0, "contact frames beside a parked car");
+    assert.equal(stopped, 0, "frames a racing car spent stopped on the road");
+    assert.ok(minDx >= 2.0, `closest pass ${minDx.toFixed(2)} m centre to centre (bodies overlap under 2.0)`);
+  } finally { m.close(); }
+});

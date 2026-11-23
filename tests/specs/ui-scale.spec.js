@@ -22,11 +22,14 @@
 // is 399px at 130 %" goes stale the moment the type scale is retuned, which is
 // exactly what the component restructure is about to do. Every check here is
 // relative or a containment test.
+import { BRYCE_WINDOWS } from "../../tools/lib/bryce-phone.mjs";
+import { LANDSCAPE, PORTRAIT } from "../helpers/iphone15.mjs";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { readFileSync } from "node:fs";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 // Explicit phone cells use a coherent mobile identity; DPR 1 intentionally limits raster cost.
-const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary play shape
 // 50 is SCALE_MIN; 100 is what ships; 115 stays because three defects confirmed
 // on 2026-08-08 were invisible at 100% and present at 115% (garage overlapping
 // the camera bar by 61px — measured -8 / +61 / +130 / +222 at 100/115/130/150).
@@ -104,8 +107,15 @@ async function toTitle(page) {
     if (ov) { ov.hidden = false; ov.style.removeProperty("display"); }
     document.body.classList.remove("in-race");
   }, OVERLAY_IDS);
-  await page.waitForTimeout(150);
+  // No settle (was 150 ms): every write above is synchronous, and TopModal's
+  // MutationObserver mirror is a microtask that has run before evaluate resolves.
 }
+
+// The screen each title/select door opens. The click handlers swap screens in
+// a vt() callback (a view transition or its 60 ms fallback) or after a lazy
+// bundle, so open() waits for THIS element to show, not for a fixed beat.
+const OPENS = { "mb-race": "select", "sel-car": "carsetup", "sel-go": "race-settings",
+  "mb-help": "howtoplay", "mb-settings": "pmsettings", "mb-career": "career" };
 
 // Clicks are dispatched in-page rather than through locators on purpose: the
 // sheets open with a CSS animation that headless Chromium does not reliably
@@ -113,13 +123,17 @@ async function toTitle(page) {
 // a screen that is, as far as the DOM is concerned, already open.
 async function open(page, ids) {
   for (const id of ids) {
+    const screen = OPENS[id];
+    if (!screen) throw new Error(`open(): no screen mapped for #${id} — add it to OPENS`);
     await page.evaluate((i) => document.getElementById(i)?.click(), id);
-    await page.waitForTimeout(250);
+    await page.waitForFunction((sid) => { const el = document.getElementById(sid); return !!el && !el.hidden; },
+      screen, { polling: 100, timeout: BOOT_MS });
   }
+  // finish() lands every finite animation's end state synchronously, and the
+  // probes read layout through getBoundingClientRect, which forces it: no settle.
   await page.evaluate(() => {
     for (const a of document.getAnimations()) { try { a.finish(); } catch { /* infinite */ } }
   });
-  await page.waitForTimeout(150);
 }
 
 // Every visible control in `rootSel`, with the box it actually PAINTS —
@@ -179,7 +193,8 @@ const PROBE = (rootSel) => {
 // column rendered 398.5px wide at UI SIZE 130 % (17.5px off the right edge) and
 // 459.8px at 150 % (78.8px off), while its CSS width sat unchanged at 306.5px
 // the whole time. A landscape-only matrix cannot see a portrait-only branch.
-const SHAPES = [["landscape", LANDSCAPE], ["portrait", { width: 393, height: 852 }]];
+const relativeLabel = (physical, baseline) => Math.round(physical * 10000 / baseline) / 100 + "%";
+const SHAPES = [["landscape", LANDSCAPE], ["portrait", PORTRAIT]];
 
 test.describe("UI scale", () => {
   test.use({ hasTouch: true });
@@ -362,6 +377,7 @@ test.describe("UI scale", () => {
 
   // Reset restores the independent button default, even after HUD SIZE changes.
   test("BUTTON SIZE uses its own default and can be reset", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
     await boot(page);
     const state = () => page.evaluate(() => {
       const rev = document.getElementById("pm-btnscale-r");
@@ -377,12 +393,14 @@ test.describe("UI scale", () => {
       };
     });
 
-    // Touch defaults to 125%, independently of the readout scale.
+    // Phone controls default to 143.25%, independently of the readout scale.
     await page.evaluate(() => { window.__apex.hudScale(120); window.__apex.btnScale(null); });
     let st = await state();
     expect(st.over, "unset: no override marker").toBe(false);
     expect(st.revertShown, "unset: no revert button").toBe(false);
-    expect(st.btn, "unset: independent touch default").toBe(125);
+    expect(st.btn, "unset: independent touch default").toBe(143.25);
+    await expect(page.locator("#pm-btnscale")).toHaveAttribute("aria-valuetext", "100%");
+    await expect(page.locator("#pm-btnscale-v")).toHaveText("100%");
 
     await page.evaluate(() => window.__apex.btnScale(60));
     st = await state();
@@ -399,19 +417,20 @@ test.describe("UI scale", () => {
     // range input and move the very slider it was meant to reset.
     await page.evaluate(() => document.getElementById("pm-btnscale-r").click());
     st = await state();
-    expect(st.btn, "revert restores the independent touch default").toBe(125);
+    expect(st.btn, "revert restores the independent touch default").toBe(143.25);
     expect(st.over, "and clears its own marker").toBe(false);
     expect(st.revertShown, "and hides itself").toBe(false);
 
     // A later HUD change must leave the reset button size alone.
     await page.evaluate(() => window.__apex.hudScale(90));
-    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(125);
+    expect((await state()).btn, "HUD changes leave the button default unchanged").toBe(143.25);
   });
 
   // The mechanism itself. If these two ever start moving together the sliders
   // are back to being one knob, and every fit result above becomes a statement
   // about a size nobody can actually select.
   test("the two scales are independent", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
     await boot(page);
     const read = () => page.evaluate(() => {
       const cs = getComputedStyle(document.documentElement);
@@ -427,19 +446,19 @@ test.describe("UI scale", () => {
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.9" });
 
-    // Buttons are a third independent axis, with a fixed 125% touch default.
+    // Buttons are a third independent axis, with a 143.25% physical phone default.
     const btn = () => page.evaluate(() => window.__apex.btnScale().pct);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "unset, independent touch default").toBe(125);
+    expect(await btn(), "unset, independent touch default").toBe(143.25);
     await page.evaluate(() => window.__apex.hudScale(120));
-    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(125);
+    expect(await btn(), "HUD changes leave default buttons unchanged").toBe(143.25);
     await page.evaluate(() => window.__apex.btnScale(60));
     expect(await btn(), "set, it is its own axis").toBe(60);
     expect(await read(), "and moving it must not move the HUD").toEqual({ ui: "1.5", hud: "1.2" });
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await btn(), "nor does the HUD move it back").toBe(60);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "null restores the button default").toBe(125);
+    expect(await btn(), "null restores the button default").toBe(143.25);
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.
@@ -454,19 +473,57 @@ test.describe("UI scale", () => {
   });
 
   test("200% keeps title navigation reachable on phones and browser-zoom equivalents", async ({ page }) => {
+    // Each cell names its contract. The never-scroll fit (#5150, UI contract
+    // 2026-11-06 §3 rule 3, §4.1) is written for phone LANDSCAPE: js/ui/
+    // title-layout.js fit() runs on wide shapes only, and the portrait band in
+    // css/menu-destinations.css keeps its scroll fallback on purpose (the
+    // portrait column is one door per row and scrolls to SETTINGS). So the
+    // portrait cell keeps the ORIGINAL reachability contract (the 1.25 cap times BUTTONS SIZE, text
+    // at the requested 200%, the column scrolls RACE into view) and the two
+    // landscape cells carry the fit contract (no scroller, every door on screen).
     const shapes = [
-      ["phone portrait", { width: 393, height: 659 }],
-      ["phone landscape", { width: 734, height: 343 }],
+      ["phone portrait", { width: 393, height: 659 }, "scroll"],
+      ["phone landscape", { width: 734, height: 343 }, "fit"],
       // 1920x937 content area at 200% browser zoom is approximately 960x469
       // CSS pixels. Browser zoom changes this viewport; DPR/render resolution do not.
-      ["desktop at 200% browser zoom", { width: 960, height: 469 }],
+      ["desktop at 200% browser zoom", { width: 960, height: 469 }, "fit"],
     ];
 
-    for (const [name, viewport] of shapes) {
+    for (const [name, viewport, contract] of shapes) {
       await page.setViewportSize(viewport);
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
         null, { polling: 100, timeout: BOOT_MS });
+      // THIS SHAPE'S 100% BASELINE: what RACE paints at UI SIZE 100 in this very
+      // box, in screen px (own font-size × the cluster's zoom, the fit included).
+      // The fit contract below is relative to it, not to a guessed zoom floor:
+      // measured on 219157ca, 734x343 fitted to zoom 0.585 in one browser and
+      // passed 0.7 in CI run 42303256107 (the base type differs by machine), so
+      // a floor pinned the environment, not the contract. Frames, not wall
+      // clock, as in the settle below; the fit lands two frames after a change
+      // (ResizeObserver, then its rAF), and a frame that never comes is reported
+      // as starvation.
+      const baseline = await page.evaluate(async ({ frames, capMs }) => {
+        window.__apex.uiScale(100);
+        let starved = false;
+        for (let n = 0; n < frames; n++) {
+          let timer = 0;
+          const framed = await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
+          ]);
+          clearTimeout(timer);
+          if (!framed) { starved = true; break; }
+        }
+        const menu = document.getElementById("menu-buttons");
+        const zoom = +getComputedStyle(menu).zoom;
+        const raceFont = parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize);
+        return { starved, zoom, fit: menu.style.getPropertyValue("--tf") || null, raceFont, racePainted: raceFont * zoom,
+          uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
+      }, { frames: 8, capMs: BOOT_MS });
+      const baselineDump = JSON.stringify(baseline);
+      expect(baseline.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(100) ${baselineDump}`).toBe(false);
+      expect(baseline.racePainted, `${name}: RACE paints at 100% ${baselineDump}`).toBeGreaterThan(8);
       // DENSITY AND ZOOM SETTLE ARE FRAME CONTRACTS, NOT WALL-CLOCK ONES.
       //
       // Density: body[data-density] is written by SheetShape's --ui-scale
@@ -506,8 +563,11 @@ test.describe("UI scale", () => {
       // budget counted from before uiScale(200) let the synchronous relayout
       // spend it (157-335 s at loadavg 200-500), after which setTimeout(0)
       // beat every requestAnimationFrame and "starved" fired one frame in.
-      const SETTLE_FRAMES = 6;
-      const settle = await page.evaluate(async ({ frames, capMs }) => {
+      // Eight, not six: the fit (#5150) lands two frames after the zoom
+      // change (the ResizeObserver fires after the next layout and schedules
+      // one rAF), and the fit cells below settle on its outcome too.
+      const SETTLE_FRAMES = 8;
+      const settle = await page.evaluate(async ({ frames, capMs, fitted }) => {
         const t0 = performance.now();
         window.__apex.uiScale(200);
         const snap = () => {
@@ -527,12 +587,29 @@ test.describe("UI scale", () => {
           const brand = document.getElementById("menu-brand");
           const brandZoom = brand ? +getComputedStyle(brand).zoom : NaN;
           const density = document.body.dataset.density;
-          return { density, anims, brandZoom,
-            ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 };
+          // A fit cell has settled only once the fit has landed: the cluster
+          // no longer scrolls in either axis. CI run 42303256107 (de86b559)
+          // read 960x469 one frame early — zoom 1.25, no --tf, 4px of scroll.
+          const menu = document.getElementById("menu-buttons");
+          const scrollY = menu ? menu.scrollHeight - menu.clientHeight : NaN;
+          const scrollX = menu ? menu.scrollWidth - menu.clientWidth : NaN;
+          const fitLanded = !fitted || (scrollY <= 1 && scrollX <= 1);
+          // ...and "does not scroll" is not "the fit has run" (#5578): the five-row touch cluster at the new zoom
+          // overflows the VIEWPORT without scrolling, so frame 0 read ok with the 100 % --tf still on it (CI run
+          // 43989398592: fit 0.971 at zoom 1.49, six doors off screen). That only waited before because every label
+          // lagged its door by a frame under reduced motion. The fit lands by the third frame after a change
+          // (ResizeObserver in one frame, its rAF in the next, read in the one after), so a fit cell is settled
+          // once the cluster's fit and extents have stood still for QUIET frames in a row.
+          const key = menu ? [menu.style.getPropertyValue("--tf"), menu.getAttribute("data-home-rows"), menu.getAttribute("data-home-floor"),
+            getComputedStyle(menu).zoom, scrollY, scrollX, density].join("|") : "";
+          return { density, anims, brandZoom, scrollY, scrollX, key,
+            ok: density === "compact" && anims.length === 0 && Math.abs(brandZoom - 1) < 0.001 && fitLanded };
         };
-        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, s = snap();
+        const QUIET = fitted ? 3 : 0;
+        let n = 0, starved = false, compactAt = -1, maxFrameMs = 0, quiet = 0, s = snap();
         if (s.density === "compact") compactAt = 0;
-        while (!s.ok && n < frames) {
+        while (!(s.ok && quiet >= QUIET) && n < frames + QUIET) {
+          const before = s.key;
           const asked = performance.now();
           let timer = 0;
           const framed = await Promise.race([
@@ -544,11 +621,12 @@ test.describe("UI scale", () => {
           if (!framed) { starved = true; break; }
           n++;
           s = snap();
+          quiet = s.key === before ? quiet + 1 : 0;
           if (compactAt < 0 && s.density === "compact") compactAt = n;
         }
-        return { ...s, frames: n, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
+        return { ...s, frames: n, quiet, compactAt, starved, maxFrameMs, ms: Math.round(performance.now() - t0),
           uiScale: document.documentElement.style.getPropertyValue("--ui-scale") };
-      }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
+      }, { frames: SETTLE_FRAMES, capMs: BOOT_MS, fitted: contract === "fit" });
       const settleDump = JSON.stringify(settle);
       expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(200) `
         + "(main thread starved, not a layout answer) " + settleDump).toBe(false);
@@ -557,17 +635,87 @@ test.describe("UI scale", () => {
       expect(settle.anims, `${name}: brand/buttons zoom transitions retire within ${SETTLE_FRAMES} frames `
         + settleDump).toEqual([]);
 
-      const scale = await page.evaluate(() => ({
-        requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
-        brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
-        geometry: getComputedStyle(document.getElementById("menu-buttons")).zoom,
-        raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
-      }));
+      // THE BOX IS THE LAW (#5150, UI contract 2026-11-06 §3 rules 2-3): the
+      // compact cap (1.25) is the REQUEST, and js/ui/title-layout.js fit()
+      // multiplies it by --tf, the zoom that keeps the whole cluster inside
+      // the overlay's content box with no scroller. Until #5152 this pinned
+      // the cap itself (1.25) and let the column scroll. This project is
+      // Desktop Chrome (a fine pointer, body.desktop), so the cluster here is
+      // the compact DESKTOP title — 16 doors in 7 rows, height-bound in a
+      // 343px box — and the phone-only column rule in css/menu-destinations.css
+      // never reaches it: on 219157ca one browser read 734x343 fit 0.468 →
+      // zoom 0.585 with RACE at 18.7 painted px against 15.5 at 100%, and
+      // 960x469 fit 0.693 → zoom 0.866, 27.7 against 18.0. A setting that
+      // cannot fit shrinks until it does (D-030); what 200% owes the player is
+      // that it never paints SMALLER than 100% in the same box. Contract here,
+      // fit cells: geometry == cap × fit, never above the cap, RACE paints no
+      // smaller than this shape's 100% baseline, the 200% request lands in the
+      // cluster's own px, the cluster fits in both axes and every destination
+      // sits inside the viewport.
+      const scale = await page.evaluate(() => {
+        const menu = document.getElementById("menu-buttons");
+        const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+        const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
+        const off = doors.filter((b) => {
+          const r = b.getBoundingClientRect();
+          return r.top < -1 || r.left < -1 || r.bottom > vh + 1 || r.right > vw + 1;
+        }).map((b) => b.id);
+        return {
+          requested: getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim(),
+          brandGeometry: getComputedStyle(document.getElementById("menu-brand")).zoom,
+          // The brand's own geometry is TITLE SIZE x its fit (css/menu-destinations.css); a phone ships TITLE SIZE
+          // 108 (js/ui/title-layout.js PHONE_WIDE), so the compact brand is that size, never the 200 % request.
+          brandSize: (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--tl-title-size")) || 1)
+            * (parseFloat(document.getElementById("menu-brand").style.getPropertyValue("--tf")) || 1),
+          geometry: getComputedStyle(menu).zoom,
+          fit: parseFloat(menu.style.getPropertyValue("--tf")) || 1,
+          raceFont: parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize),
+          scrollY: menu.scrollHeight - menu.clientHeight, scrollX: menu.scrollWidth - menu.clientWidth,
+          doors: doors.length, off,
+          // BUTTONS SIZE multiplies the cap (css/menu-destinations.css `max(1, --tl-btns-size)`); off the wide
+          // shape a title layout's compact rule multiplies it raw (css/responsive.css, #5976 188f049e).
+          doorSize: document.body.dataset.shape === "wide" ? Math.max(1, TitleLayout.current("wide").btns.size / 100)
+            : document.documentElement.hasAttribute("data-title-layout") ? parseFloat(getComputedStyle(menu).getPropertyValue("--tl-btns-size")) || 1 : 1,
+        };
+      });
+      scale.racePainted = scale.raceFont * +scale.geometry;
+      scale.baseline = baseline.racePainted;
+      const scaleDump = JSON.stringify(scale);
       expect(scale.requested, `${name}: the preference remains honest`).toBe("2");
-      expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact`).toBe(1);
-      expect(+scale.geometry, `${name}: compact geometry is capped`).toBeCloseTo(1.25, 2);
-      expect(scale.raceFont * +scale.geometry,
-        `${name}: control text still paints at the requested 200%`).toBeGreaterThanOrEqual(33);
+      expect(+scale.brandGeometry, `${name}: decorative brand geometry stays compact (TITLE SIZE x fit)`).toBeCloseTo(scale.brandSize, 3);
+      expect(scale.doors, `${name}: destinations are measured ${scaleDump}`).toBeGreaterThan(5);
+      if (contract === "fit") {
+        expect(+scale.geometry, `${name}: compact geometry is the cap times the fit ${scaleDump}`).toBeCloseTo(1.25 * scale.doorSize * scale.fit, 2);
+        expect(+scale.geometry, `${name}: the fit never grows the cap ${scaleDump}`).toBeLessThanOrEqual(1.25 * scale.doorSize + 0.001);
+        // Both readings here are the compact layout (a phone-sized box is
+        // compact at 100% too), so this compares like with like and holds with
+        // room: CI run 42303256107 read 18.7 vs 15.5 at 734x343 and 27.7 vs
+        // 18.0 at 960x469. The one percent covers the fit's margin (half a
+        // percent on its first pass, title-layout.js) and nothing else. The
+        // desktop windows (next test) cannot make this comparison: 200% flips
+        // them to the compact layout and 100% is the normal column.
+        expect(scale.racePainted, `${name}: 200% never paints RACE smaller than this box's 100% ${scaleDump}`)
+          .toBeGreaterThanOrEqual(baseline.racePainted * 0.99);
+        // The 200% request lands in the cluster's own units: the 1.25 cap takes
+        // its share and text takes the residual 1.6, the fit scales the paint
+        // uniformly. Relative to this box's own 100% label since #5199: the pin
+        // was 26.4 own px, which is 1.6 x the 16.5 px label of the composition
+        // #5199 replaced; the eight-row Home's label is smaller at 100% (12.58
+        // own px in CI run 42737932108, 20.128 at 200% = 1.6 x exactly).
+        expect(scale.raceFont, `${name}: control text carries the requested 200% in its own px ${scaleDump}`).toBeGreaterThanOrEqual(baseline.raceFont * 1.6 * 0.999);
+        expect(scale.scrollY, `${name}: the fitted cluster has no vertical scroller ${scaleDump}`).toBeLessThanOrEqual(1);
+        expect(scale.scrollX, `${name}: the fitted cluster has no horizontal scroller ${scaleDump}`).toBeLessThanOrEqual(1);
+        expect(scale.off, `${name}: every destination is on screen without scrolling ${scaleDump}`).toEqual([]);
+      } else {
+        // Portrait: no fit runs (--tf stays 1), the cap is the geometry, the
+        // text paints at the requested 200%, and the column scrolls (the click
+        // below proves RACE reachable).
+        expect(scale.fit, `${name}: portrait is not fitted ${scaleDump}`).toBe(1);
+        expect(+scale.geometry, `${name}: compact geometry is the cap times BUTTONS SIZE ${scaleDump}`).toBeCloseTo(1.25 * scale.doorSize, 2);
+        expect(scale.raceFont * +scale.geometry,
+          `${name}: control text still paints at the requested 200% ${scaleDump}`).toBeGreaterThanOrEqual(33);
+        expect(scale.scrollX, `${name}: the column never scrolls sideways ${scaleDump}`).toBeLessThanOrEqual(1);
+      }
 
       // A real locator click asks Chromium to scroll the control into view. The
       // old nested 2x geometry timed out here in phone portrait even though the
@@ -592,32 +740,78 @@ test.describe("UI scale", () => {
   });
 
   // DESKTOP-SIZED WINDOWS AT 200% NEVER HIT THE 1.25 CAP (that media query is
-  // max-width 899 / max-height 699), so #menu-buttons zooms the full 2x - and
+  // max-width 899 / max-height 699), so #menu-buttons requests the full 2x - and
   // the compact-wide live Home used to zoom its door groups by --ui-scale AGAIN
   // on top (#1238's display:contents leftover): 4x geometry on 1280x742. CAREER's
   // save line and CONTINUE's ran past the viewport's right edge and RACE sat
-  // ~950px down a 742px window. Contract here: one zoom, every door subtitle
-  // inside its door and the viewport, RACE on screen without scrolling, and
-  // the column scrolls (never clips) to its last door.
+  // ~950px down a 742px window. Since #5152 (#5150) the 2x is a REQUEST and the
+  // fit in js/ui/title-layout.js is the law: the 2x column was ~1300px in a
+  // 742px window and fitted at zoom 1.14 (CI run 42285504262 on e144a336), and
+  // 1920x1080 has no room either. Both windows sit where 2x of the door column
+  // is about the box, and the two readings are two LAYOUTS: at 200% the body's
+  // own height (742/2 = 371, 1080/2 = 540) is under --compact-at 600, so the
+  // title flips to the compact layout (column hero, 2-column grid, ~1100 own px
+  // for 17 doors) while 100% is the normal desktop column (867 own px). Which
+  // one puts RACE larger per box px is the machine's fonts: run 42306477326 on
+  // 2bab534e read 200%/100% = 1.028 at 1280x742 and 0.978 at 1920x1080; one
+  // steward's browser read 0.964 and 0.956 for the same cells, the fit landing
+  // in ONE pass with the box filled to 1.000. A "200% paints no smaller than
+  // 100%" pin at these windows measures the environment, not the code (the
+  // fourth such pin on this spec). Contract here, the one the code promises
+  // (D-030: a request that cannot fit shrinks UNTIL it fits, not further): one
+  // zoom (2 × --tf, never above 2); the text carries the 200% request in its
+  // own px, no smaller than at 100%; or, with room to spare (fit 1), RACE
+  // paints larger than 100%; every door subtitle inside its door
+  // and the viewport; RACE on screen without scrolling; the whole column on
+  // screen with no scroller. Making 200% paint LARGER than 100% in these
+  // windows means fewer rows in the desktop compact title (three door
+  // columns), the UI rebuild's lane (#5153 / #5160), not a never-scroll fix.
   test("200% home doors keep subtitles inside the door and RACE on screen on desktop windows", async ({ page }) => {
-    const SETTLE_FRAMES = 6;
+    const SETTLE_FRAMES = 8;   // the fit lands two frames after the change (see the phone test)
     for (const viewport of [{ width: 1280, height: 742 }, { width: 1920, height: 1080 }]) {
       const name = `${viewport.width}x${viewport.height}`;
       await page.setViewportSize(viewport);
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.uiScale,
         null, { polling: 100, timeout: BOOT_MS });
-      // Same frame contract as the phone test above: write, then count
-      // rendered frames until compact + no zoom transition is pending.
-      // Returning-player strings (refreshCareerButton writes the same nodes)
-      // so the subtitles are long enough to need their ellipsis.
-      const settle = await page.evaluate(async ({ frames, capMs }) => {
+      // This window's 100% baseline (as in the phone test): RACE's own font
+      // size and painted size at UI SIZE 100, fit included, eight frames after
+      // the write — on the SAME doors the 200% reading below gets (CONTINUE
+      // shown, returning-player subtitles), so the two readings differ only in
+      // the request.
+      const baseline = await page.evaluate(async ({ frames, capMs }) => {
         const cont = document.getElementById("mb-continue");
         if (cont) cont.hidden = false;
         const cs = document.getElementById("mb-continue-sub");
         if (cs) cs.textContent = "2026 · ROUND 1 · BAHRAIN INTERNATIONAL CIRCUIT";
         const ks = document.getElementById("mb-career-sub");
         if (ks) ks.textContent = "YOU · ALPINE · 2026 R1 · SAKHIR";
+        window.__apex.uiScale(100);
+        let starved = false;
+        for (let n = 0; n < frames; n++) {
+          let timer = 0;
+          const framed = await Promise.race([
+            new Promise((resolve) => requestAnimationFrame(() => resolve(true))),
+            new Promise((resolve) => { timer = setTimeout(() => resolve(false), capMs); }),
+          ]);
+          clearTimeout(timer);
+          if (!framed) { starved = true; break; }
+        }
+        const menu = document.getElementById("menu-buttons");
+        const zoom = +getComputedStyle(menu).zoom;
+        const raceFont = parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize);
+        return { starved, zoom, fit: menu.style.getPropertyValue("--tf") || null, raceFont, racePainted: raceFont * zoom };
+      }, { frames: 8, capMs: BOOT_MS });
+      const baselineDump = JSON.stringify(baseline);
+      expect(baseline.starved, `${name}: no animation frame within ${BOOT_MS} ms of uiScale(100) ${baselineDump}`).toBe(false);
+      expect(baseline.racePainted, `${name}: RACE paints at 100% ${baselineDump}`).toBeGreaterThan(8);
+      // Same frame contract as the phone test above: write, then count
+      // rendered frames until compact + no zoom transition is pending and the
+      // fit has landed (the column no longer scrolls).
+      // The returning-player strings (refreshCareerButton writes the same
+      // nodes) are in place from the baseline, long enough to need their
+      // ellipsis.
+      const settle = await page.evaluate(async ({ frames, capMs }) => {
         window.__apex.uiScale(200);
         const snap = () => {
           const anims = ["menu-brand", "menu-buttons"].flatMap((id) => {
@@ -627,9 +821,24 @@ test.describe("UI scale", () => {
               .filter((a) => !/mask/.test(a.transitionProperty || ""))   // paint-only (#3606, see the phone test)
               .map((a) => id + ":" + (a.transitionProperty || a.animationName || "?"));
           });
-          const zoom = +getComputedStyle(document.getElementById("menu-buttons")).zoom;
+          const menu = document.getElementById("menu-buttons");
+          const zoom = +getComputedStyle(menu).zoom;
+          const fit = parseFloat(menu.style.getPropertyValue("--tf")) || 1;
           const density = document.body.dataset.density;
-          return { density, anims, zoom, ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2) < 0.001 };
+          const scrollY = menu.scrollHeight - menu.clientHeight;
+          const raceFont = parseFloat(getComputedStyle(document.getElementById("mb-race")).fontSize);
+          // The fitted cluster against the overlay's content box (the box fit()
+          // measures): painted content extent over the box, the binding axis.
+          const ov = document.getElementById("overlay");
+          const o = ov.getBoundingClientRect(), ocs = getComputedStyle(ov), px = (v) => parseFloat(v) || 0;
+          const boxH = o.height - px(ocs.paddingTop) - px(ocs.paddingBottom);
+          const boxW = o.width - px(ocs.paddingLeft) - px(ocs.paddingRight);
+          const fill = Math.max(menu.scrollHeight * zoom / boxH, menu.scrollWidth * zoom / boxW);
+          // Settled: the zoom is the request times the fit the last frame
+          // wrote, and the fit has landed (no scroller left to shrink away).
+          return { density, anims, zoom, fit, scrollY, raceFont, racePainted: raceFont * zoom, fill: +fill.toFixed(4),
+            boxH: +boxH.toFixed(1), boxW: +boxW.toFixed(1),
+            ok: density === "compact" && anims.length === 0 && Math.abs(zoom - 2 * fit) < 0.001 && scrollY <= 1 };
         };
         let n = 0, starved = false, s = snap();
         while (!s.ok && n < frames) {
@@ -647,11 +856,30 @@ test.describe("UI scale", () => {
         if (!starved) await new Promise((resolve) => requestAnimationFrame(() => resolve(true)));
         return { ...s, frames: n, starved };
       }, { frames: SETTLE_FRAMES, capMs: BOOT_MS });
+      settle.baseline = { raceFont: baseline.raceFont, racePainted: baseline.racePainted, fit: baseline.fit };
       const dump = JSON.stringify(settle);
       expect(settle.starved, `${name}: no animation frame within ${BOOT_MS} ms (starved, not a layout answer) ${dump}`).toBe(false);
       expect(settle.density, `${name}: compact within ${SETTLE_FRAMES} frames ${dump}`).toBe("compact");
       expect(settle.anims, `${name}: zoom transitions retire within ${SETTLE_FRAMES} frames ${dump}`).toEqual([]);
-      expect(settle.zoom, `${name}: uncapped desktop geometry is the requested 2x ${dump}`).toBeCloseTo(2, 2);
+      expect(settle.zoom, `${name}: desktop geometry is the requested 2x times the fit ${dump}`).toBeCloseTo(2 * settle.fit, 2);
+      expect(settle.zoom, `${name}: the fit never grows the request ${dump}`).toBeLessThanOrEqual(2.001);
+      expect(settle.raceFont, `${name}: control text carries the 200% request in its own px, no smaller than at 100% ${dump}`)
+        .toBeGreaterThanOrEqual(baseline.raceFont - 0.01);
+      // HOW MUCH OF THE BOX THE FIT USES IS NOT PINNED (`fill` in the dump is
+      // evidence): fit() is a monotone shrink from the unfitted ratio, and a
+      // smaller zoom makes the cluster wider in its own px, so wrapped rows
+      // collapse and the content can land short of the box — CI run
+      // 42317930151 on efc3f57b read 1280x742 fitted to 0.57 filling 90.8 %
+      // (one steward's browser: 0.514, 0.9994). Growing the zoom back cannot be
+      // measured by overflow: the cluster is a flex column, so a larger zoom
+      // SQUEEZES the doors below their natural height instead of overflowing
+      // (measured --tf 0.514 → 0.6: scrollHeight 698 → 598 own px, bottom
+      // pinned at the box, no scroller). "As big as fits" needs a
+      // natural-height measure; that is the UI rebuild's lane (#5153).
+      if (settle.fit >= 1) {
+        expect(settle.racePainted, `${name}: with room to spare, 200% paints RACE larger than 100% ${dump}`)
+          .toBeGreaterThan(baseline.racePainted);
+      }
 
       const fit = await page.evaluate(() => {
         const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
@@ -678,25 +906,23 @@ test.describe("UI scale", () => {
         }
         const race = document.getElementById("mb-race").getBoundingClientRect();
         const m = menu.getBoundingClientRect();
-        // The doors below RACE may run past the fold at 2x; the column must
-        // then scroll (not clip) and its last door must come fully on screen.
+        // The doors below RACE used to run past the fold at 2x and the column
+        // scrolled to them; the fit (#5150) now keeps the whole column inside
+        // the box, so the last door is on screen with NOTHING scrolled.
         const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
         const last = doors.reduce((a, b) => (b.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom ? b : a));
         const overflowY = getComputedStyle(menu).overflowY;
         const overflows = menu.scrollHeight > menu.clientHeight + 1;
-        const top0 = menu.scrollTop;
-        menu.scrollTop = menu.scrollHeight;
         const lr = last.getBoundingClientRect();
-        menu.scrollTop = top0;
         const reach = {
-          last: last.id, overflowY, overflows,
-          lastAfterScroll: [lr.top, lr.bottom].map((v) => +v.toFixed(1)),
-          ok: (!overflows || /^(auto|scroll)$/.test(overflowY)) && lr.bottom <= Math.min(vh, m.bottom) + 1 && lr.top >= -1,
+          last: last.id, overflowY, overflows, scrollTop: menu.scrollTop,
+          lastRect: [lr.top, lr.bottom].map((v) => +v.toFixed(1)),
+          ok: !overflows && menu.scrollTop === 0 && lr.bottom <= Math.min(vh, m.bottom) + 1 && lr.top >= -1,
         };
         return {
           doubled, over, subs, reach,
           race: [race.top, race.bottom, race.left, race.right].map((v) => +v.toFixed(1)),
-          menu: [m.top, m.bottom, top0, menu.scrollHeight, menu.clientHeight].map((v) => +v.toFixed(1)),
+          menu: [m.top, m.bottom, menu.scrollTop, menu.scrollHeight, menu.clientHeight].map((v) => +v.toFixed(1)),
           raceInView: race.top >= Math.max(0, m.top) - 1 && race.bottom <= Math.min(vh, m.bottom) + 1
             && race.left >= -1 && race.right <= vw + 1,
         };
@@ -706,7 +932,7 @@ test.describe("UI scale", () => {
       expect(fit.subs, `${name}: the save-line subtitles are measured ${fitDump}`).toBeGreaterThan(0);
       expect(fit.over, `${name}: every door subtitle ends inside its door and the viewport ${fitDump}`).toEqual([]);
       expect(fit.raceInView, `${name}: RACE is on screen without scrolling ${fitDump}`).toBe(true);
-      expect(fit.reach.ok, `${name}: the door column scrolls to its last door ${fitDump}`).toBe(true);
+      expect(fit.reach.ok, `${name}: the whole door column is on screen with no scroller ${fitDump}`).toBe(true);
     }
   });
 
@@ -720,6 +946,7 @@ test.describe("UI scale", () => {
   // slider would show a sane value while the real render used whatever was
   // stored, unbounded.
   test("an out-of-range stored scale clamps the applied CSS property, not just the slider label", async ({ page }) => {
+    await page.setViewportSize(LANDSCAPE);
     // This test referenced `read` from "the two scales are independent" above,
     // a `const` local to THAT test's own callback — plain JS lexical scoping
     // never made it visible here, in any run order, on any worker. Not a
@@ -763,7 +990,7 @@ test.describe("UI scale", () => {
       hudLabel: document.getElementById("pm-hudscale-v").textContent,
     }));
     expect(shown).toEqual({
-      uiInput: String(bounds.max), uiLabel: bounds.max + "%",
+      uiInput: String(bounds.max), uiLabel: Math.round(bounds.max * 10000 / 70) / 100 + "%",
       hudInput: String(bounds.min), hudLabel: bounds.min + "%",
     });
   });
@@ -830,13 +1057,18 @@ test.describe("UI scale", () => {
       window.__apex.headless(true);
       window.__apex.go(); window.__apex.jump(0.3, 50);
     });
-    await page.waitForTimeout(600);
+    // No settle (was 600 ms): go() makes the state "race" synchronously, and
+    // jump() then runs refreshHud(true) — a forced, synchronous HUD tick with its
+    // fitHud pass (js/agent/apex.js) — before this evaluate returns.
 
     const CLUSTERS = [".hud-top", ".hud-bottom", "#minimap", ".dock"];
     let dockSeen = false;
     for (const pct of SCALES) {
-      await page.evaluate((p) => window.__apex.hudScale(p), pct);
-      await page.waitForTimeout(200);
+      // The fit caps (--hud-z-*) follow HUD SIZE on the next 10 Hz HUD tick;
+      // re-jumping to the same spot forces that tick synchronously (jump() ->
+      // refreshHud(true), the idiom camera() uses for hud-layout.spec) instead
+      // of sleeping for it (was 200 ms).
+      await page.evaluate((p) => { window.__apex.hudScale(p); window.__apex.jump(0.3, 50); }, pct);
       const boxes = await page.evaluate((sels) => {
         const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
         return sels.map((s) => {
@@ -938,16 +1170,20 @@ test("UI inspector verifies real scale bindings, persistence and CSS provenance"
   await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
   const open = async () => {
     await page.locator("#mb-settings").click(); await page.locator("#pm-open-appearance").click();
+    // The lazy studio moves the shell slider into Menu Customization after the door opens.
+    await expect(page.locator("#ap-menu-customization #pm-uiscale")).toBeVisible();
     await installInspector(page);
   };
   await open();
-  const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#pmsettings" }));
-  const before = await snapshot();
+  const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#ap-menu-customization" }));
   const input = page.locator("#pm-uiscale"); const old = Number(await input.inputValue());
-  await input.focus(); await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
+  await input.focus();
+  const before = await snapshot();
+  expect(before.controls.find(c => c.selector === "#pm-uiscale")?.value).toBe(String(old));
+  await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
   const value = Number(await input.inputValue()); expect(value).not.toBe(old);
   await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#pm-uiscale")?.binding.runtime).toBeCloseTo(value, 5);
-  const after = await inspectPage(page, { root: "#pmsettings", styles: "#pm-uiscale" });
+  const after = await inspectPage(page, { root: "#ap-menu-customization", styles: "#pm-uiscale" });
   const control = after.controls.find(c => c.selector === "#pm-uiscale");
   expect(control.role).toBe("slider"); expect(control.binding.status).toBe("matches");
   expect(control.binding.saved.value).toBe(value);
@@ -1130,7 +1366,6 @@ test("UI inspector observes intentional hysteresis on forward and reverse paths"
 });
 
 test("UI inspector records bounded alternating classification evidence", async ({ page }) => {
-  const { settleLayout } = await import("../../tools/ui/explorer/transitions.mjs");
   await page.setContent('<main id="sheet" data-density="roomy"><button>Action</button></main>');
   await page.evaluate(() => {
     window.__stopAlternating = false;
@@ -1264,7 +1499,7 @@ test.describe("Race setup adaptive task", () => {
       await expect(weatherHelp).toBeVisible();
 
       const cells = [
-        { width: 852, height: 393, scale: 109 },
+        { ...LANDSCAPE, scale: 109 },
         { width: 390, height: 844, scale: 109 },
         { width: 390, height: 844, scale: 150 },
         { width: 390, height: 844, scale: 200 },
@@ -1334,9 +1569,16 @@ test.describe("Race setup adaptive task", () => {
         }
 
         if (cell.width === 667) {
-          const sheet = page.locator("#race-settings > .sheet");
-          await sheet.evaluate(el => { el.scrollTop = 0; });
-          const box = await sheet.boundingBox();
+          // #5153 gap 16 (css/race-setup.css): only a TALL sheet is the page
+          // scroller; a compact wide sheet keeps its head and START RACE fixed
+          // and scrolls #rs-body. Swipe whichever scroller the layout designates.
+          const scrollerSel = await page.evaluate(() => {
+            const sh = document.querySelector("#race-settings > .sheet");
+            return /auto|scroll/.test(getComputedStyle(sh).overflowY) && sh.scrollHeight > sh.clientHeight + 1 ? "#race-settings > .sheet" : "#rs-body";
+          });
+          const scroller = page.locator(scrollerSel);
+          await scroller.evaluate(el => { el.scrollTop = 0; });
+          const box = await scroller.boundingBox();
           const gesture = await page.context().newCDPSession(page);
           // Dispatch trusted touch events: synthesizeScrollGesture('touch')
           // is a no-op on this headless host even on a plain scroll fixture.
@@ -1351,7 +1593,7 @@ test.describe("Race setup adaptive task", () => {
             await gesture.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
             // Finger release can fling; compare checkpoints only after the
             // native scroller settles, rather than against a mid-fling value.
-            await sheet.evaluate(async el => {
+            await scroller.evaluate(async el => {
               let previous = el.scrollTop, stable = 0;
               for (let frame = 0; frame < 180; frame++) {
                 await new Promise(resolve => requestAnimationFrame(resolve));
@@ -1365,13 +1607,13 @@ test.describe("Race setup adaptive task", () => {
           };
           const scrollPath = [];
           try {
-            const limit = await sheet.evaluate(el => el.scrollHeight - el.clientHeight);
+            const limit = await scroller.evaluate(el => el.scrollHeight - el.clientHeight);
             let middleCaptured = false;
             for (let step = 0; step < 32; step++) {
-              const before = await sheet.evaluate(el => el.scrollTop);
+              const before = await scroller.evaluate(el => el.scrollTop);
               if (before >= limit - 2) break;
               await swipe(box.y + box.height * .7, box.y + box.height * .2);
-              const after = await sheet.evaluate(el => el.scrollTop);
+              const after = await scroller.evaluate(el => el.scrollTop);
               scrollPath.push({ direction: "down", before, after, limit });
               expect(after, "each downward gesture advances the task").toBeGreaterThan(before + 1);
               if (!middleCaptured && after >= limit / 2) {
@@ -1380,17 +1622,17 @@ test.describe("Race setup adaptive task", () => {
               }
             }
             expect(middleCaptured).toBe(true);
-            expect(await sheet.evaluate(el => el.scrollTop), "touch reaches the end of the task").toBeGreaterThanOrEqual(limit - 2);
+            expect(await scroller.evaluate(el => el.scrollTop), "touch reaches the end of the task").toBeGreaterThanOrEqual(limit - 2);
             await page.screenshot({ path: testInfo.outputPath(`race-touch-end-${index}.png`) });
             for (let step = 0; step < 32; step++) {
-              const before = await sheet.evaluate(el => el.scrollTop);
+              const before = await scroller.evaluate(el => el.scrollTop);
               if (before <= 2) break;
               await swipe(box.y + box.height * .2, box.y + box.height * .7);
-              const after = await sheet.evaluate(el => el.scrollTop);
+              const after = await scroller.evaluate(el => el.scrollTop);
               scrollPath.push({ direction: "up", before, after, limit });
               expect(after, "each upward gesture reveals earlier settings").toBeLessThan(before - 1);
             }
-            expect(await sheet.evaluate(el => el.scrollTop), "touch returns to the task heading").toBeLessThanOrEqual(2);
+            expect(await scroller.evaluate(el => el.scrollTop), "touch returns to the task heading").toBeLessThanOrEqual(2);
             await page.screenshot({ path: testInfo.outputPath(`race-touch-scroll-back-${index}.png`) });
           } finally { await gesture.detach(); }
 
@@ -1464,7 +1706,7 @@ test.describe("Race setup adaptive task", () => {
 });
 
 test.describe("Custom Home width on touch", () => {
-  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }) });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }) });
 
   test("a narrow saved Home stack stays bounded and actionable after rotation", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1499,9 +1741,9 @@ test.describe("Custom Home width on touch", () => {
 
     const observations = [];
     for (const [index, viewport] of [
-      { width: 852, height: 393 },
-      { width: 393, height: 852 },
-      { width: 852, height: 393 },
+      LANDSCAPE,
+      PORTRAIT,
+      LANDSCAPE,
     ].entries()) {
       await page.setViewportSize(viewport);
       await page.evaluate(() => window.dispatchEvent(new Event("orientationchange")));
@@ -1511,7 +1753,19 @@ test.describe("Custom Home width on touch", () => {
       if (index !== 1) {
         const box = await page.locator("#menu-buttons").boundingBox();
         expect(box).toBeTruthy();
-        expect(Math.abs(box.width - viewport.width * 0.2)).toBeLessThanOrEqual(1);
+        // THE FLOOR IS THE TRACK (#5167 part F; UI contract 2026-11-06 §4.1): on
+        // a landscape phone a saved WIDTH under the shipped doors column fills
+        // that column (the overlay's second grid track) instead of pinning the
+        // cluster to 20 % of the screen. Measured before the floor at 852x393
+        // with these values: a 170px cluster, fit 0.628, labels at 9.7 painted
+        // px and the four utility doors one per row. The request stays on
+        // record as the floor's lower bound: the track is never narrower.
+        const track = await page.evaluate(() => {
+          const cols = getComputedStyle(document.getElementById("overlay")).gridTemplateColumns.split(/\s+/).map(parseFloat);
+          return cols[cols.length - 1];
+        });
+        expect(track).toBeGreaterThanOrEqual(viewport.width * 0.2);
+        expect(Math.abs(box.width - track)).toBeLessThanOrEqual(1);
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.y).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
@@ -1546,7 +1800,7 @@ test.describe("Custom Home width on touch", () => {
 
 test.describe("Factory Home on touch", () => {
   // Keep finite transitions disabled while measuring the layout contract.
-  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 852, height: 393 }, deviceScaleFactor: 1 }), reducedMotion: "reduce" });
+  test.use({ ...uiTestOptions({ touch: true, viewport: LANDSCAPE, deviceScaleFactor: 1 }), reducedMotion: "reduce" });
 
   test("default Home separates landscape regions and keeps destinations readable through enlargement", async ({ page }, testInfo) => {
     const { inspectSettled } = await import("../../tools/ui/explorer/inspector.mjs");
@@ -1568,16 +1822,16 @@ test.describe("Factory Home on touch", () => {
       desktop: document.body.classList.contains("desktop"),
       custom: localStorage.getItem("apex26.titleLayout"),
       scale: Number(getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")),
-    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 1.09 });
+    }))).toEqual({ coarse: true, desktop: false, custom: null, scale: 0.7 });   // 852x393 is a phone: it ships UI SIZE 70 % (#5358)
 
     const cells = [
-      { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-      { width: 852, height: 393, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
-      { width: 852, height: 393, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
+      { ...LANDSCAPE, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { ...LANDSCAPE, safe: { top: 0, right: 0, bottom: 0, left: 0 }, returning: true },
+      { ...LANDSCAPE, safe: BRYCE_WINDOWS.standalone.insets, returning: true },
       { width: 1280, height: 590, safe: { top: 0, right: 59, bottom: 21, left: 59 }, returning: true },
       { width: 667, height: 320, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-      { width: 393, height: 852, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
-      { width: 852, height: 393, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
+      { ...PORTRAIT, safe: { top: 0, right: 0, bottom: 0, left: 0 } },
+      { ...LANDSCAPE, safe: { top: 0, right: 47, bottom: 21, left: 47 }, enlarged: true },
     ];
     for (const [index, cell] of cells.entries()) {
       await page.setViewportSize({ width: cell.width, height: cell.height });
@@ -1628,11 +1882,14 @@ test.describe("Factory Home on touch", () => {
         const race = await page.locator("#mb-race").boundingBox();
         const timeTrial = await page.locator("#mb-tt").boundingBox();
         expect(Math.abs(race.y - timeTrial.y), "normal landscape keeps paired play destinations").toBeLessThanOrEqual(1);
-        expect(race.x + race.width).toBeLessThanOrEqual(timeTrial.x + 1);
+        // A phone's shipped look shears the doors (#5358): a sheared door's bounding box is wider than the door by
+        // height × tan(skew), so neighbours' boxes cross while the doors keep their gap. Compare the doors themselves.
+        const shear = await page.locator("#mb-race").evaluate(el => Math.abs(new DOMMatrix(getComputedStyle(el).transform).c) * el.getBoundingClientRect().height);
+        expect(race.x + race.width - shear).toBeLessThanOrEqual(timeTrial.x + 1);
         const practice = await page.locator("#mb-practice").boundingBox();
         const garage = await page.locator("#mb-garage").boundingBox();
         expect(Math.abs(practice.y - garage.y), "Practice and Garage share the final play row").toBeLessThanOrEqual(1);
-        expect(practice.x + practice.width).toBeLessThanOrEqual(garage.x + 1);
+        expect(practice.x + practice.width - shear).toBeLessThanOrEqual(garage.x + 1);
         const settings = await page.locator("#mb-settings").boundingBox();
         const help = await page.locator("#mb-help").boundingBox();
         expect(Math.abs(settings.y - help.y), "normal landscape keeps utilities in a compact strip").toBeLessThanOrEqual(1);
@@ -1684,12 +1941,12 @@ test.describe("Factory Home on touch", () => {
       await page.screenshot({ path: testInfo.outputPath(`factory-home-${index}.png`) });
       observations.push({ cell, geometry, destinations, settled });
     }
-    await page.setViewportSize({ width: 852, height: 393 });
+    await page.setViewportSize(LANDSCAPE);
     await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: { top: 0, right: 0, bottom: 0, left: 0 } });
     await page.evaluate(() => { __apex.uiScale(109); AppearanceOpts.setTextSize("large"); TitleLayout.reset(); });
     await inspectSettled(page, { root: "#overlay" });
     const menuBefore = await page.locator("#menu-buttons").boundingBox();
-    await page.evaluate(() => TitleLayout.set({ art: { x: 5, y: 0, size: 100 } }));
+    await page.evaluate(() => TitleLayout.set({ ...TitleLayout.current(), art: { x: 5, y: 0, size: 100 } }));
     await expect(page.locator("html")).toHaveAttribute("data-title-layout", "on");
     await inspectSettled(page, { root: "#overlay" });
     const menuAfter = await page.locator("#menu-buttons").boundingBox();
@@ -1705,3 +1962,167 @@ test.describe("Factory Home on touch", () => {
     await cdp.detach();
   });
 });
+
+// #5206 — EVERY SIZE SLIDER DOES WHAT IT SAYS. Table-driven over tests/data/control-registry.json at Bryce's two
+// phone cells with his exported profile (HUD SIZE 155.25, BUTTON SIZE 245): each race size slider is driven through
+// the range the row offers and the rects are read back. Before the fix HUD SIZE painted nothing above 100 %, BUTTON
+// SIZE was dead under 82 % and over the cap, a smaller HUD SIZE grew the steer pad and a bigger BUTTON SIZE shrank
+// the gear cluster (docs/notes/CONTROL-AUDIT-5206-2026-11-10.md). The pure half: tests/unit/hud-feel.test.mjs.
+const CONTROL_REG = JSON.parse(readFileSync(new URL("../data/control-registry.json", import.meta.url), "utf8"));
+const OWNER_PROFILE = JSON.parse(readFileSync(new URL("../../" + CONTROL_REG.profile, import.meta.url), "utf8"));
+async function bootOwnerCell(page, cell, { race = true, store = {} } = {}) {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(({ data, store }) => {
+    SettingsExport.applySettings(data, {});
+    for (const [k, v] of Object.entries(store)) localStorage.setItem("apex26." + k, JSON.stringify(v));
+  }, { data: OWNER_PROFILE, store });
+  await page.reload();
+  await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  // #5655: __apex lands before the shell's boot flipper has moved the deferred sheets (settings-controls.css and the
+  // rest, media="print") into the cascade; it flips them only once ALL have loaded. The race path's 1.5 s cap wait
+  // hid that; race:false opened SETTINGS straight away and could measure the panel without its 44 px floors.
+  // Route sheets (data-route) stay on print until their screen opens, by design.
+  await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]:not([data-route])')]
+    .every((l) => l.media !== "print" && !!l.sheet), null, { polling: 100, timeout: BOOT_MS });
+  const { sal, sar, sab } = cell.insets;
+  if (sal || sar || sab) await page.addStyleTag({ content: `:root{--sal:${sal}px;--sar:${sar}px;--sat:0px;--sab:${sab}px;}` });
+  if (!race) return;
+  await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => window.__apex.headless(true));   // the HUD tick without the software-GL frame
+  await page.waitForFunction(() => document.documentElement.style.getPropertyValue("--hud-cap") !== "", null, { polling: 100, timeout: BOOT_MS });
+  // The race fit takes about a second of passes to settle after boot (measured: --hud-cap's steerKeep 1.186 -> 1.875
+  // over 0.8 s at cell A). No player reaches SETTINGS in that second; a slider read inside it is a read of a draft.
+  await page.waitForFunction(() => {
+    const w = /** @type {any} */ (window), cap = document.documentElement.style.getPropertyValue("--hud-cap"), now = performance.now();
+    if (w.__capSeen !== cap) { w.__capSeen = cap; w.__capAt = now; }
+    return now - w.__capAt > 1500;
+  }, null, { polling: 100, timeout: BOOT_MS });
+}
+const sizeRowState = (page, id) => page.evaluate((id) => {
+  const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
+  return { min: +el.min, max: +el.max, value: +el.value, label: document.getElementById(id + "-v").textContent };
+}, id);
+const widths = (page, sels) => page.evaluate((sels) => sels.map((s) => {
+  const el = document.querySelector(s);
+  return el ? +el.getBoundingClientRect().width.toFixed(1) : 0;
+}), sels);
+// The audit's method: the slider's own `input` then `change` (a release; UI SIZE applies on it, #5256), then two
+// forced fits a settle period apart (the fit ticks at 10 Hz).
+async function driveSize(page, id, v) {
+  await page.evaluate(async ({ id, v }) => {
+    const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
+    el.value = String(v);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 2; i++) { GameHud.invalidateFit(); await new Promise((r) => setTimeout(r, 450)); }
+  }, { id, v });
+}
+for (const [cellId, cell] of Object.entries(CONTROL_REG.cells)) {
+  test.describe(`Size controls do what they say — cell ${cellId} ${cell.width}x${cell.height}, owner profile`, () => {
+    test.use({ ...uiTestOptions({ touch: true, viewport: { width: cell.width, height: cell.height }, deviceScaleFactor: 1 }) });
+    for (const row of CONTROL_REG.size.filter((r) => r.moves)) {
+      test(`${row.id} (${row.names}): no dead travel, monotonic, the number is the painted size, nothing else moves`, async ({ page }) => {
+        test.setTimeout(240_000);
+        // The adaptive (automatic) HUD, where the band fit caps HUD and BUTTON SIZE: explicit empty sets. A fresh
+        // phone's factory layout (hud-layout.js PHONE_STANDARD, #5977) places every piece by hand, so nothing caps there.
+        await bootOwnerCell(page, cell, { store: { hudLayout: { v: 4, standard: { other: {}, helmet: {}, cockpit: {} } } } });
+        // Untouched: the stored wish is kept, the thumb sits at what paints and the row says it is the cap.
+        const at = await sizeRowState(page, row.id);
+        expect(await page.evaluate((k) => JSON.parse(localStorage.getItem("apex26." + k)), row.key), "the stored wish survives the clamp").toBeGreaterThanOrEqual(at.max);
+        expect(at.value, "the thumb is at the painted size").toBe(at.max);
+        expect(at.max, "the range ends where this window stops painting").toBeLessThan(row.lim.max);
+        expect(at.label, "the row shows the cap").toMatch(/ · max$/);
+        // The first move pins the OTHER slider's wish to what it paints, and this row's range becomes the one that
+        // keeps that painted size (BUTTON SIZE at cell A: 194 -> about 187 %). It must not collapse, and it must hold.
+        await driveSize(page, row.id, at.min);
+        const held = await sizeRowState(page, row.id);
+        expect(held.min, "the first move leaves the minimum alone").toBe(at.min);
+        expect(held.max, "the first move never widens the range").toBeLessThanOrEqual(at.max);
+        expect(held.max, "and keeps at least 95 % of it").toBeGreaterThanOrEqual(at.max * 0.95);
+        const stops = [0, 0.25, 0.5, 0.75, 1].map((t) => Math.round((held.min + (held.max - held.min) * t) * 4) / 4);
+        const seen = [];
+        // HUD SIZE paints two bands, each min(slider, its own cap) (#5256: the tower's cap no longer follows the dock, so
+        // it can pass the bottom row's). A band held at its cap is named in the label; each band's widgets paint
+        // exactly its number, and every step grows at least one band. Other rows: one band, `moves`, at the slider.
+        const bands = row.movesTop ? [["bot", row.moves], ["top", row.movesTop]] : [["", row.moves]];
+        for (const v of stops) {
+          await driveSize(page, row.id, v);
+          const st = await sizeRowState(page, row.id);
+          expect(st.value, `${v}: the slider holds the value it was given`).toBe(v);
+          expect([st.min, st.max], `${v}: the range holds while the slider moves`).toEqual([held.min, held.max]);
+          expect(st.label.startsWith(relativeLabel(v, row.key === "hudBtnScale" ? 143.25 : 100)), `${v}: label "${st.label}" leads with the value`).toBe(true);
+          const caps = await page.evaluate(() => UiScale.parseCaps(document.documentElement.style.getPropertyValue("--hud-cap")));
+          const paints = bands.map(([k]) => (k ? Math.min(v, Math.ceil(caps[k] * 100 - 1e-6)) : v));
+          bands.forEach(([k], b) => {
+            if (k && paints[b] < v - 0.5) expect(st.label, `${v}: the label names the ${k === "top" ? "top" : "bottom"} row held at ${paints[b]} %`).toContain(` · ${k === "top" ? "top" : "bottom"} row ${paints[b]}%`);
+          });
+          seen.push({ v, paints, bands: await Promise.all(bands.map(([, sels]) => widths(page, sels))), still: await widths(page, row.still) });
+        }
+        for (let i = 1; i < seen.length; i++) {
+          expect(seen[i].paints.some((p, b) => p > seen[i - 1].paints[b]), `${seen[i - 1].v} % -> ${seen[i].v} % grows a band (no dead travel)`).toBe(true);
+          bands.forEach(([k, sels], b) => sels.forEach((sel, m) => {
+            const w = seen[i].bands[b][m], was = seen[i - 1].bands[b][m], w0 = seen[0].bands[b][m];
+            if (seen[i].paints[b] > seen[i - 1].paints[b]) expect(w, `${sel} grows from ${seen[i - 1].v} % to ${seen[i].v} % (no dead travel)`).toBeGreaterThan(was + 0.5);
+            // The number is the painted size: widths scale with the band's number (2 % for the band's 1 % zoom grid).
+            const ratio = (w / w0) / (seen[i].paints[b] / seen[0].paints[b]);
+            expect(Math.abs(ratio - 1), `${sel} at ${seen[i].v} % (${k || "band"} ${seen[i].paints[b]} %) paints ${w} px, ${w0} px at ${seen[0].v} %`).toBeLessThan(0.02);
+          }));
+          for (let s = 0; s < row.still.length; s++) {
+            expect(Math.abs(seen[i].still[s] - seen[0].still[s]), `${row.still[s]} must not move with ${row.id}: ${seen[0].still[s]} px at ${seen[0].v} %, ${seen[i].still[s]} px at ${seen[i].v} %`).toBeLessThan(1);
+          }
+        }
+        // And back down: the first stop paints what it painted on the way up.
+        await driveSize(page, row.id, stops[0]);
+        const back = await widths(page, row.moves);
+        for (let m = 0; m < row.moves.length; m++) expect(Math.abs(back[m] - seen[0].bands[0][m]), `${row.moves[m]} has no hysteresis`).toBeLessThan(1);
+      });
+    }
+    // The top is NOT clamped: above the sheet's 125 % the title still grows. The bottom stops at 50 % on a phone (#5452; 70 under #5235).
+    test("pm-uiscale (every menu): a phone stops at 50 % with 12 px text and 44 px rows, and the row names the zoom its own sheet paints at", async ({ page }) => {
+      const ui = CONTROL_REG.size.find((r) => r.key === "uiScale");
+      await bootOwnerCell(page, cell, { race: false, store: { uiScale: 40 } });
+      await page.locator("#mb-settings").click();
+      await page.locator("#pm-open-appearance").click();
+      await expect(page.locator("#" + ui.id)).toBeVisible();
+      // The sheet's entrance (sheet-in) and SheetShape's first-frame classification must land before the floor is read.
+      const settled = await page.evaluate(settleLayout, { root: "#pmsettings-inner" });
+      expect(settled.stable, "the settings sheet settled: " + (settled.reason || "")).toBe(true);
+      const sheetZoom = () => page.evaluate((id) => +getComputedStyle(document.getElementById(id).closest(".sheet")).zoom, ui.id);
+      expect(await sizeRowState(page, ui.id)).toEqual({ min: ui.phoneMin, max: ui.lim.max, value: ui.phoneMin, label: relativeLabel(ui.phoneMin, 70) });
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")), "a stored 40 % paints the minimum").toBe(String(ui.phoneMin / 100));
+      expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale"))), "and is raised in storage on load").toBe(ui.phoneMin);
+      // At the minimum: the open panel's token-sized text paints >= 12 px and its controls >= 44 px.
+      const floor = await page.evaluate(() => {
+        const panel = document.getElementById("pm-panel-appearance"), z = +getComputedStyle(/** @type {Element} */ (panel.closest(".sheet"))).zoom;
+        const shown = (/** @type {Element} */ el) => el.getClientRects().length > 0;
+        const rows = [...panel.querySelectorAll("button, input, select")].filter(shown).map((el) => {
+          const r = el.getBoundingClientRect();
+          return { id: el.id || el.className || el.tagName, w: Math.round(r.width * 10) / 10, h: Math.round(r.height * 10) / 10, min: Math.min(r.width, r.height) };
+        });
+        const least = rows.reduce((a, b) => (b.min < a.min ? b : a));
+        const probe = panel.appendChild(Object.assign(document.createElement("span"), { textContent: "x" }));
+        probe.style.fontSize = "var(--fs-micro)";
+        const micro = parseFloat(getComputedStyle(probe).fontSize) * z;
+        probe.remove();
+        return { micro, tap: least.min, least: { id: least.id, w: least.w, h: least.h } };
+      });
+      expect(floor.micro, "the smallest type rung paints 12 px").toBeGreaterThanOrEqual(11.95);
+      expect(floor.tap, "the smallest control in the panel paints 44 px: " + JSON.stringify(floor.least)).toBeGreaterThanOrEqual(43.5);
+      for (const v of [100, 125, 150, 200]) {
+        await page.evaluate(({ id, v }) => {
+          const el = /** @type {HTMLInputElement} */ (document.getElementById(id));
+          el.value = String(v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));   // UI SIZE applies on release (#5256)
+        }, { id: ui.id, v });
+        const z = Math.round(Math.min(v / 100, ui.sheetZoom) * 100);
+        await expect.poll(sheetZoom, `${v} %: the sheet paints min(wish, ${ui.sheetZoom})`).toBeCloseTo(z / 100, 2);
+        await expect(page.locator(`#${ui.id}-v`), `${v} %: the number is the wish, the note is what this sheet paints`).toHaveText(z < v ? `${relativeLabel(v, 70)} · this menu ${relativeLabel(z, 70)}` : relativeLabel(v, 70));
+        expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.uiScale")))).toBe(v);
+        expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"))).toBe(String(v / 100));
+      }
+    });
+  });
+}

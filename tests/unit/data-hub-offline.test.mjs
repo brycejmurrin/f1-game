@@ -1,5 +1,6 @@
 /* Render the real hub's failure/retry path; source text is not a UI oracle. */
 import test from 'node:test';
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -14,7 +15,7 @@ function harness(online) {
   const empty = () => Promise.resolve(dom.document.createElement('div'));
   const create = (value) => ({ create: () => value });
   class Clock extends Date { static now() { return now; } }
-  const ctx = vm.createContext({ document: dom.document, navigator, Date: Clock, queueMicrotask,
+  const ctx = vm.createContext({ I18n: i18nStub(),  document: dom.document, navigator, Date: Clock, queueMicrotask,
     Log: { info() {}, warn() {} }, F1API: { cancelAll() {}, staleMark: () => staleSeq,
       staleSince: mark => staleEvent && staleEvent.seq > mark ? staleEvent.at : null },
     DataSchedule: create({ loadSchedule: () => { calls++; return new Promise((resolve, reject) => pending.push({resolve, reject})); } }),
@@ -22,7 +23,7 @@ function harness(online) {
     DataLive: create({ loadLive: empty, stopLiveAuto() {}, disarmLiveAuto() {} }),
     DataTelemetry: create({ loadTelemetry: empty, closeTelemPopup() {} }),
     DataRealRace: create({ loadRealRace: empty, cancel() {} }), DataExport: create({ loadExport: empty }) });
-  for (const file of ['js/ui/dom.js', 'js/data/hub.js']) {
+  for (const file of ['js/ui/dom.js', 'js/data/tab-utils.js', 'js/data/hub.js']) {
     vm.runInContext(fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), ctx, { filename: absSrc(file) });
   }
   const hub = vm.runInContext('DataHub', ctx);
@@ -149,4 +150,19 @@ test('reselecting a pending schedule then changing tabs retires superseded compl
   assert.equal(h.calls(), 40, 'the surviving cached view is reusable');
   assert.equal(h.panel().querySelector('.schedule-data').textContent, 'Delayed schedule');
   assert.equal(disposed, 39);
+});
+
+// D-032: both feeds are CC BY-NC-SA 4.0; the tab that shows their data credits them.
+test('a tab showing feed data carries the data-source line with the licence', async () => {
+  const h = harness(true);
+  h.hub.open('schedule');
+  await h.answer(true, 'Race at Monza');
+  const find = (n) => (n.dataset && n.dataset.feed ? n : (n.children || []).map(find).find(Boolean) || null);
+  const src = find(h.panel());
+  assert.ok(src, 'the schedule tab has a source line');
+  assert.equal(src.dataset.feed, 'jolpica');
+  const text = src.children.map((n) => n.textContent).join('');   // mini-dom keeps text per node
+  assert.equal(text, 'Data: Jolpica F1, CC BY-NC-SA 4.0 · unofficial, non-commercial');
+  const links = src.querySelectorAll('a');
+  assert.deepEqual(links.map((a) => a.href), ['https://github.com/jolpica/jolpica-f1', 'https://creativecommons.org/licenses/by-nc-sa/4.0/']);
 });

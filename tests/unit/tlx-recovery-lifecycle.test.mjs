@@ -4,8 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { parse } from "acorn";
-import * as THREE from "../../vendor/three-0.186.1/three.webgpu.min.js";
+import { vendorModule, bindImports } from "../helpers/vendor-class.mjs";
+import * as THREE from "../../vendor/three-0.187.0/three.webgpu.min.js";
 import { makeFakeGL, installThreeGlobals } from "../helpers/fake-webgl2.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -23,24 +23,25 @@ function load(ctx, paths) {
 
 // Exact vendor ownership code, including the strong RenderObjects Set and
 // object/material event cleanup. Only hash/compiler/backend managers are stubs.
-const vendor = read("vendor/three-0.186.1/three.webgpu.min.js");
-const tree = parse(vendor, { ecmaVersion: "latest", sourceType: "module" });
-const cls = (name) => {
-  const n = tree.body.find((n) => n.type === "ClassDeclaration" && n.id.name === name);
-  assert.ok(n, `vendored lifecycle class ${name}`);
-  return vendor.slice(n.start, n.end);
-};
-const { RO, ROs } = new Function(`let rb=0; ${cls("nb")} ${cls("ob")} return {RO:nb,ROs:ob};`)();
+// Located by method names (terser renames the classes on every regeneration), with the module-level
+// declarations they read (vendor-class.mjs).
+const vendor = vendorModule(read("vendor/three-0.187.0/three.webgpu.min.js"));
+const roNode = vendor.classWith("getDynamicCacheKey", "getMaterialCacheKey");
+const rosNode = vendor.classWith("createRenderObject", "getChainMap");
+const { code: roCode, imports: roImports } = vendor.closure([roNode, rosNode]);
+const roCtx = bindImports(roImports, THREE, TSL);
+const { RO, ROs } = new Function(...Object.keys(roCtx), `${roCode} return {RO:${roNode.id.name},ROs:${rosNode.id.name}};`)(...Object.values(roCtx));
 RO.prototype.getDynamicCacheKey = () => 0;
 RO.prototype.getCacheKey = () => 0;
 function shadowHarness() {
-  const originalTarget = {}, nodes = { delete() {} }, bindings = { deleteForRender() {} };
+  const originalTarget = {}, nodes = { delete() {} }, bindings = { deleteForRender() {} }, lightsNode = new THREE.EventDispatcher();
   let target = originalTarget, fail = false, material, scene, deletes = 0, geometryDisposals = 0;
   const renderer = { render() {}, backend: { isWebGPUBackend: true, deleteVertexState() {} },
     coordinateSystem: THREE.WebGPUCoordinateSystem, _currentSourceMaterial: null,
     getRenderTarget: () => target, setRenderTarget(t) { target = t; } };
   const pipelines = { backend: renderer.backend, delete() { deletes++; } };
-  const ros = new ROs(renderer, nodes, {}, pipelines, bindings, {});
+  const geometries = { deleteVertexState() {} }; // r187 releases the vertex state through Geometries
+  const ros = new ROs(renderer, nodes, geometries, pipelines, bindings, {});
   ros.getChainMap = () => ({ delete() {} });
   renderer.compileAsync = async (s, camera) => {
     scene = s;
@@ -51,7 +52,7 @@ function shadowHarness() {
         m.geometry.__counted = true;
         m.geometry.addEventListener("dispose", () => geometryDisposals++);
       }
-      ros.createRenderObject(nodes, {}, renderer, m, m.material, s, camera, null, {}, null, "default");
+      ros.createRenderObject(nodes, geometries, renderer, m, m.material, s, camera, lightsNode, {}, null, "default"); // r187 listens on the lights node
     });
     if (fail) throw Error("injected partial compile failure");
   };
@@ -108,12 +109,13 @@ for (const initialFailure of [true, false]) {
     const target = () => ({ tagOn: () => true, resize() {}, hdrOk: () => true });
     const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} }, THREE, TSL,
       post: initialFailure ? null : target(), fx: {}, lit: null, renderer: { setMRT() {} },
-      shadowSys: null, envRT: null, matMaps: null, lampGrid: null, _sharedUniforms: true, _liteGpu: true,
+      garageProbeRequested: false, _gfxx: () => false,
+      shadowSys: null, envRT: null, matMaps: null, lampGrid: null, _sharedUniforms: true, _liteGpu: true, isMobile: false, isWebGPU: () => false, ENV_SIZE: 64,
       _warmPending: null, W: 640, H: 360, presentW: 640, presentH: 360, performance: { now: () => 100 },
       buildPost() { builds++; return target(); } });
     load(ctx, ["js/render/shared/light-budget.js", "js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"]);
     vm.runInContext("globalThis.TLXShaders = window.TLXShaders; globalThis.chunks = TLXShaders.chunks(THREE, TSL);", ctx);
-    vm.runInContext(slice(tlx, "          lit = TLXShaders.lit(THREE, TSL, {", "\n        }"), ctx, { filename: "vm-snippet:tlx-lit-recovery" });
+    vm.runInContext(slice(tlx, "          const litCtx = {", "\n        }"), ctx, { filename: "vm-snippet:tlx-lit-recovery" });
     const existing = ctx.lit.makeMaterial({ carPaint: 1 });
     assert.equal(existing.mrtNode, null, "canvas starts without MRT");
     const key = existing.customProgramCacheKey(), output = existing.outputNode, opacity = existing.opacityNode;
@@ -158,15 +160,28 @@ test("post SSR diagnostics agree with uploaded road/car gates and required camer
   const proj = camera.projectionMatrix.toArray(), invProj = camera.projectionMatrixInverse.toArray();
   const F = { proj, invProj, invVP: invProj, viewProj: proj, upVS: [0, 1, 0], sunVS: [0, 0, -1], sunDir: [0, -1, 0], sunColor: [0.05, 0.05, 0.08], time: 0 };
   const base = { ssao: 0, contact: 0, godray: 0, bloom: 0, reflect: 0, flareMul: 0 };
+  const C = graph.composite.U;
+  let cameraWrites = 0;
+  for (const name of ["ipXY", "ipZW", "pXY", "upVS", "reflSkyHi", "reflSkyLo"]) {
+    const vector = C[name].value;
+    const set = vector.set;
+    vector.set = function (...args) { cameraWrites++; return set.apply(this, args); };
+  }
   for (const [extra, frame, expected] of [
     [{}, F, true], // default car .05 with road sheen explicitly disabled
     [{ carReflect: 0 }, F, false],
-    [{ carReflect: 0, reflect: 0.1 }, F, true],
+    [{ carReflect: 0.001, reflect: 0.001 }, F, false],
+    [{ carReflect: 0, reflect: 0.1 }, { ...F, upVS: [1, 0, 0], skyHi: [0.8, 0.4, 0.2] }, true],
     [{ carReflect: 0.1 }, { ...F, upVS: null }, false],
     [{ carReflect: 0.1 }, { ...F, proj: null }, false],
   ]) {
+    cameraWrites = 0;
     const opts = { ...base, ...extra }; post.present(opts, frame);
-    const C = graph.composite.U;
+    assert.equal(cameraWrites, expected ? 6 : 0);
+    if (expected) {
+      assert.deepEqual(C.upVS.value.toArray(), frame.upVS);
+      assert.deepEqual(C.reflSkyHi.value.toArray(), frame.skyHi || [0.05, 0.06, 0.09]);
+    }
     assert.equal(post.state().blocks.ssr, expected);
     assert.equal(post.state().blocks.ssr, C.ssrOk.value > 0.5 && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
     assert.equal(post.needsDepth(opts, frame), expected);

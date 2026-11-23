@@ -1,5 +1,7 @@
 # GPU memory hunt — TLX on three's WebGPU backend (A·H12, 2026-10-24)
 
+Summary: GPU memory growth and leaks on Bryce's THREE PATH: WEBGPU (`GPUBuffer` counts across race and quit cycles; A·H12).
+
 Lane: GPU memory growth and leaks on Bryce's path (SETTINGS › THREE PATH: WEBGPU). First lead: A·H11 row H2
 (branch cursor/live-debug-race-1-ah11, its LIVE-DEBUGGER-RACE note): `GPUBuffer` 371 → 1102 → 1247
 across race→quit cycles, retained through `renderer.backend.data`.

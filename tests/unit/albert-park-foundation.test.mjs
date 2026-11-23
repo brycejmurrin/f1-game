@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import trackBuild from "../../tools/lib/track-build-vm.cjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -25,15 +26,21 @@ function loadDefinition() {
   return window.TrackDefs[0];
 }
 
-test("Albert Park uses an explicit essentially-flat racing-space terrain contract", () => {
+test("Albert Park keeps its flat parkland and reproduces the measured approach to T11", () => {
   const def = loadDefinition();
   assert.equal(def.sceneryCoordinates, "racing");
   assert.equal(def.flatTerrain, true);
   assert.ok(def.terrainOuter >= 90);
-  assert.ok(def.elevations?.length >= 2);
-  assert.ok(def.elevations.every((zone) => Math.abs(zone.rise) <= 0.75));
-  const rises = def.elevations.map((zone) => zone.rise);
-  assert.ok(Math.max(...rises) - Math.min(...rises) <= 1.2);
+  // Verstappen and Sainz both measured 2.5 m of relief, cresting at 71.6–71.8%
+  // of their 2024 qualifying laps (docs/research/TRACK-SURFACE-VALIDATION-2026-11-22.md).
+  const { Tracks } = trackBuild.buildContext({});
+  const circuit = Tracks.LIST.find((d) => d.id === def.id);
+  const road = Tracks.buildCenterline(circuit, { line: false });
+  const high = Math.max(...road.py);
+  const relief = high - Math.min(...road.py);
+  const crest = road.py.indexOf(high) / road.n;
+  assert.ok(Math.abs(relief - 2.5) <= 0.2, `road relief is ${relief} m`);
+  assert.ok(Math.abs(crest - 0.717) <= 0.004, `crest is at lap fraction ${crest}`);
 });
 
 test("Albert Park excludes shared foliage for bespoke park densification", () => {

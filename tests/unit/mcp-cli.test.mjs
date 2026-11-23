@@ -1,8 +1,8 @@
 // mcp-cli.test.mjs — the MCP surface that stays on the fast gate: mcp-cli.mjs
 // probe mode (dry-run call plans), the Chrome wrapper's flags and release pin,
 // gfx-probe's backend flags, and the Playwright MCP pin. Nothing here launches
-// a browser or needs network. The tinyfish proxy and the probe bridge have
-// their own suites in tests/manual/ (tinyfish-mcp / probe-mcp), run by path.
+// a browser or needs network. The probe bridge has its own suite in
+// tests/manual/probe-mcp.test.mjs, run by path (the tinyfish proxy left 2026-11-03).
 import { nativeMcpConfig } from "../helpers/agent-output-launch.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -74,6 +74,9 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     const packageBin = path.join(dir, "cached/build/src/bin/chrome-devtools-mcp.js");
     fs.mkdirSync(mcp, { recursive: true });
     fs.mkdirSync(bin);
+    const record = "tests/data/phone-windows.json";
+    fs.mkdirSync(path.join(dir, "tests/data"), { recursive: true });
+    fs.copyFileSync(path.join(ROOT, record), path.join(dir, record));
     fs.mkdirSync(path.dirname(packageBin), { recursive: true });
     for (const name of ["playwright-mcp.sh", "chrome-devtools-mcp.sh"]) fs.copyFileSync(path.join(ROOT, "tools/mcp", name), path.join(mcp, name));
     fs.writeFileSync(path.join(mcp, "mcp-preflight.sh"), "mcp_preflight() { :; }\n");
@@ -81,6 +84,7 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     stub("npx", 'printf "%s\\n" "$@" > "$LAUNCH_LOG"\n');
     stub("npm", 'printf "%s\\n" "$@" > "$LAUNCH_LOG"\nprintf "%s\\n" "$PACKAGE_BIN"\n');
     stub("node", `case "$1" in
+      -p) exec "$REAL_NODE" "$@";;
       */chromium-path.mjs) printf '/bin/true\\n';;
       -e) printf '%s\\n' "$3";;
       */webgpu-chrome-args.cjs) :;;
@@ -89,7 +93,7 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     esac\n`);
     const log = path.join(dir, "launch"), gate = path.join(dir, "gate"), runtime = path.join(dir, "runtime");
     const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH, LAUNCH_LOG: log,
-      GATE_LOG: gate, RUNTIME_LOG: runtime, PACKAGE_BIN: packageBin, APEX_PW_DEVICE: "iPhone 15", APEX_PW_CDP: "", APEX_CDT_BROWSER_URL: "" };
+      GATE_LOG: gate, RUNTIME_LOG: runtime, PACKAGE_BIN: packageBin, REAL_NODE: process.execPath, APEX_PW_DEVICE: "iPhone 15", APEX_PW_CDP: "", APEX_CDT_BROWSER_URL: "" };
     for (const cdp of ["", "http://127.0.0.1:9222"]) {
       const r = spawnSync("bash", [path.join(mcp, "playwright-mcp.sh"), "run"], { env: { ...env, APEX_PW_CDP: cdp }, encoding: "utf8", timeout: 5000 });
       assert.equal(r.status, 0, r.stderr);
@@ -105,7 +109,9 @@ test("browser MCP launches prefer cached exact pins while retaining cold-cache d
     assert.deepEqual(args.slice(0, 4), ["exec", "--yes", "--prefer-offline", "--package=chrome-devtools-mcp@1.11.0"]);
     assert.equal(args.includes("--offline"), false);
     assert.ok(fs.readFileSync(gate, "utf8").includes(path.join(dir, "cached")), "resolved package still passes through version gate");
-    assert.equal(fs.readFileSync(runtime, "utf8").split("\n")[0], "/fixture/gated-runtime.js");
+    const runtimeArgs = fs.readFileSync(runtime, "utf8").split("\n");
+    assert.equal(runtimeArgs[0], "/fixture/gated-runtime.js");
+    assert.equal(runtimeArgs[runtimeArgs.indexOf("--viewport") + 1], "852x393");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -266,4 +272,20 @@ print("ok")
 `;
   const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
   assert.equal(r.status, 0, r.stderr); assert.equal(r.stdout.trim(), "ok");
+});
+
+// chrome-devtools-mcp 1.11 routes by page: a page tool without `pageId` is an
+// input-validation error, so `probe` failed right after a good new_page. The
+// fake server REQUIRES the id; the batch must carry the one new_page reported (#5712).
+test("mcp-cli probe fills pageId from new_page for page-routed tools", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-page-"));
+  const log = path.join(dir, "calls.jsonl");
+  const r = spawnSync("node", [MCP_CLI, "probe", "--backend", "webgl2", "--wait", "0", "--console"], {
+    encoding: "utf8", timeout: 20000,
+    env: { ...process.env, MCP_FAKE_LOG: log, APEX_MCP_WRAPPER: path.join(ROOT, "tests/fixtures/mcp-page-routed-server.mjs") } });
+  const calls = fs.readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(calls.map((c) => [c.name, c.pageId]), [["new_page", null], ["evaluate_script", 7],
+    ["navigate_page", 7], ["evaluate_script", 7], ["list_console_messages", 7]]);
 });

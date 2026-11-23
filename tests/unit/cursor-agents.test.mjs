@@ -1091,3 +1091,152 @@ test("handback keeps wait's exit code: a cancelled last run is 1, and the digest
     after();
   }
 });
+
+// Claude Code adapter contract (reads only since 2026-11-03): shares this registered agent-control suite.
+{
+const { createClaudeAgents, runClaude, validateClaudeRequest, RETIRED_VERBS } = await import("../../tools/ci/claude-agents.mjs");
+const { CLAUDE_CATALOG, createClaudeTools } = await import("../../tools/mcp/apex-claude-agents.mjs");
+const { fileURLToPath } = await import("node:url");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const ID = "cse_test123";
+function workspace(t) {
+  const parent = path.join(ROOT, "artifacts", "claude-adapter-tests");
+  fs.mkdirSync(parent, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(parent, "case-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+test("the send and cloud-read verbs are retired: refused by name, nothing spawned, the message never echoed", async () => {
+  // 2026-11-03 (agent-surface reset §4.8): no agent session messages or reads another session through Bryce's
+  // personal Claude login. The adapter names the retirement so a caller gets the reason, never a send.
+  const handle = createClaudeAgents({ run: () => assert.fail("must not spawn") });
+  assert.deepEqual([...RETIRED_VERBS], ["followup", "remember", "transcript"]);
+  for (const args of [
+    { verb: "followup", id: ID, options: { text: "Do not echo this message" } },
+    { verb: "remember", id: ID, options: { title: "known" } },
+    { verb: "transcript", id: ID, options: { refresh: true } },
+    { verb: "followup", id: ID, options: { text: "Do not echo this message" }, dryRun: true },
+  ]) {
+    const r = await handle(args);
+    assert.equal(r.ok, false, JSON.stringify(args));
+    assert.equal(r.error, "unsupported_verb");
+    assert.match(r.message, /2026-11-03/);
+    assert.ok(!JSON.stringify(r).includes("Do not echo this message"));
+  }
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/claude-agents.mjs"), "utf8");
+  assert.ok(!/--cloud|claude-transcript\.py|cloud_teleport_export/.test(src), "no send argv or transcript reader survives");
+  assert.equal(fs.existsSync(path.join(ROOT, "tools/ci/claude-transcript.py")), false, "the PTY transcript scraper is gone");
+});
+
+test("strict per-verb validation refuses typos and unsupported cloud controls before spawning", async () => {
+  const handle = createClaudeAgents({ run: () => assert.fail("must not spawn") });
+  for (const args of [
+    { verb: "launch" }, { verb: "__proto__" }, { verb: {} },
+    { verb: "auth", options: { model: "opus" } },
+    { verb: "auth", id: ID },
+    { verb: "auth", dryRun: "true" }, { verb: "auth", token: "secret" },
+    { verb: "list", options: { limit: 1.5 } }, { verb: "list", options: { limit: "5" } },
+    { verb: "local-logs", id: "--help" }, { verb: "local-list", options: { all: "yes" } },
+  ]) assert.equal((await handle(args)).ok, false, JSON.stringify(args));
+});
+
+test("dryRun and MCP mock validate but never call the CLI or create files", async (t) => {
+  const root = workspace(t);
+  const run = () => assert.fail("dryRun must not call CLI");
+  const tool = createClaudeTools({ root, run, mock: () => true });
+  for (const args of [{ verb: "auth" }, { verb: "list" }, { verb: "local-list", options: { all: true } }, { verb: "local-logs", id: "local1" }]) {
+    const r = await tool.handlers.apex_claude_agents(args);
+    assert.equal(r.structuredContent.dryRun, true, JSON.stringify(args));
+    assert.deepEqual(JSON.parse(r.content[0].text), r.structuredContent);
+    assert.equal(r.isError, false);
+  }
+  assert.equal(fs.existsSync(path.join(root, "artifacts")), false);
+});
+
+test("a missing CLI is reported with its fix, not mistaken for a result", async () => {
+  const r = await createClaudeAgents({ run: async () => ({ error: "cli_unavailable", started: false }) })({ verb: "auth" });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, "cli_unavailable");
+  assert.match(r.fix, /claude auth login/);
+});
+
+test("auth drops account identity and credentials; logged-out status remains failure", async () => {
+  const handle = createClaudeAgents({ run: async () => ({ exit: 0, stdout: JSON.stringify({ loggedIn: true, authMethod: "claude.ai", subscriptionType: "max", email: "private@example.test", accessToken: "never-return-this" }) }) });
+  assert.deepEqual(await handle({ verb: "auth" }), { ok: true, loggedIn: true, authMethod: "claude.ai", subscriptionType: "max" });
+  const r = await createClaudeAgents({ run: async () => ({ exit: 1, stdout: '{"loggedIn":false,"authMethod":"none"}' }) })({ verb: "auth" });
+  assert.equal(r.ok, false);
+  assert.equal(r.error, "not_authenticated");
+});
+
+test("reference listing reads an existing address book, bounded and read-only, never a provider ownership claim", async (t) => {
+  const root = workspace(t);
+  const handle = createClaudeAgents({ root, run: () => assert.fail("registry does not call provider") });
+  assert.equal((await handle({ verb: "list" })).total, 0);
+  assert.equal(fs.existsSync(path.join(root, "artifacts")), false, "an empty list creates nothing");
+  const file = path.join(root, "artifacts", "claude-agents.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ version: 1, sessions: [{ id: ID, title: "Garage", rememberedAt: "2026-10-31T00:00:00Z" }, { id: "cse_other", title: "Other" }] }));
+  const before = fs.statSync(file);
+  const r = await handle({ verb: "list", options: { limit: 1 } });
+  assert.equal(r.source, "local_reference_registry");
+  assert.equal(r.live, false);
+  assert.equal(r.sessions[0].id, ID);
+  assert.equal(r.sessions[0].url, `https://claude.ai/code/${ID}`);
+  assert.equal(r.truncated, true);
+  assert.equal(fs.statSync(file).mtimeMs, before.mtimeMs, "list never writes the registry");
+  fs.writeFileSync(file, JSON.stringify({ version: 2 }));
+  assert.equal((await handle({ verb: "list" })).error, "registry_invalid");
+});
+
+test("a symlinked registry is refused as an escape", async (t) => {
+  const root = workspace(t), outside = workspace(t);
+  fs.writeFileSync(path.join(outside, "external.txt"), "outside content");
+  fs.mkdirSync(path.join(root, "artifacts"));
+  fs.symlinkSync(path.join(outside, "external.txt"), path.join(root, "artifacts", "claude-agents.json"));
+  const handle = createClaudeAgents({ root, run: () => assert.fail("no provider call") });
+  assert.equal((await handle({ verb: "list" })).error, "path_escaped");
+});
+
+test("local sessions and logs retain their source, bounds and untrusted-data label", async () => {
+  const list = await createClaudeAgents({ run: async (argv) => { assert.deepEqual(argv, ["agents", "--json", "--all"]); return { exit: 0, stdout: JSON.stringify([{ sessionId: "local1", name: "one", secret: "drop" }, { sessionId: "local2" }]) }; } })({ verb: "local-list", options: { all: true, limit: 1 } });
+  assert.equal(list.source, "local_cli_sessions");
+  assert.equal(list.truncated, true);
+  assert.equal(list.sessions.length, 1);
+  assert.ok(!JSON.stringify(list).includes("drop"));
+  const logs = await createClaudeAgents({ run: async (argv) => { assert.deepEqual(argv, ["logs", "local1"]); return { exit: 0, stdout: "abcdefgh" }; } })({ verb: "local-logs", id: "local1", options: { maxChars: 3 } });
+  assert.equal(logs.text, "fgh"); assert.equal(logs.truncated, true); assert.equal(logs.untrustedData, true);
+});
+
+test("real child transport uses argv/stdin without shell expansion and handles absence and cancellation", async (t) => {
+  const root = workspace(t);
+  const bin = path.join(root, "fake-claude");
+  fs.writeFileSync(bin, '#!/usr/bin/env node\nlet s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.stringify({argv:process.argv.slice(2),input:s})));\n', { mode: 0o700 });
+  const r = await runClaude(["auth", "status"], { cwd: root, env: { ...process.env, APEX_CLAUDE_BIN: bin }, input: "$(touch must-not-exist)" });
+  assert.equal(r.exit, 0);
+  assert.deepEqual(JSON.parse(r.stdout), { argv: ["auth", "status"], input: "$(touch must-not-exist)" });
+  assert.equal(fs.existsSync(path.join(root, "must-not-exist")), false);
+  const missing = await runClaude([], { env: { ...process.env, APEX_CLAUDE_BIN: path.join(root, "missing") } });
+  assert.equal(missing.error, "cli_unavailable"); assert.equal(missing.started, false);
+  const cancelled = await runClaude([], { signal: AbortSignal.abort() });
+  assert.equal(cancelled.error, "cancelled"); assert.equal(cancelled.started, false);
+});
+
+test("MCP descriptor is compact and exposes honest read-only hints", async () => {
+  const descriptor = CLAUDE_CATALOG[0];
+  assert.equal(descriptor.name, "apex_claude_agents");
+  assert.deepEqual(Object.keys(descriptor.inputSchema.properties), ["verb", "id", "options", "dryRun"]);
+  assert.deepEqual(descriptor.annotations, { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+  assert.match(descriptor.description, /Verbs: capabilities, auth, list, local-list, local-logs/);
+  const tool = createClaudeTools({ run: () => assert.fail("unsupported operation must not run") });
+  const rejected = await tool.handlers.apex_claude_agents({ verb: "launch" });
+  assert.equal(rejected.isError, true);
+  assert.equal(rejected.structuredContent.error, "unsupported_verb");
+  assert.equal(validateClaudeRequest({ verb: "list" }).options.limit, 20);
+  const caps = await createClaudeAgents({ run: () => assert.fail("capabilities is local") })({ verb: "capabilities" });
+  assert.deepEqual(caps.verbs, ["capabilities", "auth", "list", "local-list", "local-logs"]);
+  assert.deepEqual(caps.retired, ["followup", "remember", "transcript"]);
+  assert.equal(caps.cloud.followup, "not_implemented");
+});
+
+}

@@ -17,6 +17,14 @@ var CarSfx = (() => {
 
   function create(G) {
     let lastPit = "none", lastCar = null, lastRaceT = NaN;
+    // LEVELS ONCE PER FRAME (#5052). game.js calls update() on every physics
+    // substep (up to 5 a frame) for the wheel-gun EDGES below; the levels only
+    // need the frame's last one. Substeps of one frame run back to back in well
+    // under a millisecond and frames are >= 8 ms apart, so a 4 ms wall-clock gap
+    // separates frames; an on/off flip of any level is sent at once (onsets).
+    const SEND_GAP_MS = 4;
+    let lastSendMs = -Infinity, lastOnMask = -1;
+    const wall = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
     /** Pure: the levels for car `c`, where v01 is |speed| / vTop. Exposed for tests. */
     function levels(c, v01, out) {
@@ -37,8 +45,13 @@ var CarSfx = (() => {
       if (!c) return;
       const v01 = Math.abs(+c.speed || 0) / Math.max(1, G.vTop());
       levels(c, v01, SFX);
-      SFX.wet = !!(G.isWetRoad && G.isWetRoad());
-      GameAudio.setCarSfx(SFX);
+      const mask = (SFX.scrub > 0) | (SFX.lock > 0) << 1 | (SFX.surface > 0) << 2 | (SFX.pitLim > 0) << 3;
+      const ms = wall();
+      if (mask !== lastOnMask || ms - lastSendMs >= SEND_GAP_MS || c !== lastCar) {
+        lastOnMask = mask; lastSendMs = ms;
+        SFX.wet = !!(G.isWetRoad && G.isWetRoad());
+        GameAudio.setCarSfx(SFX);
+      }
       // The wheel guns fire on the stop's edges: loosen as the car drops into
       // the box, tighten as it is released. A new car (a new race) resets the edge.
       const ps = c.pitState || "none";

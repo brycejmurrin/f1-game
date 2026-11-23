@@ -1,6 +1,8 @@
-/* Read-only driving feedback and explicitly unscored solo practice. */
+/* Read-only driving feedback and explicitly unscored solo practice: the BODY (DrivingCoachBody, LAZY_RACE_SESSION,
+   #4748). The eager façade js/race/driving-coach-boot.js owns the DrivingCoach global, the practice-goal list and
+   every Settings row and button this panel wires; it creates this body ONCE, the first call after the bundle lands. */
 "use strict";
-const DrivingCoach = (function () {
+const DrivingCoachBody = (function () {
   const TIPS = Object.freeze({
     recovery: { label: "Off-track recovery", text: "OFF TRACK — SLOW DOWN AND REJOIN GENTLY", detail: "Grip is lower off the track. Use gentle inputs and check for traffic before rejoining.", dwell: 0.8 },
     trail: { label: "Braking into turns", text: "EASE THE BRAKE AS YOU TURN", detail: "Heavy braking is using most of your grip. Release the brake gradually as you steer.", dwell: 0.5 },
@@ -43,10 +45,7 @@ const DrivingCoach = (function () {
   const TYRE_SHARE = 0.15, TYRE_FAST_K = 1.1, TYRE_EVERY = 3;
   // The practice goals as the picker names them, so the review can point at a
   // goal by the label the driver will actually look for. One list, two readers.
-  const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"], ["cooling", "COOLING LAP"],
-    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"],
-    ["start", "RACE START"], ["slipstream", "SLIPSTREAM"], ["overtake", "OVERTAKE"], ["defend", "DEFEND"],
-    ["backmarkers", "TRAFFIC"]]);
+  const GOALS = DrivingCoach.GOALS;   // the eager façade's list: the pm-drill row it wires and the goal names here
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -66,7 +65,6 @@ const DrivingCoach = (function () {
     let tyreAcc = null;
     const tyreSaid = new Map();
     let log = [];   // one row per tip: which tip, which turn, when — the session's map
-    // --- where the lap went, against your own best lap ---------------------
     // The coach's tips answer "is the car at its limit"; they cannot answer
     // "where am I slow", which is the question that actually moves lap times.
     // This does, by differencing your elapsed time against the ghost's at the
@@ -155,10 +153,13 @@ const DrivingCoach = (function () {
       }
       return bestD <= TURN_WINDOW_M ? best : null;
     }
+    // A real-race WATCH follows a replay puppet: its pedals read 0, not the player's driving (#5557).
+    const puppet = () => !!(G.realRace && G.realRace.owns && G.realRace.owns(G.player));
     function coachState() {
       if (!enabled) return "off";
       if (!G.player || G.state !== "race") return "ready";
       if (G.player.finished || G.player.retired) return "complete";
+      if (puppet()) return "ready";
       if (G.paused) return "paused";
       if (G.player.pitState && G.player.pitState !== "none") return "pit";
       if ((G.raceRadio && G.raceRadio.trafficBusy && G.raceRadio.trafficBusy()) || G.announceBusy || G.cautionLevel() > 0 || G.player.contactT > 0) return "waiting";
@@ -302,7 +303,7 @@ const DrivingCoach = (function () {
     function update(dt) {
       const stamp = G._s8Stamp;
       if (stamp != null && stamp === _s8Done) return;
-      if (!Number.isFinite(dt) || dt <= 0 || G.paused) return;
+      if (!Number.isFinite(dt) || dt <= 0 || G.paused || puppet()) return;
       if (stamp != null) _s8Done = stamp;
       // A suspended frame is not sustained driving evidence.
       const step = Math.min(dt, 0.1);
@@ -391,7 +392,6 @@ const DrivingCoach = (function () {
     // before the lights, and the pause menu opens during the countdown.
     const onTrack = () => G.state === "race" || G.state === "count";
     function canPractice() { return !!(G.practice && !G.daily.isActive() && !G.netPlay.active() && G.player && onTrack()); }
-    // ---- capture / restore: ONE pair, three callers -------------------------
     // mark() (a checkpoint the player places), rewind() (the rolling buffer)
     // and retry() all move the SAME state, so they share these rather than
     // each growing their own field list that drifts out of step.
@@ -478,7 +478,6 @@ const DrivingCoach = (function () {
       c.rPrevPx = c.px; c.rPrevPz = c.pz;
       c.rPrevHead = c.head; c.rPrevS = c.s; c.rPrevX = c.x;
     }
-    // ---- the WORLD, not just the player ------------------------------------
     // A rewind that moved one car through a field that kept running is not a
     // rewind, it is a teleport: you rejoin having lost the ground everyone else
     // covered, the order scrambles, and you can land inside a rival who is now
@@ -496,6 +495,7 @@ const DrivingCoach = (function () {
     function captureWorld() {
       const cars = (G.cars || []).map((c) => captureCar(c));
       return { cars, raceT: G.raceT, sectorIdx: G.sectorIdx, sectorStartT: G.sectorStartT,
+        fieldSectorBests: G.fieldSectorBests?.slice(),
         sectorBests: Array.isArray(G.sectorBests) ? G.sectorBests.slice() : null,
         sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
     }
@@ -514,6 +514,7 @@ const DrivingCoach = (function () {
       if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
       if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
       if (w.sectorBests) G.sectorBests = w.sectorBests.slice();
+      if (w.fieldSectorBests) G.fieldSectorBests.splice(0, G.fieldSectorBests.length, ...w.fieldSectorBests);
       // sectorLast has no setter — mutate the live array in place.
       if (w.sectorLast && Array.isArray(G.sectorLast)) {
         G.sectorLast.length = 0;
@@ -575,10 +576,16 @@ const DrivingCoach = (function () {
       G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
+    // World snapshots serve live practice controls. The coaching trace and journal
+    // remain available for review from Settings after the driver leaves the track.
+    function releasePracticeWorlds() {
+      checkpoint = null; rewindBuf.length = 0; rewindAcc = 0;
+    }
     function reset() {
+      for (const mode of pathwayModes) { const check = $("pm-pathway-check-" + mode); if (check) check.checked = false; }
       if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session reset before attempt completed");
-      checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
-      rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
+      releasePracticeWorlds(); practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
+      reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
     }
@@ -604,7 +611,15 @@ const DrivingCoach = (function () {
     }
     function toggle() { enabled = !enabled; pendingReport = null; clearCandidate(); G.store.set("drivingCoach", enabled); paint(); return enabled; }
     const $ = G.$;
+    const pathwayModes = ["braking", "trail", "lap"];
+    function paintProgress() {
+      for (const mode of pathwayModes) {
+        const choice = $("pm-pathway-" + mode);
+        if (choice) { choice.disabled = !canPractice(); choice.onclick = () => { if (canPractice()) setPracticeGoal(mode); }; }
+      }
+    }
     function paint() {
+      paintProgress();
       SettingRow.paint($("pm-coach"), enabled ? "on" : "off");
       const coaching = feedback(), coachStatus = $("pm-coach-status"), coachTip = $("pm-coach-tip"), coachSummary = $("pm-coach-summary");
       if (coachStatus) coachStatus.textContent = { off: "Coach off. Turn it on for driving tips.", ready: "Ready for your next drive.",
@@ -669,7 +684,7 @@ const DrivingCoach = (function () {
         // `start` is stored NEGATED so mastery's Math.min ranks more places
         // higher (js/race/race-insights.js). The sign is undone here, once, at
         // the only place a human reads the number.
-        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
+        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m from " + insights.brakingRef() : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
           : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]
@@ -682,6 +697,12 @@ const DrivingCoach = (function () {
       if (strategy) strategy.textContent = !G.tyres.on() ? "Enable tyre wear for stint forecasts." : !f || f.remainingLaps == null ? "Drive at least half a lap on this set for a tyre-life estimate."
         : "Tyre life ≈ " + f.remainingLaps.toFixed(1) + " laps · " + (f.reachesFinish ? "projected to reach the finish" : "another stop may be needed")
           + (f.paybackLaps == null ? "" : " · estimated stop payback " + f.paybackLaps.toFixed(1) + " laps") + " · " + f.confidence + " confidence";
+      const energyCard = $("pm-last-lap-energy-text");
+      if (energyCard) {
+        const receipt = f && f.lastLapEnergy, net = value => Math.abs(value * 100).toFixed(1) + " percentage points " + (value >= 0 ? "used" : "recovered");
+        energyCard.textContent = receipt ? "Lap " + receipt.lap + ": " + net(receipt.netUsed) + ". " + receipt.sectors.map((value, i) => "Sector " + (i + 1) + ": " + net(value)).join(" · ") + ". Measured net battery change, including recovery; this does not identify why energy changed."
+          : "Complete one full clean lap in stable conditions for a measured sector-by-sector review. Partial laps, pits, incidents, cautions and changed conditions are excluded.";
+      }
       const energy = $("pm-energy-forecast");
       if (energy) energy.textContent = !f || f.energyPerLap == null ? "Complete clean sectors to learn your energy use."
         : "Net energy per lap: " + (f.energyPerLap * 100).toFixed(1) + "%" + (f.energyLaps == null ? " · current pattern sustains charge" : " · charge lasts ≈ " + f.energyLaps.toFixed(1) + " laps") + " · estimated from recent sectors";
@@ -745,12 +766,6 @@ const DrivingCoach = (function () {
         note.textContent = e ? "Estimated pit loss: " + e.lossS.toFixed(1) + "s" + (e.gapS == null ? "" : " · gap behind: " + e.gapS.toFixed(1) + "s") : "Pit strategy is available with tyre wear enabled.";
       }
     }
-    const bind = (id, fn) => { const b = $(id); if (b) b.onclick = () => { fn(); paint(); }; };
-    bind("pm-driving-trace", downloadTrace);
-    bind("pm-practice-set", mark); bind("pm-practice-retry", retry);
-    bind("pm-practice-rewind", rewind); bind("pm-practice-arm", armPractice);
-    SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
-      read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
     function beginSetupTrial() {
       if (!G.practice || !canPractice()) return false;
       drillMode = "launch";
@@ -761,19 +776,6 @@ const DrivingCoach = (function () {
       if (!Object.hasOwn(RaceInsights.DRILLS, mode)) return false;
       drillMode = mode; paint(); return true;
     }
-    SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
-      read: () => drillMode, write: setPracticeGoal });
-    SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
-      write: v => { if (typeof RealRace !== "undefined" && RealRace.status().watch) return; G.pits.selectNext(G.player, v); paint(); } });
-    const menu = $("pmsettings"), panel = $("pm-panel-driving");
-    if (menu && panel && typeof MutationObserver === "function") {
-      const observer = new MutationObserver(() => { if (!menu.hidden && !panel.hidden) paint(); });
-      observer.observe(menu, { attributes: true, attributeFilter: ["hidden"] });
-      observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
-    }
-    if (typeof SettingsNav !== "undefined") SettingsNav.onEnter((id) => {
-      if (["driving", "practice", "strategy", "review"].includes(id)) paint();
-    });
     // ARM PRACTICE in a session that is not a Time Trial. Declaring the session
     // unscored is the player's call and it is ONE WAY: there is no disarm,
     // because a session that has already been rewound cannot become scored
@@ -793,12 +795,12 @@ const DrivingCoach = (function () {
     // unlocks rewind, but a season or career round is always scored — a rewound
     // P1 took full points and prize money. Practice those in a one-off race.
     function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && onTrack() && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
-    return { update, status, feedback, advice, beginSetupTrial, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
+    return { update, status, feedback, advice, beginSetupTrial, mark, retry, rewind, releasePracticeWorlds, reset, toggle, paint, armPractice, canArm,
       practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
-      practiceActive: () => practice,
+      practiceActive: () => practice, isEnabled: () => !!enabled, downloadTrace,
       trace: () => trace.map(row => ({ ...row })), insights };
   }
   return { create };
 })();
-Object.freeze(DrivingCoach);
+Object.freeze(DrivingCoachBody);

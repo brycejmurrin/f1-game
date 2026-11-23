@@ -147,9 +147,10 @@ async function awaitGarageThenCard(page) {
         if (tl.some((s) => s.prep) && go && !go.disabled && /START/i.test(text) && !text.startsWith("PREPARING")) return "released";
         return false;
       }
-      // Wait for the card itself — assertGarageThenCard requires it. Still in
-      // garage: the timeout allows studioDone's 3× duration cap to fire (~8 s × 3).
-      return tl.some((s) => s.cardShown) && "card";
+      // BUILD can reveal the preparation card between studioClose and raceIntro.
+      // Keep recording until the actual session card/flyby follows that cover;
+      // the ordering checks below still include every intermediate sample.
+      return tl.some((s) => s.cardShown && ["run", "card", "handoff"].includes(s.phase)) && "card";
     }, null, { polling: 100, timeout: 180_000 });
     if ((await verdict.jsonValue()) === "released") throw new Error("START released after PREPARING with no garage-out (#3591): see the apex-logs line \"intro released without a garage-out\"");
   } catch (e) {
@@ -236,7 +237,9 @@ test.describe("garage-out before race/session card", () => {
     expect(m.hadGaragePhase, "reduce must play garage phase, not skip it").toBe(true);
     expect(m.garageMs, "reduce must not speed the garage-out up (full OUT_DURATION at speed 1)").toBeGreaterThan(6000);
     // …and the flyby (card up, phase run — or card with no world) follows it, never a 700 ms flash to the race.
-    const after = tl.find((s) => s.t > m.lastGarageT && s.phase && s.phase !== "garage" && s.phase !== "build");
+    // Adjacent mutation samples can share performance.now(); event order is the contract.
+    const after = tl.slice(tl.map((s) => s.phase).lastIndexOf("garage") + 1)
+      .find((s) => s.phase && s.phase !== "garage" && s.phase !== "build");
     expect(after, "reduce: a phase follows the garage-out").toBeTruthy();
     expect(["run", "card", "handoff"], "reduce: the card + flyby follow the garage").toContain(after && after.phase);
   });
@@ -415,6 +418,11 @@ test.describe("direct start during the picker's build", () => {
       // eslint-disable-next-line no-undef
       const T = Tracks, real = T.buildPaced, seen = [];
       T.buildPaced = function (def, ...rest) { seen.push(def && def.id); return real.call(this, def, ...rest); };
+      // The picker previews the solo GP draft's world, and the direct start has its own conditions: the
+      // shipped storm/dusk draft (RaceSettings.DEFAULT_DRAFT, #5977) built Monaco at night, then the race
+      // built the day world, which is a different world to join. The draft here is the direct start's own.
+      const KEY = "apex26.raceDraft", had = localStorage.getItem(KEY);
+      GameStore.store.set("raceDraft", { weather: "dry", tod: "default", mixed: false, laps: "3" });
       try {
         document.getElementById("mb-race").click();
         // The title already pre-built the saved pick: tap another circuit so the picker starts a fresh build.
@@ -428,7 +436,10 @@ test.describe("direct start during the picker's build", () => {
         window.__apex.race(seen[0]);   // the Daily / Data Hub door: startRace with no RACE! intro
         for (let i = 0; i < 3600 && !/^(count|race)$/.test(window.__apex.info().state); i++) await sleep(50);
         return { seen, startedMs, state: window.__apex.info().state };
-      } finally { T.buildPaced = real; }
+      } finally {
+        T.buildPaced = real;
+        if (had === null) { localStorage.removeItem(KEY); GameStore.store.onForeignWrite({ key: KEY }); } else GameStore.store.set("raceDraft", JSON.parse(had));
+      }
     });
     expect(r.seen.length, "the picker started a build of its circuit: " + JSON.stringify(r)).toBeGreaterThan(0);
     expect(r.state, "the race reached the lights, not the title").toMatch(/^(count|race)$/);

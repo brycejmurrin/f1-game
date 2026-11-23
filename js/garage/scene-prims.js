@@ -2,7 +2,7 @@
 const GaragePrims = (function () {
   "use strict";
 
-// Interior, metres. The car spans z -2.69..3.18 and x +/-0.95; its nose is +Z,
+// Interior, metres. The car spans z -2.69..2.72 (5.41 m; nose tip 2.60, car3d.js) and x +/-0.95; its nose is +Z,
 // so +Z is the pit-lane end and the deep end of the bay is behind it.
 // THE ROOM IS THE TRACKSIDE GARAGE. js/track/core/pit.js owns the bay's
 // dimensions (TrackPit.BAY, read at eval — a HARD_EDGES pair in the manifest),
@@ -65,7 +65,13 @@ const BOX_F = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 
 // the whole class of bug at the primitive instead of at ~150 call sites.
 const WALL_KEYED = [1, 2, 4, 5, 7, 12, 13, 14];
 const sideOnly = (mid, ny) => (ny !== 0 && WALL_KEYED.indexOf(mid) >= 0 ? 0 : mid);
+// EXTREME ("garageHi" / "crewHi"): H is the lazy GarageHiPrims while its dense()
+// build scope runs (it sets it through hi()), else null and every primitive is today's.
+// ex(name, ...) is a builder's hook: truthy = GarageHiPrims[name] built the EXTREME form.
+let H;
+const ex = (n, ...a) => H && H[n](...a);
 function block(out, cx, cy, cz, hx, hy, hz, col, mid) {
+  if (H && H.block(arguments, sideOnly)) return;
   const c = [cx, cy, cz], h = [hx, hy, hz];
   for (let f = 0; f < 6; f++) {
     const n = BOX_F[f];
@@ -90,7 +96,7 @@ function block(out, cx, cy, cz, hx, hy, hz, col, mid) {
 }
 
 function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
-  seg = seg || 10;
+  seg = H ? H.segs(seg || 10) : seg || 10;
   const base = out.pos.length / 3;
   for (let i = 0; i < seg; i++) {
     const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
@@ -122,7 +128,7 @@ function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
 // cyl's top cap and the a-end reverses it. Caps take sideOnly on their axis so
 // a horizontal cap of a wall-keyed material never streaks (see block()).
 function tube(out, a, b, rad, col, seg, mid) {
-  seg = seg || 8;
+  seg = H ? H.segs(seg || 8) : seg || 8;
   const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
   const n = [d[0] / L, d[1] / L, d[2] / L];
@@ -161,15 +167,48 @@ function tube(out, a, b, rad, col, seg, mid) {
 }
 // A hose or cable through a polyline of points: one tube per leg.
 function hose(out, pts, rad, col, seg, mid) {
+  if (H && H.hose(arguments)) return;
   for (let i = 1; i < pts.length; i++) tube(out, pts[i - 1], pts[i], rad, col, seg, mid);
 }
 
 // The shared material ids, so the bay names the same surfaces the track does
-// rather than keeping a second copy that can drift. Read lazily: every use is
-// inside a build function, so TrackGeom (manifest position 77, this file 121)
-// is always up by then and this needs no HARD_EDGES pair.
+// rather than keeping a second copy that can drift. Read at eval (HARD_EDGES
+// pairs this file after TrackGeom in tools/manifest.cjs); the fallback object
+// is only for a harness that loads the module alone.
 const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
   ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
+
+// Low-detail neighboring workshop, in the same local frame as the player's bay.
+function buildLaneBay(out, cx, col, left = HALF_W, right = HALF_W, fixtures = out) {
+  const front = Z_DOOR, depth = (front - Z_BACK) / 2;
+  const aperture = TrackPit.BAY.doorW / 2, half = (left + right) / 2, mid = cx + (right - left) / 2;
+  const height = CEIL_Y / 2, lintel = (CEIL_Y - TrackPit.BAY.doorH) / 2;
+  const wall = [.48, .51, .54], floor = [.25, .27, .29];
+  // Solid dividers and rear wall present faces to both the lane and the interior.
+  for (const sign of [-1, 1]) {
+    const edge = sign < 0 ? left : right, jamb = (edge - aperture) / 2;
+    block(out, cx + sign * (edge - 0.08), height, -0.09, 0.08, height, depth - 0.09, wall, MAT.CONCRETE);
+    block(out, cx + sign * (aperture + jamb), height, front - 0.09, jamb, height, 0.09, STEEL, MAT.METAL);
+  }
+  block(out, mid, height, Z_BACK + 0.10, half - 0.16, height, 0.10, wall, MAT.CONCRETE);
+  block(out, cx, CEIL_Y - lintel, front - 0.09, aperture, lintel, 0.09, col, MAT.METAL);
+  block(out, mid, CEIL_Y + 0.06, 0, half, 0.06, depth, STEEL, MAT.METAL);
+  block(out, mid, -0.06, 0, half, 0.06, depth, floor, MAT.FLAT);
+  // Workbench, team-colored cabinet fronts and a task light give the doorway depth.
+  block(out, cx, 0.54, Z_BACK + 0.80, 2.85, 0.54, 0.55, col, MAT.METAL);
+  block(out, cx, 1.14, Z_BACK + 0.80, 2.95, 0.06, 0.62, STEEL, MAT.METAL);
+  for (const z of [-2.2, 2.2]) {
+    const i = fixtures.pos.length / 3;
+    for (const [x, dz] of [[-1.6, -.25], [1.6, -.25], [1.6, .25], [-1.6, .25]]) {
+      fixtures.pos.push(cx + x, CEIL_Y - .04, z + dz);
+      fixtures.nrm.push(0, -1, 0);
+      fixtures.col.push(1.55, 1.62, 1.70);
+    }
+    pushMat(fixtures, 4, MAT.FLAT);
+    fixtures.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+  }
+  block(fixtures, cx, 2.65, Z_BACK + 0.25, 2.65, 0.045, 0.05, [1.55, 1.62, 1.70], MAT.FLAT);
+}
 
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
@@ -200,7 +239,7 @@ function tile(out, x0, x1, z0, z1, col, y, mid) {
 
 // ── room LOOKS (B·G1) ───────────────────────────────────────────────────────
 // The setup sheet's GARAGE row picks the SETUP-SCREEN bay's architecture: walls, floor, ceiling,
-// back-wall branding. `stock` (null) is the shipped room; every other id is a
+// back-wall branding. `stock` (null) is the original room; every other id is a
 // data record GarageDress.look* reads. Trackside pit rows (buildStatic) never
 // see a look. Pick one with ?garageLook=<id>, localStorage apex26.garageLook,
 // or GaragePrims.setLook(id) (the geometry key carries lookId(), so the bay
@@ -288,19 +327,42 @@ const LOOKS = {
              band: (c1) => c1, key: GREY(0.90), outline: [0.94, 0.55, 0.14] },
     backWall: "frame",
   },
+  // Wet-race / rain-ready bay: cool overcast panelling, dark gloss resin with
+  // pale safety lanes — pairs with the rain lighting mood for a Spa weekend.
+  rainready: {
+    label: "Rain ready",
+    wall: { dado: () => [0.28, 0.32, 0.34], stripe: (c1, c2) => mix([0.55, 0.62, 0.70], c2, 0.35),
+            panel: () => [0.42, 0.46, 0.50], skirt: GREY(0.06), seam: "joint", jointPitch: 1.80, back: null },
+    ceil: [0.30, 0.34, 0.38], truss: "rails", ceilLed: "grid",
+    floor: { slab: [0.08, 0.10, 0.12], inner: [0.12, 0.15, 0.18], paint: GREY(0.88), walk: [0.70, 0.74, 0.78],
+             band: (c1) => mix(GREY(0.55), c1, 0.35), key: GREY(0.90), outline: [0.72, 0.78, 0.84], wetBands: true },
+    backWall: "header",
+  },
+  // Qualifying night: deep charcoal walls, bright linear strips, white floor
+  // box under a framed back wall — the Saturday-night parc-fermé read.
+  qualify: {
+    label: "Qualifying night",
+    wall: { dado: () => [0.08, 0.09, 0.12], stripe: (c1, c2) => mix([0.85, 0.88, 0.95], c2, 0.25),
+            panel: () => [0.04, 0.05, 0.08], skirt: GREY(0.02), seam: "slat", back: (c1) => scale(c1, 0.40) },
+    ceil: GREY(0.012), truss: "stock", ceilLed: "strips", hotStrips: true,
+    floor: { slab: GREY(0.035), inner: GREY(0.050), paint: GREY(0.94), walk: (c1, c2) => scale(c2, 0.75),
+             band: (c1, c2) => c2, key: GREY(0.92), outline: GREY(0.90) },
+    backWall: "frame",
+  },
 };
 const LOOK_IDS = Object.keys(LOOKS);
-let _look = "stock";
+let _look = "flood";
 try {
   const q = typeof location !== "undefined" && new URLSearchParams(location.search).get("garageLook");
-  const s = typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook");
-  const v = q || s;
+  const v = q || (typeof GameStore !== "undefined" && GameStore.store
+    ? GameStore.store.raw("garageLook")
+    : typeof localStorage !== "undefined" && localStorage.getItem("apex26.garageLook"));
   if (v && LOOK_IDS.indexOf(v) >= 0) _look = v;
 } catch (_) { /* no storage */ }
 function setLook(id) {
   if (LOOK_IDS.indexOf(id) < 0) return false;
   _look = id;
-  try { localStorage.setItem("apex26.garageLook", id); } catch (_) { /* private mode */ }
+  try { if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.rawSet("garageLook", id); else localStorage.setItem("apex26.garageLook", id); } catch (_) { /* private mode */ }
   return true;
 }
 const lookId = () => _look;
@@ -308,7 +370,11 @@ const look = () => LOOKS[_look] || null;
 // Resolve a look colour slot: a fixed [r,g,b] or a function of the livery.
 const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
-  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, BOX_F, WALL_KEYED, sideOnly, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
-    mix, LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
+  // BOX_F / WALL_KEYED / sideOnly / mix stay module-local: only block/cyl/tube + LOOKS use them.
+  return { buildLaneBay, tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
+    LOOKS, LOOK_IDS, setLook, lookId, look, lookCol, ex, hi: (h) => (H = h),
+    // EXTREME seams GarageHiPrims replaces when it lands: the room's geometry key (the look + "+hi")
+    // and run(kind, build, undo), a room / crew build in its dense scope (it also sets crewHi, a key bit).
+    lookKey: lookId, run: /** @type {(kind: string, build: () => any, undo?: () => any) => any} */ ((k, f) => f()) };
 })();
 if (typeof window !== "undefined") window.GaragePrims = GaragePrims;

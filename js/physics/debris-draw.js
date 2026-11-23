@@ -43,7 +43,7 @@ const DebrisDraw = (function () {
   // updateInstances (glx.js, wgx.js, tlx.js), so the per-body fallback below is
   // dead on the shipped backends and stays only for a
   // backend that honestly lacks the name. Same shape as gfx.hasPerChunkLights
-  // (docs/RENDERERS.md), which is still GLX + WGX only.
+  // (docs/ARCHITECTURE.md), which is still GLX + WGX only.
   // null = not tried yet, false = unavailable on this backend.
   const _batch = { shard: null, marble: null, cone: null, panel: null };
   const _bMat = { shard: null, marble: null, cone: null, panel: null };

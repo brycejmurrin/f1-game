@@ -1,5 +1,7 @@
 # Live-debugger race hunt — 2026-10-24 (fleet A, hunter A·H11)
 
+Summary: Race flow, physics, AI, race-weekend and restart hunt reproduced the way Bryce plays (phone landscape, touch; A·H11).
+
 Lane: race flow, physics, `js/game.js`, AI, race weekend (quali, pit, tyres, flags/SC), restarts and
 menu→race transitions, reproduced the way Bryce plays (phone landscape 844×390, touch).
 Seed: deploy tip `b3779370`. Prior art: agent prior-art-scout over `DEFECT-LEDGER.md`, `docs/BUGS.md`,

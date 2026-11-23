@@ -10,7 +10,8 @@ import cp from "node:child_process";
 import path from "node:path";
 import { parse as parseYAML } from "yaml";
 import { report } from "../../tools/ci/ci-coverage.mjs";
-import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter, LABEL_NOISE, EDIT_NOISE } from "../helpers/ci-workflow.mjs";
+import { decide as rearmDecide } from "../../tools/ci/pages-rearm.mjs";
+import { ciWorkflow, pagesWorkflow, selectedJob, shipFilter } from "../helpers/ci-workflow.mjs";
 
 test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
@@ -37,8 +38,8 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // unique run_id group (the nightly must not share the tip's group —
   // run 2758). The train is not in this group: pages.yml passes a unique
   // concurrency_key. PR branches keep newest-wins cancel on pull_request.
-  assert.ok(ciWorkflow.includes(`group: ci-\${{ inputs.concurrency_key || (${LABEL_NOISE} && format('label-{0}', github.run_id)) || (${EDIT_NOISE} && format('edit-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}`),
-    "PR runs of one branch share a group; dispatched/scheduled runs keep run_id (no ship-fast since 2026-10-16: pages.yml runs on push)");
+  assert.ok(ciWorkflow.includes(`group: ci-\${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)) || format('ref-{0}', github.ref_name) }}`),
+    "PR runs of one branch share a group; dispatched/scheduled runs keep run_id (no ship-fast since 2026-10-16, no label/edit noise groups since 2026-11-03)");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "newest wins on PR only; ship pushes must not cancel each other");
   assert.doesNotMatch(ciWorkflow, /'ship-fast'/, "the deploy-branch fast tier and its group are gone (2026-10-16)");
@@ -76,8 +77,9 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   // and the hazard the old tip check guarded — moving the site backwards — by
   // an ancestry check against the LIVE shell's apex-sha, before the environment
   // and again under the Pages lock.
-  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
-  const deploy = pagesWorkflow.split("\n  deploy:")[1];
+  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  stage:")[0];
+  const stageJob = pagesWorkflow.split("\n  stage:")[1].split("\n  deploy:")[0];
+  const deploy = pagesWorkflow.split("\n  deploy:")[1].split("\n  verify-live:")[0];
   assert.doesNotMatch(preflight, /^\s+environment:/m,
     "the cheap publishability check must not create a github-pages deployment record");
   assert.match(preflight, /deploy: \$\{\{ steps\.pub\.outputs\.publish \}\}/);
@@ -86,13 +88,15 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   assert.match(preflight, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"/,
     "the pre-environment check asks the one question that matters: may THIS commit still be published?");
 
-  assert.match(deploy, /needs: publishable/);
+  assert.match(deploy, /needs: \[publishable, stage\]/);
+  assert.match(stageJob, /needs: publishable/);
   // `!cancelled()` plus an explicit result check: a job's implicit success()
   // looks at every job upstream TRANSITIVELY, so with the gate skipped (nothing
   // new / reused pass) deploy was skipped even though publishable said yes
   // (run 2237). The result check keeps a failed or skipped publishable fatal.
-  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/,
+  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' && needs\.stage\.result == 'success' \}\}/,
     "a run that cannot publish must skip the environment job entirely; a reused gate must not");
+  assert.match(stageJob, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/);
   const verifyLive = pagesWorkflow.split("\n  verify-live:")[1];
   assert.match(verifyLive, /if: \$\{\{ !cancelled\(\) && needs\.deploy\.result == 'success' \}\}/,
     "verify-live must run exactly when deploy succeeded, whatever was skipped upstream");
@@ -104,24 +108,62 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   assert.doesNotMatch(deploy, /TIP=\$\(git rev-parse/);
   assert.doesNotMatch(deploy, /refs\/remotes\/origin/);
 
-  // Order: confirm publishable under the lock, then stage, then publish.
-  // Anchor on the STEP DECLARATIONS, not bare phrases (a comment names "Stage
-  // site" in prose, and a loose indexOf once reported the steps out of order).
+  // Staging and stamping run in the unprivileged stage job (2026-11-10); the
+  // privileged deploy job confirms publishable under the lock, then publishes,
+  // and runs no npm ci and no staging script. Anchor on STEP DECLARATIONS.
   const recheck = deploy.indexOf("- name: Confirm this commit may still be published (under the Pages lock)");
-  const stage = deploy.indexOf("- name: Stage site");
   // Pinned to a commit sha since 2026-09-22 (`@<sha> # v4.x.y`), so match the
   // action name, not the moving tag.
   const publish = deploy.search(/uses: actions\/deploy-pages@/);
-  assert.ok(recheck >= 0 && stage > recheck, "the in-lock check must precede staging");
-  assert.ok(publish > stage, "staging must precede publication");
+  assert.ok(recheck >= 0 && publish > recheck, "the in-lock check must precede publication");
+  assert.doesNotMatch(deploy, /setup-apex|npm ci|stage\.mjs/, "the job holding the Pages token runs no npm ci and no staging");
+  assert.ok(stageJob.indexOf("- name: Stage site") >= 0 && stageJob.search(/uses: actions\/upload-pages-artifact@/) > stageJob.indexOf("- name: Stage site"),
+    "the stage job stages, then uploads the Pages artifact");
+  assert.match(deploy, /id: deployment-retry\n\s+if: \$\{\{ steps\.deployment\.outcome == 'failure' \}\}/, "one retry of the publish step");
+  assert.match(deploy, /failed=deploy-pages/, "a Pages-side failure is named apart from a gate failure");
+  // The REST-visible marker the dispatcher reads (steps[].name / conclusion): its name is a contract.
+  const marker = parseYAML(pagesWorkflow).jobs.deploy.steps.find((st) => st.name === "Pages publish failed (platform)");
+  assert.equal(marker?.if, "${{ always() && steps.recheck.outcome == 'success' && steps.deployment.outcome == 'failure' && steps.deployment-retry.outcome == 'failure' }}",
+    "the platform-failure step runs only when both publish attempts failed after the recheck passed");
 
   // apex-sha is the provenance record AND the input to the next run's
   // monotonic check, so it must name the commit actually published: GITHUB_SHA.
-  assert.match(deploy, /PUBLISH_SHA="\$GITHUB_SHA"/);
-  assert.match(deploy, /name=\\"apex-sha\\" content=\\"\$PUBLISH_SHA\\"/,
+  assert.match(stageJob, /PUBLISH_SHA="\$GITHUB_SHA"/);
+  assert.match(stageJob, /name=\\"apex-sha\\" content=\\"\$PUBLISH_SHA\\"/,
     "apex-sha must name the commit actually published");
   assert.doesNotMatch(deploy, /echo "deploy=false"/,
     "once the environment job starts, unpublishable must fail rather than report success");
+});
+
+test("Pages publishes the staged artifact directly after the in-lock recheck", () => {
+  const { steps } = parseYAML(pagesWorkflow).jobs.deploy;
+  const recheck = steps.findIndex(step => step.id === "recheck");
+  assert.ok(recheck >= 0);
+  assert.match(steps[recheck + 1].uses, /^actions\/deploy-pages@/);
+});
+
+test("a deploy-only rerun publishes the artifact from the successful staging attempt", () => {
+  const { stage, deploy } = parseYAML(pagesWorkflow).jobs;
+  const name = stage.steps.find(step => step.id === "artifact");
+  const upload = stage.steps.find(step => step.uses?.startsWith("actions/upload-pages-artifact@"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-artifact-"));
+  try {
+    for (const attempt of [1, 4]) {
+      const output = path.join(dir, "outputs-" + attempt);
+      cp.execFileSync("bash", ["-ec", name.run], {
+        env: { ...process.env, GITHUB_RUN_ATTEMPT: String(attempt), GITHUB_OUTPUT: output },
+      });
+      assert.equal(fs.readFileSync(output, "utf8").trim(), "name=github-pages-" + attempt);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  assert.equal(upload.with.name, "${{ steps.artifact.outputs.name }}");
+  assert.equal(stage.outputs.artifact_name, upload.with.name);
+  const publish = deploy.steps.filter(step => step.uses?.startsWith("actions/deploy-pages@"));
+  assert.deepEqual(publish.map(step => step.with.artifact_name), [
+    "${{ needs.stage.outputs.artifact_name }}", "${{ needs.stage.outputs.artifact_name }}",
+  ]);
 });
 
 test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys", () => {
@@ -180,12 +222,22 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.match(preflight, /!cancelled\(\)/, "a skipped `needs` job skips its dependents unless the condition opts in");
 });
 
-test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", () => {
+test("pages-reuse-verdict.sh header: merge-commit landings, not squash-only", () => {
+  // Round-2 BUGS residual: the backlog claimed reuse was dead because merges
+  // were "SQUASH-only". Policy is merge commits only; the script must say so
+  // so the next reader does not re-open a false closed path.
+  const src = fs.readFileSync(new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url), "utf8");
+  assert.match(src, /MERGE COMMITS \(never squash\/rebase/);
+  assert.match(src, /merge tree == parent 2/);
+});
+
+test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", (t) => {
   // A throwaway repo: A -> C on the deploy line; B branches from A; D is B with
   // C merged in. M1 = merge(C, B) has a tree neither parent has (both sides
   // changed). M2 = merge(C, D) has D's tree exactly. A fake `gh` on PATH serves
   // whatever runs FAKE_RUNS names for the head_sha in the URL.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-reuse-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   const write = (f, s) => fs.writeFileSync(path.join(dir, f), s);
   git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
@@ -216,7 +268,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, "gh"),
     '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"\n' +
-    'case "$url" in */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit 0;; esac\n' +
+    'case "$url" in */annotations*) id="${url%/annotations*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_ANN||"{}");const v=m[process.argv[1]];console.log(JSON.stringify(v===undefined?[{title:"apex-guards",message:"mode=full base=none"}]:v))\' "$id"; exit "${FAKE_ANN_EXIT:-0}";;\n' +
+    '  */jobs*) id="${url%/jobs*}"; id="${id##*/}"; node -e \'const m=JSON.parse(process.env.FAKE_JOBS||"{}");console.log(JSON.stringify({jobs:m[process.argv[1]]||[]}))\' "$id"; exit "${FAKE_JOBS_EXIT:-0}";; esac\n' +
     'sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:(m[process.argv[1]]||[]).map((r)=>({head_sha:process.argv[1],...r}))}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
@@ -230,7 +283,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     ["Smoke (page boots, __apex responds) (1)", "success"], ["Structural guards", "success"],
     ["Structural guards (tooling A)", "success"], ["Structural guards (tooling B)", "success"],
     ["Pure-node unit suites (vm-a1)", "success"], ["Pure-node unit suites (page-a)", "success"], ["Pure-node unit suites (page-b)", "success"], ["Driving model (characterization traces)", "skipped"],
-  ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion }));
+  ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion,
+    ...(name === "Structural guards (tooling A)" ? { id: 500 } : {}) }));
   const fullJobs = {
     7: gateJobs(),
     // Pages run 3112 (37689226760): smoke-only, sweeps/selection/guards skipped.
@@ -241,6 +295,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     11: gateJobs("ci / "),
     12: gateJobs("ci / ", { "Smoke (page boots, __apex responds) (1)": "cancelled" }),
     13: gateJobs("", { "Selected specs (verdict)": "skipped" }),
+    14: gateJobs("", { "Smoke (page boots, __apex responds) (1)": "skipped" }),
     // T1 (2026-10-14): the run that POKED this train, still in progress — its
     // tree-only jobs are done and green, CI has not run yet.
     20: gateJobs("", { CI: null, "Per-circuit geometry sweeps": "skipped", "Smoke (page boots, __apex responds) (1)": "skipped" })
@@ -250,7 +305,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     // A fast tier whose aggregator has not been created yet (its halves still run).
     22: gateJobs("").filter((j) => j.name !== "Structural guards"),
   };
-  const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
+  const run = (over) => ({ id: 7, run_attempt: 1, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
@@ -268,6 +323,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
   assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "…the ready run beside it is");
+  assert.equal(verdict(M2, { [D]: [run({ id: 14 })] }).reuse, "false",
+    "a ready PR with an explicit browser exemption passed CI but provides no deploy smoke coverage");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected
@@ -308,6 +365,21 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
+  for (const run_attempt of [undefined, null, 0, "garbage"]) {
+    assert.equal(verdict(M2, { [D]: [run({ run_attempt })] }).reuse, "false",
+      `unknown attempt ${run_attempt} cannot prove a first-attempt pass`);
+  }
+  for (const failure of ["FAKE_JOBS_EXIT", "FAKE_ANN_EXIT"]) {
+    assert.equal(verdict(M2, { [D]: [run()] }, { [failure]: "1" }).reuse, "false",
+      `${failure}: valid partial stdout followed by an API failure must run the gate`);
+  }
+  // FULL GUARDS, FIRST ATTEMPT (2026-11-10).
+  assert.equal(verdict(M2, { [D]: [run({ run_attempt: 2 })] }).reuse, "false",
+    "a run that passed only on a re-run failed on this tree once: not a gate (run 42730286157)");
+  assert.equal(verdict(M2, { [D]: [run({ run_attempt: 1 })] }).reuse, "true", "a first-attempt pass is");
+  for (const [ann, why] of [[[{ title: "apex-guards", message: "mode=changed base=none" }], "narrowed guards"],
+    [[{ title: "apex-guards", message: "mode=unknown base=none" }], "an unknown scope"], [[], "no record at all"]])
+    assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_ANN: JSON.stringify({ 500: ann }) }).reuse, "false", `${why} is not a full gate`);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -392,4 +464,53 @@ test("ship filter chooses a successful active deployment, not merely the newest 
   assert.match(shipFilter, /inactive\|failure\|error\|queued\|pending\|in_progress/);
   assert.match(shipFilter, /no successful active github-pages deployment found/);
   assert.doesNotMatch(shipFilter, /j\[0\].*\.sha.*process\.stdout\.write/);
+});
+
+// ── #5530: the queue can drop the TIP's train; the surviving run re-arms it (tools/ci/pages-rearm.mjs) ──
+const OLD = "1c1ac46c".padEnd(40, "0"), TIP = "240426c6".padEnd(40, "0"), PREV = "f74bcc77".padEnd(40, "0");
+const trainRun = (id, head_sha, status, conclusion = null) => ({ id, head_sha, status, conclusion });
+const noJobs = () => 0;
+
+test("the 2026-11-11 pair: the older run survived, the tip's run was replaced while pending → re-arm", () => {
+  // Runs as the REST list showed them when #5108 started: #5106 done, #5108 (this run) in progress, #5109 cancelled
+  // at 18:55:08Z with zero jobs.
+  const runs = [trainRun(43082240074, TIP, "completed", "cancelled"), trainRun(43082235314, OLD, "in_progress"), trainRun(43079958852, PREV, "completed", "success")];
+  const v = rearmDecide({ sha: OLD, tip: TIP, self: 43082235314, runs, jobCount: noJobs });
+  assert.equal(v.rearm, true, v.reason);
+  assert.equal(v.reason, "tip 240426c6 lost its train: run 43082240074 was replaced while pending and nothing is queued for it");
+});
+
+test("the designed queue is left alone: no re-arm without the loss", () => {
+  const no = (q, why) => assert.equal(rearmDecide({ self: 1, jobCount: noJobs, ...q }).rearm, false, why);
+  no({ sha: TIP, tip: TIP, runs: [trainRun(1, TIP, "in_progress")] }, "this run IS the tip's");
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress")] }, "a prose-only tip has no run: the cron's, not ours");
+  for (const st of ["queued", "pending", "in_progress", "waiting", "requested"])
+    no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, st)] }, `the tip's run is ${st}: a train is coming`);
+  for (const c of ["success", "failure", "timed_out"])
+    no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", c)] }, `the tip was gated (${c})`);
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", "cancelled")], jobCount: () => 14 },
+    "a cancel after jobs started is a verdict (AGENTS.md rule 8), not a queue loss");
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", "cancelled"), trainRun(3, TIP, "queued")] },
+    "already re-armed (a re-run of this job must not dispatch twice)");
+  no({ sha: OLD, tip: TIP, runs: [trainRun(1, OLD, "in_progress"), trainRun(2, TIP, "completed", "cancelled"), trainRun(3, TIP, "completed", "success")] },
+    "the re-armed train already finished");
+  no({ sha: OLD, tip: "", runs: [] }, "an unreadable tip decides nothing");
+  no({ sha: OLD, tip: TIP, self: 2, runs: [trainRun(2, TIP, "completed", "cancelled")] }, "this run's own row is never the evidence");
+});
+
+test("pages.yml: one job holds actions: write, runs only the re-arm tool, and cannot turn a train red or wait on the gate", () => {
+  const wf = parseYAML(pagesWorkflow);
+  const job = wf.jobs.rearm;
+  assert.deepEqual(job.permissions, { contents: "read", actions: "write" });
+  for (const [id, j] of Object.entries(wf.jobs)) if (id !== "rearm") assert.notEqual(j.permissions?.actions, "write", `${id} holds no actions: write`);
+  assert.equal(job.needs, "verdict", "after the off-branch refusal, beside the gate, never behind it");
+  assert.deepEqual(job.steps.map((s) => s.run || s.uses.split("@")[0]), ["actions/checkout", "node tools/ci/pages-rearm.mjs --dispatch"]);
+  assert.equal(job.steps[0].with["sparse-checkout"], "tools/ci/pages-rearm.mjs");
+  for (const [id, j] of Object.entries(wf.jobs)) assert.ok(![].concat(j.needs || []).includes("rearm"), `${id} must not wait on rearm`);
+  assert.deepEqual(wf.concurrency, { group: "pages-train-${{ github.ref }}", "cancel-in-progress": false }, "the single-flight group is unchanged");
+  // Never red: with no gh at all every lookup throws, and the job still exits 0 with a warning.
+  const dead = cp.spawnSync(process.execPath, ["tools/ci/pages-rearm.mjs", "--dispatch"], { encoding: "utf8",
+    cwd: new URL("../../", import.meta.url), env: { PATH: "/nonexistent", GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "b", GITHUB_SHA: "0".repeat(40) } });
+  assert.equal(dead.status, 0, "no gh at all (every lookup fails): a warning, never a red job");
+  assert.equal(dead.stdout.split("\n")[0].slice(0, 39), "::warning::pages-rearm: lookup failed (", "and it says so");
 });

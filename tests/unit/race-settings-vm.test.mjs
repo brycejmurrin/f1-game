@@ -176,6 +176,7 @@ test("settings search cannot reveal race preferences during a live, championship
 test("REMEMBER LAST RACE SETUP: START with 10 / rain / night opens the next circuit the same way", () => {
   const h = sheet();
   assert.equal(h.at("spa"), 3, "nothing stored: the default");
+  assert.deepEqual([h.G.raceWeather, h.G.raceTimeOfDay, h.G.raceChangeable], ["storm", "dusk", true]);
   assert.equal(h.disk.has("raceDraft"), false, "opening the sheet writes nothing");
   Object.assign(h.G, { raceLaps: 10, raceWeather: "rain", raceTimeOfDay: "night", raceChangeable: true });
   h.start();
@@ -426,6 +427,66 @@ test("the medal ladder is monotone and the reference pole slows with the pace sl
   } finally { g.G.PACE = pace; }
 });
 
+// #5585 finding 3 — the reference pole is driven on the WEATHER'S tyre, like every car in a wet session. On the slick
+// column (a bare G.gripMult()) the rain reference at Monza was 137.26 s against a dry 129.48 s: 6 % of lap that no
+// car in the field gives away (its pole in that rain: 132.70 s), so wet medals were soft by the difference.
+test("the reference pole runs the weather's tyre: the field's grip in wet and rain, the same lap as before in the dry (#5585)", async () => {
+  const G = g.G, sb = g.sandbox, T = sb.TyreModel, WET = sb.PhysicsConsts.WET_GRIP;
+  const top = { tierV: sb.Teams.TIER_V[0], skill: 1 };
+  const ref = {};
+  for (const wx of ["dry", "wet", "rain"]) {
+    await g.race("monza", "day", wx);
+    const quali = sb.Quali.create(G), w = G.trackWetness(), tread = T.treadFor(G.raceWeather, w);
+    assert.equal(tread, { dry: 0, wet: 1, rain: 2 }[wx], wx + ": the tread the weather calls for");
+    const grip = T.weatherGrip(tread, w);
+    assert.equal(grip, WET[wx][tread], wx + ": that tyre's cell of WET_GRIP");
+    ref[wx] = G.referencePole();
+    // referencePole is QUALI_TRIM (0.92, module-local) x the top car's integrated lap (carLap's `raw`): the lap pit
+    // loss and the real-race replay scale are measured against. Since Bryce's decision C (2026-11-20) it is no longer
+    // the MEDAL target (referencePole("medal"), next test), and it keeps this value so race behaviour does not move.
+    const lap = (gr) => 0.92 * quali.carLap(top, G.track, gr, true);
+    assert.ok(Math.abs(ref[wx] - lap(grip)) < 1e-9, wx + ": the top car's flying lap on the weather's tyre (" + ref[wx] + " vs " + lap(grip) + ")");
+    if (wx === "dry") assert.ok(Math.abs(ref.dry - lap(G.gripMult())) < 1e-9, "dry: the slick column is the same lap");
+    else assert.ok(ref[wx] < lap(G.gripMult()), wx + ": faster than the slick-column lap no car drives");
+  }
+  assert.ok(ref.wet > ref.dry && ref.rain > ref.dry, "a wet road still costs time");
+  assert.ok(ref.wet < ref.dry * 1.02 && ref.rain < ref.dry * 1.02,
+    `…but the right tyre keeps it within 2 % of the dry lap (dry ${ref.dry.toFixed(2)}, wet ${ref.wet.toFixed(2)}, rain ${ref.rain.toFixed(2)})`);
+  await g.race("monza", "day", "dry");
+});
+
+// Audit item 73, Bryce's decision C (2026-11-20): the time-trial and daily MEDAL target is the field's own calibrated
+// model (QUALI_CENTRE x calibFor x the integrated lap), so gold sits 1.4-1.8 % under the AI's simulated pole on every
+// circuit; on referencePole's fixed 0.92 it was 0.930 (Imola) to 0.974 (Silverstone) of that pole. Pit loss and the
+// real-race replay scale (real-race.test.mjs seeds K off referencePole) keep referencePole, so no race moves.
+test("medals read the calibrated referencePole(\"medal\"); pit loss keeps the QUALI_TRIM pole (decision C, audit 73)", async () => {
+  const G = g.G, sb = g.sandbox, T = sb.TyreModel;
+  const top = { tierV: sb.Teams.TIER_V[0], skill: 1 };
+  for (const wx of ["dry", "rain"]) {
+    await g.race("monza", "day", wx);
+    const quali = sb.Quali.create(G), w = G.trackWetness();
+    const grip = T.weatherGrip(T.treadFor(G.raceWeather, w), w);
+    const medal = G.referencePole("medal"), cal = 0.9915 * quali.carLap(top, G.track, grip);   // x0.9915: the gap kept once the AI takes paceTrim (#5686, Bryce 2026-11-20 (b))
+    assert.ok(Math.abs(medal - cal) < 1e-9, wx + ": the top car's calibrated flying lap on the weather's tyre (" + medal + " vs " + cal + ")");
+    const ai = Math.min(...quali.preview(0).filter((r) => r.t > 0).map((r) => r.t));
+    const k = medal / ai;
+    assert.ok(k > 0.975 && k < 0.99, wx + ": gold " + medal.toFixed(2) + " s is 1-2.5 % under the AI pole " + ai.toFixed(2) + " s (" + k.toFixed(3) + ")");
+    assert.equal(sb.Quali.medalFor(ai * 1.005, medal), "silver", wx + ": half a per cent off the AI pole is a medal");
+  }
+  await g.race("monza", "day", "dry");
+  const prev = G.raceTyreWear;
+  G.tyres.setLevel("real");
+  const { referencePole } = G;
+  try {
+    const loss = () => G.pits.planFor(0.5, false, 20).pitLossLaps;
+    const base = loss();
+    G.referencePole = (k) => (k === "medal" ? 1 : referencePole(k));
+    assert.equal(loss(), base, "the medal target does not price a pit stop");
+    G.referencePole = (k) => (k === "medal" ? referencePole(k) : 2 * referencePole(k));
+    assert.ok(loss() < base * 0.6, "pit loss is measured against the QUALI_TRIM pole");
+  } finally { G.referencePole = referencePole; G.tyres.setLevel(prev === "off" || !prev ? "off" : prev); }
+});
+
 // ── CHANGEABLE (MIXED) conditions ─────────────────────────────────────────────
 // The chip is a RaceSettings row; the arc it arms lives in js/race/weather-arc.js
 // (WeatherArc.create(G, deps)), reached here only through G — raceChangeable,
@@ -454,6 +515,9 @@ test("a MIXED race arms a weather arc at the start and walks it; the plan is the
   assert.equal(g.G.weatherArc.dur, 200);
   // Walk it: the weather has moved off dry well before the arc ends…
   g.apex.headless(true); g.apex.go();
+  // The AI drives the player's car: a player parked 60 s under green is retired (W26 row 5,
+  // AiDrive.stallSweep), and the race it ends would stop the arc this test walks.
+  g.apex.carRole(g.apex.carRoles().findIndex((r) => r.local), { human: false });
   g.apex.step(1 / 30, 30 * 150);
   assert.notEqual(g.G.raceWeather, "dry", "the arc moved the weather");
   // …and the chip's pick comes back when the race is left.
@@ -621,36 +685,37 @@ test("tile -> SETTINGS -> weather/time chips -> RACE! builds the world once; onl
 
     G.raceTimeOfDay = "default"; G.raceWeather = "dry";
     G.trackIdx = T.LIST.findIndex((d) => d.id === "spa");
-    assert.ok(!T.LIST[G.trackIdx].night, "spa is a day circuit: default and day build the same world");
+    assert.ok(!T.LIST[G.trackIdx].night, "spa is a day circuit: fresh dusk uses a different world than day");
     doc.getElementById("select").hidden = false;
-    G.scheduleFlybyTrack(true);                                   // the tile
+    doc.getElementById("select").appendChild(G.els.selTracks); // mount the picker strip on the inert VM DOM
+    G.buildSelect();                                          // prepare the selected tile
     assert.ok(await until(() => starts.length === 1, 600), "the tile starts a build");
     await frames(8);
     assert.equal(live, 1, "still building (else the taps below prove nothing)");
 
-    doc.getElementById("select").hidden = true; G.openRaceSettings("select");   // SETTINGS (first open: default / dry)
+    doc.getElementById("select").hidden = true; G.openRaceSettings("select");   // SETTINGS keeps the picker’s storm / dusk draft
     await frames(2);
     G.raceWeather = "rain"; G.scheduleFlybyTrack();             // weather chip: no build input
     await frames(2);
-    G.raceTimeOfDay = "day"; G.scheduleFlybyTrack();            // default -> day on a day circuit: the same world
+    G.raceTimeOfDay = "night"; G.scheduleFlybyTrack();          // dusk -> night: the same dark world
     await frames(2);
     assert.equal(live, 1, "the first build is still in flight " + JSON.stringify({ starts, ends }));
-    assert.deepEqual(starts, ["spa:light"], "SETTINGS and the chips kept the build");
+    assert.deepEqual(starts, ["spa:dark"], "SETTINGS and the chips kept the build");
     assert.deepEqual(ends, [], "nothing was abandoned");
 
-    G.raceTimeOfDay = "night"; G.scheduleFlybyTrack();          // a dark session IS a different world
+    G.raceTimeOfDay = "day"; G.scheduleFlybyTrack();            // a daylight session switches the build
     assert.ok(await until(() => starts.length === 2, 600), "a build-key change restarts the build");
     assert.deepEqual(ends, ["abandoned"]);
     await frames(8);
-    G.raceTimeOfDay = "dusk"; G.scheduleFlybyTrack();           // dark -> dark: the same world
+    G.raceTimeOfDay = "default"; G.scheduleFlybyTrack();        // day circuit: the same daylight world
     await frames(2);
     assert.equal(live, 1, "the second build is still in flight " + JSON.stringify({ starts, ends }));
-    assert.deepEqual(starts, ["spa:light", "spa:dark"]);
+    assert.deepEqual(starts, ["spa:dark", "spa:light"]);
 
     G.raceIntro(() => {});                                      // RACE! mid-build joins it
     assert.ok(await until(() => !live && G.track && G.track.def.id === "spa", 3000), "the joined build lands");
     await frames(10);
-    assert.deepEqual(starts, ["spa:light", "spa:dark"], "RACE! started no build of its own");
+    assert.deepEqual(starts, ["spa:dark", "spa:light"], "RACE! started no build of its own");
     assert.deepEqual(ends, ["abandoned", "done"]);
     assert.equal(syncBuilds, 0, "and no synchronous rebuild either: the intro reuses the joined world");
     assert.equal(G.track.def.id, "spa");

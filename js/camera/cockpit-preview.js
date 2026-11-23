@@ -72,7 +72,7 @@ const CockpitPreview = (function () {
     }
     toggle.onclick = () => iframe ? close(true) : open();
     doc.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape" || !iframe) return;
+      if (e.key !== "Escape" || !iframe || e.target?.closest?.("#screen-arranger")) return;
       close(true); e.preventDefault(); e.stopImmediatePropagation();
     }, true);
     // Leaving SETTINGS or collapsing COCKPIT discards the entire graphics context.

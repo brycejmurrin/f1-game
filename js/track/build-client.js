@@ -55,6 +55,27 @@ const TrackBuildClient = (function () {
     if (on) spawn();   // parse the build modules now, not at the next RACE!
     else if (_w) drop("turned off");   // the worker holds a whole TRACK_VM heap (~20 MB) for nothing
   }
+  // LAB coldBuild (perf lane B 2026-11-18, OFF by default): the FIRST build of a circuit — the menu's
+  // prep build and startRaceBody's — goes to the worker too, not only an in-session switch (PR #1175
+  // kept cold entry on the paced build after a quiet A/B; this arm re-measures it on a phone).
+  // ?lab=coldBuild (URL only, read once, no storage key: D-027); cold(on) flips it for the session
+  // (__apex.buildWorkerCold). use(inSession) is the one question loadTrackStepped asks.
+  let _labs = null;
+  function labOn(name) {
+    if (_labs === null) {
+      _labs = [];
+      try { const v = new URLSearchParams(location.search).get("lab"); if (v) _labs = v.split(",").map((s) => s.trim()).filter(Boolean); }
+      catch (_) { /* no location (node harness) or a bad query: no labs */ }
+    }
+    return _labs.indexOf(name) >= 0;
+  }
+  let _cold = null;
+  function cold(on) {
+    if (on !== undefined) { _cold = !!on; if (_cold && enabled()) idleWarm(true); }
+    if (_cold === null) _cold = labOn("coldBuild");
+    return _cold && enabled();
+  }
+  const use = (inSession) => !!inSession || cold();
   function initUI() {
     if (typeof SettingRow === "undefined" || !document.getElementById("pm-buildworker")) return;
     SettingRow.wire("pm-buildworker", { values: SettingRow.labels(["off", "on"]), read: () => (enabled() ? "on" : "off"), write: (v) => set(v === "on") });
@@ -63,7 +84,10 @@ const TrackBuildClient = (function () {
   // js/ui/setting-row.js, while readyState already reads "interactive".
   if (typeof document !== "undefined") {
     if (document.readyState === "complete") initUI();
-    else document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    else document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
   }
   // ScriptLoader.url: the deploy's content-hash key for a lazy file (the same
   // URL the page and the SW precache use), else `?v=<build>` (R3-PHONE-8).
@@ -102,7 +126,8 @@ const TrackBuildClient = (function () {
   // (post → spawn). Safe to call bare: it then only reports the readiness.
   function idleWarm(agentSurface) {
     if (!enabled()) return null;
-    if (!agentSurface) return _ready;
+    // Under the coldBuild lab a player's title warms it too: the menu's first build is posted.
+    if (!agentSurface && !cold()) return _ready;
     const kick = () => { try { spawn(); } catch (_) { /* best-effort */ } };
     if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 3000 });
     else setTimeout(kick, 500);
@@ -138,6 +163,7 @@ const TrackBuildClient = (function () {
         try { worker.postMessage({ type: "buildPermit", seq: m.seq, live }); }
         catch (err) { failed("permit send " + err.message); return; }
         if (!live) { _pending.delete(m.seq); p.resolve(null); }
+        else p.running = true;   // Tracks.build is now synchronous in the worker: no message can stop it
         return;
       }
       _pending.delete(m.seq);
@@ -162,7 +188,13 @@ const TrackBuildClient = (function () {
     worker.onmessageerror = () => failed("unreadable worker response");
     // `base`: the PAGE's URL. The worker resolves relative fetches (assets.js's
     // "assets/pack/…") against it, not against js/track/build-worker.js.
-    try { worker.postMessage({ type: "init", files: pageUrls(files), base: location.href }); }
+    // Start the worker's script fetches on this thread while worker.js itself
+    // is still downloading. The worker awaits the same URLs, so the two fetches
+    // join and importScripts reads the cache instead of one round trip per file.
+    const hrefs = pageUrls(files);
+    try { if (typeof ScriptLoader !== "undefined" && ScriptLoader.warm) ScriptLoader.warm(hrefs); }
+    catch (_) { /* the worker still warms its own list */ }
+    try { worker.postMessage({ type: "init", files: hrefs, base: location.href }); }
     catch (e) { failed("init " + e.message); }
     return ready;
   }
@@ -177,18 +209,29 @@ const TrackBuildClient = (function () {
   let _graphNoted = false, _inflight = 0, _last = null;
   async function build(idx, def, opts, gfx, sceneryFile, live) {
     // Cancellation is opt-in per caller, never global newest-request-wins.
+    let wedged = false;
     for (const [seq, p] of _pending) if (p.live && !isLive(p.live)) {
-      _pending.delete(seq); p.resolve(null);
+      _pending.delete(seq); p.resolve(null); wedged = wedged || !!p.running;
       try { if (_w) _w.postMessage({ type: "buildPermit", seq, live: false }); } catch (_) { /* reply path still checks liveness */ }
     }
+    // coldBuild: a player who backs out of one circuit and picks another must not queue behind
+    // the abandoned build's remaining seconds. With nobody else waiting, terminate and respawn
+    // (the respawn's imports are cache hits; their parse is the worker's, not this thread's).
+    if (wedged && cold() && _pending.size === 0 && _w) drop("superseded mid-build");
     if (!isLive(live)) return null;
     // A custom circuit is not in the worker's list (it would only answer
     // "worker track list differs" after a round-trip): build it in steps.
     if (!enabled() || (def && def.custom)) return null;
+    // A page-only switch the worker cannot see (it has no localStorage): MODEL INSTANCING off
+    // (build-props.js INST_MODELS) would be ignored there, so the worker's world would differ.
+    try { if (localStorage.getItem("apex26.modelInst") === "0") return null; } catch (_) { /* no storage: the default, as the worker */ }
     // Page-only diagnostic switches cannot be reproduced by the worker copy.
     // Drop the memo so restoring defaults cannot reuse a diagnostic-era request.
     if (typeof Tracks !== "undefined" && Tracks.diagnosticBuild && Tracks.diagnosticBuild()) { _last = null; return null; }
     const prepare = gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null;
+    // The page's desktop detail level rides the config and the key (no GfxQuality in the worker).
+    // The page's desktop detail level rides the build message (post); it is boot-time (GfxQuality.detail), so a
+    // page's requests share one level and the key need not carry it.
     const key = [JSON.stringify(prepare), def.id, opts.night, opts.gridSlots, !!opts.chunkRibbons, !!gfx.mobileTier].join("|");
     // A live caller owns its own permit; unrelated equal-key callers retain
     // their shared request without inheriting another caller's cancellation.
@@ -210,6 +253,9 @@ const TrackBuildClient = (function () {
     if (timedOut && _ready === r) drop("worker init gave no answer in " + ANSWER_MS / 1000 + " s");
     if (!up || !_w || _ready !== r || !isLive(live)) return null;
     const seq = ++_seq, worker = _w;
+    // { detail, detailFeatures } (js/track/scenery/detail.js, lazy); none = the worker's level 0 (no GfxQuality there).
+    let det;
+    try { det = TrackDetail.config(); } catch (_) { /* detail 0 */ }
     return new Promise((resolve) => {
       let timer = null;
       if (typeof setTimeout === "function") timer = setTimeout(() => {
@@ -224,6 +270,7 @@ const TrackBuildClient = (function () {
           // The graph cannot cross; the CPU geometry only when the dev surface will read it.
           retainGeometry: !!(opts.retainGraph || (typeof Tracks !== "undefined" && Tracks.keepGeometry && Tracks.keepGeometry())) },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
+        ...det,
         prepare: gfx.trackPrepareConfig ? gfx.trackPrepareConfig() : null,
         scenery: sceneryFile ? url(sceneryFile) : null,
         team: myTeam(),
@@ -255,7 +302,7 @@ const TrackBuildClient = (function () {
     const S = typeof TrackScenery !== "undefined" ? TrackScenery : null;
     const fn = def && (def.scenery || (S && S[def.id]));
     const got = new Set(Array.isArray(have) ? have : []);
-    return Assets.modelIds(fn ? String(fn) : "").filter((id) => Assets.modelSync(id) && !got.has(id));
+    return Assets.modelIds(typeof TrackDef !== "undefined" ? TrackDef.scenerySource(def, S) : fn ? String(fn) : "").filter((id) => Assets.modelSync(id) && !got.has(id));
   }
 
   // The worker's track, made real: every recorded upload runs against `gfx` in
@@ -354,7 +401,7 @@ const TrackBuildClient = (function () {
           fallback.push(m[base]);
           // The empty chunk handle is replaced, so the adopted track cannot
           // free it later. Remove it from our ledger before releasing it.
-          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); }
+          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership(); }
         }
         m[k] = null;
       }
@@ -391,7 +438,7 @@ const TrackBuildClient = (function () {
         if (!h) continue;
         try {
           if (r.op === "batch" || (r.op !== "mesh" && r.op !== "chunked")) { if (gfx.freeInstancedBatch) gfx.freeInstancedBatch(h); }
-          else if (r.op === "chunked" && gfx.freeChunkedMesh) gfx.freeChunkedMesh(h);
+          else if (r.op === "chunked" && gfx.freeChunkedMesh) { gfx.freeChunkedMesh(h); if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership(); }
           else gfx.freeMesh(h);
         } catch (_) { /* the replay's error is the one to surface */ }
       }
@@ -436,7 +483,7 @@ const TrackBuildClient = (function () {
         resolve(null);
       }, Math.min(ANSWER_MS, 8000));
       _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def, live: null });
-      try { worker.postMessage({ type: "preview", seq, idx, id: def.id }); }
+      try { worker.postMessage({ type: "preview", seq, idx, id: def.id, banking: false }); }
       catch (e) {
         _pending.delete(seq);
         if (timer != null) clearTimeout(timer);
@@ -445,9 +492,13 @@ const TrackBuildClient = (function () {
       }
     });
     if (!msg || msg.type !== "preview" || !msg.track) return false;
+    // The adopted centreline never derives the shift here: carry the worker's (#5081).
+    if (Number.isFinite(msg.sceneryShift)) def._sceneryShift = msg.sceneryShift;
     return !!Tracks.adoptPreviewCenterline(def, msg.track);
   }
 
-  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy, KEY, defaultOn };
+  // KEY / defaultOn stay local (enabled() reads storage + cores); tests pin
+  // enabled/set/spawn/idleWarm and hardcode the localStorage string.
+  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy, cold, use };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;

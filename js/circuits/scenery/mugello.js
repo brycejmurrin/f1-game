@@ -6,16 +6,14 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mugello"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
-        indexSolid, seat,
-        pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
-        spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
+      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack,
+        indexSolid, seat, tree, bush, mountain, building, grandstandEx,
+        spectatorHill, broadcastCompound, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge,
-        terrainYAt, groundYAt,
-        groundUnder,
-      } = api;
+        terrainYAt,
+        groundUnder } = api;
 
       // World-up horizontal basis — banked a.u digs hillside props into grade.
       const flatBasis = (a) => {
@@ -47,53 +45,38 @@
           [0.455,  1, 126, 6, 58, -0.05],
           [0.585,  1,  96, 8, 66,  0.08],
           [0.720, -1, 118, 7, 60, -0.06],
-          [0.865, -1, 100, 6, 52,  0.07],
+          [0.865, -1, 100, 6, 24,  0.07],
         ]) {
           const kk = K(sf), a0 = anchor(kk, side, gap);
           if (onTrack(a0.c[0], a0.c[2], 30)) continue;
           for (let r = 0; r < rows; r++) {
             const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
             if (onTrack(a.c[0], a.c[2], 24)) continue;
-            const b = [a.r, a.u, a.t];
             const hv = hash(kk * 19 + r * 31);
             const rowLen = len * (0.85 + hv * 0.24);
-            // Seat each row on the hillside under its centre — reusing
-            // anchor()'s road-edge Y buried the tilled strip up to 1.8 m into
-            // the Tuscan slope (ground-audit line 53). World-up basis so a
-            // banked a.u does not tip the strip into grade.
-            const gy = groundUnder(a.c[0], a.c[2]);
-            const ty = terrainYAt(a.c[0], a.c[2]);
-            const baseY = Math.max(
-              gy != null ? gy : -Infinity,
-              ty != null ? ty : -Infinity,
-              a.c[1]
-            );
-            if (!Number.isFinite(baseY)) continue;
-            const foot = [a.c[0], baseY + 0.06, a.c[2]];
             const bw = flatBasis(a);
-            seat.box(out, foot, [4.6, 0.12, rowLen], SOIL, bw);
-            out._mat = MAT.FOLIAGE;
-            // A trellised row, not a hedge wall: ~7 m runs of a 0.55 m canopy on
-            // its wire with a clear gap at every run (survey defect 1).
+            // Sample each run separately. Long rigid strips crossed both sides
+            // of the hillside and extended beyond the rendered terrain.
             const nSeg = Math.max(2, Math.round(rowLen / 8)), segL = rowLen / nSeg;
             for (let q = 0; q < nSeg; q++) {
               const off = -rowLen / 2 + (q + 0.5) * segL;
-              const sx = foot[0] + bw[2][0] * off, sz = foot[2] + bw[2][2] * off;
-              const sy = Math.max(groundUnder(sx, sz) ?? -Infinity, terrainYAt(sx, sz) ?? -Infinity);
+              const sx = a.c[0] + bw[2][0] * off, sz = a.c[2] + bw[2][2] * off;
+              const sy = terrainYAt(sx, sz);
+              if (sy == null) continue;
+              const ends = [-1, 1].map(sign => terrainYAt(
+                sx + sign * bw[2][0] * segL / 2, sz + sign * bw[2][2] * segL / 2));
+              if (ends.some(y => y == null || Math.abs(y - sy) > 0.6)) continue;
+              out._mat = 0;
+              seat.box(out, [sx, sy + 0.02, sz], [2.5, 0.12, segL * 0.84], SOIL, bw);
               out._mat = MAT.FOLIAGE;
-              seat.box(out, [sx, (Number.isFinite(sy) ? sy : baseY) + 0.18, sz], [0.55, 1.25, segL * 0.74],
+              seat.box(out, [sx, sy + 0.18, sz], [0.55, 1.25, segL * 0.74],
                        (hv + q * 0.13) % 1 < 0.5 ? VINE : VINE_DRY, bw);
             }
-            out._mat = 0;
             out._mat = MAT.WOOD;
             for (const e of [-rowLen / 2, rowLen / 2]) {
               const pc = vadd(a.c, a.t, e);
-              const py = Math.max(
-                groundUnder(pc[0], pc[2]) ?? -Infinity,
-                terrainYAt(pc[0], pc[2]) ?? -Infinity,
-                foot[1]
-              );
-              seat.cyl(out, [pc[0], py, pc[2]], 0.10, 2.0, POST, 4, bw);
+              const py = terrainYAt(pc[0], pc[2]);
+              if (py != null) seat.cyl(out, [pc[0], py, pc[2]], 0.10, 2.0, POST, 4, bw);
             }
             out._mat = 0;
           }
@@ -184,7 +167,7 @@
       // Also clear Poggio Secco / Materassi outside (0.200-0.260).
       const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46)
         || (s >= 0.200 && s <= 0.260)
-        || (s >= 0.286 && s <= 0.342) || (s >= 0.852 && s <= 0.906);   // Casanova / Bucine terrazze
+        || (s >= 0.286 && s <= 0.342) || (s >= 0.852 && s <= 0.906);   // Materassi-Borgo S. Lorenzo / Bucine terrazze
       // Mid-lap day orbit (survey scenery preset: frac 0.50, az 45, el 22,
       // dist 45) sits ~30 m lateral of the Arrabbiata apex — near trees and
       // forestEdge crowns put the eye inside foliage (#3375). Keep ordered
@@ -439,7 +422,10 @@
           addBox(out, vadd(a.c, a.u, 0.85), [0.7, 1.7, seg],
             (Math.round(k / 4) & 1) ? ROSSO : [0.93, 0.93, 0.90], b);
           for (let r = 0; r < rows; r++) {
-            const back = 0.9 + r * depth, up = 0.9 + r * rise;
+            const back = 0.9 + r * depth;
+            const tread = vadd(a.c, a.r, side * back);
+            const terrain = terrainYAt(tread[0], tread[2]) ?? tread[1];
+            const up = Math.max(0.9 + r * rise, terrain - tread[1] + rise / 2);
             addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.25, seg], r & 1 ? [0.74, 0.72, 0.68] : [0.68, 0.66, 0.63], b);
             const h = hash(k * 23 + r * 3);
@@ -470,19 +456,21 @@
       // San Donato is T1, braking from 0.13 to the apex at 0.155. This group
       // was authored 0.08 early (at 0.07, mid main straight) — against some
       // earlier centreline, since no start-line frame puts it on the corner.
-      groundPatch(K(0.140), 1, 6, [38, 0.18, 52], GRAVEL,
+      // T1 is a RIGHT-hander: gravel and tyre wall stand on its outside (-1);
+      // they were on +1, the inside (corner-frames, #5652).
+      groundPatch(K(0.140), -1, 6, [38, 0.18, 52], GRAVEL,
         { id: "mugello-san-donato-gravel", samples: 8 });
-      tyreWall(0.135, 0.170, 1, 5, [0.86, 0.20, 0.18]);
+      tyreWall(0.135, 0.170, -1, 5, [0.86, 0.20, 0.18]);
       terrazza(0.128, 0.178, -1, 18, { rows: 9 });          // San Donato bowl
       marshalPost(K(0.155), -1, 10);
 
       groundPatch(K(0.312), 1, 5, [26, 0.18, 34], GRAVEL,
-        { id: "mugello-casanova-gravel", samples: 6 });
+        { id: "mugello-casanova-gravel", samples: 6 });   // id kept; sits at T4-T5 Materassi-Borgo San Lorenzo
       tyreWall(0.298, 0.328, 1, 4, [0.20, 0.40, 0.85]);
-      // Casanova is R~35 m and this is the INSIDE of it: tiers pitched 18 m out converge and
+      // Materassi (T4, left) is R~35 m and this is the INSIDE of it: tiers pitched 18 m out converge and
       // overlap 1.1 m at the apex (clip 0.297-0.301), so the bowl stops short of the apex.
       terrazza(0.292, 0.2935, -1, 18, { rows: 5 });
-      terrazza(0.3095, 0.334, -1, 18, { rows: 5 });         // Casanova-Savelli
+      terrazza(0.3095, 0.334, -1, 18, { rows: 5 });         // Borgo San Lorenzo (T5)
       marshalPost(K(0.306), -1, 9);
 
       groundPatch(K(0.495), -1, 6, [30, 0.18, 40], GRAVEL,
@@ -506,13 +494,13 @@
 
       // Poggio Secco + Materassi — uncovered stands on the outside near turn 3
       // (motogpmugello.com / koobit: Materassi "outer edge… near Poggio Secco";
-      // mugellocircuit FAQ: enter both from Luco). Turn apex ~0.219 (turns[3]).
+      // mugellocircuit FAQ: enter both from Luco). Turn apex ~0.219 (turns[2], T3).
       function emitOpenHillStand(stage, a, side, tiers, spineH, len0) {
         const b = [a.r, a.u, a.t];
         const IN = -side;
         stage._mat = MAT.CONCRETE;
         // Raise plinth slightly so seat.box does not sink into the hillside.
-        const plinth = [a.c[0], a.c[1] + 0.15, a.c[2]];
+        const plinth = [a.c[0], (terrainYAt(a.c[0], a.c[2]) ?? a.c[1]) + 0.15, a.c[2]];
         seat.box(stage, plinth, [10, 0.4, len0], [0.70, 0.70, 0.68], b);
         for (let tier = 0; tier < tiers; tier++) {
           const lat = side * (1.2 + tier * 2.0);
@@ -652,7 +640,7 @@
           const a = anchor(k, side, gap);
           const bases = [];
           for (let r = 0; r < rows; r++) {
-            // TRAP B (docs/SCENERY-GROUNDING.md §2): anchor() samples the ground
+            // TRAP B (docs/SCENERY-API.md §2): anchor() samples the ground
             // at the ROAD EDGE, and these rows march up to 37 m back from it —
             // across a Tuscan hillside. Reusing a.c's height that far put the
             // back rows metres into the air. Re-seat each row on the ground
@@ -702,16 +690,16 @@
 
       // Turn signage and broadcast towers.
       signBoard(K(0.150), -1, 8, "corner", 1);
-      signBoard(K(0.312), -1, 8, "corner", 6);
-      signBoard(K(0.521), 1, 8, "corner", 9);   // Arrabbiata 2 = turns[8]
-      signBoard(K(0.880), 1, 8, "corner", 15);
+      signBoard(K(0.312), -1, 8, "corner", 5);   // Borgo San Lorenzo = turns[4] (apex 0.3187; was "6", Casanova is 0.386)
+      signBoard(K(0.518), 1, 8, "corner", 9);   // Arrabbiata 2 = T9 = turns[8] (FIA 2020 map; apex 0.518)
+      signBoard(K(0.857), 1, 8, "corner", 15);
       sponsorHoarding(0.930, 0.060, -1, 3.6, { h: 1.2, step: 10,
         palette: [ROSSO, [0.94, 0.92, 0.88], [0.10, 0.34, 0.20], [0.96, 0.76, 0.06]] });
       cameraTower(K(0.030), -1, 26, { h: 16 });
       cameraTower(K(0.152), -1, 30, { h: 18 });
       cameraTower(K(0.500), 1, 30, { h: 18 });
       cameraTower(K(0.880), 1, 28, { h: 16 });
-      // Forest edge stops short of the Casanova (-1, 0.292-0.334) and Bucine (+1, 0.858-0.902)
+      // Forest edge stops short of the Materassi-Borgo San Lorenzo (-1, 0.292-0.334) and Bucine (+1, 0.858-0.902)
       // terrazze: their foliage cones cut the tier boxes (clip-audit 0.294-0.334, 0.888).
       // Arrabbiata mid-lap (0.475–0.545) is also open: the gap-14 / gap-30 belts
       // put FOLIAGE AABBs on the survey orbit eye (#3375). Resume past 0.55 with

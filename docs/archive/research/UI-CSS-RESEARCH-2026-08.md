@@ -54,7 +54,7 @@
 > **So any audit metric that depends on a post-layout observer is unreliable
 > under headless**, and will report the pre-observer state as if it were final.
 > That is a third instance this session of the instrument being the thing at
-> fault; it is now written into `docs/LAYOUT-AUDIT.md`.
+> fault; it is now written into `docs/COMPONENTS.md`.
 >
 > Two other fixes were tried first and both were worse — kept because the
 > failures are the useful part. A frame-counted `requestAnimationFrame` retry
@@ -72,7 +72,7 @@ the Chrome DevTools MCP at 852x393 (the landscape phone — the shape the game i
 played in) and 1440x900.
 
 **The headline: the problem is not that this project lacks technique.** The
-mechanism docs (`docs/LAYOUT-AUDIT.md`), the intent docs
+mechanism docs (`docs/COMPONENTS.md`), the intent docs
 (`docs/research/UI-DESIGN-PRINCIPLES.md`) and the 15 rules in
 `.claude/skills/restructure-screens-css` are all correct and all ahead of what
 most codebases have. The problem is that **the design system is declared but not
@@ -365,6 +365,6 @@ requires a new dependency, a build step, or a methodology.
 - MDN, [Using container scroll-state queries](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Conditional_rules/Container_scroll-state_queries)
 - Playwright docs, ARIA snapshots (`toMatchAriaSnapshot`, `page.ariaSnapshot()`)
 - [What's new in DevTools (Chrome 146)](https://developer.chrome.com/blog/new-in-devtools-146) — DevTools MCP 0.19.0: Lighthouse via MCP, `--slim` mode, a11y debugging skills
-- This repo: `docs/LAYOUT-AUDIT.md`, `docs/research/UI-DESIGN-PRINCIPLES.md`,
+- This repo: `docs/COMPONENTS.md`, `docs/research/UI-DESIGN-PRINCIPLES.md`,
   `.claude/skills/restructure-screens-css`, `js/game/scrollfade.js` header
 - Live measurements and screenshots: `artifacts/ui-research/`

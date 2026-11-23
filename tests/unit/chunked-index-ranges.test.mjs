@@ -76,6 +76,7 @@ function makeGL() {
     bufferSubData(target, byteOffset, src) {
       if (target !== this.ELEMENT_ARRAY_BUFFER) return;
       this._elem.bytes.set(new Uint8Array(src.buffer, src.byteOffset, src.byteLength), byteOffset);
+      (this._elem.subs || (this._elem.subs = [])).push(Object.prototype.toString.call(src));
     },
     enableVertexAttribArray(i) { this._enabled.add(i); },
     vertexAttribPointer(idx, size, type, norm, stride, offset) {
@@ -488,4 +489,63 @@ test("C-P7: Uint16 chunk ranges start on 4-byte boundaries when aligned", () => 
     for (let i = from; i < from + n; i++) got.push(all[i]);
   }
   assert.deepEqual(got, srcIdx, "alignment pads must not alter the real index sequence");
+});
+
+// ToUint32(int32) is the int32 bit pattern, so a Uint32 element buffer can be
+// filled from ChunkBins' Int32Array without a second copy. This pins both
+// directions: a mesh past 65535 verts uploads those Int32 views, and a smaller
+// one still narrows to Uint16 (uploading the wide view there would read four
+// bytes per index).
+function makeWide() {
+  const perRow = 40, quads = perRow * 410;   // 65600 verts, past the Uint16 ceiling
+  const vCount = quads * 4;
+  const pos = new Float32Array(vCount * 3);
+  const nrm = new Float32Array(vCount * 3);
+  const col = new Float32Array(vCount * 3);
+  const idx = new Uint32Array(quads * 6);
+  col.fill(1);
+  for (let i = 0; i < vCount; i++) nrm[i * 3 + 1] = 1;
+  for (let q = 0; q < quads; q++) {
+    const ox = (q % perRow) * 0.5, oz = ((q / perRow) | 0) * 100;
+    const v = q * 4, b = v * 3, t = q * 6;
+    pos[b] = ox; pos[b + 1] = 0; pos[b + 2] = oz;
+    pos[b + 3] = ox + 1; pos[b + 4] = 0; pos[b + 5] = oz;
+    pos[b + 6] = ox + 1; pos[b + 7] = 0; pos[b + 8] = oz + 1;
+    pos[b + 9] = ox; pos[b + 10] = 0; pos[b + 11] = oz + 1;
+    idx[t] = v; idx[t + 1] = v + 1; idx[t + 2] = v + 2;
+    idx[t + 3] = v; idx[t + 4] = v + 2; idx[t + 5] = v + 3;
+  }
+  return { pos, nrm, col, idx, _keepPositions: true };
+}
+
+test("a uint32 mesh uploads each bucket's Int32Array without a second copy", () => {
+  const probe = new Int32Array([0, 1, 65535, 65536, -1]);
+  assert.deepEqual(new Uint32Array(probe), new Uint32Array(probe.buffer, probe.byteOffset, probe.length),
+    "ToUint32 of every int32 value is its own bits — the upload relies on this");
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const src = makeWide();
+  const mesh = C.createChunkedMesh(src, 72);
+  assert.equal(mesh.indexType, gl.UNSIGNED_INT);
+  assert.ok(mesh.chunks && mesh.chunks.length > 8, "rows 100 m apart must be separate chunks");
+  const elem = gl._buffers.find((b) => b.subs && b.subs.length);
+  assert.ok(elem, "element uploads must be recorded");
+  assert.ok(elem.subs.every((s) => s === "[object Int32Array]"),
+    `uint32 buckets must upload the Int32 view, got ${elem.subs[0]}`);
+  const all = readIndices(gl, mesh);
+  assert.equal(all.length, src.idx.length, "no pad on a uint32 mesh — a pad would change the count");
+  assert.ok(all.some((i) => i > 65535), "the fixture must exercise indices a Uint16 buffer would truncate");
+  const got = Array.from(all).sort((a, b) => a - b);
+  const want = Array.from(src.idx).sort((a, b) => a - b);
+  assert.deepEqual(got, want, "the uploaded bits must be the source indices");
+});
+
+test("a uint16 mesh still narrows bucket indices to two bytes", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const mesh = C.createChunkedMesh(makeGrid(6, 6, 30), 72);
+  assert.equal(mesh.indexType, gl.UNSIGNED_SHORT);
+  const elem = gl._buffers.find((b) => b.subs && b.subs.length);
+  assert.ok(elem.subs.every((s) => s === "[object Uint16Array]"),
+    `uint16 buckets must narrow, got ${elem.subs[0]}`);
 });

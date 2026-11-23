@@ -137,6 +137,24 @@
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
+/* A single native choice owns each touch-response row. Size it to its longest
+   option, retaining the platform arrow. The flex row wraps on narrow sheets. */
+#pmsettings-inner #pm-touch-response-fields .set-row > .tune-label {
+  white-space: normal; overflow-wrap: anywhere; text-align: start;
+}
+#pmsettings-inner #pm-touch-response-fields .set-row > div { flex: 0 1 auto; }
+#pmsettings-inner #pm-touch-response-fields .set-row select {
+  -webkit-appearance: auto; appearance: auto;
+  flex: 0 1 auto; width: max-content; max-width: 100%; min-width: min(100%, 9em);
+  min-height: max(var(--chip-h), var(--tap-paint));
+}
+/* tuner.css sets .adv-help { opacity: 0.6 } on --text — on a 225px card that
+   is low-contrast grey. Restore full ink inside Settings; dim via --steel. */
+#pmsettings-inner .adv-help {
+  opacity: 1;
+  color: var(--steel);
+  font-size: var(--fs-2);
+}
 /* KEYBOARD / CONTROLLER rows (#pm-keys, #pm-pad, js/ui/key-binds.js): the two
    slots are chips that show a key or button name, not the chevron squares — a
    name needs width. An armed slot (waiting for input) wears the selected
@@ -212,12 +230,6 @@
     grid-auto-rows: 1fr;
     align-items: stretch;
   }
-  /* Wide shape turns a page into two columns; action labels (REPOSITION
-     TOUCH CONTROLS) then wrap inside a half-width --tap plate. Span the row. */
-  #pmsettings-inner[data-shape="wide"] .pm-group > button {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
 }
 /* MOVE & SIZE (js/ui/hud-layout.js): an element the current mode does not draw
    greys its sliders and RESET ELEMENT — they would move nothing; #pm-hl-why says why. */
@@ -244,6 +256,13 @@
   line-height: 1;
   white-space: nowrap;
 }
+/* #5622: painted 48 x 0.7 = 33.6 px at UI SIZE 70; --tap-paint holds the floor (cf. appearance-studio.css). */
+@media (pointer: coarse) {
+  .set-row > div > button,
+  #pmsettings-inner .pm-groups .set-row > div > button { min-width: var(--tap-paint); min-height: var(--tap-paint); }
+}
+body[data-density="compact"] .set-row > div > button,
+body[data-density="compact"] #pmsettings-inner .pm-groups .set-row > div > button { min-width: var(--tap-paint); min-height: var(--tap-paint); }
 /* Injected SCREENSHOTS / THREE PATH status — ID-scoped, no new class. */
 #pmsettings-inner .pm-group #pm-gfx-status {
   margin: calc(var(--gap) * 0.25) 0 0;
@@ -267,12 +286,31 @@
   width: 100%;
   margin: 0 0 calc(var(--gap) * 0.25);
 }
+#pm-settings-index > h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-block-start: calc(var(--gap) * .35);
+  color: var(--dim);
+  font-size: var(--fs-2);
+  line-height: 1.15;
+}
 .pm-doors > button {
   flex: 1 1 var(--balance-basis);
   min-width: min(100%, var(--balance-min));
   margin: 0;
 }
 #pm-settings-index { --balance-basis: max(12rem, calc(50% - var(--gap) * 0.25)); }
+/* CLAUDE LINK (#5259) is fixed-size chrome: the door that reaches the phone bridge must stay tappable and readable
+   at a UI SIZE too small to read anything else, so its height and type divide the sheet zoom back out (48 px tall,
+   16 / 14 px type PAINTED at every UI SIZE). It spans two tracks: the whole row of the two-up index, and in the
+   three-up index the free two thirds beside PROGRESS, so the 11th tile adds no row (and no scroll) on a phone. */
+#pm-settings-index > #pm-claude-link {
+  grid-column: span 2;
+  flex-basis: 100%;
+  min-height: calc(48px / var(--sheet-scale, var(--ui-scale)));
+  font-size: calc(16px / var(--sheet-scale, var(--ui-scale)));
+}
+#pm-settings-index > #pm-claude-link > small { font-size: calc(14px / var(--sheet-scale, var(--ui-scale))); }
 /* Seven doors: a 50% flex-basis still lets the odd last tile (BACKUP) grow
    into a full-width orphan, and a wrapping APPEARANCE blurb makes that row
    taller than DISPLAY beside it. From 24rem (two --balance-basis) the index
@@ -290,13 +328,54 @@
     align-self: stretch;
   }
 }
-/* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
-   have to scroll through a single full-width column of buttons.
-   Each option button shrinks from full-sheet width (~717px) to half-width
-   (~350px). Sliders (.tune-row) and the renderer picker (#pm-renderer-row)
-   span both columns — they need the width.
-   Uses data-shape="wide" (sheetshape.js, zoom-corrected) not @media orientation. */
-#pmsettings-inner[data-shape="wide"] .pm-group {
+/* A touch phone held upright keeps the door LIST (ui-redesign "balanced
+   control rows"): #5640's uncapped --sheet-w lifts its sheet past 24rem
+   (~33rem own px at UI 70), where the grid left a half-width orphan
+   mid-list. Tablets (>= 40rem) and desktop keep the grid. Keyed on the
+   viewport's orientation, not the sheet's data-shape: SheetShape writes that
+   a frame after the open (ResizeObserver + rAF), so a sheet opened right
+   after a rotation still read "wide" and painted the grid (ready run
+   44479875495, ui-redesign:989). */
+@media (orientation: portrait) {
+  @container sheet (min-width: 24rem) and (max-width: 39.99rem) {
+    body:not(.desktop) #pmsettings-inner #pm-settings-index { display: flex; }
+  }
+}
+/* A wide sheet (laptop and up) reads nine doors as three columns, not a
+   long two-up list with a half-width orphan. */
+@container sheet (min-width: 52rem) {
+  #pm-settings-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* SHORT AND WIDE (a phone on its side, design pass 2b): the search block was a
+   label, a field, a hint and a rule, and left 2 of 10 doors on the first
+   screen. The field keeps its own aria-label, so the visible label goes; the
+   hint shows only once a query is typed (it then counts the matches); the doors
+   go three-up. 844x390: 6 of 10 doors on screen. */
+@container sheet (min-width: 40rem) {
+  #pmsettings-inner.sheet[data-density="compact"] #pm-settings-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] {
+  gap: 0; padding: 0 0 calc(var(--gap) * 0.5); border-bottom: 0;
+}
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search] > label { font-size: 0; gap: 0; }
+/* Keep the search text at least 16 painted pixels when the settings sheet scales down. */
+#pm-settings-index [data-settings-search] input {
+  font-size: max(var(--fs-3), calc(16px / var(--sheet-scale, var(--ui-scale, 1))));
+}
+#pmsettings-inner.sheet[data-density="compact"] #pm-settings-index > [data-settings-search]:has(input:placeholder-shown) > p { display: none; }
+/* TWO-COLUMN SETTINGS PAGES — BY WIDTH, NOT BY ASPECT (UI contract 2026-11-06
+   §4.2, gap 3). This grid used to key on data-shape="wide", which is the
+   sheet's ASPECT: every landscape phone is wide, so every phone settings page
+   was a 2-column grid of ~320-own-px half-width plates with large-text labels
+   wrapping to three lines (measured 852x393 / 852x283 / 844x390, all
+   2-col). A phone page is ONE reading column; columns are for a sheet that
+   is wide IN ITS OWN PX (52rem = 832 own, the same cliff as the 3-up door
+   index above) and not compact. Container units are zoom-corrected, so UI
+   SIZE 150% on a laptop sheet correctly drops back to one column.
+   Sliders (.tune-row), setting rows and the renderer picker span both
+   columns — they need the width. */
+@container sheet (min-width: 52rem) {
+#pmsettings-inner:not([data-density="compact"]) .pm-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   /* max-content: Chromium sizes an `auto` track from a wrapping setting row's
@@ -308,34 +387,36 @@
 /* Two rules, not one :is() — :is() takes its HIGHEST argument's specificity,
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
-#pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display > details { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-appearance > details { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-phonepad-box) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-graphics > details,
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display > details { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance > details { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-appearance :is(.pm-look-h, .pm-accent-swatches, .pm-replay-intro) { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: HUD / METRICS / RENDERER each on their own row (UI SIZE moved to
    APPEARANCE › READABILITY). Named areas so an open fold cannot steal the hole. */
-#pmsettings-inner[data-shape="wide"] #pm-panel-display {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display {
   grid-template-areas:
     "hudopts hudopts"
     "metrics metrics"
     "cockpit cockpit";
   grid-auto-flow: dense;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
   margin: 0;
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-hud-details {
   grid-area: hudopts;
   margin: 0;
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
+}
 /* DISPLAY sliders (and APPEARANCE's UI SIZE) are settings rows, not tuner
    rows: steel label, text value (tuner red is the loud bit), no extra
    tap-height padding around a track that is already --slider. */
@@ -450,12 +531,14 @@
 /* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
    + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
    after RESOLUTION / RENDERER / GRAPHICS — do not add a named "adv" area. */
+#pm-graphics-details-body .set-row > details { flex: 1 1 12rem; min-width: 0; }
 #pm-display-adv,
 #pm-visual-tuners {
   margin: 0;
   min-width: 0;
 }
 #pm-display-adv-body,
+#pm-graphics-details-body,
 #pm-visual-tuners-body {
   display: flex;
   flex-direction: column;
@@ -544,6 +627,33 @@
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
+/* HUD & CAMERA / MUSIC folds read as plain text links on a tall phone card.
+   A quiet plate marks them as the same family as the door tiles above.
+   :hover/:active too: the plain-fold hover/active rules above (higher
+   specificity) set border:none, so hover shrank the box 2px; a cursor in its
+   bottom 2px then flipped hover every frame (ui-button-touch "not stable"). */
+#pmsettings-inner .pm-group details > summary,
+#pmsettings-inner .pm-group details > summary:active {
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  margin-block: calc(var(--gap) * 0.15);
+  padding-block: calc(var(--gap) * 0.35);
+}
+@media (hover: hover) and (pointer: fine) {
+  #pmsettings-inner .pm-group details > summary:hover {
+    background: var(--surf-1);
+    border: 1px solid var(--plate-line);
+  }
+}
+#pmsettings-inner .pm-group details {
+  border-bottom: 0;
+}
+/* #5358: under 100 % UI the sheet zoom paints --chip-h (48) below 44 (33.6 px at the phone's 70 %). Re-floor
+   the touch folds on the PAINTED 44, as #3334 did for the garage chips; 100 %+ is unchanged. */
+body:not(.desktop) :is(#pmsettings-inner .pm-group, #rs-body) details > summary {
+  min-height: max(var(--chip-h), calc(45px / var(--ui-scale)));
+}
 #advanced-inner > .pm-group-h {
   display: flex;
   justify-content: space-between;
@@ -598,19 +708,29 @@ button:has(> [data-fold]) {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body),
 #pmsettings-inner[data-density="compact"] :is(#pm-display-adv-body, #pm-visual-tuners-body) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) > button,
 #pmsettings-inner[data-density="compact"] :is(#pm-display-adv-body, #pm-visual-tuners-body) > button {
   width: auto;
 }
 #pm-visual-tuners-body > .adv-help { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners-body {
+/* The same fold plates on a wide (≥ 52rem own, not compact) sheet — gap 3's
+   gate, never the aspect. */
+@container sheet (min-width: 52rem) {
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
+}
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) > button {
+  width: auto;
+}
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-display #pm-visual-tuners-body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 }
 /* Capture / diag sit under RESET | THREE PATH as secondary rows, not
    a third pair of equally loud plates. They always span — when
@@ -677,41 +797,43 @@ button:has(> [data-fold]) {
    Range controls own Left/Right for adjustment. Keep one reading column so
    Up/Down and the controller D-pad reach every input, including short rows
    whose neighbours have longer help text. Section headings retain the groups. */
-#pmsettings-inner[data-shape="wide"] #advanced-inner,
-#pmsettings-inner[data-shape="wide"] #audioset-inner {
+@container sheet (min-width: 52rem) {
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner,
+#pmsettings-inner:not([data-density="compact"]) #audioset-inner {
   grid-column: 1 / -1;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #advanced-inner,
-#pmsettings-inner[data-shape="wide"] #advanced-inner #adv-extra {
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner,
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner #adv-extra {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
   align-content: start;
 }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-driving .preset-row,
-#pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #advanced-inner details,
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .adv-item { margin: 0; min-width: 0; grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #pm-panel-driving .preset-row,
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .preset-row { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner details,
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .adv-sec { grid-column: 1 / -1; }
+#pmsettings-inner:not([data-density="compact"]) #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 /* UI SIZE 200% on wide sheets: ‹ select › clusters must shrink inside their
    grid cell instead of painting past the pane (fit-audit #3254 / #3255). */
-#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div {
+#pmsettings-inner:not([data-density="compact"]) .pm-group .set-row > div {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
 }
-#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div > select {
+#pmsettings-inner:not([data-density="compact"]) .pm-group .set-row > div > select {
   flex: 1 1 6rem;
   width: auto;
   min-width: 3.25rem;
   max-width: 100%;
 }
-#pmsettings-inner[data-shape="wide"] .pm-group .set-row > div > button {
+#pmsettings-inner:not([data-density="compact"]) .pm-group .set-row > div > button {
   flex: 0 0 var(--chip-h);
   width: var(--chip-h);
   min-width: var(--tap-min);
+}
 }
 /* MY TEAM logo upload: the file input itself is hidden (its native button is
    unstyleable), so the <label> is the visible control.
@@ -745,5 +867,22 @@ body.desktop #pm-calib-help { display: none !important; }
 [data-dep-off] :is(input, select, button, textarea):disabled { opacity: 0.45; cursor: default; }
 [data-dep-reason] { margin-left: 0.5em; font-size: 0.8em; font-weight: 400; color: var(--text); white-space: nowrap; }
 [data-dep-reason][hidden] { display: none; }
+/* One piece that moves to its own line, and wraps only when it is wider than the row (#5452: GEARS' reason ran
+   63 px out of the 320 px Driving pane at UI SIZE 50 %, whose text rung is 12px / --ui-scale). */
+[data-dep-reason="label"] { display: inline-block; max-width: 100%; white-space: normal; }
 [data-dep-reason="line"] { display: block; margin: 0.25em 0 0.5em; }
+}
+
+@layer layout {
+/* A native field can open Safari's keyboard or picker at any game UI size.
+   Use the compact sheet cap, ordinary sheet scale, or the designer's own zoom. */
+@media (pointer: coarse), (hover: none) {
+  :where(input:not([type]), textarea, select, [contenteditable]:not([contenteditable="false"])) {
+    font-size: max(16px, var(--touch-field-size, var(--fs-3)), calc(16px / var(--_sheet-z, var(--sheet-scale, var(--td-zoom, var(--ui-scale, 1))))));
+  }
+  :where(input:is([type=text], [type=search], [type=url], [type=email], [type=tel], [type=number],
+                  [type=password], [type=date], [type=time], [type=datetime-local], [type=month], [type=week])) {
+    font-size: max(16px, var(--touch-field-size, var(--fs-3)), calc(16px / var(--_sheet-z, var(--sheet-scale, var(--td-zoom, var(--ui-scale, 1))))));
+  }
+}
 }

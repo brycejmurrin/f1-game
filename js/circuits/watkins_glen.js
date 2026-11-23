@@ -1,11 +1,13 @@
 /* Apex 26 — WATKINS GLEN INTERNATIONAL circuit definition (data only).
    Retired circuit (`classic: true`): last United States GP 1980.
+   The Boot and uninterrupted Esses match the 1971–74 GP configuration.
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "watkins_glen",
+    revision: 3,
     classic: true,
     // Upstream us-1956 already runs clockwise, matching the racing direction.
     reverse: false,
@@ -35,12 +37,18 @@
       grass:         [0.20, 0.42, 0.19],
       sunDir:        [0.46, 0.58, 0.36],
     },
-    // WAT-M3 identity lock: the -12 m Esses drop and +13 m Boot climb are
-    // authored circuit geometry. Scenery grading must follow them, never
-    // flatten or counter-grade these two elevation moves.
+    // Fallback when the SRTM profile is unavailable. The normal runtime uses
+    // the 64-sample survey of this same unchicaned Boot trace.
     elevations: [
-      { s: 0.11, halfM: 320, rise: 9.0 },    // climb out of Turn 1
-      { s: 0.19, halfM: 380, rise: -12.0 },  // down through the Esses (OSM "The Esses", lap 0.118-0.256; was seated on the back straight at 0.30)
+      // ONE climb from Turn 1's exit up through the Esses (T2-T4, 0.118-0.256),
+      // peaking where they open onto the back straight, then easing down the
+      // straight into the Outer Loop, where "the road falls away". Sources:
+      // nasaspeed.news lap guide ("Turn 1 is downhill on the entry … uphill on
+      // the exit", "the uphill Esses"); nascar.com turn guide ("ascent through
+      // the esses"). Until 2026-11-18 a +9 m bump at 0.11 and a -12 m dip at
+      // 0.19 made the Esses a ~20 m DROP (#5316 CIRC4-07). The 12 m is the
+      // def's old figure, not a survey.
+      { s: 0.27, halfM: 900, rise: 12.0 },
       { s: 0.52, halfM: 340, rise: -8.0 },   // into the Boot
       { s: 0.70, halfM: 360, rise: 13.0 },   // the climb back out
       { s: 0.90, halfM: 300, rise: -5.0 },   // drop to the front straight
@@ -51,19 +59,30 @@
       { s0: 0.9208, s1: 0.9562, hw: 6.4, ease: 0.012 },  // the Anvil (index; arc 0.880-0.925)
     ],
     bankZones: [
-      { frac: 0.182, angleDeg: 4.5, widthM: 150 },   // the Esses, middle left-hander (turn: 1 resolves to T1, turns[] has no Esses apex)
-      { frac: 0.620, angleDeg: 3.5, widthM: 130 },   // Toe of the Boot
-      { turn: 10, angleDeg: 4.0, widthM: 130 },   // the Anvil; re-seated frac 0.9 (was 138 m off any apex)
+      { turn: 3, angleDeg: 4.5, widthM: 150 },    // the Esses, middle left-hander (was frac 0.182, 639 m off; turns[] had no Esses apex)
+      { turn: 7, angleDeg: 3.5, widthM: 130 },    // Toe of the Boot (was frac 0.620, on the exit)
+      // Final right, banked in the 1971 report. Estimate the magnitude from nine
+      // 8 m transverse sections of USGS 1 m terrain (2020), within 24 m of the apex.
+      { turn: 11, angleDeg: 5.8, widthM: 130 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    // turns: the 11 real corners (2026-11-18, #5316 CIRC4-08), each on the built
+    // curvature peak of its group: T1 the 90 (R); T2-T4 the Esses (R-L-R, uphill);
+    // T5 the Outer Loop (R 135°, end of the back straight); T6-T9 the Boot —
+    // "curling left-hand downhill through the woods … two consecutive right-hand
+    // turns, over an exciting blind crest to a left-hand turn" (en.wikipedia.org
+    // Watkins_Glen_International, 1971 extension); T10 the left back onto the old
+    // course; T11 the final right onto the front straight. Numbering: nasaspeed.news
+    // lap guide (T1, T2-T4 Esses, T5, T6 Laces / T7 Toe / T8 Heel of the Boot, 11
+    // turns). The old list was the 11 strongest peaks: no Esses or Outer Loop apex,
+    // the Boot and T10/T11 double-counted. No researched sectors — consumers fall
+    // back to thirds.
     sectors: [0.334, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.0645, 0.5055, 0.5255, 0.5970, 0.6245, 0.7335, 0.7920, 0.8035, 0.8665, 0.9255, 0.9320],
+    turns: [0.0643, 0.1263, 0.1750, 0.2449, 0.4051, 0.5055, 0.5970, 0.7312, 0.7919, 0.8663, 0.9255],
     furniture: { tree: "broadleafFall", fol: [0.56, 0.30, 0.13], lamp: "none" },  // turning scarlet-brown — the fall reads or it doesn't
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["scaffold", "alu", "concrete"],  // club-built timber/steel, no colour at all

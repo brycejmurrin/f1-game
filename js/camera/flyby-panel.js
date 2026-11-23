@@ -2,7 +2,6 @@
 /* Apex 26 — the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live through __apex.flybyCam(), reorder the list and copy it out as window.FlybyShots for tools/gen/bake-flyby.mjs. */
 const FlybyPanel = (function () {
 
-// ---- the shot language, as an editable registry --------------------------
 //
 // js/camera/flyby-seq.js owns the MEANING of these fields; this table owns how
 // far a slider may push each one. The ranges are authoring bounds, not physical
@@ -10,7 +9,7 @@ const FlybyPanel = (function () {
 // and lifts an eye out of a building, so a slider that can reach silly numbers
 // only costs the author a bad frame, never a crash.
 const EASES = ["linear", "in", "out", "inOut"];
-const AT_KINDS = ["start", "pole", "grid", "slot", "corner", "centre", "landmark"];
+const AT_KINDS = ["start", "pole", "grid", "slot", "pitexit", "corner", "centre", "landmark"];
 const SLOTS = [
   { key: "eye0", arr: "eye", i: 0, label: "EYE FROM" },
   { key: "eye1", arr: "eye", i: 1, label: "EYE TO" },
@@ -26,6 +25,7 @@ const POSE_FIELDS = {
   pole: ["off", "x", "y"],
   grid: ["off", "x", "y"],
   slot: ["off", "x", "y"],
+  pitexit: ["off", "x", "y"],
   corner: ["off", "x", "y"],
   centre: ["bear", "distR", "yR", "y"],
   landmark: ["bear", "distK", "yK", "y"],
@@ -52,7 +52,6 @@ const CORNER_NS = ["first", "mid", "late", "slowest", "fastest", "lore", "1", "2
 const DUR = { min: 0.01, max: 1, step: 0.005, unit: "" };
 const FOV = { min: 15, max: 90, step: 0.5, unit: "°" };
 
-// ---- pure list operations -------------------------------------------------
 //
 // Everything below this line is data in, data out: no DOM, no globals, no
 // FlybySeq. That is deliberate — it is the half a node test can hold, and
@@ -272,14 +271,13 @@ const ops = {
   addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
 
-
 let _camEdLoad = null;
 // Files that evaluated on an earlier (failed) attempt: re-injecting a const-declaring one throws "already declared".
 const _camEdLoaded = new Set();
 function ensureCamEditor() {
   if (typeof FlybyEditor !== "undefined" && typeof CamTunerEditor !== "undefined") return Promise.resolve(true);
   if (_camEdLoad) return _camEdLoad;
-  const files = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAM_EDITOR) || [];
+  const files = ((typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAM_EDITOR) || []).filter(file => file !== "js/lighting/tuner-panel.js");
   const edges = (typeof ApexRoster !== "undefined" && ApexRoster.LAZY_CAM_EDITOR_EDGES) || [];
   if (!files.length || typeof ScriptLoader === "undefined") {
     Log.warn("game", "camera editor bundle is not in this build");
@@ -300,7 +298,7 @@ function ensureCamEditor() {
 // finish after BACK, resume or a newer door; only that visit may reveal a dock.
 let _pendingUiOpen = null;
 function createEditorOpener(G, buttonId, ensure, method) {
-  let pending = null;
+  let pending = null, doorLabel = null;
   function cancel() {
     const request = pending;
     pending = null;
@@ -334,7 +332,14 @@ function createEditorOpener(G, buttonId, ensure, method) {
       const changed = request.observer && request.observer.takeRecords().length > 0;
       const allowed = !fromUi || (!changed && visible() && G.state === request.state && G.paused === request.paused);
       cancel(); // real.open hides Settings itself; release its observer first.
-      if (allowed && real && typeof real[method] === "function") real[method]();
+      if (!allowed) return;
+      if (real && typeof real[method] === "function") {
+        if (doorLabel && button) { button.textContent = doorLabel; doorLabel = null; }
+        real[method]();
+      } else if (fromUi && button) {
+        doorLabel ||= button.textContent;
+        button.textContent = doorLabel + " · RETRY";
+      }
     }, (error) => {
       if (pending === request) cancel();
       Log.warn("game", "camera editor did not open", error);
@@ -348,7 +353,7 @@ let _refresh = null;
 function create(G) {
   Log.info("game", "FlybyPanel.create");
   const { store } = G;
-  let real = null, _apiLoader = null;
+  let /** @type {ReturnType<typeof FlybyEditor.create> | null} */ real = null, _apiLoader = null;
   function loadSaved() {
     let saved = null;
     try { saved = store.get("flybyShots", null); } catch (_) { return null; }

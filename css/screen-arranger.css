@@ -1,0 +1,264 @@
+@layer layout {
+#companion-appearance-return:not([hidden]) {
+  position: fixed;
+  z-index: 7;
+  inset-inline-start: max(.5rem, env(safe-area-inset-left));
+  bottom: max(.5rem, env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  padding: 0 .75rem;
+  min-height: 44px;
+  color: var(--text);
+  background: var(--surf-1);
+  border: 1px solid currentColor;
+  border-radius: .5rem;
+}
+body.arranging #companion-appearance-return { visibility: hidden; }
+
+#arrange-prepare {
+  position: fixed;
+  pointer-events: auto;
+  z-index: 2147483646;
+  inset: max(.25rem, env(safe-area-inset-top)) max(.25rem, env(safe-area-inset-right)) auto auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - .5rem);
+}
+#arrange-prepare[data-edge="bottom"] { top: auto; bottom: max(.25rem, env(safe-area-inset-bottom)); }
+#arrange-prepare button {
+  background: var(--surf-1);
+  color: var(--text);
+  border: 1px solid currentColor;
+  border-radius: var(--r-md, .5rem);
+  min-height: 44px;
+  padding: .25em .6em;
+  font: inherit;
+}
+/* The streaming companion ships without the game shell stylesheet so OBS
+   retains its transparent background. Map its own palette into the editor. */
+body:has(> main#overlay) {
+  --text: var(--ov-ink);
+  --dim: var(--ov-dim);
+  --bg: #090a10;
+  --surf-1: #13151b;
+  --surf-3: #282b36;
+  --card-line: var(--ov-line);
+  --focus: var(--ov-ink);
+  --font-ui: system-ui, sans-serif;
+  --fs-2: 1rem;
+  --fs-3: 1rem;
+  --fs-6: 1.25rem;
+  --r-md: .5rem;
+  --r-lg: .75rem;
+  --tap: 44px;
+  --safe-t: max(.5rem, env(safe-area-inset-top));
+  --safe-r: max(.5rem, env(safe-area-inset-right));
+  --safe-b: max(.5rem, env(safe-area-inset-bottom));
+  --safe-l: max(.5rem, env(safe-area-inset-left));
+  --safe-w: calc(100% - var(--safe-l) - var(--safe-r));
+  --kb: 0px;
+}
+/* The dialog is a transparent input shield. Its coordinate system stays in
+   viewport pixels even when a menu underneath it uses the game's sheet zoom. */
+#screen-arranger {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font: 600 var(--fs-3)/1.35 var(--font-ui);
+  touch-action: none;
+}
+#screen-arranger::backdrop { background: transparent; }
+.screen-arranger:not([open]) { display: none; }
+/* Draw inside the measured region, including regions clipped by a scroller. */
+.arrange-selection {
+  outline: 3px dashed var(--focus);
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 4px var(--bg);
+}
+#screen-arranger .arrange-tools {
+  position: absolute;
+  z-index: 1;
+  right: var(--safe-r);
+  bottom: max(var(--safe-b), var(--kb));
+  box-sizing: border-box;
+  display: grid;
+  width: min(24rem, var(--safe-w));
+  max-height: min(54svh, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: calc(var(--gap, .75rem) / 4);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-lg);
+  background: var(--surf-1);
+  color: var(--text);
+  scroll-padding: .75em;
+}
+#screen-arranger[data-edge="start"] .arrange-tools { right: auto; left: var(--safe-l); }
+#screen-arranger #screen-arranger-bar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap, .75rem) / 4);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+#screen-arranger #screen-arranger-bar select {
+  height: max(44px, 2.4em);
+  white-space: nowrap;
+  flex: 1 1 5em;
+  min-width: 44px;
+  text-overflow: ellipsis;
+}
+#screen-arranger #screen-arranger-bar :is(button, select) {
+  min-width: 44px;
+  padding-inline: .4em;
+}
+#arrange-controls:not([hidden]) {
+  display: grid;
+  gap: .4em;
+  padding: .4em;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+#screen-arranger .arrange-tools :is(h2, p) { margin: 0; }
+#screen-arranger .arrange-tools h2 { font-size: var(--fs-6); }
+#screen-arranger .arrange-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35em;
+  min-width: 0;
+}
+#screen-arranger .arrange-tools :is(button, select, input:not([type="checkbox"])) {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 44px;
+  padding: .35em .65em;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  background: var(--surf-3);
+  color: var(--text);
+  font: inherit;
+}
+#screen-arranger #arrange-controls > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .35em;
+}
+#screen-arranger .arrange-tools output {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#screen-arranger .arrange-tools #screen-arranger-cancel + button {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+}
+#screen-arranger .arrange-tools button { white-space: normal; }
+#screen-arranger .arrange-tools :is(button, select):enabled { cursor: pointer; }
+#screen-arranger .arrange-tools :disabled { color: var(--dim); border-style: dashed; }
+#screen-arranger :focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+:is(#datahub, .dh-tpopup) > :is(.dh-card, .dh-tpopup-card) {
+  min-height: 0;
+  max-height: 100%;
+}
+#datahub > .dh-card { height: min(880px, 100%); }
+@media (orientation: portrait) {
+  #screen-arranger .arrange-tools {
+    left: var(--safe-l);
+    width: auto;
+    max-height: min(26svh, calc(100% - var(--safe-t) - max(var(--safe-b), var(--kb))));
+  }
+  #screen-arranger[data-edge="start"] .arrange-tools {
+    right: var(--safe-r);
+    top: var(--safe-t);
+    bottom: auto;
+  }
+}
+@media (orientation: landscape) and (max-height: 32rem) {
+  #screen-arranger .arrange-tools { width: min(24rem, var(--safe-w)); }
+}
+/* Some menus keep placement in a dedicated editor. */
+#screen-arranger .arrange-row[hidden], #screen-arranger #arrange-controls > label[hidden] { display: none; }
+
+#arrange-controls > details summary {
+  display: list-item;
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+}
+#arrange-controls > details label:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5em, 7em);
+  align-items: center;
+  gap: .4em;
+}
+} /* @layer layout */
+
+@layer base {
+:root[data-ui-theme="endurance"] {
+  --r-lg: 20px;
+  --r-md: 12px;
+}
+:root[data-ui-theme="drafting"] {
+  --r-lg: 6px;
+  --r-md: 3px;
+  --r-sm: 2px;
+  --font-ui: system-ui, sans-serif;
+}
+:root[data-ui-theme="endurance"] :is(#hud, #announce, #game-metrics) {
+  --bg: var(--endurance-bg);
+  --carbon: var(--endurance-carbon);
+  --text: var(--endurance-text);
+}
+:root[data-ui-theme="drafting"] :is(#hud, #announce, #game-metrics) {
+  --bg: var(--drafting-bg);
+  --carbon: var(--drafting-carbon);
+  --text: var(--drafting-text);
+}
+:root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])),
+:root[data-ui-theme="endurance"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
+  --dim: var(--endurance-dim);
+  --plate-line: var(--endurance-line);
+}
+:root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])),
+:root[data-ui-theme="drafting"]:where(:not([data-ui-contrast="high"])) :is(#hud, #announce, #game-metrics) {
+  --dim: var(--drafting-dim);
+  --plate-line: var(--drafting-line);
+}
+}
+
+@layer components {
+/* Keep selection recognizable when team and flag colours coincide. The underline
+   stays within the label, leaving the independent keyboard focus ring visible. */
+button[role="tab"][aria-selected="true"] {
+  text-decoration: underline;
+  text-decoration-thickness: .12em;
+  text-underline-offset: .2em;
+}
+:root[data-ui-theme="endurance"] .sheet-head h2 {
+  font-family: Georgia, serif;
+  letter-spacing: .025em;
+}
+:root[data-ui-theme="drafting"] .sheet-head h2 {
+  font-style: normal;
+  letter-spacing: .08em;
+}
+}

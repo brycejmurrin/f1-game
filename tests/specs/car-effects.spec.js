@@ -79,7 +79,14 @@ test.describe("Car runtime effects", () => {
     expect(state).toEqual(expect.objectContaining({ ersDeploy: true }));
   });
 
-  test("brake glow stays off until braking heat crosses its draw threshold", async ({ page }) => {
+  // HOOK THRESHOLDS, NOT THE DRAW (audit 2026-11-09 W32 row 6). The brake-glow
+  // and exhaust-flame booleans below are what __apex.carEffects() computes from
+  // brakeHeat / exhaustPop against its OWN constants (js/agent/apex.js); the draw
+  // has separate gates (js/car/car-draw.js: ringOk adds a 40 m camera range,
+  // the flame adds flameOk) and nothing reports what was actually drawn. These
+  // tests pin the physics-side state and the hook's mirror of the threshold;
+  // a draw-side `__apex` field is the missing seam.
+  test("brake glow (hook threshold) stays off until braking heat crosses it", async ({ page }) => {
     await startCar(page, 40);
     const cold = await effects(page);
     expect(cold).toEqual(expect.objectContaining({ brakeGlow: false }));
@@ -132,7 +139,7 @@ test.describe("Car runtime effects", () => {
     expect(await effects(page)).toEqual(expect.objectContaining({ ersDeploy: true }));
   });
 
-  test("steady throttle does not leave the exhaust continuously flaming", async ({ page }) => {
+  test("steady throttle does not leave the exhaust flame state on (hook threshold)", async ({ page }) => {
     await startCar(page, 30);
     await page.evaluate(() => {
       window.__apex.setInput({ steer: 0, throttle: true, brake: false });
@@ -141,7 +148,7 @@ test.describe("Car runtime effects", () => {
     expect(await effects(page)).toEqual(expect.objectContaining({ exhaustFlame: false }));
   });
 
-  test("a throttle-lift transient can activate the exhaust flame", async ({ page }) => {
+  test("a throttle-lift transient can set the exhaust flame state (hook threshold)", async ({ page }) => {
     await startCar(page, 30);
     const observed = await page.evaluate(() => {
       if (typeof window.__apex.carEffects !== "function") return null;

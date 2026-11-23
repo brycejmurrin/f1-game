@@ -11,7 +11,7 @@
  *     end would become a pit-stop simulator — the failure the whole
  *     distance-fraction model exists to avoid (js/physics/tyre-model.js).
  *  2. THE FIELD DIVERGES. A grid that all picks the same plan is a procession,
- *     and js/physics/ai-drive.js's own TYRE comment cites strategy diversity as
+ *     and js/physics/ai-strategy.js's own TYRE comment cites strategy diversity as
  *     the largest lever a race controls over overtaking. Biasing only the stop
  *     COUNT is not enough — measured, it put 20 cars on one plan.
  *  3. STRATEGIES MIX. Harder rubber early, softer late, because a full tank
@@ -39,7 +39,7 @@ function load() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
-                   "js/car/parts.js", "js/physics/tyre-model.js", "js/physics/ai-drive.js"]) {
+                   "js/car/parts.js", "js/physics/tyre-model.js", "js/physics/ai-strategy.js", "js/physics/ai-drive.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return { A: vm.runInContext("AiDrive", ctx), T: vm.runInContext("TyreModel", ctx) };
@@ -206,6 +206,13 @@ test("splitStints covers the distance when rounding under-allocates and the last
   const out = A.splitStints(4, [1, 1, 1]);
   assert.equal([...out].reduce((a, v) => a + v, 0), 4);
   assert.ok([...out].every((v) => v >= 1));
+});
+
+test("degCost stays finite when life or length is nonfinite", () => {
+  assert.ok(Number.isFinite(A.degCost(5, NaN)));
+  assert.ok(Number.isFinite(A.degCost(NaN, 10)));
+  assert.ok(Number.isFinite(A.degCost(Infinity, 10)));
+  assert.equal(A.degCost(NaN, 10), A.degCost(0, 10));
 });
 
 // ── 4. The reactive rules ──────────────────────────────────────────────────

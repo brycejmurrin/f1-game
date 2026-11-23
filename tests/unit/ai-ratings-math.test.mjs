@@ -68,9 +68,11 @@ test("ai-ratings.mjs --json: craft/awareness/consistency are decorrelated", () =
   assert.equal(j.decorrelated, true);
   // Slice 3+: style axes are present and zero-mean by construction.
   assert.equal(j.style.present, true);
-  assert.deepEqual(j.styleAxes, ["aggression", "optimism"]);
+  assert.deepEqual(j.styleAxes, ["aggression", "optimism", "composure", "tyreCare", "qualiBias", "ersBias"]);
+  for (const ax of ["tyreCare", "qualiBias", "ersBias"]) assert.equal(j.style.sums[ax], 0, `${ax} is zero-mean (#1566)`);
   assert.equal(j.style.sums.aggression, 0);
   assert.equal(j.style.sums.optimism, 0);
+  assert.equal(j.style.sums.composure, 0);
   // Column means stay near the pre-decorrelation tip (±1.5).
   assert.ok(Math.abs(j.stats.craft.mean - 82.9) <= 1.5, `craft mean ${j.stats.craft.mean}`);
   assert.ok(Math.abs(j.stats.awareness.mean - 80.0) <= 1.5, `awareness mean ${j.stats.awareness.mean}`);
@@ -85,7 +87,7 @@ test("ai-race.mjs ratings dispatches (help and json)", () => {
     cwd: ROOT, encoding: "utf8", timeout: 15000,
   });
   assert.equal(help.status, 0, help.stderr);
-  assert.match(help.stdout, /ai-ratings/);
+  assert.equal(help.stdout, "ai-ratings — DriverRatings.BASE correlation census\n\n  node tools/check/ai-ratings.mjs [--json]\n\nNo race. No --wear. Owned by ai-racecraft.\n");
   const json = spawnSync(process.execPath, ["tools/check/ai-race.mjs", "ratings", "--json"], {
     cwd: ROOT, encoding: "utf8", timeout: 15000,
   });
@@ -98,8 +100,7 @@ test("ai-band.mjs --help exits 0 and names the Melder checklist", () => {
     cwd: ROOT, encoding: "utf8", timeout: 10000,
   });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /ai-band/);
-  assert.match(r.stdout, /--wear/);
+  assert.equal(r.stdout, "ai-band — rubber-band profile with a human on track\n\n  node tools/check/ai-band.mjs [--track monza] [--diff normal] [--seconds 90] [--runs 1] [--json]\n  every run: --wear off|light|real  (default off)\n\nOwned by ai-racecraft.\n");
 });
 
 test("defend-duel.mjs --help exits 0 before the VM boot and names the real path", () => {
@@ -109,7 +110,5 @@ test("defend-duel.mjs --help exits 0 before the VM boot and names the real path"
     cwd: ROOT, encoding: "utf8", timeout: 10000,
   });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /defend-duel/);
-  assert.match(r.stdout, /tools\/check\/defend-duel\.mjs/);
-  assert.doesNotMatch(r.stdout, /scratch\/defend-duel/);
+  assert.equal(r.stdout, "defend-duel — staged two-car defendPull ON vs OFF (VM, no browser)\n\n  node tools/check/defend-duel.mjs [--track monza] [--diff normal] [--fracs 4]\n       [--gaps 2,4,6,8,10] [--dxs -1.6,-0.9,...] [--dvs 1.0,2.0] [--secs 8]\n       [--pair 0,1] [--json out.json]\n\n  --help / -h   this text (exits before the game VM boots)\n\n");
 });

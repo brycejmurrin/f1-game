@@ -95,7 +95,11 @@ test("custom destinations cannot erase existing data or overlap the source", (t)
 test("sync-web.mjs imports the shared desktop stager, not a second allow-list", () => {
   const src = fs.readFileSync(SCRIPT, "utf8");
   assert.match(src, /tools\/desktop\/stage\.mjs/);
-  assert.match(src, /stageSite|stampStaged/);
+  assert.match(src, /stampStaged/);
+  // The same staging function the Pages deploy runs (stage.mjs CLI → stageSiteMinified),
+  // not the unminified stageSite: the APK must carry the bytes Pages ships.
+  assert.match(src, /import \{[^}]*\bstageSiteMinified\b[^}]*\} from "\.\.\/\.\.\/tools\/desktop\/stage\.mjs"/);
+  assert.doesNotMatch(src, /import \{[^}]*\bstageSite\b[,\s}]/, "the unminified stageSite must not be the default stager");
 });
 
 /* R3-ARCHITECTURE-11 (2026-10-10). Without --src, sync-web used ANY index.html
@@ -118,14 +122,14 @@ function fakeRoot(t) {
   return root;
 }
 
-test("sync-web restages instead of reusing a stale artifacts/site or _site", (t) => {
+test("sync-web restages instead of reusing a stale artifacts/site or _site", async (t) => {
   const root = fakeRoot(t);
   const artifacts = path.join(root, "artifacts", "site");
   stagedTree(artifacts, OLD);
   stagedTree(path.join(root, "_site"), null);   // an unstamped Pages stage: no provenance at all
   assert.equal(resolveSrc({ root, explicit: null, head: HEAD }), null, "neither tree is HEAD's");
   const calls = [];
-  const src = prepareSrc({
+  const src = await prepareSrc({
     root, explicit: null, head: HEAD, dev: false,
     stage: (dest, o) => { calls.push(["stage", dest, o.root]); fs.rmSync(dest, { recursive: true, force: true }); stagedTree(dest, null); },
     stamp: (dest, o) => { calls.push(["stamp", dest, o.root]); stagedTree(dest, HEAD); },
@@ -135,12 +139,12 @@ test("sync-web restages instead of reusing a stale artifacts/site or _site", (t)
   assert.match(fs.readFileSync(path.join(src, "index.html"), "utf8"), new RegExp(HEAD));
 });
 
-test("sync-web reuses a stage stamped from HEAD without restaging", (t) => {
+test("sync-web reuses a stage stamped from HEAD without restaging", async (t) => {
   const root = fakeRoot(t);
   stagedTree(path.join(root, "artifacts", "site"), OLD);
   stagedTree(path.join(root, "_site"), HEAD);
   const boom = () => { throw new Error("must not restage a current tree"); };
-  assert.equal(prepareSrc({ root, explicit: null, head: HEAD, clean: true, dev: false, stage: boom, stamp: boom }), path.join(root, "_site"));
+  assert.equal(await prepareSrc({ root, explicit: null, head: HEAD, clean: true, dev: false, stage: boom, stamp: boom }), path.join(root, "_site"));
   assert.equal(resolveSrc({ root, explicit: null, head: null }), null, "no HEAD (git failed): nothing is provably current");
 });
 
@@ -174,12 +178,12 @@ test("default destination overlap is rejected before deleting source or existing
   }
 });
 
-test("dirty same-HEAD trees are freshly staged, including --dev", (t) => {
+test("dirty same-HEAD trees are freshly staged, including --dev", async (t) => {
   for (const dev of [false, true]) {
     const root = fakeRoot(t), site = path.join(root, "artifacts", "site");
     stagedTree(site, HEAD);
     let staged = 0;
-    const src = prepareSrc({root, explicit: null, head: HEAD, clean: false, dev,
+    const src = await prepareSrc({root, explicit: null, head: HEAD, clean: false, dev,
       stage(dest) { staged++; stagedTree(dest, HEAD); }, stamp() {} });
     assert.equal(src, site);
     assert.equal(staged, 1, "same SHA cannot establish unchanged working-tree bytes");

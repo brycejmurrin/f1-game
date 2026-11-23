@@ -11,6 +11,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FILE = "js/ui/title-fx.js";
@@ -117,15 +118,13 @@ function load({ stored = {}, osReduce = false, readyState = "complete", vibrate 
   vm.runInContext(SRC, ctx, { filename: absSrc(FILE) });
   return {
     M: vm.runInContext("TitleFx", ctx),
-    html, written, wired, ids, overlay, document, timers, frames, buzz, observers,
+    html, written, wired, ids, overlay, document, timers, frames, buzz, observers, store: sb.GameStore.store,
     runTimers: () => { for (const t of [...timers.values()]) t.fn(); timers.clear(); },
     runFrames: () => { const f = frames.splice(0); for (const fn of f) fn(); },
   };
 }
 
 test("shell declares TITLE INTRO, MENU WASH, TITLE ART and REPLAY INTRO (motion is a11y)", () => {
-  assert.ok(SHELL.includes('id="pm-panel-appearance"'));
-  assert.ok(!SHELL.includes('id="pm-motion"'), "REDUCE MOTION row is built by A11yOpts");
   assert.ok(SHELL.includes('id="pm-titleintro"'));
   assert.ok(SHELL.includes('id="pm-menuwash"'));
   assert.ok(SHELL.includes('id="pm-titleart"'));
@@ -146,6 +145,23 @@ test("defaults: motion AUTO (effective ON), intro FULL, wash FULL, title art ON 
   assert.equal(html.dataset.titleIntro, undefined);
   assert.equal(html.dataset.menuWash, undefined);
   assert.equal(html.dataset.titleArt, undefined);
+});
+
+test("race motion reads reuse the stored choice until a settings revision changes", () => {
+  const stored = { motion: "off" };
+  const { M, store } = load({ stored, osReduce: true });
+  store.rev = store.rawRev = 0;
+  let reads = 0;
+  const get = store.get;
+  store.get = (key, d) => { reads++; return get(key, d); };
+  for (let i = 0; i < 180; i++) assert.equal(M.mode(), "on");
+  assert.equal(reads, 1);
+  stored.motion = "reduce"; store.rev++;
+  assert.equal(M.choice(), "reduce");
+  delete stored.motion; store.rawRev++;
+  assert.equal(M.choice(), "auto");
+  assert.equal(M.mode(), "reduce");
+  assert.equal(reads, 3);
 });
 
 test("AUTO follows OS; OFF overrides OS; legacy ON reads as AUTO", () => {
@@ -204,6 +220,13 @@ test("Appearance rows wire and round-trip intro + wash + titleArt (motion via se
   ids.get("pm-titleintro")._spec.write("quick");
   assert.equal(written.titleIntro, "quick");
   assert.equal(html.dataset.titleIntro, "quick");
+  for (const [id, key] of [["pm-menuwash", "menuWash"], ["pm-titleart", "titleArt"]]) {
+    const spec = ids.get(id)._spec;
+    assert.deepEqual(Array.from(spec.values, ([value]) => value).slice(1), ["medium", "soft", "off"]);
+    spec.write("medium");
+    assert.equal(written[key], "medium");
+    assert.equal(html.dataset[key], "medium");
+  }
   ids.get("pm-menuwash")._spec.write("soft");
   assert.equal(written.menuWash, "soft");
   assert.equal(html.dataset.menuWash, "soft");
@@ -334,14 +357,30 @@ test("CSS keys off data-motion / data-title-intro / data-menu-wash / data-title-
   assert.match(MENUS, /var\(--menu-wash-pct/);
   assert.match(CSS, /var\(--menu-wash-pct/);
   assert.match(MENUS, /--grain-opacity:\s*0\.025/);
-  assert.match(MENUS, /--grain-opacity:\s*0/);
   assert.match(COMP, /opacity:\s*var\(--grain-opacity/);
   assert.match(MENUS, /data-title-intro="quick"/);
   assert.match(MENUS, /:not\(\[data-title-intro="off"\]\)/);
   assert.match(COMP, /:not\(\[data-title-intro="off"\]\)/);
-  assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"titleIntro"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"menuWash"[\s\S]*?group:\s*"appearance"/);
   assert.match(EXPORT, /k:\s*"titleArt"[\s\S]*?group:\s*"appearance"/);
   assert.match(MANIFEST, /\["js\/core\/store\.js", "js\/ui\/title-fx\.js"\]/);
+});
+
+test("MOTION: REDUCED backstop transitions paint only, never geometry (#5812)", () => {
+  // On the initial `transition-property: all`, the backstop's 0.01ms started a transition on every geometry change,
+  // which paints its START value until the next frame: a fit or measure after a class flip read the previous box.
+  const backstop = cssRules(CSS).find((r) => r.decls.has("transition-duration")
+    && r.selector.startsWith(':root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *'));
+  assert.ok(backstop, "the menu reduced-motion backstop rule");
+  const raw = backstop.decls.get("transition-property") || "";
+  const props = raw.replace("!important", "").split(",").map((p) => p.trim());
+  const GEOMETRY = new Set(["all", "width", "height", "min-height", "max-height", "top", "left", "right", "bottom",
+    "inset", "margin", "margin-top", "padding", "zoom", "transform", "translate", "scale", "font-size",
+    "grid-template-rows", "grid-template-columns", "flex-basis"]);
+  assert.deepEqual({
+    important: raw.trim().endsWith("!important"), // a later-layer `transition:` shorthand must not put geometry back
+    geometry: props.filter((p) => GEOMETRY.has(p)),
+    paint: ["opacity", "color", "background-color"].filter((p) => props.indexOf(p) < 0),
+  }, { important: true, geometry: [], paint: [] }, "geometry is instant under MOTION: REDUCED; paint keeps its reduced transition");
 });

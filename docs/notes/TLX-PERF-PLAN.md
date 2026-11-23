@@ -1,5 +1,7 @@
 # TLX performance plan — the next backlog steps (2026-09-24)
 
+Summary: The working plan for the three.js backend's remaining per-frame costs (night lamp shadow, godray chain, draw records, post materials): steps, status, switches and checks. Results land in PERF-FINDINGS.
+
 The working plan for the three.js (TLX) backend's remaining per-frame costs after the
 compile-hitch work (PERF-FINDINGS §2ad-§2ak, all live). Evidence and results land in
 [PERF-FINDINGS.md](PERF-FINDINGS.md); this file is the plan and its status only.

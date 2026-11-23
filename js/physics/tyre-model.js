@@ -58,15 +58,12 @@ const TyreModel = (function () {
   // Not tanh(x): that saturates at 1 and NEVER falls, so the front could be
   // driven to 16° of slip with the force still at 100 % and a flick at full
   // lock turned the car 2.4× as far as a moderate input at no cost.
-  // Every developer account of tyre feel (docs/notes/PLAYER-PHYSICS-RESEARCH-
-  // 2026-09.md §4) says the same thing: the linear range and the peak are the
-  // easy part; the WIDTH of the plateau past the peak and the STEEPNESS of the
-  // fall after it are what make a tyre feel real and drivable.
+  // Tyre feel is the plateau's WIDTH past the peak and the fall's STEEPNESS
+  // (docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md §4).
   //
-  // Three regions, in units where every CS_* constant keeps its meaning: sin(x) up to the peak at x = π/2 (slope 1 at 0, peak force exactly
-  // mu), then a Gaussian fall from 1 to CURVE_FLOOR of width CURVE_FALL_W:
-  // ≥ 0.97 of peak out to x ≈ 2.1 (the "limit zone" a driver leans on), 0.85 at
-  // x = 3, the floor by x ≈ 5. Never oscillates, never negative, C¹ at the peak
+  // FRONT (CS_* units): sin(x·k) to the peak at x = CURVE_PEAK_X_F ≈ 1.272 (force mu),
+  // then a Gaussian fall to CURVE_FLOOR, width CURVE_FALL_W: ≥ 0.97 to x ≈ 1.8, 0.80
+  // at x = 3, floor by x ≈ 4. REAR: gentler (below). Never oscillates, never negative, C¹ at the peak
   // — a Magic Formula with a sharpening E goes NEGATIVE at spin-sized slip
   // angles, which this model reaches every time a car goes round. The floor is
   // the "forgiving" end of the range shipped titles use (0.73 relative in
@@ -74,9 +71,8 @@ const TyreModel = (function () {
   // overdriving costs a quarter of the grip, enough to make smooth inputs
   // faster than flicks without turning the limit into a cliff on a keyboard.
   const CURVE_PEAK_X = Math.PI / 2;
-  // Front-only peak abscissa (x = cs·α/μ). The exported CURVE_PEAK_X stays π/2
-  // so frontUtil/rearUtil keep 1.0 = at the curve's nominal peak; the front
-  // path reaches |F| = μ here earlier in α (~8° vs ~10.5° at CS_FRONT 130).
+  // Front peak abscissa (x = cs·α/μ); CURVE_PEAK_X stays π/2 (the rear's). frontUtil
+  // reads against it (player-forces.js): ~8° vs ~10.5° of α at CS_FRONT 130.
   const CURVE_PEAK_X_F = (Math.PI / 2) * (8.5 / 10.5); // ~8.4° peak slip at CS_FRONT 130 (was ~10.5°)
   const CURVE_FLOOR = 0.75;
   const CURVE_FALL_W = 1.4;
@@ -213,6 +209,15 @@ const TyreModel = (function () {
   const W_KERB = 0.35;
   const W_OFF = 1.20;
   const LOAD_MIN = 0.20, LOAD_MAX = 3.0;
+  // OFF-ROAD IS ONE PRICE FOR EVERY CAR (#4936). W_OFF used to sit inside each path's
+  // clamp, before that path's own divisor, so a metre of grass cost the player
+  // W_OFF/LOAD_REF = 2.45 load units and the AI W_OFF/LOAD_AI_REF = 0.98: the
+  // player's stint paid ~2.5x for the same excursion. It is now added AFTER the
+  // divide, on the shared normalised scale, at the player's existing price, so the
+  // player's load is unchanged to the bit and the AI pays the same for the same grass.
+  // LOAD_MAX_N is the player's old ceiling on that scale, shared by both paths.
+  const W_OFF_N = W_OFF / LOAD_REF;
+  const LOAD_MAX_N = LOAD_MAX / LOAD_REF;
 
   // Squared, not linear, for two reasons: tyre energy is not linear in load, and
   // it is what makes a tidy lap materially cheaper than a scrappy one — the
@@ -222,8 +227,8 @@ const TyreModel = (function () {
     const lng = clamp(fin(c.axFrac, 0), 0, 1);
     const slide = clamp(fin(c.skidIntensity, 0), 0, 1);
     const raw = clamp(LOAD_IDLE + W_LAT * lat * lat + W_LONG * lng * lng + W_SLIDE * slide
-      + (c.onKerb ? W_KERB : 0) + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX);
-    return raw / LOAD_REF;
+      + (c.onKerb ? W_KERB : 0), LOAD_MIN, LOAD_MAX);
+    return Math.min(LOAD_MAX_N, raw / LOAD_REF + (c.offroad ? W_OFF_N : 0));
   }
 
   // The AI has no slip angle to read, so its lateral term is implicit: a car
@@ -246,6 +251,7 @@ const TyreModel = (function () {
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
+  const LOAD_AI_CARE = 0.12;   // tyre care (#1566, AI-only style axis): ±12 % load
   // …AND THE AI NEEDS ITS OWN DIVISOR, for the reason the player has LOAD_REF.
   // The three constants above were authored to read ~1.03 for a mid driver, but
   // that is the base and the style term ALONE: the longitudinal term adds to
@@ -262,7 +268,8 @@ const TyreModel = (function () {
   // Tight, because unlike the player's path this one carries no geometry — only
   // consistency and longitudinal accel — so one divisor fits the calendar
   // instead of straddling a range the way LOAD_REF must. Divided AFTER the
-  // clamp, exactly as humanLoad does, so the two paths stay the same shape.
+  // clamp, exactly as humanLoad does, so the two paths stay the same shape; the
+  // off-road price (W_OFF_N) is added after that divide on both (#4936).
   const LOAD_AI_REF = 1.23;
   // An AI car's SIGNED longitudinal accel. `accSm` is engine pull only: written
   // on the throttle branch, never below 0 and stale under the brake, so the
@@ -275,8 +282,9 @@ const TyreModel = (function () {
   function aiLoad(c, aTop) {
     const cons = clamp(fin(c.consistency, 0.75), 0, 1);
     const lng = clamp(fin(Math.abs(aiLong(c)) / Math.max(1, aTop), 0), 0, 1);
-    return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
-      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
+    const care = 1 - LOAD_AI_CARE * clamp(fin(c.tyreCare, 0), -1, 1);
+    return Math.min(LOAD_MAX_N, clamp((LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng) * care,
+      LOAD_MIN, LOAD_MAX) / LOAD_AI_REF + (c.offroad ? W_OFF_N : 0));
   }
 
   // ── GRIP ──────────────────────────────────────────────────────────────────
@@ -306,7 +314,6 @@ const TyreModel = (function () {
     const w = Math.max(0, wear || 0);
     return clamp(1 - DROP_LIN * Math.min(w, 1) - DROP_CLIFF * Math.max(0, w - 1), GRIP_FLOOR, 1);
   }
-  function longFor(wear) { return 1 - (1 - gripFor(wear)) * LONG_SHARE; }
 
   // ── PER-AXLE ──────────────────────────────────────────────────────
   // One wear number makes every set go off the same way, and that is not how a
@@ -566,10 +573,7 @@ const TyreModel = (function () {
     soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
     medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
     hard:   { code: "H", life: 1.05, off: -0.004, tread: 0, colour: [0.90, 0.90, 0.93] },
-    // A player who owns no weather tyre gets the class fallback. Its dry-stat
-    // cost must travel with it just as a catalog row's does; AI cars have no
-    // tyreBaseMods and continue to use `off` instead, so this is not counted
-    // twice on the field.
+    // `mods` mirror parts.js; a car is fitted at the AI's cost instead (wetModsFor, #5289).
     inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24],
               mods: { speed: 0.92, accel: 0.93, cornering: 0.94, braking: 0.98 } },
     wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92],
@@ -599,13 +603,30 @@ const TyreModel = (function () {
   function weatherGrip(tread, w) {
     const table = PhysicsConsts.WET_GRIP, t = Number.isInteger(tread) && tread >= 0 && tread <= 2 ? tread : 0;
     w = clamp(w, 0, 1);
-    return w <= 0.5 ? 1 + (table.wet[t] - 1) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
+    return w <= 0.5 ? table.dry[t] + (table.wet[t] - table.dry[t]) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
   }
   function treadFor(weather, wetness) {
     if (Number.isFinite(wetness)) return wetness >= 0.72 ? 2 : wetness >= 0.25 ? 1 : 0;
     return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
+  function bestTread(w) {
+    const g0 = weatherGrip(0, w), g1 = weatherGrip(1, w), g2 = weatherGrip(2, w);
+    return g2 > g1 && g2 > g0 ? 2 : g1 > g0 ? 1 : 0;
+  }
+  // A car's grip tread: null = treadFor (the field); c.wxFollow = its one set (#5253).
+  function treadOf(c, weather, wetness) {
+    if (!c) return 0;
+    if (c.wxFollow && c.tyre) return c.tyre.tread || 0;
+    return c.tread == null ? treadFor(weather, wetness) : c.tread;
+  }
+  /** game.js gripMult(c): `mean` lap-mean wetness, `surface` the road under the car. */
+  function carGrip(c, weather, mean, surface) {
+    const g = weatherGrip(treadOf(c, weather, mean), surface);
+    if (!c || !c.wxFollow || !(c.wxMix < 1) || c.wxPrev == null) return g;
+    const g0 = weatherGrip(c.wxPrev, surface), k = clamp(c.wxMix, 0, 1);
+    return g0 + (g - g0) * k;
+  }
 
   // ── AQUAPLANING ───────────────────────────────────────────────────────────
   // Above a speed, a tyre in STANDING water rides up on a water wedge and the
@@ -656,7 +677,7 @@ const TyreModel = (function () {
   // the tread the conditions call for.
   const _aq = { mul: 1, safeV: Infinity };
   function aquaInto(c, speedStd, weather, wetness) {
-    const tread = c && c.tread != null ? c.tread : treadFor(weather, wetness);
+    const tread = treadOf(c, weather, wetness);
     _aq.mul = aquaplane(speedStd, wetness, tread);
     _aq.safeV = aquaplaneSafeV(wetness, tread);
     return _aq;
@@ -686,7 +707,14 @@ const TyreModel = (function () {
   }
 
   const STAT_KEYS = ["speed", "accel", "cornering", "braking"];
-  function applyCompound(c, record) {
+  // A treaded set costs a human what it costs an AI: 1 + off on speed, wear on only (#5289).
+  const _wetMods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
+  function wetModsFor(tread, wearOn) {
+    const t = AI_CLASS[classForTread(tread)];
+    _wetMods.speed = wearOn && t ? 1 + t.off : 1;
+    return _wetMods;
+  }
+  function applyCompound(c, record, wearOn) {
     if (!c) return null;
     c.tyre = record || classRecord("medium");
     // `null` is the competent-field sentinel: ordinary AI is assumed to have
@@ -699,7 +727,7 @@ const TyreModel = (function () {
     // Wear off (no plan) keeps the sentinel: that field cannot change tyres.
     if (c.tread !== null || (c.pitPlan && !c.human)) c.tread = c.tyre.tread || 0;
     if (c.tyreBaseMods) {
-      const out = c.mods || (c.mods = {}), tm = c.tyre.mods || null;
+      const out = c.mods || (c.mods = {}), tm = c.tyre.tread > 0 ? wetModsFor(c.tyre.tread, !!wearOn) : c.tyre.mods || null;
       for (const k of STAT_KEYS) out[k] = c.tyreBaseMods[k] * (tm && tm[k] != null ? tm[k] : 1);
     }
     return c.tyre;
@@ -760,7 +788,10 @@ const TyreModel = (function () {
     // and a re-grid cannot disagree about what "fresh" means.
     function fit(c, record) {
       if (!c) return;
-      applyCompound(c, record);
+      applyCompound(c, record, on());
+      // Wear off (no pit lane): a garage slick follows the weather (#5253, followWeather).
+      c.wxFollow = !on() && c.tread !== null && !!c.tyreOpt && !c.tyreOpt.wetTread;
+      c.wxMix = 1; c.wxPrev = null;
       c.tyreWear = 0;
       c.tyreWearF = 0; c.tyreWearR = 0;
       // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
@@ -873,7 +904,19 @@ const TyreModel = (function () {
     // Integrate one physics tick. Distance-based, not time-based: wear reaches
     // 1.0 after `lifeLaps` laps at load 1.0, which is what makes the constant
     // above mean what its name says regardless of pace, PACE or lap time.
+    // A following car's record (HUD letter) moves to the best tread for the lap mean;
+    // grip blends over WX_CHANGE_S, WX_HYST stops chatter. c.tread/c.mods never move.
+    const WX_CHANGE_S = 3, WX_HYST = 0.002;
+    function followWeather(c, dt) {
+      if (c.wxMix < 1) c.wxMix = Math.min(1, c.wxMix + (dt > 0 ? dt : 0) / WX_CHANGE_S);
+      const w = G.trackWetness ? G.trackWetness() : wetness(G.raceWeather, G.weatherArc);
+      const want = bestTread(w), cur = c.tyre ? c.tyre.tread || 0 : -1;
+      if (cur === want || (cur >= 0 && weatherGrip(want, w) < weatherGrip(cur, w) + WX_HYST)) return;
+      if (cur >= 0) { c.wxPrev = cur; c.wxMix = 0; }
+      c.tyre = want > 0 ? classRecord(classForTread(want)) : optionRecord(c.tyreOpt);
+    }
     function update(c, dt) {
+      if (c && c.wxFollow && !c.retired) followWeather(c, dt);
       if (!on() || !c || c.retired || c.finished) return;
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
@@ -985,7 +1028,12 @@ const TyreModel = (function () {
     function lapsLeft(c) {
       if (!on() || !c || !c.tyre) return null;
       const w = spent(c), n = lapsOn(c);
-      const life = n >= 1 && w > 0.02 ? n / w : planLaps(c.tyre.life, G.lapsTarget);
+      // WEAR IS CONTINUOUS, lapsOn IS WHOLE LAPS: n / w late in a lap divided n laps by the wear
+      // of nearly n + 1, so the rate read up to (n + 1) / n high — 2.0 laps left on a set that had
+      // 2.6 (measured, monaco rain, 5 laps: the whole AI field boxed wet-for-wet on it, and the
+      // HUD's laps-left sawtoothed down through every lap). Count the part of this lap driven.
+      const len = G.track && G.track.total, at = len > 0 && Number.isFinite(c.prog) ? Math.max(0, c.prog - (c._progGift || 0)) / len : 0;
+      const life = n >= 1 && w > 0.02 ? (n + (at - Math.floor(at))) / w : planLaps(c.tyre.life, G.lapsTarget);
       return Math.max(0, life * (1 - Math.min(1, w)));
     }
 
@@ -997,10 +1045,19 @@ const TyreModel = (function () {
       return Math.max(0, (tempOpt - T_WINDOW) - tempS);
     }
 
+    // The race HUD only needs the three display-temperature fields.
+    function temperatureInfo(c, out = {}) {
+      if (!c) return null;
+      out.tempS = c.tyreTs != null ? +c.tyreTs.toFixed(1) : null;
+      out.tempOpt = c.tyre ? +optTemp(c.tyre.life).toFixed(1) : null;
+      out.tempWindow = T_WINDOW;
+      return out;
+    }
+
     function info(c) {
       if (!c) return null;
       const t = c.tyre || null;
-      return {
+      return temperatureInfo(c, {
         level, on: on(),
         compound: t ? t.id : null,
         code: t ? t.code : null,
@@ -1014,10 +1071,7 @@ const TyreModel = (function () {
         load: +(c._tyreLoad || 0).toFixed(3),
         severity: +severity().toFixed(3),
         // Temperature and the two surface defects (see the TEMPERATURE block).
-        tempS: c.tyreTs != null ? +c.tyreTs.toFixed(1) : null,
         tempB: c.tyreTb != null ? +c.tyreTb.toFixed(1) : null,
-        tempOpt: t ? +optTemp(t.life).toFixed(1) : null,
-        tempWindow: T_WINDOW,
         ambient: ambient(),
         trackTemp: +trackTemp().toFixed(1),
         grain: +(c.tyreGrain || 0).toFixed(4),
@@ -1029,15 +1083,28 @@ const TyreModel = (function () {
         axleF: +axleSplit(c).f.toFixed(4),
         axleR: +axleSplit(c).r.toFixed(4),
         fuel: +fuelOf(c).toFixed(3),
-      };
+      });
+    }
+
+    // A WET ROAD AT THE LIGHTS FITS THE WEATHER'S TREAD to a car that carries its
+    // own garage slick (the player, a MY TEAM mate), as the field is fitted. The
+    // garage does not show the race's weather when the set is chosen, and a slick
+    // on a wet road is 0.72 grip against a field at 0.97: with wear off there is
+    // no pit lane at all, and with wear on it was a forced stop on lap 1 that a
+    // 3-lap race never recovers (Bryce's decision, #5251). A treaded set of their
+    // own stays theirs; the garage slick comes back at a stop on a dry road.
+    function sessionStartRecord(c, tread) {
+      const rec = startRecord(c, tread);
+      if (!(tread > 0) || !c || !c.tyreOpt || !rec || rec.tread > 0) return rec;
+      return classRecord(classForTread(tread));
     }
 
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
-      lapsOn, spent, lapsLeft, belowWindow, info, severity, ambient, trackTemp,
+      lapsOn, spent, lapsLeft, belowWindow, temperatureInfo, info, severity, ambient, trackTemp,
       level: () => level, setLevel, on, planLaps,
-      classRecord, optionRecord, applyCompound, startRecord,
+      classRecord, optionRecord, applyCompound: (c, record) => applyCompound(c, record, on()), startRecord: sessionStartRecord,
     };
   }
 
@@ -1057,13 +1124,13 @@ const TyreModel = (function () {
 
   return {
     LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_PEAK_X_F, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, lifeLaps, MIN_LIFE_LAPS,
-    gripFor, longFor, humanLoad, aiLoad, fuelFrac,
+    gripFor, humanLoad, aiLoad, fuelFrac,
     optTemp, warmRate, stepTemp, tempGrip, stepGrain, stepBlister,
     axleShare, AXLE_LONG, AXLE_REST, BB_REF, brakeBeta, brakeFront,
     T_AMBIENT, T_TRACK_DELTA, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, treadOf, bestTread, carGrip, classForTread, wetness, weatherGrip,
     aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, AQUA_LOSS, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,

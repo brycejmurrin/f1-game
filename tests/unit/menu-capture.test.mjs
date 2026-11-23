@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -30,6 +31,24 @@ test("cellFileBase and cellPaths agree", () => {
 test("cellRecorded requires both png and dom", () => {
   const dir = path.join(ROOT, "artifacts", "layout-audit", "gallery");
   assert.equal(cellRecorded(dir, "missing", "ios-iphone-landscape"), false);
+});
+
+test("resuming a native phone gallery replaces an older low-density capture", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "menu-capture-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const paths = cellPaths(dir, "title", "bryce-portrait");
+  fs.mkdirSync(path.dirname(paths.png));
+  fs.mkdirSync(path.dirname(paths.dom));
+  fs.writeFileSync(paths.dom, "{}");
+  const { viewports: [[, options]] } = parseMenuGalleryArgv(["--viewports=bryce-portrait"]);
+  const header = Buffer.alloc(24);
+  header.writeUInt32BE(0x89504e47);
+  for (const scale of [2, 3]) {
+    header.writeUInt32BE(393 * scale, 16);
+    header.writeUInt32BE(852 * scale, 20);
+    fs.writeFileSync(paths.png, header);
+    assert.equal(cellRecorded(dir, "title", "bryce-portrait", options), scale === 3);
+  }
 });
 
 test("parseMenuGalleryArgv picks screens and viewports", () => {
@@ -130,4 +149,41 @@ test("layout-audit --diff flags a new finding, credits a fix, and never counts a
     const green = cli("--diff", a, "--after=" + a);
     assert.equal(green.status, 0, green.stderr || green.stdout);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("layout-audit --diff with NOTHING compared is not a pass (all skipped, or no rows)", async () => {
+  // It printed `= diff ok: 0 cells compared` and exited 0 (2026-11-10).
+  const { diffAudits, formatDiff, diffVerdict } = await import("../../tools/ui/audit-diff.mjs");
+  const skippedOnly = { rows: [{ screen: "title", viewport: "v1", skipped: "timeout" }] };
+  const empty = { rows: [] };
+  for (const [b, a] of [[skippedOnly, skippedOnly], [empty, empty], [{ rows: [{ screen: "title", viewport: "v1" }] }, skippedOnly]]) {
+    const d = diffAudits(b, a);
+    assert.equal(d.compared, 0);
+    assert.equal(diffVerdict(d), "EMPTY");
+    assert.equal(formatDiff(d).at(-1).split(",")[0], "= diff EMPTY: 0 cells compared");
+  }
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "audit-diff-test-"));
+  try {
+    const f = path.join(dir, "skipped.json");
+    fs.writeFileSync(f, JSON.stringify(skippedOnly));
+    const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ui/layout-audit.mjs"), "--diff", f, "--after=" + f], { encoding: "utf8" });
+    assert.equal(r.status, 1, r.stderr || r.stdout);
+    assert.equal(r.stdout.trim().split("\n").at(-1).split(":")[0], "= diff EMPTY", "the CLI's verdict line");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("fit-audit's verdict: an error cell, any finding, or an empty matrix is a red", async () => {
+  // fit-audit skipped a cell whose MEASURE threw and never set an exit code
+  // (2026-11-10). fitVerdict is the pure half the browser loop feeds.
+  const { fitVerdict } = await import("../../tools/ui/fit-audit.mjs");
+  const vp = { width: 852, height: 393 };
+  const clean = { screen: "menu", viewport: vp, tap: [], spacing: [], type: [], overflow: [], marker: [] };
+  assert.equal(fitVerdict([clean]).code, 0);
+  const err = fitVerdict([clean, { screen: "select", viewport: vp, error: "Execution context was destroyed" }]);
+  assert.equal(err.code, 1);
+  assert.equal(err.errors.length, 1);
+  assert.equal(err.errors[0].split(": ")[0], "select 852x393", "the error names the cell");
+  assert.equal(fitVerdict([{ ...clean, tap: [{ el: "#x", w: 20, h: 20, sev: "under-floor" }] }]).code, 1);
+  assert.equal(fitVerdict([]).code, 1, "no cell measured is not clean");
 });

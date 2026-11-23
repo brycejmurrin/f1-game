@@ -1,5 +1,7 @@
 # Base-context audit — 2026-10-19
 
+Summary: Superseded by BASE-CONTEXT-2026-10-26: the 2026-10-19 trim and its stale 50–60k base.
+
 Superseded by: [Base context of a fresh Claude cloud session — 2026-10-26](BASE-CONTEXT-2026-10-26.md) — the ~50–60k figure below is stale; read that note for the current base.
 
 Goal (Bryce, 2026-10-19: "Yes, audit and trim"): fresh sessions read ~50–60k tokens per call before work starts.

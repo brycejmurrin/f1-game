@@ -1,1 +1,0 @@
-New: garage LIVERY editor — ENDPLATES colour for the front and rear wing endplates; HALO, SIDEPOD and COVER finishes now also reach the halo titanium, the sidepod colour panel and the cover stripe (#2796).

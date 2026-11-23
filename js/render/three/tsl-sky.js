@@ -15,11 +15,11 @@
  * twilight AND damps the corona (at night uSunDir is the MOON key pointing
  * high — without the gate a daytime sun disc paints among the stars).
  *
- * DELIVERY: instead of GLX's fullscreen triangle at far depth, the factory
- * returns a NODE for three's scene.backgroundNode — three renders it on its
- * internal camera-following background mesh (depthTest/Write off, drawn
- * first, vertex z pinned to w == the far plane), which is exactly the GLX
- * draw order. The RAY MATH stays identical to SKY_VS: per-pixel NDC from
+ * DELIVERY: tlx.js nulls scene.backgroundNode; the sky is a scene mesh at
+ * renderOrder 1e6 (far-plane depth, no depth write) AFTER the opaque world —
+ * not three's background pass. This factory's TSL NODE is what that mesh
+ * consumes (same GLX far-depth fullscreen-triangle ray setup). The RAY MATH
+ * stays identical to SKY_VS: per-pixel NDC from
  * screenUV, unprojected through uInvViewProj on both z planes (frameSky
  * carries invViewProj each frame — the env-probe pass in game.js swaps it
  * per face, so update() must NOT derive the ray from three's camera nodes).
@@ -35,7 +35,7 @@
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.sky = (THREE, TSL, ctx) =>
  *         ({ node, fallbackNode, uniforms, update,
- *            cacheStep, cacheWarm, cacheState, dispose })   // the cache four: no-ops without ctx.cache
+ *            cacheStep, cacheWarm, cacheDrawWarm, cacheState, dispose })   // the cache five: no-ops without ctx.cache
  * fallbackNode is a zenith→horizon screen-Y mix (no ray reconstruction).
  * tlx.js arms it on software GL: the full SKY_FS node either misses
  * (fog Color → beige void) or reconstructs rays badly against the HDR
@@ -61,14 +61,108 @@
 "use strict";
 
 (function () {
+  /* SKY ATMO (EXTREME `skyAtmo`, GfxQuality.feature; docs/notes/DESKTOP-GRAPHICS-TIERS-2026-11-20.md).
+   * Single-scattering Rayleigh + Mie along the view ray (AT.N steps) with a marched sun optical depth
+   * (AT.NL steps) per sample, in KILOMETRES so float32 keeps the planet-scale squares (|p|^2 ~ 4e7)
+   * inside its 24-bit mantissa. Constants: the Nishita / Bruneton sea-level values (Rayleigh scale
+   * height 8 km, Mie 1.2 km, Cornette-Shanks Mie phase g 0.76). This is the CPU twin of the TSL
+   * atmoFn in sky() below, line for line; the node tests run THIS (tests/unit/extreme-lights-sky.test.mjs), the
+   * fake-GL test builds the node. Absolute radiance is in units of AT.SUN; derive() rescales it so the
+   * model's zenith luminance equals the authored zenith's (the preset still owns brightness, the
+   * model owns hue and the zenith-to-horizon shape). */
+  const AT = Object.freeze({
+    R: 6360, RT: 6420, H0: 0.2, HR: 8.0, HM: 1.2,
+    BR: Object.freeze([5.802e-3, 13.558e-3, 33.1e-3]), BM: 10e-3, MEXT: 1.11, G: 0.76,
+    N: 12, NL: 4, SUN: 20,
+  });
+  const PI = Math.PI;
+  function phaseR(mu) { return 3 / (16 * PI) * (1 + mu * mu); }
+  function phaseM(mu, g) {
+    const gg = g === undefined ? AT.G : g, g2 = gg * gg;
+    return 3 / (8 * PI) * ((1 - g2) * (1 + mu * mu)) / ((2 + g2) * Math.pow(Math.max(1 + g2 - 2 * gg * mu, 1e-4), 1.5));
+  }
+  // Far root of |o + t d| = r for a point inside the sphere (o, d unit); 0 when it misses.
+  function exitT(ox, oy, oz, dx, dy, dz, r) {
+    const b = ox * dx + oy * dy + oz * dz, c = ox * ox + oy * oy + oz * oz - r * r;
+    return -b + Math.sqrt(Math.max(b * b - c, 0));
+  }
+  // [Rayleigh, Mie] optical depth (km of sea-level-equivalent air) from p toward s to the top.
+  // Both marches use QUADRATIC segments (boundaries L (i/n)^2): the 1.2 km Mie layer next to the
+  // start point gets short steps instead of one 15 km midpoint that skips it.
+  function sunDepth(px, py, pz, sx, sy, sz, out) {
+    const lt = exitT(px, py, pz, sx, sy, sz, AT.RT);
+    let r = 0, m = 0;
+    for (let j = 0; j < AT.NL; j++) {
+      const a = j / AT.NL, b = (j + 1) / AT.NL, t0 = lt * a * a, t1 = lt * b * b, lds = t1 - t0, t = (t0 + t1) * 0.5;
+      const qx = px + sx * t, qy = py + sy * t, qz = pz + sz * t;
+      const h = Math.max(Math.hypot(qx, qy, qz) - AT.R, 0);
+      r += Math.exp(-h / AT.HR) * lds; m += Math.exp(-h / AT.HM) * lds;
+    }
+    out[0] = r; out[1] = m;
+    return out;
+  }
+  // Optical depth [R, M] of the whole view ray (the horizon is the long one).
+  function viewDepth(d) {
+    const oy = AT.R + AT.H0, tMax = exitT(0, oy, 0, d[0], d[1], d[2], AT.RT);
+    let r = 0, m = 0;
+    for (let i = 0; i < AT.N; i++) {
+      const a = i / AT.N, b = (i + 1) / AT.N, t0 = tMax * a * a, t1 = tMax * b * b, ds = t1 - t0, t = (t0 + t1) * 0.5;
+      const h = Math.max(Math.hypot(d[0] * t, oy + d[1] * t, d[2] * t) - AT.R, 0);
+      r += Math.exp(-h / AT.HR) * ds; m += Math.exp(-h / AT.HM) * ds;
+    }
+    return [r, m];
+  }
+  // Transmittance of sunlight reaching the viewer (the sun disc's own colour).
+  function sunTransmit(s) {
+    const od = sunDepth(0, AT.R + AT.H0, 0, s[0], s[1], s[2], [0, 0]);
+    return AT.BR.map((b) => Math.exp(-(b * od[0] + AT.BM * AT.MEXT * od[1])));
+  }
+  // In-scattered radiance along unit view dir d for unit sun dir s: [r, g, b] in units of AT.SUN.
+  // Segments are QUADRATIC in t (boundaries tMax (i/N)^2): the dense air next to the viewer gets the
+  // short ones. Each segment integrates exactly for its midpoint density (Hillaire 2020's
+  // energy-conserving form): view transmittance at its start x sun transmittance x (1 - e^-st ds)/st,
+  // so a long horizon segment whose blue optical depth is > 1 does not lose its in-scatter.
+  const _od = [0, 0];
+  function scatter(d, s) {
+    const oy = AT.R + AT.H0, tMax = exitT(0, oy, 0, d[0], d[1], d[2], AT.RT), BMe = AT.BM * AT.MEXT;
+    const sR = [0, 0, 0], sM = [0, 0, 0], tv = [1, 1, 1];
+    for (let i = 0; i < AT.N; i++) {
+      const a = i / AT.N, b = (i + 1) / AT.N, t0 = tMax * a * a, t1 = tMax * b * b, ds = t1 - t0, t = (t0 + t1) * 0.5;
+      const px = d[0] * t, py = oy + d[1] * t, pz = d[2] * t;
+      const h = Math.max(Math.hypot(px, py, pz) - AT.R, 0);
+      const rr = Math.exp(-h / AT.HR), rm = Math.exp(-h / AT.HM);
+      sunDepth(px, py, pz, s[0], s[1], s[2], _od);
+      for (let k = 0; k < 3; k++) {
+        const st = AT.BR[k] * rr + BMe * rm, seg = Math.exp(-st * ds);
+        const w = tv[k] * Math.exp(-(AT.BR[k] * _od[0] + BMe * _od[1])) * (1 - seg) / Math.max(st, 1e-9);
+        sR[k] += w * rr; sM[k] += w * rm; tv[k] *= seg;
+      }
+    }
+    const mu = d[0] * s[0] + d[1] * s[1] + d[2] * s[2], pr = phaseR(mu), pm = phaseM(mu);
+    return [0, 1, 2].map((k) => (sR[k] * AT.BR[k] * pr + sM[k] * AT.BM * pm) * AT.SUN);
+  }
+  const lum = (c) => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+  // The derive() exposure: authored zenith luminance over the model's, clamped so a sun far below the
+  // horizon (model ~0) cannot blow up, and 0 when either is not a number.
+  function exposure(sunDir, authoredZenith) {
+    const z = scatter([0, 1, 0], sunDir), lz = lum(z), la = lum(authoredZenith);
+    const k = la / Math.max(lz, 1e-6);
+    return k > 0 && k < 1e4 ? k : (k >= 1e4 ? 1e4 : 0);
+  }
+  const SkyAtmo = Object.freeze({ AT, phaseR, phaseM, sunDepth, viewDepth, sunTransmit, scatter, exposure, lum });
+
   function sky(THREE, TSL, ctx) {
     const {
-      Fn, If, uniform, texture, positionGeometry,
-      float, vec2, vec3, vec4,
+      Fn, If, Loop, uniform, texture, positionGeometry,
+      float, int, vec2, vec3, vec4, sqrt,
       screenUV, screenCoordinate,
       fract, floor, dot, mix, smoothstep, clamp, pow, exp,
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
+    // DESCENDING smoothstep (edge0 > edge1 reads 1 below `hi`, 0 above `lo`) written as the ascending builtin
+    // flipped: GLSL ES 3.00 leaves smoothstep undefined for edge0 >= edge1 (#5699 row 8). Same value wherever
+    // the descending form was defined. tests/unit/tlx-hunt3.test.mjs refuses a literal descending call.
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
     // The 0..1 image uv of the scene pass: screenUV, or (fixed targets, #2655)
     // the fragment over the LOGICAL scene size (tsl-viewport.js).
     const imageUV = (ctx && ctx.vp && ctx.sceneView) ? ctx.vp.uv(ctx.sceneView) : screenUV;
@@ -112,6 +206,11 @@
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
 
+    // SKY ATMO switch (see the A uniforms below): once, at factory time. ctx.atmo === false forces it off.
+    const ATMO = !(ctx && ctx.atmo === false) && (() => {
+      try { return typeof GfxQuality !== "undefined" && GfxQuality.feature("skyAtmo") === true; } catch (_) { return false; }
+    })();
+
     /* the 28 uniforms (drawSky upload in js/render/glx/glx.js) */
     const U = {
       invViewProj:   uniform(new THREE.Matrix4()),
@@ -147,8 +246,8 @@
     /* UNIFORM-ONLY TERMS, hoisted (TLX perf hunt E5). Every value below is a
      * pure function of the U uniforms, so the GPU used to evaluate it once per
      * uncovered sky pixel (~0.5 M a frame at 1080p, again in the mirror). They
-     * are derived ONCE per update() in derive(), in the same arithmetic as the
-     * per-pixel graph did (glsl-sky.js SKY_FS still spells them per pixel and
+     * now update when lighting changes, while drift and dither follow the clock.
+     * The arithmetic matches the per-pixel graph (glsl-sky.js SKY_FS still spells them per pixel and
      * stays the source of truth; only float rounding may differ in the last
      * ulp). The noise, the ray and every per-pixel term are untouched. */
     const v3 = () => uniform(new THREE.Vector3());
@@ -163,24 +262,42 @@
       bankThresh: uniform(0.0), bankK: uniform(0.0),
       topK: uniform(0.0), topTint: v3(), topWarm: uniform(0.0), cloudBot: v3(),
       silverK: uniform(0.0), silverCol: v3(), washCol: v3(),
-      mieDamp: uniform(0.0), mieK: uniform(0.0),
+      mieK: uniform(0.0),
       sunHLen: uniform(0.0), sunHn: v2(), hGlowCol: v3(),
-      coronaDamp: uniform(0.0), golden: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
+      coronaDamp: uniform(0.0), sunWarm: v3(), aurExp: uniform(0.0),
       aurCol: v3(), squash: uniform(0.0), discOut: uniform(0.0), discIn: uniform(0.0),
       discCore: v3(), starThresh: uniform(0.0), dthOff: uniform(0.0),
       // E1 cache lookup: on/off and the per-channel cp offset since the bake.
       cacheOn: uniform(0.0), cD1: v2(), cD3: v2(), cDb: v2(),
     };
+    /* SKY ATMO switch, decided once at factory time (a compile-time branch: off, the graph below is
+     * today's node for node). ctx.atmo === false forces it off (tests, a caller that must not). The
+     * A uniforms are derive()d: w = atmosphere weight (0 at night, under full overcast and whenever
+     * ATMO is off), k = the exposure that pins the model's zenith luminance to the authored zenith,
+     * shOff = the cloud-plane step toward the sun for the cloud self-shadow tap, shK / silK = the
+     * cloud self-shadow and phase silver-lining strengths. A.on is ATMO (declared above U; the
+     * typeof keeps a harness that evaluates only this stretch on today's path). */
+    const A = { on: typeof ATMO !== "undefined" && ATMO === true,
+      w: uniform(0.0), k: uniform(0.0), shOff: uniform(new THREE.Vector2()), shK: uniform(0.0), silK: uniform(0.0) };
     const C = ctx && ctx.cache ? makeCache() : null;
     const sstep = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
     const clamp01 = (x) => Math.min(1, Math.max(0, x));
     const lerp = (a, b, t) => a + (b - a) * t;
     const set3 = (u, x, y, z) => u.value.set(x, y, z);
     const lid = (a, b) => (a + b) * 1.25;
-    // update()'s frameSky readers, hoisted: update + derive run every frame, so
+    // update()'s frameSky readers, hoisted: update runs every frame, so
     // no closure or array is minted per call (#3115 F8/F9).
-    const s3 = (u, a) => { if (a) u.value.set(a[0], a[1], a[2]); };
-    const s1 = (u, v, def) => { u.value = v !== undefined ? v : def; };
+    let lightingChanged = false;
+    const s3 = (u, a, derived = true) => {
+      if (a && (u.value.x !== a[0] || u.value.y !== a[1] || u.value.z !== a[2])) {
+        u.value.set(a[0], a[1], a[2]);
+        if (derived) lightingChanged = true;
+      }
+    };
+    const s1 = (u, v, def) => {
+      const next = v !== undefined ? v : def;
+      if (u.value !== next) { u.value = next; lightingChanged = true; }
+    };
     const NO_GLOW = Object.freeze([0, 0, 0]);
     function derive() {
       const sd = U.sunDir.value, sc = U.sunColor.value, ze = U.zenith.value, ho = U.horizon.value;
@@ -216,12 +333,7 @@
       D.lowK.value = (1 - sstep(0.0, 0.60, sunE)) * (1 - overcast * 0.85);
       const lc = clamp01(sunE * 3.0);
       set3(D.lowColor, lerp(0.90, 1.0, lc), lerp(0.26, 0.66, lc), lerp(0.03, 0.12, lc));
-      // Clouds: drift, coverage window, enrichment gates, the lit model's colours.
-      const cT = U.time.value * U.cloudSpeed.value;
-      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
-      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
-      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
-      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      // Clouds: coverage window, enrichment gates, the lit model's colours.
       D.covLo.value = 0.50 - cloud * 0.42;
       const rich = Math.max(daytime, twilight);
       D.cloudRich.value = rich;
@@ -231,7 +343,6 @@
       const sunBright = Math.max(sc.x, Math.max(sc.y, sc.z));
       const eff = lerp(sunBright, Math.min(sunBright, 0.55), overcast);
       const golden = 1 - sstep(0.0, 0.45, sunE);   // goldenC == golden (the same expression)
-      D.golden.value = golden;
       D.topK.value = eff * 0.62 + 0.38;
       const tk = lerp(1.45, 2.6, golden);
       set3(D.topTint, sc.x * tk, sc.y * tk, sc.z * tk);
@@ -249,7 +360,6 @@
       // Mie + the horizon glow in the sun's compass direction.
       // sunDir is the moon key at night: solar lobes must not follow it.
       const mieDamp = (1 - overcast * 0.85) * (1 - night);
-      D.mieDamp.value = mieDamp;
       D.mieK.value = 0.22 * mieDamp * U.mieScatter.value;
       const hLen = Math.hypot(sd.x, sd.z);
       D.sunHLen.value = hLen;
@@ -259,20 +369,43 @@
       // Corona, aureole and disc.
       const cd = (1 - overcast * 0.92) * (1 - night);
       D.coronaDamp.value = cd;
-      const sw = [lerp(sc.x, sc.x * 1.18, golden), lerp(sc.y, sc.y * 0.52, golden), lerp(sc.z, sc.z * 0.24, golden)];
-      set3(D.sunWarm, sw[0], sw[1], sw[2]);
+      const sw0 = lerp(sc.x, sc.x * 1.18, golden), sw1 = lerp(sc.y, sc.y * 0.52, golden), sw2 = lerp(sc.z, sc.z * 0.24, golden);   // locals: no per-frame array
+      set3(D.sunWarm, sw0, sw1, sw2);
       D.aurExp.value = lerp(20.0, 8.0, golden);
       const ak = (golden * 0.55 + 0.55) * cd * U.coronaAureole.value;
-      set3(D.aurCol, sw[0] * ak, sw[1] * ak, sw[2] * ak);
+      set3(D.aurCol, sw0 * ak, sw1 * ak, sw2 * ak);
       D.squash.value = lerp(1.0, lerp(1.0, 1.6, golden), U.sunSquash.value);
       D.discOut.value = lerp(0.018, 0.028, golden) * U.sunDiscSize.value;
       D.discIn.value = U.sunDiscSize.value * 0.006;
-      set3(D.discCore, lerp(2.3, sw[0] * 2.8, golden), lerp(2.2, sw[1] * 2.8, golden), lerp(1.9, sw[2] * 2.8, golden));
-      // Star spawn window; the dither's time step (float32 like the GPU's floor).
+      set3(D.discCore, lerp(2.3, sw0 * 2.8, golden), lerp(2.2, sw1 * 2.8, golden), lerp(1.9, sw2 * 2.8, golden));
+      // Star spawn window.
       D.starThresh.value = Math.min(0.9994, 1.0 - U.starDensity.value * (1.0 - 0.9968));
-      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
-      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
-      if (C) cacheSync();
+      if (A.on) atmoDerive(night, overcast, rich);
+    }
+    // SKY ATMO's per-frame uniforms. The exposure march (SkyAtmo.exposure, ~50 exp) re-runs only when
+    // the sun direction or the authored zenith moved; the painted solar lobes (Mie mix, compass glow,
+    // aureole) step aside by the atmosphere weight, because the model already draws its own Mie lobe.
+    let _atX = NaN, _atY = NaN, _atZ = NaN, _atR = NaN, _atG = NaN, _atB = NaN;
+    function atmoDerive(night, overcast, rich) {
+      const sd = U.sunDir.value, ze = U.zenith.value;
+      const w = (1 - night) * (1 - overcast);
+      A.w.value = w;
+      if (w > 0 && (sd.x !== _atX || sd.y !== _atY || sd.z !== _atZ || ze.x !== _atR || ze.y !== _atG || ze.z !== _atB)) {
+        _atX = sd.x; _atY = sd.y; _atZ = sd.z; _atR = ze.x; _atG = ze.y; _atB = ze.z;
+        const l = Math.hypot(sd.x, sd.y, sd.z) || 1;
+        A.k.value = SkyAtmo.exposure([sd.x / l, sd.y / l, sd.z / l], [ze.x, ze.y, ze.z]);
+      }
+      const damp = 1 - 0.85 * w;
+      D.mieK.value *= damp;
+      D.hGlowCol.value.multiplyScalar(damp);
+      D.aurCol.value.multiplyScalar(1 - 0.6 * w);
+      // Self-shadow tap: the sun's compass direction on the cloud plane, longer for a low sun (a deck
+      // ~0.05 cp thick seen along the sun ray), capped at 0.2 cp so the tap plus a drift offset (re-baked
+      // at MARGIN/2 = 0.25) stays inside the cache window's 0.5 cp margin.
+      const reach = Math.min(0.2, 0.05 / Math.max(sd.y, 0.25));
+      A.shOff.value.set(D.sunHn.value.x * reach, D.sunHn.value.y * reach);
+      A.shK.value = rich * (1 - overcast * 0.7) * (1 - night) * 0.75;
+      A.silK.value = D.silverK.value * (1 - night) * 0.9;
     }
 
     /* THE CLOUD NOISE CACHE (TLX perf hunt E1).
@@ -420,6 +553,33 @@
       C.foT[0] = F.oT.value.x; C.foT[1] = F.oT.value.y; C.fob[0] = F.ob.value.x; C.fob[1] = F.ob.value.y;
       cacheSync();
     }
+    /** The draw warm (tlx.js drawWarmStage): one zero-height band into the
+     * back target, so the bake's pipeline is built by render(), keyed exactly
+     * as cacheStep's. cacheWarm's compileAsync takes renderer.depth (true)
+     * while render() takes the target's depthBuffer (false here), so on WebGPU
+     * the compiled pipeline never matched: census 41021224706 built it
+     * mid-race from cacheStep. y0 = y1 collapses the band: no texel changes.
+     * Returns the number of draws (0 or 1). */
+    function cacheDrawWarm(renderer) {
+      if (!C || C.dead || !renderer) return 0;
+      const t = renderer.getRenderTarget(), mrt = renderer.getMRT ? renderer.getMRT() : null, ac = renderer.autoClear;
+      const y0 = C.F.y0.value, y1 = C.F.y1.value;
+      try {
+        if (mrt) renderer.setMRT(null);
+        renderer.autoClear = false;
+        C.F.y0.value = -1; C.F.y1.value = -1;
+        renderer.setRenderTarget(C.rts[1 - C.front]);
+        renderer.render(C.scene, C.cam);
+        return 1;
+      } catch (_) {
+        return 0;   // cacheStep reports a real failure; the warm only loses its head start
+      } finally {
+        C.F.y0.value = y0; C.F.y1.value = y1;
+        renderer.autoClear = ac;
+        renderer.setRenderTarget(t);
+        if (mrt) renderer.setMRT(mrt);
+      }
+    }
     /** The warm scopes its target/MRT too: optional-cache retirement must
      * happen after these references are released, including compile rejection. */
     async function cacheWarm(renderer) {
@@ -451,7 +611,20 @@
         fills: C.fills, bands: C.bands, maxOff: +C.maxOff.toFixed(4), dead: C.dead } : null;
     }
     function dispose() { retireCache(); }
+    // A steady sky still animates clouds and dithering as the clock advances.
+    function updateClock() {
+      const cT = U.time.value * U.cloudSpeed.value;
+      D.drift1.value.set(cT * 0.0028, cT * 0.0011);
+      D.drift2.value.set(cT * 0.0017, cT * 0.0023);
+      D.bankDrift.value.set(cT * 0.0028 * 1.4, cT * 0.0011 * 1.4);
+      D.thickOff.value.set(cT * 0.00035 + 3.1, 1.7);
+      // Match the GPU's float32 time step.
+      const step60 = Math.floor(Math.fround(Math.fround(U.time.value) * 60.0));
+      D.dthOff.value = (step60 - 64 * Math.floor(step60 / 64)) * 5.588238;   // GLSL mod(): never negative
+      if (C) cacheSync();
+    }
     derive();
+    updateClock();
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
      * js/render/glx/glx.js upload exactly (each frameSky field maps to the same-
@@ -464,31 +637,80 @@
       s3(U.horizon, sky.horizon);
       s3(U.sunDir, sky.sunDir);
       s3(U.sunColor, sky.sunColor);
-      U.stars.value = sky.stars ? 1 : 0;
+      s1(U.stars, sky.stars ? 1 : 0, 0);
       s1(U.cloud, sky.cloud, 0);
-      s1(U.time, sky.time, 0);
-      s1(U.moon, sky.moon, 0);
-      s3(U.cityGlow, sky.cityGlow || NO_GLOW);
-      s1(U.starBright, sky.starBright, 1);
-      s1(U.cloudSpeed, sky.cloudSpeed, 1);
-      s1(U.skyGrad, sky.skyGrad, 0.35);
+      U.time.value = sky.time !== undefined ? sky.time : 0;
+      // Only controls read by derive() invalidate its lighting colors and factors.
+      U.moon.value = sky.moon !== undefined ? sky.moon : 0;
+      s3(U.cityGlow, sky.cityGlow || NO_GLOW, false);
+      U.starBright.value = sky.starBright !== undefined ? sky.starBright : 1;
+      U.cloudSpeed.value = sky.cloudSpeed !== undefined ? sky.cloudSpeed : 1;
+      U.skyGrad.value = sky.skyGrad !== undefined ? sky.skyGrad : 0.35;
       s1(U.starDensity, sky.starDensity, 1);
-      s1(U.daySkyBlue, sky.daySkyBlue, 1);
+      U.daySkyBlue.value = sky.daySkyBlue !== undefined ? sky.daySkyBlue : 1;
       s1(U.mieScatter, sky.mieScatter, 1);
       s1(U.cloudSilver, sky.cloudSilver, 1);
       s1(U.coronaAureole, sky.coronaAureole, 1);
       s1(U.sunDiscSize, sky.sunDiscSize, 1);
-      s1(U.starSize, sky.starSize, 1);
-      s1(U.starTwinkle, sky.starTwinkle, 1);
-      s1(U.moonDiscSize, sky.moonDiscSize, 1);
-      s1(U.moonHalo, sky.moonHalo, 1);
-      s1(U.sunCorona, sky.sunCorona, 1);
+      U.starSize.value = sky.starSize !== undefined ? sky.starSize : 1;
+      U.starTwinkle.value = sky.starTwinkle !== undefined ? sky.starTwinkle : 1;
+      U.moonDiscSize.value = sky.moonDiscSize !== undefined ? sky.moonDiscSize : 1;
+      U.moonHalo.value = sky.moonHalo !== undefined ? sky.moonHalo : 1;
+      U.sunCorona.value = sky.sunCorona !== undefined ? sky.sunCorona : 1;
       s1(U.sunSquash, sky.sunSquash, 1);
-      s1(U.cityGlowReach, sky.cityGlowReach, 1);
+      U.cityGlowReach.value = sky.cityGlowReach !== undefined ? sky.cityGlowReach : 1;
       s1(U.cloudDef, sky.cloudDef, 1);
-      s1(U.lightning, sky.lightning, 0);
-      derive();
+      U.lightning.value = sky.lightning !== undefined ? sky.lightning : 0;
+      updateClock();
+      if (lightingChanged) { derive(); lightingChanged = false; }
     }
+
+    /* SKY ATMO: the TSL twin of SkyAtmo.scatter (top of this file), built only when ATMO is on. One
+     * layouted function: AT.N view samples, each with an AT.NL-step march to the sun (48 exp pairs a
+     * sky pixel, desktop EXTREME only). Heights clamp at 0, so a sun below the horizon marches through
+     * the ground at full density and the sample goes dark: the planet's shadow, with no branch. */
+    const atmoFn = ATMO ? Fn(([dIn, sIn]) => {
+      const d = vec3(dIn).toVar(), s = vec3(sIn).toVar();
+      const oy = float(AT.R + AT.H0);
+      const b = oy.mul(d.y).toVar();
+      const tMax = b.negate().add(sqrt(max(b.mul(b).sub((AT.R + AT.H0) * (AT.R + AT.H0) - AT.RT * AT.RT), 0.0)));
+      const tM = tMax.toVar();
+      const bR = vec3(AT.BR[0], AT.BR[1], AT.BR[2]);
+      const BMe = AT.BM * AT.MEXT;
+      const sumR = vec3(0.0).toVar(), sumM = vec3(0.0).toVar(), tv = vec3(1.0).toVar();
+      Loop({ start: int(0), end: int(AT.N), type: "int", condition: "<" }, ({ i }) => {
+        // Quadratic segments, exact per-segment in-scatter: SkyAtmo.scatter, line for line.
+        const a = float(i).div(AT.N), b1 = float(i).add(1.0).div(AT.N);
+        const t0 = tM.mul(a).mul(a), t1 = tM.mul(b1).mul(b1);
+        const ds = t1.sub(t0).toVar(), t = t0.add(t1).mul(0.5).toVar();
+        const p = vec3(d.x.mul(t), d.y.mul(t).add(oy), d.z.mul(t)).toVar();
+        const h = max(length(p).sub(AT.R), 0.0).toVar();
+        const rr = exp(h.mul(-1 / AT.HR)).toVar(), rm = exp(h.mul(-1 / AT.HM)).toVar();
+        const lb = dot(p, s).toVar();
+        const lt = lb.negate().add(sqrt(max(lb.mul(lb).sub(dot(p, p).sub(AT.RT * AT.RT)), 0.0)));
+        const lt2 = lt.toVar();
+        const lR = float(0.0).toVar(), lM = float(0.0).toVar();
+        Loop({ start: int(0), end: int(AT.NL), type: "int", condition: "<" }, ({ i: j }) => {
+          const la = float(j).div(AT.NL), lb1 = float(j).add(1.0).div(AT.NL);
+          const l0 = lt2.mul(la).mul(la), l1 = lt2.mul(lb1).mul(lb1);
+          const lds = l1.sub(l0).toVar();
+          const lh = max(length(p.add(s.mul(l0.add(l1).mul(0.5)))).sub(AT.R), 0.0).toVar();
+          lR.addAssign(exp(lh.mul(-1 / AT.HR)).mul(lds));
+          lM.addAssign(exp(lh.mul(-1 / AT.HM)).mul(lds));
+        });
+        const st = bR.mul(rr).add(rm.mul(BMe)).toVar();
+        const seg = exp(st.mul(ds).negate()).toVar();
+        const w = tv.mul(exp(bR.mul(lR).add(lM.mul(BMe)).negate())).mul(seg.oneMinus()).div(max(st, vec3(1e-9))).toVar();
+        sumR.addAssign(w.mul(rr)); sumM.addAssign(w.mul(rm));
+        tv.mulAssign(seg);
+      });
+      const mu = dot(d, s).toVar();
+      const g = AT.G, g2 = g * g;
+      const pR = mu.mul(mu).add(1.0).mul(3 / (16 * Math.PI));
+      const pM = mu.mul(mu).add(1.0).mul(3 / (8 * Math.PI) * (1 - g2) / (2 + g2))
+        .div(pow(max(mu.mul(-2 * g).add(1 + g2), 1e-4), 1.5));
+      return sumR.mul(bR).mul(pR).add(sumM.mul(AT.BM).mul(pM)).mul(AT.SUN);
+    }).setLayout({ name: "apexSkyAtmo", type: "vec3", inputs: [{ name: "dIn", type: "vec3" }, { name: "sIn", type: "vec3" }] }) : null;
 
     /* the fragment (SKY_VS ray math + SKY_FS in js/render/glx/shaders/glsl-sky.js) */
     const node = Fn(() => {
@@ -561,6 +783,21 @@
         const gnd = clamp(up.negate().mul(5.0), 0.0, 1.0);
         c.assign(mix(U.horizon.mul(0.85), vec3(0.035, 0.030, 0.022), gnd.mul(gnd)));
       });
+      // SKY ATMO: the physical dome replaces the painted gradient by A.w (0 at night and under full
+      // overcast, where the painted path above stays the whole answer). Below the horizon the earth
+      // blends from the model's horizon (ray clamped to up = 0) so the seam matches the dome above it.
+      if (ATMO) {
+        If(A.w.greaterThan(0.0), () => {
+          const ad = normalize(vec3(dir.x, max(up, 0.0005), dir.z));
+          const phys = min(atmoFn(ad, normalize(U.sunDir)).mul(A.k), vec3(8.0)).toVar();
+          If(up.greaterThanEqual(0.0), () => {
+            c.assign(mix(c, phys, A.w));
+          }).Else(() => {
+            const gnd = clamp(up.negate().mul(5.0), 0.0, 1.0);
+            c.assign(mix(c, mix(phys.mul(0.85), vec3(0.035, 0.030, 0.022), gnd.mul(gnd)), A.w));
+          });
+        });
+      }
 
       // --- Procedural cloud layer ---
       // Coverage/thickness along this ray, hoisted for the city-glow cloud
@@ -600,36 +837,45 @@
         const cloudRich = D.cloudRich;
         If(cloudRich.greaterThan(0.001), () => {
           // Billow: higher-frequency octave carves lumpy cumulus definition.
-          // Cached: billow came with f; the bank tap only where its band is
-          // non-zero (the (1 - smoothstep(0.10, 0.26, up)) factor below is
-          // exactly 0 from up 0.26, so bankN = 0 there is the same product).
-          const bankN = C ? float(0.0).toVar() : null;
-          if (C) {
-            If(useC, () => {
-              If(up.lessThan(0.26), () => { bankN.assign(tap(D.cDb).w); });
-            }).Else(() => {
-              billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3))));
-              bankN.assign(fbm(dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift)));
-            });
-          }
+          if (C) If(useC.not(), () => { billowN.assign(fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)))); });
           const billow = C ? billowN : fbm(cp1.mul(2.3).add(vec2(11.7, 4.3)));
           const defined = smoothstep(0.42, 0.80, f.mul(0.6).add(billow.mul(0.45)))
             .mul(smoothstep(0.013, 0.05, up));
           // CLOUD DEFINITION knob (0.85 = as-shipped blend).
           cov.assign(mix(cov, max(cov, defined), D.defMix));
           // Horizon cloud-bank on the compressed *0.16 plane, banded ~1-9°.
-          const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
-          const bankThresh = D.bankThresh;
-          const bankCov = smoothstep(bankThresh, 0.80, C ? bankN : fbm(bp))
-            .mul(smoothstep(0.013, 0.030, up))
-            .mul(smoothstep(0.10, 0.26, up).oneMinus());
-          cov.assign(max(cov, bankCov.mul(D.bankK)));
+          // The upper fade reaches zero at 0.26. Skip the four-octave noise or
+          // the explicit-LOD cache tap above it; coverage is already nonnegative.
+          If(up.lessThan(0.26), () => {
+            const bp = dir.xz.div(max(up, 0.02)).mul(0.16).add(D.bankDrift);
+            const bankN = C ? float(0.0).toVar() : fbm(bp);
+            if (C) If(useC, () => { bankN.assign(tap(D.cDb).w); }).Else(() => { bankN.assign(fbm(bp)); });
+            const bankCov = smoothstep(D.bankThresh, 0.80, bankN)
+              .mul(smoothstep(0.013, 0.030, up))
+              .mul(smoothstep(0.10, 0.26, up).oneMinus());
+            cov.assign(max(cov, bankCov.mul(D.bankK)));
+          });
           // Firmer edges so cumulus look solid, not gauzy.
           cov.assign(mix(cov, smoothstep(0.18, 0.82, cov), cloudRich.mul(0.5)));
         });
         // Second FBM gives per-cloud thickness (thin = backlit, thick = dark).
         const thick = clamp((C ? thickN : fbm(cp2.mul(0.55).add(D.thickOff)))
           .mul(2.0).sub(0.55), 0.0, 1.0).toVar();
+        // SKY ATMO cloud self-shadow: the coverage one step toward the sun on the cloud plane (A.shOff),
+        // Beer-attenuated, darkens the body of a cloud whose sunward side is deep. From the cache when
+        // its window holds (the same texel channel as f), else one more per-pixel FBM.
+        const selfSh = ATMO ? float(1.0).toVar() : null;
+        if (ATMO) {
+          If(A.shK.greaterThan(0.0), () => {
+            const fS = float(0.0).toVar();
+            if (C) {
+              If(useC, () => { fS.assign(tap(D.cD1.add(A.shOff)).x); })
+                .Else(() => { fS.assign(fbm(cp1.add(A.shOff))); });
+            } else fS.assign(fbm(cp1.add(A.shOff)));
+            const dS = smoothstep(D.covLo, 0.84, fS);
+            selfSh.assign(mix(float(1.0), exp(dS.mul(-2.2)).mul(0.6).add(0.4), A.shK));
+          });
+        }
         const sl = pow(sd, 2.0).toVar();
         // Under heavy overcast even a bright sun gives grey clouds (effSunBright,
         // goldenC == golden: derive()).
@@ -645,9 +891,17 @@
         const lit = mix(cloudBot, cloudTop, capf).toVar();
         // Day: widen the top-bottom contrast (gated; twilight keeps soft grading).
         lit.assign(mix(lit, mix(cloudBot.mul(0.80), cloudTop.mul(1.14), capf), daytime.mul(0.45)));
+        if (ATMO) lit.mulAssign(selfSh);
         // Silver lining: thin sun-facing edges glow (backlit forward scatter).
         const silver = pow(sd, 6.0).mul(thick.oneMinus()).mul(D.silverK);
         lit.addAssign(D.silverCol.mul(silver));
+        // SKY ATMO silver lining: a Henyey-Greenstein forward lobe (g 0.75, peak-normalised:
+        // (1-g)^3 / (1+g^2-2g mu)^1.5 is 1 looking at the sun) on the cloud EDGES (cov (1-cov), peak at
+        // half cover) of thin cloud, so the rim lights up around the sun, not the body.
+        if (ATMO) {
+          const hgN = pow(max(sd.mul(-1.5).add(1.5625), 1e-4), -1.5).mul(0.015625);
+          lit.addAssign(D.silverCol.mul(hgN.mul(cov.mul(cov.oneMinus()).mul(4.0)).mul(thick.oneMinus()).mul(A.silK)));
+        }
         // Twilight: broad warm wash. twilight is a uniform — 0 on default
         // day / night (GLX SKY_FS). Dawn/dusk still enter.
         If(twilight.greaterThan(0.001), () => {
@@ -714,7 +968,14 @@
         // Disc, vertically squashed near the horizon (atmospheric refraction).
         const dd = dir.sub(U.sunDir.mul(sd)).toVar();
         const perp = length(vec2(length(dd.xz), dd.y.mul(D.squash))).toVar();
-        const disc = smoothstep(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
+        const disc = smoothstepDown(D.discOut, D.discIn, perp).mul(coronaDamp).mul(cityCov.oneMinus()).toVar();
+        // SKY ATMO limb darkening: I(r)/I(0) = 1 - u (1 - sqrt(1 - r^2)), u = 0.6 (the solar visible-band
+        // coefficient), r = the disc radius fraction; by A.w so night and overcast keep today's disc.
+        if (ATMO) {
+          const rr = clamp(perp.div(max(D.discOut, 1e-5)), 0.0, 1.0);
+          const limb = sqrt(max(rr.mul(rr).oneMinus(), 0.0)).oneMinus().mul(-0.6).add(1.0);
+          disc.mulAssign(mix(float(1.0), limb, A.w));
+        }
         // Bright HDR core (>1) so it blooms; warm-white high, deep amber low.
         const discCore = D.discCore;
         c.addAssign(discCore.mul(disc));
@@ -737,7 +998,7 @@
           const twinkle = U.starTwinkle.mul(0.20).mul(sin(U.time.mul(1.4).add(phase))).add(0.80);
           const giant = step(0.9995, h);                       // rare brighter star
           const srad = mix(float(0.0016), float(0.0028), giant).mul(U.starSize);
-          const star = smoothstep(srad, srad.mul(0.35), d)
+          const star = smoothstepDown(srad, srad.mul(0.35), d)
             .mul(min(0.88, bright.mul(twinkle).mul(giant.mul(0.6).add(1.0))));
           // Cloud occlusion: stars sit BEHIND the deck (cityCov hoisted above).
           c.addAssign(vec3(star).mul(U.starBright).mul(cityCov.oneMinus()));
@@ -750,7 +1011,7 @@
         const moonDir = normalize(U.sunDir);
         const md = dot(dir, moonDir).toVar();
         const moonPerp = length(dir.sub(moonDir.mul(max(md, 0.0)))).toVar();
-        const moonDisc = smoothstep(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
+        const moonDisc = smoothstepDown(U.moonDiscSize.mul(0.025), U.moonDiscSize.mul(0.010), moonPerp)
           .mul(U.moon);
         const moonHalo = exp(moonPerp.mul(moonPerp)
           .mul(float(140.0).div(max(U.moonHalo, 0.001))).negate())
@@ -793,8 +1054,8 @@
       return vec4(mix(U.zenith, U.horizon, t), 1.0);
     })();
 
-    return { node, fallbackNode, uniforms: U, update, cacheStep, cacheWarm, cacheState, dispose };
+    return { node, fallbackNode, uniforms: U, update, cacheStep, cacheWarm, cacheDrawWarm, cacheState, dispose, atmo: ATMO };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { sky });
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { sky, skyAtmo: SkyAtmo });
 })();

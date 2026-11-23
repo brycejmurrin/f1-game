@@ -264,7 +264,7 @@ interface GameEls {
   best: HTMLElement; speed: HTMLElement; energy: HTMLElement;
   ot: HTMLElement; aero: HTMLElement;
   tyre: HTMLElement; tyreCode: HTMLElement; tyreFill: HTMLElement; plan: HTMLElement;
-  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement;
+  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement; endSessionBtn: HTMLElement;
   gapA: HTMLElement; gapB: HTMLElement;
   hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;
@@ -322,6 +322,8 @@ interface PitSession {
   info(c?: CarState): Record<string, unknown> | null;
   setNext(c: CarState, record: unknown): void;
   estimate(c: CarState): { lossS: number; gapS: number | null } | null;
+  /** The lane's net cost in seconds at racing speed (the STRATEGY row's figure). */
+  lossS(): number;
   choices(c: CarState): Array<{ id: string; code: string }>;
   selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;
@@ -340,6 +342,7 @@ interface TyreSession {
   /** Wear as a fraction of the compound's life, 0..2. */
   spent(c: CarState): number;
   info(c: CarState): Record<string, unknown> | null;
+  temperatureInfo(c: CarState | null): { tempS: number | null; tempOpt: number | null; tempWindow: number } | null;
   belowWindow(c: CarState | null): number;
   severity(): number;
   level(): TyreLevel;
@@ -382,7 +385,7 @@ interface GameCtx {
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
-  readonly openDailyPicker: () => void;
+  readonly openTimeTrialPicker: (request: { kind: "daily"; day?: string; mode?: "standard" | "open" } | { kind: "lap"; track: string }) => void;
   readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
@@ -416,6 +419,8 @@ interface GameCtx {
   raceDirtyAir: "off" | "classic" | "cfd";
   readonly tyres: TyreSession;
   readonly pits: PitSession;
+  /** Game-feel state (screen shake, hit-stop, camera roll); __apex reads it, never writes. */
+  readonly feel: { shake: number; camRoll: number; hitStop: number; startHold: number; restartPending: boolean };
   /** Frames that submitted the pit-crew mesh since the last read; __apex.pit() drains it. */
   readonly pitCrewDrawn: () => number;
   /** Continuous track wetness 0..1 (look=drive). Local roadWetness() in game.js aliases this. */
@@ -425,7 +430,7 @@ interface GameCtx {
   readonly setupTrialRestart: (options: { teamId: string; tune: Record<string, number>; mode: "launch"; isCurrent: () => boolean }) => Promise<{ ok: boolean; context?: Record<string, unknown>; reason?: string }>;
   readonly setupTrialContext: () => Record<string, unknown> | null;
   readonly setupTrialCancel: () => void;
-  readonly realRace: { status(): { active: boolean } };
+  readonly realRace: { status(): { active: boolean; watch?: boolean }; isWatch(): boolean; isActive(): boolean; owns(car: CarState): boolean };
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null; feedback(): Record<string, unknown>; practiceGoal(): string; setPracticeGoal(id: string): boolean };
   readonly openCoachDetails: () => void;
@@ -598,13 +603,13 @@ interface GameCtx {
   /** Arm-then-confirm for destructive buttons (the career DELETE? idiom, shared): first call arms in place and returns false, second runs `action`; disarm = the caller rebuilding the node. */
   readonly armConfirm: (btn: HTMLElement, armedText: string, action: () => void) => boolean;
   readonly getTeamParts: (teamId: string) => PartsSetup;
-  readonly saveTeamParts: (teamId: string, parts: PartsSetup) => void;
+  /** false when a conflicted career save refused it (#5044). */
+  readonly saveTeamParts: (teamId: string, parts: PartsSetup) => boolean;
   /** Re-resolve the player's fitted parts into mods, aero, ERS and the mesh-cache keys — what the garage's DONE and a race boot run; `__apex.garageParts` runs it mid-race. */
   readonly recomputePlayerMods: () => void;
   readonly getLiveryId: (teamId: string) => string;
   readonly saveLiveryId: (teamId: string, id: string) => void;
   readonly getCustomLiveries: (teamId: string) => unknown[];
-  readonly setCustomLiveries: (teamId: string, arr: unknown[]) => void;
   readonly getLiveries: (team: TeamDef) => unknown[];
   readonly invalidateDecalTextures: (teamId: string) => void;
   /** Drop every procedural body/wheel GPU cache so the next warm/draw rebuilds through Car3D.build. */
@@ -674,7 +679,7 @@ interface GameCtx {
   readonly gfx: GfxBackend | null;
   /** LOCAL predictor + Newton read — never a global search. See its comment. */
   readonly trackFrom: (px: number, pz: number, sPredicted: number) => { s: number; x: number };
-  readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
+  readonly worldFromTrack: (s: number, x: number, out?: { p: number[]; t: number[]; r: number[] }) => { x: number; z: number };
 
   // ── Model constants published for js/race/quali-model.js and the net layer ──────
   /** The race-entry stopwatch (js/game.js startRace): one row per phase, in
@@ -700,7 +705,7 @@ interface GameCtx {
    * line (a cooldown, a wear step) must spend it only on true.
    */
   readonly announce: (msg: string, dur?: number, kind?: string, still?: () => boolean) => boolean;
-  readonly applyCaution: (d: unknown) => void;
+  readonly applyCaution: (d: unknown) => boolean;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   /** The interpolated pose a car is drawn at this frame (pooled; read it at once): the TV director's subject. */
   readonly camPoseOf: (c: CarState) => { s: number; x: number; carPos: number[] | null; carHead: number };
@@ -785,8 +790,8 @@ interface GameCtx {
   raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
   /** A championship's grid with qualifying off: "champ" (standings, FIA 2026 SR B2.5.4(a)) | "tier" | "revchamp" | "random". */
   champGrid: "champ" | "tier" | "revchamp" | "random";
-  /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
-  readonly referencePole: () => number;
+  /** The modelled pole (Quali.referencePole): at QUALI_TRIM, the lap pit loss and the replay scale use; "medal": the calibrated time-trial / daily medal target. */
+  readonly referencePole: (kind?: "medal") => number;
   /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
   readonly redFlagRestart: () => boolean;
   /** The day's time-trial plan (js/race/daily-challenge.js). */
@@ -795,8 +800,8 @@ interface GameCtx {
   readonly holdCaution: (level: number, cause?: string) => number;
   /** Clear race-control, incident and debris ownership before a deterministic episode restart. */
   readonly resetEpisodeOwners: () => void;
-  /** Read-only rendered camera damping anchors and independent simulation/render clocks. */
-  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; };
+  /** Read-only rendered camera damping anchors and independent simulation/render clocks; `warming`/`liveTicks` are tickBody's holds (__apex.info()). */
+  readonly cameraDampingState: () => { eye: number[]; target: number[]; fov: number; previousAnchor: (number | null)[]; nextAnchor: (number | null)[]; renderFrame: number; simulationTime: number; renderTime: number; warming: boolean; liveTicks: number; };
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
   /** True while an #announce message is still on screen — a coach mark waits for it. */
@@ -880,7 +885,10 @@ declare const DebrisWorld: GameModuleFactory;
 declare const GameHud: GameModuleFactory;
 // js/ui/hud-minimap.js: GameHud.create builds it from the same ctx (#1656).
 declare const HudMinimap: GameModuleFactory;
+// js/ui/hud-radio-lane.js: GameHud.create builds it from the same ctx (#3261).
+declare const HudRadioLane: GameModuleFactory;
 declare const GameResults: GameModuleFactory;
+declare const GameResultsSheet: GameModuleFactory;
 declare const IncidentSim: GameModuleFactory;
 declare const LightStore: GameModuleFactory;
 declare const Menus: GameModuleFactory;
@@ -890,6 +898,10 @@ declare const Photomode: GameModuleFactory;
 declare const FreeCam: GameModuleFactory;
 declare const ReplayBuf: GameModuleFactory;
 declare const ResultsCam: GameModuleFactory;
+declare const RaceCeremony: GameModuleFactory;
+declare const CooldownLap: GameModuleFactory;
+declare const ParcFerme: GameModuleFactory;
+declare const RacePodium: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
@@ -901,15 +913,17 @@ declare const StartLights: GameModuleFactory;
 declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
+declare const RealRaceBody: GameModuleFactory;
 declare const FlyingStart: GameModuleFactory;
 declare const JumpStartPenalty: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
-declare const LearnDoor: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const UiExperience: GameModuleFactory;
 declare const HomeWorld: GameModuleFactory;
 declare const PhotoStudio: GameModuleFactory;
+/** LAZY_UI_PRESETS body; PhotoStudio stub creates it (#4978 row 5). */
+declare const PhotoStudioBody: GameModuleFactory;
 declare const WatchTransport: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const Director: GameModuleFactory;
@@ -925,18 +939,23 @@ declare const CarSfx: GameModuleFactory;
 declare const VoicePack: GameModuleFactory;
 declare const Spotter: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
+declare const LightingTunerDoor: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
 declare const DockLayout: GameModuleFactory;
+declare const DockToolbar: GameModuleFactory;
 declare const HudArrange: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
+declare const SettingsExportBody: GameModuleFactory;
 
 declare const SessionRecords: GameModuleFactory;
 declare const DrivingCoach: GameModuleFactory;
+declare const DrivingCoachBody: GameModuleFactory;
 declare const RaceInsights: GameModuleFactory;
 
 declare const PlatformSession: GameModuleFactory;
+declare const PhonePairingUI: GameModuleFactory;
 
 declare const DeepLink: GameModuleFactory;
 declare const TitleFlow: GameModuleFactory;

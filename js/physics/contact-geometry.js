@@ -158,7 +158,20 @@ const ContactGeometry = (function () {
     return out;
   }
 
+  // AI aim only (#5997): the road-side car-centre line wallLimits holds beside the pit / exit wall
+  // (signed, 0 = none); pitWallAim keeps an aim 0.35 m inside it, here and `ahead`.
+  function pitWallX(t, s) {
+    const p = t.pit; if (!p || p.painted) return 0;
+    const k = ((Math.round(s / t.total * t.n) % t.n) + t.n) % t.n;
+    return p.v[k] >= 0.98 ? p.side * (t.hw[k] + p.bands.verge - 1.1)
+      : p.w[k] >= TrackPit.EXIT_WALL_W && ((s - p.sOut) % t.total + t.total) % t.total < p.exitRoadM ? p.side * (t.hw[k] + p.bands.verge * p.v[k] - 1.15) : 0;
+  }
+  function pitWallAim(t, s, ahead, x) {
+    const a = pitWallX(t, s), b = pitWallX(t, ahead), w = a && (!b || Math.abs(a) < Math.abs(b)) ? a : b;
+    return !w ? x : w > 0 ? Math.min(x, w - 0.35) : Math.max(x, w + 0.35);
+  }
+
   // `radius` is internal to overlap()/sweep(); nothing outside ever read it.
-  return Object.freeze({ overlap, sweep, impulse, wallLimits, INERTIA, FRICTION });
+  return Object.freeze({ overlap, sweep, impulse, wallLimits, pitWallX, pitWallAim, INERTIA, FRICTION });
 })();
 Object.freeze(ContactGeometry);

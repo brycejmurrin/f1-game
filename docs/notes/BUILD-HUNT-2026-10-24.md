@@ -1,5 +1,7 @@
 # Build / CI wall-time hunt — 2026-10-24 (A·H16)
 
+Summary: Build and CI wall-time hunt (A·H16): measured first, ranked by minutes saved per day times risk, without weakening a gate.
+
 Lane: developer and CI wall time without weakening any gate. Measured first,
 ranked by minutes saved per day × risk. Prior art (do not re-report):
 `CI-WALL-TIME-HUNT-2026-10-21.md` (F5, F10–F12 open), `CI-TOOLING-RESEARCH-2026-10-21.md`,

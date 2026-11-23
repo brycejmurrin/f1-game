@@ -70,7 +70,7 @@ const TrackDesigner = (function () {
     GESTURES: Object.freeze([
       { input: "Touch", text: "Tap a point to select · RANGE then tap or drag to an end point on either view for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
       { input: "Mouse", text: "Click a point to select · RANGE drag selects a section without moving it · POINT drag past a short threshold moves it (a SPAN moves as a group) · click the road to add one · double-click to delete · wheel to zoom, drag empty space to pan · shift-click a second point to select the span between them." },
-      { input: "Keyboard", text: "Tab / [ ] cycle points · arrows nudge the selected point or SPAN 1 m (10 m with Shift) · Delete removes the anchor · Enter stamps · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height (whole SPAN when one is selected)." },
+      { input: "Keyboard", text: "[ ] cycle points (Tab moves on) · arrows nudge the selected point or SPAN 1 m (10 m with Shift) · Delete removes the anchor · Enter stamps · Esc deselects · Ctrl/⌘Z undo · Shift+Ctrl/⌘Z redo · on the elevation strip, Up/Down set height (whole SPAN when one is selected)." },
       { input: "Gamepad", text: "The d-pad and A work every button and chip. With a point or SPAN selected, the d-pad nudges it on the canvas; B lets go of the selection, and B again closes the designer." },
     ]),
     LIMITS: "2.5–7 km a lap · 8–200 points · 24 saved circuits · no online play on your own circuits yet.",
@@ -78,15 +78,15 @@ const TrackDesigner = (function () {
   const COACH_KEY = "designerCoached";
 
   let G = null, custom = null, root = null, built = false, openFlag = false, returnFocus = null;
-  let cv = null, canvas = null;
+  let /** @type {ReturnType<typeof DesignerCanvas.create> | null} */ cv = null, canvas = null;
   const ui = {};                       // named nodes, built once
   let lineage = 0;   // which loaded design a history entry belongs to (restore)
   let design = null, verdict = null, sel = -1, span = -1, tool = "select", mode = "edit";
   // spanArm: next pick sets the span end (touch-friendly stand-in for shift-tap).
-  let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
+  let spanArm = false, selectionMode = "point", /** @type {ReturnType<typeof DesignerSelection.create> | null} */ selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null, workspace = null, seatFootFn = null;
+  let propKind = "stand", /** @type {ReturnType<typeof DesignerScenery.create> | null} */ scenery = null, sceneryView = false, /** @type {ReturnType<typeof DesignerFollowup.repairPanel> | null} */ repair = null, /** @type {ReturnType<typeof DesignerBridges.create> | null} */ bridges = null, /** @type {ReturnType<typeof DesignerWorkspace.create> | null} */ workspace = null, seatFootFn = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
@@ -193,120 +193,9 @@ const TrackDesigner = (function () {
     return b;
   }
 
-  // ── zones follow the loop ─────────────────────────────────────────────────
-  // Every zone list is keyed by ARC fraction of the control polygon (toRaw maps
-  // hwZones to the engine's index fractions; the rest are read as arc
-  // fractions of the built lap). bankZones are { frac, angleDeg, widthM },
-  // elevations / bridges { s, … }, hwZones { s0, s1, … } — sanitize's shapes.
-  const wrap01 = (v) => ((v % 1) + 1) % 1;
-  function cumArc(pts) {
-    const c = [0];
-    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; c.push(c[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
-    return c;
-  }
-  /** Every zone list through one fraction map at(f, role) → f' | null (drop).
-   *  A range asks for each end as a point first; an end that is dropped asks
-   *  again as "s0"/"s1" (a clamp to the edit's edge); both ends gone drops it.
-   *  flip swaps the ends (REVERSE). angleDeg is never touched: its SIGN is not
-   *  the camber side (mesh.js reads that off curvature), a negative is adverse. */
-  function zoneMap(d, at, flip) {
-    const pt = (key) => (z) => { const f = at(z[key], "p"); return f == null ? null : Object.assign({}, z, { [key]: wrap01(f) }); };
-    const range = (z) => {
-      // Full-lap width has no movable endpoints; retain its storage sentinel.
-      if (z.s0 === 0 && z.s1 === 1) return Object.assign({}, z);
-      let a = at(z.s0, "p"), b = at(z.s1, "p");
-      if (a == null && b == null) return null;
-      if (a == null) a = at(z.s0, "s0");
-      if (b == null) b = at(z.s1, "s1");
-      if (a == null || b == null) return null;
-      if (flip) { const t = a; a = b; b = t; }
-      return Object.assign({}, z, { s0: wrap01(a), s1: wrap01(b) });
-    };
-    const each = (list, fn) => (Array.isArray(list) ? list : []).map(fn).filter(Boolean);
-    // Authored scenery props (slice H) are arc-fraction keyed like elevations —
-    // reverse / START HERE / insert·delete·stamp must carry them or they strand.
-    const out = {
-      hwZones: each(d.hwZones, range),
-      bankZones: each(d.bankZones, pt("frac")),
-      elevations: each(d.elevations, pt("s")),
-      bridges: each(d.bridges, pt("s")),
-    };
-    if (Array.isArray(d.props)) {
-      out.props = each(d.props, pt("s"));
-      // `side` is relative to the travel direction (+1 right): REVERSE turns the
-      // road round, so the same bank is now the other side.
-      if (flip) out.props = out.props.map((p) => Object.assign({}, p, { side: p.side < 0 ? 1 : -1 }));
-    }
-    return out;
-  }
-  /** Apply zoneMap and drop an emptied props list (absent, like look defaults). */
-  function withZones(d, extra, at, flip) {
-    const zm = zoneMap(d, at, flip);
-    const next = Object.assign({}, d, extra || {}, zm);
-    if (Array.isArray(zm.props) && !zm.props.length) delete next.props;
-    return next;
-  }
-  /** After an insert / delete / stamp: a zone BEFORE the edited span keeps its
-   *  arc distance from the start, one AFTER it its distance to the finish, one
-   *  inside it is dropped (a range is clipped to the span's edge). Anchors are
-   *  the control points both loops share — the unchanged head walked forward,
-   *  the unchanged tail walked back (a stamp may thin the tail with RDP, so its
-   *  survivors are a subsequence) — and a zone between two anchors keeps its
-   *  share of that stretch. When the start point itself changed there is no
-   *  anchor and the fractions stand — but heights are keyed by control-point
-   *  identity (coordinates), not arc fraction, so they are remapped regardless. */
-  function remapZones(d, oldPts, newPts) {
-    const N = oldPts.length, M = newPts.length;
-    const same = (p, q) => p[0] === q[0] && p[1] === q[1];
-    if (!N || !M) return d;
-    if (!same(oldPts[0], newPts[0])) return Object.assign({}, d, { heights: remapHeights(d, oldPts, newPts) });
-    const head = [[0, 0]];
-    let i = 1, j = 1;
-    while (i < N && j < M && same(oldPts[i], newPts[j])) head.push([i++, j++]);
-    if (i === N && j === M) return d;                    // nothing changed
-    const tail = [[N, M]];                               // both loops close back onto point 0
-    for (let jn = M - 1, io = N - 1; jn >= j; jn--) {
-      let k = io;
-      while (k >= i && !same(oldPts[k], newPts[jn])) k--;
-      if (k < i) break;                                  // a new point: the edit ends here
-      tail.unshift([k, jn]); io = k - 1;
-    }
-    const cO = cumArc(oldPts), cP = cumArc(newPts), LO = cO[N], LP = cP[M];
-    if (!(LO > 0 && LP > 0)) return d;
-    const A = head.concat(tail).map(([o, n]) => [cO[o], cP[n]]), gap = head.length - 1, eps = 1e-9 * LO;
-    const at = (f, role) => {
-      const x = wrap01(f) * LO;
-      let k = 0;
-      while (k < A.length - 2 && x > A[k + 1][0]) k++;
-      if (k === gap && x > A[k][0] + eps && x < A[k + 1][0] - eps) return role === "s0" ? A[k + 1][1] / LP : role === "s1" ? A[k][1] / LP : null;
-      const span = A[k + 1][0] - A[k][0];
-      return (A[k][1] + (span > 0 ? (x - A[k][0]) / span : 0) * (A[k + 1][1] - A[k][1])) / LP;
-    };
-    return withZones(d, { heights: remapHeights(d, oldPts, newPts) }, at, false);
-  }
-  /** Keep per-node heights on shared control points; a new point takes the
-   *  arc-weighted blend of the nearest kept heights either side (0 m would carve
-   *  a notch when it is inserted mid-hill). */
-  function remapHeights(d, oldPts, newPts) {
-    const oldH = Array.isArray(d.heights) ? d.heights : [];
-    const idx = new Map();
-    for (let i = 0; i < oldPts.length; i++) idx.set(oldPts[i][0] + "," + oldPts[i][1], i);
-    const M = newPts.length, known = new Array(M);
-    for (let j = 0; j < M; j++) {
-      const k = idx.get(newPts[j][0] + "," + newPts[j][1]);
-      known[j] = k != null && k < oldH.length && Number.isFinite(+oldH[k]) ? +oldH[k] : null;
-    }
-    const c = cumArc(newPts), L = c[M];
-    const next = known.map((v, j) => {
-      if (v != null || !known.some((u) => u != null)) return v != null ? v : 0;
-      let a = j, b = j;
-      while (known[a] == null) a = (a - 1 + M) % M;
-      while (known[b] == null) b = (b + 1) % M;
-      const back = (c[j] - c[a] + L) % L, fwd = (c[b] - c[j] + L) % L;
-      return back + fwd > 0 ? known[a] + (known[b] - known[a]) * back / (back + fwd) : known[a];
-    });
-    return typeof ElevPresets !== "undefined" ? ElevPresets.sanitize(newPts, next) : next;
-  }
+  // ── zones follow the loop (TrackZones) ───────────────────────────────────
+  // hwZones, bankZones, elevations, bridges, props and heights[] move with the
+  // control polygon. TrackZones owns that map; this screen only calls it.
 
   // ── state transitions ─────────────────────────────────────────────────────
   function snapshot() { return JSON.stringify(design); }
@@ -323,7 +212,7 @@ const TrackDesigner = (function () {
     else pushUndo(snapshot());
     nudge = nudgeKind ? { sel, span, kind, t: now } : null;
     next.pts = lattice(next.pts);
-    if (REMAP.test(kind || "") && design && design.pts) next = remapZones(next, design.pts, next.pts);
+    if (REMAP.test(kind || "") && design && design.pts) next = TrackZones.remapZones(next, design.pts, next.pts);
     ensureHeights(next);
     design = next;
     afterChange(kind);
@@ -334,7 +223,7 @@ const TrackDesigner = (function () {
     if (sel >= design.pts.length) sel = -1;
     if (span >= design.pts.length) span = -1;
     if (ctxAt >= 0) hideCtx();                         // its point index may name another point now
-    if (cv) { cv.setPoints(design.pts); cv.setSelection(sel, span); }
+    if (cv) cv.batch(() => { cv.setPoints(design.pts); cv.setSelection(sel, span); });
     schedulePreview();
     scheduleDraft();
     refreshControls();
@@ -348,8 +237,7 @@ const TrackDesigner = (function () {
     // A design the registry refuses outright (a loop under 1 km, a point out
     // of range) builds nothing and may name no red: never show "All checks pass".
     if (!verdict.ok && !verdict.red) verdict = Object.assign({}, verdict, { red: 1, issues: verdict.issues.concat([{ code: "bounds", level: "red", msg: "This loop cannot be built — make it bigger (2.5–7 km) and keep its points in range" }]) });
-    if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
-    refreshMapView();
+    if (cv) cv.batch(() => { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); refreshMapView(); });
     renderIssues(); renderStats(); announceChecks();
     if (workspace) workspace.review(verdict);
     renderInsight();
@@ -457,7 +345,7 @@ const TrackDesigner = (function () {
     if (pts.length < 3) return false;
     // The start point stays; every arc fraction f is 1 − f on the reversed loop.
     const hs = Array.isArray(design.heights) ? design.heights : flatHeights(pts);
-    const next = withZones(design, {
+    const next = TrackZones.withZones(design, {
       pts: [pts[0]].concat(pts.slice(1).reverse()),
       heights: [hs[0] || 0].concat(hs.slice(1).reverse()),
     }, (f) => 1 - f, true);
@@ -472,7 +360,7 @@ const TrackDesigner = (function () {
     for (let k = 0; k < N; k++) { const a = pts[k], b = pts[(k + 1) % N]; const d = Math.hypot(b[0] - a[0], b[1] - a[1]); if (k < i) upto += d; L += d; }
     const f = L ? upto / L : 0;
     const hs = Array.isArray(design.heights) ? design.heights.slice() : flatHeights(pts);
-    const next = withZones(design, {
+    const next = TrackZones.withZones(design, {
       pts: S.rotate(pts, i),
       heights: hs.length === pts.length ? hs.slice(i).concat(hs.slice(0, i)) : flatHeights(pts),
     }, (v) => v - f, false);
@@ -490,7 +378,7 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { pts: next }), "delete");
     return true;
   }
-  /** Cycle the selected control point (PREV / NEXT POINT, Tab / [ ]). */
+  /** Cycle the selected control point (PREV / NEXT POINT, [ ]). */
   function cyclePoint(dir) {
     if (!design || !design.pts || !design.pts.length) return false;
     const N = design.pts.length;
@@ -526,7 +414,7 @@ const TrackDesigner = (function () {
   }
   function focusSelection() {
     if (!design || sel < 0) return false;
-    const c = cumArc(design.pts), f = c[sel] / (c[design.pts.length] || 1);
+    const c = TrackZones.cumArc(design.pts), f = c[sel] / (c[design.pts.length] || 1);
     if (cv && verdict && verdict.tr) cv.focusAt(f * verdict.tr.total);
     if (prof && prof.zoom) prof.zoom(4);
     return true;
@@ -584,12 +472,14 @@ const TrackDesigner = (function () {
     const was = design, next = ensureHeights(JSON.parse(snap));
     if (was && next.lin === was.lin) {
       next.name = was.name;
-      for (const k of ["id", "originId"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
-    }
+      for (const k of ["id", "originId", "country"]) { if (was[k] === undefined) delete next[k]; else next[k] = was[k]; }
+    } else invalidateShares();
     design = next; sel = -1; span = -1; nudge = null;
   }
-  function doUndo() { if (!undo.length) return false; redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
-  function doRedo() { if (!redo.length) return false; undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
+  // A drag in flight holds its own copy of the points: drop it first, or the
+  // release would commit that stale copy over the restored design (and wipe redo).
+  function doUndo() { if (!undo.length) return false; if (cv) cv.reset(); redo.push(snapshot()); restore(undo.pop()); afterChange("undo"); return true; }
+  function doRedo() { if (!redo.length) return false; if (cv) cv.reset(); undo.push(snapshot()); restore(redo.pop()); afterChange("redo"); return true; }
   function setTheme(id) {
     if (!TrackThemes.has(id) || id === design.theme) return false;
     commit(Object.assign({}, design, { theme: id }), "theme");
@@ -750,6 +640,7 @@ const TrackDesigner = (function () {
     ++replacementGeneration;
     const kept = stash();
     if (!kept) { undo.length = 0; redo.length = 0; }
+    invalidateShares();
     design = copy(item);
     design.lin = ++lineage;
     for (const k of ["hwZones", "bankZones", "elevations", "bridges", "turns"]) if (!Array.isArray(design[k])) design[k] = [];
@@ -791,12 +682,68 @@ const TrackDesigner = (function () {
   }
 
   // ── save / race ───────────────────────────────────────────────────────────
-  function save(forRace) {
+  /** The saved circuit this design's SHAPE already is (the id is a hash of the shape), when saving would relabel
+   *  it: another name or country, and not the entry this design was opened from (#5947 A). Else null. */
+  function labelClash() {
+    const it = custom.get && custom.sanitize(design);
+    const mine = it && it.id !== design.originId ? custom.get(it.id) : null;
+    return mine && (mine.name !== it.name || (mine.country || "") !== (it.country || "")) ? mine : null;
+  }
+  /** Ask before a shared copy of your own circuit renames it: KEEP MINE / USE THEIRS. The house modal (a
+   *  `dialog.screen` sheet, like the share-card preview) over the designer; Escape keeps yours. Each door paints
+   *  at least 44 px at any UI SIZE (the pause menu's floor, css/dialogs.css #3274). */
+  function askLabel(mine, done) {
+    const dlg = el("dialog", "screen dim");
+    dlg.id = "td-label-ask";
+    dlg.setAttribute("aria-labelledby", "td-label-ask-title");
+    dlg.setAttribute("data-esc-close", "td-label-keep");
+    const sheet = el("div", "sheet"); sheet.style.setProperty("--sheet-w", "460px");
+    const head = el("div", "sheet-head"), title = el("h2", "", "SAME CIRCUIT");
+    title.id = "td-label-ask-title"; head.appendChild(title);
+    const body = el("div", "sheet-body pane");
+    body.appendChild(el("p", "", "You already have this circuit as " + mine.name + "."));
+    const foot = el("div", "sheet-foot");
+    const finish = (keep) => {
+      if (dlg.open && typeof dlg.close === "function") dlg.close();
+      dlg.remove();
+      done(keep);
+    };
+    const door = (id, label, cls, keep) => {
+      const b = btn(label, cls, () => finish(keep)); b.id = id;
+      b.style.minHeight = b.style.minWidth = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
+      foot.appendChild(b);
+      return b;
+    };
+    const keepBtn = door("td-label-keep", "KEEP MINE", "bigbtn", true);
+    door("td-label-theirs", "USE THEIRS", "bigbtn alt", false);
+    sheet.append(head, body, foot);
+    dlg.appendChild(sheet);
+    dlg.addEventListener("cancel", (ev) => { ev.preventDefault(); finish(true); });
+    document.body.appendChild(dlg);
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+    keepBtn.focus();
+    return dlg;
+  }
+  function save(forRace, after, asked) {
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before " + (forRace ? "racing" : "saving"), true); return { ok: false, reason: "red" }; }
     design.turns = verdict.turns.slice();
     design.lengthM = Math.round(verdict.tr.total);
     design.name = CustomTracks.sanitizeName(ui.name ? ui.name.value : design.name);
+    const mine = asked ? null : labelClash();
+    if (mine) {
+      askLabel(mine, (keep) => {
+        if (keep) {
+          design.name = mine.name;
+          if (mine.country) design.country = mine.country; else delete design.country;
+          if (ui.name) ui.name.value = design.name;
+          if (ui.country) ui.country.value = design.country || "";
+        }
+        const r = save(forRace, null, true);
+        if (r.ok && after) after(r);
+      });
+      return { ok: false, reason: "ask" };
+    }
     const r = custom.upsert(design, { replace: design.originId });
     if (!r.ok) {
       // A race runs a SAVED circuit, so a full library blocks racing a new design too.
@@ -815,7 +762,7 @@ const TrackDesigner = (function () {
     return r;
   }
   function race(mode) {
-    const r = save(true);
+    const r = save(true, (saved) => raceId(saved.id, mode));
     if (!r.ok) return false;
     return raceId(r.id, mode);
   }
@@ -920,12 +867,16 @@ const TrackDesigner = (function () {
     ui.export = btn("EXPORT", "sel-chip", () => exportFile());
     ui.import = btn("IMPORT", "sel-chip", () => ui.file.click());
     ui.file = el("input"); ui.file.type = "file"; ui.file.accept = ".json,application/json"; ui.file.hidden = true; ui.file.setAttribute("aria-label", "Import a circuit file");
-    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; if (f) importFile(f); });
+    // A native chooser can leave focus on <body> when it closes; hand it back to the menu that opened it.
+    const refocusFiles = () => { const t = ui.filesTrigger, a = document.activeElement; if (t && root && !root.hidden && (!a || a === document.body || !root.contains(a))) t.focus({ preventScroll: true }); };
+    ui.file.addEventListener("change", () => { const f = ui.file.files && ui.file.files[0]; ui.file.value = ""; refocusFiles(); if (f) Promise.resolve(importFile(f)).then(refocusFiles, refocusFiles); });
+    ui.file.addEventListener("cancel", refocusFiles);
     ui.msg = el("div", "td-msg"); ui.msg.setAttribute("role", "status"); ui.msg.setAttribute("aria-live", "polite");
     const files = el("div", "td-chips"); files.dataset.role = "file-actions";
     files.append(ui.share, ui.card, ui.export, ui.import);
     foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
+    // The compact header is zero-height; the designer reserves a grid cell by its footer for this action.
     // Short landscape phone: the foot rides under the rail (inside the body) so the dialog never scrolls.
     // Sizes are the effective ones (UI SIZE zooms the dialog); a very narrow effective width keeps the stacked layout.
     const seatFoot = (force) => {
@@ -934,10 +885,22 @@ const TrackDesigner = (function () {
       try {
         const cs = getComputedStyle(document.documentElement);
         const k = (parseFloat(cs.getPropertyValue("--ui-scale")) || 1) * (parseFloat(cs.getPropertyValue("--look-designer-size")) || 1);
-        tuck = innerWidth > innerHeight && innerHeight / k <= 600 && innerWidth / k >= 560;
+        // The layout viewport (UI contract 2026-11-06 rule 1): inner* can still hold the portrait pair on a Home Screen landscape launch.
+        const de = document.documentElement, vw = de.clientWidth > 0 ? de.clientWidth : innerWidth, vh = de.clientHeight > 0 ? de.clientHeight : innerHeight;
+        tuck = vw > vh && vh / k <= 600 && vw / k >= 560;
       } catch (_) { /* no layout engine (unit VM): the foot stays under the body */ }
       const home = tuck ? body : root;
-      if (foot.parentNode !== home) home.appendChild(foot);   // a no-op re-append can drop focus from SAVE/RACE
+      if (foot.parentNode !== home) {   // a no-op re-append can drop focus from SAVE/RACE
+        // Moving the foot moves the control focused inside it, and the platform
+        // drops that focus on <body>: the Enter already on its way then seeds
+        // MenuNav's landing (the pressed mode chip) instead of opening SHARE &
+        // FILES (deploy red b852807e, 844x390 right after the designer opened).
+        const had = document.activeElement;
+        home.appendChild(foot);
+        if (had && had !== document.body && foot.contains(had) && document.activeElement !== had) {
+          try { had.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+        }
+      }
       root.dataset.foot = tuck ? "in" : "out";
     };
     if (typeof addEventListener === "function") addEventListener("resize", seatFoot);
@@ -956,7 +919,7 @@ const TrackDesigner = (function () {
     cv = DesignerCanvas.create(canvas, {
       rangeSelect: () => selectionMode === "range" && (mode === "edit" || mode === "elevation"),
       extendSelection: () => spanArm,
-      onBegin: () => {},
+      onBegin: () => { ++replacementGeneration; },
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
       onLimit: () => message(CustomTracks.LIMITS.ptsMax + " points is the most a circuit holds — delete one first", true),
       onSelect: (i, j) => {
@@ -1021,6 +984,7 @@ const TrackDesigner = (function () {
   function showPane(pane) {
     if (workspace) workspace.remember();
     if (pane !== "library" && pane !== "howto") pane = "design";
+    if (pane !== "library") confirmDel = null;
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
@@ -1194,13 +1158,13 @@ const TrackDesigner = (function () {
     ui.prevPt = btn("PREV POINT", "sel-chip", () => cyclePoint(-1));
     ui.nextPt = btn("NEXT POINT", "sel-chip", () => cyclePoint(1));
     ui.spanEnd = btn("SELECT END", "sel-chip", () => armSpanEnd());
-    ui.prevPt.setAttribute("aria-label", "Select previous control point");
-    ui.nextPt.setAttribute("aria-label", "Select next control point");
-    ui.spanEnd.setAttribute("aria-label", "Next tap sets the end of a selected span (group move, elevate, or replace)");
+    ui.prevPt.setAttribute("aria-label", "Prev point: select previous control point");
+    ui.nextPt.setAttribute("aria-label", "Next point: select next control point");
+    ui.spanEnd.setAttribute("aria-label", "Select end: next tap sets the end of a selected span (group move, elevate, or replace)");
     ui.spanEnd.setAttribute("aria-pressed", "false");
     actions.append(ui.randomise, ui.reverse, ui.start, ui.del, ui.prevPt, ui.nextPt, ui.spanEnd);
     ui.testHere = btn("TEST HERE", "sel-chip", () => testHere());
-    ui.testHere.setAttribute("aria-label", "Test drive from the selected point");
+    ui.testHere.setAttribute("aria-label", "Test here: test drive from the selected point");
     actions.appendChild(ui.testHere);
     circuit.appendChild(actions);
     // Elevation presets (always built; shown in elevation mode).
@@ -1253,7 +1217,7 @@ const TrackDesigner = (function () {
     // The label row carries FIX ALL (shown while a red issue has an automatic fix).
     const head = el("div", "td-chips");
     ui.fixAll = btn("FIX ALL", "sel-chip", () => fixEverything());
-    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix every issue the designer can repair");
+    ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix all: fix every issue the designer can repair");
     head.append(el("div", "td-label", "CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
@@ -1297,22 +1261,38 @@ const TrackDesigner = (function () {
 
   // ── share out / in ────────────────────────────────────────────────────────
   let lastCode = null;
-  /** The APXT1 code for the current design (null when it does not sanitise). */
-  async function shareCode() {
-    if (!design || !design.pts.length) return null;
-    lastCode = await TrackCodec.encode(design);
-    return lastCode;
+  let codeGeneration = 0, shareGeneration = 0, shareSession = 0;
+  // Replacing the loaded document or changing visits withdraws every pending
+  // share. Edits within one document keep the snapshot chosen at the click.
+  function invalidateShares() {
+    ++codeGeneration; ++shareGeneration; ++shareSession;
   }
+  let clipboardWrite = Promise.resolve(false);
+  /** The APXT1 code for the current design (null when it does not sanitise). */
+  async function encodeShareItem(item) {
+    const generation = ++codeGeneration;
+    const code = item && item.pts.length ? await TrackCodec.encode(item) : null;
+    if (generation === codeGeneration) lastCode = code;
+    return code;
+  }
+  const shareCode = () => encodeShareItem(design);
   /** Copy the share link; the code also lands in the SHARE CODE field for a long-press copy. */
   async function share() {
+    const generation = ++shareGeneration;
+    const current = () => generation === shareGeneration;
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     const code = await shareCode();
+    if (!current()) return null;
     if (!code) { message("This design cannot be encoded", true); return null; }
     const url = TrackCodec.shareUrl(code);
     if (ui.code) ui.code.value = url;
-    let copied = false;
-    try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
+    // An OS clipboard write already in progress cannot be cancelled. Let it
+    // settle before writing a newer link, and skip superseded queued links.
+    clipboardWrite = clipboardWrite.then(() => current() && typeof ApexClipboard !== "undefined" &&
+      ApexClipboard.write && ApexClipboard.write(url, { mayFallback: current })).catch(() => false);
+    const copied = await clipboardWrite;
+    if (!current()) return null;
     if (!copied) {
       showPane("design"); setMode("test"); ui.sharingGroup.open = true;
       ui.code.focus(); ui.code.select(); ui.code.scrollIntoView({ block: "nearest" });
@@ -1321,9 +1301,12 @@ const TrackDesigner = (function () {
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
   }
-  /** The `apex26.track` file envelope for the current design (what EXPORT writes). */
+  /** The `apex26.track` file envelope for the current design (what EXPORT writes).
+   *  Gated like SHARE / CARD: a RED design must not leave the machine as a file. */
   async function exportEnvelope() {
     if (!design || !design.pts.length) return null;
+    if (previewT || !verdict) runPreview();
+    if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before exporting", true); return null; }
     const d = copy(design);
     const code = await TrackCodec.encode(d);
     if (!code) return null;
@@ -1332,7 +1315,7 @@ const TrackDesigner = (function () {
   }
   async function exportFile() {
     const env = await exportEnvelope();
-    if (!env) { message("Nothing to export yet", true); return false; }
+    if (!env) { if (!verdict || verdict.ok) message("Nothing to export yet", true); return false; }
     const name = fileStem(env.design) + ".apextrack.json";
     const blob = new Blob([JSON.stringify(env, null, 2)], { type: "application/json" });
     try {
@@ -1611,12 +1594,16 @@ const TrackDesigner = (function () {
   }
   function renderLibrary() {
     if (!ui.lib) return;
+    const active = document.activeElement, cards = Array.from(ui.lib.children);
+    const at = cards.findIndex((card) => card.contains(active));
+    const action = at < 0 ? -1 : Array.from(cards[at].querySelectorAll("button")).indexOf(active);
+    const focusedId = at < 0 ? null : cards[at].dataset.trackId;
     if (ui.recoverDraft) ui.recoverDraft.hidden = !draftItem(true);
     while (ui.lib.firstChild) ui.lib.removeChild(ui.lib.firstChild);
     const items = custom.list();
-    if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
+    if (!items.length) ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker."));
     for (const it of items) {
-      const card = el("div", "td-card");
+      const card = el("div", "td-card"); card.dataset.trackId = it.id;
       const c = el("canvas"); c.width = 320; c.height = 220; c.setAttribute("aria-hidden", "true");
       const def = Tracks.LIST.find((t) => t.id === it.id);
       try { if (def) TrackMaps.draw(c, def, { width: 3, color: "#f6f6f9" }); } catch (e) { Log.warn("track", "library thumbnail failed: " + (e && e.message)); }
@@ -1638,6 +1625,13 @@ const TrackDesigner = (function () {
       card.append(c, name, meta, row);
       ui.lib.appendChild(card);
     }
+    if (action >= 0 && openFlag && !ui.paneLib.hidden) {
+      const same = items.findIndex((it) => it.id === focusedId);
+      const card = ui.lib.children[same < 0 ? Math.min(at, items.length - 1) : same];
+      // A removed row lands on EDIT, so repeating Enter cannot delete its neighbour.
+      const target = card && card.querySelectorAll("button")[same < 0 ? 0 : action];
+      (target || ui.tabLib).focus();
+    }
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────────
@@ -1655,6 +1649,7 @@ const TrackDesigner = (function () {
     return true;
   }
   function onBack(ev) {
+    if (ev.target?.closest?.("#screen-arranger")) return;
     if (workspace && workspace.closeMenu(ev)) return;
     if (ev.type === "keydown" && (ev.key === "z" || ev.key === "Z") && (ev.ctrlKey || ev.metaKey)) {
       if (!openFlag) return;
@@ -1675,6 +1670,7 @@ const TrackDesigner = (function () {
     if (first) first.focus();
   }
   function open(opts) {
+    invalidateShares();
     ++replacementGeneration;
     if (!built && !init()) return false;
     // A share link opened while the screen is up (hashchange) must not make
@@ -1691,7 +1687,7 @@ const TrackDesigner = (function () {
     else if (!design) {
       const it = draftItem();
       if (it) { load(it, "draft", it.originId); if (!custom.get(it.id)) savedSnap = null; message("Draft restored"); }
-      else { design = blank(); afterChange("blank"); randomise(design.seed); randomisedOnOpen = true; }
+      else { design = blank(); afterChange("blank"); randomise(design.seed); randomisedOnOpen = true; undo.length = 0; redo.length = 0; refreshControls(); }
     }
     root.hidden = false; openFlag = true; checksSaid = null;
     if (seatFootFn) seatFootFn(true);   // a resize while closed was skipped
@@ -1717,8 +1713,25 @@ const TrackDesigner = (function () {
   }
   function close() {
     if (!root || !openFlag) return;
+    invalidateShares();
     ++replacementGeneration;   // pending single-circuit reads/decodes no longer own this visit
     saveDraft();
+    clearTimeout(previewT); previewT = 0;   // open() schedules a fresh preview
+    if (cancelDesignJob) cancelDesignJob();
+    if (typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(fromFrame);
+      cancelAnimationFrame(candThumbFrame);
+    }
+    ++fromJob; ++candThumbJob;
+    if (ui.from) ui.fromBtn.setAttribute("aria-expanded", "false");
+    for (const panel of [ui.from, ui.cands]) if (panel) {
+      while (panel.firstChild) panel.removeChild(panel.firstChild);
+      panel.hidden = true;
+    }
+    cands = []; candStyle = null;
+    if (ui.styles) for (const chip of Object.values(ui.styles)) {
+      chip.setAttribute("aria-pressed", "false"); chip.classList.remove("active");
+    }
     cancelLibraryImport(false);
     if (repair) repair.cancel();
     if (cv) cv.reset();
@@ -1735,7 +1748,7 @@ const TrackDesigner = (function () {
   /** For tests and the agent: a plain snapshot of what the screen shows. */
   function state() {
     return {
-      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind,
+      open: openFlag, tool, mode, sel, span, selectionMode, spanArm: !!spanArm, pending: !!previewT, propKind, view: cv ? cv.view() : null,
       design: design ? copy(design) : null,
       ok: !!(verdict && verdict.ok), red: verdict ? verdict.red : null, amber: verdict ? verdict.amber : null,
       issues: verdict ? verdict.issues.map((i) => i.code + ":" + i.level) : [],
@@ -1753,7 +1766,7 @@ const TrackDesigner = (function () {
 
   // ── insight: TURNS, SPEED, TRACK OF THE DAY, START FROM (TrackInsight) ──
   // ins: the TURNS rows of the last preview; heatV: its per-node speeds (m/s).
-  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0;
+  let ins = [], heatOn = false, heightHeatOn = false, heatV = null, fromJob = 0, fromFrame = 0;
   // START FROM: def id → the OUTLINE DesignerCanvas.thumb strokes ({ px, pz, n }, at most
   // THUMB_PTS points), built once. It held each whole line-less centreline: 52 circuits,
   // ~4 MB pinned for the page after the panel opened once, for a 160×110 card.
@@ -1852,11 +1865,41 @@ const TrackDesigner = (function () {
     const I = insight();
     const def = Tracks.LIST.find((t) => t.id === id && !t.custom);
     if (!I || !def) { message("That circuit is not available", true); return false; }
+    const generation = ++replacementGeneration;
+    // Picker entries may still be metadata only. Hydrate just the chosen circuit;
+    // edits, another pick or closing the screen revoke this pending replacement.
+    if (def._metaOnly) {
+      if (!G || typeof G.ensureCircuit !== "function") { message("Could not load " + def.name, true); return false; }
+      // Pin the map view before "Loading…" reflows the foot: a mid-hydration
+      // resize must not re-fit under a drag the player (or the pending-drag
+      // spec) already aimed — that miss became a pan with no onBegin (#6031).
+      if (cv && cv.holdFit) cv.holdFit(true);
+      message("Loading " + def.name + "…");
+      const releaseFit = () => { if (cv && cv.holdFit) cv.holdFit(false); };
+      return Promise.resolve().then(() => G.ensureCircuit(Tracks.LIST.indexOf(def))).then(async () => {
+        if (generation !== replacementGeneration) return false;
+        if (def._metaOnly) { message("Could not load " + def.name, true); return false; }
+        // A handle press can still become a drag after hydrate resolves; wait
+        // for the map/profile gesture to go idle, then re-check the generation
+        // so a deliberate move revokes and a selection-only tap still applies.
+        if (cv && cv.whenIdle) await cv.whenIdle();
+        if (prof && prof.whenIdle) await prof.whenIdle();
+        if (generation !== replacementGeneration) return false;
+        return traceCircuit(I, def);
+      }).catch((e) => {
+        if (generation === replacementGeneration) message("Could not load " + def.name + " — try again", true);
+        Log.warn("track", "start from " + id + " failed: " + (e && e.message || e));
+        return false;
+      }).finally(releaseFit);
+    }
+    return traceCircuit(I, def);
+  }
+  function traceCircuit(I, def) {
     let f = null;
-    try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + id + " failed: " + (e && e.message || e)); f = null; }
+    try { f = I.fromCircuit(def); } catch (e) { Log.warn("track", "start from " + def.id + " failed: " + (e && e.message || e)); f = null; }
     if (!f || f.pts.length < CustomTracks.LIMITS.ptsMin) { message("Could not trace " + def.name, true); return false; }
     sel = -1; span = -1;
-    commit(Object.assign(freshLoop(design, f.pts, (Date.now() % 4294967296) >>> 0), { baseHW: f.baseHW, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + id);
+    commit(Object.assign(freshLoop(design, f.pts, (Date.now() % 4294967296) >>> 0), { baseHW: f.baseHW, name: CustomTracks.sanitizeName(def.name + " REMIX") }), "seed:" + def.id);
     if (ui.name) ui.name.value = design.name;
     if (cv) cv.fit();
     if (ui.from) { ui.from.hidden = true; ui.fromBtn.setAttribute("aria-expanded", "false"); }
@@ -1894,9 +1937,9 @@ const TrackDesigner = (function () {
         if (!tr) { tr = thumbOutline(Tracks.buildCenterline(def, { line: false })); thumbTr.set(def.id, tr); }
         DesignerCanvas.thumb(c, tr, { color: "#f6f6f9", width: 2 });
       } catch (e) { Log.warn("track", "start-from thumbnail " + def.id + " failed: " + (e && e.message)); }
-      requestAnimationFrame(next);
+      fromFrame = requestAnimationFrame(next);
     };
-    requestAnimationFrame(next);
+    fromFrame = requestAnimationFrame(next);
   }
 
   // ── authoring: SPIRAL m, SPAN WIDTH m, the SELECTED TURN's BANK ° ─────────
@@ -1919,7 +1962,7 @@ const TrackDesigner = (function () {
     box.insertBefore(ui.spanW, box.children[at + 1] || null);
     ui.turnPick = el("div"); ui.turnPick.hidden = true; ui.turnPick.setAttribute("role", "group"); ui.turnPick.setAttribute("aria-label", "Selected turn");
     ui.turnPickLabel = el("div", "td-label", "SELECTED TURN");
-    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v > 0 ? v + "°" : "FLAT"));
+    ui.bank = stepper("BANK °", pickedBank, (v) => { const c = pickedTurn(); if (c) setCornerBank(c, v); }, 2, (v) => (v ? v + "°" : "FLAT"));
     ui.turnPick.append(ui.turnPickLabel, ui.bank);
     ui.turns.parentNode.appendChild(ui.turnPick);
   }
@@ -1942,31 +1985,51 @@ const TrackDesigner = (function () {
   // control-polygon arc fractions — the frame remapZones keeps and toRaw maps
   // to the engine's index fractions (CustomTracks.arcToIndexFrac).
   function spanFracs() {
-    const c = cumArc(design.pts), L = c[design.pts.length];
+    const c = TrackZones.cumArc(design.pts), L = c[design.pts.length];
     return L > 0 ? [c[sel] / L, c[span] / L] : null;
   }
-  /** Two lap ranges share road (s1 < s0 runs over the line; touching ends do not count). */
+  /** Two lap ranges share road (s1 < s0 runs over the line; touching ends do not count).
+   *  {s0: 0, s1: 1} is the whole lap (CustomTracks keeps it; zones.js / fixes.js
+   *  carry it whole): its wrapped length is 0, so it is caught first. */
   function rangesOverlap(a0, a1, b0, b1) {
-    const len = (x0, x1) => wrap01(x1 - x0);
-    const inside = (x, x0, x1) => { const d = wrap01(x - x0); return d > ZONE_EPS && d < len(x0, x1) - ZONE_EPS; };
-    return Math.abs(wrap01(a0 - b0 + 0.5) - 0.5) < ZONE_EPS || inside(b0, a0, a1) || inside(a0, b0, b1);
+    if ((a0 === 0 && a1 === 1) || (b0 === 0 && b1 === 1)) return true;
+    const len = (x0, x1) => TrackZones.wrap01(x1 - x0);
+    const inside = (x, x0, x1) => { const d = TrackZones.wrap01(x - x0); return d > ZONE_EPS && d < len(x0, x1) - ZONE_EPS; };
+    return Math.abs(TrackZones.wrap01(a0 - b0 + 0.5) - 0.5) < ZONE_EPS || inside(b0, a0, a1) || inside(a0, b0, b1);
   }
   function spanHW() {
     if (!design) return 7;
     const f = hasSpan() ? spanFracs() : null;
-    const z = f && (design.hwZones || []).find((q) => rangesOverlap(f[0], f[1], q.s0, q.s1));
-    return z ? z.hw : design.baseHW;
+    // The engine keeps the narrower where zones overlap (def.js applyHwZones).
+    let hw = design.baseHW;
+    if (f) for (const q of design.hwZones || []) if (rangesOverlap(f[0], f[1], q.s0, q.s1)) hw = Math.min(hw, q.hw);
+    return hw;
   }
-  /** Narrow the selected span to half-width hw (5 m … the base): one hwZone,
-   *  replacing any it overlaps; the base width clears it. The engine only ever
+  /** The parts of zone z outside the lap range [s0, s1) (wrap-aware): 0, 1 or 2
+   *  zones with z's hw and ease. The full lap {0, 1} leaves the range's complement. */
+  function zoneOutside(z, s0, s1) {
+    if (z.s0 === 0 && z.s1 === 1) return [Object.assign({}, z, { s0: s1, s1: s0 })];
+    // Unrolled on the line from z.s0; each kept end is one of the four given
+    // fractions, stored as-is (wrap01's +1 would shift the low bits).
+    const w = TrackZones.wrap01, ze = z.s0 + w(z.s1 - z.s0), out = [];
+    for (const k of [-1, 0, 1]) {
+      const c0 = s1 + k, c1 = c0 + 1 - w(s1 - s0);
+      const a = z.s0 >= c0 ? z.s0 : s1, b = ze <= c1 ? z.s1 : s0;
+      if (Math.min(ze, c1) - Math.max(z.s0, c0) > ZONE_EPS) out.push(Object.assign({}, z, { s0: a, s1: b }));
+    }
+    return out;
+  }
+  /** Set the selected span to half-width hw (5 m … the base): one hwZone. A zone
+   *  it overlaps keeps the road outside the span (a full-lap narrowing stays on
+   *  the rest of the lap); the base width clears the span. The engine only ever
    *  narrows (def.js applyHwZones keeps the smaller), so the base is the top. */
   function setSpanWidth(hw) {
     if (!hasSpan()) { message("Select a span first: tap a point, then shift-tap a second (or tap a row under TURNS)", true); return false; }
     const LIM = CustomTracks.LIMITS, base = design.baseHW;
     hw = Math.round(Math.min(base, Math.max(LIM.hwMin, Number.isFinite(+hw) ? +hw : base)) * 10) / 10;
     const [s0, s1] = spanFracs(), had = design.hwZones || [];
-    const keep = had.filter((z) => !rangesOverlap(s0, s1, z.s0, z.s1));
-    if (hw !== base && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " width zones at most — set one back to the base width first", true); return false; }
+    const keep = had.flatMap((z) => rangesOverlap(s0, s1, z.s0, z.s1) ? zoneOutside(z, s0, s1) : [z]);
+    if (keep.length + (hw !== base ? 1 : 0) > LIM.zones) { message("A circuit keeps " + LIM.zones + " width zones at most — set one back to the base width first", true); return false; }
     // The taper: no steeper than 1 m of half-width per 20 m (×1.5), never under the engine's 0.025 default.
     const Lb = verdict && verdict.tr ? verdict.tr.total : S.polyLen(design.pts);
     const ease = Math.round(Math.min(0.2, Math.max(0.005, Math.max(0.025, 1.5 * 20 * Math.abs(hw - base) / Lb))) * 1000) / 1000;
@@ -1988,21 +2051,20 @@ const TrackDesigner = (function () {
     const z = c && tr ? bankNear(c, tr.total, (q) => Math.max(q.widthM / 2, c.lenM / 2)) : null;
     return z ? z.angleDeg : 0;
   }
-  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, else 2 … 30). */
+  /** Bank turn `row` (a TURNS row, or its number) at `deg` (0 = flat, negative = adverse). */
   function setCornerBank(row, deg) {
     if (previewT || !verdict) runPreview();
     const c = typeof row === "number" ? ins.find((x) => x.n === row) : row, tr = verdict && verdict.tr;
     if (!c || !tr || !Number.isFinite(c.sApex)) { message("Select a turn under TURNS first", true); return false; }
     const L = tr.total, LIM = CustomTracks.LIMITS, had = design.bankZones || [];
-    deg = Math.round(Math.min(LIM.angleDeg, Math.max(0, +deg || 0)));
-    if (deg < 2) deg = 0;
+    deg = Math.round(Math.min(LIM.angleDeg, Math.max(-LIM.angleDeg, +deg || 0)));
     const keep = had.filter((z) => !(lapDist(z.frac * L, c.sApex, L) < c.lenM / 2));
     if (deg && keep.length >= LIM.zones) { message("A circuit keeps " + LIM.zones + " banked corners at most — flatten one first", true); return false; }
-    const next = deg ? keep.concat([{ frac: wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
+    const next = deg ? keep.concat([{ frac: TrackZones.wrap01(c.sApex / L), angleDeg: deg, widthM: Math.round(Math.min(600, Math.max(20, c.lenM))) }]) : keep;
     if (JSON.stringify(next) === JSON.stringify(had)) return false;
     commit(Object.assign({}, design, { bankZones: next }), "zone:bank");
     const I = insight(), fiaMax = I && I.THRESH ? I.THRESH.bankDeg : 5.7;
-    message("T" + c.n + (deg ? " banked " + deg + "°" + (deg > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
+    message("T" + c.n + (deg ? " banked " + deg + "°" + (Math.abs(deg) > fiaMax ? " — over the FIA's " + fiaMax + "°" : "") : " is flat again"));
     return true;
   }
   /** Whole-circuit kerb ribbon: flat / sausage / rumble (mesh.js buildKerbs). */
@@ -2032,14 +2094,14 @@ const TrackDesigner = (function () {
   }
   /** "· BANK 6° · 12.6 m WIDE" on a TURNS row whose apex carries a zone. */
   function turnTags(c) {
-    return (c.bankDeg > 0 ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
+    return (c.bankDeg ? " · BANK " + Math.round(c.bankDeg) + "°" : "") + (c.hwSpan != null ? " · " + +(2 * c.hwSpan).toFixed(1) + " m WIDE" : "");
   }
 
   // ── elevation: per-node heights[] + the strip (DesignerProfile) ──
   // Control points stay [x, z]; heights[i] is metres at point i (0.25 m lattice).
   // Presets write heights and clear legacy cosine elevations so the strip matches
   // the road. Old saves without heights load flat (ensureHeights).
-  let prof = null;
+  let /** @type {ReturnType<typeof DesignerProfile.create> | null} */ prof = null;
   function buildProfile(stage) {
     if (typeof DesignerProfile === "undefined" || !stage) return;
     ui.profile = el("canvas");
@@ -2051,7 +2113,7 @@ const TrackDesigner = (function () {
       rangeSelect: () => selectionMode === "range",
       extendSelection: () => spanArm,
       onChange: (i, h, live, all) => {
-        if (live) return;
+        if (live) { ++replacementGeneration; return; }
         if (Array.isArray(all)) setHeights(all, i);
         else setNodeHeight(i, h);
       },
@@ -2140,7 +2202,7 @@ const TrackDesigner = (function () {
     if (prof.setHeights) prof.setHeights(design.heights);
     const tr = verdict && verdict.tr, pts = design.pts;
     let at = null;
-    if (tr && sel >= 0 && sel < pts.length) { const c = cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }
+    if (tr && sel >= 0 && sel < pts.length) { const c = TrackZones.cumArc(pts); at = c[sel] / (c[pts.length] || 1) * tr.total; }
     prof.setCursor(at);
     if (prof.setSelection || sel >= 0) {
       if (prof.setSelection) prof.setSelection(sel, span);
@@ -2166,7 +2228,8 @@ const TrackDesigner = (function () {
   // cands: the cards on show ({ seed, pts, score, feats, tr, stats }, best
   // first); candJob: the run in flight (a newer press drops an older one).
   const DESIGN_N = 16, DESIGN_SLICES = 4, DESIGN_STYLES = ["FAST", "TECHNICAL", "MIXED"];
-  let cands = [], candStyle = null, candJob = 0, candThumbJob = 0, candBusy = false;
+  let cands = [], candStyle = null, candThumbJob = 0, candThumbFrame = 0, candBusy = false;
+  let /** @type {(() => void) | null} */ cancelDesignJob = null;
   /** Under the RANDOMISE row's group: [FAST][TECHNICAL][MIXED] and the candidate cards. */
   function buildDesigned(circuit) {
     ui.styleRow = el("div", "td-chips");
@@ -2192,21 +2255,30 @@ const TrackDesigner = (function () {
    *  the busy state paints), then done() → the Promise's value. A newer run
    *  supersedes this one (false). */
   function runSliced(text, slices, work, done) {
-    const job = ++candJob;
+    if (!openFlag) return Promise.resolve(false);
+    if (cancelDesignJob) cancelDesignJob();
     setDesignBusy(true); message(text);
     return new Promise((resolve) => {
-      let k = 0;
+      let k = 0, timer;
+      const cancel = () => {
+        clearTimeout(timer);
+        cancelDesignJob = null;
+        setDesignBusy(false);
+        message("");
+        resolve(false);
+      };
+      cancelDesignJob = cancel;
       const step = () => {
-        if (job !== candJob) { resolve(false); return; }
+        if (cancelDesignJob !== cancel) return;
         try { work(k); } catch (e) {
           Log.warn("track", "designed randomise failed: " + (e && e.message || e));
-          setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
+          cancelDesignJob = null; setDesignBusy(false); message("Could not design circuits — RANDOMISE instead", true); resolve(false); return;
         }
-        if (++k < slices) { setTimeout(step, 0); return; }
-        setDesignBusy(false);
+        if (++k < slices) { timer = setTimeout(step, 0); return; }
+        cancelDesignJob = null; setDesignBusy(false);
         resolve(done());
       };
-      setTimeout(step, 30);
+      timer = setTimeout(step, 30);
     });
   }
   /** FAST / TECHNICAL / MIXED: DESIGN_N seeds (from `seed`, default the design's
@@ -2286,9 +2358,9 @@ const TrackDesigner = (function () {
       if (job !== candThumbJob || !queue.length) return;
       const [cvs, tr] = queue.shift();
       try { DesignerCanvas.thumb(cvs, tr, { color: "#f6f6f9", width: 2 }); } catch (e) { Log.warn("track", "designed thumbnail failed: " + (e && e.message)); }
-      requestAnimationFrame(next);
+      candThumbFrame = requestAnimationFrame(next);
     };
-    requestAnimationFrame(next);
+    candThumbFrame = requestAnimationFrame(next);
   }
 
   // ── files, the share card, the test drive ─────────────────────────────────
@@ -2374,13 +2446,14 @@ const TrackDesigner = (function () {
   /** The 640×360 track card: the outline in the left 360², name, facts, theme,
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
   async function cardCanvas() {
+    const started = shareSession;
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok || !verdict.tr) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     // The encoder yields to compression; editing can continue meanwhile. One
     // snapshot owns the link, drawing, filename AND native share-sheet title.
     const item = copy(design), preview = verdict;
-    const code = await TrackCodec.encode(item);
-    lastCode = code;
+    const code = await encodeShareItem(item);
+    if (started !== shareSession) return null;
     if (!code) { message("This design cannot be encoded", true); return null; }
     const url = TrackCodec.shareUrl(code), tr = preview.tr, st = preview.stats || {}, COL = DesignerCanvas.COL;
     const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
@@ -2408,29 +2481,43 @@ const TrackDesigner = (function () {
    *  sheet (AbortError) is the player's choice — no fallback, no message.
    *  Re-entry while a draw/share is in flight is refused (double-click used to
    *  fire two downloads). */
-  let cardBusy = false;
+  let busyCardSession = null;
   async function shareCard() {
-    if (cardBusy) return false;
-    cardBusy = true;
+    const started = shareSession;
+    if (busyCardSession === started) return false;
+    busyCardSession = started;
     try {
       const card = await cardCanvas();
-      if (!card) return false;
+      if (!card || started !== shareSession) return false;
       let blob = null;
-      try { blob = await blobOf(card.canvas); } catch (e) { message("Could not draw the card: " + (e && e.message || e), true); return false; }
+      try { blob = await blobOf(card.canvas); } catch (e) {
+        if (started === shareSession) message("Could not draw the card: " + (e && e.message || e), true);
+        return false;
+      }
+      if (started !== shareSession) return false;
       const nav = typeof navigator !== "undefined" ? navigator : null;
       const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
       if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
         try {
           await nav.share({ files: [file], title: card.title, text: card.url });
+          if (started !== shareSession) return false;
           message("Card shared"); Log.info("track", "designer card shared");
           return true;
         } catch (e) {
-          if (e && e.name === "AbortError") return false;
+          if (started !== shareSession || (e && e.name === "AbortError")) return false;
           Log.info("track", "designer card share refused (" + (e && e.name || e) + ") — saving it instead");
         }
       }
-      try { await saveFile(blob, card.name); message("Card saved as " + card.name); return true; } catch (e) { message("Could not save the card: " + (e && e.message || e), true); return false; }
-    } finally { cardBusy = false; }
+      try {
+        await saveFile(blob, card.name);
+        if (started !== shareSession) return false;
+        message("Card saved as " + card.name);
+        return true;
+      } catch (e) {
+        if (started === shareSession) message("Could not save the card: " + (e && e.message || e), true);
+        return false;
+      }
+    } finally { if (busyCardSession === started) busyCardSession = null; }
   }
   /** Arc s (m) of the preview build's node nearest control point i, or -1. */
   function builtS(i) {
@@ -2495,10 +2582,11 @@ const TrackDesigner = (function () {
   async function testHere(i) {
     const at = Number.isInteger(i) ? i : sel;
     if (!design || !(at >= 0 && at < design.pts.length)) { message("Select a point to test drive from", true); return false; }
-    const r = save(true);
+    const r = save(true, () => testHere(at));   // after a KEEP MINE / USE THEIRS answer, drive from the same point
     if (!r.ok) return false;
     const idx = custom.select(r.id);
     if (idx < 0) { message("That circuit is not in the list any more", true); return false; }
+    if (at !== sel) span = -1;                         // a drive from another point leaves the range behind (#5743 D3)
     sel = at;
     const s = builtS(at), back = { id: r.id, sel: at, span, s };
     if (custom.armReturn) custom.armReturn(back);

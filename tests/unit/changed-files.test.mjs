@@ -13,7 +13,8 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parseNameStatusZ, changedPaths } from "../../tools/lib/changed-files.mjs";
+import { parseNameStatusZ, changedPaths, changedWithUntracked, resolveDeployBase, untrackedPaths } from "../../tools/lib/changed-files.mjs";
+import { changedVsDeploy, changedHeader } from "../../tools/ci/tooling-fast.mjs";
 import { pick } from "../../tools/ci/pick-unit-slices.mjs";
 
 test("parseNameStatusZ reads plain statuses and both ends of R and C records", () => {
@@ -45,4 +46,37 @@ test("a real rename lists its source, and the circuit rules fire on it", () => {
     assert.ok(slices.has("vm-a1") && slices.has("page-a") && slices.has("page-b"), [...slices].join(","));
     assert.ok(!new Set(pick(["docs/PHYSICS.md"]).slices.keys()).has("vm-a1"), "the destination alone routed docs-only");
   } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+});
+
+
+// AUDIT W6 (2026-11-10): `--changed` on a clone without origin/<deploy> fell
+// back to HEAD~1 (the last commit's selection, reported green), and a new file
+// was invisible to `git diff <base>` until `git add`.
+test("deploy base: origin, else the local branch, else null; untracked files count as changed", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-deploy-base-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  try {
+    g("init", "-q", "-b", "work"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.writeFileSync(path.join(dir, "a.js"), "1\n"); g("add", "-A"); g("commit", "-qm", "base");
+    const baseSha = g("rev-parse", "HEAD");
+    fs.writeFileSync(path.join(dir, "b.js"), "2\n"); g("add", "-A"); g("commit", "-qm", "two");
+    fs.writeFileSync(path.join(dir, "new.js"), "untracked\n");
+    fs.writeFileSync(path.join(dir, ".gitignore"), "ignored.js\n"); fs.writeFileSync(path.join(dir, "ignored.js"), "x\n");
+
+    assert.equal(resolveDeployBase("deploy", { cwd: dir }), null, "no origin/deploy, no deploy: no base (never HEAD~1)");
+    assert.throws(() => changedVsDeploy(dir, { branch: "deploy" }), (e) => e.code === "NO_DEPLOY_BASE" && /no deploy base/.test(e.message));
+
+    g("branch", "deploy", baseSha);
+    assert.deepEqual(resolveDeployBase("deploy", { cwd: dir }), { ref: "deploy", sha: baseSha }, "the local branch is the fallback");
+    g("update-ref", "refs/remotes/origin/deploy", baseSha);
+    assert.equal(resolveDeployBase("deploy", { cwd: dir }).ref, "origin/deploy", "origin wins when it resolves");
+
+    assert.deepEqual(untrackedPaths({ cwd: dir }).sort(), [".gitignore", "new.js"], "ignored files stay out");
+    assert.deepEqual(changedPaths([baseSha], { cwd: dir }), ["b.js"], "premise: git diff alone misses the new file");
+    assert.deepEqual(changedWithUntracked(baseSha, { cwd: dir }).sort(), [".gitignore", "b.js", "new.js"]);
+    const d = changedVsDeploy(dir, { branch: "deploy" });
+    assert.equal(d.base.sha, baseSha);
+    assert.deepEqual(d.paths.sort(), [".gitignore", "b.js", "new.js"], "branch commits + untracked, not just HEAD~1");
+    assert.match(changedHeader({ reason: "matched", changed: 3, shards: [], base: d.base }, 1), new RegExp(`base=origin/deploy@${baseSha.slice(0, 12)}$`));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

@@ -48,7 +48,7 @@ function boot() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
@@ -326,4 +326,25 @@ test("mixer: OFF sends a zero-duration stop on actuators without reset", () => {
   assert.equal(calls.at(-1).params.strongMagnitude, 0);
   assert.equal(calls.at(-1).params.weakMagnitude, 0);
   Input.poll(); assert.equal(calls.length, 2);
+});
+
+test("hot-unplug stops the actuator instead of letting the last effect run out (hunt input-touch)", () => {
+  const { Input, sb, fire } = boot();
+  const { calls, pad } = attachPad(sb, fire);
+  let resets = 0;
+  pad.vibrationActuator.reset = () => { resets++; return Promise.resolve(); };
+  Input.setHaptics(1);
+  Input.poll();
+  Input.rumble(0.7, 400, "handles");
+  assert.equal(calls.length, 1, "rumble started");
+  // Pad gone: getGamepads empty + disconnect (Bluetooth drop). flush runs before
+  // pollGamepad, so the stop lands on the following frame once padConnected is false.
+  sb.navigator.getGamepads = () => [];
+  fire("gamepaddisconnected", { gamepad: pad });
+  Input.poll();   // pollGamepad clears padConnected
+  Input.poll();   // flush sees !padConnected and stops the actuator
+  assert.equal(resets, 1, "unplug stops the playing effect");
+  const n = calls.length;
+  Input.poll();
+  assert.equal(calls.length, n, "no further playEffect after the pad is gone");
 });

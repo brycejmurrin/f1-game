@@ -59,6 +59,25 @@ const SKIP = new Set([MANIFEST.PATHS.GLX]);
 
 const noop = () => {};
 
+// ECMAScript globals the game reads in hot code; aliased as script-scope
+// lexicals in each context (see createGame). Only names this Node has.
+const VM_INTRINSICS = ["Math", "Number", "Object", "Array", "String", "Boolean", "Symbol", "JSON", "Reflect",
+  "Map", "Set", "WeakMap", "WeakSet", "Date", "Promise", "Error", "TypeError", "RangeError",
+  "ArrayBuffer", "DataView", "Float32Array", "Float64Array", "Int8Array", "Int16Array", "Int32Array",
+  "Uint8Array", "Uint8ClampedArray", "Uint16Array", "Uint32Array",
+  "isFinite", "isNaN", "parseFloat", "parseInt"].filter((n) => typeof globalThis[n] !== "undefined");
+
+// The GLX stub's frustum: six planes that pass everything (p·x + 1e9 ≥ -r for
+// any point the game draws). Written into the caller's pool when one is given.
+const OPEN_PLANES = Array.from({ length: 6 }, () => new Float32Array(4));
+function fillOpenPlanes(out) {
+  for (let i = 0; i < 6; i++) {
+    const p = out[i] || (out[i] = new Float32Array(4));
+    p[0] = 0; p[1] = 0; p[2] = 0; p[3] = 1e9;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // DOM stubs
 // ---------------------------------------------------------------------------
@@ -391,7 +410,9 @@ function makeGlx(record) {
       instances: matrices && matrices.length ? matrices.length / 16 : 0, idxCount: 0, visible: 0,
     }),
     updateInstances: noop, cullInstances: noop, drawInstanced: noop, castShadowInstanced: noop, freeInstancedBatch: noop,
-    makeFrustumPlanes: () => [],
+    // Six all-pass planes (n = 0, w = 1e9): render()'s car cull indexes
+    // planes[0..5], so an empty array threw on the first rival frame (#5056).
+    makeFrustumPlanes: (vp, out) => fillOpenPlanes(out || OPEN_PLANES),
     aabbInFrustum: () => true,
     envProbeReady: () => false, envProbeReset: noop,
     gpuErrors: () => 0,
@@ -416,7 +437,7 @@ function makeGlx(record) {
 
 function buildSandbox(opts) {
   const vmSearch = opts && opts.search != null ? opts.search : "?seed=1";
-  const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0 };
+  const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0, rapier: !!(opts && opts.rapier) };
   const timers = makeTimers();
   const rafQueue = [];
   const echo = !!opts.verbose;
@@ -485,6 +506,15 @@ function buildSandbox(opts) {
   sandbox.parent = sandbox; sandbox.top = sandbox; sandbox.frames = sandbox;
 
   const ctx = vm.createContext(sandbox);
+
+  // Built-in reads through a contextified global go through V8's interceptor:
+  // `Math.abs` x1e7 measured 107-130 ns a read here against ~1 ns in the main
+  // context, so every VM profile over-weighted math-heavy code (#5056). A
+  // script-scope lexical is resolved before the global, so alias the realm's
+  // OWN intrinsics (same objects: identity, results and the physics digest are
+  // unchanged) before js/ loads. Nothing in js/ declares or reassigns these.
+  // opts.intrinsics === false skips it (the A/B in tests/unit/game-vm-pump.test.mjs).
+  if (opts.intrinsics !== false) vm.runInContext(`const { ${VM_INTRINSICS.join(", ")} } = this;`, ctx, { filename: "game-vm:intrinsics" });
 
   // Realm-native constructors (Event subclasses, Image, observers) so
   // `instanceof` and `new` inside the game see this context's own intrinsics.
@@ -561,6 +591,25 @@ function seatReport(name, sandbox, G) {
   return { name, teamIdx: idx, team, parts };
 }
 
+// A LAZILY INJECTED SCRIPT THAT THROWS IS A BROKEN BOOT (audit W6, 2026-11-10).
+// The <script src> stub above catches the throw, records it and fires onerror —
+// exactly what a browser does — so createGame used to resolve on a half-built
+// game: a js/circuits/scenery/monza.js that threw at load raced a bare Monza and
+// every assertion ran against it. Reject by default; `allowScriptErrors: true`
+// is the per-test opt-out for a test that ASSERTS on a failed load.
+function scriptLoadErrors(record) { return record.scripts.filter((s) => s && s.error); }
+function assertScriptsLoaded(record, opts, where) {
+  if (opts && opts.allowScriptErrors) return;
+  const bad = scriptLoadErrors(record);
+  if (!bad.length) return;
+  const err = new Error(`game-vm: ${bad.length} lazily injected script(s) threw at load ${where}: ` +
+    bad.slice(0, 5).map((s) => `${s.file} (${s.error})`).join("; ") +
+    " — fix the script; createGame({ allowScriptErrors: true }) is only for a test that asserts on the failure");
+  err.record = record;
+  err.scriptErrors = bad;
+  throw err;
+}
+
 function safeStr(x) { try { return typeof x === "object" ? JSON.stringify(x) : String(x); } catch (_) { return String(x); } }
 
 // ---------------------------------------------------------------------------
@@ -599,6 +648,40 @@ function stubCarMeshes(ctx, record) {
   C.buildWheelLayers = () => ({ rotating: empty(), fixed: empty() });
 }
 
+// createGame({ rapier: true }) — OPT-IN Rapier for the debris world.
+// js/physics/debris-world.js loads the vendored Rapier with a dynamic import();
+// a vm.Script without an import hook rejects it (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING),
+// so no headless race ever spawned debris, raised a yellow / VSC / safety car /
+// red flag from a crash, or ran an incident takeover. A custom callback needs
+// --experimental-vm-modules; USE_MAIN_CONTEXT_DEFAULT_LOADER (Node >= 21.7)
+// does not, but resolves with the HOST loader, so document.currentScript.src is
+// a file: URL while the script evaluates and RAPIER_URL lands on the vendored
+// file. Only that one file gets the hook. Opt-in because a live debris world
+// changes crash outcomes, and traces recorded without it must stay as they are.
+const RAPIER_SCRIPT = "js/physics/debris-world.js";
+function runRapierScript(body, ctx, filename) {
+  const loader = vm.constants && vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER;
+  if (!loader) throw new Error("game-vm: rapier:true needs Node >= 21.7 (vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER)");
+  const doc = ctx.document, was = doc ? doc.currentScript : null;
+  if (doc) doc.currentScript = { src: require("url").pathToFileURL(filename).href };
+  // The loader constant is flagged experimental and warns at the import (later,
+  // on a host turn): filter that one warning for the process, nothing else.
+  if (!process.emitWarning._apexRapier) {
+    const emit = process.emitWarning;
+    const quiet = function (w, ...rest) {
+      if (/USE_MAIN_CONTEXT_DEFAULT_LOADER/.test(String((w && w.message) || w))) return undefined;
+      return emit.call(process, w, ...rest);
+    };
+    quiet._apexRapier = true;
+    process.emitWarning = quiet;
+  }
+  try {
+    return new vm.Script(body, { filename, importModuleDynamically: loader }).runInContext(ctx);
+  } finally {
+    if (doc) doc.currentScript = was;
+  }
+}
+
 function runFile(ctx, relPath, record) {
   const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
   const t0 = performance.now();
@@ -607,7 +690,9 @@ function runFile(ctx, relPath, record) {
   // name made every twin report 0 % for the game sources it ran.
   const body = src.replace(/^const\b/gm, "var");
   const filename = path.join(ROOT, relPath);
-  const r = runScriptCached(body, ctx, { filename, root: ROOT });
+  const r = record.rapier && relPath === RAPIER_SCRIPT
+    ? runRapierScript(body, ctx, filename)
+    : runScriptCached(body, ctx, { filename, root: ROOT });
   record.scripts.push({ file: relPath, ms: +(performance.now() - t0).toFixed(1) });
   return r;
 }
@@ -633,10 +718,18 @@ async function settle(pred, maxTurns) {
  *           first manifest file — the VM's equivalent of page.addInitScript
  *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
  *           — OPT-IN, and never on a parity twin
+ *   rapier  true loads the vendored Rapier, so debris, crash flags and incident
+ *           takeovers run headless (see runRapierScript) — OPT-IN
  *   seat    "pin" (default: McLaren, empty parts sheet) | "shipped" (no garage
  *           seed — the GarageDefaults car a fresh browser boots)
- *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly(),
- *             settle(pred), flushTimers(), record, bootMs, trackMs }
+ *   intrinsics false skips the script-scope aliases of Math, Number, … (on by
+ *           default; they make built-in reads main-context fast, #5056)
+ *   allowScriptErrors  true keeps a lazily injected script's load error in
+ *           record.scripts instead of rejecting (createGame and race() reject
+ *           by default; see assertScriptsLoaded)
+ *   handle  { apex, G, ctx, sandbox, seat, step(n, dt), race(id, tod, wx, opts), aiOnly({untilAllFlagged}),
+ *             settle(pred), flushTimers(), pumpFrame(now) (throws on a frame
+ *             fault), record, bootMs, trackMs }
  */
 async function createGame(opts) {
   opts = opts || {};
@@ -756,8 +849,10 @@ async function createGame(opts) {
       err.record = record;
       throw err;
     }
+    assertScriptsLoaded(record, opts, "during boot");
 
     const apex = sandbox.__apex;
+    const createOpts = opts;
     // Opt-in per-step state-hash trace (#2963). Off by default — zero cost when
     // unset. Enable with createGame({ stepTrace: true }) or APEX_STEP_TRACE=1.
     const stepTraceOn = !!(opts.stepTrace || process.env.APEX_STEP_TRACE === "1");
@@ -784,6 +879,7 @@ async function createGame(opts) {
           return !G || G.cars !== carsBefore;
         }, 4000);
         if (!ok) throw new Error("game-vm: track never built for " + id);
+        assertScriptsLoaded(record, createOpts, `while building ${id}`);
         apex.go();
         handle.trackMs = performance.now() - t1;
         return r;
@@ -809,11 +905,14 @@ async function createGame(opts) {
       // first finisher, not the human) and RETIRE it: a retired car is out of
       // `ranked`, so out of every traffic scan, collision and tow. Call after
       // race(); returns the removed car (null when there is no player).
-      aiOnly() {
+      // { untilAllFlagged: true } also arms __apex.flagHold(true): the race runs
+      // until every car takes the flag (or retires), not 3.5 s after the winner.
+      aiOnly(o) {
         const i = G ? G.cars.findIndex((c) => c.isPlayer || c.human) : -1;
         if (i < 0) return null;
         apex.carRole(i, { human: false });
         apex.retire(i, "bench");
+        if (o && o.untilAllFlagged) apex.flagHold(true);
         return G.cars[i];
       },
       settle,
@@ -837,7 +936,19 @@ async function createGame(opts) {
         }
       },
       flushTimers: (onlyDue) => timers.flush(onlyDue),
-      pumpFrame: (now) => { const q = world.rafQueue.splice(0); for (const fn of q) fn(now != null ? now : performance.now()); return q.length; },
+      // Run the queued rAF callbacks once. The game's LoopHealth swallows a
+      // throwing frame into a "frame fault" console line (and only rethrows at
+      // its cap), so a pumped frame that faulted would otherwise read as clean:
+      // check the record and throw the fault (#5056). Returns callbacks run.
+      pumpFrame: (now) => {
+        const q = world.rafQueue.splice(0), mark = record.console.length;
+        for (const fn of q) fn(now != null ? now : performance.now());
+        for (let i = mark; i < record.console.length; i++) {
+          const line = record.console[i][1];
+          if (/frame fault/.test(line)) { const e = new Error("game-vm: pumped frame faulted: " + line.slice(0, 400)); e.record = record; throw e; }
+        }
+        return q.length;
+      },
       resourceSnapshot,
       close,
     };
@@ -851,7 +962,7 @@ async function createGame(opts) {
   }
 }
 
-module.exports = { createGame, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
+module.exports = { createGame, scriptLoadErrors, settle, settleAsync: settle, captureStepState, ROOT, SKIP, SEATS };
 
 if (require.main === module) {
   (async () => {

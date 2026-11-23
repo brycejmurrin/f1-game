@@ -2,7 +2,6 @@
 /* Apex 26 — the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the car and to each corner, a RACE/FLYBY lens, and COPY as an __apex.view() line or as a flyby pose (FlybySeq.shotFromView). */
 const FreeCam = (function () {
 
-// ---- pure camera maths -----------------------------------------------------
 //
 // Everything in this block is data in, data out — no DOM, no G. It is the half
 // tests/unit/free-cam.test.mjs holds without booting the game.
@@ -104,8 +103,6 @@ function anchorText(pose) {
   }
 }
 
-// ---- the panel -------------------------------------------------------------
-
 let live = null;   // the one created instance, for __apex.freeCam (js/agent/apex.js)
 
 /** photo = { enter, exit, publish, releaseKeys } from js/camera/photo-cam.js,
@@ -189,7 +186,6 @@ if (root) {
   root.appendChild(inner);
 }
 
-// ---- state -> DOM ----
 function paint() {
   const set = (id, v, txt) => { const i = E[id]; if (i && document.activeElement !== i) i.value = String(v); const b = E[id + "-val"]; if (b) b.textContent = txt; };
   set("fc-speed", sliderFromSpeed(st.speed), Math.round(st.speed) + " m/s");
@@ -233,7 +229,6 @@ function paintActions() {
   box.hidden = !list.length;
 }
 
-// ---- placing the camera ----
 function place(eye, target, fov) {
   photoCam.pos[0] = eye[0]; photoCam.pos[1] = eye[1]; photoCam.pos[2] = eye[2];
   const a = aim(eye, target); photoCam.yaw = a.yaw; photoCam.pitch = a.pitch;
@@ -273,7 +268,6 @@ function snapCorner(n) {
 }
 const stepCorner = (d) => snapCorner((st.corner || (d > 0 ? 0 : 1)) + d);
 
-// ---- the frame hook (photo-cam.js updatePhotoCam, after it builds dbgCam) ----
 /** Speed for this frame, m/s. */
 function speed(boost) { return st.speed * (boost ? BOOST : 1); }
 function decorate(cam, dt) {
@@ -316,7 +310,6 @@ function setOverlaysVisible(on) {
   else { PhotoKit.setGrid(kitOverlays.grid, st.grid); PhotoKit.applyDof(null, st.dofFocus, st.dofBlur, kitOverlays.dof); }
 }
 
-// ---- open / close ----
 function isOpen() { return st.open; }
 function open() {
   paintMarks();
@@ -386,7 +379,6 @@ function enterFrom(opts) {
 /** Photo mode left by some other door (resume, quit, the lighting tuner). */
 function onPhotoExit() { if (st.open) close(false); }
 
-// ---- copy ----
 function copyOut(text, okMsg) {
   const ta = E["fc-out"];
   if (ta) { ta.value = text; ta.hidden = false; ta.focus(); if (ta.setSelectionRange) ta.setSelectionRange(0, text.length); }
@@ -413,7 +405,6 @@ function copyPose() {
   return r;
 }
 
-// ---- __apex.freeCam(opts) ----
 function state() {
   const c = G.dbgCam;
   return {
@@ -439,7 +430,6 @@ function cmd(opts) {
   return state();
 }
 
-// ---- wiring ----
 const on = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
 const tick = () => { if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiTick(); };
 on($("fc-close"), "click", () => { tick(); close(true); });

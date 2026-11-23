@@ -8,7 +8,7 @@
 // is loaded, just the car. For interactive poking, open tools/carview.html itself.
 //
 // Prereq: a static server for the repo root on http://127.0.0.1:3456
-//   python3 -m http.server 3456      (or: npx serve -l 3456 .)
+//   node tools/serve.mjs              (port 3456)
 //
 // Usage:
 //   node tools/car/render-car.mjs [--views=a,b,c] [options]
@@ -270,6 +270,7 @@ const BG     = arg('bg', null);
 const LOOK   = parseFloat(arg('look', '0'));    // orbit-target Z offset (+nose / −rear)
 const LOOKX  = parseFloat(arg('lookx', '0'));   // orbit-target X offset (+right / −left)
 const PRESET = arg('preset', null);
+if (PRESET && PRESET !== 'list' && arg('views', null) != null) { console.error('render-car: --preset overrides --views; pass one of them'); process.exit(2); }
 const LIGHTSET = arg('lightset', null);   // e.g. "day,dusk,night" — fan out every shot across these tod values
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.
@@ -398,7 +399,7 @@ for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v
 // UNKNOWN FLAGS EXIT 2, BEFORE CHROMIUM. arg() only answers the names it is
 // asked for, so `--dry-run`, `--bogus` or a typo (`--tema=redbull`) used to be
 // ignored and the tool booted a browser to render the default McLaren. Every
-// flag this file reads is listed here (tests/unit/tools-runnable.test.mjs pins
+// flag this file reads is listed here (tests/unit/tools-runnable-cli.test.mjs pins
 // that each arg('…') literal is in it).
 const RC_FLAGS = new Set(['az', 'bg', 'carsmooth', 'dist', 'el', 'exp', 'flap', 'gpu', 'h',
   'intensity', 'lightset', 'livery', 'look', 'lookx', 'looky', 'num', 'out', 'preset', 'refl',

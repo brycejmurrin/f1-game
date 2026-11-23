@@ -1,12 +1,12 @@
 # Carve recipes
 
-Parent applies **one** carve after `bloat-auditor` returns rows. Record
+Parent applies **one** carve after `code-hunter` (`focus: dead-code`) returns rows. Record
 before/after counts (`bloat-scan.mjs --json`).
 
 ## 1. Extract from `game.js` / a ratchet file
 
-1. Name the block (start/end lines). Reject if it is `updateCar` / `render`
-   or needs ~15 new `G` members (`do-not.md`).
+1. Name the block: its start/end lines from apex-lsp `lsp_outline` (whole functions; skill code-nav), not
+   `grep -n`. Reject if it is `updateCar` / `render` or needs many new `G` members (`do-not.md`).
 2. Analyse only (no write):
 
    ```sh
@@ -17,23 +17,28 @@ before/after counts (`bloat-scan.mjs --json`).
    that should move, move — do not copy.
 3. New file is hyphenated IIFE: `"use strict"; var Name = { create(G) { … } };`
    Module never reaches into `game.js`. `Module.create(G)` at the existing
-   roster site.
+   roster site. A lazy backend group is different: a `js/render/three/` carve is a sibling `tlx-*.js` / `tsl-*.js`
+   factory in `DEFERRED.three` with `DEFERRED_EDGES` pairs in `tools/manifest.cjs`, and gets no `index.html` tag.
 4. Lockstep the same commit: file + its `tools/manifest.cjs` row (+ `HARD_EDGES` if eval-time
-   destructure), then `npm run gen` (writes the `index.html` `<script>` tag — generated, never
+   destructure), then `npm run gen` (writes the `index.html` `<script>` tag for a FULL-roster file — generated, never
    hand-edited) + lower
    the ceilings: `node tools/check/ratchets.mjs --update --lower-only` (a delta in tests/data/ratchets.d on a topic branch).
-5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
-   `game.js`: `physics-characterization` is the master gate — parent names
-   leftover browser groups as not-run.
-6. No bump — `bump-cache` is deploy-only (`.claude/rules/game-code.md`); `npm run gen` only if the manifest changed.
+5. `lsp_references` every removed symbol (grep for text and comments). Then
+   `node tools/ci/tooling-fast.mjs --changed --jobs=3` (the full tier in the background only, AGENTS.md rule 4).
+   Near `game.js`: `tests/specs/physics-characterization.spec.js` is the master gate. It runs on CI, not
+   locally (AGENTS.md rule 5): `node tools/ci/pick-tests.mjs` names the groups, the PR's own CI runs
+   the browser shard (a whole group is Bryce's opt-in); the parent names any group not run.
+6. Commit in two calls (AGENTS.md rule 12); the hook must pass with the lowered ceiling.
+7. No bump — `bump-cache` is deploy-only (`.claude/rules/game-code.md`); `npm run gen` only if the manifest changed.
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 
 ## 2. Split an always-on doc
 
-- A fat skill is **agent-config** (DECISIONS #8); this section covers docs.
+- A fat skill is **agent-config** (`docs/notes/DECISIONS-2026-10-26.md` #8); this section covers docs.
 - Do not paste `AGENTS.md` into a doc. Point at it.
-- The `total-audit` workflow (`docs-ref` / `docs-idx` lenses) first if the prose may be stale.
+- The `total-audit` workflow (`.claude/workflows/total-audit.js`, `docs-ref` / `docs-idx` lenses) first if the
+  prose may be stale.
 
 ## 3. Split the tree (new directory / file family)
 
@@ -56,8 +61,9 @@ row. Grep the symbol; check `hooks-documented`, `global-registry`,
 
 **Dead CSS** (a selector or `--token` nothing uses): grep every `css/*.css`, `index.html`, `js/**` (class
 names built in JS: grep the stem too) and `controller.html`; the proof is a green
-`tests/unit/css-tokens.test.mjs` after the cut plus one screenshot of the touched screen by the parent
-(844×390 touch first). Restructuring what is left is **css-play**.
+`tests/unit/css-tokens.test.mjs` (tokens) and `tests/unit/component-inventory.test.mjs` (the dead-class list in
+`docs/COMPONENTS.md`; `node tools/check/class-usage.mjs` lists class use) after the cut plus one screenshot of the touched screen by the parent
+(852×393 touch first). Restructuring what is left is **css-play**.
 
 **Duplicate:** keep one seam. Shared scalars already live on `M4`
 (`clamp`/`lerp`/`wrapDelta`) — do not add a private copy
@@ -72,7 +78,7 @@ mirrors that cite a **symbol**.
 
 ```sh
 node tools/check/bloat-scan.mjs --json
-npm run test:tooling-fast
+node tools/ci/tooling-fast.mjs --changed --jobs=3
 node tools/ci/verify-change.mjs --plan --json
 ```
 

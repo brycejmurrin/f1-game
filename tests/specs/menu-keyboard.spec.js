@@ -135,6 +135,19 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(await page.evaluate(() => document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 
+  // #3893: Enter from the title must move FORWARD. The picker used to land on
+  // the ALL filter chip and Race Settings on BACK (its [autofocus]), so a
+  // keyboard player's Enter bounced back to the picker instead of racing.
+  test("Enter walks title → picker → Race Settings forward: initial focus is the forward button", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === "sel-go", null, { polling: 100, timeout: 5_000 });
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === "rs-go", null, { polling: 100, timeout: 5_000 });
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("rs-go");
+  });
+
   test("ArrowRight walks the flag strip and scrolls it into view; ArrowDown leaves it for the hero", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
@@ -186,12 +199,14 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     // dispatch these same keys.
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
+    // Every scale could `continue` and the old wait swallowed its own timeout, so the test
+    // passed having measured nothing. Count the scales measured; the wait now fails loudly.
+    let measured = 0;
     for (const pct of [100, 150, 200]) {
       await page.evaluate((p) => window.__apex.uiScale(p), pct);
-      await page.waitForFunction((p) => {
-        try { return Math.round((window.__apex.uiScale?.() ?? p)) === p || document.documentElement.style.getPropertyValue("--ui-scale") !== ""; }
-        catch (_) { return true; }
-      }, pct, { polling: 100, timeout: 2_000 }).catch(() => {});
+      // applyScale writes the clamped pct / 100 to --ui-scale on <html> (js/ui/scale.js).
+      await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale")),
+        { message: `--ui-scale lands at ${pct}%`, timeout: 2_000 }).toBe(String(pct / 100));
       const r = await page.evaluate(() => {
         const list = document.getElementById("sel-tracks");
         list.scrollLeft = 0;
@@ -202,10 +217,53 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
                  max: list.scrollWidth - list.clientWidth };
       });
       if (r.max < r.pane) continue; // not enough content to measure a full page at this scale
+      measured++;
       expect(r.moved / r.pane, `travel at ${pct}% is ~0.9 strip-widths`).toBeGreaterThan(0.7);
       expect(r.moved / r.pane, `travel at ${pct}% is not a double page`).toBeLessThan(1.05);
     }
+    expect(measured, "at least one UI scale had a full page of tracks to measure").toBeGreaterThan(0);
     await page.evaluate(() => window.__apex.uiScale(null));
+  });
+
+  // Until #5152 the enlarged Home column scrolled and this held that PageDown
+  // scrolled it. The landscape title never scrolls now (#5150: js/ui/title-layout.js
+  // fit() zooms the cluster into the box), so a page key over it has nothing to
+  // scroll — js/ui/menu-nav.js then treats the pane as one page: PageDown lands
+  // on the last destination, PageUp on the first, the key is consumed, focus
+  // stays in the menu and the document never moves.
+  test("synthetic page keys walk enlarged Home destinations that do not scroll and keep focus in the menu", async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => { window.__apex.headless(true); window.__apex.uiScale(200); });
+    // The fit lands a frame after the write; settled when the cluster fits whole.
+    await expect.poll(() => page.locator("#menu-buttons").evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+    const result = await page.evaluate(() => {
+      const menu = document.getElementById("menu-buttons");
+      const doors = [...menu.querySelectorAll(".bigbtn")].filter((b) => !b.hidden && b.getClientRects().length);
+      const at = () => doors.indexOf(document.activeElement);
+      document.getElementById("mb-career").focus({ preventScroll: true });
+      const start = at();
+      const key = name => {
+        const event = new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true });
+        document.activeElement.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, scroll: menu.scrollTop, index: at(),
+                 id: document.activeElement && document.activeElement.id, focused: menu.contains(document.activeElement) };
+      };
+      const down = key("PageDown"), up = key("PageUp");
+      return { start, doors: doors.length, down, up, documentScroll: document.documentElement.scrollTop,
+               scroller: menu.scrollHeight - menu.clientHeight };
+    });
+    const dump = JSON.stringify(result);
+    expect(result.scroller, `the enlarged title cluster fits whole ${dump}`).toBeLessThanOrEqual(1);
+    expect(result.start, `CAREER is a measured destination ${dump}`).toBeGreaterThanOrEqual(0);
+    expect(result.down.prevented, `PageDown is consumed ${dump}`).toBe(true);
+    expect(result.down.index, `PageDown lands on a later destination ${dump}`).toBeGreaterThan(result.start);
+    expect(result.down.index, `PageDown reaches the last destination ${dump}`).toBe(result.doors - 1);
+    expect(result.up.prevented, `PageUp is consumed ${dump}`).toBe(true);
+    expect(result.up.index, `PageUp returns to the first destination ${dump}`).toBe(0);
+    expect(result.down.scroll + result.up.scroll, `nothing scrolled ${dump}`).toBe(0);
+    expect(result.down.focused && result.up.focused, `focus stays in the menu ${dump}`).toBe(true);
+    expect(result.documentScroll).toBe(0);
   });
 
   test("PageDown on the circuit strip hands focus to a visible circuit; the next arrow does not page back", async ({ page }) => {
@@ -586,7 +644,8 @@ test.describe("Escape is BACK", () => {
       const out = [];
       for (const id of window.UiLayers.LAYER_IDS) {
         const el = document.getElementById(id);
-        if (!el) { out.push({ id, why: "no such element" }); continue; }
+        // A transient layer (an on-demand editor) exists only once opened; its door is checked live there.
+        if (!el) { if (!window.UiLayers.TRANSIENT_IDS.includes(id)) out.push({ id, why: "no such element" }); continue; }
         const via = el.getAttribute("data-esc-close");
         if (!via) continue;                       // opting out is allowed
         const btn = document.getElementById(via);
@@ -596,6 +655,47 @@ test.describe("Escape is BACK", () => {
       return out;
     });
     expect(bad).toEqual([]);
+  });
+
+  test("composition keys leave picker input, scroll and layer unchanged", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openSelect(page);
+    const results = await page.evaluate(() => {
+      const input = document.getElementById("sel-track-search");
+      const picker = document.getElementById("select");
+      const strip = document.getElementById("sel-tracks");
+      input.focus();
+      const before = { left: strip.scrollLeft, top: document.getElementById("sel-track-section").scrollTop };
+      const rows = [];
+      for (const composing of [{ isComposing: true }, { keyCode: 229 }]) {
+        for (const key of ["ArrowDown", "PageDown", "Escape"]) {
+          const event = new KeyboardEvent("keydown", { key, ...composing, bubbles: true, cancelable: true });
+          input.dispatchEvent(event);
+          rows.push({ key, composing, prevented: event.defaultPrevented, focused: document.activeElement === input,
+            hidden: picker.hidden, left: strip.scrollLeft, top: document.getElementById("sel-track-section").scrollTop });
+        }
+      }
+      return { before, rows };
+    });
+    for (const row of results.rows) {
+      expect(row, JSON.stringify(row)).toEqual({ key: row.key, composing: row.composing, prevented: false,
+        focused: true, hidden: false, ...results.before });
+    }
+    const tabResults = await page.evaluate(() => {
+      const picker = document.getElementById("select");
+      const last = window.MenuNav.items(picker).filter(el => el.tabIndex >= 0).at(-1);
+      return [{ isComposing: true }, { keyCode: 229 }].map(composing => {
+        last.focus();
+        const event = new KeyboardEvent("keydown", { key: "Tab", ...composing, bubbles: true, cancelable: true });
+        last.dispatchEvent(event);
+        return { prevented: event.defaultPrevented, retained: document.activeElement === last };
+      });
+    });
+    expect(tabResults).toEqual([{ prevented: false, retained: true }, { prevented: false, retained: true }]);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#select")).toBeHidden();
+    await expect(page.locator("#overlay")).toBeVisible();
   });
 
   test("Escape on the circuit picker goes back to the title", async ({ page }) => {

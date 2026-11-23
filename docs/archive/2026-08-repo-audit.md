@@ -4,7 +4,7 @@
 > reads as a changelog of its own corrections. One claim was wrong even for its
 > day and stayed misleading: §1 "No CI runs any test" — `.github/workflows/ci.yml`
 > exists and gates the Pages deploy (guards / sweeps / smoke). The standing
-> assessment now lives in docs/ARCHITECTURE-REVIEW.md.
+> assessment now lives in docs/notes/ARCHITECTURE-REVIEW.md.
 
 # Audit findings — August 2026
 

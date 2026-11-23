@@ -1,5 +1,7 @@
 # Agent dev-process research — 2026-09-16
 
+Summary: Third pass, as research: what the two speed-up plans left open, live CI timings (60 runs), the box's own gate timings, and the ranked remaining sinks — twins run twice locally, serial node gates, the double deploy gate, ratchet churn, permission prompts — plus the ideas closed as not-applicable.
+
 Third pass after `PROCESS-SPEEDUP-2026-09.md` (09-01) and
 `PROCESS-SPEEDUP-2026-09-16.md` (the addendum). This one was asked as a
 question — "is there a faster way for agents to work here?" — so it is a

@@ -1,9 +1,17 @@
 // @ts-check
+import { LANDSCAPE, PORTRAIT } from "../helpers/iphone15.mjs";
 import { writeFile } from "node:fs/promises";
+import { BRYCE_WINDOWS, readProfile } from "../../tools/lib/bryce-phone.mjs";
 import { test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 
-const LANDSCAPE = { width: 852, height: 393 };
-const PORTRAIT = { width: 393, height: 852 };
+// The legacy LOAD SETTINGS export (TEXT large, the garage look): the UI scaling contract (PR #5154) measures at it.
+// It is the October 2026 LEGACY export (tools/lib/bryce-phone.mjs `legacy`: HUD 155, BUTTON 245), a heavy fixture, not his phone today.
+const LEGACY_PROFILE = readProfile("legacy");
+// Window A of the contract: an iPhone 15 held sideways, notch left, home
+// indicator below. Headless reports env(safe-area-inset-*) as 0, so inject it.
+const { left, right, top, bottom } = BRYCE_WINDOWS.standalone.insets;
+const NOTCH_A = `:root{--sal:${left}px!important;--sar:${right}px!important;--sat:${top}px!important;--sab:${bottom}px!important}`;
+
 test.use({ viewport: LANDSCAPE, hasTouch: true });
 
 async function boot(page) {
@@ -92,6 +100,40 @@ test("Title circuit photo provides a car to place without starting a race", asyn
   await clickLive(page, "ps-close");
   await expect(page.locator("#photo-studio")).toBeHidden();
   expect(await page.evaluate(() => __apex.cars().length)).toBe(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test("Appearance prepares a Photo Studio subject and keeps its captured preview through layout edits", async ({ page, pageErrors }) => {
+  await boot(page);
+  await clickLive(page, "mb-settings");
+  await clickLive(page, "pm-open-appearance");
+  await page.getByLabel("Screen to arrange").selectOption("photo-studio");
+  await page.getByLabel("Choose page state first").check();
+  await page.locator(".arrange-route").tap();
+  const start = page.getByRole("button", { name: "Start arranging" });
+  await expect(start).toBeVisible();
+  await page.locator("#ps-subject").selectOption("circuit");
+  await page.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track",
+    null, { polling: 100, timeout: BOOT_MS });
+  await expect(start).toBeVisible();
+  await present(page);
+  await clickLive(page, "ps-capture");
+  const photo = page.locator("#ps-preview");
+  await expect(photo).toHaveJSProperty("complete", true);
+  await expect.poll(() => photo.evaluate(img => img.naturalWidth), { timeout: BOOT_MS }).toBeGreaterThan(0);
+  const before = await photo.evaluate(img => img.getBoundingClientRect().width);
+  const source = await photo.evaluateHandle(img => img.currentSrc);
+  await start.tap();
+  const editor = page.locator('#screen-arranger[data-editing-screen="photo-studio"]');
+  await editor.getByLabel("Region", { exact: true }).selectOption("preview");
+  await editor.getByRole("button", { name: "Controls", exact: true }).tap();
+  await editor.getByRole("button", { name: "Width −", exact: true }).tap();
+  await expect.poll(() => photo.evaluate(img => img.getBoundingClientRect().width)).toBeLessThan(before);
+  await editor.getByRole("button", { name:"Cancel", exact:true }).tap();
+  await expect(editor).toHaveCount(0);
+  expect(await photo.evaluate(img => img.getBoundingClientRect().width)).toBeCloseTo(before, 1);
+  expect(await photo.evaluate((img, original) => img.currentSrc === original, source)).toBe(true);
+  await source.dispose();
   expect(pageErrors).toEqual([]);
 });
 
@@ -232,6 +274,45 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   expect(pageErrors).toEqual([]);
 });
 
+test("Paused race photo at the owner's export on a notched phone keeps the LOOK stick clear of the side panel (UI contract gap 18)", async ({ page, pageErrors }, info) => {
+  // One race boot plus a settings import and reload: ~60-90 s on SwiftShader.
+  test.setTimeout(180000);
+  await boot(page);
+  const imp = await page.evaluate((d) => SettingsExport.applySettings(d, {}), LEGACY_PROFILE);
+  expect(imp.ok, "owner export imports: " + JSON.stringify(imp)).toBe(true);
+  await page.reload();
+  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await page.addStyleTag({ content: NOTCH_A });
+  await page.evaluate(async () => {
+    __apex.headless(true);
+    await __apex.race("bahrain", "day", "dry");
+    __apex.go(); __apex.park(0.1);
+  });
+  await clickLive(page, "pausebtn");
+  await clickLive(page, "pm-photo");
+  await expect(page.locator("#photo-studio")).toBeVisible();
+  // The dock is `--ps-dock-px: min(300px * UI, 38vw)` (css/photo-studio.css) and
+  // the LOOK stick parks left of it: measured 2026-11-06 at this export, panel
+  // 297 px wide at x 461, stick right edge 353 — 108 px clear. SheetShape may
+  // still be fitting the panel for a few frames under software GL.
+  const geom = () => page.evaluate(() => {
+    const r = (s) => CssZoom.viewportRect(document.querySelector(s));
+    const look = r(".pc-look-wrap"), panel = r("#ps-panel"), move = r(".pc-move-wrap");
+    return { lookLeft: look.x, lookRight: look.x + look.width, lookBottom: look.y + look.height,
+      panelLeft: panel.x, panelRight: panel.x + panel.width, moveLeft: move ? move.x : null, vw: innerWidth, vh: innerHeight };
+  });
+  await expect.poll(async () => { const g = await geom(); return g.lookRight <= g.panelLeft + 0.5; }, { timeout: 30000 }).toBe(true);
+  const g = await geom();
+  expect(g.lookRight, `LOOK stick (right ${g.lookRight}) clears the panel (left ${g.panelLeft})`).toBeLessThanOrEqual(g.panelLeft + 0.5);
+  expect(g.panelRight, "panel inside the right safe inset").toBeLessThanOrEqual(g.vw - 59 + 1);
+  expect(g.lookBottom, "stick above the home indicator").toBeLessThanOrEqual(g.vh - 21 + 1);
+  if (g.moveLeft != null) expect(g.moveLeft, "MOVE stick inside the notch inset").toBeGreaterThanOrEqual(59 - 1);
+  await controls(page, ["ps-capture", "ps-close", "pc-move", "pc-look"]);
+  await nativeClick(page, "ps-close");
+  await expect(page.locator("#photo-studio")).toBeHidden();
+  expect(pageErrors).toEqual([]);
+});
+
 test("Accent lists receive real keyboard events through menu navigation", async ({ page, pageErrors }) => {
   await boot(page);
   await page.evaluate(() => __apex.headless(true));
@@ -277,8 +358,11 @@ test("Two tabs atomically retain six durable photos after concurrent saves", asy
     for (const [i, tab] of tabs.entries()) {
       await tab.goto("/__photo-storage");
       await tab.addScriptTag({ url: "/js/ui/setting-row.js" });
+      // Body is LAZY_UI_PRESETS (#4978); this bare page has no ScriptLoader, so load it explicitly.
+      await tab.addScriptTag({ url: "/js/ui/photo-studio-ui.js" });
       await tab.addScriptTag({ url: "/js/ui/photo-studio.js" });
       await tab.evaluate((i) => {
+        window.DrivingLine = { shown: () => true, setPhoto: () => {} };   // this bare page loads no render modules
         window.studio = PhotoStudio.create({ $: (id) => document.getElementById(id), setTimeOfDay: () => "day", weather: () => "dry" }, { garage: {} });
         window.studio.open({ source: "garage", metadata: { title: `Tab ${i}` } });
       }, i);
@@ -344,4 +428,60 @@ test("Two tabs atomically retain six durable photos after concurrent saves", asy
       expect(photo.thumb).toMatch(/^data:image\/jpeg;base64,/);
     }
   } finally { await other.close(); }
+});
+
+test("Photo Studio sizes the actual movement and look sticks independently", async ({ page }, info) => {
+  await boot(page);
+  await page.evaluate(async () => {
+    __apex.headless(true);
+    await __apex.race("monza");
+    __apex.go();
+  });
+  await clickLive(page, "pausebtn");
+  async function arrangeSticks() {
+    await expect(page.locator("#pm-settings")).toBeVisible();
+    await clickLive(page, "pm-settings");
+    await clickLive(page, "pm-open-appearance");
+    await page.getByLabel("Screen to arrange").selectOption("photo-controls");
+    await page.locator(".arrange-route").tap();
+    await expect(page.locator('#screen-arranger[data-editing-screen="photo-controls"]')).toBeVisible();
+  }
+  await arrangeSticks();
+  const editor = page.locator('#screen-arranger[data-editing-screen="photo-controls"]');
+  const region = editor.getByLabel("Region", { exact: true });
+  const diameter = (id) => page.locator(id).evaluate(el => el.getBoundingClientRect().width);
+  const move = () => diameter("#pc-move");
+  const look = () => diameter("#pc-look");
+  const action = name => editor.getByRole("button", { name, exact: true }).tap();
+  const shippedMove = await move(), shippedLook = await look();
+  await region.selectOption("move");
+  await action("Controls");
+  await editor.getByRole("button", { name: /Diameter.*\+/i }).tap();
+  const wider = await move();
+  expect(wider).toBeGreaterThan(shippedMove);
+  expect(await look()).toBeCloseTo(shippedLook, 1);
+  await region.selectOption("look");
+  await editor.getByRole("button", { name: /Diameter.*[−-]/i }).tap();
+  const narrower = await look();
+  expect(narrower).toBeLessThan(shippedLook);
+  await action("Apply");
+  await expect(editor).toHaveCount(0);
+  expect(await move()).toBeCloseTo(wider, 1);
+  expect(await look()).toBeCloseTo(narrower, 1);
+  for (const id of ["pc-move", "pc-look"]) {
+    expect(await page.locator("#" + id).evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return Math.abs(r.height - r.width) < 0.1 &&
+        el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    })).toBe(true);
+  }
+  await evidence(page, info, "photo-studio-custom-sticks");
+  await clickLive(page, "ps-close");
+  await arrangeSticks();
+  await region.selectOption("move");
+  await action("Controls");
+  await action("Reset region");
+  await action("Apply");
+  expect(await move()).toBeCloseTo(shippedMove, 1);
+  expect(await look()).toBeCloseTo(narrower, 1);
 });

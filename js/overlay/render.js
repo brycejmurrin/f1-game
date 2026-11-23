@@ -2,7 +2,8 @@
 const OverlayRender = (function () {
   "use strict";
 
-  const MAX_ROWS = 20;
+  const MAX_ROWS = 22;
+  const FLASH_MS = 1200;
 
   function options(search) {
     const q = new URLSearchParams(search || "");
@@ -11,6 +12,34 @@ const OverlayRender = (function () {
     const side = q.get("side") === "right" ? "right" : "left";
     const chroma = ["green", "blue", "magenta"].includes(q.get("chroma")) ? q.get("chroma") : "";
     return { scale, rows, side, chroma, demo: q.get("demo") === "1", only: q.get("only") === "captions" ? "captions" : "" };
+  }
+
+  // WCAG 2 relative luminance / contrast of "#rgb", "#rrggbb" or "rgb(r,g,b)".
+  function rgbOf(colour) {
+    const c = String(colour || "").trim();
+    let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+    if (m) {
+      const h = m[1].length === 3 ? m[1].replace(/./g, "$&$&") : m[1];
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    }
+    m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(c);
+    return m ? [m[1], m[2], m[3]].map((v) => Math.max(0, Math.min(255, Number(v)))) : null;
+  }
+  function luminance(rgb) {
+    const lin = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  }
+  function contrast(a, b) {
+    const la = luminance(rgbOf(a)), lb = luminance(rgbOf(b));
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  // THE TEAM PLATE: the position number sits on the team colour, in whichever ink
+  // reads better. Pure black or white always clears 4.5:1 on one of them (the
+  // worst case, a mid-luminance colour, is ~4.58:1), so every team's plate meets WCAG AA.
+  const INK_DARK = "#000000", INK_LIGHT = "#ffffff";   // pure black: #0b0c10 drops the worst case to 4.4:1
+  function ink(colour) {
+    if (!rgbOf(colour)) return "";
+    return contrast(colour, INK_DARK) >= contrast(colour, INK_LIGHT) ? INK_DARK : INK_LIGHT;
   }
 
   function node(tag, cls) {
@@ -82,15 +111,18 @@ const OverlayRender = (function () {
         const out = rows[i], row = list[i];
         out.el.hidden = i >= limit || !row;
         if (!row || i >= limit) continue;
-        const key = [row.pos, row.code, row.team, row.interval, row.tyre, row.pit, row.you].join("|");
+        const key = [row.pos, row.code, row.team, row.interval, row.tyre, row.pit, row.out, row.you].join("|");
         out.el.style.transform = "translate3d(0," + ((Math.max(1, row.pos) - 1) * 34) + "px,0)";
         if (key === out.key) continue;
         out.key = key;
         text(out.pos, row.pos);
         text(out.code, row.code);
-        text(out.gap, row.pos === 1 ? "LEADER" : row.pit ? "PIT" : row.interval == null ? "" : "+" + Number(row.interval).toFixed(2));
+        text(out.gap, row.out ? "OUT" : row.pos === 1 ? "LEADER" : row.pit ? "PIT" : row.interval == null ? "" : "+" + Number(row.interval).toFixed(2));
         text(out.tyre, row.tyre || "");
         out.team.style.background = row.team || "";
+        const plate = rgbOf(row.team) ? row.team : "";
+        out.pos.style.background = plate;
+        out.pos.style.color = plate ? ink(plate) : "";
         out.el.dataset.you = row.you ? "1" : "";
       }
       // Battles are race/count only — hide once the session leaves those states
@@ -108,7 +140,11 @@ const OverlayRender = (function () {
       if (view.sectors && view.sectors.last) {
         for (let i = 0; i < sec.length; i++) {
           const s = view.sectors.last[i] || {};
-          text(sec[i], s.value == null ? "S" + (i + 1) : s.glyph + Number(s.value).toFixed(3));
+          const label = s.value == null ? "S" + (i + 1) : s.glyph + Number(s.value).toFixed(3);
+          // SECTOR FLASH: a new time flashes its cell for FLASH_MS (overlay.html
+          // animates it; under prefers-reduced-motion it is a static outline).
+          if (s.value != null && sec[i].textContent !== label) flash(sec[i]);
+          text(sec[i], label);
           sec[i].dataset.tone = s.tone || "";
         }
       }
@@ -123,9 +159,17 @@ const OverlayRender = (function () {
       return true;
     }
 
+    const flashTimers = new Map();
+    function flash(el) {
+      el.dataset.flash = "1";
+      clearTimeout(flashTimers.get(el));
+      flashTimers.set(el, setTimeout(() => { el.dataset.flash = ""; flashTimers.delete(el); }, FLASH_MS));
+    }
     // Dispose the painted chrome (feed stopped, race quit). Mirrors createDiffer.reset.
     function clear() {
       current = null;
+      for (const id of flashTimers.values()) clearTimeout(id);
+      flashTimers.clear();
       for (let i = 0; i < rows.length; i++) {
         rows[i].el.hidden = true;
         rows[i].key = "";
@@ -136,6 +180,7 @@ const OverlayRender = (function () {
       for (let i = 0; i < sec.length; i++) {
         text(sec[i], "S" + (i + 1));
         sec[i].dataset.tone = "";
+        sec[i].dataset.flash = "";
       }
     }
 
@@ -158,45 +203,86 @@ const OverlayRender = (function () {
     });
   }
 
+  // THE STALE FEED. A game tab that closes or stops publishing sends nothing
+  // more, so the last tower, battle and caption stayed on stream forever. The
+  // publisher sends a full frame at least every OverlayFeed.FULL_MS, so three of
+  // those with no frame at all means the feed is gone: clear, show the waiting card.
+  const STALE_MS = 3 * (typeof OverlayFeed !== "undefined" && OverlayFeed.FULL_MS || 2000);
+  function waitingFrame() {
+    return OverlayFeed.frame({
+      seq: 0, state: "waiting", ranked: [],
+      caption: { id: "waiting", who: "APEX 26", text: "Waiting for a broadcast feed", kind: "status" },
+    });
+  }
+  // deps: { now(), setInterval(fn, ms), clearInterval?(id) }. Returns { frame, check, stop }.
+  function watch(painter, deps) {
+    const now = deps.now;
+    const clearInt = deps.clearInterval || ((id) => clearInterval(id));
+    let lastAt = null, timer = 0, open = true;
+    function check() {
+      if (!open) return false;
+      if (lastAt == null || now() - lastAt < STALE_MS) return false;
+      lastAt = null;
+      painter.clear();
+      painter.paint(waitingFrame());
+      return true;
+    }
+    timer = deps.setInterval(check, 1000);
+    return {
+      frame(f) { if (!open) return false; lastAt = now(); return painter.paint(f); },
+      check,
+      stop() {
+        if (!open) return;
+        open = false;
+        if (timer) { clearInt(timer); timer = 0; }
+      },
+    };
+  }
+
   function boot() {
     const root = typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]');
     if (!root) return null;
-    const config = options(typeof location !== "undefined" ? location.search : "");
+    const search = typeof location !== "undefined" ? location.search : "";
+    const config = options(search);
     if (config.chroma) document.documentElement.dataset.chroma = config.chroma;
     else delete document.documentElement.dataset.chroma;
     document.body.dataset.side = config.side;
     document.body.dataset.only = config.only;
     root.style.setProperty("--ov-scale", String(config.scale));
     const painter = create(root, config);
+    // Paint one representative race frame so conditional panels remain
+    // selectable throughout arrangement even without a live game tab.
+    if (new URLSearchParams(search).get("arrange") === "broadcast") {
+      painter.paint(demoFrame(0));
+      return painter;
+    }
     if (!config.demo) {
-      painter.paint(OverlayFeed.frame({
-        seq: 0, state: "waiting", ranked: [],
-        caption: { id: "waiting", who: "APEX 26", text: "Waiting for a broadcast feed", kind: "status" },
-      }));
+      painter.paint(waitingFrame());
+      // Same-browser feed: a game tab of this origin publishes once it hears us.
+      if (typeof OverlayBridge !== "undefined") {
+        const feed = watch(painter, {
+          now: () => performance.now(),
+          setInterval: (fn, ms) => window.setInterval(fn, ms),
+          clearInterval: (id) => window.clearInterval(id),
+        });
+        const sub = OverlayBridge.subscribe((frame) => feed.frame(frame));
+        if (typeof window !== "undefined" && window.addEventListener) {
+          window.addEventListener("pagehide", () => { feed.stop(); if (sub) sub.close(); }, { once: true });
+        }
+      }
       return painter;
     }
     const started = performance.now();
-    if (typeof TvGraphics !== "undefined") {
-      const demoRanked = [
-        { code: "LEC", pos: 1, prog: 5050, speed: 76 },
-        { code: "NOR", pos: 2, prog: 4996, speed: 76 },
-      ];
-      const demoG = { hudProfile: "broadcast", state: "race", raceT: 18, lap: 18, laps: 53, ranked: demoRanked };
-      const tv = TvGraphics.create(demoG);
-      tv.tick(.25, true);
-      window.setTimeout(() => {
-        demoRanked[0] = { code: "NOR", pos: 1, prog: 5055, speed: 77, fastest: true };
-        demoRanked[1] = { code: "LEC", pos: 2, prog: 5002, speed: 76 };
-        tv.tick(.25, true);
-      }, 900);
-    }
     const paint = () => painter.paint(demoFrame((performance.now() - started) / 1000));
     paint();
-    window.setInterval(paint, 250);
+    const demoTimer = window.setInterval(paint, 250);
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("pagehide", () => window.clearInterval(demoTimer), { once: true });
+    }
     return painter;
   }
 
-  return { MAX_ROWS, options, create, demoFrame, boot };
+  return { MAX_ROWS, FLASH_MS, STALE_MS, options, create, watch, waitingFrame, demoFrame, boot, contrast, ink };
 })();
 Object.freeze(OverlayRender);
 if (typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]')) OverlayRender.boot();

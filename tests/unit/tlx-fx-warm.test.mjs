@@ -16,7 +16,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
 
 installThreeGlobals();
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 
 const tslice = (from, to) => {
   const a = TLX.indexOf(from), b = TLX.indexOf(to, a);
@@ -60,14 +60,15 @@ async function rig(t) {
   return { fg, renderer, mat, stream, draw };
 }
 
-test("control: the same attributes, unindexed then indexed, key two pipelines (three keys the index)", async (t) => {
+test("r187: unindexed and indexed share one geometry key (three dropped 'index,' from getGeometryCacheKey)", async (t) => {
+  // r186 keyed the index, so the warm's unindexed probe and the race's indexed line built two pipelines (the census's
+  // first-frame build). r187's getGeometryCacheKey keys attributes and morphs only; the indexed warm below stays as is.
   const h = await rig(t);
   const probe = h.stream(), race = h.stream();
   const a = h.draw(probe.geo);
   lineIndex(race);
   const b = h.draw(race.geo);
-  assert.ok(a && b && a !== b && b.endsWith("index,") && !a.includes("index,"),
-    `the warm's unindexed probe and the race's indexed line key different pipelines (${a} vs ${b}): the first-frame build the census saw`);
+  assert.ok(a && a === b && !b.includes("index,"), `one geometry key for both (${a} vs ${b})`);
 });
 
 test("fixed: the warm gives the probe the race's index, so the race's line reuses the warmed pipeline", async (t) => {
@@ -89,6 +90,17 @@ test("lineIndex: (i, i+1, i+2) at full capacity, built once (no orphaned index b
   slot.cap = 8; lineIndex(slot);
   assert.notEqual(geo.index, first, "a grown stream gets a bigger index");
   assert.equal(geo.index.count, 18);
+});
+
+test("line indices fit 16 bits up to the WebGL2 primitive restart boundary", () => {
+  for (const [cap, IndexArray] of [[4096, Uint16Array], [65535, Uint16Array], [65536, Uint32Array], [65537, Uint32Array]]) {
+    const slot = { geo: new THREE.BufferGeometry(), cap };
+    lineIndex(slot);
+    const index = slot.geo.index.array;
+    assert.ok(index instanceof IndexArray);
+    assert.equal(index.byteLength, (cap - 2) * 3 * IndexArray.BYTES_PER_ELEMENT);
+    assert.deepEqual(Array.from(index.slice(-3)), [cap - 3, cap - 2, cap - 1]);
+  }
 });
 
 test("tlx.js wiring: drawDrivingLine and the fx warm share lineIndex; the per-record blob warms both windings", () => {

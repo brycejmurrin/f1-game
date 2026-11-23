@@ -1,0 +1,1 @@
+Fixed: Jeddah's grid is on the pit straight after the final hairpin (it sat before Turn 27), 250 m from Turn 1; turns carry their FIA numbers and the pit building, main stand and start gantry stand at the line.

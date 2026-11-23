@@ -1,1 +1,0 @@
-Improved: Wet-race rain compares its knobs in scratch slots instead of building a string every frame, and a heavier shower reuses the rain buffers instead of allocating a new set. Streaks, smoke and sparks are unchanged.

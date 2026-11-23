@@ -14,6 +14,29 @@ const EditorWorkspace = (function () {
       if (cls) el.className = cls;
       return el;
     };
+    // Keep the garage's live controls ahead of documentation. Move the actual
+    // buttons, preserving the domain handlers, preview origin and focus target.
+    const rows = options.rows && doc.getElementById(options.rows);
+    if (rows) {
+      const sequences = make("div", null, "balanced-row");
+      sequences.dataset.editorSequences = "";
+      sequences.setAttribute("role", "group"); sequences.setAttribute("aria-label", "Preview sequence");
+      for (const [id, text] of options.sequences || []) {
+        const button = doc.getElementById(id);
+        if (button) { button.textContent = text; sequences.append(button); }
+      }
+      if (sequences.children.length) sheet.insertBefore(sequences, rows);
+      const help = make("details", null, "ew-tools");
+      help.dataset.editorHelp = ""; help.open = false;
+      help.append(make("summary", "Help and reset"));
+      const reset = options.reset && doc.getElementById(options.reset);
+      if (reset) help.append(reset);
+      for (const paragraph of [...rows.querySelectorAll(".adv-help")]) help.append(paragraph);
+      rows.append(help);
+      const first = options.first && doc.getElementById(options.first);
+      const row = first && first.closest(".set-row");
+      if (row && row.parentNode === rows) { row.remove(); rows.prepend(row); }
+    }
     const bar = make("div", null, "ew-toolbar");
     const label = make("h2", options.title || root.getAttribute("aria-label") || "Editor", "ew-title");
     const toggle = make("button", "Preview", "ew-preview");
@@ -56,10 +79,35 @@ const EditorWorkspace = (function () {
       toggle.setAttribute("aria-pressed", String(on));
       toggle.setAttribute("aria-label", on ? "Return to editor controls" : "Show unobstructed preview");
     }
-    toggle.onclick = () => setPreview(sheet.dataset.editorView !== "preview");
-    const media = doc.defaultView && doc.defaultView.matchMedia("(max-height: 620px), (max-width: 600px)");
-    const fit = () => { if (tools) tools.open = !media || !media.matches; };
+    toggle.onclick = () => {
+      const on = sheet.dataset.editorView !== "preview";
+      const session = options.previewSession && doc.getElementById(options.previewSession);
+      // A bare garage editor has no scene. Start its real preview action only
+      // when no transport is active; an edited or paused sequence keeps its pose.
+      if (on && options.defaultPreview && (!session || session.hidden)) {
+        const scope = doc.getElementById("ga-edit-moment");
+        const selected = scope && { raceStart: "ga-preview-out", pitIn: "ga-preview-in", pitOut: "ga-preview-pit-exit", afterRace: "ga-preview-home" }[scope.value];
+        const button = doc.getElementById(selected || options.defaultPreview);
+        if (button) {
+          // The domain hides its sheet for playback and restores it on Stop.
+          // Leave edit furniture ready for that return rather than hiding it twice.
+          setPreview(false); button.click(); return;
+        }
+      }
+      setPreview(on);
+    };
+    // Fold the tools only where css/tuner.css shows their summary: the sheet's OWN density (UI SIZE moves it; a
+    // window-height query closed them at UI SIZE 50-62 on a 390 px phone with no summary to reopen, #5562) or a narrow window.
+    const media = doc.defaultView && doc.defaultView.matchMedia("(max-width: 600px)");
+    const fit = () => {
+      if (!tools) return;
+      const compact = sheet.dataset.density === "compact" || (media && media.matches);
+      const editingTool = tools.contains(doc.activeElement) && doc.activeElement !== tools.firstChild;
+      tools.open = !compact || editingTool;
+    };
     if (media && media.addEventListener) media.addEventListener("change", fit);
+    const Shape = doc.defaultView && doc.defaultView.MutationObserver;
+    if (Shape && tools) new Shape(fit).observe(sheet, { attributes: true, attributeFilter: ["data-density"] });
     fit(); setPreview(false);
     // Capture before a domain opener hides Settings (and may move focus).
     // A direct garage/context entry has no Settings origin to restore.
@@ -113,12 +161,15 @@ const EditorWorkspace = (function () {
       ["lighting", "lt-rail", "Lighting", "Auto-saved · displayed circuit, time and weather"],
       ["camtune", "ct-rail", "Camera", "Auto-saved · selected camera scope"],
       ["flyby", "fb-rail", "Flyby", "Auto-saved · next race’s flyby"],
-      ["garrival", null, "Garage arrival", "Auto-saved · arrivals and drive-outs"],
+      ["garrival", null, "Garage animation", "Changes save automatically."],
     ].map(([id, rail, title, note]) => attach(doc.getElementById(id), {
       rail, title, note, done: ({ lighting: "lt-close", camtune: "ct-close", flyby: "fb-close", garrival: "ga-close" })[id],
       previews: id === "camtune" ? "ct-previews" : null,
       entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
-      help: id === "garrival" ? "#ga-rows > .adv-help" : null, launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
+      rows: id === "garrival" ? "ga-rows" : null, first: "ga-edit-moment", reset: "ga-reset",
+      defaultPreview: id === "garrival" ? "ga-preview-out" : null, previewSession: id === "garrival" ? "ga-transport" : null,
+      sequences: [["ga-preview-out", "Race start"], ["ga-preview-in", "Pit entry"], ["ga-preview-pit-exit", "Pit exit"], ["ga-preview-home", "Race end"]],
+      launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
     }));
   }
   return Object.freeze({ attach, init });

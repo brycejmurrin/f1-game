@@ -4,7 +4,7 @@
 //
 // THE LADDER IS MEASURED, NOT COMMITTED. The rung sizes ("N of M unit files")
 // used to be written into five docs (AGENTS.md, docs/TESTING.md,
-// docs/notes/PREPUSH-GATE-LADDER.md, .claude/agents/verify-agent.md,
+// the ladder note that is now docs/VERIFICATION.md, .claude/agents/verify-agent.md,
 // README.md). Every PR that added a test file changed the same digits on the
 // same lines, so two open PRs ALWAYS conflicted: measured ~100 % same-line
 // conflicts on the ladder docs (docs/notes/MERGE-HYGIENE-2026-09-29.md), and

@@ -1,8 +1,8 @@
-/* Apex 26 — WebXR boot wiring (Phase 0).
+/* Apex 26 — WebXR boot wiring.
  *
  * Mounts the ENTER VR button, binds XrSession to the live gfx backend, and
  * exposes a tiny façade game.js reads (comfort lock, eye bags, loop handoff)
- * so the spike does not grow game.js past the ratchet absorb budget.
+ * so XR wiring does not grow game.js past the ratchet absorb budget.
  */
 "use strict";
 
@@ -16,10 +16,10 @@ const XrBoot = (function () {
   let _loopByXr = false;
   let _presentCount = 0;     // stereo submissions in this immersive session
   let _tickBody = null;
-  let _windowRaf = null;       // schedule one window.rAF(tick) — deduped
+  let _windowRaf = null;       // the window tick; bind() sets it, VR or not (recover(), #5875)
   let _windowRequest = null;
-  let _windowGeneration = 0;
-  let _windowPending = false;  // true while a window tick is queued
+  let _windowDispatch = null;   // reused until XR takes the clock
+  let _pendingTick = null;      // window tick queued for the next frame
   let _cockpitIdx = -1;
   let _savedCam = -1;
   let _cameraOwner = null;
@@ -69,6 +69,11 @@ const XrBoot = (function () {
    */
   function ensureXrBackend() {
     if (canAttach()) return { ok: true };
+    // The pin reloads the page: never mid-race (a phone's Cardboard probe can
+    // show ENTER VR over the touch dock; one stray tap lost the race).
+    if (typeof UiLayers !== "undefined" && UiLayers.inRace && UiLayers.inRace()) {
+      return { ok: false, message: "VR AFTER THE RACE" };
+    }
     try {
       if (localStorage.getItem(LS_XR_PREV) === null) {   // a second click must not stash the pin itself
         const prev = {};
@@ -147,17 +152,20 @@ const XrBoot = (function () {
    */
   function chainWindowRaf(tickFn) {
     if (_loopByXr) return false;
-    if (_windowPending) return false;
+    if (_pendingTick) return false;
     const fn = tickFn || _windowRaf;
     if (typeof fn !== "function") return false;
-    _windowPending = true;
-    const generation = _windowGeneration;
-    _windowRequest = requestAnimationFrame((t) => {
-      if (_loopByXr || generation !== _windowGeneration) return;
-      _windowRequest = null;
-      _windowPending = false;
-      fn(t);
-    });
+    _pendingTick = fn;
+    if (!_windowDispatch) {
+      _windowDispatch = function dispatch(t) {
+        if (dispatch !== _windowDispatch || !_pendingTick) return;
+        const tick = _pendingTick;
+        _windowRequest = null;
+        _pendingTick = null;
+        tick(t);
+      };
+    }
+    _windowRequest = requestAnimationFrame(_windowDispatch);
     return true;
   }
 
@@ -197,7 +205,6 @@ const XrBoot = (function () {
   function bindInner(api) {
     if (_bound || typeof XrSession === "undefined") return;
     _tickBody = api && api.tickBody;
-    _windowRaf = api && api.windowTick;
     _boundGfx = api && api.gfx;
     _getCamMode = api && api.getCamMode;
     _setCamMode = api && api.setCamMode;
@@ -217,19 +224,18 @@ const XrBoot = (function () {
       onStart: () => {
         _loopByXr = true;
         _presentCount = 0;
-        // Cancellation saves work; generation also rejects a callback already
+        // Cancellation saves work; retiring the dispatcher rejects a callback already
         // dispatched (or suspended by the browser until after XR ends).
-        _windowGeneration++;
+        _windowDispatch = null;
         if (_windowRequest !== null) cancelAnimationFrame(_windowRequest);
         _windowRequest = null;
-        _windowPending = false;
+        _pendingTick = null;
         saveAndForceCockpit();
       },
       onEnd: () => {
         _loopByXr = false;
         restoreSavedCam();
-        // Resume exactly one window loop (deduped).
-        chainWindowRaf(_windowRaf);
+        chainWindowRaf(); // one window loop (deduped)
       },
       onFrame: (time) => {
         if (_loopByXr && typeof _tickBody === "function") _tickBody(time);
@@ -250,6 +256,7 @@ const XrBoot = (function () {
 
   function bind(api) {
     _bindApi = api;
+    _windowRaf = api && api.windowTick;
     if (typeof XrSession === "undefined") return;
     bindInner(api);
   }
@@ -259,7 +266,14 @@ const XrBoot = (function () {
   // button that could only fail) for every one of them. Ask whether an
   // immersive-vr session can start at all. true / false, or null when that cannot
   // be known (no isSessionSupported, a throw, a hang past the cap).
-  const PROBE_CAP_MS = 1500;
+  // Asking bars Chrome's bfcache (#5417): ask once, store it (the one apex26.xrCaps writer).
+  const PROBE_CAP_MS = 1500, LS_XR_CAPS = "apex26.xrCaps";
+  function cachedVr() {
+    let v = null;
+    try { v = localStorage.getItem(LS_XR_CAPS); } catch (_) { /* blocked */ }
+    return v === "1" || (v === "0" ? false : null);
+  }
+  function storeVrCaps(vr) { try { localStorage.setItem(LS_XR_CAPS, vr ? "1" : "0"); } catch (_) { /* blocked */ } }
   function probeVr() {
     return (async () => {
       try {
@@ -270,6 +284,7 @@ const XrBoot = (function () {
         const cap = new Promise((resolve) => { if (typeof setTimeout === "function") timer = setTimeout(() => resolve(null), PROBE_CAP_MS); });
         try {
           const v = await Promise.race([xr.isSessionSupported("immersive-vr"), cap]);
+          if (v !== null) storeVrCaps(!!v);
           return v === null ? null : !!v;
         } finally { if (timer !== null) clearTimeout(timer); }
       } catch (_) { return null; }
@@ -278,12 +293,22 @@ const XrBoot = (function () {
 
   async function wantXrBundle() {
     try { if (localStorage.getItem("apex26.xr") === "1") return true; } catch (_) { /* blocked */ }
-    try { if (localStorage.getItem("apex26.xrEnterPending") === "1") return true; } catch (_) { /* blocked */ }
+    try { if (localStorage.getItem(LS_XR_PENDING) === "1") return true; } catch (_) { /* blocked */ }
     if (typeof navigator === "undefined" || !navigator.xr) return false;
+    if (cachedVr() !== null) return cachedVr();
     // Only a definite "no headset" skips the fetch; an unknown answer keeps the old one.
     return (await probeVr()) !== false;
   }
 
+  function recheck() {   // Settings › display: a headset added or removed since the stored answer
+    return probeVr().then((vr) => {
+      if (vr) return ensureXr().then((ok) => { if (ok) finish(); return !!ok; });
+      if (vr === false && typeof ApexXR !== "undefined") ApexXR.detect();   // adopts the stored "0"
+      return false;
+    });
+  }
+
+  let finish = () => {};
   function mountUi() {
     restorePinnedBackend();
     if (typeof window !== "undefined") {
@@ -294,7 +319,7 @@ const XrBoot = (function () {
         ensure: ensureXr,
       };
     }
-    const finish = () => {
+    finish = () => {
       // RendererBoot runs before the lazy XR bundle exists. Publish the
       // headset capability now so SETTINGS and the next boot share the probe.
       if (typeof ApexXR !== "undefined" && typeof ApexXR.detect === "function") {
@@ -366,7 +391,7 @@ const XrBoot = (function () {
     return {
       presenting: presenting,
       loopByXr: _loopByXr,
-      windowPending: _windowPending,
+      windowPending: !!_pendingTick,
       canAttach: canAttach(),
       backend: session && session.backend ? session.backend() : null,
       features: session && session.enabledFeatures ? session.enabledFeatures() : [],
@@ -387,12 +412,11 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, ensureXr, wantXrBundle, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, recheck, storeVrCaps, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, restorePinnedBackend, applyEyes, present, afterTick, chainWindowRaf,
-    findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
+    diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers
     setCamMode: (...a) => setCamTransient(...a),
-    LS_XR_PENDING, LS_XR_PREV,
   };
 })();
 Object.freeze(XrBoot);

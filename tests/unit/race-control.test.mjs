@@ -23,7 +23,11 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import * as espree from "espree";
+import * as eslintScope from "eslint-scope";
+import { findTsc } from "../../tools/check/check-gctx.mjs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -38,10 +42,10 @@ const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8"
 // The module declares `const RaceControl`, which lands in the context's global
 // LEXICAL scope rather than on the global object — so it is read back by
 // evaluating its name. Same shape as tests/unit/agentview-api-contract.test.mjs.
-function load(debris) {
+function load(debris, globals = {}) {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, isNaN, isFinite, console,
-    DebrisWorld: debris,
+    DebrisWorld: debris, ...globals,
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx,
@@ -232,6 +236,33 @@ test("the finish policy closes completed human races and bounded edge cases", ()
   ], 1081, 3), 0.1, "the hard cap still prevents a permanently hung race");
 });
 
+test("a VS FRIEND race waits POST_FINISH_CAP s after the first human finishes, not 360 s/lap (#5989 A1)", () => {
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const post = { solo: false, net: true, since: -1, first: -1 };
+  const cars = [
+    { human: true, finished: false, retired: false },
+    { _nHuman: true, finished: false, retired: false },
+    { human: false, finished: false, retired: false },
+  ];
+  assert.equal(finishDelay(cars, 290, 5, 0, post), 0, "nobody home: racing");
+  assert.equal(post.first, -1);
+  Object.assign(cars[0], { finished: true, finishT: 300 });
+  assert.equal(finishDelay(cars, 300, 5, 0, post), 0, "the first human home starts the wait");
+  assert.equal(post.first, 300);
+  assert.equal(finishDelay(cars, 374, 5, 0, post), 0, "74 s on: the friend still has time");
+  assert.equal(finishDelay(cars, 375, 5, 0, post), 0.1, "75 s on: classify the friend by laps done");
+  // The friend's own screen applies the same bound to the remote finisher.
+  const theirs = { solo: false, net: true, since: -1, first: -1 };
+  const mirror = [{ human: true, finished: false, retired: false }, { _nHuman: true, finished: true, retired: false, finishT: 300 }];
+  assert.equal(finishDelay(mirror, 300, 5, 0, theirs), 0);
+  assert.equal(finishDelay(mirror, 376, 5, 0, theirs), 0.1, "both peers end on the same bound");
+  // Both home is the ordinary 2.2 s countdown, AI still on track or not.
+  Object.assign(cars[1], { finished: true, finishT: 320 });
+  assert.equal(finishDelay(cars, 330, 5, 0, post), 2.2);
+  // Without `post.net` (TT, quali, harnesses) the old 360 s/lap cap stands.
+  assert.equal(finishDelay([{ human: true, finished: true, retired: false, finishT: 300 }, { _nHuman: true, finished: false, retired: false }], 400, 5), 0);
+});
+
 test("a Data Hub JUMP IN counts the hard cap from the clock it was seeded to, not from zero", () => {
   // PR #402 audit: RealRace.place seeds raceT to the real race's time at the
   // lap you join (K0 * t0 — 5 000+ s at lap 40 of Baku). On a 3-lap condensed
@@ -299,16 +330,33 @@ test("a caution RAISES immediately but does not LOWER before the hold", () => {
   let hz = hazards(0, 0);
   const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
 
-  hz = hazards(10, 2);
+  hz = hazards(6, 2);
   run(rc, 0.5);
-  assert.equal(rc.info().level, 3, "raises inside half a second");
+  assert.equal(rc.info().level, 2, "raises inside half a second");
 
   hz = hazards(0, 0);
   run(rc, 3);
-  assert.equal(rc.info().level, 3, "still flying 3 s later — MIN_HOLD is 6 s");
+  assert.equal(rc.info().level, 2, "still flying 3 s later — MIN_HOLD is 6 s");
 
   run(rc, 4);
   assert.equal(rc.info().level, 0, "cleared once the hold expires");
+});
+
+test("#5893: a debris SAFETY CAR outlives its debris — it holds SC_HOLD, not the 6 s MIN_HOLD", () => {
+  // Resting shards despawn after 4 s (DebrisWorld REST_DESPAWN_S), so a pile
+  // that raised an SC was gone ~6 s later and MIN_HOLD withdrew the SC before
+  // the field could bunch behind it. Before the fix: level 0 at t = 8 s.
+  let hz = hazards(10, 2);
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  hz = hazards(0, 0);   // the shards came to rest and despawned
+  run(rc, 7);
+  assert.equal(rc.info().level, 3, "the SC is still out 8 s after it was raised");
+  run(rc, 36);
+  assert.equal(rc.info().level, 3, "and 44 s after");
+  run(rc, 2);
+  assert.equal(rc.info().level, 0, "it comes in once SC_HOLD (45 s) has run");
 });
 
 test("a stuck hazard cannot neutralise the race forever", () => {
@@ -331,6 +379,46 @@ test("a stuck hazard cannot neutralise the race forever", () => {
   // …but after the hold expires the (still-present) hazards legitimately re-arm.
   run(rc, 50);
   assert.equal(rc.info().level, 3, "after the hold, a persistent hazard re-raises");
+});
+
+test("the hard cap counts the EPISODE, not the level: a flag flipping SC<->VSC still caps (#5715)", () => {
+  // Hunt 2026-11-18 (5): every level change reset sinceT, so hazards hovering
+  // at SC_MIN held the race neutralised 599.7 of 600 s and it never went green.
+  // The episode clock resets only on GREEN (or a new peak), so the SC_MAX cap
+  // fires at its designed ~90 s however the level flips underneath it.
+  for (const period of [7, 8, 20]) {
+    let t = 0;
+    const rc = load({ active: () => true, hazards: () => hazards(Math.floor(t / period) % 2 ? 6 : 10, 2) })
+      .create(makeCtx());
+    let firstGreen = null, neutral = 0, levels = new Set();
+    for (let i = 0; i < 600 * 60; i++) {
+      t = i / 60;
+      rc.update(1 / 60);
+      const lv = rc.info().level;
+      levels.add(lv);
+      if (lv) neutral += 1 / 60;
+      else if (firstGreen === null && t > 1) firstGreen = t;
+    }
+    assert.ok(levels.has(2) && levels.has(3), `period ${period}: the flag really flipped SC<->VSC`);
+    assert.ok(firstGreen !== null && firstGreen > 85 && firstGreen < 100,
+      `period ${period}: capped at the designed ~90 s (first green ${firstGreen})`);
+    assert.ok(neutral < 450, `period ${period}: the race goes green between episodes (${neutral.toFixed(1)} s neutralised)`);
+  }
+});
+
+test("a de-escalation stays one episode, while an escalation above its peak gets a fresh cap", () => {
+  let hz = hazards(0, 3);          // local YELLOW
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx());
+  run(rc, 25);
+  assert.equal(rc.info().level, 1);
+  hz = hazards(10, 2);             // a real pile: SC, above the yellow peak
+  run(rc, 60);
+  assert.equal(rc.info().level, 3, "the SC gets its own SC_MAX, not the yellow's 30 s remainder");
+  hz = hazards(6, 2);              // steps down to a VSC: the same episode
+  run(rc, 25);
+  assert.equal(rc.info().level, 2, "stepped down to VSC");
+  run(rc, 10);                     // > 90 s since the SC was raised
+  assert.equal(rc.info().level, 0, "the SC's cap still runs through the step-down");
 });
 
 test("the cap's re-arm hold never masks an ESCALATION", () => {
@@ -526,7 +614,7 @@ test("OVERTAKE stays off after the Safety Car comes in until the leader next cro
   assert.equal(rc.otEnabled(), false, "disabled under the Safety Car");
 
   hz = hazards(0, 0);
-  run(rc, 7);   // past MIN_HOLD: the Safety Car comes in
+  run(rc, 46);   // past SC_HOLD: the Safety Car comes in
   assert.equal(rc.info().level, 0);
   assert.equal(rc.otEnabled(), false, "green, but the field has not crossed the Line since");
   leader.lap = 6;
@@ -827,10 +915,12 @@ test("scQueueFrac and holdCap read the per-tick snapshot, so cars[] order cannot
   const vTop = 80;
   const frac = (order) => { const w = mk(); return R.scQueueFrac(w.me, order.map((k) => w[k]), total, null, vTop); };
   assert.equal(frac(["me", "ahead"]), frac(["ahead", "me"]));
+  // SC_* stay module-local on RaceControl; pin the documented pace thresholds here.
+  const SC_PACE = 0.45, SC_CATCH = 0.6, SC_QUEUE_GAP = 1.0;
   const w = mk();
-  const live = ((w.ahead.prog - w.me.prog) % total) / (R.SC_PACE * vTop);
-  const snap = ((w.ahead._snapProg - w.me.prog) % total) / (R.SC_PACE * vTop);
-  const t = (g) => R.SC_PACE + (R.SC_CATCH - R.SC_PACE) * Math.min(1, Math.max(0, g - R.SC_QUEUE_GAP));
+  const live = ((w.ahead.prog - w.me.prog) % total) / (SC_PACE * vTop);
+  const snap = ((w.ahead._snapProg - w.me.prog) % total) / (SC_PACE * vTop);
+  const t = (g) => SC_PACE + (SC_CATCH - SC_PACE) * Math.min(1, Math.max(0, g - SC_QUEUE_GAP));
   assert.equal(R.scQueueFrac(w.me, [w.me, w.ahead], total, null, vTop), t(snap));
   assert.notEqual(t(snap), t(live), "the fixture must distinguish snapshot from live");
   // The leader pick (leader out of the queue) rides the snapshot too.
@@ -853,15 +943,16 @@ test("settleLineStep with no or one entry never sorts, and the comparator is not
 });
 
 test("SOLO: a finished player waits for the AI still running, bounded by the post-finish cap", () => {
-  const { finishDelay, POST_FINISH_CAP } = load({ active: () => false, hazards: () => hazards(0, 0) });
-  assert.equal(POST_FINISH_CAP, 75);
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  // POST_FINISH_CAP stays module-local; pin the documented seconds here.
+  const POST_FINISH_CAP = 75;
   const you = { human: true, finished: true, retired: false, finishT: 100 };
   const ai = { human: false, finished: false, retired: false };
   const solo = { solo: true, since: -1 };
   assert.equal(finishDelay([you, ai], 101, 3, 0, solo), 0, "an AI still on track: keep counting, no 2.2 s countdown");
   assert.equal(solo.since, 101, "the wait is timed from the first tick the player was done");
-  assert.equal(finishDelay([you, ai], 101 + 74, 3, 0, solo), 0, "still inside the cap");
-  assert.equal(finishDelay([you, ai], 101 + 75, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
+  assert.equal(finishDelay([you, ai], 101 + (POST_FINISH_CAP - 1), 3, 0, solo), 0, "still inside the cap");
+  assert.equal(finishDelay([you, ai], 101 + POST_FINISH_CAP, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
   assert.equal(finishDelay([you, { ...ai, finished: true, finishT: 110 }], 111, 3, 0, { solo: true, since: -1 }), 2.2,
     "the whole field home: today's 2.2 s");
   assert.equal(finishDelay([you, { ...ai, retired: true }], 101, 3, 0, { solo: true, since: -1 }), 2.2, "a retired AI is not waited for");
@@ -1032,4 +1123,251 @@ test("holdCap reads c.rank's slot and falls back to indexOf when the slot is not
   assert.equal(R.holdCap(me, [a, me], null), 40);
   me.rank = 1;   // stale rank (a finisher's slot): the scan still finds it
   assert.equal(R.holdCap(me, [a, me], null), 40);
+});
+
+
+// This pilot keeps create(G) public; the machine gets only these capabilities.
+const CONTROL_SRC = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
+const MACHINE = fnSource(CONTROL_SRC, "function createControl(port)");
+const MACHINE_GLOBALS = ["Log", "blank", "logFlag", "LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD",
+  "RED_STOP", "RED_HOLD", "QUERY_EVERY", "DebrisWorld", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN",
+  "MIN_HOLD", "SC_HOLD", "Storm", "TyreModel", "Number", "Math", "Array",
+  // The stopped-car source (W34) leaves the machine only the empty debris picture.
+  "NO_HAZARDS"];
+function freeNames(source) {
+  const ast = espree.parse(source, { ecmaVersion: 2022, range: true });
+  return [...new Set(eslintScope.analyze(ast, { ecmaVersion: 2022 }).globalScope.through.map((r) => r.identifier.name))];
+}
+
+test("the private caution machine cannot reach G or unrelated ambient capabilities", () => {
+  const allowed = new Set(MACHINE_GLOBALS);
+  const rejected = (source) => freeNames(source).filter((name) => !allowed.has(name));
+  assert.deepEqual(rejected(MACHINE), []);
+  assert.deepEqual(rejected(MACHINE.replace("let caution = blank();", "G.state = 'menu'; let caution = blank();")), ["G"]);
+  assert.deepEqual(rejected(MACHINE.replace("let caution = blank();", "window.G.player.retired = true; let caution = blank();")), ["window"]);
+});
+
+test("the compatibility adapter exposes frozen live scalars and retains effect receivers", () => {
+  const G = makeCtx({ ranked: [{ lap: 1 }], raceT: 2, state: "race" });
+  const originalStore = G.store;
+  const port = vm.runInNewContext(fnSource(CONTROL_SRC, "function create(G)") + ";create(G)", { G, createControl: (p) => p },
+    { filename: absSrc("js/race/race-control.js") });
+  assert.ok(Object.isFrozen(port));
+  assert.throws(() => { port.state = "menu"; }, TypeError);
+  for (const key of ["ranked", "player", "cars", "netPlay", "store"]) assert.equal(key in port, false, key);
+  G.ranked = [{ lap: 2.5 }]; G.raceT = 7; G.state = "count";
+  assert.equal(port.leaderLap, 2.5); assert.equal(port.raceT, 7); assert.equal(port.state, "count");
+  G.ranked = []; assert.equal(port.leaderLap, null);
+  G.ranked = [{}]; assert.equal(port.leaderLap, undefined);
+  G.netPlay = { active() { assert.equal(this, G.netPlay); return true; },
+    ownsRaceControl() { assert.equal(this, G.netPlay); return false; },
+    reportCaution(d) { assert.equal(this, G.netPlay); this.payload = d; } };
+  assert.equal(port.networkActive(), true); assert.equal(port.ownsRaceControl(), false);
+  const payload = { level: 2 }; port.reportCaution(payload); assert.equal(G.netPlay.payload, payload);
+  assert.equal(port.announce("wet", 3, "warning"), false, "absence must not consume the notification");
+  G.announce = function () { assert.equal(this, G); return false; };
+  assert.equal(port.announce("wet", 3, "warning"), false);
+  G.announce = function () { assert.equal(this, G); return true; };
+  assert.equal(port.announce("wet", 3, "warning"), true);
+  G.trackWetness = function () { assert.equal(this, G); return 0.7; };
+  assert.equal(port.wetness(), 0.7);
+  G.store = { get() { throw Error("replacement store must not be used"); }, set() { throw Error("replacement store must not be used"); } };
+  port.writeCaution(false); assert.equal(originalStore._saved.get("caution"), false);
+  assert.equal(port.readCaution(), false);
+});
+
+test("guest low-grip retry and local reset precede authority gating through the adapter", () => {
+  const events = [];
+  const G = makeCtx({ raceWeather: { wet: true },
+    netPlay: { active: () => true, ownsRaceControl: () => { events.push("authority"); return false; }, reportCaution() {} } });
+  const rc = load({ active() { throw Error("guest queried hazards"); } }, { TyreModel: { treadFor: () => 1 } }).create(G);
+  rc.update(1 / 60); // no banner yet; must retry after the service appears
+  G.announce = () => { events.push("rejected"); return false; };
+  events.length = 0; rc.update(1 / 60); assert.deepEqual(events, ["rejected", "authority"]);
+  G.announce = () => { events.push("accepted"); return true; };
+  events.length = 0; rc.update(1 / 60); assert.deepEqual(events, ["accepted", "authority"]);
+  events.length = 0; rc.update(1 / 60); assert.deepEqual(events, ["authority"]);
+  rc.apply({ level: 3 }); G.state = "menu"; events.length = 0;
+  rc.update(1 / 60); assert.equal(rc.level, 0); assert.deepEqual(events, []);
+  G.state = "race"; rc.update(1 / 60); assert.deepEqual(events, ["accepted", "authority"], "new race notifies locally again");
+});
+
+test("the actual private machine checks against its port and rejects authority expansion", (t) => {
+  const compiler = findTsc();
+  assert.ok(compiler, "the repository TypeScript compiler is required for this boundary");
+  const base = join(ROOT, "artifacts", "race-control-types"); mkdirSync(base, { recursive: true });
+  const dir = mkdtempSync(join(base, "check-")); t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // Check the REAL factory body. Legacy collaborators stay declared separately;
+  // noImplicitAny/strictNullChecks remain off for its existing untyped internals.
+  const helpers = ["function blank()", "function logFlag(prev, next)"].map((decl) => fnSource(CONTROL_SRC, decl)).join("\n");
+  const constants = ["LABEL", "SC_MAX", "YELLOW_MAX", "CAP_REARM_HOLD", "RED_STOP", "RED_HOLD", "QUERY_EVERY", "RED_MIN", "SC_MIN", "VSC_MIN", "YELLOW_MIN", "MIN_HOLD", "SC_HOLD",
+    "NO_HAZARDS"];
+  const ast = espree.parse(CONTROL_SRC, { ecmaVersion: 2022, range: true });
+  const body = ast.body[0].declarations[0].init.callee.body.body;
+  const declarations = body.filter((n) => n.type === "VariableDeclaration" && n.declarations.some((d) => constants.includes(d.id.name)))
+    .map((n) => CONTROL_SRC.slice(...n.range)).join("\n");
+  writeFileSync(join(dir, "legacy.d.ts"), `declare const Log: { info(scope: string, message: string): void };
+    declare const DebrisWorld: { active(): boolean; hazards(): { total: number; redTotal?: number; sectors: number[]; worst: { count: number; sector: number; frac: number } } };
+    declare const Storm: { is(weather: unknown): boolean; SC_START_S: number; SC_ROLL_S: number };
+    declare const TyreModel: { treadFor(weather: unknown, wetness?: number): number };`);
+  writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { allowJs: true, checkJs: true, noEmit: true,
+    strict: false, target: "ES2022", types: [], skipLibCheck: true }, files: ["machine.js", "legacy.d.ts",
+    join(ROOT, "types/game-ctx.d.ts"), join(ROOT, "types/race-control-port.d.ts")] }));
+  const check = (extra) => {
+    writeFileSync(join(dir, "machine.js"), declarations + "\n" + helpers + "\n/** @param {RaceControlPort} port */\n" +
+      MACHINE.replace("let caution = blank();", extra + " let caution = blank();"));
+    return spawnSync(compiler.cmd, [...compiler.args, "-p", join(dir, "tsconfig.json")], { encoding: "utf8" });
+  };
+  const valid = check(""); assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+  const invalid = check("port.player.retired = true; port.state = 'menu'; port.ownsRaceControl = () => true;");
+  assert.notEqual(invalid.status, 0);
+  const codes = [...invalid.stdout.matchAll(/error TS(\d+):/g)].map((m) => +m[1]);
+  assert.deepEqual(codes, [2339, 2540, 2540], "unknown capability, readonly state and readonly command must each be rejected");
+});
+
+// ── W34: a car stopped on the road is a hazard with DEBRIS at its default ─────
+// CAUTIONS ON did nothing in a default-settings race: the only hazard source was
+// DebrisWorld, inactive unless DEBRIS is on, so four AI retirements stayed GREEN.
+// These drive the REAL create(G) adapter (stoppedOnRoad's geometry included)
+// with a Tracks stub whose road is 6 m half-width and a pit lane past x = 8.
+const SETTINGS_SRC = readFileSync(join(ROOT, "js/data/settings-defaults.js"), "utf8");
+const TRACKS_STUB = {
+  sample: (_t, _s, out) => { out.hw = 6; return out; },
+  inPitLane: (_t, _s, x) => Math.abs(x) > 8,
+};
+// The real lazy module, evaluated beside the stub Tracks it reads.
+function stoppedCars(tracks = TRACKS_STUB) {
+  const ctx = vm.createContext({ Math, Number, Map, Set, Tracks: tracks });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/stopped-cars.js"), "utf8"), ctx, { filename: absSrc("js/race/stopped-cars.js") });
+  return vm.runInContext("StoppedCars", ctx);
+}
+function stopRace(cars, tracks = TRACKS_STUB) {
+  const debrisOff = { active: () => false, hazards() { throw Error("debris is off: no query"); } };
+  const G = makeCtx({ cars, track: { total: 3000, def: { sectors: [0.3, 0.7] } } });
+  return { G, rc: load(debrisOff, { Tracks: tracks, StoppedCars: stoppedCars(tracks) }).create(G) };
+}
+const runner = (num, s) => ({ num, s, x: 0, speed: 60, finished: false, retired: false });
+
+test("default settings ship DEBRIS off, so the stopped-car source must not depend on it", () => {
+  const ctx = vm.createContext({ Object });
+  const D = vm.runInContext(SETTINGS_SRC + "\n;SettingsDefaults", ctx, { filename: absSrc("js/data/settings-defaults.js") });
+  assert.equal(D.get("debris"), "0");
+});
+
+test("a car parked on the road raises a local yellow in its sector, then VSC, and clears when it leaves", () => {
+  const parked = { num: 7, s: 1500, x: 1.2, speed: 0, finished: false, retired: true };
+  const { rc } = stopRace([runner(1, 100), parked, runner(3, 2900)]);
+  run(rc, 1);
+  assert.equal(rc.level, 0, "a car that has just stopped is not yet a hazard (a spin drives off)");
+  run(rc, 3);
+  assert.equal(rc.level, 1, "yellow once it has stood STOP_DWELL s");
+  assert.equal(rc.info().sector, 1, "frac 0.5 is sector 2 of [0.3, 0.7]");
+  run(rc, 12);
+  assert.equal(rc.level, 2, "still on the road past STOP_VSC: a VSC");
+  parked.x = 7;   // pushed clear past the verge, into the runoff
+  run(rc, 7);
+  assert.equal(rc.level, 1, "in the runoff: the VSC drops to a local yellow after MIN_HOLD (#5784 B)");
+  run(rc, 40);
+  assert.equal(rc.level, 0, "past STOP_RECOVER the marshals have it: green");
+});
+
+// #5784 decision B: a reliability DNF parked in the runoff (off the racing
+// surface, inside the barrier) flies a local single YELLOW in its sector for the
+// marshal window, and never a VSC — no marshal crosses the track for it.
+function maxLevel(rc, secs) {
+  let m = 0;
+  for (let t = 0; t < secs * 60; t++) { rc.update(1 / 60); m = Math.max(m, rc.level); }
+  return m;
+}
+test("#5784: a retirement in the runoff raises a sector yellow and never a VSC", () => {
+  const { rc } = stopRace([runner(1, 100), { num: 2, s: 2400, x: -7, speed: 0, finished: false, retired: true }, runner(3, 2900)]);
+  run(rc, 2);
+  assert.equal(rc.level, 0, "not before STOP_DWELL");
+  run(rc, 2);
+  assert.equal(rc.level, 1, "a local yellow once it has stood STOP_DWELL s");
+  assert.equal(rc.info().sector, 2, "frac 0.8 is sector 3 of [0.3, 0.7]");
+  assert.equal(rc.info().cause, "YELLOW");
+  assert.equal(maxLevel(rc, 50), 1, "the whole marshal window stays a yellow: no VSC for an off-road car");
+  run(rc, 10);
+  assert.equal(rc.level, 0, "past STOP_RECOVER: green");
+});
+
+test("#5784: an on-road DNF still escalates to VSC beside a runoff one", () => {
+  const { rc } = stopRace([
+    { num: 2, s: 400, x: 7, speed: 0, finished: false, retired: true },      // runoff
+    { num: 7, s: 1500, x: 1.2, speed: 0, finished: false, retired: true },   // on the road
+  ]);
+  run(rc, 16);
+  assert.equal(rc.level, 2, "the on-road car is unchanged: VSC at STOP_VSC");
+});
+
+test("#5784: a car stalled off the road, or a retirement past the barrier, raises nothing", () => {
+  const walled = { ...TRACKS_STUB, wallAt: () => 7.5 };
+  const { rc } = stopRace([
+    { num: 2, s: 400, x: 7, speed: 0, finished: false, retired: false },     // off, not retired
+    { num: 3, s: 700, x: 7.8, speed: 0, finished: false, retired: true },    // beyond the barrier
+    runner(6, 2000),
+  ], walled);
+  assert.equal(maxLevel(rc, 30), 0);
+});
+
+test("a stopped car in the pit lane or finished raises nothing", () => {
+  const { rc } = stopRace([
+    { num: 4, s: 900, x: 9, speed: 0, finished: false, retired: false },     // in the pit lane
+    { num: 5, s: 1200, x: 0, speed: 0, finished: true, retired: false },     // cool-down stop
+    runner(6, 2000),
+  ]);
+  run(rc, 30);
+  assert.equal(rc.level, 0);
+});
+
+test("a car stuck on the road is marshalled after STOP_RECOVER and the race goes green", () => {
+  const { rc } = stopRace([{ num: 9, s: 200, x: 0, speed: 0, finished: false, retired: true }]);
+  run(rc, 20);
+  assert.equal(rc.level, 2);
+  run(rc, 50);
+  assert.equal(rc.level, 0, "no permanent neutralisation from one unrecoverable car");
+});
+
+test("the stopped-car source respects CAUTIONS off", () => {
+  const G = makeCtx({ cars: [{ num: 9, s: 200, x: 0, speed: 0, finished: false, retired: true }], track: { total: 3000 } }, false);
+  const rc = load({ active: () => false }, { Tracks: TRACKS_STUB, StoppedCars: stoppedCars() }).create(G);
+  run(rc, 20);
+  assert.equal(rc.level, 0);
+});
+
+// #5557: a standing grid is not a hazard. A car counts once it has moved since
+// the last reset; a red-flag restart (clearHold) starts every dwell afresh.
+test("#5557: a car that never left its grid box raises nothing; once it has moved, a stop counts", () => {
+  const me = { num: 44, s: 10, x: 0, speed: 0, finished: false, retired: false };
+  const { rc } = stopRace([runner(1, 100), me]);
+  run(rc, 20);
+  assert.equal(rc.level, 0, "sitting on the grid past STOP_VSC: still green");
+  me.speed = 30; me.s = 40; run(rc, 1);
+  me.speed = 0; run(rc, 4);
+  assert.equal(rc.level, 1, "it pulled away, then stopped on the road: a yellow");
+});
+
+test("#5557: a red-flag restart drops the stopped-car dwell the pile-up accrued", () => {
+  const car = { num: 16, s: 1500, x: 0, speed: 30, finished: false, retired: false };
+  const { rc } = stopRace([runner(1, 100), car]);
+  run(rc, 1);
+  car.speed = 0; car.s = 1530; run(rc, 2.5);
+  assert.equal(rc.level, 0, "2.5 s stood: not yet a hazard");
+  rc.clearHold();   // game.js consumes takeRestart() and re-grids
+  run(rc, 2);
+  assert.equal(rc.level, 0, "re-gridded at rest: the old 2.5 s must not make this a yellow");
+  car.s = 1560; run(rc, 3.5);
+  assert.equal(rc.level, 1, "after the restart a car that moves and stops is a hazard again");
+});
+
+test("W34: every race frame hands the RETIRED card a view of the player, and leaving the race tells it so", () => {
+  const seen = [];
+  const G = makeCtx({ player: { retired: true, finished: false }, session: "race" });
+  const rc = load({ active: () => false }, { RetiredCard: { tickG: (g) => seen.push({ state: g.state, player: g.player, net: g.netPlay.active() }) } }).create(G);
+  rc.update(1 / 60);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].state, "race"); assert.equal(seen[0].player.retired, true); assert.equal(seen[0].net, false);
+  G.state = "results"; rc.update(1 / 60);
+  assert.equal(seen[1].state, "results", "the not-racing path still ticks, so the card hides");
 });

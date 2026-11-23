@@ -44,12 +44,11 @@ test("images under tests/ live only in Playwright *-snapshots/ baselines", () =>
 // docs/, artifacts/, gallery/ and shots/ take no new images on the deploy branch: survey sheets,
 // contact sheets and screenshot runs are release assets (docs/EVIDENCE-STORAGE.md).
 // Historical pinned links on track-survey-assets remain supported. 2026-10-15: 146
-// such images (123 MB, ~37% of the checkout) moved there; these 15 small ones
-// (6.5 MB) predate the rule and stay until someone moves them too. Shrink
-// this list, never grow it.
+// such images (123 MB, ~37% of the checkout) moved there; these 7 small ones
+// predate the rule and stay until someone moves them too (the 8 night-lamp
+// JPGs under artifacts/ were untracked 2026-11-03, D-001). Shrink this list,
+// never grow it.
 const DOCS_IMAGE_ALLOW = new Set([
-  ...["albert_park", "dijon", "kyalami", "mexico"].flatMap((t) =>
-    ["after", "before"].map((w) => `artifacts/night-lamps-${w}/${t}-night.jpg`)),
   ...["bahrain", "monaco-eye", "montreal-eye", "montreal", "singapore", "spa", "vegas"]
     .map((n) => `docs/research/wgx-gallery/${n}.png`),
 ]);

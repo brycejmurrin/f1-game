@@ -7,6 +7,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -101,7 +102,7 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
   }
   const resolve = section(post, "        vset(P.composite, pW, pH);", "      _last.ssao")
     .replace(/\n      }\s*$/, ""); // close of present()'s non-viz branch
-  const gate = section(tlx, "      function wantSpatialUpscale()", "      function getPresentSize()");
+  const gate = section(tlx, "      function wantSpatialUpscale()", "      function getPresentSize(");
   const sizing = section(post, "    const halfOf =", "    function layoutHalf()");
   const uv = section(viewport, "    function uv(v)", "    function tex(node)");
   const vector = () => ({ values: [], set(...values) { this.values = values; } });
@@ -110,13 +111,16 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
   // Exercise both direct hardware presentation and the present-sized soft RT.
   for (const soft of [false, true]) {
     const draws = [], P = { composite: pass("composite"), fxaa: pass("fxaa"), sgsr: pass("sgsr") };
+    P.fxaa.bendTex = {};
     const presentW = 1266, presentH = 585;
     const dest = soft ? { width: presentW, height: presentH } : null;
     const aaRT = { texture: {} }, ldrRT = { texture: {} };
     const context = vm.createContext({ P, presentW, presentH, phonePost: true,
-      fixed: true, fixedActive: () => true, spatialUpscale: false,
-      dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0,
-      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false,
+      phys: true, _scissorWarm: false, compileJobs: null, _mirTex: null, fixed: true, fixedActive: () => true, spatialUpscale: false,
+      dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0, _warmFlipUp: false,
+      AA: null, taaLive: () => false,   // traa off: the FXAA / SGSR branches below are today's
+      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false, bindLens(field) { P.fxaa.bendTex.field = field; },
+      cinemaPost: (rt) => rt, F: {}, o: { visorLens: { bend: { x: .03, y: .05 }, light: {} } },   // the desktop-tier CINEMA hook: off below EXTREME (tsl-gi.js)
       vset(p, w, h) { p.V.set(w, h); },
       runPass(mat, target) { draws.push({ mat, target, view: P[mat].V.values.slice() }); },
       enabled: true, screenCoordinate: { xy: [presentW / 2, presentH / 2] },
@@ -124,12 +128,19 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
     });
     vm.runInContext(gate + sizing + uv, context);
     context.ctx = { wantSpatialUpscale: context.wantSpatialUpscale, userSpatialUpscale: () => false };
-    for (const [W, H, scale] of [[1266, 585, 1], [950, 439, .75], [633, 293, .5], [1266, 585, 1]]) {
+    for (const [W, H, scale, lazyLens] of [[1266, 585, 1, false], [950, 439, .75, true], [633, 293, .5, true], [1266, 585, 1, true]]) {
       Object.assign(context, { W, H, renderScale: scale });
       vm.runInContext("pW = postSize(W); pH = postSize(H);", context);
+      let lensReads = 0;
+      // Exercise both the established frame payload and the lazy game accessor.
+      if (lazyLens) context.o.readVisorLens = () => { lensReads++; return context.o.visorLens; };
       draws.length = 0;
+      context.o.visorFolded = false;
       vm.runInContext("{\n" + resolve + "\n}", context);
       const { pW, pH } = context;
+      assert.equal(context.o.visorFolded, !soft && scale === 1 ? 2 : false);
+      assert.equal(lensReads, lazyLens && !soft && scale === 1 ? 1 : 0);
+      assert.equal(P.fxaa.bendTex.field, context.o.visorFolded ? context.o.visorLens : null);
       assert.deepEqual(draws[0].view, [pW, pH], "composite keeps its reduced target");
       assert.deepEqual(P.fxaa.U.texel.value.values, [1 / pW, 1 / pH], "FXAA texels follow its input");
       const final = draws.at(-1);
@@ -146,4 +157,27 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
       }
     }
   }
+});
+
+test("presentSize() and getPresentSize(out) answer in scratch: no fresh pair a present (#5057)", () => {
+  // Node VM census 2026-11-11: 64 B -> 0 a call, up to once a present on a fixed phone target.
+  const post = read("js/render/three/tlx-post.js"), tlx = read("js/render/three/tlx.js");
+  const a = post.indexOf("    const _psOut"), fn = post.indexOf("    function presentSize(", a);
+  assert.ok(a >= 0 && fn > a, "tlx-post keeps its present-size scratch beside presentSize()");
+  const ps = post.slice(a, post.indexOf("\n    }\n", fn) + 6);
+  const gps = tlx.split("\n").find((l) => l.includes("function getPresentSize("));
+  const context = vm.createContext({ PW: 844, PH: 390, presentW: 1688, presentH: 780, W: 999, H: 499 });
+  vm.runInContext(gps + "\nvar ctx = { getPresentSize };\n" + ps, context, { filename: absSrc("js/render/three/tlx-post.js") });
+  const presentSize = vm.runInContext("presentSize", context), getPresentSize = vm.runInContext("getPresentSize", context);
+  const first = presentSize();
+  assert.deepEqual(Array.from(first), [1688, 780]);
+  assert.equal(presentSize(), first, "the same scratch pair every call");
+  const out = { width: 0, height: 0 };
+  assert.equal(getPresentSize(out), out, "getPresentSize fills the caller's object");
+  assert.deepEqual(out, { width: 1688, height: 780 });
+  const fresh = getPresentSize();
+  assert.deepEqual({ ...fresh }, { width: 1688, height: 780 }, "with no target it still answers (apex-lifecycle, other callers)");
+  assert.notEqual(getPresentSize(), fresh);
+  vm.runInContext("presentW = 0; presentH = 0;", context);
+  assert.deepEqual(Array.from(presentSize()), [999, 499], "no present size: the render size");
 });

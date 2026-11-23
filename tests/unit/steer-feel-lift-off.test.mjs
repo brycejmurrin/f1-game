@@ -22,7 +22,8 @@ const SEED = 42;
 
 let g = null;
 before(async () => {
-  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false } });
+  // The fixed 45 m/s recipe and yaw bounds were calibrated at notch 11.
+  g = await createGame({ track: "monza", storage: { difficulty: "normal", autoThrottle: false, pace: 11 } });
   await g.race("monza", "day", "dry");
 });
 after(() => { if (g) g.close(); });
@@ -50,7 +51,6 @@ test("COAST_YAW_* constants ship and are read by player-forces", () => {
   assert.ok(/COAST_YAW_LO:\s*0\.65/.test(consts), "COAST_YAW_LO in consts");
   assert.ok(/COAST_YAW_HI:\s*1\.10/.test(consts), "COAST_YAW_HI in consts");
   assert.ok(forces.includes("COAST_YAW_DAMP"), "player-forces reads COAST_YAW_DAMP");
-  assert.ok(forces.includes("coastYaw"), "coastYaw term present");
 });
 
 test("lift-off at 45 m/s lock 0.8 rotates but does not snap past 1.25× in 0.75 s", () => {

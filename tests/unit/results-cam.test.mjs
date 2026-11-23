@@ -306,7 +306,7 @@ function bootAudio() {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
+  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"]
     .map(src).join("\n");
   vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const real = vm.runInContext("GameAudio", vctx);
@@ -349,9 +349,9 @@ function highlightsRig({ sound = true } = {}) {
   const tickCtx = vm.createContext({
     ...renderRateStubs(),
     Math, performance: { now: () => 0 }, PerfSpans: { begin() {}, end() {} }, lastFrame: 0, paused: false, state: "results",
-    gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
+    FieldLod: { updateModelBudget: noop }, gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
     netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
-    director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, raceT: 3,
+    director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, RaceCeremony: { get: () => null }, raceT: 3,
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
     naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,
     _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, raceRestarting: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
@@ -641,15 +641,15 @@ test("a second highlights() while one is playing is refused and does not rewind 
   assert.equal(api.status().clip, clip, "playback was not rewound to clip 0");
 });
 
-// Ordinary paused Settings still animates the world, but honors RenderRate's
-// selected cadence. Run the real gate so skipped dt and capture waits matter.
+// Ordinary paused Settings still animates the world at RenderRate.settle's 20 Hz
+// cadence. Run the real gate so skipped dt and capture waits matter.
 function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
   const calls = { render: 0, poll: 0, audio: 0, dt: 0, deltas: [] };
   const noop = () => {};
   const ctx = vm.createContext({
     Math, performance: { now: () => 0 }, localStorage: { getItem: () => mode },
     PerfSpans: { begin: noop, end: noop }, lastFrame: 0, _poseAt: null, paused: true, state: "race",
-    gfx: { warming: () => false }, Input: { poll: () => calls.poll++, clearEdges: noop },
+    FieldLod: { updateModelBudget: noop }, gfx: { warming: () => false }, Input: { poll: () => calls.poll++, clearEdges: noop },
     BrakeCue: { tick: noop }, onboard: { tick: noop }, netPlay: { tick: noop, active: () => false },
     UiExperience: { resumeHolding: () => false }, director: { tick: noop }, mirrorPass: { preparing: () => false },
     replayBuf: { isScrubbing: () => preview === "scrub", tickScrub: noop },
@@ -670,8 +670,10 @@ function pausedSettingsRig({ mode = "30", hz = 60, preview = "" } = {}) {
   return { ctx, frame, calls };
 }
 
-for (const [mode, hz, renders] of [["30", 60, 300], ["45", 60, 450], ["half", 120, 600],
-  ["auto", 120, 600], ["off", 120, 1200], ["auto", 60, 600]]) {
+// #5049: the sheet draws at 20 Hz on the wall clock whatever the tier (a full race frame each on a
+// phone); renderRate "off" never skips.
+for (const [mode, hz, renders] of [["30", 60, 200], ["45", 60, 200], ["half", 120, 200],
+  ["auto", 120, 200], ["off", 120, 1200], ["auto", 60, 200]]) {
   test(`ordinary paused Settings: ${mode} at ${hz} Hz keeps input/audio live and carries render time`, () => {
     const { frame, calls } = pausedSettingsRig({ mode, hz });
     frame(hz * 10);
@@ -695,18 +697,21 @@ for (const preview of ["lighting", "camera", "flyby", "photo", "garage", "scrub"
 
 test("Settings skip then live photo flushes pending time and marks every preview present", () => {
   const { ctx, frame, calls } = pausedSettingsRig({ mode: "half" });
+  do frame(1); while (!ctx.RenderRate.drew());   // on a Settings draw: the 20 Hz phase is known
+  calls.deltas.length = 0;
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
   ctx.photoMode = true;
   frame(1); assert.equal(ctx.RenderRate.drew(), true);
   frame(1); assert.equal(ctx.RenderRate.drew(), true);
   ctx.photoMode = false;
+  frame(1); assert.equal(ctx.RenderRate.drew(), true, "back on the sheet: it draws at once (#5049)");
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
-  frame(1); assert.equal(ctx.RenderRate.drew(), true);
-  assert.deepEqual(calls.deltas.map(dt => Math.round(dt * 6000)), [200, 100, 200]);
+  assert.deepEqual(calls.deltas.map(dt => Math.round(dt * 6000)), [200, 100, 100]);
 });
 
 test("resuming after a forced preview judges the actual preceding draw", () => {
   const { ctx, frame } = pausedSettingsRig({ mode: "half" });
+  do frame(1); while (!ctx.RenderRate.drew());
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
   ctx.photoMode = true; frame(1);
   const judged = [], noop = () => {};
@@ -717,4 +722,19 @@ test("resuming after a forced preview judges the actual preceding draw", () => {
   ctx.Input.setTimeScale = noop; ctx.replayBuf.onTick = noop;
   frame(1);
   assert.deepEqual(judged, [true], "governor sees the preview that actually drew");
+});
+
+test("#5030 highlights re-pose on every rendered frame (the flag and the orbit keep their 30 Hz cap)", () => {
+  const R = boot(), winner = { finPos: 1, s: 10, px: 10, pz: 0 };
+  let applies = 0;
+  const G = { player: winner, cars: [winner], gfx: {}, camVantage: (_m, s) => ({ eye: [s, 5, -10], tgt: [s, 0, 0], fov: 58 }) };
+  const camera = R.create(G);
+  camera.attachReplay({ window: () => ({ t0: 0, t1: 20, frames: 600 }), tags: () => [{ kind: "contact", t: 10, car: 0 }],
+    beginScrub: () => true, apply: () => { applies++; }, endScrub() {} });
+  camera.onFlag();
+  assert.equal(camera.startHighlights(), true);
+  applies = 0;
+  for (let i = 0; i < 120; i++) camera.tick(1 / 120);
+  assert.equal(applies, 120, "one replay pose per rendered frame at 120 Hz, not 30");
+  assert.equal(camera.status().phase, "highlights", "1 s into a 4 s clip");
 });

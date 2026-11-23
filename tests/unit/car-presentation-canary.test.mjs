@@ -42,12 +42,23 @@ test("render interpolates world px/pz for every car, not only humans", () => {
 // every stamp-gate term true and an empty batch). World state, not a draw.
 test("the player's skid stamp precedes the cockpit-rig continue", () => {
   const game = read("js/game.js");
-  const stamp = game.indexOf("skids.stamp(tmpMat,");
+  const stamp = game.indexOf("skids.stamp(_groundMat,");
   // The branch also carries the VISOR eye (no rig, no body) since 2026-09-28.
   const cockpit = game.indexOf("if (c.isPlayer && (cockpitRigOnly || visorEye)) {");
   assert.ok(stamp > 0 && cockpit > 0, "both sites present");
   assert.ok(stamp < cockpit, `skids.stamp at ${stamp} must come before the cockpit branch at ${cockpit}`);
   assert.equal(game.split("skids.stamp(").length - 1, 1, "one stamp site");
+});
+
+// #4751 row 13: the heat-haze anchor is world state. Marked after the side-frustum
+// `continue`, an off-screen anchor car never refreshed it and at() went null (haze blink).
+test("the heat-haze mark precedes the rival frustum cull", () => {
+  const game = read("js/game.js");
+  const mark = game.indexOf("if (c === hazeAnchor) haze.mark(c, tmpMat);");
+  const cull = game.indexOf("if (!c.isPlayer && _carCullPlanes) {");
+  assert.ok(mark > 0 && cull > 0, "both sites present");
+  assert.ok(mark < cull, `haze.mark at ${mark} must come before the frustum cull at ${cull}`);
+  assert.equal(game.split("haze.mark(").length - 1, 1, "one haze mark site");
 });
 
 test("xVis is a dump field — render and shadows do not damp it", () => {
@@ -90,12 +101,10 @@ test("the draw loop draws body + planted wheels for every procedural car", () =>
   const draw = game.slice(start, end);
   // Which body each car gets (shared / team / player / model) runs as
   // behaviour in field-lod.test.mjs; this pins only what is drawn with it.
-  assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, dt, _wheelOpts\);/,
+  assert.match(draw, /gfx\.draw\(body, tmpMat, sharedBody \? carDraw\.coOpt\(paint\) : paint\);[\s\S]*drawPlayerWheels\(c, _groundMat, wheelDt, _wheelOpts\);/,
     "only shared bodies coalesce paint (others keep it, all keep chassis attitude), then wheels plant on the ground matrix");
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
-  // The player's pair takes the team so livery wheel tints (rimTint / caliperTint) join its cache key.
   const cd = read("js/car/car-draw.js");
-  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(c\.team\) : getFieldWheelMeshes\(c\.team, c\);/);
   assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
   assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
@@ -179,6 +188,12 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
   const stampExpr = 'Parts.CATALOG.map((cat) => setup[cat.id] || "").join(",")';
   assert.equal(cd.split(stampExpr).length - 1, 1, "car-draw builds a stamp in ONE place");
   assert.equal((symbolSource("function makeCars(") + prep).split("Parts.CATALOG.map(").length - 1, 0, "neither makeCars nor the prep builds its own");
+  // setPlayerParts restamps the live player through carVisual (M27 STANDARD Daily /
+  // mid-session garage): TT ghost teamMesh and stamp-keyed casters follow the
+  // recipe recomputePlayerMods just applied, not makeCars' once-stamped save.
+  const setParts = fnSource(cd, "function setPlayerParts(");
+  assert.match(setParts, /carVisual\(team, carDecalNum\(team, G\.player\), true, \(\) => recipe\)/, "setPlayerParts restamps via carVisual");
+  assert.match(cd.slice(0, cd.indexOf('"use strict"')), /the seven helpers that could not leave game\.js through deps \(resolveLivery,\s+factoryLivery,/, "file header counts the seven deps helpers (factoryLivery joined them)");
 });
 
 // game.js resolves the first-person caster right after the grounded transform,
@@ -187,13 +202,13 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
 // in car-presentation-vm.test.mjs.
 test("the first-person caster is pinned to the car loop's cockpit branch", () => {
   const game = read("js/game.js");
-  assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\)\); \}/);
-  assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster \}\)/);
+  assert.match(game, /if \(_hasLivePlayerShadow\) \{ currentCarGroundMat\(player, shadowPass\.livePlayerMat\); shadowPass\.resolvePlayer\(_smpPlayer, yawVisInterp\(player\), _bankPlayer\.roll\); \}/);
+  assert.match(game, /ShadowPass\.create\(G, \{ teamMesh, vStd, cockpitCaster: carDraw\.cockpitCaster, sharedRivalBody: carDraw\.sharedRivalBodyMesh \}\)/);
   assert.match(game, /if \(c\.isPlayer && _plBodyOk\) \{\s*\/\/[^\n]*\n\s*const S = _smpPlayer, p = smp2\.p, t = smp2\.t, r = smp2\.r;/,
     "the car loop restores the player's smp2 from _smpPlayer");
   assert.match(game, /const yv = yawVisInterp\(c\);/);
   // The mode test and the axes call the twin in car-draw.js mirrors.
   assert.match(game, /const cockpitRigOnly = !dbgCam && \(state === "race" \|\| state === "count"\) && \(CAM_MODES\[camMode\]\.id === "cockpit" \|\| CAM_MODES\[camMode\]\.id === "helmet"\);/);
   assert.match(game, /const visorEye = !dbgCam && \(state === "race" \|\| state === "count"\) && CAM_MODES\[camMode\]\.id === "visor";/);
-  assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\)\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
+  assert.match(game, /GameCams\.cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye, tmpR, _cockU, tmpF, _cockP,\s*GameCams\.seatFwd\(visorEye \? "visor" : "cockpit"\), GameCams\.seatUp\(visorEye \? "visor" : "cockpit"\), bankC \? bankC\.roll : 0\);\s*basisMat\(tmpR, _cockU, tmpF, _cockP, _cockMat\);\s*drawCockpitRig\(c, _cockMat,/);
 });

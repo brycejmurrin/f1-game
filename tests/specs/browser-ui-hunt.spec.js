@@ -58,7 +58,14 @@ test.describe("Accessible settings discovery", () => {
     await page.addInitScript(() => localStorage.setItem("apex26.gfxBackend", "webgl2"));
     await waitReady(page);
     await page.evaluate(() => window.__apex.headless(true));
+    // Even brief native dialog focus on search can zoom Safari before the next frame.
+    const field = page.locator("#pm-settings-index input[type=search]");
+    await field.evaluate(el => el.addEventListener("focus", () => el.setAttribute("data-received-focus", "")));
     await page.locator("#mb-settings").tap();
+    await expect(page.locator("#pm-open-controls")).toBeFocused();
+    expect(await field.getAttribute("data-received-focus")).toBeNull();
+    const paintedSize = await field.evaluate(el => parseFloat(getComputedStyle(el).fontSize) * el.currentCSSZoom);
+    expect(paintedSize).toBeGreaterThanOrEqual(15.99);
     for (const [query, id, title] of [
       ["subtitles hearing", "pm-captions-sel", "APPEARANCE"], ["caption size", "pm-caption-size-sel", "APPEARANCE"],
       ["caption position", "pm-caption-pos-sel", "APPEARANCE"], ["caption background", "pm-caption-bg-sel", "APPEARANCE"],
@@ -93,7 +100,7 @@ async function dataReady(page) {
     </body>`);
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
   for (const url of [
-    "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js",
+    "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js", "/js/core/i18n.js",
     ...LAZY_DATA.map((file) => "/" + file),
   ]) await page.addScriptTag({ url });
   await page.evaluate(() => {
@@ -125,6 +132,10 @@ async function dataReady(page) {
       cursor: "2026-09-13T06:10:00Z",
     });
     F1API.liveIntervals = () => Promise.resolve({ values: {}, cursor: "2026-09-13T06:10:00Z" });
+    // A finished session (this meta has no dateEnd, so it is COMPLETED) seeds its
+    // first Live build from the whole-session snapshots (live.js liveFeedRequests).
+    F1API.sessionPositions = F1API.livePositions;
+    F1API.sessionIntervals = F1API.liveIntervals;
     F1API.fastestLap = () => Promise.resolve(null);
     DataHub.init(document.getElementById("datahub"));
     DataHub.open();

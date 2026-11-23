@@ -181,9 +181,11 @@ const InputPadMenu = (function () {
     // way MenuNav's own first arrow press would, so the NEXT press has a target.
     // "One focus visual should always be visible" (research note §8) applies to
     // A as much as to a direction — and to the menu-open seed in padNavPoll.
-    function padActivate() {
+    // `guard(el)` true = refuse this control (the phone's SELECT on a destructive one).
+    function padActivate(guard) {
       const focused = padFocusableInLayer();
       if (focused) {
+        if (typeof guard === "function" && guard(focused)) return false;
         // A click on a focused range/number jumps the thumb to the click
         // coordinate — not "confirm this control". Left/Right already own it.
         const ty = (focused.type || "").toLowerCase();
@@ -261,9 +263,11 @@ const InputPadMenu = (function () {
       } else {
         padNavDir = null;   // released the instant input returns to neutral
       }
-      if (btnEdge(pad, 6)) padDispatchKey("PageUp");
-      if (btnEdge(pad, 7)) padDispatchKey("PageDown");
-      if (pad.mapping == null || pad.mapping === "standard") {   // a wheel's 4/5 are its paddles: they navigate above
+      if (pad.mapping == null || pad.mapping === "standard") {
+        // Triggers page long panes; LB/RB step left/right. A wheel's mapping ""
+        // puts paddles/pedals on vendor indices — those already navigate above.
+        if (btnEdge(pad, 6)) padDispatchKey("PageUp");
+        if (btnEdge(pad, 7)) padDispatchKey("PageDown");
         if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
         if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
       }
@@ -281,6 +285,21 @@ const InputPadMenu = (function () {
       releaseDirection() { padNavDir = null; }, reset };
   }
 
-  return { create };
+  /* DESTRUCTIVE CONTROLS (W26): a paired phone may walk every menu, but reset/delete/import/
+     erase/wipe/clear/remove/forget need a tap on this screen. data-destructive opts in ("false"
+     out); else id/class/name/aria-label/text are matched; a file picker always counts. */
+  const DESTRUCTIVE_RE = /(?:^|[^a-z])(reset|delete|del|import|erase|wipe|clear|remove|forget)(?![a-z])/i;
+  function isDestructive(el) {
+    if (!el || typeof el !== "object") return false;
+    const attr = (n) => (typeof el.getAttribute === "function" ? el.getAttribute(n) : null);
+    const flag = el.dataset && el.dataset.destructive !== undefined ? el.dataset.destructive : attr("data-destructive");
+    if (flag != null) return String(flag).toLowerCase() !== "false";
+    if (el.tagName === "INPUT" && String(el.type || "").toLowerCase() === "file") return true;
+    const cls = typeof el.className === "string" ? el.className : "";
+    const words = [el.id, cls, el.name, attr("aria-label"), el.textContent].filter((v) => typeof v === "string").join(" ");
+    return DESTRUCTIVE_RE.test(words);
+  }
+
+  return { create, isDestructive };
 })();
 Object.freeze(InputPadMenu);

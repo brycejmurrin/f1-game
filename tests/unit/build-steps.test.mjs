@@ -41,7 +41,7 @@ function physics(track) {
   return PHYS.filter((k) => track[k]).map((k) => k + ":" + createHash("sha1").update(Buffer.from(Float64Array.from(track[k]).buffer)).digest("hex").slice(0, 16));
 }
 
-for (const id of ["monza", "spa", "vegas"]) {
+for (const id of ["monza", "spa", "vegas", "montreal"]) {
   test(`${id}: a stepped build uploads exactly what build() uploads`, () => {
     const def = Tracks.LIST.find((d) => d.id === id);
     const a = recorder();
@@ -236,4 +236,46 @@ test("prop batches are owned as each lands, so a batch that throws part-way free
   assert.throws(() => Tracks.build(def, { gfx: L.gfx }), /device lost/);
   assert.equal(L.made.filter((h) => h.kind === "inst").length, nBatches - 1);
   assert.deepEqual(liveAfter(L), [], "the batches that did land were freed with the rest");
+});
+
+// Perf hunt 7 (#4219): the pit complex and the hidden-face classify pass were each ONE step of the paced
+// build (60-380 VM ms). They yield inside now (per wall run and bay; per 4096 triangles), so no single step that runs
+// either may cost more than PIECE_BUDGET_MS of CPU. CPU time, not wall, so a busy box cannot fail it; the
+// first build warms the JIT and the better of the next two counts. (The circuit's own scenery closure is
+// still one step: it is a plain function of the frozen scenery(api) contract.)
+const PIECE_BUDGET_MS = 45;   // ~3x the after-value (11.6-22.4 CPU ms on a loaded 4-core box; the one-step code measured 77-104)
+test("montreal: no single build step running the pit complex or the hidden-face classify exceeds the budget", () => {
+  const T = buildContext(null, { quiet: true }), ctx = T._vmContext;
+  const HF = ctx.TrackHiddenFaces, SP = ctx.SceneryPits;
+  let tag = null;
+  const tagged = (opts) => Object.assign({}, opts, { groundY: (x, z) => { tag = "classify"; return opts.groundY(x, z); } });
+  ctx.TrackHiddenFaces = Object.assign({}, HF, {
+    strip: (geo, opts) => HF.strip(geo, tagged(opts)),
+    stripSteps: HF.stripSteps && ((geo, opts) => HF.stripSteps(geo, tagged(opts))),
+  });
+  ctx.SceneryPits = Object.assign({}, SP, {
+    build: (c) => { tag = "pits"; return SP.build(c); },
+    buildSteps: SP.buildSteps && ((c) => {
+      const it = SP.buildSteps(c);
+      return { next: (v) => { tag = "pits"; return it.next(v); }, return: (v) => it.return(v), [Symbol.iterator]() { return this; } };
+    }),
+  });
+  const def = T.LIST.find((d) => d.id === "montreal");
+  const worst = [];
+  for (let rep = 0; rep < 3; rep++) {
+    const it = T.buildSteps(def, { gfx: recorder().gfx });
+    const max = { classify: 0, pits: 0 };
+    for (;;) {
+      tag = null;
+      const c0 = process.cpuUsage(), r = it.next(), d = process.cpuUsage(c0), ms = (d.user + d.system) / 1000;
+      if (tag) max[tag] = Math.max(max[tag], ms);
+      if (r.done) break;
+    }
+    assert.ok(max.classify > 0 && max.pits > 0, "both pieces ran: " + JSON.stringify(max));
+    if (rep) worst.push(max);
+  }
+  const best = (k) => Math.min(worst[0][k], worst[1][k]);
+  const seen = JSON.stringify({ classify: +best("classify").toFixed(1), pits: +best("pits").toFixed(1) });
+  assert.ok(best("classify") < PIECE_BUDGET_MS, "longest classify step (CPU ms) " + seen);
+  assert.ok(best("pits") < PIECE_BUDGET_MS, "longest pit-complex step (CPU ms) " + seen);
 });

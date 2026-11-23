@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "monza",
+    revision: 2,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 3.9 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -39,18 +40,24 @@
       grass:         [0.20, 0.44, 0.18],
       sunDir:        [0.5, 0.55, 0.3],
     },
-    // elevations/bankZones re-keyed to the start line (startFrac 0) when the
-    // bogus sceneryStartFrac 0.0125 (shift 0.0867) was removed: elev s +0.0742
-    // (index -0.0125, arc +0.0867), bank frac +0.0867. Road surface unchanged.
-    elevations: [
-      { s: 0.3867, halfM: 220, rise: -1.5 },
-      { s: 0.5667, halfM: 340, rise: 4.5 },
-    ],
+    // Two 2024 OpenF1 qualifying laps (Monza session 9586, drivers 4 and 16)
+    // agree on 12.4 m of relief and the Serraglio dip before Ascari. Fit the
+    // relative car heights by lap distance with overlapping raised cosines.
+    // One knot every ~120 m; half-width spans two knots to keep the grade smooth.
+    elevations: [0, 0.33, 0.63, 0.94, 1.23, 1.52, 1.85, 2.2, 2.58, 2.97, 3.21, 3.21,
+      3.21, 3.49, 4.02, 4.57, 4.83, 4.68, 4.34, 4.1, 3.71, 3.21, 3.03, 2.99,
+      2.75, 2.47, 2.69, 2.98, 1.79, -0.01, 0.14, 1.53, 2.02, 1.6, 1.25, 1.07,
+      0.7, 0.28, -0.05, -0.37, -0.71, -1.03, -1.36, -1.55, -1.38, -1.04, -0.7, -0.36]
+      .map((rise, i) => ({ s: i / 48, halfM: 241, rise })),
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
       { s0: 0.0155, s1: 0.0949, hw: 6.8, ease: 0.012 },  // racing arc 0.087-0.104 Rettifilo
       { s0: 0.2821, s1: 0.3460, hw: 7.0, ease: 0.012 },  // racing arc 0.295-0.315 Roggia
       { s0: 0.5960, s1: 0.7315, hw: 7.2, ease: 0.012 },  // racing arc 0.608-0.652 Ascari
     ],
+    // Frac zones kept (not { turn }): converting to turn-anchors moved the
+    // banking under the car and drifted physics-characterization + props-index
+    // pins on CI (#6121). Corner-frames still lists the three far fracs; fix
+    // with a physics-aware pass, not a silent rebaseline.
     bankZones: [
       { frac: 0.1636, angleDeg: 3.0, widthM: 240 },   // Curva Grande
       { frac: 0.3831, angleDeg: 6.0, widthM: 140 },   // Lesmo 1

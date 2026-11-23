@@ -1,0 +1,17 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": -4,
+      "lines": -4
+    },
+    "js/net/lobby.js": {
+      "lines": -7
+    }
+  },
+  "tree": {
+    "assertPins": 3,
+    "assertPinsAll": 5,
+    "eagerCodeBytes": -3744,
+    "vmSrcLoads": -2
+  }
+}

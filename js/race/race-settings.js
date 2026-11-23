@@ -38,6 +38,60 @@ const RaceSettings = (function () {
       '<p id="rs-aipace-help" class="adv-help">SCRIPTED keeps each rival on a fixed target pace from car and driver ratings. CATCH-UP is the old rubber band: cars behind you speed up toward your gap.</p>';
     diff.parentNode.insertBefore(row, diff.nextSibling);
   }
+  // ERS PLAN (#1580, js/race/energy-plan.js): one policy per timing sector, injected
+  // after TYRE WEAR like AI PACE. MANUAL ×3 is today's game.
+  const RS_ERS = [["manual", "MANUAL"], ["deploy", "DEPLOY"], ["save", "SAVE"]];
+  const ersRows = [];   // the three rows once built; read by element, never looked up by id
+  function ensureErsRows($) {
+    if (ersRows.length || typeof EnergyPlan === "undefined") return;
+    let after = $("rs-tyres");
+    if (!after || !after.parentNode) return;
+    for (let i = 1; i <= 3; i++) {
+      const id = "rs-ers" + i, row = document.createElement("div");
+      row.id = id;
+      row.className = "set-row";
+      row.setAttribute("role", "group");
+      row.setAttribute("aria-labelledby", id + "-label");
+      // A constant skeleton; ids and labels go in through attributes below, never markup.
+      row.innerHTML = '<span class="tune-label"></span><div><button type="button" data-step="-1">&lsaquo;</button>' +
+        '<select></select><button type="button" data-step="1">&rsaquo;</button></div>';
+      const label = row.querySelector("span"), [prev, next] = row.querySelectorAll("button"), sel = row.querySelector("select");
+      label.id = id + "-label"; label.textContent = "ERS SECTOR " + i;
+      prev.id = id + "-prev"; prev.setAttribute("aria-label", "Previous sector " + i + " ERS policy");
+      next.id = id + "-next"; next.setAttribute("aria-label", "Next sector " + i + " ERS policy");
+      sel.id = id + "-sel"; sel.setAttribute("aria-labelledby", id + "-label");
+      if (i === 3) {
+        const help = document.createElement("p");
+        help.id = "rs-ers-help"; help.className = "adv-help";
+        help.textContent = "At each sector start, DEPLOY switches BOOST on and SAVE switches it off so the battery harvests. MANUAL leaves BOOST to you. You can still press BOOST to override.";
+        sel.setAttribute("aria-describedby", help.id);
+        row.append(help);
+      }
+      after.parentNode.insertBefore(row, after.nextSibling);
+      after = row;
+      ersRows.push(row);
+    }
+  }
+  /** DAMAGE (#1578, js/race/damage-handling.js) after RELIABILITY, injected like AI PACE. */
+  function ensureDamageRow($) {
+    if ($("rs-damage") || typeof DamageHandling === "undefined") return;
+    const reliab = $("rs-reliab");
+    if (!reliab || !reliab.parentNode) return;
+    const row = document.createElement("div");
+    row.id = "rs-damage";
+    row.className = "set-row";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-labelledby", "rs-damage-label");
+    row.innerHTML =
+      '<span class="tune-label" id="rs-damage-label">DAMAGE</span>' +
+      "<div>" +
+      '<button id="rs-damage-prev" type="button" data-step="-1" aria-label="Previous damage mode">&lsaquo;</button>' +
+      '<select id="rs-damage-sel" aria-labelledby="rs-damage-label" aria-describedby="rs-damage-help"></select>' +
+      '<button id="rs-damage-next" type="button" data-step="1" aria-label="Next damage mode">&rsaquo;</button>' +
+      "</div>" +
+      '<p id="rs-damage-help" class="adv-help">DISPLAY shows damage on the HUD only. HANDLING: a broken wing or floor costs your car grip in fast corners, until a pit stop repairs it.</p>';
+    reliab.parentNode.insertBefore(row, reliab.nextSibling);
+  }
   /** WIND (js/race/wind.js, off/real) after DIRTY AIR, injected like AI PACE:
    *  wind moves top speed ±4 km/h and a phone player has no other way off. */
   function ensureWindRow($) {
@@ -75,6 +129,9 @@ const RaceSettings = (function () {
   const duelValue = (getDuel, getDuelLegend) =>
     !getDuel() ? "off" : ((getDuelLegend && getDuelLegend()) || "on");
   const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
+  // DAMAGE (#1578, js/race/damage-handling.js): DISPLAY = the HUD readout only (shipped);
+  // HANDLING = a broken wing/floor or a knocked suspension also costs the player's car grip.
+  const RS_DAMAGE = [["off", "DISPLAY"], ["on", "HANDLING"]];
   // TYRE WEAR (js/physics/tyre-model.js). Same three-rung shape as RELIABILITY
   // and for the same reason — OFF is the shipped default, and the middle rung
   // exists so a player can have the mechanic without it deciding the race.
@@ -125,10 +182,10 @@ const RaceSettings = (function () {
 
   /* REMEMBER LAST RACE SETUP (apex26.raceDraft). A solo one-off Grand Prix
    * remembers what it last STARTED with — laps as a ladder rung or "FULL",
-   * weather, time of day, MIXED — so the next circuit opens on the same race
-   * instead of 3 laps / dry / default. Pure halves, exported for the tests. The
+   * weather, time of day and MIXED — across circuits. The
    * laps are stored as a rung, not a number: FULL is 44 at Spa and 79 at Monaco,
    * so "the full race" is what carries between circuits, not its count. */
+  const DEFAULT_DRAFT = Object.freeze({ weather: "storm", tod: "dusk", mixed: true, laps: "3" });
   const DRAFT_LAPS = ["3", "5", "10", "25"];
   function draftOf(laps, full, weather, tod, mixed) {
     const n = +laps;
@@ -152,13 +209,22 @@ const RaceSettings = (function () {
 
   function create(G, deps) {
     const {
-      $, store, GAME_LAPS, TT_LAPS, scheduleFlybyTrack, setCautionEnabled,
+      $, store, GAME_LAPS, TT_LAPS, scheduleFlybyTrack: flybyTrack, setCautionEnabled,
       startRace, buildSelect, els, openGarage,
     } = G;
+    // Every move of the circuit, weather or hour also keys the RACE! drive-out's garage exterior (#5660):
+    // it was built for the menu's dry/default and rebuilt under the drive-out, which then showed none.
+    const scheduleFlybyTrack = (settle) => {
+      flybyTrack(settle);
+      const pre = typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance ? GaragePrebuild.instance() : null;
+      if (pre && pre.prewarmExterior) pre.prewarmExterior();
+    };
     const {
       GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
       qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,
     } = deps;
+    if (typeof EnergyPlan !== "undefined") EnergyPlan.fromStore(store);   // #1580: the stored sector plan, default MANUAL ×3
+    if (typeof DamageHandling !== "undefined") DamageHandling.fromStore(store);   // #1578: the stored DAMAGE choice, default DISPLAY
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
     const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
@@ -178,6 +244,8 @@ const RaceSettings = (function () {
     function buildRaceSettings() {
       ensureAiPaceRow($);
       ensureWindRow($);
+      ensureErsRows($);
+      ensureDamageRow($);
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
@@ -224,8 +292,8 @@ const RaceSettings = (function () {
       // quickest driver with his stats lifted. Hidden in a Time Trial (which
       // has no field at all) and in a championship, where the classification
       // feeds points and standings — a 2-car GP would score a season.
-      $("rs-duel").hidden = tt || champ;
-      $("rs-duel-help").hidden = tt || champ;
+      $("rs-duel").hidden = tt || champ || netRoom;
+      $("rs-duel-help").hidden = tt || champ || netRoom;
       paintDuel();
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
@@ -242,10 +310,12 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-caution", G.cautionInfo().enabled ? "on" : "off", RS_ONOFF);
       $("rs-reliab").hidden = tt;
       SettingRow.paint("rs-reliab", G.raceReliability, RS_RELIAB);
+      if (typeof DamageHandling !== "undefined" && $("rs-damage")) { $("rs-damage").hidden = tt; SettingRow.paint("rs-damage", DamageHandling.isEnabled() ? "on" : "off", RS_DAMAGE); }
       // Hidden in a time trial for the same reason the model forces it off
       // there: a lap against the clock is not a set anybody is asked to manage.
       $("rs-tyres").hidden = tt;
       SettingRow.paint("rs-tyres", G.raceTyreWear, RS_TYRES);
+      ersRows.forEach((row, i) => { row.hidden = tt; SettingRow.paint(row.id, EnergyPlan.plan()[i], RS_ERS); });
       $("rs-dirty").hidden = tt;
       SettingRow.paint("rs-dirty", G.raceDirtyAir, RS_DIRTY);
       if ($("rs-wind")) { $("rs-wind").hidden = !hasWind(); if (hasWind()) SettingRow.paint("rs-wind", Wind.level(), RS_WIND); }
@@ -407,7 +477,12 @@ const RaceSettings = (function () {
       });
       wire("rs-caution", () => (G.cautionInfo().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
+      if (typeof DamageHandling !== "undefined" && $("rs-damage")) wire("rs-damage", () => (DamageHandling.isEnabled() ? "on" : "off"), (v) => { DamageHandling.setEnabled(v === "on"); store.set("damageHandling", v === "on"); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
+      ersRows.forEach((row, i) => wire(row.id, () => EnergyPlan.plan()[i], (v) => {
+        const p = EnergyPlan.plan(); p[i] = v;
+        if (EnergyPlan.setPlan(p)) store.set("ersPlan", p);
+      }));
       wire("rs-dirty", () => G.raceDirtyAir, (v) => { G.raceDirtyAir = v; });
       if ($("rs-wind") && hasWind()) wire("rs-wind", () => Wind.level(), (v) => { store.set("wind", Wind.setLevel(v)); });
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
@@ -619,9 +694,7 @@ const RaceSettings = (function () {
       if (G.soundOn) GameAudio.uiSelect();
     }
 
-    function openRaceSettings(from) {
-      searchReturn = null;
-      rsReturn = from || "select";
+    function stageDraft() {
       if (!netRoom) {
         const daily = isTimeTrial() && G.daily ? G.daily.current() : null;
         const key = [G.flow, G.session, G.trackIdx, daily && daily.day,
@@ -631,7 +704,7 @@ const RaceSettings = (function () {
           G.raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
           G.raceWeather = daily ? daily.weather : "dry";
           G.raceTimeOfDay = daily ? daily.tod : "default";
-          const d = soloGp() ? draftFor(store.get("raceDraft", null), fullLaps()) : null;
+          const d = soloGp() ? draftFor(store.get("raceDraft", DEFAULT_DRAFT), fullLaps()) : null;
           if (d) {
             if (d.laps != null) G.raceLaps = d.laps;
             if (d.weather) G.raceWeather = d.weather;
@@ -640,6 +713,17 @@ const RaceSettings = (function () {
           }
         }
       }
+    }
+
+    function preparePickerTrack() {
+      if (soloGp()) stageDraft();
+      flybyTrack(true);
+    }
+
+    function openRaceSettings(from) {
+      searchReturn = null;
+      rsReturn = from || "select";
+      stageDraft();
       buildRaceSettings();
       $(rsReturn).hidden = true;
       $("race-settings").hidden = false;
@@ -721,6 +805,7 @@ const RaceSettings = (function () {
     return {
       buildRaceSettings,
       wireRaceSettings,
+      preparePickerTrack,
       openRaceSettings,
       openSettingSearch,
       openRaceSetup,
@@ -737,6 +822,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts };
+  return { create, DEFAULT_DRAFT, duelOpts, duelValue, presetValues, matchPreset, sheetTitle, draftOf, draftFor, weatherOpts };
 })();
 Object.freeze(RaceSettings);

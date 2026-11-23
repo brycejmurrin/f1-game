@@ -5,8 +5,10 @@ needs code, it goes there; these files carry layout, palette, theme and metadata
 the `scenery(api)` callback lives beside them in `js/circuits/scenery/<id>.js`,
 lazy-loaded (reference: `docs/SCENERY-API.md`).
 
-- **Script-tag order == `Tracks.LIST` == picker order.** Adding a circuit is
-  the full new-file lockstep (root AGENTS.md) — tag position matters.
+- **No `<script>` tag: `CIRCUITS` order in `tools/manifest.cjs` == `Tracks.LIST` ==
+  picker order.** Append a new id LAST, never interleave (a saved `apex26.track` is a
+  positional index); a full def hydrates per pick via `LAZY_CIRCUIT`. A new circuit is
+  `<id>.js` + `scenery/<id>.js` + its registration rows (skill new-track, workflow steps 1-2).
 - **Frac-keyed tables respect `def._sceneryShift`** — the engine consumes
   them via the compensated idiom; write fracs in the def's own frame and
   never pre-compensate by hand.
@@ -15,6 +17,6 @@ lazy-loaded (reference: `docs/SCENERY-API.md`).
   `modelGroup("<id>", …, { required: true })` in `scenery/<id>.js`
   (scenery-api-contract). Never a shared list — that is what made every
   scenery PR conflict with every other.
-- After ANY edit: `node tools/track/verify-track.cjs <id>` FIRST (2 s), then the
+- After ANY edit: `node tools/track/verify-track.cjs <id>` FIRST (seconds), then the
   groups `node tools/ci/pick-tests.mjs` names. A misplaced prop or terrain
   reading usually means a raw-frac mistake, not a geometry bug.

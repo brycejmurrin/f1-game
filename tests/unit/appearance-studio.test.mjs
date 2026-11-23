@@ -4,16 +4,42 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
-function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
+const bodySource = fs.readFileSync(new URL("../../js/ui/appearance-studio-ui.js", import.meta.url), "utf8").replace(/^const AppearanceStudioBody/m, "var AppearanceStudioBody");
+// Appearance adopts existing controls; mini-dom's default insertions omit
+// detaching. These fixtures need the browser's single-parent DOM ownership.
+function movingDom(document) {
+  if (!document || !document.createElement) return;
+  const wrapped = new WeakSet(), move = el => {
+    if (!el || wrapped.has(el)) return el;
+    wrapped.add(el);
+    const append = el.appendChild, insert = el.insertBefore;
+    el.appendChild = child => { if (child.parentNode) child.parentNode.removeChild(child); return append(child); };
+    el.insertBefore = (child, before) => {
+      if (child === before) return child;
+      if (child.parentNode) child.parentNode.removeChild(child);
+      return insert(child, before);
+    };
+    return el;
+  };
+  for (const el of [document.documentElement, document.body, document.head]) move(el);
+  const get = document.getElementById, create = document.createElement;
+  document.getElementById = id => move(get(id));
+  document.createElement = tag => move(create(tag));
+}
+function load(initial = {}, durable = true, reduced = false, document, globals = {}, open = true) {
+  movingDom(document);
   const values = structuredClone(initial), writes = [], owners = [];
   const store = { get: (k, d) => k in values ? values[k] : d, set: (k, v) => { values[k] = v; writes.push(k); return durable; },
     write: (k, v) => { values[k] = v; return { ok: true, durable, reason: durable ? null : "QuotaExceededError" }; } };
   const context = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     AppearanceOpts: { restore: (v) => owners.push(v) }, ScreenLooks: { normalize: (_id, v) => ({ ...v }), apply() {}, refresh() {} },
     window: { matchMedia: () => ({ matches: reduced }) }, document, ...globals });
-  vm.runInContext(source, context); return { studio: context.AppearanceStudio, values, writes, owners };
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  if (document && open) context.AppearanceStudio.initUI();
+  return { studio: context.AppearanceStudio, values, writes, owners };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
@@ -33,7 +59,8 @@ test("game's Studio integration refreshes touch button size after profile apply,
       els: {}, store, gfx: {} } });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/scale.js", import.meta.url), "utf8"), context);
   vm.runInContext("const uiScale = UiScale.create(scaleDeps);", context);
-  vm.runInContext(source, context);
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
   const game = gameSource();
   const attachment = game.match(/AppearanceStudio\.attach\(\{[\s\S]*?\n\}\);/);
   assert.ok(attachment, "game must attach the Studio's live visual owners");
@@ -51,8 +78,9 @@ test("game's Studio integration refreshes touch button size after profile apply,
   studio.undo(); assertButtons(200, "2", "200");
 });
 
-function loadWithControls() {
+function loadWithControls(moving = false) {
   const dom = makeDom(), values = {};
+  if (moving) movingDom(dom.document);
   const panel = dom.byId("pm-panel-appearance"), titleFold = dom.byId("pm-titlescreen"), titleBody = dom.byId("pm-titlescreen-body");
   titleFold.appendChild(dom.byId("pm-titlescreen-sum")); titleFold.appendChild(titleBody); panel.appendChild(titleFold);
   titleBody.appendChild(dom.byId("pm-replay-intro"));
@@ -72,9 +100,58 @@ function loadWithControls() {
   // Keep Studio's illustrative preview unmounted; the advanced controls above
   // use their real owners and real SettingRow selects.
   context.document = { readyState: "loading", addEventListener() {} };
-  vm.runInContext(source, context); context.document = dom.document;
-  return { studio: context.AppearanceStudio, appearance: context.AppearanceOpts, dom, values };
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") }); context.document = dom.document;
+  return { studio: context.AppearanceStudio, appearance: context.AppearanceOpts, dom, values, title: context.TitleLayout };
 }
+
+test("Menu customization exposes the existing editor and retains persistence, focus and Home-only ownership", async () => {
+  const { studio, title, dom, values } = loadWithControls(true);
+  const panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  for (const id of ["pmsettings", "tl-editor", "tl-done", "menu-buttons", "menu-brand"]) {
+    const el = dom.document.createElement(id === "tl-done" ? "button" : "div"); el.id = id; dom.body.appendChild(el);
+  }
+  dom.byId("tl-editor").appendChild(dom.byId("tl-done"));
+  const edit = dom.byId("pm-tl-edit"), fold = dom.byId("pm-titlescreen");
+  studio.initUI();
+  const menu = dom.byId("ap-menu-customization"), controls = menu.parentNode;
+  assert.equal(edit.textContent, "EDIT MAIN MENU");
+  assert.ok(edit.parentNode === menu, "reuse the original launcher, including its focus and disabled-state owner");
+  assert.ok(fold.parentNode === menu, "menu controls are outside the Advanced fold");
+  const profile = controls.children.find(child => child.children.some(node => node.textContent === "APPEARANCE PROFILE"));
+  const order = Array.from(controls.children); const menuAt = order.indexOf(menu), profileAt = order.indexOf(profile);
+  assert.ok(menuAt >= 0 && menuAt < profileAt, "menu tools precede profile management");
+  assert.equal(dom.document.querySelectorAll("#pm-tl-edit").length, 1);
+  edit.click();
+  assert.equal(title.editing, true);
+  assert.equal(panel.hidden, true);
+  assert.equal(dom.byId("pmsettings").hidden, true);
+  dom.byId("tl-size-up").click();
+  assert.equal(title.current().btns.size, 105, "preview shows the draft");
+  assert.equal(values.titleLayout, undefined, "the title draft waits for Apply");
+  dom.byId("tl-done").click();
+  assert.equal(values.titleLayout.wide.btns.size, 105, "Apply writes the existing landscape preference");
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(title.editing, false);
+  assert.equal(panel.hidden, false);
+  assert.equal(dom.byId("pmsettings").hidden, false);
+  assert.ok(dom.document.activeElement === edit, "Done returns focus to the visible Menu customization launcher");
+  studio.saveProfile("My menu"); studio.reset();
+  assert.equal(title.current().btns.size, 100);
+  studio.loadProfile("profile-1"); assert.equal(title.current().btns.size, 105);
+  studio.undo(); assert.equal(title.current().btns.size, 100);
+  const x = dom.byId("pm-tl-btns-x"); x.value = "11";
+  dom.dispatch(x, { type: "input", bubbles: true });
+  dom.dispatch(x, { type: "change", bubbles: true });   // the thumb's release stores it (#4933)
+  assert.equal(title.current().btns.x, 11);
+  await new Promise(resolve => setTimeout(resolve, 360));
+  assert.equal(studio.undo(), true, "the adopted fold still records owner input for Undo");
+  assert.equal(title.current().btns.x, 0);
+  dom.byId("overlay").hidden = true; title.build();
+  assert.equal(edit.disabled, true, "main-menu editing is unavailable during a race");
+  assert.equal(title.enter(), false);
+  assert.equal(panel.hidden, false, "a rejected entry preserves Settings");
+  studio.initUI(); assert.equal(dom.document.querySelectorAll("#pm-tl-edit").length, 1, "reopening does not duplicate controls");
+});
 
 test("Colour Vision profiles, reset and Undo update the actual owner, palette and select; screen scope retains the global choice", () => {
   const { studio, appearance, dom, values } = loadWithControls();
@@ -100,6 +177,29 @@ test("Colour Vision profiles, reset and Undo update the actual owner, palette an
   for (const invalid of ["unknown", {}, 1, null]) assert.equal(studio.normalizeSnapshot({ cvdMode: invalid }).cvdMode, "off");
   studio.applySnapshot({ ...studio.snapshot(), cvdMode: "unknown" }); assertMode("off");
   studio.undo(); assertMode("tritan");
+});
+
+test("a Home profile restores medium drawing and wash strengths", () => {
+  const { studio, values } = load({ titleArt: "medium", menuWash: "medium" });
+  studio.saveProfile("Medium");
+  studio.reset("screen");
+  assert.equal(values.titleArt, "on");
+  assert.equal(values.menuWash, "full");
+  studio.loadProfile("profile-1", "screen");
+  assert.equal(values.titleArt, "medium");
+  assert.equal(values.menuWash, "medium");
+});
+
+test("title button style follows Home profiles and undo across a screen reset", () => {
+  const { studio, values } = load({ titleButtonStyle: "flat" });
+  studio.saveProfile("Flat");
+  studio.reset("screen"); assert.equal(values.titleButtonStyle, "auto");
+  studio.undo(); assert.equal(values.titleButtonStyle, "flat");
+  studio.applySnapshot({ ...studio.snapshot(), titleButtonStyle: "racing" });
+  studio.applyPreset("broadcast"); assert.equal(values.titleButtonStyle, "racing");
+  studio.loadProfile("profile-1", "screen"); assert.equal(values.titleButtonStyle, "flat");
+  assert.equal(studio.normalizeSnapshot({}).titleButtonStyle, "auto");
+  assert.equal(studio.normalizeSnapshot({ titleButtonStyle: "unknown" }).titleButtonStyle, "auto");
 });
 
 test("profile restore, Undo and reset repaint mounted title and pause controls without duplicating them", () => {
@@ -128,18 +228,15 @@ test("profile restore, Undo and reset repaint mounted title and pause controls w
   studio.loadProfile("profile-1"); assertControls(true);
   studio.undo(); assertControls(false);
   studio.undo(); assertControls(true);
-  studio.applyPreset("classic"); assertControls(false);
+  studio.applyPreset("classic"); assertControls(true);   // a cosmetic preset never moves the menu layouts (#5058)
 });
 
-test("Studio mounts once the document has passed loading (interactive included)", () => {
-  for (const readyState of ["interactive", "complete", "loading"]) {
-    const lookedUp = [], events = [];
-    load({}, true, false, { readyState, getElementById(id) { lookedUp.push(id); return null; },
-      addEventListener(name, callback) { events.push({ name, callback }); } });
-    if (readyState === "loading") {
-      assert.equal(lookedUp.length, 0); assert.equal(events[0].name, "DOMContentLoaded");
-      events[0].callback();
-    } else assert.equal(events.length, 0);
+test("Appearance waits for entry before mounting even when the body was already loaded", () => {
+  for (const readyState of ["complete", "interactive", "loading"]) {
+    const lookedUp = [];
+    const { studio } = load({}, true, false, { readyState, getElementById(id) { lookedUp.push(id); return null; } }, {}, false);
+    assert.deepEqual(lookedUp, []);
+    studio.initUI();
     assert.deepEqual(lookedUp, ["pm-panel-appearance"]);
   }
 });
@@ -153,6 +250,24 @@ test("visual profiles and coordinated presets preserve driving, career, confirma
   assert.ok(writes.every((key) => studio.VISUAL_KEYS.includes(key)));
   studio.saveProfile("Race night"); values.steering = "rookie"; studio.loadProfile("profile-1");
   assert.equal(values.steering, "rookie"); assert.equal(values.pauseConfirm, "off");
+});
+
+test("Endurance and Drafting coordinate theme and menu accent without changing the cockpit or session", () => {
+  for (const [id, accent] of [["endurance", "amber"], ["drafting", "cyan"]]) {
+    const { studio, values, writes, owners } = load({ uiTheme: "system", menuAccent: "violet",
+      hudAccent: "team", hudProfile: "broadcast", homeScene: "photo", uiContrast: "high", cvdMode: "deutan" });
+    assert.equal(studio.applyPreset(id, "screen"), false);
+    assert.deepEqual(writes, []);
+    assert.equal(studio.applyPreset(id, "global"), true);
+    assert.deepEqual(writes.sort(), ["menuAccent", "uiTheme"]);
+    assert.equal(owners.at(-1).uiTheme, id);
+    assert.equal(owners.at(-1).menuAccent, accent);
+    assert.equal(owners.at(-1).uiContrast, "high");
+    assert.equal(values.hudAccent, "team");
+    assert.equal(studio.undo(), true);
+    assert.equal(values.uiTheme, "system");
+    assert.equal(values.menuAccent, "violet");
+  }
 });
 
 test("hostile visual snapshots are clamped, normalized and stripped of unrelated keys", () => {
@@ -170,27 +285,62 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before); assert.equal(studio.undo(), false);
   studio.applyPreset("classic", "screen"); assert.equal(values.homeScene, "static");
   assert.equal(values.uiTheme, "light"); assert.equal(values.hudProfile, "minimal");
-  // Screen-scope RESET restores the shipped home scene (photo), not the prior garage value.
-  studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
+  // Screen-scope RESET restores the shipped home scene (static).
+  studio.reset("screen"); assert.equal(values.homeScene, "static"); assert.equal(values.uiTheme, "light");
 });
 
-test("HUD screen scope does not rewrite the global HUD profile", () => {
-  assert.equal(studioForScope().includes("hudProfile"), false);
+test("THIS SCREEN covers what each preview shows: pause layout keys and the HUD style (#4920)", () => {
+  assert.equal(studioForScope().includes("hudProfile"), true, "FOCUS / BROADCAST set the HUD style the HUD preview heading shows");
+  const { studio, values } = load({ pauseLayout: "sidebar", pauseSide: "left", pauseDim: "off", hudProfile: "standard", uiTheme: "light" });
+  studio.applyPreset("focus", "screen");           // previewPage is "home": the HUD keys stay
+  assert.equal(values.hudProfile, "standard");
+  // The preview page is UI state; boot the Studio with PAUSE / HUD already picked.
+  const on = (page, initial) => {
+    const v = structuredClone(initial), store = { get: (k, d) => k in v ? v[k] : d, set: (k, x) => { v[k] = x; return true; } };
+    const ctx = vm.createContext({ GameStore: { store }, Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
+      AppearanceOpts: { restore() {} }, ScreenLooks: { normalize: (_id, x) => ({ ...x }), apply() {}, refresh() {} }, window: { matchMedia: () => ({ matches: false }) } });
+    vm.runInContext(bodySource.replace('previewPage = "home"', 'previewPage = "' + page + '"'), ctx, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+    vm.runInContext(source, ctx, { filename: absSrc("js/ui/appearance-studio.js") });
+    return { s: ctx.AppearanceStudio, v };
+  };
+  const pause = on("pause", { pauseLayout: "sidebar", pauseSide: "left", pauseDim: "off", uiTheme: "light" });
+  pause.s.reset("screen");
+  assert.deepEqual([pause.v.pauseLayout, pause.v.pauseSide, pause.v.pauseDim], ["grid", "centre", "full"], "RESET SCOPE resets the pause menu");
+  assert.equal(pause.v.uiTheme, "light");
+  const hud = on("hud", { hudProfile: "standard", menuAccent: "lime" });
+  hud.s.applyPreset("focus", "screen");
+  assert.equal(hud.v.hudProfile, "minimal", "FOCUS applied to HUD changes the HUD style");
+  assert.equal(hud.v.menuAccent, "lime");
+  hud.s.applyPreset("broadcast", "screen");
+  assert.equal(hud.v.hudProfile, "broadcast");
+  // Every key a preset sets is either device-wide or owned by one screen.
+  const DEVICE_WIDE = new Set(["uiTheme", "menuAccent", "menuAccentHex", "textSize", "uiContrast", "cvdMode", "speedUnits", "menuHelp", "motion", "uiScale"]);
+  const owned = new Set(Object.values(studio.SCREEN_KEYS).flat());
+  for (const p of studio.PRESETS) for (const k of Object.keys(p.values)) {
+    assert.ok(owned.has(k) || DEVICE_WIDE.has(k), p.id + " sets " + k + ", which no THIS SCREEN scope owns");
+  }
+  for (const k of ["pauseLayout", "pauseSide", "pauseDim", "lookPause"]) assert.ok(studio.SCREEN_KEYS.pause.includes(k), "pause scope owns " + k);
+  assert.equal(values.uiTheme, "light");
 });
 
 test("every ScreenLooks page has a screen scope and a preview entry", () => {
-  const { studio } = load();
+  const { studio, dom } = loadStudioRenderCounts();
   const keys = id => Array.from(studio.SCREEN_KEYS[id]);
-  assert.deepEqual(keys("pause"), ["lookPause"]);
+  assert.deepEqual(keys("pause"), ["lookPause", "pauseLayout", "pauseSide", "pauseDim"]);
   assert.deepEqual(keys("datahub"), ["lookDatahub"]);
   assert.deepEqual(keys("select"), ["lookSelect"]);
   assert.deepEqual(keys("race"), ["lookRace"]);
   assert.deepEqual(keys("career"), ["lookCareer"]);
   assert.deepEqual(keys("garage"), ["lookGarage"]);
   assert.deepEqual(keys("popups"), ["lookPopups"]);
-  const sourceText = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8");
-  for (const id of ["pause", "datahub", "select", "career", "race", "garage", "hud", "popups"]) {
-    assert.match(sourceText, new RegExp('\\[\\"' + id + '\\",'), id + " preview button");
+  const panel = dom.byId("appearance-studio");
+  for (const [page, label] of Object.entries({ pause: "PAUSE", datahub: "DATA HUB", select: "TRACK SELECTOR",
+    career: "CAREER", race: "RACE SETUP", garage: "GARAGE", hud: "HUD", popups: "POPUP" })) {
+    const button = panel.querySelectorAll("button").find(el => el.textContent === label);
+    assert.ok(button, label + " preview entry");
+    button.click();
+    assert.equal(button.getAttribute("aria-pressed"), "true");
+    assert.equal(panel.querySelector('[aria-label="Illustrative appearance preview"]').dataset.screen, page);
   }
 });
 
@@ -222,7 +372,7 @@ test("Profile boundary rejects duplicates and bad ids and enforces the saved-pro
 });
 
 test("Scene events and independent background motion respect OS reduce and unsubscribe", () => {
-  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  const { studio } = load({}, true, true); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   const changes = []; const stop = studio.onSceneChange((v) => changes.push(plain(v)));
   studio.setScene("night", "ambient"); assert.deepEqual(plain(studio.scene()), { mode: "night", motion: "ambient" });
   assert.equal(studio.effectiveSceneMotion(), "still"); assert.equal(changes.length, 1); stop(); studio.setScene("studio", "still"); assert.equal(changes.length, 1);
@@ -251,7 +401,7 @@ test("Home camera defaults and hostile saved choices normalize without expanding
   const fresh = load().studio;
   assert.equal(fresh.homeCamera(), "side"); assert.equal(fresh.snapshot().homeCamera, "side");
   const { studio, values } = load({ homeScene: "unknown", homeCamera: "driver" });
-  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   const changes = []; studio.onSceneChange((value) => changes.push(plain(value)));
   studio.setScene("garage", "still"); studio.setHomeCamera("front");
   assert.equal(values.homeCamera, "front"); assert.equal(studio.homeCamera(), "front"); assert.equal(changes.length, 2);
@@ -278,7 +428,7 @@ test("Circuit, pit lane and mixed environments persist through named visual prof
 test("Home scoped reset includes camera and environment while undo preserves other screens", () => {
   const { studio, values } = load({ homeScene: "pitlane", homeCamera: "rear", backgroundMotion: "still", hudProfile: "broadcast", uiTheme: "light", raceSettings: { laps: 18 } });
   const before = plain(studio.snapshot()); studio.reset("screen");
-  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "photo", motion: "ambient" });
+  assert.equal(studio.homeCamera(), "side"); assert.deepEqual(plain(studio.scene()), { mode: "static", motion: "ambient" });
   assert.equal(values.hudProfile, "broadcast"); assert.equal(values.uiTheme, "light"); assert.deepEqual(values.raceSettings, { laps: 18 });
   assert.equal(studio.undo(), true); assert.deepEqual(plain(studio.snapshot()), before);
   studio.applyPreset("classic", "screen"); assert.equal(studio.scene().mode, "static"); assert.equal(studio.homeCamera(), "side");
@@ -291,10 +441,10 @@ test("profile apply, reset and Undo disclose session-only restoration when stora
   const descendants = node => [node, ...node.children.flatMap(descendants)];
   const status = descendants(dom.byId("appearance-studio")).find(node => node.dataset.as === "status");
   studio.saveProfile("Night"); studio.applyPreset("sunlight"); studio.loadProfile("profile-1");
-  assert.match(status.textContent, /applied.*for this session; browser storage is unavailable/);
+  assert.equal(status.textContent, "Night applied to all visual settings for this session; browser storage is unavailable.");
   studio.applyPreset("sunlight"); // reset needs something to change: unchanged keys are no longer rewritten
-  studio.reset(); assert.match(status.textContent, /reset for this session; browser storage is unavailable/);
-  studio.undo(); assert.match(status.textContent, /restored for this session; browser storage is unavailable/);
+  studio.reset(); assert.equal(status.textContent, "All visual settings reset for this session; browser storage is unavailable. Undo restores your previous choices.");
+  studio.undo(); assert.equal(status.textContent, "Previous visual settings restored for this session; browser storage is unavailable.");
 });
 
 test("Studio previews independent HUD accent and contrast precedence", () => {
@@ -325,20 +475,24 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
     Log: { info() {}, warn() {} }, setTimeout, clearTimeout,
     requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
     MutationObserver: class {
-      constructor(cb) { this.cb = cb; observers.push(this); }
-      observe() {}
+      constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+      observe(t) { this.targets.push(t); }
     },
     ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
     matchMedia: () => ({ matches: false }),
     innerWidth: 1000, innerHeight: 500,
   });
   context.window = context;
-  vm.runInContext(source, context);
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") }); vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  context.AppearanceStudio.initUI();
   context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
   sceneHits.length = 0; // attach() refreshes the live Home scene once; this test is about OPEN
-  assert.equal(observers.length, 1, "studio watches the appearance panel");
+  // The other observer is the PORTRAIT & LANDSCAPE watch on body[data-shape] (#4529).
+  const watching = observers.filter((o) => o.targets.includes(panel));
+  assert.equal(watching.length, 1, "studio watches the appearance panel");
+  assert.equal(observers.filter((o) => o.targets.includes(dom.document.body)).length, 1, "one orientation watch");
   panel.hidden = false;
-  observers[0].cb([{ attributeName: "hidden" }]);
+  watching[0].cb([{ attributeName: "hidden" }]);
   assert.equal(panel.getAttribute("aria-busy"), "true");
   assert.equal(sceneHits.length, 0, "preview must not run on the same turn as the open click");
   assert.ok(rafQueue.length >= 1);
@@ -349,6 +503,54 @@ test("Opening Appearance marks the panel busy and defers scene preview off the c
   for (const fn of second) fn();
   assert.equal(panel.getAttribute("aria-busy"), null);
   assert.ok(sceneHits.length >= 1, "garage preview runs after the sheet has a frame");
+});
+
+test("closing Appearance cancels a pending store debounce so sceneChanged cannot fire after hide", () => {
+  const dom = makeDom();
+  const panel = dom.byId("pm-panel-appearance");
+  const settings = dom.byId("pmsettings");
+  panel.hidden = false; settings.hidden = false;
+  panel.prepend = (node) => panel.insertBefore(node, panel.firstChild);
+  const observers = [];
+  const timers = [];
+  const sceneHits = [];
+  const subs = [];
+  const store = {
+    get: (_k, d) => d, set: () => true,
+    subscribe(fn) { subs.push(fn); },
+  };
+  const context = vm.createContext({
+    document: dom.document, GameStore: { store },
+    Log: { info() {}, warn() {} },
+    setTimeout(fn, ms) { timers.push({ fn, ms, dead: false }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) { timers[id - 1].dead = true; timers[id - 1].fn = null; } },
+    requestAnimationFrame: (fn) => { fn(); return 1; },
+    MutationObserver: class {
+      constructor(cb) { this.cb = cb; this.targets = []; observers.push(this); }
+      observe(t) { this.targets.push(t); }
+    },
+    ScreenLooks: { endPeek() {}, normalize: (_id, v) => v, apply() {}, refresh() {} },
+    matchMedia: () => ({ matches: false }),
+    innerWidth: 1000, innerHeight: 500,
+  });
+  context.window = context;
+  // Force initUI now (document complete) so the MutationObserver and store.subscribe wire.
+  Object.defineProperty(dom.document, "readyState", { value: "complete" });
+  vm.runInContext(bodySource, context, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  vm.runInContext(source, context, { filename: absSrc("js/ui/appearance-studio.js") });
+  context.AppearanceStudio.initUI();
+  context.AppearanceStudio.attach({ previewScene: (s) => sceneHits.push(plain(s)) });
+  assert.ok(subs.length >= 1 && observers.length >= 1);
+  sceneHits.length = 0;
+  // A live visual key change schedules the 80 ms debounce that calls sceneChanged.
+  for (const fn of subs) fn({ key: "homeScene" });
+  assert.equal(timers.filter((t) => t.fn && t.ms === 80).length, 1, "store change armed the debounce");
+  panel.hidden = true;
+  // The panel's own observer (the #4529 orientation watch on body is another).
+  observers.find((o) => o.targets.includes(panel)).cb([{ attributeName: "hidden" }]);
+  assert.ok(timers.every((t) => !t.fn || t.dead), "hide clearTimeouts the pending debounce");
+  for (const t of timers) if (t.fn) t.fn();
+  assert.equal(sceneHits.length, 0, "no preview after Appearance closed");
 });
 
 test("M2: Studio edits never pin motion:'on' and write only the keys that changed", () => {
@@ -380,7 +582,7 @@ test("one home (#2846): the Studio builds no second copy and jumps to HUD and mo
 
 test("cosmetic presets retain accessibility and units without writing those preferences", () => {
   const preferences = { motion: "reduce", textSize: "larger", uiScale: 137.5, uiContrast: "high", cvdMode: "tritan", speedUnits: "mph", cbCues: "on" };
-  for (const preset of ["classic", "paddock", "broadcast", "focus", "sunlight"]) {
+  for (const {id: preset} of load().studio.PRESETS) {
     const { studio, values, writes } = load(preferences);
     const before = plain(studio.snapshot());
     studio.applyPreset(preset);
@@ -390,6 +592,75 @@ test("cosmetic presets retain accessibility and units without writing those pref
     }
     studio.undo(); assert.deepEqual(plain(studio.snapshot()), before);
   }
+});
+
+// Bryce's installed-app profile, copied from his live settings export of 2026-11-09
+// (PR #5264; inline here because that file belongs to that PR until it lands).
+const LIVE = Object.freeze({ uiScale: 61, textSize: "large", uiContrast: "high", homeScene: "static",
+  titleLayout: { v: 2, wide: { btns: { x: 50, y: -42, size: 60, width: 49 }, title: { x: -50, y: 2, size: 100 }, art: { x: 0, y: 0, size: 100 }, layout: "grid", side: "auto" } },
+  hudLayout: { v: 4, standard: { cockpit: {}, helmet: { tower: { x: 0, y: 0, s: 80 }, limits: { x: -73.97, y: -2.83, s: 70 } } } }, layoutPreset: "shipped" });
+
+test("preset tiles keep Bryce's live UI SIZE, main-menu layout and ARRANGE HUD layout (#5058)", () => {
+  for (const {id: preset} of load().studio.PRESETS) {
+    const { studio, values, writes } = load(structuredClone(LIVE));
+    assert.equal(studio.applyPreset(preset), true);
+    for (const key of ["uiScale", "titleLayout", "hudLayout", "layoutPreset", "textSize", "uiContrast"]) {
+      assert.equal(new Set(writes).has(key), false, preset + " leaves " + key + " unwritten");
+      assert.deepEqual(plain(values[key]), plain(LIVE[key]), preset + " keeps " + key);
+    }
+  }
+});
+
+test("preset tiles keep custom HUD sizes, opacities, the pause layout and screen looks; a named look is merged (#5058)", () => {
+  const mine = { ...structuredClone(LIVE), hudScale: 155.25, hudBtnScale: 245, hudBtnOpacity: 65, hudPanelOpacity: 80,
+    pauseLayout: "sidebar", pauseSide: "right", pauseDim: "soft", lookGarage: { btn: 125, pw: 135 }, lookCareer: { density: "tight", corners: "sharp" }, lookDesigner: { size: 150 } };
+  for (const {id: preset} of load().studio.PRESETS) {
+    const { studio, values, writes } = load(structuredClone(mine));
+    studio.applyPreset(preset);
+    for (const key of ["hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "titleLayout", "pauseLayout", "pauseSide", "pauseDim", "lookGarage", "lookDesigner"]) {
+      assert.equal(new Set(writes).has(key), false, preset + " leaves " + key + " unwritten");
+      assert.deepEqual(plain(values[key]), plain(mine[key]), preset + " keeps " + key);
+    }
+    const named = studio.PRESETS.find((p) => p.id === preset).values.lookCareer;
+    assert.deepEqual(plain(values.lookCareer), { ...mine.lookCareer, ...named }, preset + " merges lookCareer");
+  }
+});
+
+test("scene chip, profile apply and UNDO keep Bryce's live profile; RESET SCOPE is the one path that resets it and UNDO brings it back", () => {
+  const { studio, values } = load(structuredClone(LIVE));
+  const same = (why) => { for (const key of ["uiScale", "titleLayout", "hudLayout"]) assert.deepEqual(plain(values[key]), plain(LIVE[key]), why + " keeps " + key); };
+  studio.setScene("garage"); same("scene chip");
+  studio.saveProfile("Mine"); studio.applyPreset("broadcast"); same("preset");
+  assert.equal(studio.loadProfile("profile-1"), true); same("profile apply"); assert.equal(values.homeScene, "garage");
+  studio.undo(); same("UNDO"); studio.undo(); same("second UNDO");
+  studio.reset("global");
+  assert.equal(values.uiScale, null);
+  assert.deepEqual(plain(values.hudLayout), plain(LIVE.hudLayout), "ARRANGE HUD is not a Studio key");
+  studio.undo(); same("UNDO after RESET SCOPE");
+});
+
+test("no preset value names a key presets preserve (no dead FOCUS / SUNLIGHT values)", () => {
+  const { studio } = load(), preserved = new Set(studio.PRESET_PRESERVE);
+  for (const k of ["uiScale", "hudScale", "hudBtnScale", "titleLayout", "pauseLayout"]) assert.equal(preserved.has(k), true, k);
+  for (const p of studio.PRESETS) for (const k of Object.keys(p.values)) assert.equal(preserved.has(k), false, p.id + " sets preserved key " + k);
+});
+
+test("DESIGNER SIZE (lookDesigner) is a Studio visual key: profiles carry it and RESET SCOPE covers it (#5060)", () => {
+  const { studio, values } = load({ lookDesigner: { size: 150 } });
+  assert.equal(studio.VISUAL_KEYS.includes("lookDesigner"), true);
+  studio.saveProfile("D"); assert.deepEqual(plain(studio.profiles()[0].values.lookDesigner), { size: 150 });
+  studio.reset("global"); assert.equal(values.lookDesigner, null);
+  studio.undo(); assert.deepEqual(plain(values.lookDesigner), { size: 150 });
+});
+
+test("HUD preview prints the speed in the chosen unit only (#5058)", () => {
+  const h = loadStudioRenderCounts(), descendants = node => [node, ...node.children.flatMap(descendants)];
+  const all = () => descendants(h.dom.byId("appearance-studio"));
+  const speed = () => all().find(node => node.dataset.as === "preview-speed").textContent;
+  h.dom.dispatch(all().find(node => node.tagName === "BUTTON" && node.textContent === "HUD"), { type: "click", bubbles: true });
+  assert.equal(speed(), "287 KM/H");
+  h.studio.applySnapshot({ ...h.studio.snapshot(), speedUnits: "mph" });
+  assert.equal(speed(), "178 MPH");
 });
 
 test("profile application obeys selected screen scope and undo restores the affected screen", () => {
@@ -414,7 +685,7 @@ function photoPickerHarness(album, setBackground = () => true) {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance");
   panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   const observers = [];
-  const result = load({}, true, false, dom.document, {
+  const result = load({ homeScene: "photo" }, true, false, dom.document, {
     PhotoStudio: { album, setBackground },
     ScreenLooks: { endPeek() {}, normalize: (_id, value) => value, apply() {}, refresh() {} },
     MutationObserver: class { constructor(cb) { observers.push(cb); } observe() {} },
@@ -429,6 +700,7 @@ const photoTick = () => new Promise(resolve => setImmediate(resolve));
 
 test("saved photo picker previews only on selection and persists only on explicit Choose", async () => {
   const saved = [], rows = Array.from({ length: 8 }, (_, i) => ({ id: String(i), title: "Photo " + i, thumb: "data:image/jpeg;base64,AAAA" }));
+  rows[2].background = "data:image/jpeg;base64,SE9NRQ==";
   const h = photoPickerHarness(async () => rows, thumb => { saved.push(thumb); return true; });
   await photoTick();
   assert.equal(h.select.tagName, "SELECT"); assert.equal(h.select.children.length, 7, "six photos plus prompt");
@@ -436,8 +708,8 @@ test("saved photo picker previews only on selection and persists only on explici
   h.select.value = "2"; h.dom.dispatch(h.select, { type: "change" });
   assert.equal(h.preview.src, rows[2].thumb); assert.equal(h.preview.alt, "Preview: Photo 2");
   assert.equal(h.choose.disabled, false); assert.deepEqual(saved, []);
-  h.choose.click(); assert.deepEqual(saved, [rows[2].thumb]); assert.equal(h.studio.scene().mode, "photo");
-  assert.match(h.note.textContent, /Photo 2 chosen/);
+  h.choose.click(); assert.deepEqual(saved, [rows[2].background]); assert.equal(h.studio.scene().mode, "photo");
+  assert.equal(h.note.textContent, "Photo 2 chosen as your menu background.");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "PHOTO STUDIO & MY BACKGROUND"), "import door retained");
   assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "RESET SCOPE"), "reset retained");
 });
@@ -448,11 +720,11 @@ test("saved photo empty, failed load and failed background writes are recoverabl
     if (mode === "failure") throw new Error("Unavailable");
     return mode === "empty" ? [] : [{ id: "safe", title: "Safe", thumb: "data:image/png;base64,AAAA" }, { id: "unsafe", thumb: "https://invalid.test/photo" }];
   }, () => { writes++; return false; });
-  await photoTick(); assert.match(h.note.textContent, /No saved photos/); assert.equal(h.select.disabled, true);
-  mode = "failure"; h.refresh.click(); await photoTick(); assert.match(h.note.textContent, /could not load.*Refresh/); assert.equal(h.choose.disabled, true);
+  await photoTick(); assert.equal(h.note.textContent, "No saved photos yet. Open Photo Studio to import or capture a photo, then save it."); assert.equal(h.select.disabled, true);
+  mode = "failure"; h.refresh.click(); await photoTick(); assert.equal(h.note.textContent, "Saved photos could not load. Try Refresh, or open Photo Studio to import a photo."); assert.equal(h.choose.disabled, true);
   mode = "saved"; h.refresh.click(); await photoTick(); assert.equal(h.select.children.length, 2); assert.equal(h.select.disabled, false);
   h.select.value = "safe"; h.dom.dispatch(h.select, { type: "change" }); h.choose.click();
-  assert.equal(writes, 1); assert.match(h.note.textContent, /could not be saved/); assert.equal(h.studio.scene().mode, "photo");
+  assert.equal(writes, 1); assert.equal(h.note.textContent, "Background could not be saved. Your current background stays in place; try again or import through Photo Studio."); assert.equal(h.studio.scene().mode, "photo");
 });
 
 test("saved photo refresh ignores superseded responses and responses after Appearance closes", async () => {
@@ -567,4 +839,145 @@ test("Studio coalesces an advanced click and its store notification while preser
   assert.deepEqual(plain(studio.snapshot()), before);
   assert.deepEqual(scenes, ["front", "side"]);
   expectRenders(() => assert.equal(studio.undo(), false), 0);
+});
+
+test("combined profiles restore placement, touch docks and cockpit while earlier profiles leave them alone", () => {
+  const dock = vm.runInNewContext(fs.readFileSync(absSrc("js/ui/dock-layout.js"), "utf8") + "\nDockLayout", {}, { filename: absSrc("js/ui/dock-layout.js") });
+  const globals = { HudLayout: { migrate: v => ({ standard: v.standard }), apply() {} },
+    DockLayout: dock, SettingsExport: { normalizePlacement: v => v } };
+  const customized = { L: { x: -0.02, y: 0.1 }, gap: 32, layout: "pedal-row", controls: { "btn-brake": { shape: "round", size: 140 } } };
+  const mine = { hudLayout: LIVE.hudLayout, hudBtnShape: "square", dockLayout: plain(dock.normalize({ buttons: customized })),
+    screenPlacement: { v: 1, screens: { carsetup: { portrait: { panel: { width: 50 } } },
+      "home-style": { landscape: { buttons: { textSize: 1.15, buttonHeight: 64 } } } } } };
+  const { studio, values } = load({ ...mine, appearanceProfiles: [{ id: "old", name: "Earlier", values: { uiTheme: "light" } }] }, true, false, undefined, globals);
+  studio.reset("screen");
+  assert.deepEqual(plain(values.screenPlacement.screens), { carsetup: mine.screenPlacement.screens.carsetup });
+  studio.undo();
+  assert.deepEqual(plain(values.screenPlacement), mine.screenPlacement);
+  studio.saveProfile("Phone");
+  studio.applyPreset("focus");
+  assert.equal(values.hudBtnShape, "square");
+  assert.equal(values.dockLayout.buttons.controls["btn-brake"].size, 140);
+  studio.loadProfile("old");
+  for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
+  studio.applySnapshot({ ...studio.snapshot(), hudLayout: null, dockLayout: null, hudBtnShape: null, screenPlacement: null });
+  studio.loadProfile("profile-1");
+  for (const [key, value] of Object.entries(mine)) assert.deepEqual(plain(values[key]), value);
+  studio.undo();
+  for (const key of Object.keys(mine)) assert.equal(values[key], null);
+});
+
+test("the real picker scopes profile apply and reset to Results, shared popup style or one Settings page", () => {
+  const dom = makeDom(), doc = dom.document, panel = dom.byId("pm-panel-appearance");
+  panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const screen = width => ({ portrait: { panel: { width } } });
+  const layouts = width => ({ v: 1, screens: { results: screen(width), "home-style": screen(width + 2), "pm-panel-graphics": screen(width + 4) } });
+  const touch = { dockLayout: { buttons: { gap: 32 } }, hudBtnShape: "square", hudBtnScale: 140, hudBtnOpacity: 70 };
+  const { studio, values } = load({ ...touch, screenPlacement: layouts(60), lookPopups: { dim: "solid" }, homeScene: "garage" }, true, false, doc, {
+    DockLayout: { normalize: value => value }, SettingsExport: { normalizePlacement: value => value }
+  });
+  studio.saveProfile("Earlier arrangements");
+  studio.applySnapshot({ ...studio.snapshot(), screenPlacement: layouts(70), lookPopups: { dim: "glass" }, homeScene: "night" });
+  // Supply the select/option and data-attribute reflection used by the real picker.
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  for (const el of descendants(panel)) if (el.dataset.as) el.setAttribute("data-as", el.dataset.as);
+  const create = doc.createElement;
+  doc.createElement = tag => {
+    const el = create(tag);
+    if (tag === "select") {
+      el.add = option => el.appendChild(option);
+      Object.defineProperty(el, "selectedOptions", { get: () => el.children.filter(option => option.value === el.value) });
+    }
+    return el;
+  };
+  let racing = false;
+  const pickerContext = vm.createContext({
+    window: { UiLayers: { inRace: () => racing } }, document: doc, location: { search: "" }, URLSearchParams, queueMicrotask: fn => fn(),
+    MutationObserver: class { observe() {} }, CustomEvent: class { constructor(type, init) { this.type = type; Object.assign(this, init); } },
+    Option: function (text, value) { return Object.assign(create("option"), { text, value }); }
+  });
+  for (const file of ["js/ui/screen-regions.js", "js/ui/appearance-arrangement-picker.js"]) {
+    vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), pickerContext, { filename: absSrc(file) });
+  }
+  const picker = panel.querySelector("#appearance-arrange-screen");
+  assert.equal(panel.querySelector("#appearance-studio").firstChild.id, "appearance-arrange");
+  assert.equal(picker.parentElement.querySelector("label").htmlFor, picker.id);
+  const button = text => panel.querySelectorAll("button").find(el => el.textContent === text);
+  const pick = id => { picker.value = id; dom.dispatch(picker, { type: "change" }); };
+  const hint = panel.querySelector("#appearance-arrange-help");
+  pick("hud");
+  assert.equal(hint.textContent, "Preview the race HUD with sample readouts. Apply or Cancel returns to Appearance.");
+  pick("touch-controls");
+  assert.equal(button("Arrange Touch controls").disabled, true);
+  racing = true;
+  const brake = dom.byId("btn-brake");
+  brake.hidden = true;
+  pick("touch-controls");
+  assert.equal(button("Arrange Touch controls").disabled, true);
+  brake.hidden = false;
+  let dockOpens = 0;
+  dom.byId("pm-dock-reposition").onclick = () => { dockOpens++; };
+  pick("touch-controls");
+  button("Arrange Touch controls").click();
+  assert.equal(dockOpens, 1);
+  racing = false;
+  button("THIS SCREEN").click();
+  const tiles = panel.querySelectorAll("button").filter(el => el.dataset.preset);
+  assert.ok(tiles.length && tiles.every(el => el.disabled));
+  assert.equal(studio.applyPreset("paddock", "screen"), false);
+  pick("hud");
+  button("RESET SCOPE").click();
+  for (const [key, value] of Object.entries(touch)) assert.deepEqual(plain(values[key]), value);
+  pick("touch-controls");
+  button("RESET SCOPE").click();
+  for (const key of Object.keys(touch)) assert.equal(values[key], null);
+  button("APPLY PROFILE").click();
+  for (const [key, value] of Object.entries(touch)) assert.deepEqual(plain(values[key]), value);
+  pick("results");
+  button("APPLY PROFILE").click();
+  assert.deepEqual(plain(values.screenPlacement.screens), { ...layouts(70).screens, results: screen(60) });
+  assert.equal(values.lookPopups.dim, "glass");
+  button("RESET SCOPE").click();
+  const others = { "home-style": screen(72), "pm-panel-graphics": screen(74) };
+  assert.deepEqual(plain(values.screenPlacement.screens), others);
+  assert.equal(values.lookPopups.dim, "glass");
+  pick("popups");
+  const advanced = doc.createElement("details"), popupFold = doc.createElement("details"), summary = doc.createElement("summary");
+  popupFold.id = "pm-look-popups"; popupFold.appendChild(summary); advanced.appendChild(popupFold); panel.appendChild(advanced);
+  button("Edit shared popup style").click();
+  assert.equal(advanced.open, true); assert.equal(popupFold.open, true);
+  assert.equal(doc.activeElement, summary);
+  button("APPLY PROFILE").click();
+  assert.equal(values.lookPopups.dim, "solid");
+  button("RESET SCOPE").click();
+  assert.equal(values.lookPopups, null);
+  assert.deepEqual(plain(values.screenPlacement.screens), others);
+  pick("pm-panel-graphics");
+  button("APPLY PROFILE").click();
+  assert.deepEqual(plain(values.screenPlacement.screens), { ...others, "pm-panel-graphics": screen(64) });
+  button("RESET SCOPE").click();
+  assert.deepEqual(plain(values.screenPlacement.screens), { "home-style": screen(72) });
+  assert.equal(values.homeScene, "night");
+  pick("wheel");
+  for (const text of ["APPLY PROFILE", "RESET SCOPE"]) assert.equal(button(text).disabled, true, text);
+  button("GLOBAL").click();
+  for (const text of ["APPLY PROFILE", "RESET SCOPE"]) assert.equal(button(text).disabled, false, text);
+});
+
+test("Home scene subscribers work before first Appearance visit and can unsubscribe after the transfer", () => {
+  const values = {};
+  const store = { get: (key, fallback) => values[key] ?? fallback, set: (key, value) => { values[key] = value; return true; } };
+  const ctx = vm.createContext({ GameStore:{store}, Log:{warn() {}}, setTimeout, clearTimeout });
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/appearance-studio.js") });
+  let changes = 0;
+  const unsubscribe = ctx.AppearanceStudio.onSceneChange(() => changes++);
+  ctx.AppearanceStudio.setScene("garage");
+  assert.equal(changes, 1);
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/appearance-studio-ui.js") });
+  assert.equal(ctx.AppearanceStudio.loaded(), true);
+  ctx.AppearanceStudio.setScene("night");
+  assert.equal(changes, 2);
+  unsubscribe();
+  ctx.AppearanceStudio.setScene("track");
+  assert.equal(changes, 2);
 });

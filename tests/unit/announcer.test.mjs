@@ -71,7 +71,7 @@ function load({ api = true, voices = [], stored = {}, soundOn = true, lore = tru
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
     radio: RV.create({ soundOn, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } }),
   };
-  return { A, RV, G, synth, saved, CircuitLore: lore ? vm.runInContext("CircuitLore", ctx) : null };
+  return { A, RV, G, synth, saved, context: ctx, CircuitLore: lore ? vm.runInContext("CircuitLore", ctx) : null };
 }
 
 const { A } = load();
@@ -589,29 +589,36 @@ test("every lore line is one spoken sentence the synth can read", () => {
   }
 });
 
-// Baku is exempt until its night line is baked: lore lines are pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side
-// credentials), and voice-pack.test.mjs fails on an unbaked line. Drop BAKED_GAP once the voice pack is re-baked with a Baku night line.
-const BAKED_GAP = ["baku"];
+// Baku defaults to DAY since 2026-11-10 (the Azerbaijan GP starts ~15:00 local; FIA 2026 pre-race procedure), so it is no longer
+// a `night: true` circuit; NIGHT stays selectable there, which is why its unbaked night line stays a todo below. Lore lines are
+// pre-baked TTS clips (assets/voice/*.json, tools/gen/voicepack.mjs, author-side credentials).
+const BAKED_GAP = [];
 test("every night circuit has a night line, so the announcer has something to say after dark", () => {
   const { CircuitLore } = load();
   const nights = readdirSync(join(ROOT, "js/circuits")).filter((f) => f.endsWith(".js"))
     .filter((f) => /^ {4}night: true,/m.test(readFileSync(join(ROOT, "js/circuits", f), "utf8")))
     .map((f) => f.replace(/\.js$/, ""));
-  assert.ok(nights.includes("baku") && nights.length >= 7, `only found ${nights.join(", ")}`);
+  assert.ok(nights.includes("singapore") && !nights.includes("baku") && nights.length >= 6, `only found ${nights.join(", ")}`);
   assert.deepEqual(nights.filter((id) => !BAKED_GAP.includes(id) && !CircuitLore.LORE[id].night), [], "a night circuit has no `night` lore slot");
 });
 
-test("Baku's night line is a known gap (voice bake pending)", { todo: true }, () => {
+test("Baku races in daylight by default, so its identity line is a day line", () => {
+  // Decision (#5287): Baku defaults to day. The circuit def is the default time of day
+  // (game.js: raceTimeOfDay "default" && def.night), so the def must not say night.
   const { CircuitLore } = load();
-  assert.ok(CircuitLore.LORE.baku.night, "Baku is night: true but has no night lore line");
+  const def = readFileSync(join(ROOT, "js/circuits", "baku.js"), "utf8");
+  assert.doesNotMatch(def, /^ {4}night: true,/m, "baku defaults to night");
+  const line = CircuitLore.LORE.baku.line;
+  assert.ok(line, "Baku has no identity line");
+  assert.doesNotMatch(line, /\b(night|floodlit|floodlights?|dark|after dark|moon)\b/i, "Baku's identity line is a night line");
 });
 
-// Reverted until the voice pack is re-baked: the Istanbul `corner` line IS voiced (voice-pack.test.mjs fails on any reworded line),
-// so the fix is "seems to last forever" + a bake of that line.
-test("no lore line states a duration the circuit does not have (Istanbul turn eight is seconds, not a minute)", { todo: true }, () => {
+test("Baku's night line is a known gap (voice bake pending; NIGHT is selectable there)", { todo: true }, () => {
   const { CircuitLore } = load();
-  assert.doesNotMatch(CircuitLore.LORE.istanbul.corner, /minute/);
+  assert.ok(CircuitLore.LORE.baku.night, "Baku can be raced at night but has no night lore line");
 });
+
+// Lore-duration assertion dropped by Bryce's decision on #5340 (option b); the lore rewrite + voice-pack re-bake is #5372.
 
 test("the circuit's own line is spoken, and outranks the numbers when the budget is tight", () => {
   const spa = info({ track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19 });
@@ -731,6 +738,102 @@ function recordedLifecycle() {
   vm.runInContext(read("js/audio/announcer-recorded.js"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
   return { a: sb.RecordedAnnouncer.create(G), clock, spoken, pending, stops, G, document };
 }
+
+// Real caption consumer + a controllable recorded scheduler: accepting a line
+// is not playback, because the pack can still abandon its pending decode.
+function recordedCaptions() {
+  const clock = fakeClock(), spoken = [], parts = { who: { textContent: "" }, text: { textContent: "" } };
+  const loading = { hidden: true, querySelector: (s) => s === ".ld-caption-who" ? parts.who : parts.text };
+  const document = { hidden: false, readyState: "complete", addEventListener() {},
+    documentElement: { dataset: {}, style: { setProperty() {} }, removeAttribute() {} },
+    getElementById: (id) => id === "ld-caption" ? loading : null };
+  const b = load({ clock, document });
+  b.context.GameStore = { store: b.G.store };
+  vm.runInContext(read("js/ui/captions.js"), b.context, { filename: absSrc("js/ui/captions.js") });
+  const captions = vm.runInContext("Captions", b.context);
+  let volume = 0.8, recorded = true, accepts = true;
+  const pack = { stop() {}, load: () => Promise.resolve(true), plan: () => ({ secs: 1 }),
+    speak(_id, text, options) { spoken.push({ text, options, accepted: accepts }); return accepts; } };
+  b.G.radio = { stop() {}, announcerPackOn: () => recorded, recordedVoice: () => "bella",
+    volume: () => volume, pack };
+  const a = vm.runInContext("RecordedAnnouncer", b.context).create(b.G);
+  return { ...b, a, ann: b.A.create(b.G), clock, spoken, pack, captions, loading, parts, document,
+    setVolume: (v) => { volume = v; }, setRecorded: (v) => { recorded = v; },
+    setAccepts: (v) => { accepts = v; } };
+}
+
+test("recorded captions start with scheduled speech, once, using its actual adapted text and ANNOUNCER speaker", async () => {
+  const f = recordedCaptions();
+  f.pack.plan = (_id, text) => /unknown|19 laps/.test(text) ? null : { secs: 1 };
+  f.a.play(["unknown story", "the sprint. 19 laps, let's go racing"], 0, false);
+  await Promise.resolve(); f.clock.tick(0);
+  assert.equal(f.spoken.length, 1, "unsupported copy stays written, not synthesized");
+  assert.equal(f.captions.ring().length, 0, "accepted pending audio is not yet captioned");
+  const row = f.spoken[0];
+  assert.equal(row.text, "the sprint, let's go racing");
+  row.options.onStart(); row.options.onStart();
+  assert.equal(f.captions.ring().length, 1, "duplicate start notification cannot duplicate a caption");
+  assert.equal(f.captions.ring()[0].text, row.text);
+  assert.equal(f.captions.ring()[0].who, "ANNOUNCER");
+  assert.equal(f.parts.who.textContent, "ANNOUNCER");
+  assert.equal(f.parts.text.textContent, row.text);
+  assert.equal(f.loading.hidden, false);
+});
+
+test("recorded closing captions wait for the reserved audio cue and stale callbacks cannot caption a replacement", async () => {
+  const f = recordedCaptions();
+  f.a.play(["opening", "closing"], 5000, true);
+  await Promise.resolve(); f.clock.tick(0);
+  const first = f.spoken[0]; first.options.onStart(); first.options.onEnd();
+  f.clock.tick(3399);
+  assert.equal(f.spoken.length, 1);
+  assert.equal(f.captions.ring().length, 1);
+  f.clock.tick(1);
+  const last = f.spoken[1];
+  assert.equal(last.text, "closing");
+  assert.equal(f.captions.ring().length, 1, "caption waits through decode too");
+  f.a.play(["replacement"], 0, false);
+  await Promise.resolve(); f.clock.tick(0);
+  last.options.onStart();
+  assert.equal(f.captions.ring().length, 1, "old generation must not caption");
+  f.spoken[2].options.onStart();
+  assert.equal(f.captions.ring().at(-1).text, "replacement");
+});
+
+test("recorded caption feed respects caption preference, unavailable playback and audio lifecycle gates", async (t) => {
+  for (const state of ["captions-off", "sound-off", "volume-zero", "volume-zero-during-decode", "hidden", "paused", "rejected", "stopped"]) {
+    await t.test(state, async () => {
+      const f = recordedCaptions();
+      if (state === "captions-off") f.captions.setMode("off");
+      if (state === "sound-off") f.G.soundOn = false;
+      if (state === "volume-zero") f.setVolume(0);
+      if (state === "hidden") f.document.hidden = true;
+      if (state === "paused") f.G.paused = true;
+      if (state === "rejected") f.setAccepts(false);
+      f.a.play(["welcome"], 0, false);
+      await Promise.resolve(); f.clock.tick(0);
+      if (state === "stopped") f.a.stop();
+      if (state === "volume-zero-during-decode") f.setVolume(0);
+      if (f.spoken[0]?.accepted) f.spoken[0].options.onStart();
+      assert.equal(f.captions.ring().length, 0);
+      assert.equal(f.loading.hidden, true);
+      if (["sound-off", "volume-zero", "hidden", "paused"].includes(state)) assert.equal(f.spoken.length, 0);
+    });
+  }
+});
+
+test("recorded selection never double-captions through TTS, while selecting synthesized speech keeps its existing feed", async () => {
+  const f = recordedCaptions();
+  f.ann.sample(); await Promise.resolve(); f.clock.tick(0);
+  assert.equal(spoken(f.synth).length, 0);
+  f.spoken[0].options.onStart();
+  assert.equal(f.captions.ring().length, 1);
+  f.ann.stop(); f.setRecorded(false);
+  f.ann.sample();
+  assert.equal(spoken(f.synth).length, 1);
+  assert.equal(f.captions.ring().length, 2, "one caption per selected speech path");
+  assert.equal(f.captions.ring()[1].text, spoken(f.synth)[0]);
+});
 
 test("recorded preview aborts release ownership at every asynchronous gate", async (t) => {
   for (const state of ["paused", "hidden", "muted"]) {
@@ -1180,7 +1283,7 @@ const BAKU40 = {
     tyre: { compound: "medium", age: 8, used: false }, stops: [31, 36], passesMade: 3, passesLost: 6, best: { time: 107.208, lap: 29 }, penalties: [] }),
   leaderStops: 2,
 };
-const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: true };
+const bakuTrack = { id: "baku", name: "Baku", gp: "Azerbaijan Grand Prix", country: "Azerbaijan", lengthKm: 6.003, night: false };
 const bakuJoin = (over = {}) => {
   const real = { title: "2026 Azerbaijan Grand Prix", driver: "Charles Leclerc", startLap: 40, realLaps: 51, watch: false, reel: false, story: BAKU40, ...over };
   return info({ track: bakuTrack, gp: real.title, tod: "day", real, story: { real } });
@@ -1322,4 +1425,23 @@ test("storm introductions warn of heavy rain and preserve the existing wet circu
   const spa = info({ track: { id: "spa", name: "Spa", lengthKm: 7.004 }, weather: "storm" });
   assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
   assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
+});
+
+// Clean-room audit fix 58: the intro line is "<km> kilometres, <n> corners." but
+// the packs record only "<km> kilometres", so the recorded voice skipped it.
+test("the recorded announcer voices the circuit-length line from the recorded length", () => {
+  const pack = JSON.parse(read("assets/voice/george-announcer.json"));
+  const keys = new Set(JSON.stringify(pack).match(/@line:[^"]+/g));
+  const key = (t) => "@line:" + t.toLowerCase().replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "");
+  const G = { soundOn: true, radio: { recordedVoice: () => "george", volume: () => 0.8, pack: {
+    ensure() {}, ready: () => true, stop() {},
+    plan: (id, text) => keys.has(key(text)) ? { secs: 1 } : null,
+  } } };
+  const sb = vm.createContext({ Promise, Date, setTimeout, clearTimeout, document: { hidden: false } });
+  vm.runInContext(read("js/audio/announcer-recorded.js"), sb, { filename: absSrc("js/audio/announcer-recorded.js") });
+  const a = sb.RecordedAnnouncer.create(G);
+  const lengths = [...keys].map((k) => /^@line:(\d+\.\d{3}) kilometres$/.exec(k)).filter(Boolean).map((m) => m[1]);
+  const silent = lengths.filter((km) => !(a.readMs([km + " kilometres, 15 corners."]) > 0));
+  // Every recorded length is voiced (the pack holds many); an unrecorded one stays on the card.
+  assert.deepEqual([lengths.length > 10, silent, a.readMs(["9.999 kilometres, 15 corners."])], [true, [], 0]);
 });

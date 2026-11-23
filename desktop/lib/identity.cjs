@@ -10,9 +10,7 @@
 const identity = Object.freeze({
   appId: "io.github.brycejmurrin.apex26",
   productName: "Apex 26",
-  /** Privileged custom scheme + host (app://apex/). Frozen with appId. */
-  scheme: "app",
-  host: "apex",
+  // Privileged origin app://apex/ is SCHEME/HOST in app-protocol.js (not duplicated here).
 });
 
 module.exports = identity;

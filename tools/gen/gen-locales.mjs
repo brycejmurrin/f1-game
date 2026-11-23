@@ -9,8 +9,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { argGate } from "./gen-lib.mjs";
+import { loadParts } from "../car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const EN_REL = "locales/en.json";
@@ -31,19 +33,82 @@ function walkJs(dir, out = []) {
   return out;
 }
 
-function scanCallSites() {
+/** Read a JS string literal starting at `i` (must point at ' or "). Returns { value, end } or null. */
+export function readStringLiteral(text, i) {
+  const q = text[i];
+  if (q !== '"' && q !== "'") return null;
+  let j = i + 1;
+  let out = "";
+  while (j < text.length) {
+    const ch = text[j];
+    if (ch === "\\") {
+      if (j + 1 >= text.length) return null;
+      out += text[j + 1];
+      j += 2;
+      continue;
+    }
+    if (ch === q) return { value: out, end: j + 1 };
+    out += ch;
+    j++;
+  }
+  return null;
+}
+
+/**
+ * Extract I18n.t / local tr("key", vars, "english") pairs.
+ * Vars may contain commas and nested calls; the English default is the last
+ * string-literal argument before the matching close paren (gettext style).
+ * Skips dynamic keys (`"prefix." + x`) — those need a static default elsewhere.
+ */
+export function extractMessageCalls(text) {
+  const out = new Map();
+  const startRe = /\b(?:I18n\.t|tr|hT)\s*\(\s*/g;
+  let m;
+  while ((m = startRe.exec(text))) {
+    let i = m.index + m[0].length;
+    const keyLit = readStringLiteral(text, i);
+    if (!keyLit) continue;
+    if (/[+]/.test(text.slice(keyLit.end, Math.min(text.length, keyLit.end + 8)))) continue;
+    i = keyLit.end;
+    let depth = 1;
+    let lastStr = null;
+    while (i < text.length && depth > 0) {
+      const ch = text[i];
+      if (ch === '"' || ch === "'") {
+        const lit = readStringLiteral(text, i);
+        if (!lit) break;
+        lastStr = lit.value;
+        i = lit.end;
+        continue;
+      }
+      if (ch === "(") depth++;
+      else if (ch === ")") {
+        depth--;
+        if (depth === 0) break;
+      }
+      i++;
+    }
+    if (depth !== 0 || lastStr == null) continue;
+    out.set(keyLit.value, lastStr);
+  }
+  return out;
+}
+
+function scanCallSites(root = ROOT) {
   const keys = new Map();
-  const jsRoot = path.join(ROOT, "js");
+  const jsRoot = path.join(root, "js");
   if (fs.existsSync(jsRoot)) {
     for (const file of walkJs(jsRoot)) {
-      const text = fs.readFileSync(file, "utf8");
-      const re = /I18n\.t\s*\(\s*["']([^"']+)["']\s*,\s*[^,]+,\s*["']([^"']*)["']\s*\)/g;
-      let m;
-      while ((m = re.exec(text))) keys.set(m[1], m[2]);
+      for (const [k, v] of extractMessageCalls(fs.readFileSync(file, "utf8"))) keys.set(k, v);
     }
   }
-  if (fs.existsSync(INDEX)) {
-    const html = fs.readFileSync(INDEX, "utf8");
+  for (const cat of loadParts().Parts.CATALOG) {
+    keys.set(`parts.${cat.id}.label`, cat.label);
+    for (const o of cat.options) keys.set(`parts.${cat.id}.${o.id}.label`, o.label);
+  }
+  const indexPath = path.join(root, "index.html");
+  if (fs.existsSync(indexPath)) {
+    const html = fs.readFileSync(indexPath, "utf8");
     const re = /data-i18n=["']([^"']+)["'][^>]*>([^<]*)</g;
     let m;
     while ((m = re.exec(html))) {
@@ -55,8 +120,31 @@ function scanCallSites() {
   return keys;
 }
 
+/** Keys present in en.json but not produced by generate() — hand-edited leftovers. */
+export function deadLocaleKeys(root = ROOT) {
+  const abs = path.join(root, EN_REL);
+  if (!fs.existsSync(abs)) return [];
+  const have = JSON.parse(fs.readFileSync(abs, "utf8"));
+  const want = JSON.parse(generate(root)[EN_REL]);
+  return Object.keys(have).filter((k) => !k.startsWith("_") && !Object.prototype.hasOwnProperty.call(want, k)).sort();
+}
+
+/** `radio.*` pools: js/race/radio-lines.js owns the English variants (the runtime default, no fetch
+ *  for English); en.json mirrors them so translators copy one file and the lint sees every pool. */
+function radioPools() {
+  const file = path.join(ROOT, "js/race/radio-lines.js");
+  if (!fs.existsSync(file)) return {};
+  const ctx = vm.createContext({});
+  const RL = vm.runInContext(fs.readFileSync(file, "utf8") + "\n;RadioLines", ctx, { filename: file });
+  const out = {};
+  for (const [k, v] of Object.entries(RL.POOLS)) out["radio." + k] = [...v];
+  for (const [k, v] of Object.entries(RL.WHY)) out["radio.why." + k] = v;
+  return out;
+}
+
 export function generate(root = ROOT) {
-  const keys = scanCallSites();
+  const keys = scanCallSites(root);
+  for (const [k, v] of Object.entries(radioPools())) keys.set(k, v);
   const sorted = [...keys.keys()].sort();
   const en = {};
   for (const k of sorted) en[k] = keys.get(k);

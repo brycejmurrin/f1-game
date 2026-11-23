@@ -99,6 +99,8 @@
   :where(body:not([data-density="compact"])) #tc-frame { transform: translate(72px, 0); }
 }
 
+/* Wide, tablet and fold rules are @layer layout at the end of this file. */
+
 /* ---------- LARGE PORTRAIT (iPad upright, a rotated monitor) ---------- */
 /* Keeps the stacked composition — a tall screen has height to spend, not width —
    but not the phone's SIZES. A 340px button column centred in an 834px iPad left
@@ -119,8 +121,8 @@
      32vw yields on the same physical width. */
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
-  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), 660px, 100%); }
-  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), 660px, 100%); }
+  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), var(--col-max), 100%); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), var(--col-max), 100%); }
   :where(body:not([data-density="compact"])) #menu-buttons { gap: 14px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
@@ -166,8 +168,16 @@
 :root[data-motion="reduce"] :is(#overlay, .screen, #rotate-device) *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
+  animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
+  /* …PAINT ONLY (#5812). On the initial `all`, 0.01ms replays the previous box for a frame after every class flip,
+     and fit code reads it (title doors #5150/#5578, results YOU on P1 #5603). Geometry is instant; !important so
+     no later-layer `transition:` shorthand puts width/top/zoom/transform back. */
+  transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow !important;
 }
+/* #hud-restore's display:none lives in deferred touch-controls.css; until it
+   lands (~19 s on Slow 4G) the bare button sat top-left over the title. */
+body:not(.hud-hidden) #hud-restore { display: none; }
 /* A hidden tab stops spending frames on a menu nobody can see. */
 #overlay[data-paused] *,
 #overlay[data-paused] *::before,
@@ -227,15 +237,25 @@
    MOVES ARE `translate`, SIZES ARE `zoom`. The individual `translate` / `scale`
    properties compose with the intro's `transform` keyframes instead of
    replacing them. Size is zoom on the two UI pieces so a bigger cluster still
-   takes up layout room and scrolls like the shipped one; the drawing is not a
-   grid item, so it scales from its foot. */
+   takes up layout room; the drawing is not a grid item, so it scales from its
+   foot. EVERY VALUE HERE IS A REQUEST, THE BOX IS THE LAW (#5150): --tf is
+   the fit js/ui/title-layout.js writes when a size would not fit the
+   overlay's content box in landscape, and --tf-dx / --tf-dy pull an offset
+   back by exactly its overrun (css/title.css documents both tokens). */
 :root[data-title-layout] #menu-buttons {
-  translate: var(--tl-btns-x, 0) var(--tl-btns-y, 0);
-  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1));
+  translate: calc(var(--tl-btns-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-btns-y, 0px) + var(--tf-dy, 0px));
+  zoom: calc(var(--ui-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
 }
 :root[data-title-layout] #menu-brand {
-  translate: var(--tl-title-x, 0) var(--tl-title-y, 0);
-  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1));
+  translate: calc(var(--tl-title-x, 0px) + var(--tf-dx, 0px)) calc(var(--tl-title-y, 0px) + var(--tf-dy, 0px));
+  zoom: calc(var(--ui-scale) * var(--tl-title-size, 1) * var(--tf, 1));
+}
+/* A layout scales compact's cap (css/menus.css). */
+:root[data-title-layout] :where(body[data-density="compact"]) #menu-buttons {
+  zoom: calc(var(--ui-compact-scale) * var(--tl-btns-size, 1) * var(--tf, 1));
+}
+:root[data-title-layout] :where(body[data-density="compact"]) #menu-brand {
+  zoom: calc(var(--ui-compact-brand-scale) * var(--tl-title-size, 1) * var(--tf, 1));
 }
 :root[data-title-layout] #title-car {
   translate: var(--tl-art-x, 0) var(--tl-art-y, 0);
@@ -243,11 +263,34 @@
   transform-origin: 50% 100%;
 }
 /* WIDTH: a share of the SCREEN, whatever the cluster's size. --vwz already
-   undoes --ui-scale; dividing by the size undoes the cluster's own zoom. The
-   rows then fill the cluster instead of their per-shape shipped widths. */
+   undoes --ui-scale; dividing by the size undoes the cluster's own zoom, and
+   dividing by the fit (--tf, #5150) keeps the share while the fit shrinks
+   everything else. The rows then fill the cluster instead of their per-shape
+   shipped widths. */
 :root[data-title-btnw] #menu-buttons {
-  width: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1));
-  max-width: none; min-width: 0; justify-self: center;
+  --_tl-bw: calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1));
+  width: var(--_tl-bw);
+  max-width: none; min-width: 0;
+  /* CENTRED ON ITS COLUMN even when wider than it (#4529 part 3). In portrait
+     the shipped width is already ~94 % of the screen, so a big WIDTH overran
+     the column and a centred grid item pinned to the start edge: measured
+     2026-11-11 at 393x852, WIDTH 100 painted 12..405px. A start-aligned item
+     with a symmetric margin stays centred whatever its width. */
+  justify-self: start;
+  margin-inline: calc((100% - var(--_tl-bw)) / 2);
+}
+/* THE FLOOR IS THE TRACK (#5167 part F, UI contract 2026-11-06 §4.1: "width
+   as a share of the viewport without a floor" goes). On a landscape phone the
+   request cannot go under the column the shipped title gives the doors.
+   Measured 2026-11-09 at 852x393 (insets 59/21/59) with Bryce's export,
+   WIDTH 20: a 170px cluster centred in a 330px track, 17 doors in one column,
+   the fit at 0.628, labels painting at 9.7px, the four utility doors one per
+   row and 90px of dead track beside them. 100% here is the grid area (the
+   overlay's second column, in the cluster's own px under its zoom), so a
+   request narrower than that fills the track exactly as AUTO does, and a
+   wider request still widens the cluster, which the fit still contains. */
+:root[data-title-btnw] :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
+  --_tl-bw: max(100%, calc(var(--tl-btns-w, 100) * var(--vwz) / var(--tl-btns-size, 1) / var(--tf, 1)));
 }
 :root[data-title-btnw] #menu-buttons > :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) { width: 100%; max-width: none; }
 /* LAYOUT. .balanced-row sizes its children from --balance-basis / -min
@@ -284,14 +327,7 @@
 :root[data-appearance-peek] #pmsettings > * { opacity: 0.14; transition: opacity 0.12s; }
 :root[data-appearance-peek][data-motion="reduce"] #pmsettings > * { transition: none; }
 :root[data-appearance-peek] #pmsettings :focus-visible { outline-color: transparent; }   /* a ring would read through the ghost; it returns with the page */
-/* EDIT ON TITLE SCREEN (html[data-tl-edit], js/ui/title-layout.js): the pieces
-   are outlined and dragged whole — their own controls take no pointer, so a
-   press on a door is the door's piece, never its click. #tl-art is the
-   drawing's transparent stand-in (the drawing itself is pointer-events:none),
-   laid under the doors so where they overlap the doors win. #tl-editor is a
-   small bar docked at the foot, above #overlay (z 20); #tl-handle, fixed at the
-   selected piece's corner, sizes it. No zoom on the bar: its fixed handle
-   would move with it. */
+/* Title edit: groups drag; #tl-editor stays unzoomed (its handle tracks a corner). */
 :root[data-tl-edit] :is(#menu-buttons, #menu-brand, #tl-art) {
   outline: 2px dashed color-mix(in oklab, var(--text) 55%, transparent);
   outline-offset: 4px;
@@ -304,13 +340,23 @@
 :root[data-tl-edit] #tl-art { position: absolute; z-index: -1; zoom: normal; pointer-events: auto; }
 :root[data-tl-edit] #tl-editor {
   position: fixed; z-index: 44;
-  left: 0; right: 0; bottom: var(--safe-b); margin-inline: auto;
+  left: var(--safe-l); right: var(--safe-r); bottom: var(--safe-b); margin-inline: auto;
   width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
+  max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
   gap: calc(var(--gap) * 0.5); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
   background: var(--panel); border: 1px solid var(--plate-line); border-radius: 10px;
 }
-:root[data-tl-edit] #tl-editor > button { margin: 0; min-height: var(--tap-min); }
+:root[data-tl-edit] #tl-editor[data-top] { top: var(--safe-t); bottom: auto; }
+:root[data-tl-edit] #tl-editor button {
+  margin: 0; min-height: max(44px, var(--tap-min)); min-width: 44px;
+  padding-inline: .5em;
+}
+:root[data-tl-edit] #tl-adjustments:not([hidden]) {
+  flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: .25em;
+}
+:root[data-tl-edit] #tl-values { flex: 0 0 100%; text-align: center; }
 :root[data-tl-edit] #tl-piece { padding-inline: calc(var(--gap) / 3); }
 :root[data-tl-edit] #tl-handle {
   position: fixed; width: 22px; height: 22px; translate: -50% -50%;
@@ -324,3 +370,48 @@
 
 
 } /* @layer overlays */
+
+@layer layout {
+/* Beats @layer responsive. 1fr tracks pinned the wordmark to the left edge at
+   2560 (741px hole). 1440×900 stays under 1920, so the title-desktop golden holds.
+   --bp-wide is 1920px; a media query cannot read a custom property. */
+@media (min-width: 1920px) and (orientation: landscape) {
+  :where(body:not([data-density="compact"])) #overlay {
+    grid-template-columns: minmax(0, min(var(--col-max), var(--layout-active))) minmax(0, min(var(--col-max), var(--layout-active)));
+    justify-content: center;
+    column-gap: clamp(calc(var(--gap) * 4), 4vw, calc(var(--gap) * 8));
+  }
+  :where(body:not([data-density="compact"])) #menu-brand,
+  :where(body:not([data-density="compact"])) #menu-buttons {
+    width: min(100%, var(--col-max));
+    justify-self: center;
+  }
+  :where(body:not([data-density="compact"])) #menu-buttons {
+    --home-label: min(clamp(var(--fs-4), 1.85vw, 2.25rem), calc(var(--col-max) * .045 / var(--ui-scale, 1)));
+  }
+}
+
+/* Upright tablet: centre the doors in the leftover row. Phones and compact stay put. */
+@media (orientation: portrait) and (min-width: 700px) {
+  :where(body:not([data-density="compact"])) #menu-buttons { align-content: safe center; }
+}
+
+/* Two viewport segments: keep the shell on the first pane, off the hinge. */
+@media (horizontal-viewport-segments: 2) {
+  :where(#overlay, .screen) {
+    width: var(--seg-w);
+    max-width: var(--seg-w);
+    margin-inline: 0 auto;
+    box-sizing: border-box;
+    padding-inline-end: max(var(--safe-r), var(--fold-gap));
+  }
+}
+@media (vertical-viewport-segments: 2) {
+  :where(#overlay, .screen) {
+    max-height: var(--seg-h);
+    margin-block: 0 auto;
+    box-sizing: border-box;
+    padding-block-end: max(var(--safe-b), var(--fold-gap-y));
+  }
+}
+} /* @layer layout */

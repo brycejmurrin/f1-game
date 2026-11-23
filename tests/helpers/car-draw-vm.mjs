@@ -13,6 +13,8 @@
  * rec.wheels: Car3D.buildWheelLayers calls; rec.freed: meshes an LRU let go;
  * rec.flaps: one { team, blend, m, only, still, viewLivery? } per deps.drawAeroFlaps call.
  * rec.mats: the world matrix (16 numbers, or null) handed to each gfx.draw, parallel to rec.draws.
+ * `carMesh`: { name: value } overrides for the recording CarMesh, read when CarDraw.create
+ *   destructures its getters (e.g. a getSpeedDigit that records the digit it was asked for).
  * Real teams come from js/data/teams.js (11 x 2 seats); `legends: true` appends
  * js/data/legends.js's twelve-seat LEGENDS entry, the menu's widest pick.
  * `career`: null (no career) or { teamId: fitted setup } — Career.aiSetup's
@@ -32,7 +34,7 @@ const CATALOG = ["aero", "floor", "engine", "ers", "gearbox", "suspension", "bra
 
 export const WORKS = Object.freeze(Object.fromEntries(CATALOG.map((c) => [c.id, "w:" + c.id])));
 
-export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null, livery = null } = {}) {
+export function carDrawVm({ casters = false, cam = "chase", legends = false, playerParts = { aero: "hi-df", tyres: "soft" }, career = null, livery = null, carMesh = null } = {}) {
   const rec = { builds: [], wheels: 0, freed: 0, draws: [], flaps: [], mats: [] };
   const stored = { hudMirror: "on" };
   const classes = new Set();
@@ -76,19 +78,38 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
       banking: () => null,
     },
     GameCams: { vantage: (_t, _m, s) => ({ eye: [0, 4, s - 12], tgt: [0, 1, s + 20], fov: 40 }) },
-    CarMesh: new Proxy({}, { get: (_o, k) => () => ({ carMesh: String(k) }) }),
+    // An override map (carMesh) wins; getSpeedDigit keeps its digit, so the wheel LCD can be read back (cockpit-wheels.test.mjs).
+    CarMesh: new Proxy({}, { get: (_o, k) => (carMesh && k in carMesh ? carMesh[k]
+      : k === "getSpeedDigit" ? (d) => ({ carMesh: "getSpeedDigit", digit: d }) : () => ({ carMesh: String(k) })) }),
     Car3D: {
       build: (_c1, _c2, o) => {
         const kind = o.silhouette ? "sh" : o.noWheels ? "body" : "whole";
         rec.builds.push({ kind, team: o.teamId, num: o.num });
+        // opts.seats (#4219): the real build derives each teammate's body from this one.
+        if (o.seats) for (const n of o.seats.keys()) o.seats.set(n, { kind, team: o.teamId, num: n, seated: o.num });
         return { kind, team: o.teamId, num: o.num };
       },
+      buildFarWheel: () => ({ kind: "wheel", far: true }),
       buildWheelLayers: () => { rec.wheels++; return { rotating: { kind: "wheel" }, fixed: { kind: "wheelFixed" } }; },
       TYRE_BAND: [null, [1, 1, 0]], BRAKE_CALIPER: [null, [1, 0, 0]],
       aeroLevelOf: () => 2, aeroStyleOf: () => null, appearanceParts: (p) => p,
       PART_STYLE_FIELDS: Object.fromEntries(["engine", "aero", "suspension", "brakes", "tyres", "ers", "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"].map(c => [c + "Shape", c])),
     },
-    CarWheels: { tints: () => ({ rim: null, cal: null, ink: null, key: "" }) },   // livery wheel tints: none set
+    CarWheels: {
+      tints: () => ({ rim: null, cal: null, ink: null, key: "" }),   // livery wheel tints: none set
+      WHEEL_R: 0.34,
+      // Mirror js/car/car-wheels.js — advanceWheelPhases calls these by name.
+      phaseStep(speed, dt, wheelR, lock) {
+        const r = wheelR > 0 ? wheelR : 0.34;
+        const spin = (speed || 0) / r * (dt || 0);
+        const L = lock == null ? 0 : lock;
+        return { rear: spin, front: spin * (1 - L) };
+      },
+      wrapPhase(rad) {
+        const t = Math.PI * 2, x = (rad || 0) % t;
+        return x < 0 ? x + t : x;
+      },
+    },
     Parts: {
       CATALOG,
       legalityKey: () => "2026",
@@ -120,12 +141,15 @@ export function carDrawVm({ casters = false, cam = "chase", legends = false, pla
     getLiveryId: () => "default",
     getTeamParts: () => playerParts,
   };
+  const factory = new Map();
   const carDraw = ctx.CarDraw.create(G, {
     resolveLivery: () => livery || ({ c1: [1, 0, 0], c2: [0, 0, 1] }), partsVisualKey: () => "111111111111",
+    // CustomLiveries.factoryLivery: the team's own colours, one object per team (identity-stable, as the real memo).
+    factoryLivery: (team) => factory.get(team.id) || factory.set(team.id, { id: "default", c1: team.color, c2: team.color2 }).get(team.id),
     // drawAeroFlaps in game.js, recorded (field-lod.test.mjs drives the real one):
     // `still` = the static flap set, drawn whatever the car's distance.
     drawAeroFlaps: (team, aLvl, blend, m, paint, style, only, still, viewLivery) => {
-      const record = { team: team.id, blend, m: m[12] + "," + m[14], only: only || null, still: !!still };
+      const record = { team: team.id, blend, m: m[12] + "," + m[14], y: m[13], only: only || null, still: !!still };
       if (viewLivery !== undefined) record.viewLivery = viewLivery;
       rec.flaps.push(record);
     },

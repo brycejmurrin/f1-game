@@ -3,9 +3,11 @@
 **[Play live on GitHub Pages &rarr;](https://brycejmurrin.github.io/f1-game/)**
 
 An unofficial Formula 1 fan game and data hub in pure JS/CSS/HTML — no app
-framework, no build step. WebGL2 and optional WebGPU renderers (default
-renderer vendors [three.js](https://threejs.org/) under `vendor/`; a few other
-libraries sit there too). Runs in any modern browser on desktop or mobile. A
+framework, no build step. The default renderer is [three.js](https://threejs.org/)
+(vendored under `vendor/`), which draws with WebGPU where the browser has it —
+iPhone Safari included — and three's WebGL2 backend where it does not; a
+hand-written WebGL2 renderer is the universal fallback, and a raw WebGPU renderer
+is opt-in (Settings → Graphics → RENDERER). Runs in any modern browser on desktop or mobile. A
 sibling of [Neon Drift](https://github.com/brycejmurrin/driving-game): same
 static-site spirit, this time in true 3D.
 
@@ -14,7 +16,11 @@ Recent merges: [CHANGELOG.md](CHANGELOG.md).
 ## The game
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
-across a **24-round season** of low-poly 3D tracks. The season rounds:
+on low-poly 3D tracks. Season setup defaults to **2026 REAL** (23 rounds,
+Albert Park to Abu Dhabi — `SeasonCal.REAL_2026` in `js/career/season-cal.js`;
+tested in `tests/unit/season-calendar-default.test.mjs`). **SEASON SETUP**
+still offers the **24-ROUND** preset (`Tracks.SEASON`: every circuit without
+`classic: true`). The season rounds:
 Bahrain, Monaco, Silverstone, Spa, Monza, Suzuka, Singapore, COTA,
 Interlagos, Las Vegas, Madrid, Jeddah, Albert Park, Shanghai, Miami,
 Montreal, Red Bull Ring, Hungaroring, Baku, Mexico City, Qatar, Abu Dhabi,
@@ -26,12 +32,12 @@ Night races run under floodlights.
 2026-regulation game mechanics:
 
 - **Electric boost** — hold BOOST to deploy battery energy; deployment tapers
-  away at high speed, exactly like the 2026 power units. Recharge by braking
+  away at high speed, as the 2026 power units do. Recharge by braking
   and lifting.
 - **Active Aero** — in MANUAL, press **Z** (or **AERO** on screen) inside an
   activation zone to open the wings (**STRAIGHT MODE**): less drag and grip;
-  braking or leaving the zone closes them. **SETTINGS › CONTROLS › ACTIVE
-  AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
+  braking or leaving the zone closes them. **SETTINGS › DRIVING AIDS ›
+  ACTIVE AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
   circuits have no zones.
 - **Overtake Mode** — stay within one second of the car ahead at the circuit's
   detection line to earn it; the allowance arms at the start/finish line for
@@ -46,7 +52,7 @@ Night races run under floodlights.
   in the pit lane at the entry for about half a second to call the stop.
 - **Race control** — yellow flags, virtual safety car, safety car and red flag
   are **off** by default. Turn them on in **RACE SETTINGS › CAUTIONS**.
-- **Manual gearbox** (optional, SETTINGS › CONTROLS › GEARS: MANUAL) — an
+- **Manual gearbox** (optional, SETTINGS › DRIVING AIDS › GEARS: MANUAL) — an
   8-speed 'box with a live gear readout and tachometer. Shift up near the
   redline, down for corner exits; the limiter makes you upshift to reach top
   speed. Auto mode shifts for you.
@@ -54,7 +60,7 @@ Night races run under floodlights.
 
 ### Modes
 
-Menu routes and regression journeys: [docs/USAGE-PATHS.md](docs/USAGE-PATHS.md).
+Menu routes and regression journeys: [docs/ARCHITECTURE-MAP.md](docs/ARCHITECTURE-MAP.md).
 
 - **Season** — race the calendar in order with saved championship progress;
   **SEASON SETUP** picks rounds, qualifying and sprint weekends.
@@ -104,9 +110,39 @@ link. The designer's HOW TO tab walks through it; the long form is
   is drag-to-steer from where the finger lands, with automatic gas: use
   **BRAKE** to slow down, and a tap alone does not steer. Stuck or
   facing the wrong way? Pause, then **RECOVER CAR**.
-- Manual gears (**SETTINGS › CONTROLS › GEARS: MANUAL**) work on desktop
+- Manual gears (**SETTINGS › DRIVING AIDS › GEARS: MANUAL**) work on desktop
   and with **TILT**. **BUTTONS** and **TOUCH** keep gears automatic.
 - Rebind keyboard and controller actions in **SETTINGS › CONTROLS**.
+
+#### Touch buttons
+
+Open **Settings › Controls › Touch Button Response** and choose the control to edit. Each control remembers its own settings. Choose an idle border and a pressed accent for each race button. For Boost, Overtake, Aero, shifts, Camera, Pause and Show HUD, choose the original gesture, tap on release, quick tap (within 0.18 seconds), hold for 0.45 or 0.9 seconds and release, or double-tap within 0.35 seconds. Camera’s default keeps its hold-to-open view picker. Gas, Brake and steering use the analog settings below. The paired phone also lists its own actions in its layout editor.
+
+| Setting | What you feel or see |
+| --- | --- |
+| First Touch | **Instant** requests full input on contact. Slide up a pedal or inward on an arrow to ease off. **Progressive** starts at 12%. Slide away from the landing point in any direction to build input, or back toward it to ease off. Lift to release in Hold mode. |
+| Start From Touch Position | Choose which edge gives 100% at touchdown. A double border marks that edge when feedback is on. The opposite edge gives 0%, and the middle gives 50%. Sliding then follows the selected direction and distance. Off restores the saved fixed starting input. |
+| Pedal Mapping | Choose **Absolute** for Gas or Brake to read your thumb’s current position across the pedal. Pick the edge that gives full input. Quarter marks help you find 25%, 50% and 75% again. **Relative Slide** uses movement from where you first touched. |
+| Pressure Indicator | Show color alone, color plus a live percentage, or a colored fill that rises from the bottom. Grip warnings take priority over the percentage. |
+| Starting Input | Choose the input at touchdown in 5% steps. Mode Default uses 100% for Instant and 12% for Progressive. |
+| Slide Direction | Choose which way to ease off an Instant button or build a Progressive button. Mode Default keeps the original gesture. For example, choose Instant Gas with Up and Progressive Brake with Down to ease both pedals by sliding up. |
+| Hold Build Curve | Linear builds evenly. Gentle Start builds slowly at first, and Fast Start builds quickly at first. Each reaches full at the selected hold time. |
+| Hold Build Time | With a starting input below full, a stationary hold builds to full over 0.25, 0.5, 1 or 2 seconds. Off keeps the starting input steady. Sliding still adjusts the request. |
+| Full-input Color Intensity | Choose how vivid the button becomes at full input, from 25% to 100% color. The standard mix is 46%. This affects the display only and requires On-button Feedback. |
+| Slide Response | Linear changes pressure evenly over the slide. Fine Start gives more precision near touchdown, Quick Start makes a short slide count more, and S-Curve makes small adjustments near both ends. |
+| Slide Distance | This is thumb travel in screen pixels. At 40 px, a progressive pedal reaches full input quickly. At 160 px there is more room to make small changes. |
+| Slide onto Pedal | Applies when your thumb crosses from one pedal onto the other without lifting. **Instant** fully presses the receiving pedal. **Ease** starts it at 12% and reaches full input over another 40 px. **Default** follows the global **Pedal Slide** choice. On a paired controller, **Stay on Original Pedal** keeps the pedal you first pressed. |
+| Adaptive Buttons | Applies to the steering arrows. Higher levels soften a short tap at speed. Holding the arrow builds more steering. **1** turns speed smoothing off, **10** gives the most, and **Follow Global** uses the level in Driving Aids. |
+| On-button Feedback | The whole button brightens with input. A tread pattern on Gas warns of wheelspin. Brake can show a lock-up cue. The cockpit wheel’s T and B bars show the demands applied to the car. |
+| Throttle mode | **Hold** gives manual Gas until you lift. **Latch** toggles full Gas on each tap. **Auto** manages acceleration while you steer and brake. |
+| Reset | In Touch Button Response, reset restores only the selected button’s response. |
+
+During a race, pause and open **Settings › Controls › Reposition Touch Controls**. Drag the arrows or the driving controls as a group, or choose a button to move, resize or reshape independently. Choose **Steering buttons** to adjust the space between the arrows. Choose **Driving buttons** to place Gas above or to the left of Brake, arrange the actions in a compact grid, or use one of the row layouts. The shape selector includes Arch, Shield, Left Paddle, Right Paddle and Leaf. Choose **Gas + Brake** to move or size both pedals together, or **Race actions** for controls such as Boost, Overtake and Aero. Individual size is a percentage of the main Button Size setting. **Auto** restores the automatic row arrangement. With a button focused, the arrow keys move it 2 px, or 16 px with Shift. **Done** returns to Settings. Positions and customizations are saved for the active steering scheme.
+
+With **Touch** steering, choose **Floating Wheel** under **Touch Steering Guide** to show a wheel centered where your steering finger lands. It turns as you drag. **Drag Ring** keeps the original guide.
+
+On the **paired phone**, open the layout editor. **Split Actions** puts OT and Aero on the left grip and Boost on the right. **Race Views** puts Camera and Look on the left and Radio on the right. Under **Move & Size**, select an individual button to change its shape, then choose **Apply** to save the phone arrangement. With manual gears, **Flick to Shift** replaces the paddles with a strip. Flick up or down at least 24 px for one gear change. **Utility Wheel** groups Camera, Look and Radio under one button. Hold Utilities, slide to an action and lift, or tap Utilities and select a button. Look gives a one-second glance behind the car.
+
 
 The **CAM** button (top-right, next to pause) cycles cameras the same
 way `C` and **View** do. The choice is remembered. Boost is a tap that
@@ -120,12 +156,17 @@ a corner and the front washes wide (understeer); loosen the rear and it steps ou
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
 **SETTINGS** (from the pause menu or title) opens pages for **CONTROLS**,
-**DRIVING**, **DRIVING AIDS**, **DISPLAY**, **APPEARANCE**, **MUSIC &
-SOUND**, and **BACKUP & RESTORE**. **DRIVING AIDS** has **RELAX /
-STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**, **DRIVING
-HELP**, **RACING LINE**, and **ADAPTIVE BUTTONS** (keys / on-screen arrows;
-default ON) — with lock, speed steer and the rest tucked behind an
-**ADVANCED** disclosure. **BRAKE CUE** lives under **SETTINGS › DRIVING**.
+**DRIVING AIDS**, **HUD & CAMERA**, **APPEARANCE**, **ACCESSIBILITY**,
+**MUSIC & SOUND**, **SAVES & DATA**, **GRAPHICS**, **VISUAL STUDIO**,
+**PROGRESS** and **ABOUT & CREDITS** (the page list is `SettingsNav` in
+`js/ui/settings-tabs.js`).
+**CONTROLS** holds **STEERING INPUT**, **STEERING** feel, **TILT
+SENSITIVITY**, **THROTTLE** and the keyboard and controller bindings, with
+lock, speed steer and the fine curves on its **ADVANCED INPUT & HANDLING**
+page. **DRIVING AIDS** has the **ROOKIE / RELAX / STANDARD / PRO** presets,
+**DRIVING HELP**, **STEER ASSIST**, **ADAPTIVE BUTTONS**, **GEARS**,
+**ACTIVE AERO**, **DRIVING COACH** and the **BRAKING CUES** (**PREDICTIVE
+CUE**, **LINE-SPEED CUE**).
 
 ### Car Setup
 
@@ -147,8 +188,8 @@ your car across **12 upgrade categories** before each race:
 | **COCKPIT** | Halo, mirrors and driver furniture |
 | **WHEELS** | Rim and wheel-cover treatment |
 
-Budget is **780 credits** per race. Toggle **UNLIMITED BUDGET** in the setup
-screen to remove the cap for testing. Some parts are **factory/supplier-exclusive**
+Free play starts with **FREE BUILD** on (no credit cap); tap it in the setup
+screen to race within the credit budget (`Parts.BUDGET` in `js/car/parts.js`). Some parts are **factory/supplier-exclusive**
 and only appear when your team uses that power unit (Mercedes, Ferrari, Red Bull
 Ford, Honda, or Audi).
 
@@ -189,8 +230,8 @@ sensors require a secure context.
 ## Project layout
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
-Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
-renderers + shaders), `js/track/` (the spline → mesh track engine),
+Plain script-tag IIFE modules, grouped by domain: `js/render/` (three.js TLX default,
+WebGL2 GLX fallback, WebGPU WGX + shaders), `js/track/` (the spline → mesh track engine),
 `js/circuits/` (the 52 circuit data files: 24 season rounds + 28 retired), `js/car/` (procedural car geometry,
 liveries, the 12-category upgrade catalog), `js/data/` (the 2026 grid,
 Jolpica/OpenF1 clients + the data hub UI), `js/input/`, `js/audio/`, `js/ui/`,
@@ -200,6 +241,12 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
+The reference phone is the standard **iPhone 15**. For full-screen captures, use 393 × 852 CSS pixels
+in portrait or 852 × 393 in landscape. At the native 3× scale the PNGs are 1179 × 2556 and 2556 × 1179
+pixels respectively. Safari’s visible game area varies with browser controls. The measured landscape tab
+is 852 × 368 CSS pixels. Use the [device fixture](tests/data/phone-windows.json) for the corresponding
+viewport and safe-area assumptions. [Apple display specifications](https://support.apple.com/en-us/111831)
+
 The project ships a **Playwright test suite** — 130+ Playwright specs — plus
 1000+ `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
@@ -207,10 +254,9 @@ minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.
 
 ```sh
-node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need?
-node tools/ci/test-bg.mjs physics-core hooks    # start them in the background, one at a time
-tail -f artifacts/logs/smoke.log             # watch one live
-node tools/ci/test-bg.mjs --status              # running / how each ended
+node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need? (they run on the PR)
+node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # attended: ONE spec in the background
+node tools/ci/test-bg.mjs --status              # running / how it ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
 npm run test:physics-core                    # the driving model (browser; 42 tests, mostly fast)
@@ -247,11 +293,8 @@ __apex.groundY(0.11, 12);    // rendered terrain height + gap vs the road at a p
 
 ## Credits
 
-Music: free demo tracks from
-[Beatscribe's Homebrew VGM assets](https://github.com/Beatscribe/homebrew_vgm)
-([more at beatscribe.itch.io](https://beatscribe.itch.io)), released under
-**CC0 1.0** (public domain) and downsampled for the web. See
-[`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine drone is looped sample clips pitched by rpm and gear (see
+Music: the six playlist tracks were provided by the project owner for this
+game; see [`assets/music/CREDITS.txt`](assets/music/CREDITS.txt). The engine drone is looped sample clips pitched by rpm and gear (see
 [`assets/sfx/CREDITS.txt`](assets/sfx/CREDITS.txt)); the other sound effects are
 synthesized in-browser with the Web Audio API.
 The team-radio voice is synthetic speech from

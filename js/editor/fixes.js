@@ -3,12 +3,13 @@
    design — never the input mutated — on the 0.25 m storage lattice with point
    0 still the start (except the start remedy, whose whole job is to move it)
    and every zone still where it was on the road: START moves the line to the
-   longest straight (the designer's START HERE shift), LENGTH and BOUNDS scale
-   or centre the loop, SPACING / POINTS merge and thin with RDP, KINK / RADIUS /
-   FOLD relax the control points under the issue, CROSSING adds a bridge, and
+   straight the validator accepts (the designer's START HERE shift), LENGTH and
+   BOUNDS scale or centre the loop, SPACING / POINTS merge and thin with RDP,
+   KINK / RADIUS relax the control points under the issue, FOLD relaxes them or
+   evens out the spacing into the corner, CROSSING adds a bridge, and
    CLEARANCE pushes two close sections apart. fixAll runs them over every RED
    (≤ 3 rounds). Pure; LAZY_EDITOR, after validate.js; needs TrackShape at eval,
-   TrackRandom / TrackValidate / CustomTracks / TrackPit at call time. */
+   TrackValidate / CustomTracks / TrackPit at call time. */
 const TrackFixes = (function () {
   "use strict";
   const S = TrackShape;
@@ -19,7 +20,7 @@ const TrackFixes = (function () {
   // point count before the local edits (an index window must stay put), the
   // bridge before clearance (a crossing is also the closest approach).
   const ORDER = Object.freeze(["start", "length", "bounds", "spacing", "points", "kink", "radius", "fold", "crossing", "clearance"]);
-  const REPEAT = { crossing: 4, clearance: 3 };            // several crossings in one round; one try for the rest
+  const REPEAT = { crossing: 4, clearance: 3, fold: 4 };            // several crossings in one round; one try for the rest
 
   const q = (v) => Math.round(v * 4) / 4;
   const wrap01 = (v) => ((v % 1) + 1) % 1;
@@ -153,32 +154,43 @@ const TrackFixes = (function () {
   const check = (d) => { try { return TrackValidate.check(d); } catch (_) { return null; } };
 
   // ── the remedies ─────────────────────────────────────────────────────────
-  /** START: the designer's startOnLongestStraight + START HERE's zone shift.
-   *  Twice, as TrackRandom.generate does: the 4 m resample starts at control 0,
-   *  so rotating re-phases it, and a second look settles the line where a
-   *  second click would not move it again. */
-  function fixStart(d, pts) {
-    if (typeof TrackRandom === "undefined") return null;
-    let cur = pts, f = 0, rot = 0;
-    for (let pass = 0; pass < 2; pass++) {
-      const ls = TrackRandom.longestStraight(cur);
-      if (!ls || !ls.dense || !ls.dense.length || !(ls.lenM > 0)) break;
-      const along = Math.min(Math.max(ls.lenM * 0.6, 240), Math.max(ls.lenM - 140, 0));
-      const p = ls.dense[(ls.start + Math.round(along / 4)) % ls.dense.length];
-      const j = S.project(cur, p[0], p[1]).i;
-      if (!(j > 0)) break;
-      const c = cum(cur);
-      f += c[j] / c[cur.length];
-      cur = S.rotate(cur, j);
-      rot += j;
-    }
-    if (cur === pts || samePts(lattice(cur), lattice(pts))) return null;   // already there (or a full turn)
-    const out = clone(d);
-    out.pts = lattice(cur);
+  /** START: rotate point 0 to the control point whose built arc has the most
+   *  straight road either side, scored with the validator's own straightRun
+   *  (a different curvature measure left Silverstone 128 m short), and keep the
+   *  first of the best six that the validator no longer calls red. Zones shift
+   *  with the line (START HERE's rule); heights rotate with pts. */
+  function startAt(pts, tr, j) {
+    // Control j's built arc: the fraction-of-lap guess, refined to the nearest built node within ±8 % of the lap.
+    const N = pts.length, c = cum(pts), n = tr.n, g = Math.round(c[j] / c[N] * n), win = Math.max(8, Math.round(0.08 * n));
+    let bk = g, bd = Infinity;
+    for (let o = -win; o <= win; o++) { const k = (((g + o) % n) + n) % n, dd = Math.hypot(tr.px[k] - pts[j][0], tr.pz[k] - pts[j][1]); if (dd < bd) { bd = dd; bk = k; } }
+    return bk * (tr.total / n);
+  }
+  function rotated(d, pts, j) {
+    const c = cum(pts), f = c[j] / c[pts.length], out = clone(d);
+    out.pts = lattice(S.rotate(pts, j));
     Object.assign(out, mapZones(out, (v) => v - f));
-    // Heights are parallel to pts: rotate them with it (the designer's START HERE does).
-    if (Array.isArray(out.heights) && out.heights.length === pts.length) { const k = rot % pts.length; out.heights = out.heights.slice(k).concat(out.heights.slice(0, k)); }
-    return { design: out, msg: "Moved the start to the longest straight" };
+    if (Array.isArray(out.heights) && out.heights.length === pts.length) out.heights = out.heights.slice(j).concat(out.heights.slice(0, j));
+    return out;
+  }
+  function fixStart(d, pts, built) {
+    const tr = trOf(d, built);
+    if (!tr || !tr.px || typeof TrackValidate === "undefined" || !TrackValidate.straightRun) return null;
+    const lim = LIM(), back = lim.startBackAmber || 240, fwd = lim.startFwdAmber || 240, cand = [];
+    for (let j = 0; j < pts.length; j++) {
+      const s = j ? startAt(pts, tr, j) : 0, sb = TrackValidate.straightRun(tr, s, -1, 600), sf = TrackValidate.straightRun(tr, s, +1, 600);
+      if (sb < (lim.startBackRed || 150) || sf < (lim.startFwdRed || 70)) continue;
+      // Both sides up to their amber length, then the total as the tie-break.
+      cand.push({ j, score: Math.min(sb, back) / back + Math.min(sf, fwd) / fwd + (sb + sf) / 1e5 });
+    }
+    cand.sort((x, y) => y.score - x.score);
+    if (cand.length && cand[0].j === 0) return null;   // the line already sits on the best straight
+    for (const { j } of cand.slice(0, 6)) {
+      if (!j) continue;
+      const out = rotated(d, pts, j), v = check(out);
+      if (v && !(v.issues || []).some((i) => i.code === "start" && i.level === "red")) return { design: out, msg: "Moved the start to the longest straight" };
+    }
+    return null;
   }
   /** Scale about the centroid by k; recentre and fit the map when that pushes a point past it. */
   function scaled(pts, k) {
@@ -252,6 +264,50 @@ const TrackFixes = (function () {
     const pairs = survivors(cur, out);
     if (!pairs || out.length < LIM().ptsMin) return null;
     return { design: rebuilt(d, pts, out, pairs), msg: "Smoothed the " + (issue.code === "kink" ? "kink" : "corner") + " at " + km(issue.s) };
+  }
+  /** FOLD: the tightest radius-to-half-width ratio within 150 m of built arc s (higher is better). */
+  function foldScore(tr, s) {
+    if (!tr || !tr.px) return -Infinity;
+    const n = tr.n, ds = tr.total / n, k0 = Math.round(s / ds), span = Math.round(150 / ds), P = (k) => [tr.px[(k + n) % n], tr.pz[(k + n) % n]];
+    let worst = Infinity;
+    for (let o = -span; o <= span; o++) { const k = k0 + o, hw = tr.hw[(k + n) % n] || 1; worst = Math.min(worst, S.menger(P(k - 1), P(k), P(k + 1)) / hw); }
+    return worst;
+  }
+  /** FOLD: split a segment over 3× its neighbour's length next to the fold, so a
+   *  long straight no longer runs straight into a hairpin of short segments
+   *  (Korea: 688 m into 11–15 m) — smoothing alone moves that fold around. */
+  function evened(d, pts, issue, built) {
+    const tr = trOf(d, built), N = pts.length;
+    if (!tr || N + 4 > (LIM().ptsMax || PTS_CAP)) return null;
+    const c = nearestCtrl(pts, tr, issue.s, false);
+    if (c < 0) return null;
+    const w = (i) => ((i % N) + N) % N, len = (i) => { const a = pts[w(i)], b = pts[w(i + 1)]; return Math.hypot(b[0] - a[0], b[1] - a[1]); };
+    const point = (i, fromEnd, m) => { const a = pts[w(i)], b = pts[w(i + 1)], t = (fromEnd ? len(i) - m : m) / len(i); return [q(a[0] + (b[0] - a[0]) * t), q(a[1] + (b[1] - a[1]) * t)]; };
+    const ins = new Map();
+    for (let i = c - 2; i <= c + 1; i++) {
+      const L = len(i), prev = len(i - 1), next = len(i + 1), add = [];
+      if (L > 3 * prev && L > 48) add.push(point(i, false, Math.min(Math.max(2 * prev, 16), L / 3)));
+      if (L > 3 * next && L > 48) add.push(point(i, true, Math.min(Math.max(2 * next, 16), L / 3)));
+      if (add.length) ins.set(w(i), add);
+    }
+    if (!ins.size) return null;
+    const out = [], pairs = [];
+    pts.forEach((p, i) => { pairs.push([i, out.length]); out.push(p); if (ins.has(i)) out.push(...ins.get(i)); });
+    return { design: rebuilt(d, pts, out, pairs), msg: "Evened out the points into the corner at " + km(issue.s) };
+  }
+  /** FOLD: even the spacing or smooth, whichever clears the fold; else the one that eases it most. */
+  function fixFold(d, pts, issue, built) {
+    if (!Number.isFinite(issue.s)) return null;
+    let best = null, bs = foldScore(trOf(d, built), issue.s);
+    for (const r of [evened(d, pts, issue, built), fixSmooth(d, pts, issue, built)]) {
+      if (!r) continue;
+      const v = check(r.design);
+      if (!v) continue;
+      if (!stillThere(v, "fold", "red", issue.s, 150)) return r;
+      const sc = foldScore(v.tr, issue.s);
+      if (sc > bs) { best = r; bs = sc; }
+    }
+    return best;
   }
   /** CROSSING: a bridge (sanitize's BUMP shape { s, halfM, rise }) over the road
    *  farther from the start line, when the other road clears its span. */
@@ -339,14 +395,14 @@ const TrackFixes = (function () {
   }
 
   const REMEDY = {
-    start: (d, pts) => fixStart(d, pts),
+    start: (d, pts, it, b) => fixStart(d, pts, b),
     length: (d, pts, it, b) => fixLength(d, pts, b),
     bounds: (d, pts) => fixBounds(d, pts),
     spacing: (d, pts) => fixSpacing(d, pts),
     points: (d, pts) => (pts.length > PTS_CAP ? fixSpacing(d, pts) : null),
     kink: (d, pts, it, b) => fixSmooth(d, pts, it, b),
     radius: (d, pts, it, b) => fixSmooth(d, pts, it, b),
-    fold: (d, pts, it, b) => fixSmooth(d, pts, it, b),
+    fold: (d, pts, it, b) => fixFold(d, pts, it, b),
     crossing: (d, pts, it, b) => fixCrossing(d, it, b),
     clearance: (d, pts, it, b) => fixClearance(d, pts, it, b),
   };
@@ -399,6 +455,6 @@ const TrackFixes = (function () {
     return { design: d, applied, msgs, verdict: v };
   }
 
-  return { ORDER, BRIDGE, LAP, canFix, apply, fixAll };
+  return { ORDER, canFix, apply, fixAll };
 })();
 Object.freeze(TrackFixes);

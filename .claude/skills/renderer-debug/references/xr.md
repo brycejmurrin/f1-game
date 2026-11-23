@@ -43,7 +43,7 @@ delivers zero frames.
 ```sh
 node --test tests/unit/xr-phase0.test.mjs tests/unit/xr-plan.test.mjs tests/unit/xr-opts.test.mjs \
   tests/unit/xr-backend-pin.test.mjs tests/unit/xr-cull-union.test.mjs tests/unit/xr-visibility-pause.test.mjs
-node tools/ci/test-bg.mjs xr     # BROWSER: vr-emulated.spec.js + xr-plan.spec.js, Playwright project xr-emulated (pinned IWER)
+# BROWSER: the `test:xr` script (package.json) under IWER runs in the PR's own CI; a whole group is Bryce's opt-in
 ```
 
 A green `test:xr` is an EMULATION pass: IWER cannot prove multiview, MSAA > 1,

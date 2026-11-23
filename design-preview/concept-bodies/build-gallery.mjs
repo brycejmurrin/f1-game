@@ -51,7 +51,7 @@ dt{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var
 <p class="state">${process.env.STATE || ""}</p></div>
 <figure class="ref"><img src="${b64("ref.jpg")}" alt="Concept sheet: Rift, Keel, Delta, Serpent"><figcaption>Bryce's concept sheet (reference)</figcaption></figure>
 ${BODIES.map(card).join("\n")}
-<p class="intro" style="color:var(--muted)">Fit: car-fit-audit --bodies, each body against a zero-offset body on the same team car (a body replaces the team's own style numbers, so that is its fair base). None of the #3156 hood↔chassis, cockpit↔engineCover or bolster↔sidepod overlaps. Sizes: design-preview/bodies/measure.mjs, millimetres, ceiling = the lower of the current shipped p75 and the frozen #3160 measurements.</p>
+<p class="intro" style="color:var(--muted)">Fit: car-fit-audit --bodies, each body against a zero-offset body on the same team car (a body replaces the team's own style numbers, so that is its fair base). None of the #3156 hood↔chassis, cockpit↔engineCover or bolster↔sidepod overlaps. Sizes: design-preview/concept-bodies/measure.mjs, millimetres, ceiling = the lower of the current shipped p75 and the frozen #3160 measurements.</p>
 </main>`;
 fs.writeFileSync("scratch/d1d/concept-bodies.html", html);
 console.log((html.length / 1024 | 0) + " KB");

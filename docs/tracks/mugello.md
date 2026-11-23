@@ -17,12 +17,7 @@ Warm golden hill light, slightly hazy, with the deep near-black greens Tuscan cy
 - Kerbs red `[0.80, 0.14, 0.14]` / white `[0.92, 0.92, 0.90]`
 
 ## 3. Elevation
-Circuit-authored elevation lobes sum to roughly ~40 m of ups and downs (not a surveyed DEM — **UNCERTAIN** as a single relief figure; keep the existing `elevations` table, do not invent new peaks).
-- s≈0.16: **10 m climb** after San Donato.
-- s≈0.34: **11 m drop** into Casanova-Savelli.
-- s≈0.52: **9 m climb** through the Arrabbiate — uphill, fast, and banked.
-- s≈0.74: 8 m down to Bucine.
-- s≈0.92: 6 m rise onto the main straight.
+The road follows the heights printed for all 15 corners on Mugello’s technical map. From Poggio Secco (T3) to Arrabbiata 1 (T8), the map drops 37.54 m and the built road drops 36.03 m. From T8 to Scarperia (T10), the road climbs 23.08 m against the mapped 24.74 m. Built lap relief is 37.66 m, below the circuit’s published 42.86 m. The corner labels leave the locations of intermediate extrema uncertain. Banking remains estimated. [Technical map](https://mugellocircuit.cronorapino.it/downloads/MAPPE%20CIRCUITO/Cartina%20Tecnica.pdf) · [Circuit sheet](https://mugellocircuit.cronorapino.it/downloads/MAPPE%20CIRCUITO/Mugello3Intermedi.pdf)
 
 ## 4. Landmarks & surroundings by lap position
 | s | Side | Distance | Box description |

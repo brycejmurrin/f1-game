@@ -10,8 +10,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
+import YAML from "yaml";
 import { browserGroups, planMatrix, parseWorkers, resolveWorkers, pickRun, failLines, groupVerdict, SHARD_CHOICES, WORKFLOW, USAGE,
-  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin } from "../../tools/ci/remote-group.mjs";
+  groupFiles, expectedSec, shardPlan, runShardArgs, liveRun, MAX_PIECES, SPEC_RE, fetchOrigin, ownerWriteGate, OWNER_OPT_IN, GROUP_LANES, withLanes, groupLanes, MAX_GROUP_LANES } from "../../tools/ci/remote-group.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPTS = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
@@ -60,9 +61,11 @@ test("the workflow reads its matrix from the plan input, has no plan job, and ne
   const runs = YML.split("\n").filter((l) => /^\s+run: /.test(l));
   assert.ok(runs.length >= 2);
   for (const l of runs) assert.ok(!/\$\{\{\s*(inputs|github\.event)\./.test(l), `input interpolated into a shell line: ${l.trim()}`);
-  assert.equal((YML.match(/run: node tools\/ci\/remote-group\.mjs --run-shard$/gm) || []).length, 2, "both GL steps run the one validated entry point");
+  // The entry-point steps in file order: ONE plan-record, then the two GL steps (#5480: the plan is recorded before any spec runs).
+  const entry = runs.map((l) => l.trim().split(" ")).filter((w) => w[2] === "tools/ci/remote-group.mjs").map((w) => w.slice(3).join(" "));
+  assert.deepEqual(entry, ["--plan-record", "--run-shard", "--run-shard"], "one plan-record step first, then both GL steps through the one validated entry point");
   for (const k of ["GROUP", "PLAN", "SHARD", "TOTAL", "WORKERS", "GL"])
-    assert.equal((YML.match(new RegExp(`^\\s+${k}: `, "gm")) || []).length, 2, `${k} reaches both shard steps through env`);
+    assert.equal((YML.match(new RegExp(`^\\s+${k}: `, "gm")) || []).length, 3, `${k} reaches both shard steps and the plan-record step through env`);
   assert.match(YML, /^permissions:\n  contents: read/m, "read-only token");
   assert.match(YML, /cancel-in-progress: true/, "a re-dispatch supersedes the old run");
   // The CLI finds a 204 dispatch's run by its name.
@@ -154,7 +157,7 @@ test("runShardArgs: the plan is untrusted text — every unit is checked against
   assert.equal(piece.args.filter((a) => /\.spec\.js$/.test(a)).length, 1, "…alone");
   // Count mode: no plan lists → npm run test:<group> -- --shard=i/n (the group's own flags ride along).
   const c = runShardArgs({ group: "proj", plan: '{"matrix":[{"shard":1,"total":2},{"shard":2,"total":2}]}', shard: "2", total: "2", workers: "" }, FAKE_SCRIPTS);
-  assert.deepEqual(c, { runs: [{ cmd: "npm", args: ["run", "test:proj", "--", "--timeout=900000", "--shard=2/2"] }], mode: "count" });
+  assert.deepEqual(c, { runs: [{ cmd: "npm", args: ["run", "test:proj", "--", "--timeout=900000", "--shard=2/2"], units: [] }], mode: "count", units: [] }, "a --project group records no units (it never counts for a dropped spec, #5480)");
   assert.equal(runShardArgs({ group: "plain", plan: "", shard: "1", total: "4", workers: "" }, FAKE_SCRIPTS).mode, "count", "an empty plan is a count plan");
   // Refusals: a path outside the group, a shell-ish string, a piece beyond MAX_PIECES, a mismatched matrix, a bad shard, an unknown group, broken JSON.
   const bad = (shards, extra = {}) => runShardArgs({ group: "plain", plan: JSON.stringify({ matrix: [], shards }), shard: "1", total: String(shards.length), workers: "", ...extra }, FAKE_SCRIPTS);
@@ -170,7 +173,7 @@ test("runShardArgs: the plan is untrusted text — every unit is checked against
   assert.ok(runShardArgs({ group: "plain", plan: "", shard: "0", total: "4", workers: "" }, FAKE_SCRIPTS).error);
   assert.ok(runShardArgs({ group: "plain", plan: "", shard: "1", total: "4", workers: "1; id" }, FAKE_SCRIPTS).error);
   assert.ok(runShardArgs({ group: "proj", plan: JSON.stringify({ matrix: [], shards: [[]] }), shard: "1", total: "1", workers: "" }, FAKE_SCRIPTS).error, "a packed plan cannot drive a --project group");
-  assert.deepEqual(bad([[]]), { empty: true, mode: "time" }, "an empty list is a no-op shard, not a red");
+  assert.deepEqual(bad([[]]), { empty: true, mode: "time", units: [] }, "an empty list is a no-op shard, not a red");
 });
 
 test("liveRun: a live run of THIS group on THIS sha is reused, else the newest green one; another sha, group or branch is not", () => {
@@ -194,7 +197,7 @@ test("workers: empty is left empty for parseWorkers; resolveWorkers fills the GL
   assert.deepEqual(resolveWorkers("physics-core", "llvmpipe", "3", SCRIPTS), { workers: "3" });
   assert.match(YML, /^\s+workers:\n/m, "the workflow takes a workers input");
   // Both shard steps hand the raw input to --run-shard through env; it resolves empty → the GL+group default.
-  assert.equal((YML.match(/^\s+WORKERS: \$\{\{ inputs\.workers \}\}/gm) || []).length, 2);
+  assert.equal((YML.match(/^\s+WORKERS: \$\{\{ inputs\.workers \}\}/gm) || []).length, 3, "both shard steps and the plan-record step");
 });
 
 test("pickRun: the newest dispatch of THIS group on THIS branch since the dispatch", () => {
@@ -262,4 +265,44 @@ test("--ref still refreshes origin/<branch>: the sha, the green lookup and the w
   const src = fs.readFileSync(path.join(ROOT, "tools/ci/remote-group.mjs"), "utf8");
   const call = src.indexOf("fetchOrigin(branch);"), refGate = src.indexOf('if (!argv.includes("--ref")) {', call);
   assert.ok(call > 0 && refGate > call, "main fetches before it branches on --ref");
+});
+
+test("the dispatch is an owner write: it says so and refuses unless the owner's opt-in is set (decision 2026-11-11)", () => {
+  assert.equal(OWNER_OPT_IN, "APEX_GH_OWNER_WRITE");
+  const what = "this dispatch is a GitHub write made with the gh token, recorded as the repository owner's own act (no app marker).";
+  for (const env of [{}, { APEX_GH_OWNER_WRITE: "" }, { APEX_GH_OWNER_WRITE: "0" }, { APEX_GH_OWNER_WRITE: "yes" }]) {
+    const g = ownerWriteGate(env);
+    assert.deepEqual([g.ok, g.lines.length, g.lines[0], g.lines[1].slice(0, 8)], [false, 2, what, "refused:"], JSON.stringify(env));
+  }
+  assert.deepEqual(ownerWriteGate({ APEX_GH_OWNER_WRITE: "1" }), { ok: true, lines: [what] }, "the opt-in still prints what the dispatch is");
+});
+
+test("group lanes (D-LANES): --group-lanes, else APEX_GROUP_LANES, else 8; bounds and fallback", () => {
+  assert.equal(MAX_GROUP_LANES, 128);
+  assert.equal(groupLanes({}, []), GROUP_LANES);
+  assert.equal(groupLanes({ APEX_GROUP_LANES: "24" }, []), 24);
+  assert.equal(groupLanes({ APEX_GROUP_LANES: "24" }, ["ui", "--group-lanes", "12"]), 12, "the flag wins over the env");
+  for (const v of ["", "0", "-1", "2.5", "24x", "129"]) {
+    assert.equal(groupLanes({ APEX_GROUP_LANES: v }, []), GROUP_LANES, `env '${v}' falls back`);
+    assert.equal(groupLanes({}, ["--group-lanes", v]), GROUP_LANES, `flag '${v}' falls back`);
+  }
+  assert.equal(groupLanes({}, ["--group-lanes"]), GROUP_LANES, "a flag with no value falls back");
+  const m = Array.from({ length: 4 }, (_, i) => ({ shard: i + 1, total: 4 }));
+  assert.deepEqual(withLanes(m, 22, 24).map((x) => x.lane), [23, 24, 1, 2], "lanes above 8 are used and wrap at the count");
+  assert.deepEqual(withLanes(m, 6, 0).map((x) => x.lane), withLanes(m, 6).map((x) => x.lane), "a bad count is the default");
+});
+
+test("group lanes (#5848): a dispatch gives every shard a lane 1..GROUP_LANES and the shard job queues on it", () => {
+  const m = [1, 2, 3, 4].map((shard) => ({ shard, total: 4 }));
+  assert.deepEqual(withLanes(m, 0).map((x) => x.lane), [1, 2, 3, 4]);
+  assert.deepEqual(withLanes(m, 6).map((x) => x.lane), [7, 8, 1, 2], "consecutive lanes from the base, wrapping");
+  assert.deepEqual(withLanes(m, -1).map((x) => x.lane), [8, 1, 2, 3]);
+  assert.ok(withLanes(Array.from({ length: 8 }, (_, i) => ({ shard: i + 1, total: 8 })), 3).every((x) => x.lane >= 1 && x.lane <= GROUP_LANES));
+  assert.equal(new Set(withLanes(Array.from({ length: GROUP_LANES }, (_, i) => ({ shard: i + 1 })), 5).map((x) => x.lane)).size, GROUP_LANES,
+    "one run's shards never share a lane");
+  assert.deepEqual(withLanes(m, 0)[0], { shard: 1, total: 4, lane: 1 }, "the shard fields are kept");
+  // The workflow: a fleet-wide queue per lane, a lane-less (hand) plan falling back to its shard number.
+  assert.deepEqual(YAML.parse(YML).jobs.group.concurrency,
+    { group: "browser-group-lane-${{ matrix.lane || matrix.shard }}", queue: "max" });
+  assert.ok(Math.max(...SHARD_CHOICES) <= GROUP_LANES, "a lane-less plan of the largest shard choice stays inside the lanes");
 });

@@ -1,5 +1,7 @@
 # CI merge burst, 2026-10-02/03: 30 merges held off the site
 
+Summary: (Superseded in part: `ship-fast` gone since 2026-10-16, release train instead.) A 30-merge burst held the site 30 PRs behind: one fast tier per merge clogged 40 slots and only-the-tip poking deployed nothing mid-burst. The fix: one shared no-cancel `ship-fast` group, a superseded green run pokes when no train is moving, and merge pacing; merge queue is not available on a personal-account repo.
+
 **Status 2026-10-26 — superseded in part.** The `ship-fast` concurrency group below is gone since 2026-10-16: a deploy-branch push starts the `pages.yml` release train (one running + one pending), described in `docs/TESTING.md` §Release train. Read this note for the 2026-10-03 incident, not for current CI shape.
 
 ## What happened

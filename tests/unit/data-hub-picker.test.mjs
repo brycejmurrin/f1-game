@@ -12,6 +12,7 @@
  * Run: node --test tests/unit/data-hub-picker.test.mjs
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -96,7 +97,8 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   const meetingYears = [];
   let cancels = 0, scheduleCalls = 0;
   const F1API = {
-    schedule: () => { scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
+    // Counts SCHEDULE loads: a load whose year is empty also asks for last season (schedule(year - 1)).
+    schedule: (year) => { if (year == null) scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
     latestSession: () => defer("latestSession", LATEST),
     meetings: (year) => { meetingYears.push(year); return defer("meetings", year === emptyYear ? [] : [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
     sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", mk === emptyMeeting ? [] : sessions || [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
@@ -109,7 +111,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     cancelAll() { cancels++; }, cacheEntryT: () => null,
   };
   class Clock extends Date { constructor(...a) { super(...(a.length ? a : [clock.now])); } static now() { return clock.now; } }
-  const ctx = vm.createContext({ document, F1API, Log: { info() {}, warn() {} }, navigator: { onLine: true }, queueMicrotask, console,
+  const ctx = vm.createContext({ I18n: i18nStub(),  document, F1API, Log: { info() {}, warn() {} }, navigator: { onLine: true }, queueMicrotask, console,
     Date: clock ? Clock : Date,
     localStorage: { length: 0, key: () => null, getItem: () => null },
     setTimeout: clock ? clock.setTimeout : setTimeout, clearTimeout: clock ? clock.clearTimeout : clearTimeout, Teams: { LIST: [] },
@@ -138,6 +140,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   }
   async function drain() { await flush(); while (pending.length) { pending.shift().res(); await flush(); await flush(); } }
   const root = new El("dialog");
+  root.ownerDocument = document;
   root.id = "datahub";
   docRoot.appendChild(root);
   byId.datahub = root;
@@ -368,6 +371,28 @@ test("RESULTS cold-start with empty latestSession defaults year (never meetings(
   const active = h.content().find((n) => n.classList.contains("dh-pill") && n.classList.contains("active"));
   assert.ok(active, "one year pill is active");
   assert.equal(active.textContent, String(year));
+});
+
+// Hunt #5694 B4: on the Friday of a weekend the default session was the
+// future Race, so RESULTS read "no classification yet" and WATCH had no race.
+test("the default session is the race once it starts, else the latest session that has", async () => {
+  const at = (h) => new Date(Date.now() + h * 3600000).toISOString();
+  const weekend = (q, r) => [
+    { sessionKey: 1, meetingKey: 50, name: "Practice 1", type: "Practice", dateStart: at(-26) },
+    { sessionKey: 2, meetingKey: 50, name: "Practice 2", type: "Practice", dateStart: at(-22) },
+    { sessionKey: 3, meetingKey: 50, name: "Qualifying", type: "Qualifying", dateStart: at(q) },
+    { sessionKey: 4, meetingKey: 50, name: "Race", type: "Race", dateStart: at(r) }];
+  for (const [q, r, want] of [[20, 44, 2], [-2, 20, 3], [-26, -2, 4]]) {
+    const h = harness({ latest: null, sessions: weekend(q, r) });
+    h.DataHub.open("results"); await h.drain();
+    const picked = h.content().selects()[1].children.find((o) => o.selected);
+    assert.equal(picked && picked.value, String(want), `quali ${q} h, race ${r} h`);
+    h.DataHub.close();
+  }
+  const future = harness({ latest: null, sessions: weekend(20, 44).map((x) => ({ ...x, dateStart: at(48) })) });
+  future.DataHub.open("results"); await future.drain();
+  assert.equal(future.content().selects()[1].children.find((o) => o.selected).value, "4", "a weekend with nothing started still defaults to its race");
+  future.DataHub.close();
 });
 
 // M24: leaving TELEMETRY mid-COMPARE used to leave its OpenF1 lane fetches queued in F1API's serialized lane, so the next
@@ -820,4 +845,140 @@ for (const origin of ["live", "results", "telemetry"]) test(`a pending year sele
   assert.equal(h.content().selects()[1].children.find((o) => o.selected).value, "400");
   assert.ok(h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year) && n.classList.contains("active")));
   h.DataHub.close();
+});
+
+// UI hunt 2026-10-29 #11: WATCH opens the hub on "race"; the DATA door then
+// reopened on WATCH & DRIVE because both doors shared one tab memory.
+test("a door's requested tab does not replace the DATA door's remembered tab", async () => {
+  const h = harness();
+  const selected = () => ["schedule", "standings", "race"].find((id) => h.root.find((n) => n.id === "dh-tab-" + id).getAttribute("aria-selected") === "true");
+  h.DataHub.open("race"); await h.drain(); h.DataHub.close();
+  h.DataHub.open(); await h.drain();
+  assert.equal(selected(), "schedule", "DATA after WATCH opens the default tab");
+  h.tab("standings"); await h.drain(); h.DataHub.close();
+  h.DataHub.open("race"); await h.drain(); h.DataHub.close();
+  h.DataHub.open(); await h.drain();
+  assert.equal(selected(), "standings", "the player's own last pick is still remembered");
+  h.DataHub.close(); await h.drain();
+});
+
+// OPENF1'S LIVE WINDOW (W23 #1). The free tier refuses requests from 30 min
+// before a session until 30 min after it ends (https://openf1.org/ FAQ). The
+// cache-bypassing latestSession(0) then answers 401/403, which the transport
+// never papers over with a stale copy — RESULTS/LIVE/TELEMETRY/WATCH all
+// failed as "SERVICE UNAVAILABLE". The fallback is the stored latest session.
+const reasonCard = (h, reason) => h.content().find((n) => n.dataset && n.dataset.reason === reason);
+
+function lockedLatest(h, cached) {
+  const calls = [];
+  h.api.latestSession = (ttl) => {
+    calls.push(ttl);
+    if (ttl === 0 || !cached) {
+      const e = new Error("HTTP 401 for https://api.openf1.org/v1/sessions?session_key=latest");
+      e.status = 401;
+      return Promise.reject(e);
+    }
+    return Promise.resolve(cached);
+  };
+  return calls;
+}
+
+test("a live-window 401 on the latest session opens the cached session under a LIVE SESSION card", async () => {
+  const h = harness();
+  const calls = lockedLatest(h, { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race",
+    dateStart: "2026-10-04T12:00:00Z" });
+  h.DataHub.open("results"); await h.drain();
+  assert.deepEqual(calls, [0, Infinity], "a refused live read falls back to the stored copy, whatever its age");
+  const card = h.content().children.find((n) => n.dataset && n.dataset.reason === "live-auth");
+  assert.ok(card, "the card is keyed live-auth");
+  assert.equal(card.children[0].textContent, "LIVE SESSION IN PROGRESS");
+  assert.equal(card.children[1].textContent.slice(0, 77),
+    "OpenF1's free feed pauses from 30 minutes before a session until 30 minutes a");
+  assert.equal(reasonCard(h, "upstream"), null, "not SERVICE UNAVAILABLE");
+  assert.deepEqual(h.resultKeys, [500], "the cached session's classification still loads");
+  h.DataHub.close();
+});
+
+test("a live-window 403 with no stored session still gives the picker and the card, not an error", async () => {
+  const h = harness();
+  lockedLatest(h, null);
+  h.DataHub.open("results"); await h.drain();
+  assert.ok(reasonCard(h, "live-auth"), "the LIVE SESSION card");
+  assert.equal(reasonCard(h, "upstream"), null);
+  assert.equal(h.content().querySelector(".dh-retry"), null, "not an error with RETRY");
+  assert.ok(h.content().selects().length >= 2, "the GP/session picker is still offered");
+  h.DataHub.close();
+});
+
+test("the lockout is read from err.status: a 500 is still SERVICE UNAVAILABLE", async () => {
+  const h = harness();
+  h.api.latestSession = () => { const e = new Error("Live F1 session in progress"); e.status = 500; return Promise.reject(e); };
+  h.DataHub.open("results"); await h.drain();
+  assert.ok(reasonCard(h, "upstream"), "SERVICE UNAVAILABLE");
+  assert.equal(reasonCard(h, "live-auth"), null);
+  h.DataHub.close();
+});
+
+// W23 #4: the LIVE "updated" stamp read cached weather/drivers keys (it could
+// never see positions or intervals) and fell back to the paint time. It is the
+// time a position or interval request last settled ok.
+test("LIVE's updated stamp is the last position/interval answer, not the paint", async () => {
+  const timers = new Map(); let nextTimer = 0;
+  const clock = { now: Date.parse("2026-10-04T15:00:00Z"),
+    setTimeout(fn, ms) { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
+    clearTimeout(id) { timers.delete(id); } };
+  const h = harness({ clock });
+  const at = (ms) => "updated " + new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const t0 = clock.now;
+  h.DataHub.open("live"); await h.drain();
+  const stamp = () => h.content().querySelector(".dh-live-updated").textContent;
+  assert.equal(stamp(), at(t0));
+  const fail = () => Promise.reject(Object.assign(new Error("HTTP 500"), { status: 500 }));
+  h.api.livePositions = fail; h.api.liveIntervals = fail;
+  clock.now += 60000;
+  h.content().find((n) => n.tagName === "BUTTON" && n.textContent === "↻ REFRESH").dispatch("click");
+  await h.drain();
+  assert.equal(stamp(), at(t0), "weather/drivers alone do not move the stamp");
+  h.DataHub.close();
+});
+
+// Hunt #5694 B2: offline, a request that falls back to its stale cache copy
+// settles ok — the batch must not stamp "updated <now>" over an old payload.
+test("LIVE: a batch served from a stale cache copy keeps the old stamp and says offline copy", async () => {
+  const timers = new Map(); let nextTimer = 0;
+  const clock = { now: Date.parse("2026-10-04T15:00:00Z"),
+    setTimeout(fn, ms) { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
+    clearTimeout(id) { timers.delete(id); } };
+  const h = harness({ clock });
+  const at = (ms) => "updated " + new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const t0 = clock.now;
+  let staleSeq = 0, staleT = null;
+  h.api.staleMark = () => staleSeq;
+  h.api.staleSince = (mark) => (staleSeq > mark ? staleT : null);
+  h.DataHub.open("live"); await h.drain();
+  const stamp = () => h.content().querySelector(".dh-live-updated").textContent;
+  assert.equal(stamp(), at(t0));
+  const ok = h.api.livePositions;
+  h.api.livePositions = (...a) => { staleSeq++; staleT = t0 - 3600000; return ok(...a); };
+  clock.now += 60000;
+  h.content().find((n) => n.tagName === "BUTTON" && n.textContent === "↻ REFRESH").dispatch("click");
+  await h.drain();
+  assert.equal(stamp(), at(t0), "a stale fallback is not an update");
+  const staleBanner = () => h.content().find((n) => n.classList.contains("dh-error") && n.getAttribute("data-state") === "stale");
+  assert.ok(staleBanner(), "an offline-copy banner is up");
+  h.api.livePositions = ok;
+  clock.now += 60000;
+  h.content().find((n) => n.tagName === "BUTTON" && n.textContent === "↻ REFRESH").dispatch("click");
+  await h.drain();
+  assert.equal(stamp(), at(clock.now), "a fresh answer stamps again");
+  assert.equal(staleBanner(), null, "and it is gone after a fresh answer");
+  h.DataHub.close();
+});
+
+test("the standings header ends with Close", async () => {
+  const h = harness();
+  h.DataHub.open("standings"); await h.drain();
+  const close = h.root.find(el => el.id === "dh-close-btn");
+  assert.equal(close.parentNode.lastChild, close);
+  assert.equal(h.root.find(el => el.id === "dh-tab-standings").getAttribute("aria-selected"), "true");
 });

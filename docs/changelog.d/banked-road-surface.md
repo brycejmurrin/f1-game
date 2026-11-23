@@ -1,0 +1,1 @@
+Fixed: Road height, banking, vehicle roll and driving cameras now follow the same surface. Corrected the timing of Spa’s Eau Rouge climb, Monaco’s climb and tunnel, Zandvoort’s dune crests and progressive banking, and surveyed profiles and corner camber across the roster.

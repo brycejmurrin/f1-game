@@ -24,6 +24,26 @@ main {
   padding: var(--pad);
 }
 
+#learn-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+#learn-studio [data-as="preview-side"] {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+  padding: var(--pad);
+  background: var(--surf-1);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+}
+@media (max-width: 900px) {
+  #learn-studio { grid-template-columns: minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"] { position: static; order: -1; }
+}
+
 h1, h2, p { margin: 0; }
 
 .settings label[for="gap"], .reading div, .limits, .instrument, .legend {
@@ -231,6 +251,12 @@ details {
   #learn-studio [data-as="controls"] { order: -2; }
 }
 @media (max-height: 500px) and (min-width: 641px) {
+  #learn-studio { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  #learn-studio [data-as="preview-side"] {
+    order: 0;
+    position: sticky;
+    padding: calc(var(--pad) * .5);
+  }
   canvas { height: 86px; }
   main { padding: .45rem; }
   .instrument button { padding: .15rem .5rem; }

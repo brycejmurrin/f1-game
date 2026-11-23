@@ -77,15 +77,33 @@ function selectors(body) {
   return found;
 }
 
-test("every row-layout branch in track-detail.css requires landscape", () => {
+test("track-detail.css keys its row layout on the sheet's own shape; the one media row branch requires landscape", () => {
   const css = stripComments(fs.readFileSync(path.join(ROOT, "css", "track-detail.css"), "utf8"));
+  // UI scaling contract gap 24 (PR #5156): the phone rail is `#td-inner[data-shape="wide"]`
+  // (SheetShape's zoom-aware aspect, in the sheet's own px), not `@media (orientation)`,
+  // which read the raw window and could not see UI SIZE. Only the large-window upgrade
+  // (a desktop or tablet) stays a media branch, and it still requires landscape.
   const rowBranches = mediaBlocks(css).filter((b) =>
     /#track-detail-body\s*\{[^}]*flex-direction:\s*row/.test(b.body));
-  assert.ok(rowBranches.length >= 2,
-    `expected the landscape rail AND its wide upgrade — found ${rowBranches.length} row branch(es); the layout moved, update this test`);
+  assert.equal(rowBranches.length, 1,
+    `expected ONE media row branch (the ≥900×600 upgrade) — found ${rowBranches.length}; the layout moved, update this test`);
   for (const b of rowBranches) {
     assert.match(b.condition, /orientation:\s*landscape/,
       `a row-layout branch matches without landscape — large portrait gets the side-by-side squeeze back: @media ${b.condition}`);
+    assert.match(b.condition, /min-width:\s*900px/);
+    assert.match(b.body, /#td-inner\[data-shape="wide"\]\s+#track-detail-body\s*\{[^}]*flex-direction:\s*row/,
+      "the upgrade carries the shape prefix, so it outranks the base wide rule instead of losing to its specificity");
+  }
+  const flat = css.replace(/@media[^{]*\{[\s\S]*?\n\}/g, "");
+  assert.match(flat, /#td-inner\[data-shape="wide"\]\s+#track-detail-body\s*\{[^}]*flex-direction:\s*row/,
+    "the phone rail is keyed on the sheet's wide shape");
+  assert.match(flat, /#td-inner\[data-shape="tall"\]\s+#track-detail-panel\s*\{[^}]*border-top/,
+    "the stacked layout is keyed on the sheet's tall shape");
+  for (const b of mediaBlocks(css)) {
+    if (/orientation:\s*portrait/.test(b.condition)) {
+      assert.doesNotMatch(b.body, /#track-detail-(body|panel|canvas-wrap|legend)/,
+        `a portrait media branch still lays out the circuit detail sheet: @media ${b.condition}`);
+    }
   }
 });
 
@@ -102,4 +120,23 @@ test("both large-screen menu blocks in responsive.css guard every selector on de
         `unguarded selector in @media ${b.condition} — it overrides the compact layout: "${sel}"`);
     }
   }
+});
+
+test("css-screens free sheets: cockpit density, career motion tokens, tdc font-size", () => {
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+  const ck = strip(fs.readFileSync(path.join(ROOT, "css", "cockpit-preview.css"), "utf8"));
+  const ce = fs.readFileSync(path.join(ROOT, "css", "career-experience.css"), "utf8");
+  const td = strip(fs.readFileSync(path.join(ROOT, "css", "track-detail.css"), "utf8"));
+  assert.ok(
+    mediaBlocks(ck).length === 0
+      && /\.sheet\[data-density="compact"\]:not\(\[data-shape="tall"\]\)\s+#ckpreview-frame\s*\{[^}]*height:\s*150px/.test(ck)
+      && /:is\(body,\s*\.sheet\)\[data-shape="tall"\]\s+#ckpreview-frame\s*\{[^}]*height:\s*245px/.test(ck)
+      && !/max-height:\s*500px|max-width:\s*600px/.test(ck)
+      && /animation:\s*career-reveal 240ms var\(--ease-out\)/.test(ce)
+      && /calc\(\(3 - var\(--podium-place\)\) \* \(var\(--dur-1\) \* 4 \/ 3\)\)/.test(ce)
+      && /translateY\(calc\(var\(--gap\) \* 1\.5\)\)/.test(ce)
+      && /\.tdc-fast\s*\{[^}]*\}/.test(td) && !/\.tdc-fast\s*\{[^}]*font-size/.test(td)
+      && /\.tdc-corner\s*\{[^}]*font-size:\s*var\(--fs-micro\)/.test(td),
+    "cockpit frame heights key on sheet density/shape (not viewport media); career reveal reads --ease-out / --dur-1 stagger / --gap rise; .tdc-* drops restated font-size"
+  );
 });

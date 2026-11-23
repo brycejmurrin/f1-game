@@ -7,10 +7,10 @@
 (window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack,
-        pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
+        pine, tree, bush, ridge, building, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
-        cameraTower, sponsorHoarding, signBoard, terrainYAt, recordBarrier,
+        fence, guardrail, modelGroup, prop,
+        cameraTower, sponsorHoarding, signBoard, groundUnder, terrainYAt, recordBarrier,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
@@ -67,16 +67,25 @@
       // footprint-guarded and follows the (very slight) plateau relief. The
       // white cross-lines are the Blue Zone's lane markings, which is what
       // stops all that blue reading as a swimming pool from the air.
+      // Join the last apron to the first. A four-node step on a 1,453-node lap
+      // otherwise emits another full tile only one node before the start.
+      const apronStep = Math.max(1, Math.round(15 / ds));
+      const apronStations = Math.floor(n / apronStep);
+      const closingStep = apronStep + n % apronStep;
       for (const side of [-1, 1]) {
-        let i = 0;
-        along(0.0, 1.0, 15, (k, spacing) => {
-          const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
+        for (let i = 0; i < apronStations; i++) {
+          const k = i * apronStep;
+          const atSeam = i === 0 || i === apronStations - 1;
+          const seg = ds * (atSeam ? closingStep : apronStep) * 1.05;
           // ONE colour per band: the old i&1 colour flip chequered the Blue Zone
           // into lilac/blue plates. (drape still alternates its own 0.12 m
           // residue per cell, which keeps overlapped faces off one plane.)
           // Draped, not runoffApron'd: one box at one anchor height across a
           // 30 m band put 203 + 144 + 113 of these wholly under the plateau.
-          const ph = { phase: i };
+          // An odd station count gives both seam tiles the same phase. Put the
+          // closing tile halfway between the two normal drape height levels.
+          const closesOddRun = i === apronStations - 1 && apronStations % 2 === 1;
+          const ph = { phase: i, res: closesOddRun ? 0.06 : 0 };
           drape(k, side, 2.5, [9, 0.16, seg], BLUE, ph);
           drape(k, side, 11.5, [30, 0.14, seg], BLUE_D, ph);
           drape(k, side, 41.5, [26, 0.12, seg], RED, ph);
@@ -85,8 +94,7 @@
           // A second lane-line further out, offset in phase, so the Blue Zone
           // reads as a marked run-off surface and never as open water.
           if (i % 3 === 1) drape(k, side, 48, [20, 0.10, 0.9], LINE, { res: 0.09, line: true });
-          i++;
-        });
+        }
       }
 
       const openRunoff = (s) =>
@@ -221,13 +229,12 @@
         building(K(0.944 + i * 0.013), -1, 40, 30, 9, 15,
           { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        // From 0.94: on the right, 0.90-0.94 is the inside of the Tour hairpin.
-        if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
-        // Gap bumped 58→66: at 58 eight motorhomes sat 0.04 m under grade.
-        motorhome(k, -1, 66 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
-      });
+      // The end of the paddock beside the pit exit has enough level ground for a row of team vehicles.
+      for (let i = 0; i < 8; i++) {
+        const k = K(0.017 + i * 0.003);
+        const h = hash(k * 71 + 31);
+        motorhome(k, -1, 105, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+      }
       broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
 
@@ -266,23 +273,19 @@
           };
           const seg = rowSeg(side * (rows - 1) * depth / 2);
           if (seg <= 0) return;
-          // Scaffold rake: two tube legs per station carrying the whole tier.
           out._mat = MAT.METAL;
-          for (const f of [0.25, 0.85]) {
-            const back = f * rows * depth, up = f * rows * rise;
-            addCyl(out, vadd(vadd(a.c, a.r, side * back), a.u, up * 0.5),
-              0.09, up + 0.4, [0.62, 0.64, 0.68], 5, b);
-          }
           // Diagonal brace — the giveaway that this is a temporary frame.
           addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.55),
             a.u, rows * rise * 0.55), [rows * depth * 1.2, 0.10, 0.10],
             [0.62, 0.64, 0.68], b);
+          const seated = [];
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
             const rs = rowSeg(side * back) || seg;
             if (rs <= 0) continue;
             const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.14, rs], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
+            seated[r] = tier !== false;
             // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
             // Never on a tier the road guard dropped: the figure floats (0.937).
             const h = hash(k * 13 + r * 7);
@@ -292,6 +295,25 @@
               a.t, (h - 0.5) * rs * 0.8), a.u, up + 0.55),
               [0.5, 0.9, 0.55], h < 0.8 ? [0.80, 0.34, 0.28] : [0.30, 0.40, 0.66], b);
             out._mat = MAT.METAL;
+          }
+          // Scaffold rake: two tube legs per station carrying the whole tier.
+          // TRAP A + B (docs/SCENERY-API.md §2): addCyl's `c` is the BASE, so
+          // the old `up * 0.5` centre put every foot half a tier-height in the
+          // air (158 of 162 stations, up to 2.24 m) and the head 1.8 m through
+          // the top row. Each leg now hangs from the centre of the tier over
+          // it down to 0.2 m into the ground under ITS OWN foot — after the
+          // tiers, so a row the road guard dropped leaves no lone pole.
+          for (const f of [0.25, 0.85]) {
+            const back = f * rows * depth, row = Math.min(rows - 1, Math.round(back / depth));
+            if (!seated[row]) continue;
+            const head = vadd(vadd(a.c, a.r, side * back), a.u, 0.5 + row * rise);
+            let foot = head, len = 0;
+            for (let it = 0; it < 2; it++) {   // a.u leans with the gradient: re-sample under the foot
+              const g = terrainYAt(foot[0], foot[2]);
+              len = (head[1] - (g != null ? g : a.c[1] + 0.3) + 0.2) / Math.max(0.5, a.u[1]);
+              foot = vadd(head, a.u, -len);
+            }
+            if (len >= 0.3) addCyl(out, foot, 0.09, len, [0.62, 0.64, 0.68], 5, b);
           }
           out._mat = 0;
         });
@@ -419,7 +441,7 @@
           addCyl(stage, vadd(a.c, a.u, 20), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
           // Windsock on its own mast beside the tower — 16 m along the
           // tangent and 6 m across from the anchor's single ground sample.
-          // TRAP B (docs/SCENERY-GROUNDING.md §2): resample the ground
+          // TRAP B (docs/SCENERY-API.md §2): resample the ground
           // actually under the mast rather than reusing a.c's height.
           const w = vadd(vadd(a.c, a.t, 16), a.r, -6);
           const wy = terrainYAt(w[0], w[2]);
@@ -524,7 +546,7 @@
       // gptoday / RaceFans same weekend. Outside of Tour → right of racing
       // (paddock side = side −1 in this file's convention). Channel length /
       // wall height approximate — no FIA drawing scaled here.
-      // Placed just past Tour apex (0.940) at gap 22 with a short bay — mid-
+      // Placed at 0.940, just past the FIA 2022 T15 apex (0.925; T14 is 0.908), at gap 22 with a short bay — mid-
       // corner spans at gap 14–28 were footprint-rejected on the ribbon fold.
       {
         const a = anchor(K(0.940), -1, 22);
@@ -559,7 +581,7 @@
       }
       for (let i = 0; i < 3; i++) signBoard(K(0.463 + i * 0.010), 1, 8, "braking", 3 - i);   // into the chicane
       signBoard(K(0.052), -1, 8, "corner", 1);
-      signBoard(K(0.705), -1, 9, "corner", 8);
+      signBoard(K(0.705), -1, 9, "corner", 10);   // FIA 2022 T10 (Signes, apex 0.7135)
       // Posted panels, not the theme's LED ribbon: this run stands along the
       // pit straight, where the pit complex rejects the apron, so a post-less
       // ribbon hung 0.15 m over bare ground (24 unsupported prims).
@@ -570,6 +592,23 @@
       cameraTower(K(0.910), -1, 70, { h: 17 });
 
       {
+        const fieldGround = (x, z) => Tracks.terrainY(api.track, x, z) ?? groundUnder(x, z);
+        // Follow the grade between the two ends of each planting strip.
+        const plantRow = (a, offset, length, width, height, color) => {
+          const ends = [-0.5, 0.5].map((sign) => {
+            const p = vadd(a.c, a.t, offset + sign * length);
+            p[1] = fieldGround(p[0], p[2]);
+            return p;
+          });
+          const [lo, hi] = ends;
+          const delta = hi.map((v, i) => v - lo[i]);
+          const span = Math.hypot(...delta);
+          const forward = delta.map((v) => v / span);
+          const right = api.norm([forward[2], 0, -forward[0]]);
+          const up = api.cross(forward, right);
+          const center = lo.map((v, i) => (v + hi[i]) / 2);
+          addBox(out, vadd(center, up, height / 2), [width, height, span], color, [right, up, forward]);
+        };
         const VINE = [0.26, 0.36, 0.20], VINE_D = [0.21, 0.30, 0.17];
         const LAV = [0.44, 0.38, 0.62], LAV_D = [0.36, 0.31, 0.54];
         const SOIL = [0.72, 0.66, 0.52];
@@ -607,33 +646,17 @@
             if (onTrack(a.c[0], a.c[2], 4)) continue;
             const alt = (r & 1);
             if (kind === 0) {
-              // Single vine row at the anchor — segmented offsets were reading
-              // terrainYAt on a different skirt and burying prims 5+ m deep.
-              addBox(out, vadd(a.c, a.u, 1.05), [0.85, 1.5, 112],
-                alt ? VINE : VINE_D, b);
-              // TRAP B (docs/SCENERY-GROUNDING.md §2): the posts walk up to
-              // 54 m along the tangent from a.c's single ground sample —
-              // reusing that height stranded them up to ~2 m in the air on
-              // this rolling plateau. Re-seat each post on the ground
-              // actually under it; clamp to ±2.5 m of the row anchor so a
-              // far sample cannot drop a post under the plateau.
+              for (const t of [-28, 28]) plantRow(a, t, 56, 0.85, 1.5, alt ? VINE : VINE_D);
+              // Posts can be 54 m from the row centre and cross a different slope.
               for (const t of [-54, -18, 18, 54]) {
                 const pbase = vadd(a.c, a.t, t);
-                const py_ = terrainYAt(pbase[0], pbase[2]);
-                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
+                pbase[1] = fieldGround(pbase[0], pbase[2]);
                 addCyl(out, vadd(pbase, a.u, 0.1), 0.07, 2.0,
                   [0.52, 0.44, 0.32], 4, b);
               }
             } else {
               // Lavender: two mid-length segments (was four — props-tris budget).
-              for (const t of [-22, 22]) {
-                const pbase = vadd(a.c, a.t, t);
-                const py_ = terrainYAt(pbase[0], pbase[2]);
-                if (py_ != null && Math.abs(py_ - a.c[1]) < 2.5) pbase[1] = py_;
-                else pbase[1] = a.c[1];
-                addBox(out, vadd(pbase, a.u, 0.75), [1.9, 1.25, 40],
-                  alt ? LAV : LAV_D, b);
-              }
+              for (const t of [-22, 22]) plantRow(a, t, 40, 1.9, 1.25, alt ? LAV : LAV_D);
             }
           }
         }

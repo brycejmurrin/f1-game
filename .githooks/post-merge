@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# .githooks/post-merge — a pull or merge can change the sources of the gitignored
+# generated files; rebuild them exactly as post-checkout does (that file explains).
+exec bash "$(dirname "$0")/post-checkout" "$@"

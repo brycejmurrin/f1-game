@@ -2,7 +2,7 @@
   "name": "apex-tools",
   "serverInfo": {
     "name": "apex-tools-mcp",
-    "version": "1.17.0"
+    "version": "1.19.0"
   },
   "prefix": "apex_",
   "stdio": {
@@ -23,7 +23,7 @@
     ]
   },
   "tools": [
-    "apex_diagnostics",
+    "apex_claude_agents",
     "apex_garage_plan",
     "apex_ui_mission_plan",
     "apex_ui_inspect",
@@ -35,7 +35,6 @@
     "apex_debug_chrome",
     "apex_catalog",
     "apex_help",
-    "apex_locations",
     "apex_doctor",
     "apex_eval",
     "apex_shot",
@@ -43,7 +42,6 @@
     "apex_agent",
     "apex_garage",
     "apex_select_specs",
-    "apex_rotate_markings_check",
     "apex_graph_parity",
     "apex_frame_report",
     "apex_cursor_agents",
@@ -52,14 +50,11 @@
     "apex_hud_mock",
     "apex_track",
     "apex_profile",
-    "apex_profile_query",
     "apex_job_start",
     "apex_job_status",
     "apex_job_cancel",
     "apex_ui_fit",
     "apex_ui_shot",
-    "apex_car_audit",
-    "apex_track_audit",
     "apex_unit_test",
     "apex_viewer"
   ]

@@ -16,6 +16,40 @@ const CLI = path.join(ROOT, "tools/mcp/cdmcp-cli.py");
 const BG = path.join(ROOT, "tools/mcp/cdmcp-bg.mjs");
 const N10 = path.join(ROOT, "tools/lighting/look-survey-n10.mjs");
 
+test("apex-shot build failure refuses server reuse/start and MCP navigation", () => {
+  const r = spawnSync("python3", ["-c", `
+import importlib.util, subprocess, tempfile
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("cdmcp_cli", ${JSON.stringify(CLI)})
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory(dir=${JSON.stringify(path.join(ROOT, "scratch"))}) as d:
+    m.ROOT = Path(d)
+    builder = m.ROOT / "tools/gen/ensure-built.mjs"
+    builder.parent.mkdir(parents=True)
+    builder.write_text('console.error("fixture builder failed"); process.exit(7);')
+    def forbidden(*args, **kwargs):
+        raise AssertionError("server or MCP continued after failed build")
+    original_popen = subprocess.Popen
+    def only_builder(argv, *args, **kwargs):
+        if argv[0] != "node":
+            forbidden()
+        return original_popen(argv, *args, **kwargs)
+    m._port_open = forbidden
+    m.subprocess.Popen = only_builder
+    m.McpClient = forbidden
+    try:
+        m.cmd_apex_shot(["--no-file"])
+    except subprocess.CalledProcessError as e:
+        assert e.returncode == 7, e
+    else:
+        raise AssertionError("failed builder was ignored")
+print("refused before server and MCP")
+`], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.stdout, "refused before server and MCP\n");
+  assert.equal(r.stderr, "fixture builder failed\n");
+});
+
 test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
   assert.ok(fs.existsSync(MEASURE));
   assert.ok(fs.existsSync(BG));
@@ -121,7 +155,7 @@ test("cdmcp-lamps.py documents --port and APEX_PORT", () => {
 test("cdmcp-bg with no args exits 2 and prints usage", () => {
   const r = spawnSync("node", [BG], { encoding: "utf8" });
   assert.equal(r.status, 2);
-  assert.match(r.stderr + r.stdout, /usage:/);
+  assert.equal(r.stderr + r.stdout, "usage: node tools/mcp/cdmcp-bg.mjs <boot|ui|full> [--port N] [--url URL] [--force]\n       node tools/mcp/cdmcp-bg.mjs --status | --wait | --stop\n       node tools/mcp/cdmcp-bg.mjs --help\n");
 });
 
 test("cdmcp-bg --help exits 0 and does NOT detach a measure", () => {
@@ -132,9 +166,7 @@ test("cdmcp-bg --help exits 0 and does NOT detach a measure", () => {
     : null;
   const r = spawnSync("node", [BG, "--help"], { encoding: "utf8", cwd: ROOT, timeout: 5000 });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /usage:/);
-  assert.match(r.stdout, /--status/);
-  assert.doesNotMatch(r.stdout, /> cdmcp-measure/);
+  assert.equal(r.stdout, "usage: node tools/mcp/cdmcp-bg.mjs <boot|ui|full> [--port N] [--url URL] [--force]\n       node tools/mcp/cdmcp-bg.mjs --status | --wait | --stop\n       node tools/mcp/cdmcp-bg.mjs --help\n");
   const after = fs.existsSync(path.join(ROOT, "artifacts/logs/cdmcp-bg.json"))
     ? fs.readFileSync(path.join(ROOT, "artifacts/logs/cdmcp-bg.json"), "utf8")
     : null;
@@ -146,13 +178,13 @@ test("cdmcp-cli --help exits 0 (not 'unknown: --help')", () => {
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /list-tools/);
   assert.match(r.stdout, /apex-shot/);
-  assert.doesNotMatch(r.stderr, /unknown/);
+  assert.equal(r.stderr, "");
 });
 
 test("cdmcp-bg --status is safe when idle", () => {
   const r = spawnSync("node", [BG, "--status"], { encoding: "utf8", cwd: ROOT });
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /cdmcp-measure/);
+  assert.equal(r.stdout, "cdmcp-measure   (no run recorded)\n");
 });
 
 test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip", () => {
@@ -205,7 +237,7 @@ assert "builtNight" in js
 print("ok")
 `], { encoding: "utf8", cwd: ROOT });
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  assert.match(r.stdout, /ok/);
+  assert.equal(r.stdout, "ok\n");
 });
 
 test("N10 look-survey command is dry-runnable and targets ignored artifacts", () => {
@@ -220,9 +252,7 @@ test("N10 look-survey command is dry-runnable and targets ignored artifacts", ()
   const plan = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/lighting/look-survey-n10.json"), "utf8"));
   assert.ok(plan.tracks.length >= 1, "the N10 plan names circuits");
   for (const { id } of plan.tracks) assert.match(r.stdout, new RegExp(`\\b${id}\\b`));
-  assert.match(r.stdout, /artifacts\/lighting\/sheets/);
-  assert.match(r.stdout, /cdmcp-cli\.py look-survey/);
-  assert.match(r.stdout, /look-survey-sheet\.py/);
+  assert.equal(r.stdout, "tracks: anderstorp, brands_hatch, buddh, dijon, donington, fuji, jerez, korea, mont_tremblant, mosport, okayama, zolder\n$ python3 tools/mcp/cdmcp-cli.py look-survey --plan tools/lighting/look-survey-n10.json\n$ python3 tools/lighting/look-survey-sheet.py anderstorp brands_hatch buddh dijon donington fuji jerez korea mont_tremblant mosport okayama zolder --out artifacts/lighting/sheets\n");
 });
 
 test("lamps tuner fatal navigation keeps exit, terminal marker and report failed", () => {
@@ -254,7 +284,7 @@ with tempfile.TemporaryDirectory(dir=${JSON.stringify(path.join(ROOT, "scratch")
   assert.equal(result.exit, 1);
   assert.equal(result.terminal, "failed");
   assert.equal(result.status, "failed");
-  assert.match(result.failures.join("\n"), /navigation failed: ERR_CONNECTION_REFUSED/);
+  assert.equal(result.failures.join("\n"), "navigation failed: ERR_CONNECTION_REFUSED");
 });
 
 test("measure retains complete private JSON beyond the former saved-character cap", () => {

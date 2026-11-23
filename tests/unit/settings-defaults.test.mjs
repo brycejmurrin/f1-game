@@ -123,7 +123,7 @@ test("an unlisted key is untouched — the override is opt-in per key", () => {
 });
 
 test("settings-export reports the shipped default, so CHANGED stays true", () => {
-  const src = fs.readFileSync(new URL("../../js/ui/settings-export.js", import.meta.url), "utf8");
+  const src = fs.readFileSync(new URL("../../js/ui/settings-export-body.js", import.meta.url), "utf8");   // LAZY_SAVES_DATA (#4748)
   const fn = src.slice(src.indexOf("function defaultOf("), src.indexOf("\n}", src.indexOf("function defaultOf(")));
   assert.match(fn, /SettingsDefaults\.has\(row\.k\)/,
     "defaultOf must consult SettingsDefaults, or an export lists keys as changed that the player never touched");
@@ -145,6 +145,7 @@ test("a SUBSYSTEM key is never silently promoted to a shipped default", () => {
   // with its reason. Adding one here is that decision, reviewed; a drive-by
   // export still fails the loop below.
   const DELIBERATE = {
+    sound: "The November 20 owner profile explicitly sets the fresh-install master switch off.",
     unlimitedBudget: "FREE BUILD ships on (2026-10-09): the shipped garage builds exceed Parts.BUDGET, so with the cap on 8 of 11 teams have no clickable part row on a fresh install",
   };
   for (const [k, why] of Object.entries(review)) {

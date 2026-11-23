@@ -1,5 +1,7 @@
 # Can the agent surface improve itself? — research, 2026-09-22
 
+Summary: Should each session write what it learned back into the rules? Measured answer: mostly no. Agentic context files grow +226% over their lifetime and old instructions get HARDER to delete (hazard -0.032/commit); a 288-run ablation finds context files do not move correctness (p=1.00) but do move token cost; an agent scoring its own edits put 15 of 35 runs below a random baseline while every one self-reported >=0.70. What the evidence backs instead: expiry, a rationale requirement, a budget on the always-on surface, and promotion of a lesson into a hook or a test rather than into prose. Includes what this tree already does better than the literature, and the CVSS 7.8 reason an instruction file must stay review-gated.
+
 Companion to [`AGENT-TOOLING-RESEARCH-2026-09-22.md`](../archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md),
 which asked whether the surface matches current guidance. This asks a different
 question: **should each session write what it learned back into `AGENTS.md`, the

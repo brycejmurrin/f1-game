@@ -42,8 +42,10 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { gpuMemInitSource, gpuMemSnapshot, createAttribution } from "./gpu-mem-webgpu.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseUploads, analyseMirrorChurn, analyseMirrorAllocs, analyseDepthTargets, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
+import { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
@@ -90,8 +92,11 @@ if (argv.includes("--help") || argv.includes("-h")) {
                                   montreal|monza; per cycle the live GPUBuffer/GPUTexture count and MB
                                   (device-side counter, mem-cycles-lib.mjs), three's render objects and
                                   heap; out.memCycles.verdict = plateau|growing over the second half
+  --lavapipe                      Dawn on Mesa Lavapipe (the gfx-probe pair): three's WebGPU path in a
+                                  GPU-less container, for COUNTS (passes, store ops, mips), never ms
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
+  --ls apex26.garageEvidence=phone|desktop  opt-in menu-full TLX/WebGPU garage trace, six frames and video
   --json out.json  --shot out.png   checkpointed JSON; screenshots (+ per-A/B captures)
   --boot-timeout MS  --race-timeout MS
   --profile DIR  --port N         a PERSISTENT browser profile and a fixed server port: run twice
@@ -186,13 +191,22 @@ const log = (m) => console.log(`[game-check] ${m}`);
 const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
   glErrDrain: glErrDrainEveryPresent ? "present" : "beat", entry };
 const { server, port } = await serve();
+const LAVAPIPE = argv.includes("--lavapipe");
 const launchOpts = {
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
-  args: ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
+  args: LAVAPIPE ? [...WEBGPU_LAVAPE_CHROMIUM_ARGS, "--headless=new"]
+    : ["--enable-unsafe-webgpu", ...(process.platform === "linux" ? ["--no-sandbox"] : [])],
+  ...(LAVAPIPE ? { env: { ...process.env, ...WEBGPU_LAVAPE_ENV } } : {}),
 };
 // --profile: one persistent context in place of browser + newContext. `launch` says whether the
 // profile already held a run (a returning player's launch) or was empty (the first ever).
 const PROFILE = flag("--profile", null);
+// Diagnostic-only capture; the existing workflow forwards --ls without another dispatch input.
+// https://playwright.dev/docs/videos and /docs/api/class-video (context close flushes video).
+const garageCapture = !PROFILE && entry === "menu-full" && backend === "three" && path3 === "webgpu"
+  ? (extraLs.join(" ").match(/apex26\.garageEvidence=(phone|desktop)\b/) || [])[1] : null;
+const garageViewport = garageCapture === "phone" ? { width: 844, height: 390 } : { width: 1280, height: 720 };
+let captureContext = null, captureVideo = null;
 let persistent = null, browser;
 if (PROFILE) {
   out.profile = { dir: PROFILE, launch: existsSync(join(PROFILE, "Default")) ? "warm" : "cold", port };
@@ -212,8 +226,12 @@ checkpoint("browser-launched");
 // written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
 const console_ = [];
 try {
-  const ctx = persistent || await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctx = persistent || await browser.newContext({ viewport: garageViewport,
+    ...(garageCapture ? { recordVideo: { dir: dirname(jsonAt || "."), size: garageViewport } } : {}),
+    ...(garageCapture === "phone" ? { hasTouch: true, isMobile: true, deviceScaleFactor: 2,
+      userAgent: "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36" } : {}) });
   const page = await ctx.newPage();
+  if (garageCapture) { captureContext = ctx; captureVideo = page.video(); }
   page.on("console", (m) => { if (console_.length < 200) console_.push(`${m.type()}: ${m.text()}`.slice(0, 300)); });
   page.on("pageerror", (e) => console_.push("pageerror: " + String(e && e.message).slice(0, 300)));
   // A renderer crash makes every later page.evaluate hang FOREVER rather than
@@ -223,6 +241,9 @@ try {
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
   if (memCycles) await page.addInitScript(gpuObjectCounter);
+  // The WebGPU allocation wrapper (tools/gfx/gpu-mem-webgpu.mjs, #4783 row 3 / #4710): requested bytes by format and
+  // an UNSAMPLED label + stack row per createBuffer / createTexture in the armed window. A no-op without a GPUDevice.
+  await page.addInitScript(gpuMemInitSource({ armed: false }));
   await page.addInitScript(([be, p, ls, drainEvery, pick]) => {
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
@@ -243,8 +264,10 @@ try {
     const _hCAP = 40000;
     const _hT = new Float64Array(_hCAP), _hD = new Float64Array(_hCAP);
     const _hP = new Int16Array(_hCAP);
-    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [];
-    const _hSig = [];
+    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [], _hSub = 0, _hOpsCur = [], _hDraws = 0;
+    // #4783 row 6: every armed pass with a depth attachment, keyed "depth view | colour attachments" (analyseDepthTargets).
+    const _hDepthT = new Map();
+    const _hSig = [], _hOps = [], _hSubs = [];   // store inventory (frame-hitch analysePassOps): first 600 frames
     // THE PASS CENSUS, and the reason it belongs HERE rather than only in the
     // container. tlx-shadow.js sizes its maps by `softwareGL`: SUN_SIZE is 512
     // on a software adapter and 2048 on a real desktop, CAR_SIZE 256 against
@@ -270,6 +293,47 @@ try {
     // aggregate by signature — the answer wanted is a function name in our
     // own files, below three's, so keep enough frames to walk through three.
     const _hStacks = new Map();
+    // UPLOAD ATTRIBUTION (perf hunt 6): writeBuffer / createBuffer in the armed window, keyed by the first
+    // game-side frames of the caller. 1 call in UP_EVERY is stack-sampled (n and KB are scaled back up), so the
+    // runner pays ~11 stacks a frame, not ~90; out.uploads ranks the sites by KB. Random, not every 8th call: a
+    // frame whose call count is a multiple of 8 would sample the same call sites every frame and never the rest.
+    const UP_EVERY = 8, _hUp = new Map();
+    // GPU hunt 3: EVERY armed writeBuffer (and createBuffer, keyed "create:<group>") by its buffer's group (three labels a uniform buffer
+    // "bindingBuffer<id>_<group>_(stages)"; the id is per buffer, so the sampled rows above scatter one
+    // group over hundreds of keys and the top-60 cut drops most of it). Exact, unsampled; unlabeled = "(none)".
+    const _hUpGroup = new Map();
+    const _upGroup = (bytes, buf, kind) => {
+      if (!_hArmed) return;
+      // The id reads "undefined" for a buffer three made outside a bindings group (run 42943667972: 23 rows named
+      // bindingBufferundefined_UniformBuffer_N), so strip that spelling too.
+      const l = (buf && buf.label) || "", g = l ? l.replace(/^bindingBuffer(?:\d+|undefined)_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
+      const k = kind ? kind + ":" + g : g;
+      const r = _hUpGroup.get(k) || { n: 0, b: 0, sizes: new Map() };
+      r.n++; r.b += bytes;
+      // The write sizes of the group (#4783 row 4: a uniform group writes whole blocks, so its strides are few).
+      if (r.sizes.has(bytes) || r.sizes.size < 8) r.sizes.set(bytes, (r.sizes.get(bytes) || 0) + 1);
+      _hUpGroup.set(k, r);
+    };
+    const _upNote = (kind, kb, buf) => {
+      if (!_hArmed || Math.random() * UP_EVERY >= 1) return;
+      let site = "?", lib = "";
+      try {
+        const prevLimit = Error.stackTraceLimit;
+        Error.stackTraceLimit = 60;
+        let raw;
+        try { raw = (new Error().stack || "").split("\n").slice(3); } finally { Error.stackTraceLimit = prevLimit; }
+        const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
+        const ours = fr.filter((l) => !/three\.webgpu|three\.core|three\.tsl|gpu-game-check|<anonymous>/.test(l) && /\.js:/.test(l));
+        // three's own path names WHAT is uploaded (a uniform group, an attribute, an index): its function names
+        // only (the minified line:col changes per build).
+        lib = fr.filter((l) => /three\.webgpu/.test(l)).slice(0, 3).map((l) => l.split(" ")[0]).join("<");
+        site = ours.slice(0, 3).join(" <- ") || "(three only)";
+      } catch (_) { /* the totals still stand */ }
+      const tag = (buf && buf.label ? buf.label : "") + "#" + Math.round(kb * 1024) + "B";
+      const key = kind + " :: " + tag + " :: " + lib + " :: " + site, r = _hUp.get(key) || { n: 0, kb: 0 };
+      r.n += UP_EVERY; r.kb += kb * UP_EVERY;
+      _hUp.set(key, r);
+    };
     let _hStackBudget = 200;
     // createShaderModule, not createRenderPipeline: patch 7 moved the lazy
     // WebGPU path to createRenderPipelineAsync, so run 202 had nothing to
@@ -360,6 +424,10 @@ try {
       wrapCall(GD, "createShaderModule", "gpu.createShaderModule");
       wrapCall(GD, "createBindGroup", "gpu.createBindGroup");
       wrapCall(GD, "createBuffer", "gpu.createBuffer");
+      if (GD && typeof GD.createBuffer === "function") {
+        const origCB = GD.createBuffer;
+        GD.createBuffer = function (desc) { try { _upNote("createBuffer", ((desc && desc.size) || 0) / 1024, desc); _upGroup((desc && desc.size) || 0, desc, "create"); } catch (_) { /* count only */ } return origCB.apply(this, arguments); };
+      }
       // The upload side: how many writes a frame makes and how many KB they
       // carry (size is elements for a typed array, bytes for an ArrayBuffer).
       const GQ = window.GPUQueue && window.GPUQueue.prototype;
@@ -371,12 +439,18 @@ try {
             const per = (data && data.BYTES_PER_ELEMENT) || 1;
             const bytes = size != null ? size * per : ((data && data.byteLength) || 0) - ((dataOffset || 0) * per);
             _bumpWorkN("gpu.writeBufferKB", Math.max(0, bytes) / 1024);
+            _upNote("writeBuffer", Math.max(0, bytes) / 1024, buffer);
+            _upGroup(Math.max(0, bytes), buffer);
           } catch (_) { /* the count stands without the size */ }
           const t = performance.now();
           try { return origWB.apply(this, arguments); } finally { _bumpWorkN("gpu.writeBufferMs", performance.now() - t); }
         };
       }
       wrapCall(GQ, "submit", "gpu.submit");
+      if (GQ && typeof GQ.submit === "function") {
+        const origSub = GQ.submit;
+        GQ.submit = function () { if (_hArmed) _hSub++; return origSub.apply(this, arguments); };
+      }
       wrapCall(GQ, "writeTexture", "gpu.writeTexture");
       wrapCall(GQ, "copyExternalImageToTexture", "gpu.copyExternalImageToTexture");
       wrapCall(GD, "createTexture", "gpu.createTexture");
@@ -395,6 +469,13 @@ try {
       wrapCall(GCC, "getCurrentTexture", "gpu.getCurrentTexture");
       const GRP = window.GPURenderPassEncoder && window.GPURenderPassEncoder.prototype;
       wrapCall(GRP, "end", "gpu.passEnd");
+      // Draws in the armed window (#4783 row 4: object-group writes are bounded by them). Counted, not timed: a
+      // timer on every draw would cost more than the draw's own encode.
+      for (const dn of ["draw", "drawIndexed", "drawIndirect", "drawIndexedIndirect"]) {
+        if (!GRP || typeof GRP[dn] !== "function") continue;
+        const origD = GRP[dn];
+        GRP[dn] = function () { if (_hArmed) _hDraws++; return origD.apply(this, arguments); };
+      }
       wrapCall(GD, "createBindGroupLayout", "gpu.createBindGroupLayout");
       wrapCall(GD, "createPipelineLayout", "gpu.createPipelineLayout");
       wrapCall(GD, "createSampler", "gpu.createSampler");
@@ -474,6 +555,20 @@ try {
                 if (lo) sig += ":" + lo;
               } catch (_) { sig = "?"; }
               _hSigCur.push(sig);
+              try {
+                const parts = [], ca = (desc && desc.colorAttachments) || [], ds = desc && desc.depthStencilAttachment;
+                for (let i = 0; i < ca.length; i++) {
+                  const v = ca[i] && (ca[i].view || ca[i].resolveTarget);
+                  if (ca[i]) parts.push(((v && v.__sig) || "?") + ":" + ca[i].loadOp + ">" + ca[i].storeOp);
+                }
+                const colourN = parts.length;
+                if (ds) parts.push("d:" + ds.depthLoadOp + ">" + ds.depthStoreOp);
+                _hOpsCur.push(parts.join("+") || "empty");
+                if (ds) {
+                  const dk = ((ds.view && ds.view.__sig) || "?") + " | " + (parts.slice(0, colourN).join("+") || "none");
+                  _hDepthT.set(dk, (_hDepthT.get(dk) || 0) + 1);
+                }
+              } catch (_) { _hOpsCur.push("?"); }
             }
           }
           const _t1 = performance.now();
@@ -587,29 +682,37 @@ try {
               _hT[_hN] = a; _hD[_hN] = performance.now() - a;
               _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
               if (_hN < 4000) _hSig.push(_hSigCur);
+              if (_hN < 600) { _hOps.push(_hOpsCur); _hSubs.push(_hSub); }
               if (_hWorkCur !== null && _hWorkFrames.length < 4000) _hWorkFrames.push([_hN, _hWorkCur]);
               _hN++;
               const lf = _lhFrames();
               if (lf >= 0 && lf !== _lhLast && _gfN < _hCAP) { _gfT[_gfN++] = performance.now(); _lhLast = lf; }
             }
-            _hPass = 0; _hSigCur = []; _hWorkCur = null;
+            _hPass = 0; _hSigCur = []; _hOpsCur = []; _hSub = 0; _hWorkCur = null;
           }
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hUp.clear(); _hUpGroup.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null; _hDraws = 0; _hDepthT.clear();
+          try { const gm = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (gm) { gm.sites.clear(); gm.armedCreates = 0; gm.armedBuffers = 0; gm.armedTextures = 0; gm.siteOverflow = 0; gm.armed = true; } } catch (_) { /* no WebGPU on this leg */ }
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
-        disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames(); },
+        disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames();
+          try { const gm = window.GPUDevice && window.GPUDevice.prototype.__gmw; if (gm) gm.armed = false; } catch (_) { /* no WebGPU on this leg */ } },
         dump: () => ({ win: Object.assign({}, _win), gameFrameT: Array.from(_gfT.subarray(0, _gfN)),
                        gaps: _gGaps, marks: window.__apexMarks || {}, longTasks: window.__apexLongTasks || [],
                        loaf: window.__apexLoaf || [], loafObserver: window.__apexLoafObserver,
                        t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
-                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
+                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig, opsSig: _hOps, submits: _hSubs,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
                        workFrames: _hWorkFrames,
-                       stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
+                       stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30),
+                       uploads: [..._hUp.entries()].map(([k, r]) => ({ site: k, n: r.n, kb: +r.kb.toFixed(1) }))
+                         .sort((a, b) => b.kb - a.kb || b.n - a.n).slice(0, 60),
+                       uploadGroups: [..._hUpGroup.entries()].map(([g, r]) => ({ group: g, n: r.n, kb: +(r.b / 1024).toFixed(2), sizes: [...r.sizes.entries()].sort((a, b) => b[1] - a[1]) }))
+                         .sort((a, b) => b.n - a.n),
+                       draws: _hDraws, depthTargets: [..._hDepthT.entries()] }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -751,6 +854,7 @@ try {
         try { await page.selectOption("#rs-time-sel", tod, { timeout: 10000 }); m.tod = await page.$eval("#rs-time-sel", (s) => s.value); }
         catch (e) { m.todError = String((e && e.message) || e).slice(0, 100); }
       }
+      if (garageCapture) await page.selectOption("#rs-weather-sel", garageCapture === "phone" ? "rain" : "dry");
       const tw = Date.now();
       await page.evaluate(prepTimelineStart).catch(() => {});
       try { await page.waitForFunction(menuPrepReady, null, { polling: 100, timeout: menuTimeout }); m.prepReady = true; }
@@ -770,9 +874,39 @@ try {
       m.atGo = await prep();
       m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
         return g ? { ready: g.ready, garageReady: g.garageReady, last: g.last } : null; }).catch(() => null);
+      if (garageCapture) {
+        await page.waitForFunction(() => { const e = window.__apex.garageCam().exterior;
+          return e?.status === "ready" && e.weather === document.getElementById("rs-weather-sel").value && e.tod === document.getElementById("rs-time-sel").value;
+        }, null, { polling: 100, timeout: 30000 });
+        m.garageEvidence = { profile: garageCapture, viewport: garageViewport, source: process.env.GITHUB_SHA || null, frames: [],
+          before: await page.evaluate(() => ({ exterior: __apex.garageCam().exterior, saved: localStorage.getItem("apex26.camMode"),
+            weather: document.getElementById("rs-weather-sel").value, tod: document.getElementById("rs-time-sel").value, help: __apex.agentHelp() })) };
+        await page.evaluate(() => { window.__garageEvidence = []; window.__garageEvidenceOn = true;
+          const at = performance.now(); function tick() { if (!window.__garageEvidenceOn) return;
+            if (window.__garageEvidence.length < 1200) window.__garageEvidence.push({ t: performance.now() - at,
+              phase: document.getElementById("loading").dataset.phase, exterior: __apex.garageCam().exterior, state: __apex.info().state });
+            requestAnimationFrame(tick); } requestAnimationFrame(tick); });
+      }
       await page.evaluate(() => window.__apexMark("raceCall"));
       await page.locator("#rs-go").click({ timeout: 60000 });
       step("start-race");
+      if (garageCapture) {
+        await page.waitForFunction(() => document.getElementById("loading").dataset.phase === "garage", null, { polling: 100, timeout: 60000 });
+        for (let i = 0; i < 6; i++) {
+          const shotAt = (jsonAt || "game-capture.json").replace(/\.json$/, ".garage-" + i + ".png");
+          const fresh = await freshFrame("garage-" + i);
+          if (fresh && fresh.error) throw new Error("Garage frame refresh failed: " + fresh.error);
+          await page.screenshot({ path: shotAt, timeout: 15000 });
+          m.garageEvidence.frames.push({ path: shotAt, at: Date.now(), observed: await page.evaluate(() => ({
+            phase: document.getElementById("loading").dataset.phase, state: __apex.info().state, exterior: __apex.garageCam().exterior })) });
+          checkpoint("garage-capture", { menu: m });
+          await page.waitForTimeout(1900);
+        }
+        m.garageEvidence.after = await page.evaluate(() => { window.__garageEvidenceOn = false;
+          return { trace: window.__garageEvidence, saved: localStorage.getItem("apex26.camMode") }; });
+        if (!m.garageEvidence.after.trace.some(x => x.phase === "garage" && x.exterior?.visible && x.exterior.weather === m.garageEvidence.before.weather && x.exterior.tod === m.garageEvidence.before.tod)) throw new Error("Garage exterior was not drawn");
+        if (m.garageEvidence.before.saved !== m.garageEvidence.after.saved) throw new Error("Garage changed saved driving camera");
+      }
       m.ok = true;
     } catch (e) {
       m.ok = false; m.error = String((e && e.message) || e).slice(0, 160);
@@ -783,7 +917,7 @@ try {
 
   // menu-full: PLAYER PACE (LoadingScreen.isAutomation honours ?fullIntro=1) —
   // the garage drive-out and the flyby a harness otherwise skips.
-  await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1${entry === "menu-full" ? "&fullIntro=1" : ""}`,
+  await page.goto(`http://127.0.0.1:${port}/index.html?${garageCapture ? "" : "gfxdebug=1&"}${entry === "menu-full" ? "fullIntro=1" : ""}`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
   // 120 s. This was once raised to 300 s on the theory that windows-latest was
@@ -838,6 +972,7 @@ try {
   } else {
     out.menu = await enterViaMenu(tod);
     checkpoint("menu-entry", { menu: out.menu });
+    if (garageCapture && !out.menu.ok) throw new Error("Garage capture failed: " + out.menu.error);
   }
   out.timeOfDay = tod || "(default)";
   checkpoint("race-called");
@@ -1005,6 +1140,18 @@ try {
     const s = t.postState();
     return s ? Object.assign({ on: s.on !== false }, s.depth || {}) : null;
   }), 10000, "depth-read");
+  // GPU hunt 3: the mirror's and the TLX churn counters at BOTH ends of the armed window. The
+  // backends' mirror `renders` is reset by a target re-allocation on WGX and GLX (a lifetime count
+  // on TLX), so one end-of-window read cannot compare cadence across legs; the deltas can.
+  const readMirChurn = () => bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    let m = null, c = null;
+    try { m = A.mirror ? A.mirror() : null; } catch (_) { /* no mirror pass */ }
+    try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const s = t && t.memState ? t.memState() : null; c = s && s.churn ? Object.assign({}, s.churn) : null; } catch (_) { /* not TLX */ }
+    const b = (m && m.backend) || {};
+    return { drawn: m ? m.drawn : null, quality: m ? m.quality : null, renders: b.renders, glass: b.glass, allocs: b.allocs, churn: c };
+  }), 10000, "mirror-churn-read").catch((e) => ({ error: String((e && e.message) || e).slice(0, 80) }));
+  const _mc0 = await readMirChurn();
   const _depth0 = await readDepth();
   try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
   // WHERE THE CPU TIME GOES over the same window, by function. Census 201
@@ -1082,6 +1229,9 @@ try {
             // whether tlx.js is minting materials (MAT_CACHE_CAP evictions
             // re-mint a material and so a program). The container measured
             // this parked; the driven window is where it can move.
+            // #4710 item 2: the mirror target's allocation count and size at every beat, so a re-allocation has a beat
+            // and a size change beside it (analyseMirrorAllocs).
+            mir: (() => { try { const m = A && A.mirror ? A.mirror() : null, b = (m && m.backend) || null; return b ? { allocs: b.allocs, w: b.w, h: b.h, mips: b.mips, q: m.quality } : null; } catch (_) { return null; } })(),
             mm: (() => { try { const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null; const m = t && t.memState ? t.memState() : null;
               return m ? { progs: m.progs, mats: m.mats, pool: m.pool, hit: m.matHit, miss: m.matMiss, evict: m.matEvict, keys: m.matMissKeys || null } : null; } catch (_) { return null; } })(),
             // THE HITCH SIGNATURE. p99 against p50 over the last 2048 frames:
@@ -1108,6 +1258,7 @@ try {
   // The driven window ends with the last beat (hunt 4 I4).
   await bounded(() => page.evaluate(() => window.__gcHitch && window.__gcHitch.disarm()), 10000, "disarm");
   const _depth1 = await readDepth();
+  const _mc1 = await readMirChurn();
   // WHICH CAMERA THE WINDOW DROVE, and the mirror it left (hunt 4 H5): the
   // director or a cut could have moved it, and mipFull says whether the
   // cockpit glass latched the full chain. backend fields per gfx.mirrorState().
@@ -1119,7 +1270,7 @@ try {
     const b = (m && m.backend) || {};
     const pick = (o, ks) => { const r = {}; for (const k of ks) if (o[k] !== undefined) r[k] = o[k]; return r; };
     return { mode, mirror: m ? { ...pick(m, ["mode", "shown", "cam", "drawn"]),
-      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull"]) } : null };
+      backend: pick(b, ["ready", "renders", "glass", "w", "h", "mips", "mipCap", "mipFull", "glassLod"]) } : null };
   }), 10000, "camera-end");
   if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
   out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };
@@ -1175,7 +1326,25 @@ try {
     out.gpuWork = (d.work && d.work.length) ? Object.fromEntries(d.work)
       : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
     out.compileStacks = d.stacks || [];
+    // Per-frame upload sites (perf hunt 6): n and KB over the armed window, divide by window.frames for /f.
+    out.uploads = d.uploads || [];
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
+    out.uploadsSummary = analyseUploads(out.uploads, out.window && out.window.frames);
+    out.mirrorWindow = analyseMirrorChurn(_mc0, _mc1, out.window && out.window.frames);
+    // GPU hunt 3: writeBuffer per frame by buffer group, every call counted (not sampled).
+    { const f = out.window && out.window.frames;
+      out.uploadGroups = f > 0 && d.uploadGroups ? d.uploadGroups.map((r) => ({ group: r.group, nPerFrame: +(r.n / f).toFixed(2), kbPerFrame: +(r.kb / f).toFixed(3), sizes: r.sizes }))
+        : { note: "no writeBuffer groups recorded" };
+      // #4783 rows 4 and 6: draws a frame (the bound on object-group writes) and the depth-target inventory.
+      out.draws = f > 0 && d.draws > 0 ? { total: d.draws, perFrame: +(d.draws / f).toFixed(2) } : { note: "no WebGPU draw count on this leg" };
+      out.depthTargets = analyseDepthTargets(d.depthTargets, f);
+      out.mirrorAllocs = analyseMirrorAllocs(out.beats); }
+    // #4783 row 3 / #4710: requested WebGPU bytes by format at the end of the window, and who created what inside it.
+    try {
+      out.gpuMem = await bounded(() => page.evaluate(gpuMemSnapshot, 60), 10000, "gpu-mem-read");
+      out.createAttribution = createAttribution(out.gpuMem, out.window && out.window.frames);
+    } catch (e) { out.gpuMem = null; out.createAttribution = { note: "gpu-mem read failed: " + String((e && e.message) || e).slice(0, 80) }; }
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
     // made against the rest.
@@ -1312,15 +1481,19 @@ try {
   // So the hour is a parameter. 12 keeps every earlier run comparable; 2 is
   // night, where the lamps are up and the branch under test actually runs.
   const abClock = +flag("--clock", "12");
+  const probeFeature = (name, value) => page.evaluate(([feature, setting]) => {
+    const api = feature === "mirrorRoadCull" ? GLX : window.__apex;
+    return typeof api?.[feature] === "function" ? api[feature](setting) : { supported: false };
+  }, [name, value]);
   const abFor = (feature) => async () => {
     const A = { feature, clock: abClock };
-    const has = await page.evaluate((f) => !!(window.__apex && window.__apex[f] && window.__apex.gpuTimer), feature);
+    const has = await page.evaluate(() => !!window.__apex?.gpuTimer);
     if (!has) return { note: "no " + feature + "/gpuTimer hooks" };
     // NOTHING TO A/B (hunt 4 I4). Both features are GLX-only: WGX and the two
     // three.js legs report supported:false, yet each still spent three
     // captures and 40 interleaved samples per feature with the sim frozen —
     // frames that then sat in the governor ring the end snapshot reads.
-    const st0 = await page.evaluate((f) => { try { return window.__apex[f](); } catch (e) { return { error: String(e && e.message) }; } }, feature);
+    const st0 = await probeFeature(feature);
     if (st0 && st0.supported === false) {
       return { feature, skipped: true, stats: st0, note: feature + " reports supported:false on this backend — A/B skipped" };
     }
@@ -1370,7 +1543,7 @@ try {
         const xs = { off: [], on: [] };
         for (let r = 0; r < rounds; r++) {
           for (const k of ["off", "on"]) {
-            await page.evaluate(([f, v]) => window.__apex[f](v), [feature, k === "on"]);
+            await probeFeature(feature, k === "on");
             await settle(k === "on" ? 10 : 4);
             const v = await page.evaluate(() => { try { const q = window.__apex.gpuTimer(); return q && q.ms > 0 ? q.ms : null; } catch (_) { return null; } });
             if (v != null) xs[k].push(v);
@@ -1394,18 +1567,18 @@ try {
       // could not be turned into a per-frame figure, so a grouping defect and a
       // scene with few visible chunks were indistinguishable, and the number
       // ended up labelled unexplained instead of answered.
-      await page.evaluate(([f, v]) => {
-        window.__apex[f](v);
+      await probeFeature(feature, on);
+      await page.evaluate(() => {
         if (!window.__abTick) {
           window.__abTick = true;
           const t = () => { window.__abFrames = (window.__abFrames | 0) + 1; requestAnimationFrame(t); };
           requestAnimationFrame(t);
         }
         window.__abFrames = 0;
-      }, [feature, on]);
+      });
       await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
       A[key] = await sampleGpu(12);
-      A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
+      A[key].stats = await probeFeature(feature);
       A[key].frames = await page.evaluate(() => window.__abFrames | 0);
       if (shotBase) {
         A[key].present = await freshFrame("ab-" + key);
@@ -1415,7 +1588,7 @@ try {
       }
     }
     await page.evaluate(() => { try { window.__apex.renderClock(null, false); window.__apex.freeze(false); } catch (_) {} });
-    await page.evaluate((f) => window.__apex[f](false), feature);
+    await probeFeature(feature, false);
     try {
       const sharp = (await import("sharp")).default;
       const raw = async (f) => (f ? sharp(f).raw().toBuffer({ resolveWithObject: true }) : null);
@@ -1458,6 +1631,30 @@ try {
   };
   out.occlusionAB = await bounded(abFor("occlusionCull"), 180000, "occlusion-ab");
   out.multiDrawAB = await bounded(abFor("multiDraw"), 180000, "multidraw-ab");
+  if (backend === "three" && extraLs.includes("apex26.measureMirrorRoad=1")) {
+    const before = await page.evaluate(() => {
+      const A = window.__apex;
+      const quality = A.renderScale({ lite: true });
+      const previous = { mirror: A.mirror().mode, cull: GLX.mirrorRoadCull?.().enabled,
+        scale: quality.scale, auto: quality.auto, hold: quality.tierHold };
+      A.govHold(true);
+      A.renderScale(1);
+      A.mirror("on");
+      return previous;
+    });
+    try {
+      out.mirrorRoadAB = await bounded(abFor("mirrorRoadCull"), 180000, "mirror-road-ab");
+    } finally {
+      await page.evaluate(({ mirror, cull, scale, auto, hold }) => {
+        const A = window.__apex;
+        GLX.mirrorRoadCull?.(cull);
+        A.mirror(mirror);
+        GLX.setRenderScale(scale);
+        PerfGov.setAutoRes(auto);
+        A.govHold(hold);
+      }, before);
+    }
+  }
   checkpoint("feature-ab");
 
   // AND THE SAME THING IN MOTION. park() gives a static camera, and every
@@ -1522,6 +1719,8 @@ try {
     // rung closed it. Recording neither is what left the 30 % luma gap between
     // three's two backends an open lead after run 25 (docs/PERF-FINDINGS.md 2t).
     try { const a = window.__apex; if (a && a.renderScale) r.gov = a.renderScale(); } catch (e) { r.govError = String(e && e.message); }
+    // DESKTOP TIERS: per GfxQuality feature, on vs ran (js/perf/gfx-debug-overlay.js tiers(); census-verdict.mjs tierRows).
+    try { r.tiers = typeof GfxDebug !== "undefined" && GfxDebug.tiers ? GfxDebug.tiers() : null; if (!r.tiers) r.tiersError = "GfxDebug.tiers absent (no ?gfxdebug=1 overlay)"; } catch (e) { r.tiersError = String(e && e.message).slice(0, 160); }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
     // I-3 (#1648). Counts the renderer already tracks; no extra allocation.
     r.mem = {};
@@ -1705,6 +1904,14 @@ try {
     out.profile.probeArmedAtClose = armed || null;
     out.profile.proofWaitMs = Date.now() - t;
   }
+  if (garageCapture) {
+    out.garageCameraControl = { before: await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on })) };
+    if (out.garageCameraControl.before.garageOn) throw new Error("Garage still owns race camera");
+    if (garageCapture === "phone") await page.locator("#btn-cam").tap();
+    else await page.locator("#btn-cam").click();
+    await page.waitForFunction(saved => localStorage.getItem("apex26.camMode") !== saved, out.garageCameraControl.before.saved, { polling: 100, timeout: 5000 });
+    out.garageCameraControl.after = await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on }));
+  }
   out.ok = true;
   checkpoint("done");
 } catch (e) {
@@ -1717,6 +1924,13 @@ try {
   // meant every failure threw them away.
   out.console = console_.filter((l) => /error|warn|refus|fail|WGX|TLX/i.test(l)).slice(0, 40);
   out.root = ROOT;
+  if (captureVideo) {
+    try {
+      await Promise.race([captureContext.close(), new Promise((_, reject) => setTimeout(() => reject(new Error("video context close timeout")), 20000))]);
+      out.garageVideo = (jsonAt || "game-capture.json").replace(/\.json$/, ".garage.webm");
+      await Promise.race([captureVideo.saveAs(out.garageVideo), new Promise((_, reject) => setTimeout(() => reject(new Error("video save timeout")), 20000))]);
+    } catch (e) { out.garageVideoError = String(e); out.ok = false; }
+  }
   // browser.close() HANGS after a WebGPU/Metal session: run 4's WebGPU check
   // reached phase "done" at +42.4s and the step was then killed at 20 minutes
   // with the process still in this line. A teardown hang must not masquerade

@@ -41,7 +41,6 @@ const InputBindings = (function () {
   }
 
   function create({ onKeysChanged, onPadBindingChanged, activePad }) {
-    // ---- key bindings ------------------------------------------------------
     // Every driving key is a BINDING, not a literal: KEY_ACTIONS is the list the
     // CONTROLS page (js/ui/key-binds.js) renders and HOW TO PLAY reads, keyMap is
     // the live table (two physical-key slots per action, e.code values so WASD
@@ -194,7 +193,6 @@ const InputBindings = (function () {
       return KEY_NAMES[code] || code.toUpperCase();
     }
 
-    // ---- controller bindings -----------------------------------------------
     // The same shape for the pad: PAD_ACTIONS is the list the CONTROLS page
     // renders, padMap the live table (two button-index slots per action, W3C
     // "standard" mapping), the defaults the layout the game always had. Steering
@@ -211,7 +209,7 @@ const InputBindings = (function () {
       { id: "camera",    label: "CAMERA",      def: [8, null] },
       { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
       { id: "recover",   label: "RECOVER",     def: [10, null] },
-      { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down; d-pad up is ACTIVE AERO
+      { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down (13); ACTIVE AERO is its own row (12)
       { id: "mirror",    label: "MIRROR",      def: [null, null] },   // every standard button is taken; bind one on CONTROLS
       { id: "pause",     label: "PAUSE",       def: [9, null] },
     ];
@@ -219,7 +217,11 @@ const InputBindings = (function () {
     // reason the stick is not one. Pause left this set when it became a binding.
     const PAD_RESERVED = { 14: 1, 15: 1 };
     const padMap = {};
-    const padIndexOk = (v) => Number.isInteger(v) && v >= 0 && v < 32;
+    // Numeric strings occur in older saves. Empty slots cannot claim button zero.
+    function padIndex(v) {
+      if (typeof v === "string" && v.trim()) v = Number(v);
+      return Number.isInteger(v) && v >= 0 && v < 32 ? v : null;
+    }
     // Same contract as rebuildKeyIndex → onKeysChanged: any change to the live
     // pad table must drop held pedals whose button may have changed meaning.
     // setPadBinding already did; clear / reset / setPadMap used to skip it, so
@@ -236,11 +238,8 @@ const InputBindings = (function () {
           const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
           if (!v) continue;
           padMap[a.id] = [0, 1].map((i) => {
-            // Keep legacy numeric strings, but reject objects before Number()
-            // can invoke their (possibly malformed) coercion methods.
-            const raw = v[i];
-            const b = typeof raw === "number" || typeof raw === "string" ? Number(raw) : null;
-            if (b == null || !padIndexOk(b) || PAD_RESERVED[b] || seen[b]) return null;
+            const b = padIndex(v[i]);
+            if (b == null || PAD_RESERVED[b] || seen[b]) return null;
             seen[b] = 1;
             return b;
           });
@@ -254,8 +253,8 @@ const InputBindings = (function () {
     function padBindings() { return rows(PAD_ACTIONS, padMap); }
     function padsAreDefault() { return isDefault(PAD_ACTIONS, padMap); }
     function setPadBinding(id, slot, index) {
-      index = index == null ? NaN : Number(index);
-      if (!padMap[id] || !(slot === 0 || slot === 1) || !padIndexOk(index)) return { ok: false, reason: "invalid" };
+      index = padIndex(index);
+      if (!padMap[id] || !(slot === 0 || slot === 1) || index == null) return { ok: false, reason: "invalid" };
       if (PAD_RESERVED[index]) return { ok: false, reason: "reserved" };
       const conflict = claim(PAD_ACTIONS, padMap, id, slot, index);
       notifyPad();
@@ -304,7 +303,6 @@ const InputBindings = (function () {
       return names[index] || `BTN ${index}`;
     }
 
-
     return {
       keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, loadLayoutMap,
       keyAction: (code) => codeToAction[normCode(code)] || null,
@@ -314,6 +312,7 @@ const InputBindings = (function () {
     };
   }
 
-  return { create, HOLD_MODE_ACTIONS, holdModeDefaults, parseHoldMode };
+  // HOLD_MODE_ACTIONS stays module-local: parseHoldMode / holdModeDefaults own the list.
+  return { create, holdModeDefaults, parseHoldMode };
 })();
 Object.freeze(InputBindings);

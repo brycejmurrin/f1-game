@@ -12,6 +12,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -31,7 +32,7 @@ const PEEK_LAYER = RESP + "\n" + OVERLAYS;
 const TARGETS = { pausemenu: "dialog", datahub: "dialog", select: "div", "race-settings": "dialog",
   career: "div", carsetup: "div", trackdesigner: "dialog", standings: "dialog", pmsettings: "dialog", overlay: "div" };
 
-function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
+function boot({ stored = {}, settingsOpen = true, withPause = false, win = null, avail = true } = {}) {
   const dom = makeDom();
   const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
   for (const [id, tag] of Object.entries(TARGETS)) mk(tag, id);
@@ -76,11 +77,15 @@ function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
     addEventListener: (t, fn, cap) => { if (!winL.has(t)) winL.set(t, []); winL.get(t).push({ fn, cap }); },
   };
   sb.window = sb;
+  if (win) Object.assign(sb, win);   // innerWidth / innerHeight: the availability checks read the viewport
   const ctx = vm.createContext(sb);
-  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js"];
+  // js/ui/look-avail.js is lazy (LAZY_UI_PRESETS, the first APPEARANCE enter); it repaints the built folds on eval.
+  const files = ["js/ui/setting-row.js", ...(withPause ? ["js/ui/pause-opts.js"] : []), "js/ui/screen-looks.js",
+    ...(avail ? ["js/ui/look-avail.js"] : [])];
   for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const M = vm.runInContext("ScreenLooks", ctx);
   const P = withPause ? vm.runInContext("PauseOpts", ctx) : null;
+  const A = avail ? vm.runInContext("LookAvail", ctx) : null;
   /** Fire a window CAPTURE listener the way the browser would, with spies. */
   const fire = (type, extra = {}) => {
     const ev = Object.assign({ type, defaultPrevented: false, stopped: false }, extra);
@@ -89,7 +94,7 @@ function boot({ stored = {}, settingsOpen = true, withPause = false } = {}) {
     for (const { fn, cap } of winL.get(type) || []) if (cap) fn(ev);
     return ev;
   };
-  return { dom, M, P, data, timers, observers, fire, html: dom.documentElement, panel, general, pauseBody, tsBody, replay,
+  return { dom, M, P, A, data, timers, observers, fire, sb, winL, html: dom.documentElement, panel, general, pauseBody, tsBody, replay,
     get reclassified() { return reclassified; } };
 }
 
@@ -169,6 +174,44 @@ test("set: enums stamp an attribute, ranges a token + presence; back to default 
   assert.equal(html.style.getPropertyValue("--look-career-split"), "");
 });
 
+test("phone panel defaults apply before opening Settings and reset restores them", () => {
+  const win = { innerWidth: 844, innerHeight: 390, matchMedia: (query) => ({ matches: query === "(pointer: coarse)" }) };
+  const { M, html, data } = boot({ settingsOpen: false, win });
+  assert.deepEqual([M.read("pause").btn, M.read("pause").w, M.read("garage").pw], [125, 135, 115]);
+  assert.deepEqual([M.read("datahub").tabs, M.read("datahub").stripes, M.read("career").density], ["underline", "on", "roomy"]);
+  assert.deepEqual(["--look-pause-btn", "--look-pause-w", "--look-garage-pw"].map((k) => html.style.getPropertyValue(k)), ["1.25", "1.35", "1.15"]);
+  assert.deepEqual([html.dataset.lookDatahubTabs, html.dataset.lookDatahubStripes], ["underline", "on"]);
+  const previous = boot({ win, stored: { lookPause: { btn: 115 }, lookDatahub: { tabs: "filled" }, lookGarage: { pw: 100 } } });
+  assert.deepEqual([previous.M.read("pause").btn, previous.M.read("pause").w, previous.M.read("datahub").tabs, previous.M.read("garage").pw], [115, 135, "filled", 100]);
+  M.set("pause", "btn", 100);
+  M.set("datahub", "stripes", "off");
+  M.set("garage", "pw", 100);
+  assert.deepEqual(plain([data.lookPause, data.lookDatahub, data.lookGarage]), [{ btn: 100 }, { stripes: "off" }, { pw: 100 }]);
+  for (const key of ["pause", "datahub", "garage"]) { M.reset(key); assert.equal(M.isShipped(key), true); }
+  assert.deepEqual([html.dataset.lookPauseBtn, html.dataset.lookDatahubStripes, html.dataset.lookGaragePw], ["125", "on", "115"]);
+  assert.deepEqual([data.lookPause, data.lookDatahub, data.lookGarage], [undefined, undefined, undefined]);
+  const desktop = boot().M;
+  assert.deepEqual([desktop.read("pause").btn, desktop.read("pause").w, desktop.read("garage").pw], [100, 100, 100]);
+  assert.deepEqual([desktop.read("datahub").tabs, desktop.read("datahub").stripes], ["filled", "off"]);
+});
+
+test("geometry scale readouts use the factory size while splits show the real column share", () => {
+  const win = { innerWidth: 852, innerHeight: 393, matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) };
+  const { M, dom, html, data } = boot({ win });
+  const width = dom.byId("pm-look-garage-pw");
+  assert.equal(width.getAttribute("aria-valuetext"), "100%");
+  assert.deepEqual([width.min, width.max, width.step, width.value], ["60", "150", "5", "115"]);
+  for (const [raw, shown] of [[60, "52.17%"], [120, "104.35%"], [150, "130.43%"]]) {
+    width.value = String(raw); dom.dispatch(width, { type: "input" });
+    assert.equal(data.lookGarage.pw, raw);
+    assert.equal(html.style.getPropertyValue("--look-garage-pw"), String(raw / 100));
+    assert.equal(width.getAttribute("aria-valuetext"), shown);
+  }
+  M.reset("garage");
+  assert.equal(width.getAttribute("aria-valuetext"), "100%");
+  assert.equal(dom.byId("pm-look-designer-split").getAttribute("aria-valuetext"), "55%");
+});
+
 test("normalize: unknown keys dropped, junk enums read as shipped, ranges clamp and snap", () => {
   const { M, html } = boot({ stored: { lookGarage: { side: "left", pw: 999, glass: "neon", bogus: 1 }, lookPause: { gap: 33 } } });
   const g = M.read("garage");
@@ -182,6 +225,17 @@ test("normalize: unknown keys dropped, junk enums read as shipped, ranges clamp 
   assert.deepEqual(plain(M.normalize("nope", {})), {});
 });
 
+test("#4529: GARAGE PANEL WIDTH shrinks to 60 and PANEL HEIGHT 40-100 writes its token", () => {
+  const { M, html } = boot({ stored: { lookGarage: { pw: 10, ph: 3 } } });
+  assert.equal(M.read("garage").pw, 60, "PANEL WIDTH floors at 60 %");
+  assert.equal(M.read("garage").ph, 40, "PANEL HEIGHT floors at 40 %");
+  assert.equal(html.style.getPropertyValue("--look-garage-pw"), "0.6");
+  assert.equal(html.style.getPropertyValue("--look-garage-ph"), "0.4");
+  M.set("garage", "ph", 100);
+  assert.equal(html.style.getPropertyValue("--look-garage-ph"), "", "at its base PANEL HEIGHT writes nothing");
+  assert.equal(html.dataset.lookGaragePh, undefined);
+});
+
 test("density / columns knobs re-run SheetShape so the tier follows at once", () => {
   const b = boot();
   const n0 = b.reclassified;
@@ -193,6 +247,31 @@ test("density / columns knobs re-run SheetShape so the tier follows at once", ()
 });
 
 /* ── folds ────────────────────────────────────────────────────────────── */
+test("#5054: with the settings router, rows build on the first APPEARANCE enter only; search knows every knob before", () => {
+  const enters = [], registered = [];
+  const nav = { onEnter: (fn) => enters.push(fn) };
+  const search = { register: (owner, rows) => registered.push([owner, rows.length]) };
+  const { dom, timers, panel, M } = boot({ settingsOpen: false, win: { SettingsNav: nav, SettingsSearch: search } });
+  const knobs = M.SCREENS.reduce((n, s) => n + s.knobs.length, 0);
+  assert.deepEqual(registered, [["screen-looks", knobs]], "descriptors registered at arm, before any row");
+  assert.equal(enters.length, 1);
+  assert.equal(dom.has("pm-look-datahub"), false, "no fold at boot (title intro)");
+  assert.equal(timers.length, 0, "no timer fallback builds it later");
+  enters[0]("audio");
+  assert.equal(dom.has("pm-look-datahub"), false, "another page builds nothing");
+  enters[0]("appearance");
+  assert.ok(dom.has("pm-look-datahub") && dom.has("pm-look-pause-style"), "APPEARANCE builds every fold");
+  const n = panel.children.length;
+  enters[0]("appearance");
+  assert.equal(panel.children.length, n, "a second enter mounts nothing");
+  assert.equal(registered.length, 1, "build does not re-register search");
+});
+
+test("#5054: settings already showing APPEARANCE when the router arms builds at once", () => {
+  const { dom } = boot({ settingsOpen: true, win: { SettingsNav: { onEnter() {} } } });
+  assert.ok(dom.has("pm-look-datahub"));
+});
+
 test("build: one fold per screen after TITLE SCREEN, in registry order; pause rows join PAUSE MENU; mount once", () => {
   const { dom, M, panel, pauseBody, tsBody, replay } = boot();
   const kids = panel.children;
@@ -392,7 +471,6 @@ test("a peek swallows only the dismissing click, not the next one", () => {
   const src = read("js/ui/screen-looks.js");
   const fn = src.slice(src.indexOf("function onPointer"), src.indexOf("function onClick"));
   assert.doesNotMatch(fn, /700/);
-  assert.match(fn, /pk\.swallowGen/);
   assert.match(fn, /setTimeout\(\(\) => \{ if \(pk\.swallowGen === gen\) pk\.swallowClick = false; \}, 0\)/);
   assert.match(fn, /pointerup/);
   assert.match(fn, /pointercancel/);
@@ -429,4 +507,350 @@ test("designer: the knob is in the settings export, and the CSS keeps the tap fl
   const editor = read("css/editor.css");
   assert.match(editor, /:root\[data-look-designer-size\] #trackdesigner \{[^}]*--tap: max\(44px, calc\(24px \/ var\(--td-zoom\)\)\)/, "floors are re-derived against the designer's own zoom");
   assert.match(editor, /zoom: var\(--td-zoom\);/, "the dialog zooms by UI SIZE x DESIGNER SIZE");
+});
+
+/* ── availability: values that change nothing on this screen size (G4) ──── */
+// 844x390 at the touch default UI SIZE (109 %, js/ui/scale.js): the profile
+// the look-diff CLI (UI layout program G4) measured 41 DEAD values on (2026-10-30).
+test("availability: the pure checks answer the measured phone no-ops, and only those", () => {
+  const { M, A } = boot();
+  // P is the phone (coarse pointer, short side 390 < 600): ROOMY and the career SPLIT are requests the
+  // box clamps there (#5153 gap 11, measured docs/notes/UI-PR-D-MEASURE-2026-11-06.md); M is the same
+  // window with a mouse, where the CSS gate lets them through.
+  const P = A.env(844, 390, 1.09), D = A.env(1600, 1000, 1), Mo = A.env(844, 390, 1.09, true);
+  assert.equal(P.phone, true); assert.equal(D.phone, false); assert.equal(Mo.phone, false);
+  const look = (id, o) => Object.assign(M.normalize(id, {}), o || {});
+  // [env, screen, knob, value, overrides, expected reason substring, or "" ]
+  const ROWS = [
+    // RACE joined its siblings at --compact-at 480 (#5153 gap 16), so the phone rows read the same.
+    ...["select", "race", "career", "garage", "popups"].flatMap((id) => [[P, id, "density", "tight", null, "Already tight"],
+      [P, id, "density", "roomy", null, "phone-sized window keeps the compact"], [Mo, id, "density", "roomy", null, ""], [D, id, "density", "tight", null, ""]]),
+    // #5580: at the shipped 70 % the phone has (390 - 24) / 0.7 = 523 own px, over 480, and the hub is still held compact.
+    [A.env(844, 390, 0.7), "career", "density", "tight", null, "Already tight"], [A.env(844, 390, 0.7), "career", "density", "roomy", null, "phone-sized window keeps the compact"],
+    // #5632: RACE SETTINGS is held the same way (534 own px at 0.7); a desk window at 0.7 is not.
+    [A.env(844, 390, 0.7), "race", "density", "tight", null, "Already tight"], [A.env(844, 390, 0.7), "race", "density", "roomy", null, "phone-sized window keeps the compact"],
+    [A.env(844, 390, 0.7, true), "race", "density", "tight", null, ""],
+    [P, "pause", "music", "hide", null, "Short landscape"], [P, "pause", "build", "hide", null, "Short landscape"],
+    [D, "pause", "music", "hide", null, ""],
+    [P, "select", "names", "hide", null, "flags only"], [P, "select", "names", "hide", { density: "roomy" }, "flags only"], [Mo, "select", "names", "hide", { density: "roomy" }, ""],
+    [P, "race", "cols", "two", null, "two columns"], [P, "race", "cols", "one", null, ""], [P, "race", "cols", "two", { w: 60 }, ""],
+    [P, "career", "layout", "stacked", null, "already stacks"], [P, "career", "layout", "split", null, "phone-sized window keeps the stacked"],
+    [Mo, "career", "layout", "split", null, ""],
+    [D, "career", "layout", "split", null, "already splits"], [D, "garage", "glass", "solid", null, "SHIPPED is already"],
+  ];
+  for (const [e, id, k, v, o, want] of ROWS) {
+    const got = A.why(id, k, v, look(id, o), e);
+    assert.ok(want === "" ? got === "" : got.indexOf(want) >= 0, `${id}.${k}=${v} ${JSON.stringify(o)} -> "${got}"`);
+  }
+  // Knob-level: WIDTH notes (slider stays live) on the phone only; CAREER's dependents switch with COLUMNS.
+  const KNOBS = [
+    ...["datahub", "select", "race", "career", "popups"].map((id) => [P, id, "w", null, false]), [D, "race", "w", null, null],
+    ...["split", "side"].flatMap((k) => [[P, "career", k, null, true], [P, "career", k, { layout: "split" }, true], [Mo, "career", k, { layout: "split" }, null], [D, "career", k, { layout: "stacked" }, true]]),
+  ];
+  for (const [e, id, k, o, off] of KNOBS) {
+    const kn = A.whyKnob(id, k, look(id, o), e);
+    assert.equal(kn ? kn.off : null, off, `${id}.${k} ${JSON.stringify(o)}`);
+  }
+  // Nothing else is ever marked.
+  const MARKED = new Set(["density", "music", "build", "names", "cols", "layout", "glass"]);
+  for (const s of M.SCREENS) for (const n of s.knobs) if (n.kind === "cycle" && !MARKED.has(n.k))
+    for (const [v] of n.values) for (const e of [P, D]) assert.equal(A.why(s.id, n.k, v, look(s.id), e), "", `${s.id}.${n.k}=${v}`);
+});
+
+test("availability: the fold disables moot values with a reason, keeps the stored value, re-reads on resize", () => {
+  const stored = { lookCareer: { side: "swapped", density: "tight" } };
+  const { dom, M, data, sb, winL, observers } = boot({ stored, win: { innerWidth: 844, innerHeight: 390 } });
+  const state = () => ({
+    tight: dom.byId("pm-look-career-density-sel").children.find((o) => o.value === "tight").disabled,
+    densityWhy: dom.byId("pm-look-career-density-why").textContent.split(":")[0],
+    shown: dom.byId("pm-look-career-density-sel").value,
+    described: dom.byId("pm-look-career-density-sel").getAttribute("aria-describedby"),
+    sideOff: dom.byId("pm-look-career-side-sel").disabled, splitOff: dom.byId("pm-look-career-split").disabled,
+    widthOff: dom.byId("pm-look-select-w").disabled, widthWhy: !dom.byId("pm-look-select-w-why").hidden,
+  });
+  // 844x390 with a coarse pointer is a phone-sized window (#5153 gap 11): TIGHT is already the
+  // answer there and ROOMY is a request the box clamps, so both are moot and the line names both
+  // (ROOMY is the first value in the knob); a stored SPLIT is clamped too, so SIDE stays off.
+  const roomy = () => dom.byId("pm-look-career-density-sel").children.find((o) => o.value === "roomy").disabled;
+  assert.deepEqual(state(), { tight: true, densityWhy: "ROOMY", shown: "tight", described: "pm-look-career-density-why",
+    sideOff: true, splitOff: true, widthOff: false, widthWhy: true });
+  assert.equal(roomy(), true, "ROOMY is moot on a phone-sized window");
+  assert.match(dom.byId("pm-look-career-density-why").textContent, /ROOMY: A phone-sized window keeps the compact layout\. TIGHT: Already tight/);
+  M.set("career", "layout", "split");
+  assert.equal(state().sideOff, true, "a stored SPLIT is clamped on the phone: SIDE stays off");
+  Object.assign(sb, { innerWidth: 1600, innerHeight: 1000 });
+  for (const { fn } of winL.get("resize") || []) fn();
+  assert.equal(state().sideOff, false, "a write re-reads the dependents: SPLIT pairs on the desk");
+  assert.equal(roomy(), true, "ROOMY stays moot on the desk, for the old reason: already roomy at 976 own px");
+  assert.match(dom.byId("pm-look-career-density-why").textContent, /^ROOMY: Already roomy/);
+  M.set("career", "layout", "auto");
+  assert.deepEqual(state(), { tight: false, densityWhy: "ROOMY", shown: "tight", described: "pm-look-career-density-why",
+    sideOff: true, splitOff: true, widthOff: false, widthWhy: false });   // stored TIGHT keeps CAREER stacked
+  assert.deepEqual(plain(data.lookCareer), { side: "swapped", density: "tight" }, "nothing rewritten");
+  assert.ok(observers.some((o) => o.target === dom.body && o.opts.attributeFilter.includes("data-density")), "watches SheetShape's body answer");
+});
+
+test("lazy LookAvail: before it loads a peek shows the real screen and no line shows; its eval repaints the folds", () => {
+  const b = boot({ avail: false, win: { innerWidth: 844, innerHeight: 390 } });
+  const lines = () => ["pm-look-career-density-why", "pm-look-select-w-why"].map((id) => b.dom.byId(id).hidden);
+  b.M.peek("select", 0);
+  assert.deepEqual([b.dom.byId("sel-tracks").children.length, lines()], [0, [true, true]]);
+  b.M.endPeek();
+  vm.runInContext(read("js/ui/look-avail.js").replace(/^const\b/gm, "var"), b.sb, { filename: absSrc("js/ui/look-avail.js") });
+  assert.deepEqual(lines(), [false, false], "the forced repaint");
+  b.M.peek("select", 0);
+  assert.ok(b.dom.byId("sel-tracks").children.length >= 6, "stand-ins once loaded");
+});
+
+test("external ScreenLooks.set repaints built cycle controls (layout preset path)", () => {
+  const { dom, M, data } = boot({ win: { innerWidth: 844, innerHeight: 390 } });
+  const sel = () => dom.byId("pm-look-career-density-sel");
+  assert.equal(sel().value, "auto", "starts at shipped default");
+  M.set("career", "density", "roomy");
+  assert.deepEqual(plain(data.lookCareer), { density: "roomy" }, "stored off-default");
+  assert.equal(M.read("career").density, "roomy");
+  assert.equal(sel().value, "roomy", "the row matches storage without a reload");
+});
+
+test("external onChange repaint does not overwrite a focused range slider value", () => {
+  const { dom, M } = boot();
+  const slider = dom.byId("pm-look-popups-w");
+  slider.focus();
+  slider.value = "115";
+  dom.dispatch(slider, { type: "input" });
+  assert.equal(M.read("popups").w, 115);
+  M.set("popups", "w", 80);
+  assert.equal(M.read("popups").w, 80, "storage updates from an external set");
+  assert.equal(slider.value, "115", "paintRows keeps the focused thumb");
+  slider.blur();
+  M.set("popups", "corners", "pill");
+  assert.equal(slider.value, "80", "after blur the row follows storage again");
+});
+
+test("vocabulary (G8): SIDE knobs read LEFT / RIGHT, ROW HEIGHT means row height; stored ids are unchanged", () => {
+  const { M } = boot({ stored: { lookCareer: { side: "swapped" }, lookGarage: { side: "left" } } });
+  const knob = (id, k) => M.SCREENS.find((s) => s.id === id).knobs.find((n) => n.k === k);
+  assert.deepEqual(plain({
+    career: [knob("career", "side").label, knob("career", "side").values, M.read("career").side],
+    garage: [knob("garage", "side").label, knob("garage", "side").values, M.read("garage").side],
+    rows: ["datahub", "popups", "select"].map((id) => knob(id, "rows").label),
+  }), {
+    career: ["CALENDAR SIDE", [["swapped", "LEFT"], ["shipped", "RIGHT"]], "swapped"],
+    garage: ["PANEL SIDE", [["left", "LEFT"], ["right", "RIGHT"]], "left"],
+    rows: ["ROW HEIGHT", "ROW HEIGHT", "STRIP ROWS"],
+  });
+});
+
+function bootPlacement(durable = true, regions) {
+  const sheets = new Set();
+  const store = {
+    get: () => store.value,
+    set: (key, value) => { store.value = value; store.notify({ key }); return durable; },
+    subscribe: fn => { store.notify = fn; },
+  };
+  const media = { matches: false, addEventListener: (_, fn) => { media.change = fn; } };
+  const sb = {
+    GameStore: { store }, matchMedia: () => media,
+    ScreenRegions: regions || {
+      garage: { root: "#carsetup", regions: { panel: { selector: ".panel" } } },
+      career: { root: "#career", regions: { calendar: { selector: ".calendar" } } },
+    },
+    document: {
+      head: { appendChild: sheet => sheets.add(sheet) },
+      getElementById: () => null,
+      querySelector: () => ({ currentCSSZoom: 2 }),
+      createElement: () => ({ dataset: {}, remove() { sheets.delete(this); } }),
+    },
+  };
+  sb.window = sb;
+  vm.runInNewContext(read("js/ui/screen-placement.js"), sb, { filename: absSrc("js/ui/screen-placement.js") });
+  return { model: sb.ScreenPlacement, sheets, media, store };
+}
+
+test("region preview uses viewport coordinates at UI zoom and keeps width independent from scale", () => {
+  const { model, sheets, store } = bootPlacement();
+  model.apply("garage", { panel: { x: -4, y: 2, width: 50, height: 40, scale: 1.25 } });
+  const [sheet] = sheets;
+  // The painted declarations, parsed: the values the region renders with, not the stylesheet's spelling.
+  const decls = Object.fromEntries(sheet.textContent.split(/[;{}]/).map(part => part.trim())
+    .filter(part => part.includes(":") && !part.includes(" {")).map(part => [part.slice(0, part.indexOf(":")).trim(), part.slice(part.indexOf(":") + 1).replace(/\s*!important$/, "").trim()]));
+  assert.deepEqual([decls.translate, decls.width, decls.height, decls.scale], ["-2vw 1vh", "25vw", "20vh", "1.25"]);
+  assert.equal(store.value, undefined);
+  model.restore("garage");
+  assert.equal(sheets.size, 0);
+});
+
+test("region saves validate input, preserve both orientation and screen boundaries, and remove adaptive defaults", () => {
+  const { model, media, store, sheets } = bootPlacement(false);
+  assert.equal(model.save("garage", "landscape", {
+    panel: { x: -120, y: NaN, width: 60, scale: 1 }, gone: { x: 2 },
+  }), false, "save reports session-only storage");
+  assert.deepEqual(plain(model.read("garage", "landscape")), { panel: { x: -50, width: 60 } });
+  model.save("garage", "portrait", { panel: { height: 40 } });
+  model.save("career", "portrait", { calendar: { scale: 1.25 } });
+  media.matches = true;
+  media.change();
+  assert.equal(model.orientation(), "portrait");
+  assert.equal(sheets.size, 2);
+  model.save("garage", "portrait", {});
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+  assert.deepEqual(plain(model.read("career", "portrait")), { calendar: { scale: 1.25 } });
+  assert.equal(model.read("garage", "landscape").panel.width, 60);
+  model.save("career", "portrait", {});
+  model.save("garage", "landscape", {});
+  assert.equal(store.value, undefined);
+  assert.equal(sheets.size, 0);
+  store.value = { v: 999, screens: { garage: { portrait: { panel: { x: 2 } } } } };
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+});
+
+test("region control sizes survive import while defaults, nonnumeric values and unknown regions stay absent", () => {
+  const { model } = bootPlacement();
+  const source = { v: 1, screens: {
+    garage: {
+      landscape: { panel: { x: 3, textSize: 2, buttonWidth: 150, buttonHeight: 16 } },
+      portrait: { panel: { textSize: 0.1, buttonWidth: -10, buttonHeight: 150 }, removed: { textSize: 1.2 } },
+    },
+    career: { landscape: { calendar: { textSize: 1, buttonWidth: "50", buttonHeight: null, scale: 1.1 } } },
+  } };
+  const result = plain(model.normalize(source));
+  assert.deepEqual(result.screens, {
+    garage: {
+      landscape: { panel: { x: 3, textSize: 1.8, buttonWidth: 100, buttonHeight: 44 } },
+      portrait: { panel: { textSize: 0.8, buttonWidth: 10, buttonHeight: 104 } },
+    },
+    career: { landscape: { calendar: { scale: 1.1 } } },
+  });
+  assert.deepEqual(plain(model.normalize(JSON.parse(JSON.stringify(result)))), result);
+});
+
+test("a Garage geometry reset previews shipped placement, preserves style and touch settings, and only writes on Apply", () => {
+  const garage = { side: "left", pw: 140, ph: 60, btn: 120, glass: "glass" };
+  const { M, data, html } = boot({ stored: { lookGarage: garage, lookCareer: { side: "swapped" } } });
+  const keys = ["side", "pw", "ph"];
+  M.resetGeometry("garage", keys, "preview");
+  assert.equal(html.dataset.lookGarageSide, undefined);
+  assert.equal(html.dataset.lookGaragePw, undefined);
+  assert.equal(html.dataset.lookGarageGlass, "glass");
+  assert.equal(html.dataset.lookGarageBtn, "120");
+  assert.deepEqual(data.lookGarage, garage);
+  M.resetGeometry("garage", keys, "restore");
+  assert.equal(html.dataset.lookGarageSide, "left");
+  assert.equal(html.dataset.lookGaragePh, "60");
+  M.resetGeometry("garage", keys, "save");
+  assert.deepEqual(plain(data.lookGarage), { btn: 120, glass: "glass" });
+  assert.deepEqual(data.lookCareer, { side: "swapped" });
+});
+
+test("all Race Settings steppers can save their own region without changing adjacent controls", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+  const regions = window.ScreenRegions["race-settings"].regions;
+  const dialog = SHELL.slice(SHELL.indexOf('<dialog id="race-settings"')).split("</dialog>")[0];
+  const controls = [...dialog.matchAll(/<(?:button|select) id="rs-([a-z]+-(?:prev|sel|next))"/g)].map(match => match[1]);
+  assert.ok(controls.length > 0);
+  const values = {};
+  for (const key of controls) {
+    assert.equal(regions[key].selector, "#rs-" + key);
+    values[key] = { textSize: key.endsWith("-sel") ? 1.25 : 1.1 };
+  }
+  assert.equal(model.save("race-settings", "portrait", values), true);
+  assert.deepEqual(plain(model.read("race-settings", "portrait")), values);
+  assert.deepEqual(plain(model.read("race-settings", "landscape")), {});
+  delete values["laps-next"];
+  model.apply("race-settings", values);
+  const css = [...sheets][0].textContent;
+  assert.ok(css.includes("#rs-laps-prev") && css.includes("#rs-laps-sel"));
+  assert.equal(css.includes("#rs-laps-next"), false);
+});
+
+test("advanced region styles compose with orientation defaults and reject imported CSS", () => {
+  const { model, sheets } = bootPlacement();
+  model.save("garage", "landscape", { panel: {
+    formWidth: 999, textAlign: "end", cornerRadius: 0, rowGap: -3, columnGap: 999,
+  } });
+  assert.deepEqual(plain(model.read("garage", "landscape").panel), {
+    formWidth: 100, textAlign: "end", cornerRadius: 0, rowGap: 0, columnGap: 48,
+  });
+  assert.deepEqual(plain(model.read("garage", "portrait")), {});
+  const rules = cssRules([...sheets][0].textContent);
+  const region = rules.find(rule => rule.decls.has("column-gap"));
+  assert.equal(region.decls.get("column-gap"), "48px !important");
+  assert.equal(region.decls.get("text-align"), "end !important");
+  assert.equal(region.decls.get("border-radius"), "0px !important");
+  const controls = rules.find(rule => rule.decls.has("width") && rule.selector.includes('input[type="range"]'));
+  assert.equal(controls.decls.get("width"), "100% !important");
+  assert.equal(controls.selector.includes('input[type="checkbox"]'), false);
+  assert.equal(controls.selector.includes('input[type="radio"]'), false);
+  model.save("garage", "landscape", { panel: { textAlign: "center;color:red", rowGap: "1rem", formWidth: Infinity } });
+  assert.equal(sheets.size, 0, "malformed values remove overrides and restore the shipped stylesheet");
+});
+
+test("tuner windows reflow at zoom and reserve the same width for adjacent camera controls", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  for (const id of ["lighting", "camtune", "flyby", "freecam", "garrival"]) {
+    const screen = window.ScreenRegions[id];
+    assert.equal(Object.hasOwn(screen.regions, "tools"), id !== "freecam");
+    assert.equal(Object.hasOwn(screen.regions, "editorActions"), id !== "freecam");
+    assert.equal(screen.regions.window.selector, "#" + id + "-inner");
+    assert.equal(screen.regions.heading.selector, id === "freecam" ? "#fc-head" : ".ew-toolbar");
+    const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+    const custom = { window: { width: 40, x: -3 }, content: { textSize: 1.25 } };
+    model.save(id, "landscape", custom);
+    assert.deepEqual(plain(model.read(id, "landscape")), custom);
+    assert.deepEqual(plain(model.read(id, "portrait")), {});
+    const rules = cssRules([...sheets][0].textContent);
+    const windowRule = rules.find(({ decls }) => decls.has("width"));
+    assert.equal(windowRule.decls.get("width"), "20vw !important");
+    assert.equal(windowRule.decls.has("scale"), false);
+    assert.equal(rules.find(({ selector }) => selector === "body:has(> #" + id + ":not([hidden]))").decls.get("--dock-w"), "20vw !important");
+  }
+});
+
+test("diameter fits the touch disc at UI zoom and keeps the other stick and orientation independent", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+  const id = "photo-controls";
+  const old = { move: { x: 3, width: 28, height: 39 }, look: { width: 30, scale: 1.2 } };
+  model.save(id, "portrait", old);
+  assert.deepEqual(plain(model.read(id, "portrait")), old, "previous group geometry survives until diameter is set");
+  model.save(id, "landscape", { move: { ...old.move, diameter: 20 }, look: { ...old.look, diameter: 50 }, altitude: { diameter: 7 } });
+  assert.deepEqual(plain(model.read(id, "landscape")), { move: { x: 3, diameter: 20 }, look: { scale: 1.2, diameter: 50 } });
+  assert.deepEqual(plain(model.read(id, "portrait")), old);
+  const rules = cssRules([...sheets][0].textContent);
+  for (const [wrap, size] of [["move", "20vmin"], ["look", "50vmin"]]) {
+    const disc = rules.find(rule => rule.selector.includes(".pc-" + wrap + "-wrap") && rule.selector.endsWith(" .pc-stick"));
+    assert.equal(disc.decls.get("width"), disc.decls.get("height"));
+    assert.ok(disc.decls.get("width").includes(size + " / var(--pc-control-z,1)"));
+  }
+  const nub = rules.find(rule => rule.selector.endsWith(" .pc-nub"));
+  assert.equal(nub.decls.get("width"), nub.decls.get("height"));
+  assert.equal(nub.decls.get("translate"), "-50% -50%");
+  model.save("menupad", "landscape", { pad: { diameter: -9, scale: 0.5 }, actions: { diameter: 60 } });
+  assert.deepEqual(plain(model.read("menupad", "landscape")), { pad: { diameter: 5, scale: 0.5 } });
+  const padSheet = [...sheets].find(sheet => sheet.textContent.includes("#dpad"));
+  const dpad = cssRules(padSheet.textContent).find(rule => rule.decls.has("width"));
+  assert.equal(dpad.decls.get("height"), "max(44px,2.5vmin) !important");
+  assert.equal(dpad.decls.get("width"), dpad.decls.get("height"));
+});
+
+test("Data Hub standings, trace selection and nested telemetry playback retain independent arrangements", () => {
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const { model, sheets } = bootPlacement(true, window.ScreenRegions);
+  const hub = { drivers: { width: 38 }, constructors: { textSize: 1.2 }, loadTraces: { buttonHeight: 54 }, timingSort: { x: 5 } };
+  const popup = { window: { width: 70 }, charts: { width: 40 }, sidebar: { width: 25 }, rates: { buttonWidth: 28 }, summary: { y: 4 } };
+  model.save("datahub", "landscape", hub);
+  model.save("telemetry-detail", "landscape", popup);
+  assert.deepEqual(plain(model.read("telemetry-detail", "landscape")), popup);
+  const popupSheet = [...sheets].find(sheet => sheet.textContent.includes(".dh-telem-main"));
+  const trace = cssRules(popupSheet.textContent).find(rule => rule.selector.includes(".dh-telem-main"));
+  assert.equal(trace.decls.get("width"), "20vw !important");
+  assert.equal(trace.decls.get("--dh-trace-flex"), "0 1 auto !important");
+  assert.deepEqual(plain(model.read("telemetry-detail", "portrait")), {});
+  model.save("telemetry-detail", "landscape", {});
+  assert.deepEqual(plain(model.read("datahub", "landscape")), hub);
 });

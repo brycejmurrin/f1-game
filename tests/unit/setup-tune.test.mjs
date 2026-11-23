@@ -17,7 +17,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function load(shipped = {}) {
+function load(shipped = {}, { realDefaults = false } = {}) {
   const stored = new Map();
   const ctx = vm.createContext({
     Math, console, Object, Array, Number, JSON, isFinite,
@@ -30,6 +30,11 @@ function load(shipped = {}) {
   });
   seedLog(ctx);
   ctx.window = ctx;
+  if (realDefaults) {
+    vm.runInContext(readFileSync(join(ROOT, "js/data/garage-defaults.js"), "utf8") + "\n;globalThis.GarageDefaults = GarageDefaults;", ctx, { filename: absSrc("js/data/garage-defaults.js") });
+    const GD = ctx.GarageDefaults;
+    for (const k of GD.keys()) if (!(k in shipped)) shipped[k] = GD.get(k);
+  }
   for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
@@ -64,6 +69,23 @@ test("bars move the four channels the way the sheet says, inside the ±5 % clamp
   assert.deepEqual(host(S.mods("mclaren")), { speed: 1, accel: 1, cornering: 1, braking: 1 });
 });
 
+test("stiff ARBs move cornering by a measured percent", () => {
+  const { S } = load();
+  S.set("mclaren", { arbF: 11, arbR: 11 });          // total ≈ +4.5 clicks from works
+  const m = S.mods("mclaren");
+  // 0.006 per click of average ARB stiffness → ~2.7% at this set; a token
+  // coefficient leaves cornering within 0.05% of identity.
+  assert.ok(m.cornering >= 1.02, `stiff ARBs must raise cornering by ≥2%, got ${m.cornering}`);
+});
+
+test("stiff ARBs cut accel by a measured percent", () => {
+  const { S } = load();
+  S.set("mclaren", { arbF: 11, arbR: 11 });          // total ≈ +4.5, split +1 vs works
+  const m = S.mods("mclaren");
+  // 0.003·total and 0.004·split compound to ~1.7% cut; token coeffs leave accel ≈ 1.
+  assert.ok(m.accel <= 0.99, `stiff ARBs must cut accel by ≥1%, got ${m.accel}`);
+});
+
 test("rake adds aero load on top of the wing and clamps at the ends; the factory path ignores it", () => {
   const { Teams, Parts, S } = load();
   const t = Teams.LIST.find((x) => x.id === "williams");
@@ -89,6 +111,15 @@ test("brake bias: forward spends the front's circle, rearward the rear's; the wh
   S.set("ferrari", { brakeBias: 99 });
   assert.equal(S.get("ferrari").brakeBias, 62, "clamped to the wheel's range");
   assert.equal(S.brakeBias("ferrari"), 0.62);
+});
+
+test("brake bias 60/52 moves ellipse past ±5%", () => {
+  const { S } = load();
+  const fwd = S.bbScales(0.60), rear = S.bbScales(0.52);
+  // bbScales may stretch the brake ellipse well past the ±5% mods clamp; a
+  // 1.05/0.95 clamp would pin 60% and 52% exactly on that wall.
+  assert.ok(fwd.f > 1.05 && fwd.r < 0.95, `60% F must move past ±5%, got f=${fwd.f} r=${fwd.r}`);
+  assert.ok(rear.f < 0.95 && rear.r > 1.05, `52% F must move past ±5%, got f=${rear.f} r=${rear.r}`);
 });
 
 test("a damaged sheet falls back per field, and reset restores the works numbers", () => {
@@ -140,4 +171,113 @@ test("reset returns to the SHIPPED sheet a fresh install gets, not the works def
   const { S: bare } = load();
   bare.set("mclaren", { arbF: 11 });
   assert.equal(bare.reset("mclaren").arbF, 6, "a team with no shipped sheet still resets to the works default");
+});
+
+test("#4922: the SHIPPED garage-defaults sheet is the works sheet — untouched and reset read WORKS, mods identity", () => {
+  const { Teams, S } = load({}, { realDefaults: true });
+  for (const t of Teams.LIST) {
+    assert.equal(S.isDefault(t.id), true, t.id + " fresh install must read WORKS");
+    assert.deepEqual(host(S.mods(t.id)), { speed: 1, accel: 1, cornering: 1, braking: 1 }, t.id + " fresh mods");
+    assert.equal(S.rake(t.id), 0, t.id + " fresh rake");
+    S.set(t.id, { arbF: 1 });
+    assert.equal(S.isDefault(t.id), false, t.id + " a tune reads TUNED");
+    S.reset(t.id);
+    assert.equal(S.isDefault(t.id), true, t.id + " RESET TO WORKS must read WORKS");
+    assert.deepEqual(host(S.mods(t.id)), { speed: 1, accel: 1, cornering: 1, braking: 1 }, t.id + " reset mods");
+  }
+});
+
+// ---------------------------------------------------------------------------
+// #5036: career and free play keep separate setup sheets. Parts already split by
+// flow (game.js careerFitted: career.fitted vs parts.<team>); SetupTune.keyFor
+// follows the same rule: while a career is OPEN and the team is the career's, the
+// sheet is careerSetup.<flavour>.<slot>.<team> stamped with the career seed;
+// everything else is setup.<team>. The migration case is the one that matters:
+// an existing setup.<team> sheet stays the free-play sheet unchanged, is never
+// copied into a career, and the first career open starts from the works sheet.
+function loadScoped(disk = {}) {
+  const stored = new Map(Object.entries(disk));
+  const rev = new Map();
+  const career = { open: false, data: null, slot: { flavour: "driver", i: 0 } };
+  const store = {
+    get: (k, d) => (stored.has(k) ? stored.get(k) : d),
+    set: (k, v) => { rev.set(k, (rev.get(k) || 0) + 1); if (v === undefined) stored.delete(k); else stored.set(k, v); return true; },
+    write: (k, v) => ({ ok: true, durable: store.set(k, v) }),
+    keyRevision: (k) => rev.get(k) || 0,
+  };
+  const ctx = vm.createContext({
+    Math, console, Object, Array, Number, JSON, isFinite,
+    GameStore: { store },
+    Career: { inCareer: () => career.open, data: () => career.data, slot: () => career.slot },
+  });
+  seedLog(ctx);
+  ctx.window = ctx;
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/garage/setup-tune.js", "js/garage/setup-presets.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
+  }
+  return { S: vm.runInContext("SetupTune", ctx), P: vm.runInContext("SetupPresets", ctx), store, stored, career };
+}
+
+const OLD_SHEET = { arbF: 9, arbR: 3, rideF: 20, rideR: 70, brakeBias: 58 };
+
+test("an old setup.<team> save stays the free-play sheet; the first career open starts from works", () => {
+  const { S, stored, career } = loadScoped({ "setup.mercedes": { ...OLD_SHEET } });
+  assert.deepEqual(host(S.get("mercedes")), OLD_SHEET, "free play reads the old sheet unchanged");
+  assert.equal(S.keyFor("mercedes"), "setup.mercedes");
+
+  career.data = { team: "mercedes", seed: 4242 }; career.open = true;
+  assert.equal(S.keyFor("mercedes"), "careerSetup.driver.0.mercedes");
+  assert.deepEqual(host(S.get("mercedes")), host(S.defaults("mercedes")), "a free-play sheet is never moved into a career");
+  S.set("mercedes", { arbF: 4 });
+  assert.equal(S.get("mercedes").arbF, 4);
+  assert.deepEqual(host(stored.get("careerSetup.driver.0.mercedes")), { ...host(S.defaults("mercedes")), arbF: 4, seed: 4242 });
+  assert.deepEqual(host(stored.get("setup.mercedes")), OLD_SHEET, "a career edit leaves the free-play sheet alone");
+
+  career.open = false;
+  assert.deepEqual(host(S.get("mercedes")), OLD_SHEET, "back in free play: the old choices, intact");
+  career.open = true;
+  assert.equal(S.get("mercedes").arbF, 4, "back in the career: the career's own choice");
+});
+
+test("a rival team inside a career, and a save merely on disk, use the free-play sheet", () => {
+  const { S, career } = loadScoped({ "setup.ferrari": { ...OLD_SHEET } });
+  career.data = { team: "mercedes", seed: 1 };
+  assert.equal(S.keyFor("mercedes"), "setup.mercedes", "a save on disk that is not OPEN is not a career scope");
+  career.open = true;
+  assert.equal(S.keyFor("ferrari"), "setup.ferrari");
+  assert.deepEqual(host(S.get("ferrari")), OLD_SHEET);
+});
+
+test("a NEW career in the same slot starts from works; reset clears only the career sheet", () => {
+  const { S, stored, career } = loadScoped({ "setup.haas": { ...OLD_SHEET } });
+  career.data = { team: "haas", seed: 10 }; career.open = true;
+  S.set("haas", { arbR: 9 });
+  career.data = { team: "haas", seed: 11 };   // the slot was deleted and a new career started
+  assert.deepEqual(host(S.get("haas")), host(S.defaults("haas")), "another career's sheet does not leak in");
+  assert.equal(S.isDefault("haas"), true);
+  S.set("haas", { arbR: 2 });
+  assert.equal(stored.get("careerSetup.driver.0.haas").seed, 11);
+  S.reset("haas");
+  assert.equal(stored.has("careerSetup.driver.0.haas"), false);
+  assert.deepEqual(host(stored.get("setup.haas")), OLD_SHEET);
+});
+
+test("a career slot and flavour each get their own sheet", () => {
+  const { S, career } = loadScoped();
+  career.data = { team: "custom", seed: 3 }; career.open = true;
+  career.slot = { flavour: "myteam", i: 2 };
+  assert.equal(S.keyFor("custom"), "careerSetup.myteam.2.custom");
+});
+
+test("presets follow the active sheet: applying one in a career writes the career key only", () => {
+  const { S, P, store, stored, career } = loadScoped({ "setup.mercedes": { ...OLD_SHEET } });
+  career.data = { team: "mercedes", seed: 99 }; career.open = true;
+  const tune = { ...host(S.defaults("mercedes")), arbF: 2 };
+  assert.equal(P.save(store, "mercedes", "LOW", tune, "monza").ok, true);
+  const row = P.list(store, "mercedes")[0];
+  const pending = P.preview(store, "mercedes", row.id);
+  assert.equal(P.apply(store, "mercedes", pending).ok, true);
+  assert.equal(S.get("mercedes").arbF, 2);
+  assert.equal(stored.get("careerSetup.driver.0.mercedes").seed, 99, "the career stamp survives a preset apply");
+  assert.deepEqual(host(stored.get("setup.mercedes")), OLD_SHEET);
 });
