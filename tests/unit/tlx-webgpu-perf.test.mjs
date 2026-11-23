@@ -222,6 +222,31 @@ async function postRig(t, { up = false } = {}) {
     setUpscale(v) { up = v; post.resize(320, 180); } };
 }
 
+test("neutral HDR grade skips all five vector writes and restores current knobs when re-enabled", async (t) => {
+  const h = await postRig(t);
+  const C = h.P.composite.U;
+  assert.equal(C.sceneHdr.value, 1);
+  let writes = 0;
+  for (const name of ["tone0", "tone1", "lift", "gamma", "gain"]) {
+    const v = C[name].value, set = v.set;
+    v.set = function (...values) { writes++; return set.apply(this, values); };
+  }
+  const tune = { shadows: 0.2 };
+  h.present({ tune });
+  assert.equal(writes, 5);
+  assert.equal(C.tone0.value.y, 0.2);
+  tune.shadows = 0;
+  h.present({ tune });
+  assert.equal(C.hdrGradeOn.value, 0);
+  assert.equal(writes, 5);
+  tune.gainG = 1.2;
+  h.present({ tune });
+  assert.equal(writes, 10);
+  assert.equal(C.hdrGradeOn.value, 1);
+  assert.equal(C.tone0.value.y, 0);
+  assert.equal(C.gain.value.y, 1.2);
+});
+
 test("W5: a clear sky and no exhaust haze leave the frame-varying time uniforms unwritten; both write once read", async (t) => {
   const h = await postRig(t);
   const opts = { ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 };

@@ -408,6 +408,8 @@ const VisorOptics = (function () {
     }
     _ctx = _cv && _cv.getContext ? _cv.getContext("2d") : null;
     if (!_ctx) { _cv = null; return null; }
+    // tick measured the layout before lookup; size a newly acquired canvas for its first paint.
+    _sizeLightCanvas(_w, _h);
     // A visor setting change repaints at once; the port image is rebuilt only for the settings it shows (not a beams slider drag).
     if (typeof CockpitOpts !== "undefined" && CockpitOpts.onWheel) CockpitOpts.onWheel((name) => { if (name && name.startsWith("visor")) { if (name === "visorColor") _portKey = ""; _acc = 1; } });
     Log.info("game", "VisorOptics: helmet visor overlay ready");
@@ -415,7 +417,13 @@ const VisorOptics = (function () {
   }
 
   let _viewport = null, _shape = "standard";
-  function _size(newCanvas = false) {
+  function _sizeLightCanvas(w, h) {
+    const lightW = Math.ceil(w / 2), lightH = Math.ceil(h / 2);
+    if (_cv.width !== lightW) _cv.width = lightW;
+    if (_cv.height !== lightH) _cv.height = lightH;
+    _ctx.setTransform(_cv.width / w, 0, 0, _cv.height / h, 0, 0);
+  }
+  function _size() {
     if (typeof window === "undefined") return false;
     // The layout viewport (ICB) the fixed 100% layer is laid out in, not inner*: a Home Screen landscape launch can hold
     // the portrait inner* pair with no resize to follow, and a 393x852 store stretched over the 852x393 box bent the
@@ -436,14 +444,12 @@ const VisorOptics = (function () {
       _portKey = "";
       _bendW = 0;
     }
-    if (!geometryChanged && !newCanvas && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
+    if (!geometryChanged && (!_cv || (_cv.width === lightW && _cv.height === lightH))) return false;
     _w = w; _h = h; _lastHaze = null;
-    if (_cv && (newCanvas || resized || _cv.width !== lightW || _cv.height !== lightH)) {
+    if (_cv && (resized || _cv.width !== lightW || _cv.height !== lightH)) {
       // The broad reflected light is low-frequency. Keep projection, stroke widths
       // and paths in CSS pixels, and leave the bezel and scene at full resolution.
-      if (_cv.width !== lightW) _cv.width = lightW;
-      if (_cv.height !== lightH) _cv.height = lightH;
-      _ctx.setTransform(lightW / w, 0, 0, lightH / h, 0, 0);
+      _sizeLightCanvas(w, h);
     }
     // The sheen and the fringe are stroked INSIDE the port edge (inset paths), where the glass is clear; on the
     // edge itself the bezel's falloff would swallow them.
@@ -470,9 +476,9 @@ const VisorOptics = (function () {
   }
 
   /** The port image on body (--visor-port) for the current size and tint; rebuilt only when either changes. */
-  function _port() {
-    if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
-    const visor = _opt("visor", "off"), color = _opt("visorColor", "amber"), strength = _opt("visorIntensity", "medium");
+  function _port(visor) {
+    if (!document.body.style) return;
+    const color = _opt("visorColor", "amber"), strength = _opt("visorIntensity", "medium");
     if (_portKey && _w === _portW && _h === _portH && visor === _portV && color === _portC && strength === _portS) return;   // no per-frame key string
     _portW = _w; _portH = _h; _portV = visor; _portC = color; _portS = strength;
     _portKey = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
@@ -706,10 +712,9 @@ const VisorOptics = (function () {
     _bendActive = false;
     const helmet = _helmet();
     if (!helmet) { _syncBudget(0); _show(false); return; }
-    let resized = _size();
-    _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
-    const level = LEVEL[_opt("visorReflections", "light")] || 0;
+    const resized = visor !== "off" && _size();
+    _port(visor);                                              // OFF clears the aperture without measuring the viewport
     const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
     if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
     const budget = BUDGETS[_budget];
@@ -721,18 +726,18 @@ const VisorOptics = (function () {
       _bendActive = !!bendField.data && _bendW === _w && _bendH === _h;
     }
     if (t2 && _bendActive && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
+    const level = LEVEL[_opt("visorReflections", "light")] || 0;
     if (!(level > 0)) { _show(false); return; }
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
-    const hadCanvas = !!_cv;
+    const newSizeOrCanvas = resized || !_looked;
     if (!_lookup()) return;
-    if (!hadCanvas && _size(true)) resized = true;   // size a newly enabled canvas before painting
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
     const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
-    if (!resized && _acc < 1 / hz) return;
-    if (!(dt > 0) && !resized && !changed) return;              // a paused profile change still refreshes once
-    _acc = resized || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
+    if (!newSizeOrCanvas && _acc < 1 / hz) return;
+    if (!(dt > 0) && !newSizeOrCanvas && !changed) return;              // a paused profile change still refreshes once
+    _acc = newSizeOrCanvas || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
     if (!scene) { _show(false); return; }                       // nothing to light the shield: keep the layer hidden

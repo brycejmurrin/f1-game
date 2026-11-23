@@ -231,9 +231,16 @@ if (typeof document !== "undefined" && document.addEventListener)
 // ~40 % of setFrameLights with flicker on). -1 = not yet computed.
 let _hshC = new Float32Array(0);
 function _hshOf(o) {
-  if (o >= _hshC.length) { const nc = new Float32Array(Math.max(o + 1, _hshC.length * 2, 1024)).fill(-1); nc.set(_hshC); _hshC = nc; }
-  let h = _hshC[o];
-  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[o] = x - Math.floor(x); }
+  // Each source record spans 15 numbers, but only one cached hash.
+  const lamp = o / 15;
+  if (lamp >= _hshC.length) {
+    const next = new Float32Array(Math.max(lamp + 1, _hshC.length * 2, 1024));
+    next.set(_hshC);
+    next.fill(-1, _hshC.length);
+    _hshC = next;
+  }
+  let h = _hshC[lamp];
+  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[lamp] = x - Math.floor(x); }
   return h;
 }
 // Per-lamp rgb factor scratch: [0..2] flicker × breathe × warm-up tint (what the
