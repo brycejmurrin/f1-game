@@ -438,19 +438,43 @@ const TrackGeom = (function () {
       (h*i-e*k)*s,(a*k-d*i)*s,(d*e-a*h)*s,(e*j-g*i)*s,(b*i-a*j)*s,(a*g-b*e)*s,
       c[0]-x,c[1]-y,c[2]-z,c[0]+x,c[1]+y,c[2]+z);
   }
-  function lightIndex(records) {
-    const boxes = new Float32Array(records), count=boxes.length/LIGHT_STRIDE, cells=new Map();
-    const bounds=[Infinity,Infinity,Infinity,-Infinity,-Infinity,-Infinity];
-    for(let id=0;id<count;id++) {
-      const n=id*LIGHT_STRIDE;
-      for(let a=0;a<3;a++){bounds[a]=Math.min(bounds[a],boxes[n+12+a]);bounds[a+3]=Math.max(bounds[a+3],boxes[n+15+a]);}
-      for(let x=Math.floor(boxes[n+12]/LIGHT_CELL);x<=Math.floor(boxes[n+15]/LIGHT_CELL);x++)
-        for(let z=Math.floor(boxes[n+14]/LIGHT_CELL);z<=Math.floor(boxes[n+17]/LIGHT_CELL);z++){
-          const key=lightCellKey(x,z);let list=cells.get(key);if(!list)cells.set(key,list=[]);list.push(id);
+  function* lightIndexSteps(records) {
+    const boxes = new Float32Array(records.length);
+    const count = boxes.length / LIGHT_STRIDE, cells = new Map();
+    const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    // Dense forests contribute many small triangles. Copy and bin them in
+    // batches so the paced builder can return to the loading screen.
+    const batch = 2048;
+    for (let id = 0; id < count; id++) {
+      const n = id * LIGHT_STRIDE;
+      for (let i = 0; i < LIGHT_STRIDE; i++) boxes[n + i] = records[n + i];
+      for (let a = 0; a < 3; a++) {
+        bounds[a] = Math.min(bounds[a], boxes[n + 12 + a]);
+        bounds[a + 3] = Math.max(bounds[a + 3], boxes[n + 15 + a]);
+      }
+      const endX = Math.floor(boxes[n + 15] / LIGHT_CELL), endZ = Math.floor(boxes[n + 17] / LIGHT_CELL);
+      for (let x = Math.floor(boxes[n + 12] / LIGHT_CELL); x <= endX; x++)
+        for (let z = Math.floor(boxes[n + 14] / LIGHT_CELL); z <= endZ; z++) {
+          const key = lightCellKey(x, z);
+          let list = cells.get(key);
+          if (!list) cells.set(key, list = []);
+          list.push(id);
         }
+      if ((id + 1) % batch === 0) yield;
     }
-    for(const [key,list] of cells)cells.set(key,new Uint32Array(list));
-    return {boxes,cells,bounds,stamp:new Uint32Array(count),generation:0,queries:0,tests:0};
+    let packed = 0;
+    for (const [key, list] of cells) {
+      cells.set(key, new Uint32Array(list));
+      if (++packed % 256 === 0) yield;
+    }
+    return { boxes, cells, bounds, stamp: new Uint32Array(count), generation: 0, queries: 0, tests: 0 };
+  }
+  function lightIndex(records) {
+    const steps = lightIndexSteps(records);
+    for (;;) {
+      const step = steps.next();
+      if (step.done) return step.value;
+    }
   }
   function lightBlocked(track, eye, dx, dy, dz, maxT) {
     const index=track && track._lightOccluders;
@@ -493,6 +517,6 @@ const TrackGeom = (function () {
     return false;
   }
 
-  return { lightPrimitive, lightMesh, lightBox, lightIndex, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
+  return { lightPrimitive, lightMesh, lightBox, lightIndex, lightIndexSteps, lightBlocked, MAT, SWAY_FRAC, swayMatAt, ROUND_K, roundNormals, MIN_SEP, SEP_SLOTS, cross, norm, vadd, emit, addMesh,
            addBox, addPrism, addPyramid, addCone, addCyl, addFrustum, addMountain };
 })();

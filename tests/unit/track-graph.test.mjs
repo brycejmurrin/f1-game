@@ -847,12 +847,20 @@ test("tree blocker publication agrees for fused, instanced and staged crowns", a
 });
 
 
-test("distant forests do not add work to a local visor ray", () => {
+test("dense forests build across multiple steps and keep distant triangles out of a local visor ray", () => {
   const records = [], foliage = { _mat: TrackGeom.MAT.FOLIAGE };
   for (let i = 0; i < 1000; i++)
     TrackGeom.lightPrimitive(records, foliage, "cone", [[500 + i * 10, 2, 100], 3, 6, [.2, .4, .1], 7]);
   TrackGeom.lightPrimitive(records, foliage, "cone", [[0, 2, 10], 3, 6, [.2, .4, .1], 7]);
-  const index = TrackGeom.lightIndex(records);
+  const steps = TrackGeom.lightIndexSteps(records);
+  let yields = 0, result = steps.next();
+  while (!result.done) {
+    yields++;
+    result = steps.next();
+  }
+  assert.ok(yields > 1, "a dense index yields before all records are published");
+  const index = result.value;
+  assert.equal(index.boxes.length, records.length);
   assert.equal(TrackGeom.lightBlocked({ _lightOccluders: index }, [0, 4, 0], 0, 0, 1, Infinity), true);
   assert.ok(index.tests <= 7, "only the local crown's triangles enter the narrow phase");
 });

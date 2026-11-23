@@ -2342,7 +2342,9 @@ const TrackBuildProps = (function () {
     }
     // Model groups catch emitter failures; the sticky region cap must still abort publication.
     if (region) { region.check(); track.sceneryRegion = region.stats(); }
-    track._lightOccluders = TrackGeom.lightIndex(lightBoxes); delete out._lightBoxRecords;
+    yield; // Finish the pit complex before starting the visor index.
+    track._lightOccluders = yield* TrackGeom.lightIndexSteps(lightBoxes);
+    delete out._lightBoxRecords;
     track.props.count = propList.length;
     track.props.spanCount = spanList.length;
     track.props.dropped = propDropped;
