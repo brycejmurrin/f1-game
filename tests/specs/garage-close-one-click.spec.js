@@ -1,7 +1,8 @@
 // @ts-check
 // CLOSE GARAGE must dismiss on one real mouse click even when #loading is up
 // in the busy phase (z-index above #carsetup). Regression for live acb6a7a.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { pinFactorySeat } from "../helpers/factory-seat.js";
 import { toMenu } from "../helpers/shared-page.js";
 
 async function mouseClickCenter(page, selector) {
@@ -107,4 +108,51 @@ test.describe("garage close — one click during the open crossfade", () => {
     await expect(page.locator("#carsetup")).toBeHidden({ timeout: 5000 });
     await expect(page.locator("#overlay")).toBeVisible();
   });
+});
+
+test("work on car hides the helmet visor until the driving view returns", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("apex26.helmetVisor", "clear"));
+  await pinFactorySeat(page);
+  await page.goto("/");
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => window.__apex.tt("bahrain", "day"));
+  await awaitTrackBuild(page);
+  await page.evaluate(() => {
+    const A = window.__apex;
+    A.headless(true);
+    A.go();
+    A.tyres({ level: "real" });
+  });
+  const view = await page.evaluate(() => {
+    const A = window.__apex;
+    const total = A.info().total;
+    const pit = A.pit();
+    const f = ((A.physState().s + pit.boxM - pit.atM - 18) / total + 1) % 1;
+    A.jump(f, 2.5, 0);
+    const lane = A.pit().laneX;
+    A.jump(f, 2.5, lane); A.pit({ arm: true });
+    for (let i = 0; i < 60 * 12 && A.pit().state !== "box"; i++) {
+      const p = A.pit(), car = A.physState(), near = p.atM >= p.boxM - 3;
+      A.aim(0);
+      A.setInput({ steer: Math.max(-1, Math.min(1, (lane - car.x) * 0.5)),
+        throttle: !near && car.speed < 5, brake: near && car.speed > 0.2 });
+      A.step(1 / 60, 1);
+    }
+    A.clearInput();
+    A.camera("helmet");
+    const work = document.getElementById("hud-work");
+    const garage = document.getElementById("carsetup");
+    const visor = () => getComputedStyle(document.getElementById("hud"), "::before").content !== "none";
+    if (A.pit().state !== "box" || work.hidden) return { error: "WORK ON CAR is unavailable" };
+    const before = visor();
+    work.click();
+    const during = { garage: !garage.hidden, helmet: document.body.hasAttribute("data-helmet-cam"), visor: visor() };
+    document.getElementById("cs-arrival-skip").click();
+    const done = document.getElementById("cs-done");
+    done.click();
+    if (!garage.hidden) done.click(); // Skip the rollout when that animation is enabled.
+    return { before, during, after: { garage: !garage.hidden, visor: visor() } };
+  });
+  expect(view).toEqual({ before: true, during: { garage: true, helmet: true, visor: false },
+    after: { garage: false, visor: true } });
 });
