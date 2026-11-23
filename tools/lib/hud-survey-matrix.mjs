@@ -97,10 +97,10 @@ export const portraitBlocked = (dev) => !!dev && dev.touch && dev.h > dev.w && d
 
 // CamModes ids (js/camera/mode-switch.js CAM_MODES) — the unit test locksteps it.
 export const CAMS = Object.freeze(["chase", "far", "drift", "cockpit", "hood", "overhead", "heli", "reverse",
-  "side", "cinematic", "low", "tcam", "rear", "visor", "trackside", "rival", "pitwall", "drone", "tv", "helmet"]);
+  "side", "cinematic", "low", "tcam", "rear", "trackside", "rival", "pitwall", "drone", "tv", "helmet"]);
 // js/ui/hud.js BCAM_IDS / ONBOARD_IDS.
 export const BCAM_IDS = Object.freeze(["heli", "side", "cinematic", "low", "overhead", "rival", "pitwall", "drone"]);
-export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam", "visor", "helmet"]);
+export const ONBOARD_IDS = Object.freeze(["cockpit", "hood", "tcam", "helmet"]);
 // CamGroups.COCKPIT_LAYOUT (js/camera/cam-groups.js): the camera that reads
 // gear and speed off the wheel's LCD, so MOVE & SIZE gives it the cockpit
 // layout — and the one mode-switch.js marks body.cockpit-cam (with a wheel that
@@ -300,7 +300,6 @@ export const bootKey = (c) => BOOT_KNOBS.map((k) => c[k]).join("|");
 export const QUICK = Object.freeze([
   { name: "chase-default" },
   { name: "cockpit-default", cam: "cockpit" },
-  { name: "visor-default", cam: "visor" },
   { name: "chase-preset-clean", preset: "clean" },
   { name: "chase-preset-big", preset: "big" },
   { name: "chase-preset-corners", preset: "corners" },
@@ -315,7 +314,7 @@ export const QUICK = Object.freeze([
 ]);
 export const FULL_DIMS = Object.freeze({
   device: MATRIX_DEVICES,
-  cam: ["chase", "cockpit", "helmet", "visor", "hood", "heli", "tv"],
+  cam: ["chase", "cockpit", "helmet", "hood", "heli", "tv"],
   profile: ENUMS.profile,
   // AUTO resolves to FULL (js/ui/hud.js resolveMetricsLayout), and each layout
   // value is a BOOT: device x layout pairs alone cost 5 x 4 = 20 pages.
@@ -521,10 +520,9 @@ export const LEADS = Object.freeze([
   { name: "lead12-broadcast-640-hud175", device: "phone-640x360", profile: "broadcast", hudScale: 175, gaps: "on",
     lead: "BROADCAST 640x360 HUD 175 GAPS ON: gaps vs map", checks: [{ type: "noOverlap", a: "gaps", b: ["map"] }] },
   // 13. Which cameras count as "cockpit": do HudLayout's set, MAP AUTO and
-  // cockpit-cam each match CamGroups (js/camera/cam-groups.js)? They are TWO
-  // questions on purpose: VISOR and HOOD are ONBOARD (MAP AUTO hides) but draw
-  // no wheel (other layout, no cockpit-cam).
-  ...["visor", "hood"].map((cam) => ({ name: `lead13-${cam}-consistency`, cam, map: "auto",
+  // cockpit-cam each match CamGroups (js/camera/cam-groups.js)? Both hide
+  // the map in Auto, but only Helmet uses the dedicated Helmet layout.
+  ...["helmet", "hood"].map((cam) => ({ name: `lead13-${cam}-consistency`, cam, map: "auto",
     lead: `${cam.toUpperCase()}: HudLayout set / MAP AUTO / cockpit-cam vs CamGroups`, checks: [{ type: "camConsistency" }] })),
   // 14. LARGER text must not clip the ERS label out of its bar.
   { name: "lead14-larger-energy", textSize: "larger", lead: "TEXT LARGER: #hud-energy label clipped?",

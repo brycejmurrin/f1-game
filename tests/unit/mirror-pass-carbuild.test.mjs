@@ -130,10 +130,10 @@ test("wheel phases advance once before any view, and mirror/main/cockpit draws n
   assertWheelMatrices(mirror, expectedWheels(v, c, phase, phase), "mirror first");
   assert.deepEqual(main, mirror, "the main view reads the phase already used by the second camera");
   assert.deepEqual(wheelMatrices(v, drawMain), main, "another draw does not integrate another frame");
-  // Drive the real cockpit consumer (VISOR has no steering-wheel telemetry).
-  Object.assign(v.ctx.CockpitOpts, { layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), interior: () => "carbon" });
+  // Drive the real cockpit consumer (wheel NONE has no steering-wheel telemetry).
+  Object.assign(v.ctx.CockpitOpts, { layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), interior: () => "carbon", wheel: () => "none" });
   v.ctx.Car3D.cockpitMirrorGlass = () => [];
-  const cockpit = () => v.carDraw.drawCockpitRig(c, WHEEL_BASE, 0.02, {}, true);
+  const cockpit = () => v.carDraw.drawCockpitRig(c, WHEEL_BASE, 0.02, {});
   assertWheelMatrices(wheelMatrices(v, cockpit), expectedWheels(v, c, phase, phase, true, 0.30, 1.4), "cockpit front wheels");
   assert.deepEqual(wheelMatrices(v, drawMain), main, "cockpit drawing leaves the shared phase unchanged");
 });
@@ -201,18 +201,18 @@ test("solo photo redraws hold wheel phase and blur while online and replay views
   const mainDraw = render.match(/drawPlayerWheels\(c, _groundMat,[^;]+;/)[0];
   const cockpitDraw = render.match(/drawCockpitRig\(c, _cockMat,[^;]+;/)[0];
   const drawView = new Function("dt", "paused", "setupPreviewOn", "netPlay", "replayBuf", "carDraw",
-    "c", "_groundMat", "_cockMat", "_wheelOpts", "paint", "visorEye", "cockpit",
+    "c", "_groundMat", "_cockMat", "_wheelOpts", "paint", "cockpit",
     `const { drawPlayerWheels, drawCockpitRig } = carDraw; ${step} if (cockpit) { ${cockpitDraw} } else { ${mainDraw} }`);
   for (const cockpit of [false, true]) {
     const v = carDrawVm();
     v.field((c, i) => 1000 - 9 * i);
     const c = v.G.player;
     c.speed = 40;
-    Object.assign(v.ctx.CockpitOpts, { layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), interior: () => "carbon" });
+    Object.assign(v.ctx.CockpitOpts, { layout: () => ({ wheelS: 1, wheelY: 0, wheelZ: 0 }), interior: () => "carbon", wheel: () => "none" });
     v.ctx.Car3D.cockpitMirrorGlass = () => [];
     function frame(online, replay) {
       return wheelMatrices(v, () => drawView(1 / 60, true, false, { active: () => online }, { isScrubbing: () => replay },
-        v.carDraw, c, WHEEL_BASE, WHEEL_BASE, {}, {}, true, cockpit));
+        v.carDraw, c, WHEEL_BASE, WHEEL_BASE, {}, {}, cockpit));
     }
     const held = frame(false, false);
     assert.equal(held.length, cockpit ? 2 : 4);

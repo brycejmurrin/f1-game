@@ -46,14 +46,14 @@ const PhonePairingUI = (function () {
       newPhoneCode.hidden = true; recoveryNote.textContent = "";
       $("pm-phonepad").onclick();
     };
-    // The camera before a phone linked: the phone is the wheel, so the screen shows VISOR (no wheel,
-    // js/camera/vantage.js) while it drives, and goes back after unless the player cycled away.
-    let phonePadCam = -1;
-    const VISOR_CAM = CamModes.CAM_MODES.findIndex((c) => c.id === "visor");
+    const cameraOwner = {};
+    const helmetCam = CamModes.CAM_MODES.findIndex(c => c.id === "helmet");
+    let ownsCamera = false;
 
     function restoreCamera() {
-      if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);
-      phonePadCam = -1;
+      if (!ownsCamera) return;
+      ownsCamera = false;
+      G.setCamMode(helmetCam, { owner: cameraOwner, release: true, persist: false });
     }
     function cancel() {
       if (phonePad) phonePad.cancel();
@@ -76,7 +76,10 @@ const PhonePairingUI = (function () {
         },
         linked: () => {
           btn.textContent = "UNPAIR PHONE"; G.announce("PHONE CONNECTED — TILT TO STEER", 3, "info");
-          if (VISOR_CAM >= 0 && G.camMode !== VISOR_CAM) { phonePadCam = G.camMode; G.setCamMode(VISOR_CAM, { persist: false }); }   // the phone's view, not the player's saved one
+          if (helmetCam >= 0 && !ownsCamera) {
+            ownsCamera = true;
+            G.setCamMode(helmetCam, { owner: cameraOwner, persist: false });
+          }
         },
         // ALLOW / REJECT covers the pedals: pause a running solo race under it (a net race never pauses).
         asking: () => { if ((G.state === "race" || G.state === "count") && !G.paused && !G.netPlay.active()) setPaused(true, "phone-confirm"); },

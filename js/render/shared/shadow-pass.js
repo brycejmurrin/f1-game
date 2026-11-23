@@ -115,7 +115,7 @@ const ShadowPass = (function () {
     const _shadowCast = [];   // parallel: false = blob only, never a sun / lamp map caster (FieldLod: rivals past 50 m)
     const _livePlayerShadowMat = new Float32Array(16);
     const _cockpitShadowMat = new Float32Array(16);   // first-person views: the cockpit body's matrix
-    let _playerCockpit = null;   // the cockpit body mesh in cockpit / helmet / visor, else null
+    let _playerCockpit = null;   // the cockpit body mesh in cockpit / helmet, else null
     let _shadowCount = 0;
 
     // Instanced prop shadow cast: cull to the active light frustum (sun ortho or

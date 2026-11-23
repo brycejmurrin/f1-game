@@ -57,7 +57,7 @@ test("the saved camera's audio mix survives the LAZY_AUDIO reinjection", async (
   try {
     sb.GameAudio.init();   // isolate from the test above: a SOUND click's context
     await g.race("monza", "day", "dry");
-    assert.equal(g.G.camMode, 19, "precondition: default camera is helmet (game.js:833)");
+    assert.equal(g.ctx.CamModes.CAM_MODES[g.G.camMode].id, "helmet", "precondition: default camera is Helmet");
     assert.equal(sb.GameAudio.cameraMix().kind, "onboard", "helmet camera but the engine plays the chase mix");
   } finally { g.close(); }
 });

@@ -205,17 +205,16 @@ test("a seat moves the eye and the wheel together; every wheel stays clear of th
   assert.equal(opts.layout("f1", "high"), opts.layout("f1", "high"), "cached: the per-frame read allocates nothing");
 });
 
-test("the camera eye is the chosen seat; VISOR keeps its own", () => {
+test("the first-person camera eye uses the chosen seat", () => {
   const { opts, cams } = loadOpts({}, "", true);
   const forward = opts.layout("f1", "fwd");
-  assert.deepEqual([cams.seatFwd("cockpit"), cams.seatUp("cockpit")], [forward.eyeF, forward.eyeU]);
+  assert.deepEqual([cams.seatFwd(), cams.seatUp()], [forward.eyeF, forward.eyeU]);
   opts.setSeat("std");
-  assert.deepEqual([cams.seatFwd("cockpit"), cams.seatUp("cockpit")], [cams.COCKPIT_EYE_FWD, cams.COCKPIT_EYE_UP], "STANDARD is vantage.js's cockpit eye");
+  assert.deepEqual([cams.seatFwd(), cams.seatUp()], [cams.COCKPIT_EYE_FWD, cams.COCKPIT_EYE_UP], "STANDARD is vantage.js's cockpit eye");
   opts.setSeat("high");
-  assert.ok(Math.abs(cams.seatUp("cockpit") - opts.layout().eyeU) < 1e-12 && cams.seatUp("cockpit") > cams.COCKPIT_EYE_UP);
+  assert.ok(Math.abs(cams.seatUp() - opts.layout().eyeU) < 1e-12 && cams.seatUp() > cams.COCKPIT_EYE_UP);
   opts.setSeat("fwd");
-  assert.ok(Math.abs(cams.seatFwd("cockpit") - opts.layout().eyeF) < 1e-12);
-  assert.deepEqual([cams.seatFwd("visor"), cams.seatUp("visor")], [cams.VISOR_EYE_FWD, cams.VISOR_EYE_UP], "the phone's VISOR ignores SEAT");
+  assert.ok(Math.abs(cams.seatFwd() - opts.layout().eyeF) < 1e-12);
 });
 
 test("all modern wheels carry the readouts, and a change reaches listeners", () => {
@@ -348,12 +347,12 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
   const drawn = [];
   G.gfx.draw = (mesh, m) => drawn.push({ name: mesh && (mesh.carMesh || mesh.kind), m: Array.from(m) });
   const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  const rig = (wheel, seat, cab, noWheel = false) => {
+  const rig = (wheel, seat, cab) => {
     ctx.CockpitOpts.wheel = () => wheel; ctx.CockpitOpts.interior = () => cab;
     const layout = ctx.CockpitOpts.layout;
     ctx.CockpitOpts.layout = (w, s) => layout(w, s || seat);
     drawn.length = 0;
-    v.carDraw.drawCockpitRig(c, base, 1 / 60, {}, noWheel);
+    v.carDraw.drawCockpitRig(c, base, 1 / 60, {});
     assert.equal(received.at(-1).geometry, blockers.get(ctx.CockpitOpts.haloSize()));
     assert.deepEqual(received.at(-1).matrix, drawn.find(d => d.name === "body").m, "source obstruction receives the exact body draw matrix");
 
@@ -370,8 +369,8 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
     assert.ok(names.includes("getCockpitCabin"), `${seat}: CARBON draws its trim too`);
     for (const r of ["getGearDigit", "getLedStrip", "getSpeedDigit"]) assert.ok(names.includes(r), `${seat}: the f1 wheel shows ${r}`);
   }
-  const none = rig("f1", "std", "team", true);
-  assert.ok(none.includes("getCockpitDash"), "NONE / VISOR draw the column and bulkhead");
+  const none = rig("none", "std", "team");
+  assert.ok(none.includes("getCockpitDash"), "NONE draws the column and bulkhead");
   for (const r of ["getCockpitWheel", "getGearDigit", "getLedStrip"]) assert.ok(!none.includes(r), "NONE draws no " + r);
   const screenless = ["f1", "gt", "butterfly", "yoke", "endurance", "round"].filter((w) => !ctx.CockpitOpts.wheelHasScreen(w));
   assert.ok(screenless.length >= 1, "some wheel has no screen");

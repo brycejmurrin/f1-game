@@ -76,7 +76,7 @@ function _vAheadPt(d, h, lat) {
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 // NEAR-EYE CULL for a RIVAL: hidden only when the camera eye sits INSIDE its body
 // (the drawn car, a little over the 4.8 x 2.0 m collider, grown by `pad` = the near
-// plane plus a margin), never a RADIUS from the car's origin: from the cockpit, visor
+// plane plus a margin), never a RADIUS from the car's origin: from the cockpit or helmet
 // or hood a rival ALONGSIDE is 2-3 m from the eye, so a 3.4 m radius sized for the
 // chase cam hid it just as the player drew level. along / lat / up are the eye
 // MINUS the car in the car's own frame (tangent, right, up), metres.
@@ -85,23 +85,11 @@ function eyeInsideCar(along, lat, up, pad) {
   const p = pad > 0 ? pad : 0;
   return Math.abs(along) < CAR_BOX_HALF_L + p && Math.abs(lat) < CAR_BOX_HALF_W + p && up > -p && up < CAR_BOX_H + p;
 }
-// VISOR: the COCKPIT WITHOUT ITS STEERING WHEEL, for a phone wheel in the hand
-// (a linked phone switches to it). game.js draws the same cockpit rig — tub,
-// halo, mirrors, front wheels, the nose ahead — with the wheel and its dash
-// left out. The eye is the cockpit's own for now; its own pair of
-// offsets exists so it can move closer/lower later without dragging the tub
-// with it (cockpitViewmodelAxes anchors the rig with these).
-const VISOR_EYE_FWD = COCKPIT_EYE_FWD, VISOR_EYE_UP = COCKPIT_EYE_UP;
-
-// The driver's eye (fwd, up) for a first-person mode: VISOR's own pair, or the
-// chosen cockpit INTERIOR's seat (CockpitOpts.layout). vantage() places the
-// camera with it and game.js anchors the rig with it, so the two cannot disagree.
-function seatFwd(mode) {
-  if (mode === "visor") return VISOR_EYE_FWD;
+// The driver eye follows the selected seat in both first-person views.
+function seatFwd() {
   return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeF : COCKPIT_EYE_FWD;
 }
-function seatUp(mode) {
-  if (mode === "visor") return VISOR_EYE_UP;
+function seatUp() {
   return typeof CockpitOpts !== "undefined" ? CockpitOpts.layout().eyeU : COCKPIT_EYE_UP;
 }
 
@@ -132,7 +120,7 @@ const HEAD_MAX = Object.freeze({ lat: HEAD_ROLL_MAX * HEAD_LAT, fwd: HEAD_DIVE_M
 const _head = [0, 0, 0, 0], _headScr = [0, 0, 0, 0];
 function headOffset(mode, extra, out) {
   out[0] = out[1] = out[2] = out[3] = 0;
-  if (mode !== "cockpit" && mode !== "visor" && mode !== "helmet") return out;
+  if (mode !== "cockpit" && mode !== "helmet") return out;
   if (mode === "helmet") {
     const pose = typeof CockpitOpts !== "undefined" && CockpitOpts.helmetEye ? CockpitOpts.helmetEye() : "standard";
     const shift = pose === "tucked" ? 0.025 : pose === "upright" ? -0.025 : 0;
@@ -387,7 +375,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // with the chassis by even a centimetre would float in the cockpit — matching
   // the car matters more there than smoothness, and riding the car's own bumps
   // is what an onboard camera is FOR.
-  const onboard = _vOnboard = mode === "cockpit" || mode === "hood" || mode === "visor" || mode === "helmet";
+  const onboard = _vOnboard = mode === "cockpit" || mode === "hood" || mode === "helmet";
   const p = _vantP;
   p[0] = cvA.p[0] + cvA.r[0] * x;
   p[1] = (onboard ? cvA.p[1] : centreY(track, s)) + bankDy;
@@ -435,9 +423,9 @@ function vantage(track, mode, s, x, spd, now, extra) {
       fov = 50;
     }
   } else if (onboard) {
-    const driver = mode !== "hood";   // a driver's eye: cockpit, visor (no wheel), helmet (inside the lid)
-    const eyeFwd = driver ? seatFwd(mode) : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
-    const eyeUp  = driver ? seatUp(mode) : 0.95;
+    const driver = mode !== "hood";   // a driver's eye: cockpit and helmet (inside the lid)
+    const eyeFwd = driver ? seatFwd() : 0.55;   // the cockpit INTERIOR's seat (CockpitOpts.layout)
+    const eyeUp  = driver ? seatUp() : 0.95;
     if (extra.carPos) {
       // FREE-WORLD ONBOARD. These are bolted to the CAR, so they must sit at the
       // car and look down the CAR's nose. Built from the road (eye along the
@@ -761,7 +749,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // Clamp the eye to the ground beneath it plus a small clearance. The ground
   // is the same lateral profile the terrain ribbon is built from, plus the
   // corner's banking, so this agrees with what is actually drawn. The onboard
-  // eyes (cockpit/hood/visor/helmet) are exempt — they ride the car, and their
+  // eyes (cockpit/hood/helmet) are exempt — they ride the car, and their
   // eye is already on the surface by construction.
   if (!onboard && track.surface) {
     const n = track.n;
@@ -888,6 +876,6 @@ function applyFreeCam(cam, eyeOut, tgtOut) {
 }
 function getListenerBasis() { return _listener.valid ? _listener : null; }
 
-return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, VISOR_EYE_FWD, VISOR_EYE_UP,
+return { init, vantage, resetSmoothing, cockpitViewmodelAxes, eyeInsideCar, seatFwd, seatUp, headState, COCKPIT_EYE_FWD, COCKPIT_EYE_UP,
   HELMET_EYE_FWD, HEAD_MAX, CHASE_CORNER_LEAD_DEFAULT, publishListenerBasis, applyFreeCam, getListenerBasis, playerFrameRivalPan };
 })();

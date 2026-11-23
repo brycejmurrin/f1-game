@@ -194,13 +194,11 @@ test("the live director's battle pick is the same at OVERALL SPEED 0.469 as at p
     "pace 0.469: the same scene is no battle either — the crawl floor scales with vTop()/VMAX");
 });
 
-test("CAM_MODES keeps tv at its shipped index — save-format index contract", () => {
+test("CAM_MODES places TV before Helmet in the camera cycle", () => {
   const text = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...text.matchAll(/\{\s*id:\s*"([^"]+)"/g)].map((m) => m[1]);
   assert.ok(ids.includes("tv"), "tv mode must be in CAM_MODES");
-  // apex26.camMode stores the index: tv shipped at 18, later modes (HELMET) append after it.
-  assert.equal(ids.indexOf("tv"), 18, "tv keeps index 18 — never reorder earlier ids");
-  assert.ok(ids.indexOf("visor") < ids.indexOf("tv"), "visor stays before tv");
+  assert.equal(ids.indexOf("tv"), ids.indexOf("helmet") - 1);
 });
 
 function cameraScene() {

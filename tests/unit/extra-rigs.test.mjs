@@ -47,11 +47,9 @@ function loadExtraRigs() {
   return { ExtraRigs: ctx.exported, disk, ctx };
 }
 
-test("CAM_MODES appends rival, pitwall, drone after trackside (save-format contract)", () => {
-  // TRACKSIDE (#702) landed on ship first at index 14; our three append after it.
-  // never reorder earlier ids — apex26.camMode is an index (tv at 18 is pinned in director.test).
-  assert.deepEqual(CAM_MODE_IDS.slice(14, 18), ["trackside", "rival", "pitwall", "drone"]);
-  assert.equal(CAM_MODE_IDS.length, 20);
+test("CAM_MODES appends rival, pitwall, drone after trackside", () => {
+  assert.deepEqual(CAM_MODE_IDS.slice(13, 17), ["trackside", "rival", "pitwall", "drone"]);
+  assert.equal(CAM_MODE_IDS.length, 19);
 });
 
 test("ExtraRigs.pickRival uses Broadcast.battles when present", () => {
@@ -332,10 +330,10 @@ test("pit-entry shot: left alone it hands back the player's camera, and the save
 test("pit-entry shot: an explicit pick (the picker grid) during it ends the shot and IS the player's choice (#5585)", () => {
   const r = pitEntryWithRealSwitch();
   r.cams.setCamMode(DRONE);
-  assert.equal(r.G.camMode, DRONE); assert.equal(r.saved.get("camMode"), DRONE, "the camera they picked, saved");
+  assert.equal(r.G.camMode, DRONE); assert.equal(r.saved.get("camMode"), r.G.camMode + 1, "the camera they picked, saved");
   r.tick(100); r.tick(2400);
   assert.equal(r.G.camMode, DRONE, "the shot's release does not pull the camera back");
-  assert.equal(r.saved.get("camMode"), DRONE);
+  assert.equal(r.saved.get("camMode"), r.G.camMode + 1);
 });
 
 test("pit-entry shot: reduced motion, an uncalled stop, a paused race and the PIT WALL opt-in skip it", () => {

@@ -522,15 +522,15 @@ display label such as `"TV SIDE"` — returns `false`.
 | `low` | LOW | Low-angle drama: eye skims the track surface 10 m behind, looking up at the car silhouetted against the sky |
 | `tcam` | T-CAM | Broadcast roll-hoop (airbox) camera — narrow telephoto mounted 1.3 m above the car, looking forward |
 | `rear` | REAR CAM | Rear-mounted onboard at the car's tail looking back down the track (unlike `reverse` which floats ahead) |
-| `visor` | VISOR | The cockpit without its steering wheel: the same eye, tub, halo, mirrors and front wheels as `cockpit`, with the wheel and its dash left out; a linked phone wheel switches to it |
 | `trackside` | TRACKSIDE | Fixed cameras at each measured corner (outside the fence); auto-switches as the subject car passes (`js/camera/trackside.js`) |
 | `rival` | RIVAL LOCK | Frames the nearest battle rival (ahead or behind) — reuses `Broadcast.battles` when present; falls back to the nearest car within ~2.5 s |
 | `pitwall` | PIT WALL | Pit-lane / pit-exit wall cam on the garage side of the complex; optional auto-cut via `apex26.pitCamAuto` / `__apex.pitCamAuto()` (default OFF — opt-in) |
 | `drone` | DRONE | Smoothed tether camera with corner look-ahead — a calmer, more usable alternative to HELI |
 | `tv` | TV | Live TV director (`js/camera/director.js`): auto-cuts between broadcast shots on battles/leader; auto-spectates after finish/retire in solo. Writes `dbgCam` only — never car forces. Status: `Director.live().status()` |
+| `helmet` | HELMET | First-person view from inside the helmet. A linked phone controller starts in this view. |
 
 ```js
-__apex.camera();            // → { mode:"chase", index:0, modes:[…,"visor","trackside","rival","pitwall","drone","tv","helmet"] }
+__apex.camera();            // → { mode:"chase", index:0, modes:[…,"trackside","rival","pitwall","drone","tv","helmet"] }
 __apex.camera("hood");      // → { mode:"hood", index:4 }
 __apex.camera("tcam");      // → { mode:"tcam", index:11 }
 __apex.camera("trackside"); // → { mode:"trackside", index:14 }

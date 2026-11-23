@@ -343,41 +343,7 @@ test("the camera path is C1 — no node-rate or clamp-handover acceleration spik
   }
 });
 
-test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same car point", () => {
-  // The owner (2026-09-29): "start with exact cockpit bodywork, just remove
-  // the wheel first". The eye is pinned RELATIVE to cockpit's so a tuning pass
-  // on cockpit moves visor with it; the rig's origin (cockpitViewmodelAxes with
-  // visor's own offsets) must land on the SAME car point as cockpit's, so a
-  // later move of the visor eye moves the eye, never the tub.
-  const track = makeElevationTrack((s) => HILL(s) + RIPPLE(s));
-  const cams = loadElevationRig();
-  assert.equal(cams.VISOR_EYE_FWD, cams.COCKPIT_EYE_FWD, "the cockpit's fore/aft seat");
-  assert.equal(cams.VISOR_EYE_UP, cams.COCKPIT_EYE_UP, "the cockpit's eye height");
-  // The game's frame is right-handed with +Y up: facing +Z (carHead 0), right is -X, so R × F = +Y.
-  const R = [-1, 0, 0], F = [0, 0, 1];
-  for (const s of [200, 1100, 1210]) {
-    // vantage() writes pooled arrays IN PLACE: copy the first sample before taking the second.
-    const c0 = chaseAt(cams, track, s, "cockpit");
-    const c = { eye: [...c0.eye], tgt: [...c0.tgt], fov: c0.fov };
-    const v = chaseAt(cams, track, s, "visor");
-    assert.ok(Math.abs(v.eye[2] - c.eye[2]) < 1e-9, `same eye fore/aft at s=${s}: ${v.eye[2] - c.eye[2]}`);
-    assert.ok(Math.abs(v.eye[1] - c.eye[1]) < 1e-9, `same eye height at s=${s}: ${v.eye[1] - c.eye[1]}`);
-    assert.ok(Math.abs(v.eye[0] - c.eye[0]) < 1e-9, `no lateral offset at s=${s}`);
-    assert.ok(Math.abs(pitchOf(v) - pitchOf(c)) < 0.05, `same aim pitch at s=${s}: ${pitchOf(v)} vs ${pitchOf(c)}`);
-    assert.ok(Math.abs(v.fov - c.fov) < 1e-9, "same speed-scaled FOV");
-    const oR = [0, 0, 0], oU = [0, 0, 0], oF = [0, 0, 0], pC = [0, 0, 0], pV = [0, 0, 0];
-    cams.cockpitViewmodelAxes(R, F, 0, c.eye, oR, oU, oF, pC);
-    cams.cockpitViewmodelAxes(R, F, 0, v.eye, oR, oU, oF, pV, cams.VISOR_EYE_FWD, cams.VISOR_EYE_UP);
-    for (let i = 0; i < 3; i++) assert.ok(Math.abs(pC[i] - pV[i]) < 1e-9, `rig origin on the same car point at s=${s} (axis ${i}): ${pC[i]} vs ${pV[i]}`);
-    // And when the visor eye moves (the planned closer/lower seat), the anchor
-    // still lands on the car: an eye 0.30 forward and 0.10 down, with offsets to match.
-    const moved = [v.eye[0], v.eye[1] - 0.10, v.eye[2] + 0.30], pM = [0, 0, 0];
-    cams.cockpitViewmodelAxes(R, F, 0, moved, oR, oU, oF, pM, cams.COCKPIT_EYE_FWD + 0.30, cams.COCKPIT_EYE_UP - 0.10);
-    for (let i = 0; i < 3; i++) assert.ok(Math.abs(pC[i] - pM[i]) < 1e-9, `a moved eye keeps the rig on the car (axis ${i})`);
-  }
-});
-
-test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
+test("Wheel NONE draws the exposed column and bulkhead without wheel telemetry", () => {
   // Check the fitted geometry, so a curved bulkhead can replace a square slab.
   const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT,"js/car/cockpit-rig.js"),"utf8"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
@@ -388,11 +354,6 @@ test("VISOR draws the cockpit rig without the steering wheel, and the column and
   assert.ok(Math.min(...x)<=-0.35 && Math.max(...x)>=0.35, "bulkhead spans the tub");
   assert.ok(Math.min(...y)<=-0.24 && Math.max(...y)>=0.07, "bulkhead meets the lower coaming and upper lip");
 
-  // THE DRAW, RUN: the real CarDraw.drawCockpitRig with the VISOR flag (the
-  // `noWheel` game.js passes as visorEye) against the cockpit seat, the player
-  // having picked a real wheel. VISOR must draw the column + bulkhead and no
-  // wheel or wheel-screen readout even though a wheel is selected; the cockpit
-  // draws that wheel and no bulkhead.
   const v = carDrawVm({ cam: "cockpit" });
   const { G: vg } = v;
   v.ctx.CockpitOpts = { haloSize: () => 2, body: () => "standard", wheel: () => "f1", interior: () => "team",
@@ -406,11 +367,11 @@ test("VISOR draws the cockpit rig without the steering wheel, and the column and
   const drawn = [];
   vg.gfx.draw = (mesh) => drawn.push(mesh && (mesh.carMesh || mesh.kind));
   const base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  const rigDraws = (noWheel) => { drawn.length = 0; v.carDraw.drawCockpitRig(car, base, 1 / 60, {}, noWheel); return [...drawn]; };
-  const visor = rigDraws(true), cockpit = rigDraws(false);
-  assert.ok(visor.includes("getCockpitDash"), "VISOR draws the column and bulkhead: " + visor.join(","));
-  for (const r of ["getCockpitWheel", "getGearDigit", "getLedStrip"]) assert.ok(!visor.includes(r), "VISOR draws no " + r);
-  assert.ok(visor.includes("body"), "VISOR keeps the cockpit bodywork: " + visor.join(","));
+  const rigDraws = (wheel) => { v.ctx.CockpitOpts.wheel = () => wheel; drawn.length = 0; v.carDraw.drawCockpitRig(car, base, 1 / 60, {}); return [...drawn]; };
+  const bare = rigDraws("none"), cockpit = rigDraws("f1");
+  assert.ok(bare.includes("getCockpitDash"), "Wheel NONE draws the column and bulkhead: " + bare.join(","));
+  for (const r of ["getCockpitWheel", "getGearDigit", "getLedStrip"]) assert.ok(!bare.includes(r), "Wheel NONE draws no " + r);
+  assert.ok(bare.includes("body"), "Wheel NONE keeps the cockpit bodywork: " + bare.join(","));
   assert.ok(cockpit.includes("getCockpitWheel"), "cockpit draws the chosen wheel: " + cockpit.join(","));
   assert.ok(!cockpit.includes("getCockpitDash"), "cockpit draws no bare column/bulkhead");
 });
@@ -565,7 +526,7 @@ test("REDUCE MOTION drops the cockpit kerb shiver, and only that", () => {
 test("the bolted-on views dip under braking and lift under power, and it is the car's motion, kept under REDUCE MOTION", () => {
   const track = makeElevationTrack(() => 0), s = 500;
   const cams = loadElevationRig();
-  for (const mode of ["cockpit", "hood", "visor", "helmet", "tcam"]) {
+  for (const mode of ["cockpit", "hood", "helmet", "tcam"]) {
     const aim = (baPitch, reduceMotion) => pitchOf(cams.vantage(track, mode, s, 0, 60, 0, { carPos: [0, s], carHead: 0, att: { baPitch }, reduceMotion }));
     for (const rm of [true, false]) {
       assert.ok(aim(0.024, rm) < aim(0, rm), `${mode}${rm ? " (reduce motion)" : ""}: braking dips the view`);
@@ -653,7 +614,7 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
     const pip = cams.vantage(track, "helmet", s, 0, 60, 0, { carPos: [0, s], carHead: 0 });
     assert.ok(Math.abs(pip.eye[2] - c.eye[2] - cams.HELMET_EYE_FWD) < 1e-9);
   }
-  // The helmet is the LAST mode (apex26.camMode is a stored index) and wears the visor frame
+  // The helmet wears the visor frame
   // through a body attribute that follows the mode, on and off.
   const dom = makeDom();
   const mctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
@@ -661,10 +622,20 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
   vm.runInNewContext(readFileSync(join(ROOT, "js/camera/cam-picker.js"), "utf8"), mctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = mctx.CamModes.CAM_MODES, hi = modes.findIndex((m) => m.id === "helmet");
-  assert.equal(hi, modes.length - 1, "appended: apex26.camMode is an index");
-  const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", camCutT: 0 };
+  assert.equal(hi, modes.length - 1, "Helmet is the last selectable camera");
+  const { fromSaved, toSaved } = mctx.CamModes;
+  assert.equal(modes.some(mode => mode.id === "visor"), false);
+  assert.equal(fromSaved(13), hi, "old Visor saves open Helmet");
+  assert.equal(fromSaved(19), hi);
+  assert.equal(modes[fromSaved(14)].id, "trackside");
+  assert.equal(modes[fromSaved(18)].id, "tv");
+  for (let i = 0; i < modes.length; i++) assert.equal(fromSaved(toSaved(i)), i);
+
+  const saved = new Map();
+  const G = { $: dom.byId, camMode: 0, store: saved, state: "race", camCutT: 0 };
   const modeCams = mctx.CamModes.create(G);
   modeCams.setCamMode(hi);
+  assert.equal(saved.get("camMode"), 19);
   assert.equal(dom.document.body.hasAttribute("data-helmet-cam"), true, "the visor frame follows the helmet mode");
   modeCams.setCamMode(0);
   assert.equal(dom.document.body.hasAttribute("data-helmet-cam"), false, "and leaves with it");

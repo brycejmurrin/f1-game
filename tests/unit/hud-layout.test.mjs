@@ -222,7 +222,6 @@ test("cockpit and other cameras keep separate layouts; setCam swaps them", () =>
   const { H, els } = load({ hudLayout: { v: 4, standard: { cockpit: { tyre: { x: -30, y: 0, s: 100 } }, other: {} } } });
   assert.equal(H.camSet("cockpit"), "cockpit");
   assert.equal(H.camSet("helmet"), "helmet", "HELMET is the visor: its own set (js/camera/cam-groups.js)");
-  assert.equal(H.camSet("visor"), "other", "VISOR draws no wheel (js/camera/cam-groups.js)");
   assert.equal(H.camSet("chase"), "other");
   assert.equal("data-hl" in els["#hud-tyre"].attrs, false, "chase layout shows by default");
   H.setCam("cockpit");
@@ -928,11 +927,11 @@ test("profile: the live body class while racing, else the stored HUD STYLE", () 
 
 test("CamGroups: one onboard table, a wheel-only cockpit-layout table; hud.js and hud-layout read it", () => {
   const { CG, H } = load3();
-  assert.deepEqual(Object.keys(CG.ONBOARD).sort(), ["cockpit", "helmet", "hood", "tcam", "visor"]);
+  assert.deepEqual(Object.keys(CG.ONBOARD).sort(), ["cockpit", "helmet", "hood", "tcam"]);
   assert.deepEqual(Object.keys(CG.COCKPIT_LAYOUT), ["cockpit"]);
   assert.deepEqual(Object.keys(CG.HELMET_LAYOUT), ["helmet"]);
   for (const id in Object.assign({}, CG.COCKPIT_LAYOUT, CG.HELMET_LAYOUT)) assert.ok(CG.ONBOARD[id], id + ": a wheel camera is onboard");
-  assert.deepEqual(["cockpit", "helmet", "visor", "chase"].map(CG.layoutSet), ["cockpit", "helmet", "other", "other"]);
+  assert.deepEqual(["cockpit", "helmet", "hood", "chase"].map(CG.layoutSet), ["cockpit", "helmet", "other", "other"]);
   assert.deepEqual([...H.SETS], ["cockpit", "helmet", "other"]);
   for (const id of ["chase", "far", "heli", "tv", "rear"]) assert.equal(CG.isOnboard(id), false, id);
   assert.ok(Object.isFrozen(CG.ONBOARD) && Object.isFrozen(CG.COCKPIT_LAYOUT));

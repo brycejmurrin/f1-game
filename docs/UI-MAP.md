@@ -335,11 +335,9 @@ Other in-race roots are:
 - `#quali`, `#standings` and `#results` — session flow.
 - `#rotate-device` — portrait race blocker.
 
-The camera cycle (CAM button, `C` key; `js/camera/mode-switch.js`) includes
-VISOR: the cockpit view without its steering wheel and dash (`js/camera/vantage.js`).
-When a phone links as the controller, the screen switches to VISOR, because the
-phone in your hand is the wheel. It switches back when the phone leaves, unless
-you picked another camera meanwhile (`VISOR_CAM` in `js/ui/platform-session.js`).
+Pairing a phone controller selects HELMET. Disconnecting restores the
+previous camera unless the player chose another view during the connection
+(`js/net/phone-pairing-ui.js`).
 
 ### Mapping on a weak box
 

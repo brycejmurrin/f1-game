@@ -108,7 +108,7 @@ function mockWidgets(opt) {
   const a = window.__apex;
   const m = a && a.mirror ? a.mirror() : null;
   if (mir && m) {
-    const onboard = { cockpit: 1, hood: 1, visor: 1, tcam: 1, helmet: 1 }[m.cam];
+    const onboard = { cockpit: 1, hood: 1, tcam: 1, helmet: 1 }[m.cam];
     const want = m.mode === "on" || (m.mode === "auto" && !!onboard);
     mir.hidden = !want;
     document.body.classList.toggle("hud-mirror-on", want);
