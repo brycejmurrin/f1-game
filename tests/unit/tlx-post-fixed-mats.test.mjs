@@ -119,7 +119,7 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
       phys: true, _scissorWarm: false, compileJobs: null, _mirTex: null, fixed: true, fixedActive: () => true, spatialUpscale: false,
       dest, aaRT, ldrRT, _last: {}, _lastPresentRT: null, _mirComposites: 0, _warmFlipUp: false,
       AA: null, taaLive: () => false,   // traa off: the FXAA / SGSR branches below are today's
-      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false, bindLens(field) { P.fxaa.bendTex.field = field; },
+      presentSize: () => [presentW, presentH], mirrorPass() {}, fxaaMirror: () => false, bindWater(field) { P.fxaa.waterField = field; }, bindLens(field) { P.fxaa.bendTex.field = field; },
       cinemaPost: (rt) => rt, F: {}, o: { visorLens: { bend: { x: .03, y: .05 }, light: {} } },   // the desktop-tier CINEMA hook: off below EXTREME (tsl-gi.js)
       vset(p, w, h) { p.V.set(w, h); },
       runPass(mat, target) { draws.push({ mat, target, view: P[mat].V.values.slice() }); },
@@ -139,7 +139,7 @@ test("fixed phone FXAA maps the destination through HIGH → MED → LOW → HIG
       vm.runInContext("{\n" + resolve + "\n}", context);
       const { pW, pH } = context;
       assert.equal(context.o.visorFolded, !soft && scale === 1 ? 2 : false);
-      assert.equal(lensReads, lazyLens && !soft && scale === 1 ? 1 : 0);
+      assert.equal(lensReads, lazyLens ? 1 : 0, "every final resolve can receive wet refraction");
       assert.equal(P.fxaa.bendTex.field, context.o.visorFolded ? context.o.visorLens : null);
       assert.deepEqual(draws[0].view, [pW, pH], "composite keeps its reduced target");
       assert.deepEqual(P.fxaa.U.texel.value.values, [1 / pW, 1 / pH], "FXAA texels follow its input");
@@ -180,4 +180,24 @@ test("presentSize() and getPresentSize(out) answer in scratch: no fresh pair a p
   assert.notEqual(getPresentSize(), fresh);
   vm.runInContext("presentW = 0; presentH = 0;", context);
   assert.deepEqual(Array.from(presentSize()), [999, 499], "no present size: the render size");
+});
+
+
+test("wet texture uploads follow field revisions and reuse the same GPU allocation", () => {
+  const source = read("js/render/three/tlx-post.js"), start = source.indexOf("    let waterTexture = null"), end = source.indexOf("    function bindLens", start);
+  let allocations = 0, uploads = 0;
+  class DataTexture {
+    constructor(data, width, height) { allocations++; this.image = { data, width, height }; }
+    set needsUpdate(on) { if (on) uploads++; }
+  }
+  const water = { value: { set(x, y) { this.x = x; this.y = y; } } };
+  const ctx = { THREE: { DataTexture, LinearFilter: 1 }, ownTexture: x => x, P: { fxaa: { waterTex: {}, water } } };
+  vm.runInNewContext(source.slice(start, end) + ";this.bind = bindWater", ctx, { filename: absSrc("js/render/three/tlx-post.js") });
+  const field = { data: new Uint8Array(128 * 128 * 4), size: 128, revision: 1, x: 0.01, y: 0.02 };
+  ctx.bind(null); assert.equal(allocations, 0, "dry scenes allocate no wet texture");
+  ctx.bind(field); assert.deepEqual([allocations, uploads, water.value.x], [1, 1, 0.01]);
+  ctx.bind(field); assert.equal(uploads, 1, "unchanged or paused fields do not upload again");
+  field.revision++; ctx.bind(field); assert.deepEqual([allocations, uploads], [1, 2]);
+  ctx.bind(null); assert.deepEqual([water.value.x, water.value.y], [0, 0], "dry/disabled presentation takes the shader's zero-sample path");
+  ctx.bind(field); assert.deepEqual([allocations, uploads], [1, 2], "re-entry reuses the unchanged texture");
 });

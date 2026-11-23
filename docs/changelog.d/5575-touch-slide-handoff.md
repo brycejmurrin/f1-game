@@ -1,1 +1,0 @@
-Improved: sliding one thumb from GAS onto BRAKE (or from one steering arrow onto the other) now presses the control under the thumb and releases the one it left; a second finger is unaffected, and rotating the phone releases every held control (#5575).

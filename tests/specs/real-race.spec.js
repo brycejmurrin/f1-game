@@ -39,6 +39,7 @@ test("WATCH director buttons expose their visible names and retain keyboard cont
   await page.addInitScript(() => {
     localStorage.setItem("apex26.gfxBackend", "three");
     localStorage.setItem("apex26.tlxForceGL", "1");
+    localStorage.setItem("apex26.hudProfile", JSON.stringify("minimal"));
   });
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -46,20 +47,32 @@ test("WATCH director buttons expose their visible names and retain keyboard cont
   await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(script => {
     __apex.headless(true);
-    const line = (p, x) => ({ t: [-5, 0, 120, 600], prog: [p, p, p + 6000, p + 30000], x: [x, x, x, x] });
+    // Keep the camera fixture continuously recorded. Wide sample gaps are
+    // skipped by the director and can change which driver is available.
+    const times = Array.from({ length: 1211 }, (_, i) => i / 2 - 5);
+    const line = (p, x) => ({ t: times, prog: times.map(t => p + 50 * Math.max(0, t)), x: times.map(() => x) });
     RealRace.launch(script, { seat: "LEC", watch: true, camera: "heli", traces: {
       frame: "track", cars: { 63: line(-14, 0), 16: line(-22, 1) },
     } });
   }, SCRIPT);
   await page.waitForFunction(() => __apex.info().track === "baku" && __apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { __apex.go(); __apex.step(1 / 60, 3); });
-  // 844×390 is inside the watch bar's phone band (PHONE_BAR, js/ui/watch-transport.js): AUTO and FOLLOW LOCK dock
-  // into the ⋯ MORE popover there, closed until opened — open it as a player would, then the buttons are visible.
-  await page.evaluate(() => { const m = document.querySelector('[data-wt="more"]'); if (m && !m.hidden) /** @type {HTMLDetailsElement} */ (m).open = true; });
+  await expect(page.getByRole("region", { name: "On-camera driver" })).toContainText("Charles LECLERC");
+  await expect(page.locator("#bc-tower")).toBeVisible();
+  await expect(page.locator("#hud-gearbox")).toBeHidden();
+  await expect(page.locator("#hud-inputs")).toBeHidden();
+  // The compact More popover docks the camera controls and covers the driver card.
+  const more = page.locator("#watch-more > summary");
+  await more.click();
   const auto = page.getByRole("button", { name: /^AUTO: let the TV director/ });
   const lock = page.getByRole("button", { name: /^FOLLOW LOCK: keep following/ });
   await expect(auto).toBeVisible();
   await expect(lock).toBeVisible();
+  await page.locator('[data-wt="camera"]').selectOption("tcam");
+  await more.click();
+  await expect(page.getByRole("region", { name: "On-camera driver" })).toContainText("T-CAM");
+  await more.click();
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
   await lock.focus();
   await lock.press("Enter");
   await expect(lock).toHaveAttribute("aria-pressed", "true");

@@ -107,7 +107,7 @@
         [0.20, 0.20, 0.24],
       ];
       const rbSpan = (s, len) => { const h = (len / 2) / (ds * n); return [s - h, s + h]; };
-      tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
+      tyreWall(0.08, 0.13, -1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
       tyreWall(0.2785, 0.3285, -1, 6.5, rbYel); // outside Turn 3 (Remus) hairpin
       tyreWall(0.467, 0.517, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
       tyreWall(0.72, 0.77, -1, 6.0, rbNavy);    // outside Turn 8 (right-hander, apex 0.7323)

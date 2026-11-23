@@ -4,6 +4,8 @@ const LearnDoor = (function () {
 
   const lessons = [
     { id: "aero", title: "Aero Lab", description: "Following distance, slipstream & cornering grip" },
+    { id: "braking", title: "Grip & Braking", description: "Share tyre grip between braking and turning" },
+    { id: "vsc", title: "VSC Pit Strategy", description: "Pit timing, tyre life & track position" },
   ];
 
   let dialog;

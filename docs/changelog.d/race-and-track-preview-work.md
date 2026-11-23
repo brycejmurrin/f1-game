@@ -1,1 +1,0 @@
-Fixed: Reduced repeated work when driving with the HUD editor closed, displaying helmet speed, tracking rival pit stops, and rendering cockpit effects on phones. Browsing circuits now keeps fewer full track previews in memory.

@@ -52,7 +52,7 @@
       { s0: 0.860, s1: 0.905, hw: 6.4, ease: 0.012 },
     ],
     bankZones: [
-      { frac: 0.075, angleDeg: 3.5, widthM: 120 },
+      { turn: 1, angleDeg: 3.5, widthM: 120 },   // first end of the opening double apex
       { turn: 5, angleDeg: 4.5, widthM: 200 },   // the long lagoon-side sweep; re-seated frac 0.47 (was 609 m off any apex)
     ],
 

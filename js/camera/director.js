@@ -83,11 +83,11 @@ const Director = (function () {
   let _live = null;
   function live() { return _live; }
 
-  function create(G, eligible = () => true) {
+  function create(G, eligible = () => true, loadPresentation) {
     Log.info("game", "Director.create");
     let wall = 0, lastCut = -1e9, cuts = 0, onAirShot = null, subject = null;
     let ownCamera = null, autoSpectate = true, forcedTv = false, prevMode = -1;
-    let spectating = false;
+    let spectating = false, presentation = null, presentationRequested = false;
     const scratchEye = [0, 0, 0], scratchTgt = [0, 0, 0];
     const bankScratch = { dy: 0, roll: 0 };
     // applyShot's per-frame scratch: one solve closure over module state, one extras bag, one dbgCam (G.dbgCam identity is compared, never retained across shots)
@@ -178,7 +178,7 @@ const Director = (function () {
       G.setCamMode(i, { persist: false });
       forcedTv = true;
     }
-    function tick(dt) {
+    function updateCamera(dt) {
       const st = G.state;
       if (st !== "race" && st !== "count") { clearDbg(); return; }
       // WATCH and instant replay own the picture; Photo/tools may replace our
@@ -242,7 +242,32 @@ const Director = (function () {
         applyShot(running[0].key, shotFor(null, null, 0), dt, true);
       }
     }
+    function tick(dt) {
+      updateCamera(dt);
+      const player = G.player;
+      const watching = G.state === "race" && G.session === "race" && (player?.finished || player?.retired)
+        && !G.netPlay?.active() && !G.photoMode && eligible();
+      if (watching) {
+        if (typeof ReplayBroadcast === "undefined") {
+          if (!presentationRequested && loadPresentation) {
+            presentationRequested = true;
+            void loadPresentation();
+          }
+          return;
+        }
+        if (!presentation) {
+          presentation = ReplayBroadcast.create(G, null);
+          presentation.start({ live: true });
+        }
+        presentation.tickLive(dt, ownCamera && G.dbgCam === ownCamera ? subject : player);
+      } else {
+        presentationRequested = false;
+        if (presentation) { presentation.stop(); presentation = null; }
+      }
+    }
     function reset() {
+      if (presentation) { presentation.stop(); presentation = null; }
+      presentationRequested = false;
       wall = 0; lastCut = -1e9; cuts = 0; onAirShot = null; subject = null;
       // Auto-spectate forced "tv" non-persistently; the next race starts on the player's mode.
       if (forcedTv && prevMode >= 0 && modeId() === "tv" && G.setCamMode) G.setCamMode(prevMode, { persist: false });

@@ -1,1 +1,0 @@
-Fixed: the METRICS log ring no longer shifts 500 entries on every overflow emit; the gfx-debug soft-frame luma samples a 64×64 downscale instead of the full blit canvas; TitleWarm drops its 1 Hz poll once the build is done.

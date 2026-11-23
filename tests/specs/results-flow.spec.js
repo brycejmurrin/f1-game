@@ -320,13 +320,29 @@ test.describe("results-flow — reduced-motion phone", () => {
     // headless(true) could make a moving camera appear static: render live.
     await startGp(page, false);
     expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
-    await crossFlag(page); await tapPhase(page, "cooldown");
-    const first = await page.evaluate(() => ({ age: window.__apex.ceremony().age, cam: window.__apex.camState() }));
+    await page.evaluate(() => window.__apex.camera("helmet"));
+    await crossFlag(page);
+    const cooldownFrame = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    await page.waitForFunction(frame => window.__apex.ceremony().phase === "cooldown"
+      && window.__apex.cameraState().renderFrame > frame, cooldownFrame, { polling: 100, timeout: 20000 });
+    const chase = await page.evaluate(() => window.__apex.camState());
+    expect(chase.debug).toBe(false);
+    expect(chase.lens.near).toBe(0.9);
+    await expect(page.locator("#ceremony-speed")).toBeVisible();
+    await expect(page.locator("#hud-gearbox")).toBeHidden();
+    const parkFrame = await page.evaluate(() => window.__apex.cameraState().renderFrame);
+    await tapPhase(page, "cooldown");
+    await page.waitForFunction(frame => window.__apex.ceremony().phase === "parcFerme"
+      && window.__apex.cameraState().renderFrame > frame && window.__apex.camState().lens.near === 0.3, parkFrame, { polling: 100, timeout: 20000 });
+    const first = await page.evaluate(() => ({ age: window.__apex.ceremony().age, cam: window.__apex.camState(), frame: window.__apex.cameraState().renderFrame }));
+    await expect(page.locator("#ceremony-speed")).toBeHidden();
+    await expect(page.locator("#hud")).toBeHidden();
     await page.waitForFunction((age) => window.__apex.ceremony().phase === "parcFerme"
       && window.__apex.ceremony().age >= age + 1, first.age, { polling: 100, timeout: 5000 });
     const later = await page.evaluate(() => window.__apex.camState());
     expect(later.eye).toEqual(first.cam.eye);
     expect(later.tgt).toEqual(first.cam.tgt);
+    expect(await page.evaluate(() => window.__apex.cameraState().renderFrame)).toBe(first.frame);
     await tapPhase(page, "parcFerme"); await tapPhase(page, "podium");
     await expect(page.locator("#results")).toBeVisible();
   });

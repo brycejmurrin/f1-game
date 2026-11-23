@@ -167,6 +167,7 @@ const ReplayBroadcast = (function () {
   }
   function fmtGap(r, mode, profile) {
     if (r.out) return "OUT";
+    if (r.finished) return "FIN";
     if (r.pit) return "PIT";
     if (r.pos === 1) return mode === "interval" ? "INTERVAL" : "LEADER";
     if (r.down) return "+" + r.down + " LAP" + (r.down > 1 ? "S" : "");
@@ -174,6 +175,38 @@ const ReplayBroadcast = (function () {
     if (v == null) return "";
     // The HUD chip's spelling (hundredths under ~10 s, tenths above); inline when HudReadouts has not loaded.
     return "+" + (typeof HudReadouts !== "undefined" && HudReadouts ? HudReadouts.fmtGapSec(v, profile) : v.toFixed(profile === "broadcast" || v < 9.995 ? 2 : 1));
+  }
+
+  function liveRows(cars, inPit) {
+    return (cars || []).slice().sort((a, b) => Number(!!a.retired) - Number(!!b.retired)
+      || (a.rank || Infinity) - (b.rank || Infinity) || (b.prog || 0) - (a.prog || 0)).map((car, i) => ({
+      pos: i + 1, num: car, code: car.code, tyre: car.tyre?.code, out: !!car.retired,
+      finished: !!car.finished, pit: !!inPit?.(car), lap: Math.max(0, (car.lap || 1) - 1),
+    }));
+  }
+
+  function makeViewer(doc, live) {
+    const el = doc.createElement("section");
+    el.id = "bc-viewer";
+    el.setAttribute("aria-label", "On-camera driver");
+    const mode = doc.createElement("span"), name = doc.createElement("strong"), speed = doc.createElement("span");
+    for (const part of [mode, name, speed]) el.appendChild(part);
+    doc.body.appendChild(el);
+    doc.body.dataset.spectator = live ? "live" : "watch";
+    const write = (node, value) => { if (node.textContent !== value) node.textContent = value; };
+    return {
+      paint(car, row, label, kph) {
+        el.hidden = !car;
+        if (!car) return;
+        const flag = ["", " · YELLOW FLAG", " · VSC", " · SAFETY CAR", " · RED FLAG"][label.flag] || "";
+        write(mode, label.mode + flag);
+        write(name, (row ? "P" + row.pos + "  ·  " : "") + label.name);
+        const plate = typeof HudReadouts !== "undefined" && Number.isFinite(kph) ? HudReadouts.spdPlate(Math.max(0, kph)) : null;
+        write(speed, car.retired ? "OUT" : car.finished ? "FINISHED" : plate ? plate.n + " " + plate.unit : "");
+        speed.hidden = !speed.textContent;
+      },
+      stop() { el.remove(); delete doc.body.dataset.spectator; },
+    };
   }
 
   // ── The director (pure): who to show, and how ─────────────────────────────
@@ -223,13 +256,13 @@ const ReplayBroadcast = (function () {
     let clickBound = null;
     let cameraSuspended = false;
     let pip = null;   // {key, label, at (wall), seen (wall)} — the car in the inset
-    let graphics = null, fastCode = null;
+    let graphics = null, fastCode = null, viewer = null, live = false;
 
     // RealReplay creates the broadcast after its bundle loads TvGraphics. The
     // ordinary race director and overlay.html only use the pure helpers.
     function makeGraphics() {
       const factory = TvGraphics;
-      return Reflect.apply(factory.create, factory, [G, null, { fastest: () => fastCode }]);
+      return Reflect.apply(factory.create, factory, [G, null, { fastest: () => fastCode, spectator: true }]);
     }
     function ensureGraphics() {
       if (graphics || typeof document === "undefined") return;
@@ -264,24 +297,28 @@ const ReplayBroadcast = (function () {
     /** start({auto, tower}) — replay has already posed the field and chosen whom to follow. */
     function start(o) {
       stop();
+      live = !!o?.live;
       on = true; auto = !!(o && o.auto); locked = false; wall = 0; lastCut = -1e9; eventUntil = -Infinity; manualUntil = 0; cuts = 0;
       cameraSuspended = false;
       shown = new Set(); towerT = 0; mode = "gap"; prevPos = new Map(); deltaAt = new Map();
       syncCamera();
       if (auto) { camTo(SHOTS[0]); lastCut = 0; }
       buildTower(o && o.tower !== false);
-      ensureGraphics();
+      if (typeof document !== "undefined" && document.body && document.createElement) viewer = makeViewer(document, live);
+      if (!live) ensureGraphics();
       Log.info("game", "Broadcast.start auto=" + auto + " tower=" + !!tower);
     }
     function stop() {
       if (!on) return;
       on = false;
-      setPip(null);
+      if (!live) setPip(null);
       if (tower) {
         if (clickBound) tower.removeEventListener("click", clickBound);
         tower.hidden = true; tower.textContent = "";
       }
       if (graphics) { graphics.stop(); graphics = null; }
+      viewer?.stop(); viewer = null;
+      prevPos.clear(); deltaAt.clear();
       clickBound = null; tower = null; rowsEl = []; head = null; listEl = null;
       try { document.body.classList.remove("bc-on"); } catch (e) { /* no document: a VM */ }
     }
@@ -292,7 +329,10 @@ const ReplayBroadcast = (function () {
     // baseline — not a "viewer change" that would hand the picture back for 20 s.
     function setAuto(v) { auto = !!v; if (auto) { locked = false; manualUntil = 0; lastCut = -1e9; eventUntil = -Infinity; syncCamera(); } return auto; }
     function setLocked(v) { locked = !!v; if (locked) { manualUntil = 0; eventUntil = -Infinity; syncCamera(); } return locked; }
-    function resetTiming() { shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity; setPip(null); }
+    function resetTiming() {
+      shown.clear(); prevPos.clear(); deltaAt.clear(); towerT = 0; lastCut = -1e9; eventUntil = -Infinity;
+      setPip(null); graphics?.reset();
+    }
     /** The director has the picture: AUTO and not waiting out a viewer's choice. */
     function autoOn() { return on && auto && !locked && wall >= manualUntil; }
 
@@ -300,21 +340,24 @@ const ReplayBroadcast = (function () {
       const el = typeof document !== "undefined" ? document.getElementById("bc-tower") : null;
       if (!el || !want) return;
       tower = el; tower.textContent = "";
-      head = document.createElement("button"); head.type = "button"; head.className = "bc-head";
-      head.setAttribute("aria-label", "Timing tower: show intervals between drivers");
+      head = document.createElement(live ? "div" : "button"); head.className = "bc-head";
+      if (!live) {
+        head.type = "button";
+        head.setAttribute("aria-label", "Timing tower: show intervals between drivers");
+      }
       tower.appendChild(head);
       listEl = document.createElement("ol"); listEl.className = "bc-rows";
       tower.appendChild(listEl);
       rowsEl = [];
       clickBound = (e) => {
         const t = e.target && e.target.closest ? e.target.closest("[data-code]") : null;
-        if (t && t.dataset.code) { manual(); if (replay.follow) replay.follow(t.dataset.code); return; }
+        if (t && t.dataset.code) { if (replay.follow?.(t.dataset.code)) manual(); return; }
         if (e.target && e.target.closest && e.target.closest(".bc-head")) {
           mode = mode === "gap" ? "interval" : "gap"; towerT = 0;
           head.setAttribute("aria-label", mode === "gap" ? "Timing tower: show intervals between drivers" : "Timing tower: show gaps to leader");
         }
       };
-      tower.addEventListener("click", clickBound);
+      if (!live) tower.addEventListener("click", clickBound);
       tower.hidden = false;
       document.body.classList.add("bc-on");
     }
@@ -322,7 +365,9 @@ const ReplayBroadcast = (function () {
       if (rowsEl[i]) return rowsEl[i];
       const li = document.createElement("li");
       li.className = "bc-row";
-      const b = document.createElement("button"); b.type = "button";
+      const b = document.createElement(live ? "div" : "button");
+      if (!live) b.type = "button";
+      b.setAttribute("data-bc-entry", "");
       const part = (cls) => { const sp = document.createElement("span"); sp.className = cls; b.appendChild(sp); return sp; };
       const e = { li, b, pos: part("bc-pos"), team: part("bc-team"), code: part("bc-code"), gap: part("bc-gap"), tyre: part("bc-tyre"), key: "" };
       e.team.setAttribute("aria-hidden", "true");
@@ -331,14 +376,23 @@ const ReplayBroadcast = (function () {
       return (rowsEl[i] = e);
     }
     function paintTower(st) {
-      if (!tower) return;
       const rows = towerAt(st.script, st.T, st.isOut);
+      paintTowerRows(rows, st.script.laps | 0, st.followNum, st.colourOf);
+      if (viewer) {
+        const car = st.follow, row = rows.find(r => r.num === st.followNum);
+        const mode = st.reel ? "HIGHLIGHTS" : "RACE REPLAY";
+        viewer.paint(car, row, { mode: st.cameraLabel ? mode + " · " + st.cameraLabel : mode,
+          flag: G.cautionLevel?.(), name: st.nameOf?.(car) || row?.code || car?.code || "—" },
+        st.kphOf?.(car));
+      }
+    }
+    function paintTowerRows(rows, total, followNum, colourOf) {
+      if (!tower) return;
       let L = null;
       for (let i = 0; i < rows.length; i++) if (!rows[i].out) { L = rows[i]; break; }
-      const total = st.script.laps | 0;
-      const headText = "LAP " + Math.min(total, Math.max(1, ((L && L.lap) | 0) + 1)) + "/" + total + (mode === "interval" ? " · INTERVAL" : " · GAP");
+      const headText = "LAP " + Math.min(total, Math.max(1, ((L && L.lap) | 0) + 1)) + "/" + total
+        + (live ? " · ORDER" : mode === "interval" ? " · INTERVAL" : " · GAP");
       if (head.textContent !== headText) head.textContent = headText;
-      const followNum = st.followNum;
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
         const e = rowEl(i);
@@ -347,7 +401,7 @@ const ReplayBroadcast = (function () {
         prevPos.set(r.num, r.pos);
         const dl = deltaAt.get(r.num);
         const delta = dl && wall - dl.at < DELTA_S ? (dl.up ? "up" : "down") : "";
-        const gapText = fmtGap(r, mode, G.hudProfile);
+        const gapText = fmtGap(r, mode, "broadcast");
         const onCam = r.num === followNum;
         // Field compare — no "|".join string per row per tick.
         if (e._pos === r.pos && e._code === r.code && e._gap === gapText && e._tyre === (r.tyre || "") &&
@@ -360,7 +414,7 @@ const ReplayBroadcast = (function () {
         e.tyre.textContent = e._tyre;
         e.tyre.dataset.c = e._tyre;
         e.b.dataset.code = r.code || "";
-        const col = st.colourOf ? st.colourOf(r.num) : "";
+        const col = colourOf ? colourOf(r.num) : "";
         e.team.style.background = col || "";
         e.li.classList.toggle("out", r.out);
         e.li.classList.toggle("pit", r.pit);
@@ -372,6 +426,17 @@ const ReplayBroadcast = (function () {
       for (let i = rows.length; i < rowsEl.length; i++) rowsEl[i].li.hidden = true;
       for (let i = 0; i < rows.length; i++) rowsEl[i].li.hidden = false;
     }
+    const liveColour = car => car.team && G.cssCol ? G.cssCol(car.team.color) : "";
+    function tickLive(dt, car) {
+      if (!on || !live) return;
+      towerT -= dt;
+      if (towerT > 0) return;
+      towerT = TOWER_TICK_S;
+      const rows = liveRows(G.cars, car => G.pits?.inLane(car));
+      paintTowerRows(rows, G.lapsTarget, car, liveColour);
+      viewer?.paint(car, rows.find(r => r.num === car), { mode: "LIVE RACE", flag: G.cautionLevel?.(),
+        name: car?.name || car?.code || "—" }, car && G.dashKph?.(car.speed));
+    }
 
     function direct(st) {
       if (!auto || locked || wall < manualUntil) return;
@@ -382,13 +447,14 @@ const ReplayBroadcast = (function () {
       const age = wall - lastCut;
       if (age < SHOT_MIN_S) return;
       if (st.T < eventUntil) return;   // do not leave a pass before it happens, including at slow replay rates
-      const ev = nextEvent(st.list, st.T, shown, EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
+      const ev = nextEvent(st.list, st.T, shown, EVENT_LEAD_S * Math.max(1, st.speed), st.canFeature || (num => !st.isOut(num)));
       if (ev) { shown.add(ev.i); eventUntil = ev.h.t + EVENT_HOLD_S; cut(st.carOf(ev.h.num), ev.h.kind, st.T); return; }
       if (age < SHOT_MAX_S) return;
       const running = st.running();
-      const fight = battles(running)[0];
+      const neutralized = G.cautionLevel?.() >= 2;
+      const fight = neutralized ? null : battles(running)[0];
       const next = fight ? fight.key : running.length ? running[cuts % Math.min(3, running.length)].key : null;
-      cut(next, fight ? "pass" : null, st.T);
+      cut(next, fight ? "battle" : neutralized ? "sc" : null, st.T);
     }
     function cut(c, kind, T) {
       lastCut = wall; cuts++;
@@ -423,7 +489,7 @@ const ReplayBroadcast = (function () {
     function pipTick(st) {
       const follow = st.follow;
       const running = st.running();
-      const ev = nextEvent(st.list, st.T, new Set(), EVENT_LEAD_S * Math.max(1, st.speed), (num) => !st.isOut(num));
+      const ev = nextEvent(st.list, st.T, new Set(), EVENT_LEAD_S * Math.max(1, st.speed), st.canFeature || (num => !st.isOut(num)));
       let evCar = ev ? st.carOf(ev.h.num) : null;
       // The director is already on the event's car: the inset takes the other one
       // (the car being passed).
@@ -448,15 +514,23 @@ const ReplayBroadcast = (function () {
       towerT -= dt;
       if (towerT <= 0) { towerT = TOWER_TICK_S; paintTower(st); pipTick(st); }
       fastCode = fastestCode(st.script, st.T);
-      if (graphics) graphics.tick(dt);
+      if (graphics) graphics.tick(dt, false, st.field);
     }
-    function refresh(st) { if (on && st) { paintTower(st); pipTick(st); } }
+    function refresh(st, seek = false) {
+      if (!on || !st) return;
+      paintTower(st); pipTick(st);
+      if (seek && graphics) {
+        // The physics ranking can still describe the pre-seek field while paused.
+        fastCode = fastestCode(st.script, st.T);
+        graphics.tick(0, true, st.field);
+      }
+    }
     function status() { return on ? { auto, locked, manual: wall < manualUntil, manualRemaining: Math.max(0, manualUntil - wall), shot: onAirShot, cuts, tower: !!tower, rows: rowsEl.length, mode,
                                       pip: pip ? { code: pip.key.code || null, label: pip.label } : null } : null; }
 
-    return { start, stop, tick, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
+    return { start, stop, tick, tickLive, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
   }
 
-  return { create, towerAt, towerSample, nextEvent, pipPick, fmtGap };
+  return { create, towerAt, towerSample, liveRows, nextEvent, pipPick, fmtGap };
 })();
 Object.freeze(ReplayBroadcast);

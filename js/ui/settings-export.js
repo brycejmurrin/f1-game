@@ -191,6 +191,8 @@ const SPEC = [
   { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "medium", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["trace", "light", "medium", "strong", "deep"] },
   { k: "helmetVisorRefraction", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visorRefraction", oneOf: ["off", "light", "medium", "strong"] },
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
+  { k: "helmetVisorQuality", lane: "raw", group: "camera", def: "auto", src: "js/camera/cockpit-opts.js CHOICES.visorQuality", oneOf: ["auto", "low", "high"] },
+  { k: "helmetVisorLightStyle", lane: "raw", group: "camera", def: "classic", src: "js/camera/cockpit-opts.js CHOICES.visorLightStyle", oneOf: ["classic", "compact", "scratches"] },
   { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
   { k: "helmetVisorRain", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRain", oneOf: ["normal", "off", "light", "heavy"] },
   { k: "helmetVisorDropSize", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js visorDropSize (percent,50–200)" },
@@ -656,7 +658,7 @@ const fwd = (name) => (...args) => {
 };
 const api = {};
 for (const n of ["collect", "collectGarage", "collectCareer", "collectTtlb", "ttlbParseBoard", "applySettings",
-                 "applyGarage", "applyCareer", "applyTtlb", "resetGarage"]) api[n] = fwd(n);
+                 "applyGarage", "applyCareer", "applyTtlb", "resetGarage", "resetSettings", "resetInfo", "resetRow"]) api[n] = fwd(n);
 function create(G) {
   _G = G;
   // The bound body under its own module name, so tools/check/check-gctx.mjs sees SettingsExportBody handed G.

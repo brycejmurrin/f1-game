@@ -320,11 +320,36 @@ test("fire: the POST carries the bearer token, anthropic-version and {text: addr
   assert.deepEqual(writes.filter((w) => !w.startsWith("PATCH") && !w.includes("issues/1/comments")),
     [`POST issues/20/comments dispatch: launched claude:[Worker] CONTINUE PR #20 PR 20 for #20 at ${ISO} as ${SID}`, "DELETE issues/20/labels/needs-owner",
       `POST issues/20/comments adopts PR #20 — claude:${SID} (posted by the dispatcher when it launched the takeover)`], "no claim for the refused ISSUE 10 fire");
-  assert.deepEqual(out.filter((l) => l.startsWith("=") && !l.startsWith("= board")),
+  assert.deepEqual(out.filter((l) => l.startsWith("= launched") || l.startsWith("= needs-owner") || l.startsWith("= fire")),
     [`= launched CONTINUE PR 20 as ${SID} https://claude.ai/code/${SID}`, "= needs-owner removed from #20", "= fire failed 503 overloaded"]);
   const skipped = [];
   await applyPlan(p, { api: () => ({ json: {} }), config: cfg(), log: (s) => skipped.push(s), now: NOW, fire: true, env: {}, fetchImpl: ok });
   assert.deepEqual(skipped.filter((l) => l.startsWith("= fire")), ["= fire skipped: WORKER_FIRE_URL unset", "= fire skipped: WORKER_FIRE_URL unset"]);
+});
+
+test("busy Linux pool defers optional worker fires and keeps deploy-red recovery", async () => {
+  const launches = [{ kind: "deploy-red", address: "DEPLOY-RED 123", on: 1 },
+    { kind: "issue", address: "ISSUE 10", on: 10, number: 10 },
+    { kind: "continue", address: "CONTINUE PR 20", on: 20, number: 20 }];
+  const fired = [], logs = [], writes = [];
+  const api = (p, o) => {
+    if (o?.method) { writes.push(p); return { json: {} }; }
+    if (p.startsWith("actions/runs?")) return { json: { workflow_runs: p.includes("status=queued") ? [{ id: 123 }] : [] } };
+    if (p === "actions/runs/123/jobs?per_page=100") return { json: { jobs: Array.from({ length: 35 }, () => ({ status: "in_progress" })) } };
+    return { json: p.startsWith("issues/1/comments") ? [] : {} };
+  };
+  const result = await applyPlan({ launches, labels: [], digests: [], nudges: [], boardIssue: 1 }, {
+    api, config: cfg(), log: (line) => logs.push(line), now: NOW, fire: true,
+    env: { WORKER_FIRE_URL: "test-url", WORKER_FIRE_TOKEN: "test-token" },
+    fetchImpl: async (_, request) => {
+      fired.push(JSON.parse(request.body).text);
+      return { status: 200, json: async () => ({ claude_code_session_id: SID }), headers: { get: () => null } };
+    },
+  });
+  assert.deepEqual(fired, ["DEPLOY-RED 123"]);
+  assert.deepEqual(writes, ["issues/1/comments", "issues/1/comments"]);
+  assert.equal(result.fired, 1);
+  assert.ok(logs.some((line) => /workers deferred .*35 Linux jobs/.test(line)));
 });
 
 test("fire: a 200 without a claude_code_session_id still started a worker, so it is claimed (no session named), counted, and a CONTINUE is not adopted", async () => {
@@ -339,7 +364,7 @@ test("fire: a 200 without a claude_code_session_id still started a worker, so it
   assert.deepEqual(writes.filter((w) => !w.startsWith("PATCH") && !w.includes("issues/1/comments")),
     [`POST issues/20/comments dispatch: launched claude:[Worker] CONTINUE PR #20 PR 20 for #20 at ${ISO}`, "DELETE issues/20/labels/needs-owner",
       `POST issues/10/comments dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`]);
-  assert.deepEqual(out.filter((l) => l.startsWith("=") && !l.startsWith("= board")),
+  assert.deepEqual(out.filter((l) => l.startsWith("= launched") || l.startsWith("= needs-owner") || l.startsWith("= fire")),
     ["= launched CONTINUE PR 20: 200 without a claude_code_session_id — claimed without a session id", "= needs-owner removed from #20",
       "= launched ISSUE 10: 200 without a claude_code_session_id — claimed without a session id"]);
   // The next cycle reads that claim as a live worker: nothing is launched again.

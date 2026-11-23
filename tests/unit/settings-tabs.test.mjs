@@ -487,3 +487,25 @@ test("Spotify's authenticated return loads only the placement and editor owners 
   resolve(true); await tick();
   assert.deepEqual(opened, ["spotifypanel"], "closing while the scripts load abandons the return");
 });
+
+test("section reset launchers are unique and do not open a prompt after navigation leaves", async () => {
+  const { nav, dom, ctx } = boot({ ensure: () => true });
+  let resolve, prompts = 0;
+  ctx.SettingsExport = { ready: () => new Promise(r => { resolve = r; }), resetRow: () => prompts++ };
+  const panel = dom.byId("pm-panel-graphics");
+  nav.show("graphics"); nav.show("graphics");
+  const buttons = panel.querySelectorAll("[data-reset-settings]");
+  assert.equal(buttons.length, 1);
+  buttons[0].click(); nav.show("home"); resolve(true); await tick();
+  assert.equal(prompts, 0); assert.equal(buttons[0].disabled, false);
+});
+
+test("closing Settings while the reset bundle loads does not focus a hidden confirmation", async () => {
+  const { nav, dom, ctx } = boot({ ensure: () => true });
+  let resolve, prompts = 0;
+  ctx.SettingsExport = { ready: () => new Promise(r => { resolve = r; }), resetRow: () => prompts++ };
+  const sheet = dom.byId("pmsettings"), panel = dom.byId("pm-panel-graphics");
+  sheet.hidden = false; nav.show("graphics");
+  panel.querySelector("[data-reset-settings]").click(); sheet.hidden = true;
+  resolve(true); await tick(); assert.equal(prompts, 0);
+});

@@ -58,6 +58,7 @@ const WatchTransport = (function () {
       // The ⋯ chip. Hidden until the phone band docks the secondary controls into its box
       // (dock() below); its `open` is the player's, the band only decides where the nodes live.
       const more = node("details", "more");
+      more.id = "watch-more";
       const moreTab = node("summary", null, "⋯");
       moreTab.setAttribute("aria-label", "More replay controls: speed, camera, director, photo, event chapters");
       more.appendChild(moreTab);
@@ -65,11 +66,7 @@ const WatchTransport = (function () {
       more.hidden = true;
       top.appendChild(more);
       const cameras = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
-      select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), (id) => {
-        if (id === "tv") { replay.setAuto(true); return; }   // WATCH owns its director; the live-race TV rig is inactive here
-        const idx = cameras.findIndex((c) => c.id === id);
-        if (idx >= 0 && G.setCamMode) { G.setCamMode(idx, { persist: false }); replay.setLocked(true); if (G.snapGameCam) G.snapGameCam(true); }
-      });
+      select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), id => replay.setCamera(id));
       action(top, "auto", "AUTO: let the TV director choose the driver and camera", "AUTO", () => replay.setAuto(true));
       action(top, "lock", "FOLLOW LOCK: keep following the selected driver and camera", "FOLLOW LOCK", () => replay.setLocked(true));
       const photo = action(top, "photo", "Open photo mode", "PHOTO", () => { if (G.openWatchPhoto) G.openWatchPhoto(); });

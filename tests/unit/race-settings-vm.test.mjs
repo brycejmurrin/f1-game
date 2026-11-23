@@ -456,7 +456,7 @@ test("the reference pole runs the weather's tyre: the field's grip in wet and ra
 });
 
 // Audit item 73, Bryce's decision C (2026-11-20): the time-trial and daily MEDAL target is the field's own calibrated
-// model (QUALI_CENTRE x calibFor x the integrated lap), so gold sits 1.4-1.8 % under the AI's simulated pole on every
+// model (calibFor x the integrated lap), so gold sits 1.4-1.8 % under the AI's simulated pole on every
 // circuit; on referencePole's fixed 0.92 it was 0.930 (Imola) to 0.974 (Silverstone) of that pole. Pit loss and the
 // real-race replay scale (real-race.test.mjs seeds K off referencePole) keep referencePole, so no race moves.
 test("medals read the calibrated referencePole(\"medal\"); pit loss keeps the QUALI_TRIM pole (decision C, audit 73)", async () => {

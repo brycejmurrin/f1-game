@@ -8,6 +8,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { ROOT, line, transportReplay, visibleTransportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 test("WATCH steps from the same retirement slot after a paused seek or continuous playback", () => {
   for (const path of ["play", "seek", "seek twice"]) for (const direction of [-1, 1]) {
@@ -30,6 +31,25 @@ test("WATCH steps from the same retirement slot after a paused seek or continuou
   }
 });
 
+test("AUTO leaves an expired subject during the minimum shot hold and manual views keep their car", () => {
+  for (const mode of ["auto", "fixed", "locked"]) {
+    const { replay, options, G, cars, drivers } = transportReplay();
+    options.script.passes = [];
+    options.follow = "BBB";
+    options.camera = mode === "fixed" ? "heli" : "auto";
+    drivers[0].lapStart[1] = 9;
+    options.startLap = 2;
+    replay.start(options);
+    assert.equal(G.player, cars[1]);
+    if (mode === "locked") replay.setLocked(true);
+    const T = replay.status().T;
+    for (let i = 0; i < 20 && !cars[1].retired; i++) replay.tick(0.25);
+    assert.ok(cars[1].retired && replay.status().T - T < 5);
+    assert.equal(G.player, mode === "auto" ? cars[0] : cars[1], mode);
+    if (mode === "auto") assert.ok(["chase", "heli"].includes(replay.status().broadcast.shot));
+  }
+});
+
 test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns the picture", () => {
   for (const owner of ["auto", "manual", "locked", "fixed"]) {
     const { replay, G, options, drivers } = transportReplay();
@@ -39,9 +59,9 @@ test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns th
     options.traces.cars = { 1: line(0, 50, 0, 0, 10), 2: line(0, 50, 0, 0, 100) };
     replay.start({ ...options, reel: true, camera: owner === "fixed" ? "heli" : "auto" });
     assert.equal(replay.status().follow, "AAA");
-    replay.tick(13);
     if (owner === "manual") replay.takePicture();
     if (owner === "locked") replay.setLocked(true);
+    replay.tick(13);
     const frames = [];
     G.snapGameCam = () => frames.push({ code: G.player.code, retired: G.player.retired });
     replay.tick(1);
@@ -379,9 +399,8 @@ test("a short automatic forward cut does not re-fire a radio event inside the ne
 });
 
 test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {
-  const element = () => ({ children: [], dataset: {}, style: {}, textContent: "", classList: { add() {}, remove() {}, toggle() {} },
-    appendChild(n) { this.children.push(n); return n; }, setAttribute() {}, addEventListener() {}, removeEventListener() {}, querySelector() { return null; } });
-  const tower = element(), document = { body: element(), createElement: element, getElementById: (id) => id === "bc-tower" ? tower : null };
+  const { document } = makeDom();
+  const tower = document.getElementById("bc-tower");
   const { replay, G, drivers } = transportReplay({ document });
   drivers[0].laps = [10, 10];
   replay.tick(0.1);
@@ -451,6 +470,7 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
     status: () => state, setPaused: (v) => { state.paused = v; }, setSpeed: (v) => { state.speed = v; },
     follow: (v) => { state.follow = v; return v; }, setLocked: (v) => { state.broadcast.locked = v; },
     setAuto: () => { state.broadcast.auto = true; state.broadcast.locked = false; },
+    setCamera: (id) => { if (id === "tv") api.setAuto(); else { G.camMode = 1; calls.push(["camera", id]); api.setLocked(true); } },
     seek: (v) => { state.T = v; }, eventStep: (v) => calls.push(["event", v]) };
   const G = { camMode: 0, setCamMode: (i, opts) => { G.camMode = i; calls.push(["camera", opts.persist]); }, snapGameCam: () => calls.push(["snap"]), openWatchPhoto: () => calls.push(["photo", state.paused]) };
   const ui = W.create(G, api); ui.start();
@@ -473,7 +493,7 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   find("driver").value = "BBB"; find("driver").dispatch("change");
   assert.equal(state.follow, "BBB"); assert.equal(state.broadcast.locked, true);
   find("camera").value = "heli"; find("camera").dispatch("change");
-  assert.deepEqual(calls.slice(-2), [["camera", false], ["snap"]], "changing view is temporary and resets framing");
+  assert.deepEqual(calls.at(-1), ["camera", "heli"], "camera picks go through the replay owner");
   assert.equal(find("camera").value, "heli");
   const cameraCalls = calls.length;
   find("camera").value = "tv"; find("camera").dispatch("change");
@@ -802,7 +822,10 @@ test("WATCH bar docks its secondary controls into the ⋯ popover on the phone b
   assert.equal(find("chapters").open, true, "the chapter row shows inside the popover (its own summary is hidden by CSS)");
   assert.equal(more.open, false, "the popover is the player's to open");
   assert.equal(body.style.props["--wt-h"], "63.5px", "the bar's painted height reaches CSS");
-  assert.match(css, /#bc-tower\s*\{[^}]*max-height:\s*calc\(100svh - var\(--wt-h, 180px\)/, "the tower cap reads the measured bar height");
+  assert.match(css, /\[data-spectator="watch"\]\s*\{\s*--spectator-foot:\s*var\(--wt-h, 180px\)/,
+    "WATCH uses the measured transport height");
+  assert.match(css, /#bc-tower\s*\{[^}]*max-height:\s*calc\(100dvh - var\(--spectator-foot\)/,
+    "the tower cap reserves the spectator footer");
   for (const px of ["100px", "150px", "260px"]) assert.ok(!new RegExp("#bc-tower \\{ max-height: calc\\(100svh - " + px).test(css), "no per-band tower guess of " + px);
   assert.match(css, /\[data-wt="more-box"\]\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;[^}]*bottom:\s*calc\(100% \+ var\(--gap\)\)/, "the popover hangs above the chip, right-aligned");
   // every control still answers: the DOM walk the toolbar test does finds each key

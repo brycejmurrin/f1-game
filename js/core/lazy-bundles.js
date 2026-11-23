@@ -28,6 +28,7 @@ let raceSessionLoad = null;
 // (PitLane) called a group whose later file failed complete: the retry saw the
 // real PitLane, loaded nothing, and the race ran on stub engineer / radio.
 const RACE_SESSION_READY = {
+  "js/fx/visor-optics.js": () => typeof VisorOptics !== "undefined" && typeof VisorOptics.bind === "function",
   "js/input/touch-button-actions.js": () => typeof TouchButtonActions !== "undefined",
   "js/data/garage-departure-motion.js": () => typeof GarageDepartureMotion !== "undefined",
   "js/garage/departure-wheels.js": () => typeof GarageDepartureWheels !== "undefined",
@@ -76,12 +77,17 @@ async function loadRaceSessionSerial(opts) {
   }
   return true;
 }
+function bindRaceOptics() {
+  const ctx = ctxOrNull();
+  if (ctx && typeof VisorOptics !== "undefined") VisorOptics.bind(ctx);
+}
 function ensureRaceSession() {
   if (raceSessionLoad) return raceSessionLoad;
   if (!RACE_SESSION_FILES.length) return Promise.resolve(false);
   // Real before THIS loader ran anything (an eager shell / a spec that evaluated
   // the group itself): nothing to fetch and nobody to notify.
   if (!raceSessionLoaded.size && RACE_SESSION_FILES.every((f) => !RACE_SESSION_READY[f] || RACE_SESSION_READY[f]())) {
+    bindRaceOptics();
     raceSessionLoad = Promise.resolve(true);
     return raceSessionLoad;
   }
@@ -100,6 +106,7 @@ function ensureRaceSession() {
       // here would latch a REJECTED memo and RACE! would fail until reload. Count
       // it as fired only once it returns, so the next call retries it.
       try {
+        bindRaceOptics();
         if (typeof deps.onRaceSessionReady === "function") deps.onRaceSessionReady();
         raceSessionHooked = true;
       } catch (e) {
@@ -330,9 +337,10 @@ const DATA_READY = {
 // race) awaits it before it opens; the agent surface loads it for pages/specs.
 const REAL_RACE_FILES = ApexRoster.LAZY_REAL_RACE || [];
 const REAL_RACE_EDGES = ApexRoster.LAZY_REAL_RACE_EDGES || [];
+const REPLAY_BROADCAST_FILE = "js/race/replay-broadcast.js";
 const REAL_RACE_READY = {
   "js/race/tv-graphics.js": () => typeof TvGraphics !== "undefined",
-  "js/race/replay-broadcast.js": () => typeof ReplayBroadcast !== "undefined",
+  [REPLAY_BROADCAST_FILE]: () => typeof ReplayBroadcast !== "undefined",
   "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined",
   "js/race/real-replay.js": () => typeof RealReplay !== "undefined",
   "js/race/real-race-pace.js": () => typeof RealRacePace !== "undefined",
@@ -340,6 +348,15 @@ const REAL_RACE_READY = {
 };
 const realRaceLoaded = new Set();
 let realRaceLoad = null;
+// Post-finish TV shares the presentation without opening the rest of Data Hub.
+function ensureReplayBroadcast() {
+  return loadBackendScripts([REPLAY_BROADCAST_FILE], [], {
+    strict: true, loaded: realRaceLoaded, ready: REAL_RACE_READY[REPLAY_BROADCAST_FILE],
+  }).catch((e) => {
+    Log.warn("game", "the spectator display did not load: " + (e && e.message));
+    return false;
+  });
+}
 function ensureRealRace() {
   if (realRaceLoad) return realRaceLoad;
   if (!REAL_RACE_FILES.length) return Promise.resolve(true);   // nothing to load in this build: never holds the hub
@@ -1122,7 +1139,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

@@ -20,9 +20,10 @@ test("manifest keeps session-stub on FULL and pit-lane in LAZY_RACE_SESSION", ()
   assert.ok(m.LAZY_RACE_SESSION.includes("js/race/pit-lane.js"));
   assert.ok(m.LAZY_RACE_SESSION.includes("js/race/race-radio.js"));
   // #4748: the coach body is LAZY_RACE_SESSION; its FULL façade keeps DrivingCoach.create(G) for UiExperience.
-  const coach = (list) => list.filter((f) => f.startsWith("js/race/driving-coach"));
-  assert.deepEqual([coach(m.FULL), coach(m.LAZY_RACE_SESSION)], [["js/race/driving-coach-boot.js"], ["js/race/driving-coach.js"]],
-    "the coach façade stays FULL for UiExperience; its body loads with the race session");
+  const deferred = (list) => list.filter((f) => f.startsWith("js/race/driving-coach") || f === "js/fx/visor-optics.js");
+  assert.deepEqual([deferred(m.FULL), deferred(m.LAZY_RACE_SESSION)],
+    [["js/race/driving-coach-boot.js"], ["js/fx/visor-optics.js", "js/race/driving-coach.js"]],
+    "the coach façade stays FULL; its body and helmet optics load once with the race session");
 });
 
 test("session stub installs PitLane/Reliability and create() is inert", () => {
@@ -95,6 +96,34 @@ test("ensureRaceSession reinjects real PitLane and calls onRaceSessionReady", as
   assert.equal(ctx.__ready, 1);
   assert.equal(ctx.PitLane._stub, false);
   assert.ok(loaded.some((u) => String(u).includes("pit-lane.js")));
+});
+
+test("lazy visor optics retry an incomplete load and bind the live context before race readiness", async () => {
+  const files = ["js/fx/visor-optics.js"], G = { marker: "live-game-context" }, bound = [], ready = [];
+  const ctx = vm.createContext({ ApexRoster: { ...require("../../tools/manifest.cjs"), LAZY_RACE_SESSION: files },
+    window: {}, Log: { warn() {}, error() {} }, requestIdleCallback() { return 1; }, setTimeout() {} });
+  vm.runInContext(src("js/core/lazy-bundles.js"), ctx, { filename: absSrc("js/core/lazy-bundles.js") });
+  const create = vm.runInContext("LazyBundles.create", ctx);
+  let attempts = 0;
+  const bundle = create({ els: {}, getContext: () => G, onRaceSessionReady() { ready.push(bound.at(-1)); },
+    async loadBackendScripts(paths, edges, opts) {
+      attempts++;
+      if (attempts === 1) return false;
+      ctx.VisorOptics = { bind: value => bound.push(value) };
+      for (const file of paths) { assert.equal(opts.ready(file), true); opts.loaded.add(file); }
+      return true;
+    } });
+  assert.equal(await bundle.ensureRaceSession(), false);
+  assert.equal(ready.length, 0, "failed optics never reports a ready race session");
+  assert.equal(await bundle.ensureRaceSession(), true);
+  assert.deepEqual(bound, [G]);
+  assert.deepEqual(ready, [G], "context is bound before session preparation callbacks");
+  assert.equal(await bundle.ensureRaceSession(), true);
+  assert.equal(attempts, 2, "completed optics are never reinjected");
+  const resident = create({ els: {}, getContext: () => G,
+    loadBackendScripts() { throw new Error("resident optics must not reload"); } });
+  assert.equal(await resident.ensureRaceSession(), true);
+  assert.deepEqual(bound, [G, G], "already-resident optics also bind at race readiness, never during eager game evaluation");
 });
 
 // #2625: a never-resolving file makes ScriptLoader call onSlow; the loading card's line changes.
