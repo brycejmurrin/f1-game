@@ -65,7 +65,7 @@ const TvGraphics = (function () {
     host.setAttribute("role", "region");
     host.setAttribute("aria-label", "Broadcast race graphics");
     const lower = doc.createElement("div"); lower.id = "tvg-lower"; lower.hidden = true;
-    const battle = doc.createElement("div"); battle.className = "tvg-battle"; battle.hidden = true;
+    const battle = doc.createElement("div"); battle.className = "tvg-battle"; battle.setAttribute("data-bc-battle", ""); battle.hidden = true;
     const fastest = doc.createElement("div"); fastest.id = "tvg-fastest"; fastest.hidden = true;
     host.append(lower, battle, fastest);
     (parent || doc.body).appendChild(host);
@@ -76,7 +76,7 @@ const TvGraphics = (function () {
       lower.hidden = battle.hidden = fastest.hidden = true;
     }
     function tick(dt, force, field = G?.ranked) {
-      const on = G && G.hudProfile === "broadcast" && (G.state === "race" || G.state === "count");
+      const on = G && (opts?.spectator || G.hudProfile === "broadcast") && (G.state === "race" || G.state === "count");
       host.hidden = !on;
       if (!on) { reset(); return null; }
       wait -= Number.isFinite(dt) ? dt : 0;

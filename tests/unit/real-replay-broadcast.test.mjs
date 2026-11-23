@@ -28,7 +28,7 @@ test("WATCH rebuilds TV cards on a paused seek without treating the jump as a pa
   for (const file of ["js/overlay/feed.js", "js/race/tv-graphics.js"]) {
     vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), ctx, { filename: absSrc(file) });
   }
-  G.hudProfile = "broadcast";
+  G.hudProfile = "minimal";
   options.traces.cars[1] = line(50, 45, 0, 0, 30);
   options.traces.cars[2] = line(0, 55, 0, 0, 30);
   options.script.fastest = { t: 2, num: 2 };
@@ -53,6 +53,27 @@ test("WATCH rebuilds TV cards on a paused seek without treating the jump as a pa
   replay.setPaused(false);
   replay.tick(0.25);
   assert.equal(lower.hidden, true);
+});
+
+test("WATCH plate follows the recorded driver and keeps trace speed during a paused driver change", () => {
+  const { document } = makeDom();
+  const { replay, G } = transportReplay({ document, HudReadouts: {
+    spdPlate: kph => ({ n: Math.round(kph), unit: "KPH" }),
+  } }, { completeSubject: true });
+  const plate = document.getElementById("bc-viewer");
+  replay.seek(1);
+  assert.equal(document.body.dataset.spectator, "watch");
+  assert.equal(plate.children[1].textContent, "P1  ·  Driver A");
+  assert.equal(plate.children[2].textContent, "180 KPH");
+  replay.setPaused(true);
+  replay.tick(0.25);
+  assert.equal(G.player.speed, 0);
+  replay.follow("BBB");
+  assert.equal(plate.children[1].textContent, "P2  ·  Driver B");
+  assert.equal(plate.children[2].textContent, "162 KPH");
+  replay.stop();
+  assert.equal(document.body.dataset.spectator, undefined);
+  assert.equal(document.querySelector("#bc-viewer"), null);
 });
 
 test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds, restart and reel cuts", () => {

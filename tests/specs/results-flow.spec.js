@@ -328,11 +328,15 @@ test.describe("results-flow — reduced-motion phone", () => {
     const chase = await page.evaluate(() => window.__apex.camState());
     expect(chase.debug).toBe(false);
     expect(chase.lens.near).toBe(0.9);
+    await expect(page.locator("#ceremony-speed")).toBeVisible();
+    await expect(page.locator("#hud-gearbox")).toBeHidden();
     const parkFrame = await page.evaluate(() => window.__apex.cameraState().renderFrame);
     await tapPhase(page, "cooldown");
     await page.waitForFunction(frame => window.__apex.ceremony().phase === "parcFerme"
       && window.__apex.cameraState().renderFrame > frame && window.__apex.camState().lens.near === 0.3, parkFrame, { polling: 100, timeout: 20000 });
     const first = await page.evaluate(() => ({ age: window.__apex.ceremony().age, cam: window.__apex.camState(), frame: window.__apex.cameraState().renderFrame }));
+    await expect(page.locator("#ceremony-speed")).toBeHidden();
+    await expect(page.locator("#hud")).toBeHidden();
     await page.waitForFunction((age) => window.__apex.ceremony().phase === "parcFerme"
       && window.__apex.ceremony().age >= age + 1, first.age, { polling: 100, timeout: 5000 });
     const later = await page.evaluate(() => window.__apex.camState());

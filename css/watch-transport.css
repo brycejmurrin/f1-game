@@ -56,24 +56,70 @@
 .watch-transport [data-wt="caption"] { display: flex; justify-content: space-between; gap: var(--gap); color: var(--dim); font-size: var(--fs-micro); }
 .watch-transport [data-wt="event"] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .watch-transport [data-wt="director"] { flex-shrink: 0; }
-/* Same driving-HUD hide as body.bc-on in css/hud.css, for a replay whose
-   tower did not build. display:none, so a placed chip cannot show through.
-   Split so no selector prelude reads as a broken comment. */
-body.watch-controls-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
-body.watch-controls-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-pit-actions) { display: none !important; }
-body.watch-controls-on :is(#hud-ot, #hud-sectors, #hud-limits) { display: none !important; }
-body.watch-controls-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
-body.watch-controls-on :is(.touchbtn, #campicker) { display: none !important; }
-body.watch-controls-on :is(#btn-cam, #announce, #lights) { display: none !important; }
-body.watch-controls-on[data-helmet-cam] #hud::before { content: none; }
-body.watch-controls-on #bc-tower {
-  /* The tower stops above the bar that is actually there: --wt-h is the bar's
-     painted height, written by WatchTransport's ResizeObserver (UI scaling
-     contract gap 19). Four window-band constants (100/150/180/260) used to
-     guess it; the 100 px phone guess sat under a 172 px bar. */
-  max-height: calc(100svh - var(--wt-h, 180px) - var(--sat) - var(--sab) - 2 * var(--gap));
+body[data-spectator="watch"] { --spectator-foot: var(--wt-h, 180px); }
+body[data-spectator="live"] { --spectator-foot: 0px; }
+body[data-spectator] #bc-tower {
+  /* WATCH reserves the transport's observed height. Neither feed takes its
+     anchors or zoom from the active driving camera. */
+  --hud-z: 1;
+  left: max(var(--gap), var(--sal));
+  top: calc(var(--sat) + var(--gap));
+  width: clamp(136px, 19vw, 194px);
+  max-height: calc(100dvh - var(--spectator-foot) - var(--sat) - var(--sab) - 3 * var(--gap));
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y;
+}
+body[data-spectator="watch"] #bc-pip {
+  --hud-z: 1;
+  width: clamp(120px, 21vw, 320px);
+}
+body[data-spectator] #bc-tower .bc-head {
+  position: sticky; top: 0; z-index: 1; min-height: 32px; align-content: center;
+  background: var(--panel); color: var(--text);
+}
+body[data-spectator] #bc-tower [data-bc-entry] { grid-template-columns: 18px 3px minmax(2em, auto) minmax(0, 1fr) 12px; }
+body[data-spectator="live"] #bc-tower :is([data-bc-entry], .bc-head) { cursor: auto; }
+body[data-spectator] #bc-tower button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+@media (pointer: coarse) {
+  body[data-spectator="watch"] #bc-tower :is(.bc-head, [data-bc-entry]) { min-height: 44px; }
+}
+#bc-viewer {
+  position: fixed; z-index: 25; pointer-events: none;
+  right: calc(var(--sar) + var(--gap));
+  bottom: calc(var(--sab) + var(--spectator-foot, 0px) + var(--gap));
+  width: max-content; max-width: min(54vw, 25rem);
+  display: grid; gap: calc(var(--gap) / 3); padding: calc(var(--gap) / 2) var(--gap);
+  border: 1px solid var(--plate-line); border-right: 3px solid var(--red);
+  border-radius: var(--r-xs); background: var(--panel); color: var(--text);
+  font: 600 var(--fs-micro)/1.15 var(--font-hud); font-variant-numeric: tabular-nums;
+  text-align: right; overflow-wrap: anywhere;
+}
+#bc-viewer > :first-child { letter-spacing: .08em; color: var(--dim); }
+#bc-viewer > strong { font-size: var(--fs-body); line-height: 1.05; }
+body[data-spectator] #tvg [data-bc-battle] { top: calc(var(--sat) + var(--gap)); }
+body[data-spectator] #tvg-lower {
+  left: 50%; translate: -50% 0; bottom: calc(var(--sab) + var(--spectator-foot, 0px) + 4 * var(--gap));
+  min-width: 0; max-width: 45vw; padding: calc(var(--gap) / 2) var(--gap); font-size: var(--fs-micro);
+}
+body[data-spectator] #tvg-fastest {
+  left: 50%; right: auto; translate: -50% 0; bottom: auto; top: calc(var(--sat) + var(--gap) + 38px);
+  width: max-content; max-width: 42vw; padding: calc(var(--gap) / 2) var(--gap); font-size: var(--fs-micro);
+}
+body:has(> .screen:not([hidden])) :is(#bc-viewer, #tvg),
+body:is(.photo-mode, .hud-hidden) :is(#bc-viewer, #tvg) { display: none; }
+body[data-spectator="watch"]:has([data-wt="more"][open]) #bc-viewer { visibility: hidden; }
+#bc-viewer[hidden], #bc-viewer > [hidden] { display: none; }
+
+#ceremony-speed {
+  position: fixed; top: calc(var(--sat) + var(--gap)); left: 50%; translate: -50% 0;
+  padding: calc(var(--gap) / 2) var(--gap);
+  border-radius: var(--r-xs); background: var(--panel); color: var(--text);
+  font: 700 var(--fs-micro)/1.2 var(--font-hud); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+@media (max-width: 540px) {
+  body[data-spectator="live"] #bc-viewer { bottom: auto; top: calc(var(--sat) + var(--tap-hud) + 2 * var(--gap)); }
+  body[data-spectator] #tvg [data-bc-battle] { top: calc(var(--sat) + 3 * var(--gap) + 32px); left: auto; right: var(--sar); translate: none; max-width: 44vw; }
+  body[data-spectator] #tvg-fastest { top: calc(var(--sat) + 5 * var(--gap) + 54px); left: auto; right: var(--sar); translate: none; }
 }
 #bc-tower button.bc-head { width: 100%; text-align: left; border-radius: 0; background: transparent; }
 body:has(> .screen:not([hidden])) .watch-transport, body.photo-mode .watch-transport { display: none; }

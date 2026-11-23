@@ -88,7 +88,7 @@ var RaceCeremony = (function () {
     let skipped = false;
     let order = null;
     let meta = null;
-    let sessionEligible = false, parkPainted = false;
+    let sessionEligible = false, parkPainted = false, speedEl = null;
 
     function liveMeta() {
       return meta || { duel: !!duelOn(), watch: !!isWatch() };
@@ -102,6 +102,11 @@ var RaceCeremony = (function () {
       if (!el || !el.dataset) return;
       if (phase === "idle") delete el.dataset.ceremonyPhase;
       else el.dataset.ceremonyPhase = phase;
+      const body = document.body;
+      if (body?.dataset) {
+        if (phase === "idle" || phase === "results") delete body.dataset.raceCeremony;
+        else body.dataset.raceCeremony = phase;
+      }
     }
     function showSheet() {
       if (G.els && G.els.results) G.els.results.hidden = false;
@@ -142,6 +147,8 @@ var RaceCeremony = (function () {
       if (cool) cool.reset();
       const h = typeof document !== "undefined" ? document.getElementById("ceremony-cooldown") : null;
       if (h) h.hidden = true;
+      speedEl?.remove();
+      speedEl = null;
       if (parc) parc.reset();
       if (podium) podium.reset();
     }
@@ -160,6 +167,13 @@ var RaceCeremony = (function () {
         if (cool.start({ force: true }) && h) {
           h.hidden = false;
           if (cool.driveAllowed() && deps?.cooldownControls) deps.cooldownControls(true);
+          if (cool.driveAllowed() && typeof HudReadouts !== "undefined" && G.dashKph) {
+            speedEl = document.createElement("span");
+            speedEl.id = "ceremony-speed";
+            speedEl.setAttribute("aria-label", "Cooldown speed");
+            h.appendChild(speedEl);
+            paintSpeed();
+          }
           const b = cool.mountSkip(h, () => skip());
           if (b) b.style.pointerEvents = "auto";
         }
@@ -170,6 +184,12 @@ var RaceCeremony = (function () {
         showSheet();
       }
       return p;
+    }
+    function paintSpeed() {
+      if (!speedEl || !G.player) return;
+      const plate = HudReadouts.spdPlate(Math.max(0, G.dashKph(G.player.speed)));
+      const value = "COOLDOWN · " + plate.n + " " + plate.unit;
+      if (speedEl.textContent !== value) speedEl.textContent = value;
     }
     function nextAfter(p) {
       if (p === "classified") return "cooldown";
@@ -212,6 +232,7 @@ var RaceCeremony = (function () {
     function tick(dt) {
       if (phase === "idle" || phase === "results" || phase === "classified") return;
       age += dt > 0 ? dt : 0;
+      if (phase === "cooldown") paintSpeed();
       if (phase === "cooldown" && cool && cool.live() && cool.tick(dt)) { skip(); return; }
       if (phase === "parcFerme" && parc) parc.tick(dt);
       if (phase === "podium" && podium) podium.tick(dt);

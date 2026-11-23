@@ -12,6 +12,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -68,6 +69,38 @@ test("wantOn is solo-only and requires tv mode or finished/retired auto-spectate
   assert.equal(D.wantOn({ net: false, modeId: "chase", autoSpectate: true, finished: true }), true);
   assert.equal(D.wantOn({ net: false, modeId: "chase", autoSpectate: true, finished: false, retired: false }), false);
   assert.equal(D.wantOn({ net: false, modeId: "chase", autoSpectate: false, finished: true }), false);
+});
+
+test("post-finish TV uses the director's car and releases the spectator display before the next drive", () => {
+  const { document } = makeDom();
+  const tower = document.createElement("div");
+  tower.id = "bc-tower";
+  document.body.appendChild(tower);
+  const D = boot({ document, HudReadouts: { spdPlate: kph => ({ n: Math.round(kph), unit: "KPH" }) },
+    CamModes: { CAM_MODES: [{ id: "helmet" }, { id: "tv" }] } });
+  const player = { code: "AAA", rank: 1, lap: 3, speed: 1, prog: 2001 };
+  const rival = { code: "BBB", name: "Driver B", rank: 2, lap: 2, speed: 50, prog: 1950 };
+  const G = { state: "race", session: "race", hudProfile: "minimal", lapsTarget: 2,
+    track: { total: 1000 }, player, cars: [player, rival], camMode: 0,
+    dashKph: speed => speed * 3.6, setCamMode(i) { G.camMode = i; },
+    camVantage: () => ({ eye: [0, 5, 1], tgt: [0, 0, 0] }) };
+  const director = D.create(G);
+  director.tick(0.25);
+  assert.equal(document.body.dataset.spectator, undefined);
+  player.finished = true;
+  director.tick(0.25);
+  const viewer = document.getElementById("bc-viewer");
+  assert.equal(document.body.dataset.spectator, "live");
+  assert.equal(viewer.children[1].textContent, "P2  ·  Driver B");
+  assert.equal(viewer.children[2].textContent, "180 KPH");
+  assert.equal(tower.querySelector(".bc-gap").textContent, "FIN");
+  assert.equal(G.hudProfile, "minimal");
+  G.state = "results";
+  director.tick(0.25);
+  assert.equal(document.querySelector("#bc-viewer"), null);
+  assert.equal(tower.hidden, true);
+  director.reset();
+  assert.equal(G.camMode, 0);
 });
 
 test("create().tick writes dbgCam from camVantage and never mutates car speed", () => {

@@ -2903,6 +2903,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // the pause dialog on top of the results with a RESUME that resolves to
   // nothing, because resuming is only reachable from state "race".
   paused = false; els.pausemenu.hidden = true;
+  if (typeof RetiredCard !== "undefined") RetiredCard.hide();
   Droplets.clear();   // visor glints never linger over the results/menu (audit4 I1 R1)
   setState("results", isQuali() ? "quali-end" : forcedOrder ? "forced-order" : "flag");
   document.body.classList.remove("in-race");
@@ -7801,7 +7802,8 @@ function render(dt) {
   // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
-  if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
+  if (state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
