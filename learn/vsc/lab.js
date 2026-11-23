@@ -140,50 +140,6 @@
       "The pit path still took 30 s. Compare the two track times.";
   });
 
-  const host = window.frameElement;
-  const root = document.documentElement;
-  const hostRoot = host?.ownerDocument.documentElement;
-  get("lesson-title").hidden = Boolean(host);
-  const tokens = ["--red", "--bg", "--text", "--dim", "--surf-3", "--plate",
-    "--plate-line", "--card-line", "--edge", "--focus", "--r-lg", "--r-sm",
-    "--fs-3", "--font-ui", "--pad", "--gap", "--tap", "--menu-accent-ink"];
-
-  function syncAppearance() {
-    if (!host) return;
-    const style = getComputedStyle(host);
-    for (const token of tokens) root.style.setProperty(token, style.getPropertyValue(token));
-    root.style.colorScheme = style.colorScheme;
-  }
-
-  for (const name of ["tokens", "fonts-hud", "appearance-studio"]) {
-    const sheet = document.createElement("link");
-    sheet.rel = "stylesheet";
-    const parentSheet = host?.ownerDocument.querySelector(
-      'link[rel="stylesheet"][href*="css/' + name + '.css"]');
-    sheet.href = parentSheet?.href || "../../css/" + name + ".css";
-    sheet.addEventListener("load", syncAppearance);
-    document.head.insertBefore(sheet, document.querySelector('link[href="style.css"]'));
-  }
-  if (hostRoot) {
-    const observer = new MutationObserver(syncAppearance);
-    observer.observe(hostRoot, { attributes: true });
-    observer.observe(host.ownerDocument.body, { attributes: true });
-    const scheme = matchMedia("(prefers-color-scheme: light)");
-    scheme.addEventListener("change", syncAppearance);
-    window.addEventListener("pagehide", () => {
-      observer.disconnect();
-      scheme.removeEventListener("change", syncAppearance);
-    });
-    window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        window.parent.postMessage({ type: "apex-learn-close" }, location.origin);
-      }
-    });
-    syncAppearance();
-  } else {
-    root.dataset.uiTheme = "system";
-  }
-
+  LearnAppearance.mount();
   render();
 })();

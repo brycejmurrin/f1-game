@@ -567,6 +567,7 @@ async function precacheAssetLists() {
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     // LEARN — lesson iframes and their bare dependencies
+    "learn/appearance.js",
     "learn/aero/index.html",
     "learn/aero/style.css",
     "learn/aero/lab.js",
