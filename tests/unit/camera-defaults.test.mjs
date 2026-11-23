@@ -352,6 +352,52 @@ test("Cockpit droplet slider has its own minimum and native input persistence; o
   assert.deepEqual([opts.visorDropSize(),disk.get("apex26.helmetVisorDropSize"),doc.getElementById("pm-visor-drop-size-v").textContent],[1.7,"170","170%"]);
 });
 
+test("visor light style uses a native setting row and preserves hidden beam strength", () => {
+  const dom = makeDom(), doc = dom.document, get = doc.getElementById;
+  doc.body.appendChild(dom.makeElement("div", "pm-panel-display"));
+  doc.getElementById = id => dom.has(id) ? get(id) : null;
+  doc.createTextNode = text => ({ nodeType: 3, textContent: text });
+  const rows = { document: doc };
+  rows.window = rows;
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/ui/setting-row.js"), "utf8"), rows,
+    { filename: absSrc("js/ui/setting-row.js") });
+  const disk = new Map([["apex26.helmetVisor", "clear"], ["apex26.helmetVisorBeams", "160"]]);
+  const opts = loadCockpitOpts(disk, { document: doc, SettingRow: rows.SettingRow });
+  const style = doc.getElementById("pm-visor-light-style-sel"), beams = doc.getElementById("pm-visor-beams");
+  const hidden = el => { for (let n = el; n; n = n.parentNode) if (n.hidden) return true; return false; };
+  assert.equal(style.tagName, "SELECT");
+  assert.equal(style.value, "classic");
+  assert.deepEqual(Array.from(style.children, option => [option.value, option.textContent]),
+    [["classic", "CLASSIC"], ["compact", "COMPACT"], ["scratches", "SHORT RAYS"]]);
+  assert.equal(hidden(style), false);
+  assert.equal(hidden(beams), false);
+  const seen = [];
+  opts.onWheel((name, value) => seen.push([name, value]));
+  style.value = "compact";
+  dom.dispatch(style, { type: "change" });
+  assert.equal(opts.visorLightStyle(), "compact");
+  assert.equal(disk.get("apex26.helmetVisorLightStyle"), "compact");
+  assert.deepEqual(seen.at(-1), ["visorLightStyle", "compact"]);
+  assert.equal(hidden(style), false);
+  assert.equal(hidden(beams), true);
+  assert.equal(disk.get("apex26.helmetVisorBeams"), "160", "hiding the beam control never rewrites its preference");
+  style.value = "scratches";
+  dom.dispatch(style, { type: "change" });
+  assert.equal(hidden(beams), false);
+  assert.equal(beams.value, "160");
+  opts.setVisorReflections("off");
+  assert.equal(hidden(style), true);
+  assert.equal(hidden(beams), true);
+  opts.setVisorReflections("light");
+  opts.setVisor("off");
+  assert.equal(hidden(style), true);
+  opts.setVisor("clear");
+  assert.equal(hidden(style), false);
+  assert.equal(style.value, "scratches");
+  const restored = loadCockpitOpts(disk);
+  assert.deepEqual([restored.visorLightStyle(), restored.visorBeams()], ["scratches", 1.6]);
+});
+
 // Read off the LOADED CAM_MODES and the cut setCamMode() actually starts: a
 // `id:"cinematic"[\s\S]*cut:0.6` regex matched any later entry's cut too.
 test("broadcast cameras carry per-mode cut ease durations", () => {

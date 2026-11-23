@@ -122,6 +122,7 @@ test("visor optics and water choices keep legacy defaults, validate and survive 
   const controls = [
     ["Refraction", "off", ["off", "light", "medium", "strong"]],
     ["Reflections", "light", ["light", "off", "medium", "strong"]],
+    ["LightStyle", "classic", ["classic", "compact", "scratches"]],
     ["Rain", "normal", ["normal", "off", "light", "heavy"]],
     ["Runoff", "normal", ["normal", "slow", "fast"]],
   ];
@@ -270,6 +271,35 @@ test("the interiors build inside the tub, keyed by livery, and only CLASSIC has 
 // THE RIG, RUN: the real CarDraw.drawCockpitRig (tests/helpers/car-draw-vm.mjs;
 // CarMesh's getters are recorded by name) under the REAL CockpitOpts, so the
 // chosen wheel, seat and interior are read from what it DRAWS, not its text.
+test("cockpit halo blockers retain only the actual generated indexed triangles for every halo shape", () => {
+  const { Car3D } = loadCar3D();
+  const signatures = new Set();
+  for (const halo of [0, 1, 2, 3, 4]) {
+    const mesh = Car3D.build([0.8, 0.1, 0.1], [0.2, 0.2, 0.2],
+      { cockpit: true, noWheels: true, noDriver: true, halo });
+    const blocker = mesh._cockpitHaloOccluder;
+    if (!halo) { assert.equal(blocker, null); continue; }
+    assert.ok(blocker.triangles instanceof Float32Array);
+    assert.equal(blocker.triangles.length % 9, 0);
+    assert.ok(blocker.triangles.length > 0);
+    const triangles = new Set();
+    for (let i = 0; i < mesh.idx.length; i += 3) {
+      const tri = [];
+      for (let j = 0; j < 3; j++) for (let axis = 0; axis < 3; axis++) tri.push(Math.fround(mesh.pos[mesh.idx[i + j] * 3 + axis]));
+      triangles.add(tri.join(","));
+    }
+    for (let i = 0; i < blocker.triangles.length; i += 9)
+      assert.ok(triangles.has(Array.from(blocker.triangles.subarray(i, i + 9)).join(",")), `halo ${halo}: blocker uses rendered triangles after welding`);
+    for (let axis = 0; axis < 3; axis++) {
+      const values = Array.from(blocker.triangles).filter((_, i) => i % 3 === axis);
+      assert.ok(Math.abs(Math.min(...values) - blocker.bounds[axis]) < 1e-6);
+      assert.ok(Math.abs(Math.max(...values) - blocker.bounds[axis + 3]) < 1e-6);
+    }
+    signatures.add(Array.from(blocker.triangles).join(","));
+  }
+  assert.equal(signatures.size, 4, "slim, standard, thick and faired use their own geometry");
+});
+
 test("the rig draws the chosen wheel at the seat's mount and the interior; NONE and screenless wheels stop early", () => {
   const v = carDrawVm({ cam: "cockpit" });
   const { ctx, G } = v;
@@ -277,6 +307,11 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
   const real = loadOpts({}).opts;
   ctx.CockpitOpts = Object.assign({}, real, { haloSize: () => 2, body: () => "standard" });
   ctx.Car3D.cockpitMirrorGlass = () => [];
+  const blocker = { triangles: new Float32Array(9), bounds: [0, 0, 0, 1, 1, 1] }, received = [];
+  const build = ctx.Car3D.build;
+  ctx.Car3D.build = (a, b, o) => Object.assign(build(a, b, o), { _cockpitHaloOccluder: o.halo ? blocker : null });
+  ctx.VisorOptics = { setCockpitOccluder: (geometry, matrix) => received.push({ geometry, matrix: Array.from(matrix) }) };
+
   // The roll curve's two numbers (the helper's CarMesh records every getter by name).
   ctx.CarMesh = new Proxy({}, { get: (_o, k) => k === "WHEEL_ROLL_LAMBDA" ? 12 : k === "cockpitWheelRoll" ? (x) => x
     : () => ({ carMesh: String(k) }) });
@@ -292,6 +327,9 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
     ctx.CockpitOpts.layout = (w, s) => layout(w, s || seat);
     drawn.length = 0;
     v.carDraw.drawCockpitRig(c, base, 1 / 60, {}, noWheel);
+    assert.equal(received.at(-1).geometry, ctx.CockpitOpts.haloSize() ? blocker : null);
+    assert.deepEqual(received.at(-1).matrix, drawn.find(d => d.name === "body").m, "source obstruction receives the exact body draw matrix");
+
     ctx.CockpitOpts.layout = layout;
     return drawn.map((d) => d.name);
   };
@@ -316,6 +354,13 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
     for (const r of ["getGearDigit", "getLedStrip", "getSpeedDigit", "getErsBar"]) assert.ok(!names.includes(r), `${w}: no screen, no ${r}`);
     assert.ok(names.includes("getCockpitGlass"), "CLASSIC adds its aeroscreen");
   }
+  base[12] = 12; base[13] = 3; base[14] = -20;
+  rig("f1", "std", "carbon");
+  ctx.CockpitOpts.haloSize = () => 0;
+  rig("f1", "std", "carbon");
+  ctx.CockpitOpts.haloSize = () => 2;
+  rig("f1", "std", "carbon");
+
 });
 
 test("the rig's remaining wiring: roll damping, per-fascia LEDs, caches, and the HUD hand-back", () => {

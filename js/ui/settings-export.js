@@ -191,6 +191,7 @@ const SPEC = [
   { k: "helmetVisorIntensity", lane: "raw", group: "camera", def: "medium", src: "js/camera/cockpit-opts.js CHOICES.visorIntensity", oneOf: ["trace", "light", "medium", "strong", "deep"] },
   { k: "helmetVisorRefraction", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visorRefraction", oneOf: ["off", "light", "medium", "strong"] },
   { k: "helmetVisorReflections", lane: "raw", group: "camera", def: "light", src: "js/camera/cockpit-opts.js CHOICES.visorReflections", oneOf: ["light", "off", "medium", "strong"] },
+  { k: "helmetVisorLightStyle", lane: "raw", group: "camera", def: "classic", src: "js/camera/cockpit-opts.js CHOICES.visorLightStyle", oneOf: ["classic", "compact", "scratches"] },
   { k: "helmetVisorBeams", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js BEAMS_DEFAULT (percent, 0–200)" },
   { k: "helmetVisorRain", lane: "raw", group: "camera", def: "normal", src: "js/camera/cockpit-opts.js CHOICES.visorRain", oneOf: ["normal", "off", "light", "heavy"] },
   { k: "helmetVisorDropSize", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js visorDropSize (percent,50–200)" },

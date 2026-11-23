@@ -475,7 +475,22 @@ const CarGeometry = (function () {
     return out;
   }
 
-  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
+  // Keep only an emitted indexed section, before welding can renumber its vertices.
+  // Built once with the cockpit mesh; source visibility never reads GPU geometry.
+  function sourceOccluder(data, from, to = data.idx.length) {
+    if (!(to > from)) return null;
+    const triangles = new Float32Array((to - from) * 3);
+    const bounds = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    for (let i = from; i < to; i++) for (let axis = 0; axis < 3; axis++) {
+      const v = data.pos[data.idx[i] * 3 + axis];
+      triangles[(i - from) * 3 + axis] = v;
+      bounds[axis] = Math.min(bounds[axis], v);
+      bounds[axis + 3] = Math.max(bounds[axis + 3], v);
+    }
+    return { triangles, bounds };
+  }
+
+  return { create, weld, decimate, sourceOccluder, presentShared, SHARED_BODY_TRIS, SHARED_PAINT,
            withDetail, level: () => _lvl, hero: () => _hero, clampDetail, detailFor, heroOn,
            // hero-build hooks (CarBodyGeom, CarShade): loft UVs while one records them, a bevelled part
            loftUv: (o, v, r) => _luv && CarHero.loftUv(o, v, r), heroBevel: (o, w, n, e) => _hero ? CarHero.bevel(o, w, n, e) : e(o) };

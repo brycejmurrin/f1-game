@@ -1604,6 +1604,7 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "setVisor": [
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "setVisorBeams": [
@@ -1617,6 +1618,9 @@
       ],
       "setVisorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "setVisorReflections": [
+        "tests/unit/camera-defaults.test.mjs"
       ],
       "setVisorShape": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -1645,6 +1649,9 @@
       ],
       "visorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "visorLightStyle": [
+        "tests/unit/camera-defaults.test.mjs"
       ],
       "visorShape": [
         "tests/unit/cockpit-wheels.test.mjs"
@@ -7688,6 +7695,9 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "sceneFromG": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
+      "setCockpitOccluder": [
         "tests/unit/visor-optics.test.mjs"
       ],
       "stats": [
@@ -21352,6 +21362,7 @@
       "paint": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/title-layout.test.mjs"
       ],
       "step": [
@@ -21368,6 +21379,7 @@
       "wire": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/hud-layout.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"

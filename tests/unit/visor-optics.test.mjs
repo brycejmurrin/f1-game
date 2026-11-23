@@ -29,9 +29,9 @@ function ctx2d(calls) {
   };
 }
 
-function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "", G = undefined } = {}) {
+function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, style = "classic", color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "", G = undefined } = {}) {
   const calls = { transforms: 0, portWrites: 0, clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
-  const live = { visor, helmet, shape: "standard" };
+  const live = { visor, helmet, shape: "standard", style };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
     hasAttribute: (k) => k === "data-helmet-cam" && live.helmet,
@@ -53,7 +53,7 @@ function load({ helmet = true, visor = "clear", reflections = "light", refractio
     Math, Float32Array, Uint8Array, Uint8ClampedArray, Object, Path2D, performance: { now: () => 0 },
     getComputedStyle: () => ({ getPropertyValue: (k) => (k === "--visor-lens" ? lens : "") }),
     document, window: { ...win, __apex: apex, location: { search } }, URLSearchParams, Date,
-    CockpitOpts: { visor: () => live.visor, visorShape: () => live.shape, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
+    CockpitOpts: { visor: () => live.visor, visorShape: () => live.shape, visorLightStyle: () => live.style, visorReflections: () => reflections, visorRefraction: () => refraction, visorBeams: () => beams, visorColor: () => color, visorIntensity: () => intensity, onWheel: (fn) => listeners.push(fn) },
     GfxQuality: { current: () => "high" },
     ...(picker ? { RendererPicker: picker } : {}),
     ...(G ? { G } : {}),
@@ -825,4 +825,193 @@ test("live visor scene uses the renderer's effective fog settings, including zer
   ctx.LightTune.LT = { fogDensityMul: 0, fogHeight: 0 };
   assert.equal(V.sceneFromG(G).fogDensity, 0);
   assert.equal(V.sceneFromG(G).fogHeight, 0);
+});
+
+test("visor light styles preserve Classic by default and leave refraction fringe independent", () => {
+  const { V } = load();
+  const scene = { ...DAY, sunDir: [0, 0.1, -0.995], lights: lamp(0, -20) };
+  const opts = { level: 1.6, beams: 2, fringe: 1, bloom: 2 };
+  const original = V.lightMap(scene, 852, 393, opts);
+  for (const style of ["classic", "unknown", null]) {
+    assert.deepEqual(V.lightMap(scene, 852, 393, { ...opts, style }), original, "missing or invalid style preserves the classic map");
+  }
+  for (const style of ["compact", "scratches"]) {
+    const m = V.lightMap(scene, 852, 393, { ...opts, style });
+    assert.equal(m.fringe, original.fringe, "light style does not change the player's refraction fringe");
+    assert.equal(m.ghost, null);
+    assert.equal(m.bloom, original.bloom * 0.5);
+    assert.equal(m.sun.k, original.sun.k * 0.8);
+    assert.equal(m.sun.r, original.sun.r * 0.7);
+    if (style === "compact") assert.equal(m.rays, null);
+    else {
+      assert.ok(m.rays.short && m.rays.len < original.rays.len * 0.3);
+      assert.ok(m.rays.k < original.rays.k * 0.2);
+    }
+  }
+});
+
+test("compact cores are source-local, bounded and retain strength ordering", () => {
+  const { V } = load();
+  const source = lamp(-12, -24), added = lamp(16, -16);
+  for (const style of ["compact", "scratches"]) {
+    const map = (lights, level = 1) => V.lightMap({ ...NIGHT, lights }, 852, 393, { style, level, beams: 2 });
+    const single = map(source).glints[0];
+    const pair = map([...source, ...added]).glints.find((g) => g.x === single.x);
+    assert.deepEqual(pair, single, "a brighter unrelated lamp cannot change an existing source or its spokes");
+    const ks = [0.6, 1, 1.6].map((level) => map(source, level).glints[0].k);
+    assert.ok(ks[0] < ks[1] && ks[1] < ks[2], "reflection strength remains increasing");
+    const m = map(Array.from({ length: 8 }, (_, i) => lamp(i - 4, -12)).flat(), 1.6);
+    assert.equal(m.glints.length, 8);
+    assert.ok(m.glints.every((g) => g.k <= 0.3 && g.beam === null));
+    assert.ok(m.glints.reduce((sum, g) => sum + g.k, 0) <= 2.4 + 1e-12, "eight core amplitudes remain bounded");
+    if (style === "compact") assert.ok(m.glints.every((g) => g.star === null));
+    else assert.ok(m.glints.every((g) => g.star.short && g.star.len < g.r * 2.3 && g.star.k <= 0.15));
+  }
+});
+
+test("short rays honor beams zero and reflection gates and paint four fixed lamp spokes", () => {
+  const scene = { ...NIGHT, lights: lamp(0, -24) };
+  const { V } = load();
+  const sun = { ...DAY, sunDir: [0, 0.1, -0.995], lights: scene.lights };
+  for (const style of ["compact", "scratches"]) {
+    const off = V.lightMap(sun, 852, 393, { style, beams: 0 });
+    assert.equal(off.rays, null);
+    assert.ok(off.sun && off.sun.k > 0, "beams zero preserves the solar core");
+    // Daylight adaptation can legitimately hide lamp glints. Exercise the lamp gate in the night fixture
+    // where its source is visible, independently of the daytime solar-ray gate above.
+    const lampOff = V.lightMap(scene, 852, 393, { style, beams: 0 });
+    const lampOn = V.lightMap(scene, 852, 393, { style, beams: 1 });
+    assert.equal(lampOff.glints.length, 1);
+    assert.ok(lampOff.glints.every((g) => !g.beam && !g.star));
+    assert.equal(lampOff.glints[0].k, lampOn.glints[0].k, "beams zero preserves the lamp core");
+    for (const source of [sun, scene]) {
+      const dark = V.lightMap(source, 852, 393, { style, level: 0 });
+      assert.equal(dark.sun, null); assert.equal(dark.glints.length, 0);
+    }
+    const hidden = load({ apex: { visorScene: () => scene }, style, reflections: "off" });
+    hidden.V.tick(1 / 60, true, 0, false);
+    assert.equal(hidden.V.stats().paints, 0);
+  }
+  const short = load({ apex: { visorScene: () => scene }, style: "scratches", reflections: "strong" });
+  short.V.tick(1 / 60, true, 0, false);
+  assert.equal(short.calls.stroke, 4, "each lamp uses two opposed pairs without the classic six-spoke fan");
+});
+
+test("light styles respect minimal budgets and repaint once when changed while paused", () => {
+  const scene = { ...NIGHT, lights: Array.from({ length: 8 }, (_, i) => lamp(i - 4, -24)).flat() };
+  const arm = load({ apex: { visorScene: () => scene }, style: "scratches", reflections: "strong" });
+  arm.ctx.GLX = { isMobile: true };
+  arm.ctx.PerfGov = { autoShed: () => 2, lookPostShed: () => false };
+  arm.V.tick(1 / 60, true, 0, false);
+  assert.equal(arm.V.stats().glints, 2);
+  assert.equal(arm.V.stats().budget, "minimal");
+  assert.equal(arm.calls.stroke, 0, "minimal budget suppresses all scratch spokes");
+  const paused = load({ apex: { visorScene: () => scene }, reflections: "strong" });
+  paused.V.tick(1 / 60, true, 0, false);
+  const before = paused.V.stats(), port = paused.calls.props["--visor-port"];
+  paused.live.style = "compact";
+  for (const fn of paused.listeners) fn("visorLightStyle", "compact");
+  paused.V.tick(0, true, 0, false);
+  assert.equal(paused.V.stats().paints, before.paints + 1);
+  assert.ok(paused.V.stats().lamp < before.lamp * 0.3, "the paused canvas receives compact source strengths");
+  assert.equal(paused.calls.props["--visor-port"], port, "style does not rebuild the bezel");
+  paused.V.tick(0, true, 0, false);
+  assert.equal(paused.V.stats().paints, before.paints + 1, "no repeated paused repaint");
+});
+
+const haloBlocker = () => ({
+  triangles: new Float32Array([-0.12, 0, -2, 0.12, 0, -2, 0.12, 3, -2,
+    -0.12, 0, -2, 0.12, 3, -2, -0.12, 3, -2]),
+  bounds: [-0.12, 0, -2, 0.12, 3, -2],
+});
+const identityModel = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+function visorScene(V, frame, eye = frame.eye, tgt = frame.tgt) {
+  return V.sceneFromG({ camEye: eye, camTgt: tgt, camFov: frame.fov, frame });
+}
+
+test("opaque halo blocks complete sun and lamp effects in every light style, with visible sources preserved", () => {
+  const { V } = load();
+  V.setCockpitOccluder(haloBlocker(), identityModel());
+  const sun = { ...DAY, sunDir: [0, 0.1, -0.995] };
+  for (const style of ["classic", "compact", "scratches"]) {
+    const blocked = V.lightMap(visorScene(V, sun), 852, 393, { style, level: 1.6, beams: 2 });
+    assert.equal(blocked.sun, null); assert.equal(blocked.ghost, null); assert.equal(blocked.rays, null);
+    assert.equal(blocked.rim, null, "blocked direct sunlight cannot generate a rim reflection");
+    const aside = V.lightMap(visorScene(V, { ...sun, sunDir: [0.3, 0.1, -0.949] }), 852, 393, { style });
+    assert.ok(aside.sun, "a source beside the pillar still lights the shield");
+    const lamps = V.lightMap(visorScene(V, { ...NIGHT, lights: [...lamp(0, -24), ...lamp(6, -24)] }), 852, 393, { style });
+    assert.equal(lamps.glints.length, 1, "only the unobstructed lamp retains its core and associated effects");
+    assert.ok(lamps.glints[0].x > 426);
+  }
+  const crowded = [...Array.from({ length: 8 }, () => lamp(0, -20)).flat(), ...lamp(6, -40)];
+  const visible = V.lightMap(visorScene(V, { ...NIGHT, lights: crowded }), 852, 393, { glintLimit: 2 });
+  assert.equal(visible.glints.length, 1, "eight blocked bright sources do not displace the visible lower-ranked lamp");
+  V.setCockpitOccluder(null, null);
+  assert.ok(V.lightMap(visorScene(V, sun), 852, 393).sun, "HALO OFF restores the same source");
+});
+
+test("halo ray test uses the actual affine draw transform and stops at finite lamp sources", () => {
+  const { V } = load();
+  const sun = { ...DAY, sunDir: [0, 0.1, -0.995] };
+  const moved = identityModel(); moved[12] = 3;
+  V.setCockpitOccluder(haloBlocker(), moved);
+  moved[12] = 99; // Caller can reuse its draw matrix after publication.
+  assert.ok(V.lightMap(visorScene(V, sun), 852, 393).sun, "translated halo leaves the original sightline clear");
+  assert.equal(V.lightMap(visorScene(V, sun, [3, 1, 0], [3, 1, -10]), 852, 393).sun, null, "eye movement follows the actual translated blocker");
+  const rotated = new Float32Array([0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1]);
+  V.setCockpitOccluder(haloBlocker(), rotated);
+  const turned = { ...sun, tgt: [-10, 1, 0], sunDir: [-0.995, 0.1, 0] };
+  assert.equal(V.lightMap(visorScene(V, turned), 852, 393).sun, null, "yaw rotates the mesh and sightline together");
+  const scaled = identityModel(); scaled[0] = -2; scaled[5] = 0.5;
+  V.setCockpitOccluder(haloBlocker(), scaled);
+  assert.equal(V.lightMap(visorScene(V, sun), 852, 393).sun, null, "scaled and mirrored geometry still blocks from either triangle side");
+  V.setCockpitOccluder(haloBlocker(), identityModel());
+  const near = lamp(0, -1.5); near[1] = 1;
+  assert.equal(V.lightMap(visorScene(V, { ...NIGHT, lights: near }), 852, 393).glints.length, 1, "a lamp in front of the halo is not blocked by geometry behind it");
+  const back = identityModel(); back[14] = 4;
+  V.setCockpitOccluder(haloBlocker(), back);
+  assert.ok(V.lightMap(visorScene(V, sun), 852, 393).sun, "geometry behind the eye cannot block forward light");
+});
+
+test("halo occlusion clears on lifecycle exits and rejects a singular draw transform", () => {
+  const { V, live } = load();
+  const sun = { ...DAY, sunDir: [0, 0.1, -0.995] };
+  for (const exit of [() => V.clear(), () => V.tick(0, false, 0, false),
+    () => { live.helmet = false; V.tick(0, true, 0, false); live.helmet = true; },
+    () => { live.visor = "off"; V.tick(0, true, 0, false); live.visor = "clear"; }]) {
+    V.setCockpitOccluder(haloBlocker(), identityModel());
+    assert.equal(V.lightMap(visorScene(V, sun), 852, 393).sun, null);
+    exit();
+    assert.ok(V.lightMap(visorScene(V, sun), 852, 393).sun, "stale cockpit geometry is released on exit");
+  }
+  V.setCockpitOccluder(haloBlocker(), new Float32Array(16));
+  assert.equal(visorScene(V, sun).occluder, null);
+});
+
+test("paused halo toggles and draw transforms refresh visibility without raising the moving paint cadence", () => {
+  const arm = load({ reflections: "strong" });
+  const frame = { ...DAY, sunDir: [0, 0.1, -0.995] };
+  arm.V.bind({ camEye: frame.eye, camTgt: frame.tgt, camFov: frame.fov, frame });
+  const geometry = haloBlocker(), matrix = identityModel();
+  arm.V.tick(1 / 60, true, 0, false);
+  assert.ok(arm.V.stats().sun > 0);
+  arm.V.setCockpitOccluder(geometry, matrix);
+  arm.V.tick(0, true, 0, false);
+  assert.equal(arm.V.stats().sun, 0, "enabling the halo removes its blocked sunlight while paused");
+  arm.V.setCockpitOccluder(null, null);
+  arm.V.tick(0, true, 0, false);
+  assert.ok(arm.V.stats().sun > 0, "disabling the halo restores the source while paused");
+  arm.V.setCockpitOccluder(geometry, matrix);
+  arm.V.tick(0, true, 0, false);
+  matrix[12] = 3;
+  arm.V.setCockpitOccluder(geometry, matrix);
+  arm.V.tick(0, true, 0, false);
+  assert.ok(arm.V.stats().sun > 0, "a changed cockpit transform refreshes the paused sightline");
+  const paints = arm.V.stats().paints;
+  for (let i = 0; i < 60; i++) {
+    matrix[12] = 3 + i * 0.001;
+    arm.V.setCockpitOccluder(geometry, matrix);
+    arm.V.tick(1 / 60, true, 0, false);
+  }
+  assert.equal(arm.V.stats().paints - paints, 15, "moving cockpit transforms retain the 15Hz light budget");
 });

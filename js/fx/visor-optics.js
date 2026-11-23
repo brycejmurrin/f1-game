@@ -61,10 +61,93 @@ const VisorOptics = (function () {
   const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, errors: 0 };
   const _tmpSun = [0, 0, 0], _glintBuf = [];
   const _basis = { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
+  // CPU halo geometry is retained once when the cockpit mesh is built. Its actual draw matrix is published
+  // before Droplets.tick; no depth readback, screen-space pillar guess or duplicate cockpit rig is needed.
+  const _cockpitBlocker = { triangles: null, bounds: null, inverse: new Float32Array(12) };
+  const _occluderMatrix = new Float32Array(16);
+  let _occluderGeometry = null;
+  const _rayOrigin = [0, 0, 0], _rayDirection = [0, 0, 0];
+  let _cockpitBlocked = false;
 
   const clampTo = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lum = (c) => (c ? 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] : 0);
   const r2 = (v) => Math.round(v * 100) / 100;
+
+  function setCockpitOccluder(geometry, matrix) {
+    const was = _cockpitBlocked;
+    _cockpitBlocked = false;
+    if (!geometry || !geometry.triangles || geometry.triangles.length < 9 || !geometry.bounds || !matrix) {
+      if (was) { _settingsDirty = true; _acc = 1; }
+      _occluderGeometry = null;
+      return;
+    }
+    // Invert the affine model transform once per draw. Preserve ray parameters even for scaled geometry.
+    const a = matrix[0], b = matrix[4], c = matrix[8], d = matrix[1], e = matrix[5], f = matrix[9],
+      g = matrix[2], h = matrix[6], i = matrix[10];
+    const det = a * (e * i - f * h) + b * (f * g - d * i) + c * (d * h - e * g);
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-10) {
+      if (was) { _settingsDirty = true; _acc = 1; }
+      _occluderGeometry = null;
+      return;
+    }
+    const geometryChanged = !was || geometry !== _occluderGeometry;
+    let matrixChanged = false;
+    for (let j = 0; j < 16; j++) {
+      if (_occluderMatrix[j] !== matrix[j]) matrixChanged = true;
+      _occluderMatrix[j] = matrix[j];
+    }
+    _occluderGeometry = geometry;
+    if (geometryChanged) _acc = 1;
+    if (geometryChanged || matrixChanged) _settingsDirty = true;
+    const inv = _cockpitBlocker.inverse, k = 1 / det;
+    inv[0] = (e * i - f * h) * k; inv[1] = (c * h - b * i) * k; inv[2] = (b * f - c * e) * k;
+    inv[4] = (f * g - d * i) * k; inv[5] = (a * i - c * g) * k; inv[6] = (c * d - a * f) * k;
+    inv[8] = (d * h - e * g) * k; inv[9] = (b * g - a * h) * k; inv[10] = (a * e - b * d) * k;
+    for (let row = 0; row < 12; row += 4)
+      inv[row + 3] = -(inv[row] * matrix[12] + inv[row + 1] * matrix[13] + inv[row + 2] * matrix[14]);
+    _cockpitBlocker.triangles = geometry.triangles; _cockpitBlocker.bounds = geometry.bounds;
+    _cockpitBlocked = true;
+  }
+
+  function sourceBlocked(scene, dx, dy, dz, maxT) {
+    const blocker = scene.occluder;
+    if (!blocker) return false;
+    const inv = blocker.inverse, eye = scene.eye, o = _rayOrigin, ray = _rayDirection;
+    for (let axis = 0; axis < 3; axis++) {
+      const r = axis * 4;
+      o[axis] = inv[r] * eye[0] + inv[r + 1] * eye[1] + inv[r + 2] * eye[2] + inv[r + 3];
+      ray[axis] = inv[r] * dx + inv[r + 1] * dy + inv[r + 2] * dz;
+    }
+    let near = 0, far = maxT;
+    const bounds = blocker.bounds;
+    for (let axis = 0; axis < 3; axis++) {
+      if (Math.abs(ray[axis]) < 1e-10) {
+        if (o[axis] < bounds[axis] || o[axis] > bounds[axis + 3]) return false;
+      } else {
+        const t0 = (bounds[axis] - o[axis]) / ray[axis], t1 = (bounds[axis + 3] - o[axis]) / ray[axis];
+        near = Math.max(near, Math.min(t0, t1)); far = Math.min(far, Math.max(t0, t1));
+        if (near > far) return false;
+      }
+    }
+    // Double-sided Möller–Trumbore intersections against the actual emitted halo, including its fairing.
+    const triangles = blocker.triangles;
+    for (let n = 0; n + 8 < triangles.length; n += 9) {
+      const ex = triangles[n + 3] - triangles[n], ey = triangles[n + 4] - triangles[n + 1], ez = triangles[n + 5] - triangles[n + 2];
+      const fx = triangles[n + 6] - triangles[n], fy = triangles[n + 7] - triangles[n + 1], fz = triangles[n + 8] - triangles[n + 2];
+      const px = ray[1] * fz - ray[2] * fy, py = ray[2] * fx - ray[0] * fz, pz = ray[0] * fy - ray[1] * fx;
+      const det = ex * px + ey * py + ez * pz;
+      if (Math.abs(det) < 1e-10) continue;
+      const tx = o[0] - triangles[n], ty = o[1] - triangles[n + 1], tz = o[2] - triangles[n + 2];
+      const u = (tx * px + ty * py + tz * pz) / det;
+      if (u < 0 || u > 1) continue;
+      const qx = ty * ez - tz * ey, qy = tz * ex - tx * ez, qz = tx * ey - ty * ex;
+      const v = (ray[0] * qx + ray[1] * qy + ray[2] * qz) / det;
+      if (v < 0 || u + v > 1) continue;
+      const t = (fx * qx + fy * qy + fz * qz) / det;
+      if (t > 1e-6 && t < maxT - 1e-6) return true;
+    }
+    return false;
+  }
 
   // ---------- PORT geometry (pure) ----------
 
@@ -184,7 +267,7 @@ const VisorOptics = (function () {
    *  (VISOR REFLECTIONS); `fringe` is the chromatic rim amount (VISOR REFRACTION); `smoke` marks the tinted lens
    *  (its inner reflections read stronger against the darker transmitted scene). Every intensity is 0..~1.5 and
    *  proportional to light actually reaching the shield: a dark scene returns zeros. */
-  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1, glintLimit = MAX_GLINTS } = {}) {
+  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1, glintLimit = MAX_GLINTS, style = "classic" } = {}) {
     const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clampTo(bloom, 0, 2.5) };
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
     // VISOR BEAMS: one scale for every streak — the lamps' beams, the sun's rays, the star flares; 0 keeps the glints alone.
@@ -201,7 +284,7 @@ const VisorOptics = (function () {
     // from ~3° up; only the set sun (below −1°) adds nothing.
     const sunUp = sd ? clampTo((sd[1] + 0.02) / 0.08, 0, 1) : 0;
     let sceneLight = 0;
-    if (sd && key > 0.02 && sunUp > 0.01) {
+    if (sd && key > 0.02 && sunUp > 0.01 && !sourceBlocked(scene, sd[0], sd[1], sd[2], Infinity)) {
       const p = projectDir(sd, basis, scene.fov, w, h, _tmpSun);
       const warm = scene.sunColor;
       const rgb = [clampTo(warm[0] / Math.max(1e-3, Math.max(warm[0], warm[1], warm[2])), 0, 1) * 255,
@@ -285,12 +368,15 @@ const VisorOptics = (function () {
         const by = -(L[i + 7] * basis.up[0] + L[i + 8] * basis.up[1] + L[i + 9] * basis.up[2]);
         const bl = Math.hypot(bx, by);
         const vol = Number.isFinite(L[i + 13]) ? clampTo(L[i + 13], 0, 2) : 0;
-        _glintBuf.push({ x, y, k: kl, d: dl, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam, vol });
+        _glintBuf.push({ x, y, k: kl, d: dl, source: i, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam, vol });
       }
       _glintBuf.sort((a, b) => b.k - a.k);
       const n = Math.min(MAX_GLINTS, Math.max(0, glintLimit | 0), _glintBuf.length);
-      for (let i = 0; i < n; i++) {
+      // Stop once the visible budget is filled. Blocked bright lamps do not consume slots, so a visible
+      // source behind them in brightness order can still contribute. Worst case visits the culled input list.
+      for (let i = 0; i < _glintBuf.length && out.glints.length < n; i++) {
         const g = _glintBuf[i];
+        if (sourceBlocked(scene, L[g.source] - eye[0], L[g.source + 1] - eye[1], L[g.source + 2] - eye[2], 1)) continue;
         const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
         // Nearer fixtures smear wider across the curved shield; far ones stay small.
         const r = base * clampTo(0.035 + 1.5 / Math.max(8, g.d), 0.035, 0.10) * (0.8 + 0.2 * out.bloom);
@@ -298,7 +384,7 @@ const VisorOptics = (function () {
           // The fixture's beam, seen in the air and on the shield: longer and brighter the harder the lamp hits the eye.
           beam: bm > 0 && k > 0.25 && g.vol > 0 ? { dx: g.bx, dy: g.by, len: base * (0.16 + 0.24 * g.beam) * clampTo(k, 0, 1) * (0.6 + 0.4 * bm), k: k * 0.24 * bm * g.vol } : null,
           // A star flare on the brightest three: the shield's micro-scratches split a hard point source into spokes.
-          star: bm > 0 && i < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.2 * bm } : null });
+          star: bm > 0 && out.glints.length < 3 && k > 0.45 ? { len: r * 2.8 * (0.7 + 0.3 * bm), k: k * 0.2 * bm } : null });
         sceneLight += g.k * 0.6;
       }
     }
@@ -306,6 +392,24 @@ const VisorOptics = (function () {
     // Chromatic fringe: a lens property, but ADDED colour, so it needs light in the scene to show.
     out.fringe = clampTo(fringe * clampTo(sceneLight, 0, 1) * 0.22 * level, 0, 0.28);
     if (tint && out.sun) { const t = tint; out.sun.rgb = [(out.sun.rgb[0] * 2 + t[0]) / 3, (out.sun.rgb[1] * 2 + t[1]) / 3, (out.sun.rgb[2] * 2 + t[2]) / 3]; }
+    if (style === "compact" || style === "scratches") {
+      // Fixed per-source attenuation: a new lamp cannot dim another one. Eight bounded 1.2 cores sum to
+      // at most 2.4 after this scale; this is an amplitude limit, not a physical energy-conservation model.
+      out.bloom *= 0.5;
+      out.ghost = null;
+      if (out.sun) { out.sun.k *= 0.8; out.sun.r *= 0.7; }
+      if (style === "scratches" && out.rays) {
+        out.rays.k *= 0.18;
+        out.rays.len = base * 0.22 * (0.7 + 0.3 * bm);
+        out.rays.short = true;
+      } else out.rays = null;
+      for (const g of out.glints) {
+        g.k *= 0.25; g.r *= 0.7; g.beam = null;
+        // Every selected fixture gets the same response; no top-three rank bonus that jumps between lamps.
+        g.star = style === "scratches" && bm > 0
+          ? { len: g.r * 1.7 * (0.7 + 0.3 * bm), k: g.k * 0.25 * bm, short: true } : null;
+      }
+    }
     return out;
   }
 
@@ -626,9 +730,15 @@ const VisorOptics = (function () {
     leftX: Math.cos(angle - 0.035), leftY: Math.sin(angle - 0.035),
     rightX: Math.cos(angle + 0.035), rightY: Math.sin(angle + 0.035),
   }));
+  // Two opposed pairs, fixed to the shield; no random rotations or per-paint table construction.
+  const SHORT_RAYS = [0.52, 0.52 + Math.PI, 2.62, 2.62 + Math.PI].map((angle) => ({
+    length: 1, strength: 1, dx: Math.cos(angle), dy: Math.sin(angle),
+    leftX: Math.cos(angle - 0.012), leftY: Math.sin(angle - 0.012),
+    rightX: Math.cos(angle + 0.012), rightY: Math.sin(angle + 0.012),
+  }));
   function _rays(g, r) {
     const c = Math.round(r.rgb[0]) + "," + Math.round(r.rgb[1]) + "," + Math.round(r.rgb[2]);
-    for (const ray of RAYS) {
+    for (const ray of r.short ? SHORT_RAYS : RAYS) {
       const a = Math.min(1, r.k * ray.strength * 0.7);
       if (a < 0.004) continue;
       const len = r.len * ray.length, ex = r.x + ray.dx * len, ey = r.y + ray.dy * len;
@@ -672,7 +782,7 @@ const VisorOptics = (function () {
   function _star(g, s) {
     const c = Math.round(s.rgb[0]) + "," + Math.round(s.rgb[1]) + "," + Math.round(s.rgb[2]);
     const a = Math.min(1, s.star.k);
-    for (const spoke of STAR) {
+    for (const spoke of s.star.short ? SHORT_RAYS : STAR) {
       const len = s.star.len * spoke.length, ex = s.x + spoke.dx * len, ey = s.y + spoke.dy * len;
       const grad = g.createLinearGradient(s.x, s.y, ex, ey);
       grad.addColorStop(0, "rgba(" + c + "," + a.toFixed(3) + ")");
@@ -732,12 +842,12 @@ const VisorOptics = (function () {
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
     const helmet = _helmet();
-    if (!helmet) { _syncBend(false); _syncBudget(0); _show(false); return; }
+    if (!helmet) { _cockpitBlocked = false; _syncBend(false); _syncBudget(0); _show(false); return; }
     const visor = _opt("visor", "off");
     const resized = visor !== "off" && _size();
     _port(visor);                                              // OFF clears the aperture without measuring the viewport
     const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
-    if (visor === "off" || !on || _low() || _shed) { _syncBend(false); _show(false); return; }
+    if (visor === "off" || !on || _low() || _shed) { if (visor === "off" || !on) _cockpitBlocked = false; _syncBend(false); _show(false); return; }
     const budget = BUDGETS[_budget];
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
@@ -756,7 +866,7 @@ const VisorOptics = (function () {
     _syncBlend(t1 || Date.now());
     const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
-    if (!newSizeOrCanvas && _acc < 1 / hz) return;
+    if (!newSizeOrCanvas && _acc < 1 / hz && !(!(dt > 0) && _settingsDirty)) return;
     if (!(dt > 0) && !newSizeOrCanvas && !changed && !_settingsDirty) return;              // a paused profile change still refreshes once
     _settingsDirty = false;
     _acc = newSizeOrCanvas || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
@@ -769,7 +879,7 @@ const VisorOptics = (function () {
     let m;
     try {
       m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null,
-        bloom: Number.isFinite(tune?.bloomMul) ? tune.bloomMul : 1, glare: Number.isFinite(tune?.glareStr) ? tune.glareStr : 0.12, beams, glintLimit: budget.glints });
+        bloom: Number.isFinite(tune?.bloomMul) ? tune.bloomMul : 1, glare: Number.isFinite(tune?.glareStr) ? tune.glareStr : 0.12, beams, glintLimit: budget.glints, style: _opt("visorLightStyle", "classic") });
       // With the sun behind the driver and no visible lamps, only the sky gradient remains.
       // Its pixels depend on sky brightness and viewport size, even as the helmet moves.
       const hazeOnly = !m.sun && !m.rim && !m.glints.length && m.fringe <= 0.004;
@@ -820,7 +930,7 @@ const VisorOptics = (function () {
     document.body.toggleAttribute("data-visor-folded", !!on);
     document.body.toggleAttribute("data-visor-light-folded", on === 2);
   }
-  function clear() { _syncBend(false); folded(false); _syncBudget(0); _show(false); }
+  function clear() { _cockpitBlocked = false; _syncBend(false); folded(false); _syncBudget(0); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
@@ -830,6 +940,7 @@ const VisorOptics = (function () {
       eye: G.camEye, tgt: G.camTgt, fov: G.lens && G.lens.fovY > 0 ? G.lens.fovY * 180 / Math.PI : G.camFov, roll: G.camRoll || 0,
       sunDir: G.frame.sunDir, sunColor: G.frame.sunColor, exposure: G.frame.exposure != null ? G.frame.exposure : 1,
       ambientSky: G.frame.ambientSky, lights: G.frame.lights, tailStart: G.frame.tailStart, floodEmit: G._lastFloodEmit,
+      occluder: _cockpitBlocked ? _cockpitBlocker : null,
       // Match the rendered scene's height fog, including a user tuning override of zero.
       fogDensity: (G.frame.fogDensity || 0) * (tune?.fogDensityMul ?? 1),
       fogHeight: tune?.fogHeight ?? G.frame.fogHeight ?? 0,
@@ -838,6 +949,6 @@ const VisorOptics = (function () {
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { bind, tick, clear, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, setCockpitOccluder, tick, clear, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);
