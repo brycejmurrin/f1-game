@@ -109,7 +109,8 @@ test("a garage still waits for a fresh capture draw even when a previous photo e
   assert.equal(await b.api.capture(), true);
   b.G.gfx.renderCaptureFrame = () => false;
   assert.equal(await b.api.capture(), false);
-  assert.match(b.dom.byId("ps-message").textContent, /still getting ready/);
+  assert.equal(b.dom.byId("ps-message").textContent,
+    "Capture failed: The scene is still getting ready. Try again once the scene is ready.");
   assert.equal(b.order.filter(action => action === "read").length, 1);
   b.G.gfx.renderCaptureFrame = draw => { draw(); return true; };
   assert.equal(await b.api.capture(), true);
