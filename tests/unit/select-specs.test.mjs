@@ -665,8 +665,11 @@ function selectFor(edits, budgetMin) {
     // Preserve Git's racily-clean stat boundary, as workTreeId does.
     const st = fs.statSync(realIndex);
     fs.utimesSync(env.GIT_INDEX_FILE, st.atimeMs / 1000, st.mtimeMs / 1000);
+    const deleted = git(["diff", "--cached", "--name-only", "--diff-filter=D", "-z"]).split("\0").filter(Boolean);
     const base = git(["stash", "create"]) || git(["rev-parse", "HEAD"]);
     git(["read-tree", base]);
+    // Stash can bring back a staged deletion when its new ignored copy exists.
+    if (deleted.length) git(["update-index", "--force-remove", "--", ...deleted]);
     for (const [file, text] of Object.entries(edits)) {
       const blob = git(["hash-object", "-w", "--stdin"], text);
       git(["update-index", "--add", "--cacheinfo", `100644,${blob},${file}`]);
@@ -1378,6 +1381,38 @@ test("impact-map narrow pins elevate garage livery witness specs for GLX/pack ed
   for (const file of ["js/render/glx/soft.js", "js/render/glx/glx.js", "js/render/shared/assets.js"]) {
     assert.deepEqual(specsAffectedByImpact([file]).sort(), witness.sort(), file);
   }
+  const plan = select(null, DEFAULT_BUDGET_MIN, { files: ["js/render/glx/glx.js"], readyPr: true });
+  const scheduled = new Set(plan.shards.flatMap((shard) => shard.specs.split(" ")));
+  for (const spec of witness) assert.ok(scheduled.has(spec), `${spec} must have an execution shard`);
+});
+
+test("authored pins survive missing, stale and invalid generated reports", (t) => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const root = fs.mkdtempSync(path.join(ROOT, "scratch", "impact-pins-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const source = path.posix.join("js", "changed.js");
+  const spec = path.posix.join("tests/specs", "impact-probe.spec.js");
+  const write = (rel, text) => {
+    const filename = path.join(root, rel);
+    fs.mkdirSync(path.dirname(filename), { recursive: true });
+    fs.writeFileSync(filename, text);
+  };
+  const fragment = path.posix.join("tests/data/impact-map.d", "probe.json");
+  const unit = path.posix.join("tests/unit", "impact-probe.test.mjs");
+  write(spec, "");
+  write(fragment, JSON.stringify({ pins: { [source]: { narrow: [spec, unit] } } }));
+  assert.deepEqual(specsAffectedByImpact([source], root), [spec]);
+  const report = "tests/data/impact-map.json";
+  write(report, JSON.stringify({ narrowOnly: true, map: {} }));
+  assert.deepEqual(specsAffectedByImpact([source], root), [spec]);
+  write(report, "invalid JSON");
+  assert.deepEqual(specsAffectedByImpact([source], root), [spec]);
+
+  write(fragment, JSON.stringify({ [source]: { narrow: spec } }));
+  assert.throws(() => specsAffectedByImpact([source], root), /invalid impact pins.*probe\.json/);
+  fs.rmSync(path.join(root, spec));
+  write(fragment, JSON.stringify({ [source]: { narrow: [spec] } }));
+  assert.throws(() => specsAffectedByImpact([source], root), /missing or invalid browser spec/);
 });
 
 test("SOURCE_AFFECTED elevates career.spec.js when career-ui or career-backup changes", () => {
