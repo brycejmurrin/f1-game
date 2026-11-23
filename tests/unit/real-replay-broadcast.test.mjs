@@ -1,4 +1,4 @@
-// REAL REPLAY BROADCAST (js/race/broadcast.js with the replay): tower, director rules, battles, PiP and
+// REAL REPLAY BROADCAST (js/race/replay-broadcast.js with the replay): tower, director rules, battles, PiP and
 // the running order's speeds. Split from real-replay-vm.test.mjs (M1-15).
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,7 +8,7 @@ import vm from "node:vm";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
-import { ROOT, host, scriptIn, line, transportReplay } from "../helpers/real-replay-fixtures.mjs";
+import { ROOT, host, scriptIn, line, loadReplayBroadcast, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
@@ -140,10 +140,9 @@ test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds,
   replay.stop();
 });
 
-// ── BROADCAST (js/race/broadcast.js): the timing tower and the AUTO director ──
+// ── BROADCAST (js/race/replay-broadcast.js): the timing tower and the AUTO director ──
 test("BROADCAST event windows retain stable ties and absolute shown indices without rereading race history", () => {
-  const source = fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8");
-  const B = vm.runInNewContext(source + "; Broadcast", {}, { filename: absSrc("js/race/broadcast.js") });
+  const B = loadReplayBroadcast(vm.createContext({}));
   const rank = { out: 4, pass: 3, fastest: 2, pit: 1 };
   const list = Array.from({ length: 203 }, (_, i) => ({ t: Math.floor(i / 3), kind: ["pit", "pass", "out", "radio", "fastest"][i % 5], num: i % 7 ? i % 5 : null }));
   const old = (T, shown, lead, ok) => {
@@ -174,7 +173,7 @@ test("BROADCAST tower: the grid at lights out, the leader and gaps at the last l
   const g = await createGame({ track: "baku" });
   try {
     const { script } = scriptIn(g);
-    const B = vm.runInContext("Broadcast", g.ctx);
+    const B = vm.runInContext("ReplayBroadcast", g.ctx);
     const racing = script.drivers.filter((d) => !d.dns);
     const grid = host(B.towerAt(script, 0));
     assert.deepEqual(grid.map((r) => r.code), host(racing.slice().sort((a, b) => (a.grid || 99) - (b.grid || 99)).map((d) => d.code)), "before the first line the grid is the order");
@@ -207,7 +206,7 @@ test("BROADCAST towerAt: pools rows and skips rebuild when the timing-line sampl
   const g = await createGame({ track: "baku" });
   try {
     const { script } = scriptIn(g);
-    const B = vm.runInContext("Broadcast", g.ctx);
+    const B = vm.runInContext("ReplayBroadcast", g.ctx);
     const lead = script.drivers.find((d) => d.pos === 1);
     const T0 = lead.lapStart[31] + 1;
     const T1 = T0 + 0.2; // still between timing lines at 4 Hz tower tick
@@ -235,9 +234,10 @@ test("BROADCAST director rules: the tightest battle up the order first, the next
     const fights = host(B.battles(cars));
     assert.deepEqual(fights.map((x) => x.key), ["d", "b"], "0.17 s for P4 beats 0.5 s for P2; 3 s is no battle");
     const list = [{ t: 10, kind: "pit", num: 1 }, { t: 11, kind: "pass", num: 2 }, { t: 12, kind: "radio", num: 4 }, { t: 30, kind: "out", num: 3 }];
-    assert.equal(B.nextEvent(list, 5, new Set(), 8).h.kind, "pass", "a pass outranks a stop in the same window");
-    assert.equal(B.nextEvent(list, 5, new Set([1]), 8).h.kind, "pit", "shown once");
-    assert.equal(B.nextEvent(list, 5, new Set(), 3), null, "nothing in the next 3 s");
+    const replay = vm.runInContext("ReplayBroadcast", g.ctx);
+    assert.equal(replay.nextEvent(list, 5, new Set(), 8).h.kind, "pass", "a pass outranks a stop in the same window");
+    assert.equal(replay.nextEvent(list, 5, new Set([1]), 8).h.kind, "pit", "shown once");
+    assert.equal(replay.nextEvent(list, 5, new Set(), 3), null, "nothing in the next 3 s");
     for (let n = 0; n < 6; n++) assert.notEqual(B.shotFor("pass", "side", n), "side");
   } finally { g.close(); }
 });
@@ -246,8 +246,7 @@ test("BROADCAST holds an event through its aftermath and keeps the wall-clock mi
   for (const speed of [0.25, 1, 8]) {
     const ctx = vm.createContext({ Log: { info() {}, debug() {} },
       CamModes: { CAM_MODES: ["side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) } });
-    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/broadcast.js"), "utf8"), ctx, { filename: absSrc("js/race/broadcast.js") });
-    const B = vm.runInContext("Broadcast", ctx), cuts = [];
+    const B = loadReplayBroadcast(ctx), cuts = [];
     const cars = [{ code: "AAA" }, { code: "BBB" }];
     const G = { camMode: 0, setCamMode: (m) => { G.camMode = m; } };
     const bc = B.create(G, { setFollow: (c) => cuts.push(c.code) });
@@ -392,7 +391,7 @@ test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to 
 test("BROADCAST PiP pick: the followed car's battle partner (the car BEHIND when sandwiched), else the car in the next event, never the followed car", async () => {
   const g = await createGame({ track: "baku" });
   try {
-    const B = vm.runInContext("Broadcast", g.ctx);
+    const B = vm.runInContext("ReplayBroadcast", g.ctx);
     const pick = (fights, follow, ev, kind) => host(B.pipPick(fights, follow, ev, kind));
     const fights = [{ key: "b", ahead: "a", gapS: 0.4 }, { key: "c", ahead: "b", gapS: 0.6 }];
     assert.deepEqual(pick(fights, "a", null), { key: "b", cam: "tcam", kind: "battle" }, "the leader: the car on its tail");
@@ -523,7 +522,7 @@ test("WATCH broadcast: the running order's speeds are the cars' own, whatever th
     const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
       Log: { info() {}, warn() {}, debug() {} },
       CamModes: { CAM_MODES: [{ id: "cockpit" }, { id: "heli" }] },
-      Broadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },
+      ReplayBroadcast: { create: () => new Proxy({}, { get: (_t, k) => (k === "tick" ? (_dt, st) => { seen = st; } : () => ({})) }) },
       Tracks: { sample: (_track, s, out) => { out.p = [s, 0, 0]; out.t = [1, 0, 0]; out.r = [0, 0, 1]; out.hw = 7; } } });
     vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-replay.js"), "utf8"), ctx, { filename: absSrc("js/race/real-replay.js") });
     const R = vm.runInContext("RealReplay", ctx);

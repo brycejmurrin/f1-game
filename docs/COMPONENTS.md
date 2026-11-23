@@ -176,7 +176,7 @@ not tabled: they move with every edit and nothing reads them.
 | `set-` | `settings-controls.css` | `appearance-studio.css`, `experience.css`, `race-setup.css`, `select.css`, `settings.css`, `tuner.css` |  |
 | `settings-` | `player-tools.css` | — |  |
 | `sf-` | `components.css` | `data.css`, `menu-destinations.css`, `photo-studio.css`, `race-setup.css`, `tuner.css` |  |
-| `sheet-` | `overlays.css` | `appearance-studio.css`, `career.css`, `carsetup.css`, `components.css`, `data.css`, `dialogs.css`, `editor.css`, `hud.css`, `photo-studio.css`, `player-tools.css`, `race-setup.css`, `screen-arranger.css`, `select.css`, `settings.css`, `tuner.css` | the shared sheet head / body / foot |
+| `sheet-` | `overlays.css` | `appearance-studio.css`, `career.css`, `carsetup.css`, `components.css`, `data.css`, `dialog-platform.css`, `dialogs.css`, `editor.css`, `hud.css`, `photo-studio.css`, `player-tools.css`, `race-setup.css`, `screen-arranger.css`, `select.css`, `settings.css`, `tuner.css` | the shared sheet head / body / foot |
 | `sp-` | `tuner.css` | — |  |
 | `steer-` | `touch-controls.css` | — |  |
 | `sur-` | `race-setup.css` | `select.css` |  |
@@ -244,7 +244,7 @@ missing class, a file that left, or a file that joined.
 - `.sheet` — `career` + `career-experience` + `cockpit-preview` + `components` + `dialog-platform` + `dialogs` + `menus` + `overlays` + `race-setup` + `select` + `settings` + `settings-controls` + `tokens`
 - `.sheet-head` — `career` + `carsetup` + `components` + `data` + `dialogs` + `editor` + `overlays` + `photo-studio` + `race-setup` + `screen-arranger` + `select` + `settings`
 - `.sheet-foot` — `appearance-studio` + `career` + `carsetup` + `components` + `dialogs` + `overlays` + `photo-studio` + `race-setup` + `select` + `settings` + `tuner`. The most-shared component class in the project.
-- `.sheet-body` — `career` + `components` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.
+- `.sheet-body` — `career` + `components` + `dialog-platform` + `dialogs` + `hud` + `overlays` + `player-tools`. How to Play, Career guide and Career history place the shared body on the sheet grid for the wide contents rail (`#htp-contents` / `#cg-contents` / `#ch-contents`); idle ink and wide/compact placement stay on the screen sheets.
 - `.pane` — `components` + `race-setup` + `select`
 - `.pair-side` / `.pair-main` — `overlays` + `race-setup`
 - `.balanced-row` — `components` + `menus` + `photo-studio` + `race-setup` + `settings-controls` + `tuner`. Flex wrap that derives its column count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
@@ -256,20 +256,19 @@ missing class, a file that left, or a file that joined.
 - `.build-tag` — `dialogs` + `menus`. The footer version tag: styled in `menus`, overridden by the pause card's compact-density selector in `dialogs`.
 - `.hud-box` / `.hud-value` — `hud` + `overlays` + `tokens` + `touch-controls`
 - `.hud-label` — `hud` + `overlays` + `touch-controls`
-- `.hud-gaps` — `hud` + `overlays` + `watch-transport`
-- `.hud-top` — `hud` + `watch-transport`
-- `.hud-bottom` — `hud` + `touch-controls` + `watch-transport`
+- `.hud-gaps` — `hud` + `overlays`
+- `.hud-bottom` — `hud` + `touch-controls`
 - `.hud-unit` — `hud` + `touch-controls`
 - `.hud-energy-label` — `hud` + `touch-controls`. The ERS bar's label: styled in `hud`; the ≤740 px touch layout keeps it on one line so the value stays inside the bar (clean-room fix 49).
-- `.touchbtn` — `hud` + `overlays` + `tokens` + `touch-controls` + `watch-transport`
-- `.hud-hidden` — `helmet-visor` + `hud` + `responsive` + `touch-controls`. Hides the driving HUD, including manually positioned instruments detached from the bottom cluster; the visor refraction filter also steps aside so a clean frame stays unbent.
+- `.touchbtn` — `hud` + `overlays` + `tokens` + `touch-controls`
+- `.hud-hidden` — `helmet-visor` + `hud` + `responsive` + `touch-controls` + `watch-transport`. Hides the driving HUD, spectator cards and visor refraction.
 - `.hud-hide-map` — `hud` + `overlays`. Body class for MAP OFF: `hud` parks the gap strip in the map's corner; the ≥1200px tier in `overlays` (which wins the layer order whatever the specificity) steps aside with `body:not(.hud-hide-map)` so its 178px beside-the-map anchor cannot leave the strip floating.
 - `.dock-grp` — `overlays` + `touch-controls`. Custom row layouts arrange the same button groups as the shipped dock.
 - `.dock` — `hud` + `overlays` + `touch-controls`. The touch-controls dock: laid out in `touch-controls`; `hud` hides it with the rest of the chrome and stills it under reduced motion.
 - `.mirror-controls` — `hud` + `overlays` + `touch-controls`. Custom pedal rows follow the mirrored dock. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
 - `.bc-on` — `helmet-visor` + `hud`. Body class for the broadcast HUD (a REAL RACE WATCH / HIGHLIGHTS run): `hud` hides the driving chrome, the touch buttons and CAM; `helmet-visor` skips refraction while broadcast is up.
 - `.bc-head` — `hud` + `watch-transport`. Timing header button semantics.
-- `.watch-controls-on` — `helmet-visor` + `hud` + `watch-transport`. Body class for the WATCH transport strip: `watch-transport` hides the driving HUD chrome and the helmet `::before` shield; `hud` folds it into the AERO / BRAKE BIAS and RELATIVE / STRATEGY / INPUTS hide rules; `helmet-visor` also drops the world refraction filter so the replay view is not bent.
+- `.watch-controls-on` — `helmet-visor` + `hud`. Body class for the WATCH transport strip. The HUD stylesheet hides driving instruments and the helmet frame, and the visor stylesheet disables refraction.
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` — `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits their zoom and anchors around its side or bottom dock while it is open.
 - `.pc-uihidden` — `helmet-visor` + `hud`. Photo-mode HIDE HUD: `hud` clears the driving chrome for an unobstructed frame; `helmet-visor` drops the refraction filter with it.
 - `.pc-nopanel` — `hud` + `tuner`

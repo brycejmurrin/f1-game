@@ -1,1 +1,0 @@
-Fixed: on a landscape phone at UI SIZE 70 the camera tuner shows its "HELMET (default framing)" / "TRACK MONZA (2 overrides)" line again under "Scope, presets and preview tools", so you can see which camera and scope the sliders edit (#5218).

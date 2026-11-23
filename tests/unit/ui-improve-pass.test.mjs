@@ -44,6 +44,11 @@ const gameCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[
 const readGameEntry = () => read(path.join("js", "game" + ".js"));
 const cssCache = new Map();
 const css = (name) => { if (!cssCache.has(name)) cssCache.set(name, cssRules(readCssSource(name))); return cssCache.get(name); };
+// These simple door selectors share declaration blocks and may be reordered.
+function doorDecl(rules, selector, prop) {
+  return rules.find((rule) => rule.decls.has(prop) &&
+    rule.selector.split(",").some((member) => member.trim() === selector))?.decls.get(prop);
+}
 /** Brace-matched body of `function name(` in src. */
 function fnBody(src, name, file) {
   const m = src.match(new RegExp(`function\\s+${name}\\s*\\([^)]*\\)\\s*\\{`));
@@ -2175,8 +2180,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "named modes stay text so gold still means enabled");
   assert.equal(decl(css("css/components.css"), 'button [data-fold="auto"], summary [data-fold="auto"]', "color"), null,
     "no control paints an AUTO/MANUAL agency word any more — GEARS / ACTIVE AERO are setting rows");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner .pm-group button, #pmsettings-inner .pm-doors button", "gap"), "0.35em",
-    "flex gap keeps a space after LABEL: when the value is a painted span");
+  const settings = css("css/settings.css");
+  for (const selector of ["#pmsettings-inner .pm-group button", "#pmsettings-inner .pm-doors button", "#learn .pm-doors button"]) {
+    assert.equal(doorDecl(settings, selector, "gap"), "0.35em",
+      "the shared action row leaves space between a label and its painted value");
+  }
   assert.equal(decl(css("css/components.css"), "button:has(> [data-fold])", "column-gap"), "0.35em",
     "every menu button, not only Settings, keeps a space before a painted value");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
@@ -2422,7 +2430,10 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(narrowTabs.decls.get("touch-action"), "pan-x");
   assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
   assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
-  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
+  const settings = css("css/settings.css");
+  for (const selector of ["#pmsettings-inner .pm-doors button", "#learn .pm-doors button"]) {
+    assert.equal(doorDecl(settings, selector, "background"), "var(--plate-opaque)");
+  }
 });
 
 test("tool doors and lone foot actions do not stretch into banners", () => {

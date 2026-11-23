@@ -1,1 +1,0 @@
-Improved: Appearance Studio and Photo Studio paint and capture UI (~54 KB of code) now load with SETTINGS › APPEARANCE instead of on every boot; the title home scene and photo background still work at first paint (#4978).

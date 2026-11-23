@@ -972,10 +972,10 @@ test("balanced control rows derive their shape from local room", async ({ page }
   expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
-  // Watch and Data Hub share the Explore group.
+  // Watch, Data Hub and Learn share the Explore group.
   const explore = await report("#menu-explore");
   expect(explore.display).toBe("flex");
-  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(2);
+  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(3);
   expect(explore.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full
@@ -1202,4 +1202,144 @@ test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked fo
   expect(fit.left, "CLOSE's skewed left corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
   expect(fit.right, "CLOSE's skewed right corner is inside the foot").toBeGreaterThanOrEqual(-0.5);
 });
+});
+
+test("Learn opens the wake lesson and returns keyboard focus to its title door", async ({ page }) => {
+  await waitReady(page);
+  const door = page.locator("#mb-learn");
+  await door.click();
+  const lesson = page.locator("#learn-open-aero");
+  await lesson.click();
+  const lab = page.frameLocator("#learn-lab");
+  await expect(lab.locator("#wake")).toHaveText("86%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.locator("#tow")).toHaveText("86%");
+  await lab.getByRole("slider", { name: "Following gap", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#gap")).toHaveValue("11");
+  const flow = lab.locator("#flow");
+  await flow.scrollIntoViewIfNeeded();
+  const box = await flow.boundingBox();
+  if (!box) throw new Error("missing airflow diagram");
+  const followerX = box.x + box.width * (0.68 - 0.57 * (11 - 5) / 40);
+  const followerY = box.y + box.height * 0.52;
+  await page.mouse.move(followerX, followerY);
+  await page.mouse.down();
+  await page.mouse.move(followerX - box.width * 0.57, followerY);
+  await page.mouse.up();
+  await expect(lab.locator("#gap")).toHaveValue("45");
+  await expect(lab.locator("#wake")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("100%");
+
+  await lab.getByLabel("The tow goes away. The wake still reduces grip.").check();
+  await lab.getByRole("button", { name: "Check prediction" }).click();
+  await expect(lab.locator("#feedback")).toHaveText("Correct. The usable tow drops from 86% to 0%. Grip stays at 88% of clean air.");
+  await expect(lab.locator("#gap")).toHaveValue("10");
+  await expect(lab.locator("#tow")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.getByRole("heading", { name: "2026 F1 ACTIVE AERO" })).toBeVisible();
+  await expect(lab.locator("#local-pressure")).toHaveText("64%");
+  await lab.getByRole("slider", { name: "Local flow speed", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#local-pressure")).toHaveText("66%");
+  await expect(lab.locator("#pressure-ratio")).toHaveText("0.81² = 0.66 of the clean-air pressure and force.");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  // Appearance changes must reach the iframe without resetting the lesson.
+  await page.evaluate(() => {
+    AppearanceOpts.setTheme("light");
+    AppearanceOpts.setMenuAccent("cyan");
+  });
+  await expect(lab.locator("body")).toHaveCSS("background-color", "rgb(240, 240, 244)");
+  await expect(lab.locator("#gap")).toHaveCSS("accent-color", "rgb(0, 163, 224)");
+  await lab.getByLabel("Fast corner").check();
+  await expect(lab.locator("#state")).toHaveText("Cornering in wake");
+  await lab.getByLabel("Move follower 4 m off-line").check();
+  await expect(lab.locator("#grip")).toHaveText("100%");
+  await lab.locator("#gap").press("Escape");
+  await expect(lesson).toBeFocused();
+  await page.locator("#learn-close").click();
+  await expect(door).toBeFocused();
+  await door.click();
+  await lesson.click();
+  await expect(lab.locator("#state")).toHaveText("Tow available");
+});
+
+test("Learn Grip & Braking lets the player release brake into the force envelope", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-learn").click();
+  const lesson = page.locator("#learn-open-braking");
+  await lesson.click();
+  const lab = page.frameLocator("#learn-lab");
+  await expect(lab.locator("#turnLimit")).toHaveText("60.0%");
+  const firstScreen = await lab.locator(".plot").evaluate(plot => {
+    const bounds = plot.getBoundingClientRect();
+    const controls = document.querySelector("[data-as=controls]").getBoundingClientRect();
+    return { plotLeft: bounds.left, plotBottom: bounds.bottom, controlsRight: controls.right, viewportHeight: innerHeight };
+  });
+  expect(firstScreen.plotLeft).toBeGreaterThan(firstScreen.controlsRight);
+  expect(firstScreen.plotBottom).toBeLessThanOrEqual(firstScreen.viewportHeight);
+  const brake = lab.getByRole("slider", { name: "Brake demand" });
+  const turn = lab.getByRole("slider", { name: "Lateral demand" });
+  await lab.getByRole("button", { name: "Try 8 kN lateral" }).click();
+  await expect(lab.locator("#utilization")).toHaveText("113.1%");
+  await expect(lab.locator("#achieved")).toHaveText("70.7% / 70.7%");
+  await expect(lab.locator("#brakeLimit")).toHaveText("60.0%");
+  await brake.fill("60");
+  await expect(lab.locator("#status")).toHaveText("At the grip limit.");
+  await expect(lab.locator("#achieved")).toHaveText("60.0% / 80.0%");
+  await turn.fill("0");
+  await brake.fill("100");
+  await expect(lab.locator("#achieved")).toHaveText("100.0% / 0.0%");
+  await brake.fill("0");
+  await expect(lab.locator("#achieved")).toHaveText("0.0% / 0.0%");
+  await turn.fill("100");
+  await expect(lab.locator("#achieved")).toHaveText("0.0% / 100.0%");
+  await page.evaluate(() => {
+    AppearanceOpts.setTheme("light");
+    AppearanceOpts.setMenuAccent("cyan");
+  });
+  await expect(lab.locator("html")).toHaveCSS("background-color", "rgb(240, 240, 244)");
+  await expect(brake).toHaveCSS("accent-color", "rgb(0, 163, 224)");
+  await lab.getByRole("button", { name: "Reset", exact: true }).click();
+  await expect(lab.locator("#achieved")).toHaveText("80.0% / 0.0%");
+  await lab.getByRole("button", { name: "Meet a damp patch" }).click();
+  await expect(lab.locator("#delivered")).toHaveText("4.2 / 5.6 kN");
+  await expect(lab.locator("#utilization")).toHaveText("142.9%");
+  await expect(lab.locator("#brakeLimit")).toHaveText("Lateral demand alone exceeds cap");
+  await lab.getByRole("button", { name: "8 kN", exact: true }).click();
+  await expect(lab.locator("#answer")).toContainText("11.3 kN");
+  await lab.getByRole("button", { name: "6 kN", exact: true }).click();
+  await expect(lab.locator("#answer")).toContainText("10 kN exactly");
+  await lab.getByRole("button", { name: "Plot the 6 kN limit" }).click();
+  await expect(brake).toBeFocused();
+  await expect(lab.locator("#delivered")).toHaveText("6.0 / 8.0 kN");
+  const plot = lab.locator(".plot");
+  const { width, height } = await plot.boundingBox();
+  await plot.click({ position: { x: width * .5, y: height * .5 } });
+  await expect(lab.locator("#delivered")).toHaveText("5.0 / 5.0 kN");
+  await brake.press("Escape");
+  await expect(lesson).toBeFocused();
+});
+
+test("Learn VSC lets the player test pit-loss arithmetic and a rejoin prediction", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-learn").click();
+  const lesson = page.locator("#learn-open-vsc");
+  await lesson.click();
+  const lab = page.frameLocator("#learn-lab");
+  const reveal = lab.getByRole("button", { name: "Reveal strategy" });
+  await expect(lab.locator("#loss")).toHaveText("30 s pit − 18 s track = 12 s lost now. Under green it costs 22 s.");
+  await expect(reveal).toBeDisabled();
+  await lab.getByRole("button", { name: "Box now" }).click();
+  await lab.locator("#prediction").selectOption("ahead");
+  await reveal.click();
+  await expect(lab.locator("#feedback")).toContainText("Correct.");
+  await expect(lab.locator("#verdict")).toContainText("Staying out saves 3 s");
+  await lab.locator("#fixture").selectOption("traffic");
+  await expect(lab.locator("#track-math")).toHaveText("200 m at 80 km/h + 200 m at 180 km/h = 13 s");
+  await lab.getByRole("slider", { name: "Replay time" }).fill("9");
+  await expect(lab.locator("#track-clock")).toHaveText("Green · 200 m · 9 s");
+  await lab.getByText("Change the conditions").click();
+  await lab.getByRole("slider", { name: "Service time for either stop" }).fill("3.5");
+  await expect(lab.locator("#loss")).toHaveText("31 s pit − 13 s track = 18 s lost now. Under green it costs 23 s.");
+  await lab.locator("#prediction").press("Escape");
+  await expect(lesson).toBeFocused();
 });

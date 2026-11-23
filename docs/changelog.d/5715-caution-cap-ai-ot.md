@@ -1,1 +1,0 @@
-Fixed: A safety car or VSC that flips between levels (debris hovering at a threshold) now still ends at its 90 s hard cap instead of neutralising the race for good, and AI cars no longer waste Overtake under a VSC (#5715).

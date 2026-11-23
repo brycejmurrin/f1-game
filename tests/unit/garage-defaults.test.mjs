@@ -147,14 +147,14 @@ test("GarageDefaults.file() is a valid apex26-garage-v1 the loader accepts", () 
   assert.equal(r.skipped, 0);
 });
 
-test("resetGarage clears extras then restores the shipped garage", () => {
+test("resetGarage clears extras then restores the shipped garage", async () => {
   const { SettingsExport, GarageDefaults, GameStore, localStorage } = load({
     "apex26.team": "4",
     "apex26.parts.mercedes": JSON.stringify({ engine: "player_build" }),
     "apex26.customTeam": JSON.stringify({ id: "custom", name: "X", drivers: [{ name: "You", code: "YOU", num: 99 }] }),
     "apex26.difficulty": JSON.stringify("easy"), // not a garage key — must survive
   });
-  const r = SettingsExport.resetGarage();
+  const r = await SettingsExport.resetGarage();
   assert.equal(r.ok, true);
   assert.ok(r.applied >= 30);
   assert.equal(GameStore.store.get("team", 99), GarageDefaults.get("team"));
@@ -166,7 +166,7 @@ test("resetGarage clears extras then restores the shipped garage", () => {
   assert.equal(JSON.parse(localStorage.getItem("apex26.difficulty")), "easy", "settings survive a garage reset");
 });
 
-test("resetGarage reports refused extra-key deletions even when defaults save", () => {
+test("resetGarage reports refused extra-key deletions even when defaults save", async () => {
   const { SettingsExport, localStorage } = load({
     "apex26.customTeam": JSON.stringify({ name: "Keep until deleted" }),
     "apex26.setup.extra": JSON.stringify({ arbF: 4 }),
@@ -176,7 +176,7 @@ test("resetGarage reports refused extra-key deletions even when defaults save", 
     if (key === "apex26.customTeam" || key === "apex26.setup.extra") throw new Error("Removal denied");
     remove(key);
   };
-  const result = SettingsExport.resetGarage();
+  const result = await SettingsExport.resetGarage();
   assert.equal(result.ok, true);
   assert.ok(result.applied >= 30, "default writes still proceed");
   assert.equal(result.failed, 2, "both refused deletes remain part of the reset result");
@@ -184,7 +184,7 @@ test("resetGarage reports refused extra-key deletions even when defaults save", 
   assert.notEqual(localStorage.getItem("apex26.setup.extra"), null);
 });
 
-test("RESET GARAGE restores the SHIPPED garage, not the player's edits (bug-hunt 1.1)", () => {
+test("RESET GARAGE restores the SHIPPED garage, not the player's edits (bug-hunt 1.1)", async () => {
   // The garage mutates the object store.get returns in place (p[cat] = opt.id)
   // then store.set()s it. On a miss that object used to BE the shipped DEF
   // entry, so the edit rewrote the defaults and a reset restored the edit.
@@ -206,7 +206,7 @@ test("RESET GARAGE restores the SHIPPED garage, not the player's edits (bug-hunt
   assert.equal(JSON.stringify(GarageDefaults.get("livery.custom.mercedes")), snapLiv, "nested arrays are copied too");
   assert.equal(JSON.stringify(GarageDefaults.file().garage), snapFile, "file() is not the edited table");
 
-  assert.equal(SettingsExport.resetGarage().ok, true);
+  assert.equal((await SettingsExport.resetGarage()).ok, true);
   assert.equal(JSON.stringify(store.get("parts.mercedes", {})), snapParts, "reset restores the shipped parts");
   assert.deepEqual(JSON.parse(JSON.stringify(store.get("livery.custom.mercedes", []))), JSON.parse(snapLiv), "reset restores the shipped livery");
 

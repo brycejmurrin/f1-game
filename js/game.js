@@ -76,7 +76,7 @@ const lazyBundles = LazyBundles.create({
   els, loadBackendScripts, getContext: () => G,
   applyLightTuneIfReady: () => { if (ltStore) applyLightTune(); },
   createNetwork: () => { netPlay = NetPlay.create(G); netLobby = NetLobby.create(G); return netLobby; },
-  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); if (typeof VisorOptics !== "undefined") window.__apex.visorScene = () => VisorOptics.sceneFromG(G); } },
+  bindAgent: () => { if (typeof ApexApi !== "undefined") { window.__apex = ApexApi.create(G, restoreFreePlaySelection); window.__apex.visorScene = () => typeof VisorOptics !== "undefined" ? VisorOptics.sceneFromG(G) : null; } },
   // Recreate audio instances after LAZY_AUDIO reinjects the real `var` globals; `once` latches each part (a retry re-runs only the one that threw).
   onAudioReady: (once = (k, f) => f()) => {
     once("radio", () => { radioVoice = RadioVoice.create(G); });
@@ -2631,6 +2631,7 @@ async function startRaceBody() {
   RaceEntryProfile.span("debrisPrime", () => DebrisWorld.prime());
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; feel.startHold = 0; feel.restartPending = false; paused = false; frozen = false; raceRestarting = false; skyViewOverride = null;
   RaceEntryProfile.mark("gridCountdown:end");
+  if (bumpRaceIndex) quali.clearDeletedLap(player, netLobby.qualifying());
   if (typeof Assets !== "undefined" && Assets.retry && PerfGov.softwareRaster()) {
     const run = () => { try { Assets.retry(); } catch (_) { /* optional pack */ } };
     if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 120000 });
@@ -2926,9 +2927,12 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
-    if (myLap > 0) qualiNet.reportQuali(player.driverId, myLap);
+    if (myLap > 0) {
+      quali.clearDeletedLap(player, qualiNet.hasArmed());
+      qualiNet.reportQuali(player.driverId, myLap);
+    }
     // Infinity = drove, but every lap was deleted: NO TIME, the back of the grid.
-    quali.simulate(qualiNet.driven(myLap > 0 ? myLap : player.qualiCut ? Infinity : 0));
+    quali.simulate(qualiNet.driven(myLap > 0 ? myLap : quali.hasDeletedLap(player, qualiNet.hasArmed()) ? Infinity : 0));
     if (!(myLap > 0)) reportModelQuali();   // no valid lap: the rival still needs OUR time, or their sheet waits forever
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     qualiNet.markDone(); $("q-back").textContent = "MENU";
@@ -3483,7 +3487,7 @@ var jumpStartPenalty = JumpStartPenalty.create(G, {
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
-  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
+  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -4197,7 +4201,7 @@ let netLobby = {
 // C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
-if (typeof VisorOptics !== "undefined") VisorOptics.bind(G); RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen.phase() });   // G is local to this IIFE: a typeof read never sees it (#5964, #5965)
+RaceEntryProfile.bindGame({ state: () => G.state, loadPhase: () => loadingScreen.phase() });   // LazyBundles binds visor optics after the race-session payload loads.
 // MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
@@ -4370,7 +4374,7 @@ function quitToMenu() {
   closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   quali.clear(forgetGp);   // memory only
   qualiNet.clearPeers();
-  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
+  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel(isQuali() && state === "race") : qualiNet.resetSoft();
   stormFx._ltBase = null; stormFx._ltFlash = 0;   // the lightning's saved race base is not the menu's
   // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
   // stop is clearMenuScreens(), which startRaceBody() reaches near the END of
@@ -5664,7 +5668,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
       c.incidentInvalidLap = true;
       // A cut quali lap is DELETED, not replaced: with no valid lap the sheet
       // gave the player the model's time, which could be pole (endRace).
-      if (c.isPlayer && isQuali()) c.qualiCut = true;
+      if (c.isPlayer && isQuali()) quali.markDeletedLap(c, qualiNet.hasArmed());
       // THE RACE LADDER (FIA 2026 Penalty Guidelines): strikes 1-2 are
       // warnings, the 3rd is the black-and-white flag, the 4th AND EACH
       // ADDITIONAL one is +5 s — no reset, no +10 s step (that was a pre-2026
@@ -6358,7 +6362,7 @@ function updateCarAdvance(c, dt, ranked, S) {
         lineCross.lapValid = lapValid;
       }
       if (lapValid) c.lastLap = lapDone;
-      else if (c.isPlayer && isQuali()) c.qualiCut = true;   // ANY deleted quali lap (a takeover, a practice rewind — not only a cut) is NO TIME, never the model's
+      else if (c.isPlayer && isQuali()) quali.markDeletedLap(c, qualiNet.hasArmed());   // a takeover or practice rewind also deletes the lap
       if (lapValid && lapDone < c.best) c.best = lapDone;
       if (c.isPlayer && soundOn) GameAudio.lap();
     } else if (c.isPlayer && isTimeTrial()) {
@@ -6541,7 +6545,7 @@ function updateCarAdvance(c, dt, ranked, S) {
 // Put the player back on the racing line at its CURRENT progress, facing forward at a modest speed — for a spin, a
 // beach or a wall. Progress is kept; lateral position, heading and slip reset. In TT/QUALI the lap is DELETED (no free re-centre).
 function rescuePlayer(c) {
-  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali() && c.lap >= 1) c.qualiCut = true; }   // as a track-limits cut (lap 0: nothing timed)
+  if (c.human && (isTimeTrial() || isQuali())) { c.incidentInvalidLap = true; if (c.isPlayer && isQuali() && c.lap >= 1) quali.markDeletedLap(c, qualiNet.hasArmed()); }   // lap 0 is untimed
   // A live incident takeover would re-impose the Rapier pose over this rescue
   // (same authority rule as __apex.jump) — hand the car back first.
   incidentSim.release(c);
@@ -8880,7 +8884,7 @@ photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, ltStore, rende
     finally { _simRngState = rng; }
     return () => { cars = before.cars; player = before.player; };
   }, garage: {
-  snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
+  prepareCapture: () => setupCam.endGarageRes(), snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id),
   looks: lookRowSpecs, looked: () => { if (!$("carsetup").hidden) buildSetup(); } } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
@@ -9008,7 +9012,7 @@ $("q-sim").onclick = () => {
   if (isCareer()) Career.markWeekendStarted();   // the briefs lock: the grid is known now
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
-  quali.simulate(qualiNet.driven(player && player.qualiCut ? Infinity : 0));   // a deleted lap is not traded for the model's
+  quali.simulate(qualiNet.driven(quali.hasDeletedLap(player, qualiNet.hasArmed()) ? Infinity : 0));   // a deleted lap is not traded for the model's
   reportModelQuali();
   $("quali").classList.add("q-done");
   qualiNet.markDone(); $("q-back").textContent = "MENU";

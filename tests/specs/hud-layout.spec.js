@@ -169,7 +169,9 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
     if (!stamp0 || !/^\d+$/.test(stamp0)) {
       try { if (window.__apex && window.__apex.jump) window.__apex.jump(0.1, 60, 0); } catch (_) { /* */ }
     }
-    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit) GameHud.syncPhoneFit();
+    // A forced fit can invalidate the layout while it settles. Check its
+    // result here, in the same poll that reads the stamp and painted boxes.
+    if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit && !GameHud.syncPhoneFit()) return false;
     const stamp = document.documentElement.style.getPropertyValue("--hud-fit-stamp");
     if (!stamp || !/^\d+$/.test(stamp)) return false;
     if (prevStamp != null && prevStamp !== "" && stamp === prevStamp) return false;
@@ -1192,11 +1194,6 @@ test.describe("tilt steer high HUD scale", () => {
       window.__apex.jump(0.15, 60, 0);
     });
     await waitPhoneHudFitClearance(page, { rel: true, prevStamp: stampBefore });
-    await page.evaluate(() => {
-      if (typeof GameHud !== "undefined" && GameHud.syncPhoneFit && !GameHud.syncPhoneFit()) {
-        throw new Error("phone layout not clear after wait");
-      }
-    });
     const targets = [
       { key: "hud-sectors", sel: "#hud-sectors", role: "hud" },
       { key: "hud-rel", sel: "#hud-rel", role: "hud" },

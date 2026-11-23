@@ -1,1 +1,0 @@
-Fixed: leaving Home, closing Appearance, stopping a WATCH scrub, or clearing a stale overlay feed no longer leaves a timer or animation frame that can fire after teardown; friend-quali's gate wake-up timer clears once every rival has posted.

@@ -79,6 +79,75 @@ test("3: ANY deleted quali lap is NO TIME, never the model's (a valid lap keeps 
   } finally { g.close(); }
 });
 
+async function openSeasonQualifying(g) {
+  const { G } = g;
+  const el = (id) => g.sandbox.document.getElementById(id);
+  G.flow = "season";
+  G.session = "race";
+  G.openRaceSettings("select");
+  el("rs-go").onclick();
+  assert.ok(await g.settle(() => G.session === "quali" && !el("quali").hidden, 4000));
+  return el;
+}
+
+test("a deleted qualifying lap survives quit and reload without blocking a valid re-drive", async () => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  let reloaded;
+  try {
+    g.apex.headless(true);
+    g.G.daily.stop();
+    g.G.flow = "season";
+    const seasonCal = runInContext("SeasonCal", g.ctx);
+    g.G.season = seasonCal.applyConfig({ ...seasonCal.fresh(), trackIds: ["monza", "spa"] }).season;
+    g.G.trackIdx = seasonCal.trackIndex(0);
+    g.G.raceGrid = "quali";
+
+    let el = await openSeasonQualifying(g);
+    const previousField = g.G.cars;
+    el("q-drive").onclick();
+    assert.ok(await g.settle(() => g.G.cars !== previousField && g.G.state === "count", 4000));
+    g.apex.go();
+    g.G.player.lap = 1;
+    g.G.rescuePlayer(g.G.player);
+    assert.equal(g.G.player.qualiCut, true);
+
+    // Capture storage before quit: a reload never executes the quit handler.
+    const { localStorage, sessionStorage } = g.sandbox;
+    reloaded = await createGame({ track: "monza", carMeshes: false, onSandbox(sandbox) {
+      for (const name of ["localStorage", "sessionStorage"]) {
+        const original = name === "localStorage" ? localStorage : sessionStorage;
+        for (let i = 0; i < original.length; i++) {
+          const key = original.key(i);
+          sandbox[name].setItem(key, original.getItem(key));
+        }
+      }
+    } });
+
+    g.G.quitToMenu();
+    el = await openSeasonQualifying(g);
+    el("q-sim").onclick();
+    assert.match(qualiSheetRow(g), /NO TIME/, "returning to the same weekend cannot substitute a model lap");
+
+    reloaded.apex.headless(true);
+    reloaded.G.daily.stop();
+    reloaded.G.raceGrid = "quali";
+    el = await openSeasonQualifying(reloaded);
+    el("q-sim").onclick();
+    assert.match(qualiSheetRow(reloaded), /NO TIME/, "a reload cannot substitute a model lap either");
+
+    // The pending deletion does not poison a genuinely driven replacement.
+    await reloaded.G.startRace();
+    reloaded.apex.go();
+    const p = flyingLap(reloaded, { deleted: false });
+    assert.ok(p.lastLap > 0);
+    reloaded.G.endRace();
+    assert.doesNotMatch(qualiSheetRow(reloaded), /NO TIME/);
+  } finally {
+    if (reloaded) reloaded.close();
+    g.close();
+  }
+});
+
 test("5: S1+S2+S3 equals the lap time — S3 closes at the line, not a whole step past it", async () => {
   const g = await createGame({ track: "monza" });
   try {

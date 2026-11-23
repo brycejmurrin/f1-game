@@ -283,8 +283,8 @@ const RealReplay = (function () {
     let /** @type {ReturnType<typeof WatchTransport.create> | null} */ transport = null;
     const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     const at = {};
-    // THE BROADCAST (js/race/broadcast.js): the timing tower, and with camera "auto" the director.
-    const bc = typeof Broadcast !== "undefined" ? Broadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c), cameraOwner: () => run && run.cameraOwner }) : null;
+    // The replay broadcast: the timing tower and, with camera "auto", the director.
+    const bc = typeof ReplayBroadcast !== "undefined" ? ReplayBroadcast.create(G, { follow: (w) => follow(w), setFollow: (c) => setFollow(c), cameraOwner: () => run && run.cameraOwner }) : null;
     // What it reads each frame — one object for the run, the lists computed only when asked.
     const bcState = {
       get script() { return run.script; }, get T() { return run.T; }, get speed() { return run.speed; },

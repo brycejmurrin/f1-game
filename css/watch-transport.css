@@ -107,7 +107,8 @@ body[data-spectator] #tvg-fastest {
 }
 body:has(> .screen:not([hidden])) :is(#bc-viewer, #tvg),
 body:is(.photo-mode, .hud-hidden) :is(#bc-viewer, #tvg) { display: none; }
-body[data-spectator="watch"]:has([data-wt="more"][open]) #bc-viewer { visibility: hidden; }
+/* The disclosure is mounted inside the lazy transport, below the shell. */
+body[data-spectator="watch"]:has(#watch-more[open]) #bc-viewer { visibility: hidden; }
 #bc-viewer[hidden], #bc-viewer > [hidden] { display: none; }
 
 #ceremony-speed {

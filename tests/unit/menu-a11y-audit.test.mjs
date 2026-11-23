@@ -549,6 +549,7 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
     "ceremony-podium": "the built podium is checked by podium-beat.test.mjs",
     "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
+    learn: "dialog created on demand, covered by the Learn door test below",
     // Pre-race plate: role=status (not region/dialog); named via aria-label.
     loading: "status plate — announces once, not a navigable region",
   };
@@ -595,6 +596,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   for (const id of loadLayerIds()) {
     if (id === "ceremony-podium") continue;   // podium-beat.test.mjs checks the rendered Continue door
     if (id === "screen-arranger") continue;   // the live dialog's door: appearance-orientation.spec.js
+    if (id === "learn") continue; // the on-demand dialog is covered below
     if (id === "hud-arrange-bar") {
       assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-cancel"\)/);
       assert.match(read("js/ui/hud-arrange.js"), /mk\("Cancel", "Discard HUD edits", \(\) => setEditing\(false, true, false\), "hud-arrange-cancel"\)/);
@@ -621,6 +623,88 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   assert.match(tm, /el\.addEventListener\("cancel"[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
   assert.match(tm, /function onEscape[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
 });
+
+test("Learn opens a named modal and returns focus to the selected lesson after unloading", async () => {
+  const dom = makeDom();
+  let top = "settings";
+  let onMessage;
+  let wired;
+  let loads = 0;
+  const queue = [];
+  const origin = "https://apex.example";
+  const sb = sandbox(dom, {
+    Career: { data: () => null },
+    ApexRoster: { LAZY_LEARN: ["js/ui/learn-door.js"] },
+    ScriptLoader: { create: () => ({ load: async () => {
+      loads++;
+      vm.runInNewContext(src("js/ui/learn-door.js"), sb, { filename: absSrc("js/ui/learn-door.js") });
+      return true;
+    } }) },
+    UiLayers: { top: () => ({ id: top }) },
+    TopModal: { wire: (dialog) => {
+      wired = dialog;
+      dialog.addEventListener("cancel", () => dom.byId(dialog.getAttribute("data-esc-close")).click());
+    } },
+    addEventListener: (type, cb) => { if (type === "message") onMessage = cb; },
+    location: { origin },
+    queueMicrotask: (cb) => queue.push(cb),
+  });
+  vm.runInNewContext(src("js/ui/dom.js"), sb, { filename: absSrc("js/ui/dom.js") });
+  dom.byId("menu-buttons").dataset.destinations = "true";
+  vm.runInNewContext(src("js/ui/title-menu.js"), sb, { filename: absSrc("js/ui/title-menu.js") });
+  sb.TitleMenu.create({ $: dom.byId, state: "menu", soundOn: false, store: {} });
+  const door = dom.byId("mb-learn");
+  assert.equal(door.parentNode.id, "menu-explore");
+  door.click();
+  assert.equal(wired, undefined, "another title layer claims the screen");
+  assert.equal(loads, 0);
+  top = "overlay";
+  door.click();
+  await new Promise(setImmediate);
+  assert.equal(loads, 1);
+  const dialog = dom.byId("learn");
+  const frame = dom.byId("learn-lab");
+  frame.contentWindow = {};
+  assert.equal(wired, dialog);
+  assert.equal(dialog.parentNode, dom.document.body);
+  assert.equal(dialog.tagName, "DIALOG");
+  assert.equal(dialog.hidden, false);
+  assert.equal(dom.byId(dialog.getAttribute("aria-labelledby")).textContent, "LEARN");
+  const close = dom.byId(dialog.getAttribute("data-esc-close"));
+  const lesson = dom.byId("learn-open-aero");
+  assert.equal(lesson.autofocus, true);
+  assert.equal(frame.getAttribute("src"), null);
+  lesson.click();
+  assert.equal(frame.title, "Aero Lab");
+  assert.equal(frame.getAttribute("src"), "learn/aero/index.html");
+
+  const data = { type: "apex-learn-close" };
+  onMessage({ origin: "https://other.example", source: frame.contentWindow, data });
+  onMessage({ origin, source: {}, data });
+  assert.equal(dialog.hidden, false);
+  onMessage({ origin, source: frame.contentWindow, data });
+  assert.equal(dialog.hidden, false);
+  assert.equal(dom.document.activeElement, lesson);
+  assert.equal(frame.getAttribute("src"), null);
+  for (const [id, title] of [["braking", "Grip & Braking"], ["vsc", "VSC Pit Strategy"]]) {
+    const button = dom.byId("learn-open-" + id);
+    button.click();
+    assert.equal(frame.title, title);
+    assert.equal(frame.getAttribute("src"), "learn/" + id + "/index.html");
+    close.click();
+    assert.equal(dom.document.activeElement, button);
+    assert.equal(frame.getAttribute("src"), null);
+  }
+  close.click();
+  assert.equal(dialog.hidden, true);
+  queue.shift()();
+  assert.equal(dom.document.activeElement, door);
+  door.click();
+  dialog.dispatchEvent({ type: "cancel" });
+  assert.equal(dialog.hidden, true);
+  assert.equal(frame.getAttribute("src"), null);
+});
+
 
 test("setting-row chevrons are pointer-only decoration; the named select owns accessibility", () => {
   const rows = read("js/ui/setting-row.js");
@@ -687,6 +771,7 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
     "ceremony-podium": "dynamic story and Continue action; no scroll pane or selectable chips",
     "hud-arrange-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
     loading: "status plate — no scroll region, no selected chips",
+    learn: "the Aero Lab iframe owns its own scroll and control states",
   };
   for (const id of layers) {
     if (SKIP[id]) continue;

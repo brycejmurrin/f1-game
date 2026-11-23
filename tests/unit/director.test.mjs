@@ -17,7 +17,7 @@ import { makeDom } from "../helpers/mini-dom.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot(globals = {}) {
+function boot(globals = {}, bindReplayLoad) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
@@ -27,6 +27,7 @@ function boot(globals = {}) {
   const ctx = vm.createContext(sb);
   // Broadcast first: Director reuses its battles/shotFor when present.
   vm.runInContext(src("js/race/broadcast.js"), ctx, { filename: absSrc("js/race/broadcast.js") });
+  bindReplayLoad?.(() => vm.runInContext(src("js/race/replay-broadcast.js"), ctx, { filename: absSrc("js/race/replay-broadcast.js") }));
   vm.runInContext(src("js/camera/director.js"), ctx, { filename: absSrc("js/camera/director.js") });
   return vm.runInContext("Director", ctx);
 }
@@ -76,18 +77,25 @@ test("post-finish TV uses the director's car and releases the spectator display 
   const tower = document.createElement("div");
   tower.id = "bc-tower";
   document.body.appendChild(tower);
+  let loadReplay, requests = 0;
   const D = boot({ document, HudReadouts: { spdPlate: kph => ({ n: Math.round(kph), unit: "KPH" }) },
-    CamModes: { CAM_MODES: [{ id: "helmet" }, { id: "tv" }] } });
+    CamModes: { CAM_MODES: [{ id: "helmet" }, { id: "tv" }] } }, load => { loadReplay = load; });
   const player = { code: "AAA", rank: 1, lap: 3, speed: 1, prog: 2001 };
   const rival = { code: "BBB", name: "Driver B", rank: 2, lap: 2, speed: 50, prog: 1950 };
   const G = { state: "race", session: "race", hudProfile: "minimal", lapsTarget: 2,
     track: { total: 1000 }, player, cars: [player, rival], camMode: 0,
     dashKph: speed => speed * 3.6, setCamMode(i) { G.camMode = i; },
     camVantage: () => ({ eye: [0, 5, 1], tgt: [0, 0, 0] }) };
-  const director = D.create(G);
+  const director = D.create(G, () => true, () => { requests++; });
   director.tick(0.25);
   assert.equal(document.body.dataset.spectator, undefined);
+  assert.equal(requests, 0, "the live race does not load the replay presentation");
   player.finished = true;
+  director.tick(0.25);
+  director.tick(0.25);
+  assert.equal(requests, 1, "finish requests the shared presentation once while it loads");
+  assert.equal(document.body.dataset.spectator, undefined);
+  loadReplay();
   director.tick(0.25);
   const viewer = document.getElementById("bc-viewer");
   assert.equal(document.body.dataset.spectator, "live");

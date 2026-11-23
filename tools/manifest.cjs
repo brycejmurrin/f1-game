@@ -284,7 +284,7 @@ const FULL = [
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
-  "js/fx/visor-optics.js",     // VisorOptics: HELMET eye-port, additive shield light, rim bend (Droplets.tick calls it; reads window.__apex)
+  // VisorOptics loads with LAZY_RACE_SESSION; title/garage consumers are guarded.
   "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
@@ -358,7 +358,7 @@ const FULL = [
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
   "js/race/sporting-regs.js",  // pure 2026 SR rules (two compounds, SC passes, champ grid); game.js creates its pass watch at eval
   "js/overlay/feed.js",        // OverlayFeed: shared v1 frame schema + 2 s full-frame diff
-  "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
+  "js/race/broadcast.js",      // Broadcast: shared battle and shot policy for the live director, Rival Lock, overlay and replay
   "js/overlay/bridge.js",      // OverlayBridge: BroadcastChannel game ⇄ overlay.html (overlay.html loads it too)
   "js/overlay/publisher.js",   // OverlayPublisher: 4 Hz __apex sampler + #announce caption tap, only while an overlay listens
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
@@ -821,6 +821,7 @@ const HARD_EDGES = [
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/physics/consts.js", "js/ui/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/race/broadcast.js", "js/camera/director.js"], // live director reads Broadcast's shot policy at eval
   ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
   ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/camera/results-cam.js", "js/game.js"],        // game.js calls ResultsCam.create(G) at eval time
@@ -1082,16 +1083,19 @@ const LAZY_PERF_EDGES = [];
 // lands; its first call after that creates RealRaceBody once. Only the Data Hub
 // starts a real race, and ensureDataHub awaits ensureRealRace before the hub
 // opens; the agent surface loads it too (pages and specs call RealRace.launch).
-// Broadcast stays FULL: the live director and RIVAL LOCK read Broadcast.battles.
-// Order is the old FULL order; the stub and mat4 / Broadcast are FULL.
+// The live director, Rival Lock and overlay use Broadcast's eager policy.
+// ReplayBroadcast owns the WATCH tower, AUTO camera and picture-in-picture.
 const LAZY_REAL_RACE = [
   "js/race/tv-graphics.js",    // TvGraphics: broadcast-profile pass/battle/fastest-lap cards
+  "js/race/replay-broadcast.js", // ReplayBroadcast.create(G, replay): WATCH/HIGHLIGHTS tower and AUTO director
   "js/ui/watch-transport.js",  // WatchTransport.create(G, replay): the WATCH transport bar (RealReplay makes one)
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race-pace.js", // RealRacePace: pure timing-script helpers RealRace drives (lap maps, tables, pace multiplier)
   "js/race/real-race.js",      // RealRaceBody.create(G): a real Grand Prix replayed from its timing script (the stub creates it)
 ];
 const LAZY_REAL_RACE_EDGES = [
+  ["js/race/tv-graphics.js", "js/race/replay-broadcast.js"],
+  ["js/race/replay-broadcast.js", "js/race/real-replay.js"],
   ["js/ui/watch-transport.js", "js/race/real-replay.js"],
   ["js/race/real-replay.js", "js/race/real-race.js"],   // RealRaceBody.create(G) calls RealReplay.create(G)
   ["js/race/real-race-pace.js", "js/race/real-race.js"], // RealRaceBody destructures RealRacePace at eval
@@ -1130,11 +1134,11 @@ const LAZY_RACE = [
 // start lights / marshal panels / flying start, session records and duel —
 // title never runs a byte of these; the FULL stub (session-stub.js) keeps
 // menus from throwing until ensureRaceSession() reinjects via `var`.
-// Order IS the eval order. Broadcast / RealReplay / RealRace stay FULL (Data
-// Hub WATCH / Director eval SHOTS).
+// Order IS the eval order. The real-race engine has its own Data Hub bundle.
 // Optional selected-circuit pit slice for every garage view. Never gates a race.
 const LAZY_GARAGE_EXTERIOR = ["js/garage/exterior-geometry.js", "js/garage/exterior.js"];
 const LAZY_RACE_SESSION = [
+  "js/fx/visor-optics.js",     // Helmet optics bind to the live context before race entry; no title parse/compile cost.
   "js/input/touch-button-actions.js",
   "js/data/garage-departure-motion.js",
   "js/garage/departure-wheels.js",
@@ -1899,12 +1903,22 @@ const MOVED = {
   "js/game/quali.js": "js/race/quali-model.js",
 };
 
+// Learn's modal loads only after the title door is used. The iframe requests
+// its standalone page and lesson assets without a ScriptLoader version query.
+const LAZY_LEARN = ["js/ui/learn-door.js"];
+const SW_LEARN = [
+  "learn/appearance.js",
+  "learn/braking/index.html", "learn/braking/style.css", "learn/braking/lab.js",
+  "learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js",
+  "learn/vsc/index.html", "learn/vsc/style.css", "learn/vsc/model.js", "learn/vsc/lab.js",
+];
+
 /** Locale manifest only (English players need no locale JSON fetch). */
 const SW_LOCALES = ["locales/manifest.json"];
 
 module.exports = {
   MOVED,
-  SW_LOCALES,
+  SW_LOCALES, SW_LEARN, LAZY_LEARN,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, CSS_ROUTE, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_DEV, LAZY_PERF, LAZY_PERF_EDGES, LAZY_REAL_RACE, LAZY_REAL_RACE_EDGES, OVERLAY_PAGE, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES, LAZY_GARAGE_EXTERIOR,

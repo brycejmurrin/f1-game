@@ -1,4 +1,0 @@
-Fixed: the WebGL2 fallback no longer shows "graphics unavailable" on phones whose GPU allows fewer shader uniforms (many Android devices); it draws fewer point lights there instead (#5990).
-Fixed: the camera tuner's MOTION BLUR slider now works: it turns on the radial speed blur at high speed. It starts OFF for everyone, including anyone who moved the old slider (which never did anything), so nothing changes until you move it. SPEED LINES is hidden until it is built (#5990).
-Fixed: RESET in the lighting tuner clears only the circuit and conditions you are tuning; your global lighting adjustments from an older save stay on every other circuit (#5990).
-Fixed: after a mid-race weather change, the lamp shape (density, pool size, beam) now moves to the new weather's look once the weather fade finishes (#5990).

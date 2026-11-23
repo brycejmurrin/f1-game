@@ -158,11 +158,25 @@ const PhonePadPage = (function () {
     // anywhere on the pedal is full travel, and sliding the thumb UP from where
     // it landed eases it off. An absolute "height on the pedal" mapping gave a
     // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
-    const releases = [], pointerReleases = [];
-    const releaseAll = (pointersOnly) => {
-      const clearRoll = pointersOnly !== true && roll !== null;
+    const releases = [], pointerReleases = [], touchPointers = new Set();
+    const rememberPointer = e => {
+      if (e.pointerType === "touch") touchPointers.add(e.pointerId);
+      else touchPointers.delete(e.pointerId);
+    };
+    const releasePointer = e => {
+      touchPointers.delete(e.pointerId);
+      for (const up of pointerReleases) up(e);
+    };
+    const releaseAll = (touchOnly) => {
+      // No fingers on the glass says nothing about mouse, pen, keyboard or motion input.
+      if (touchOnly === true) {
+        for (const pointerId of touchPointers) releasePointer({ pointerId });
+        return;
+      }
+      touchPointers.clear();
+      const clearRoll = roll !== null;
       if (clearRoll) { roll = null; paintRoll(); }
-      for (const r of releases) r(pointersOnly === true);
+      for (const r of releases) r();
       if (clearRoll && session) session.sample(true);
     };
     const pedalTargets = new Map(), pedalOwners = new Map();
@@ -181,15 +195,13 @@ const PhonePadPage = (function () {
       // `edge` false = a slide (rate-capped, coalesced); a press or lift is sent at once.
       const level = (v, edge) => { if (el.style && el.style.setProperty) el.style.setProperty("--travel", v.toFixed(2)); on(v, edge); };
       const paintLevel = (edge = true) => { let strongest = 0; for (const v of levels.values()) strongest = Math.max(strongest, v); level(strongest, edge); };
-      releases.push((pointersOnly) => {
-        // A last-finger-up fallback says nothing about keys still held.
-        // Blur, backgrounding and disconnect still clear every input source.
-        if (pointersOnly) { for (const id of Array.from(ids)) if (typeof id !== "string") up({ pointerId: id }); return; }
+      releases.push(() => {
         if (!ids.size) return;
         for (const id of anchors.keys()) pedalOwners.delete(id);
         ids.clear(); anchors.clear(); levels.clear(); el.classList.remove("on"); if (travel) paintLevel(); else off();
       });
       const start = (e, transfer) => {
+        rememberPointer(e);
         ids.add(e.pointerId);
         el.classList.add("on");
         if (!travel) { on(1); return; }
@@ -289,7 +301,6 @@ const PhonePadPage = (function () {
       // The last finger up clears pointer holds, including a lost lift.
       // Backgrounding or a window blur clears keyboard holds as well.
       const allUp = (e) => { if (!e.touches || !e.touches.length) releaseAll(true); };
-      const releasePointer = (e) => { for (const up of pointerReleases) up(e); };
       document.addEventListener("pointerup", releasePointer, true);
       document.addEventListener("pointercancel", releasePointer, true);
       if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); window.addEventListener("blur", releaseAll); }
@@ -321,8 +332,8 @@ const PhonePadPage = (function () {
       let steeringPointer = null, anchorX = 0, stripW = 40;   // strip width read once per gesture, not per move (audit4 UB4)
       const steeringKeys = new Set();
       const release = (e) => { if (e && (steeringPointer === null || e.pointerId !== steeringPointer)) return; steeringPointer = null; if (!e) steeringKeys.clear(); steer = steeringKeys.size ? (Array.from(steeringKeys).pop() === "ArrowLeft" ? -1 : 1) : 0; push(); };
-      releases.push((pointersOnly) => release(pointersOnly ? { pointerId: steeringPointer } : undefined)); pointerReleases.push(release);
-      dom.steer.addEventListener("pointerdown", (e) => { if ((e.pointerType === "mouse" && e.button !== 0) || steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; stripW = Math.max(40, dom.steer.getBoundingClientRect().width * 0.4); steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
+      releases.push(() => release()); pointerReleases.push(release);
+      dom.steer.addEventListener("pointerdown", (e) => { if ((e.pointerType === "mouse" && e.button !== 0) || steeringMode !== "touch" || steeringPointer !== null) return; rememberPointer(e); steeringPointer = e.pointerId; anchorX = e.clientX; stripW = Math.max(40, dom.steer.getBoundingClientRect().width * 0.4); steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
       dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = PhonePadCodec.num((e.clientX - anchorX) / stripW, -1, 1); push(false); });
       dom.steer.addEventListener("pointerup", release); dom.steer.addEventListener("pointercancel", release);
       dom.steer.addEventListener("keydown", (e) => { if (steeringMode !== "touch" || !["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); if (steeringKeys.has(e.key)) return; steeringKeys.add(e.key); steer = e.key === "ArrowLeft" ? -1 : 1; push(); });
@@ -383,6 +394,7 @@ const PhonePadPage = (function () {
         // Track every contact: a second finger's up/leave used to clear `on` and
         // stop the repeater while the first thumb was still down (multi-touch).
         const first = !held.size;
+        rememberPointer(e);
         held.add(e.pointerId);
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* document release fanout still stops the repeat */ }
         el.classList.add("on");
@@ -427,6 +439,7 @@ const PhonePadPage = (function () {
       strip.addEventListener("pointerdown", e => {
         if (contact || !available() || (e.pointerType === "mouse" && e.button !== 0)) return;
         e.preventDefault();
+        rememberPointer(e);
         contact = { id: e.pointerId, x: e.clientX, y: e.clientY, shifted: false };
         strip.classList.add("on");
         try { strip.setPointerCapture(e.pointerId); } catch (_) { /* document release still clears the strip */ }
@@ -500,6 +513,7 @@ const PhonePadPage = (function () {
         if (e.button !== 0 || utilityPointer !== null) return;
         e.preventDefault();
         if (!panel.hidden) { hideUtilities(); return; }
+        rememberPointer(e);
         utilityPointer = e.pointerId; downX = e.clientX; downY = e.clientY; dragged = false;
         open();
         try { trigger.setPointerCapture(e.pointerId); } catch (_) { /* document release still finishes this gesture */ }
@@ -519,10 +533,7 @@ const PhonePadPage = (function () {
       };
       for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) trigger.addEventListener(event, end);
       pointerReleases.push(end);
-      releases.push(pointersOnly => {
-        if (!pointersOnly) closeUtilities();
-        else if (utilityPointer !== null) hideUtilities();
-      });
+      releases.push(closeUtilities);
       trigger.addEventListener("click", e => {
         if (e.detail !== 0) return;
         if (panel.hidden) { open(); choices.camera.focus(); } else hideUtilities();
@@ -574,6 +585,7 @@ const PhonePadPage = (function () {
       };
       base.addEventListener("pointerdown", (e) => {
         if ((e.pointerType === "mouse" && e.button !== 0) || id !== null) return;
+        rememberPointer(e);
         id = e.pointerId;
         try { base.setPointerCapture(e.pointerId); } catch (err) { /* not a pointer target */ }
         const b = base.getBoundingClientRect();

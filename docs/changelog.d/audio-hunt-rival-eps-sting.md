@@ -1,1 +1,0 @@
-Fixed: rival pass-by whoosh re-aims far less often (was opt-in `?lab=rivalEps`; now on by default, off with `?lab=noRivalEps`), and cutting a team-radio sting no longer leaves its filter chain rendering into the SFX bus when the context never fires `onended`.
