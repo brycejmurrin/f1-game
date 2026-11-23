@@ -103,8 +103,25 @@ function boot(options = {}) {
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
 
+test("visor capture snapshots the rendered pose before asynchronous readback", async () => {
+  let resolve, painted;
+  const b = boot({ visorOptics: {
+    captureSnapshot: G => ({ eye: G.camEye.slice() }),
+    captureLight: (_image, _G, options) => { painted = options.snapshot; }
+  } });
+  b.G.camEye = [1, 2, 3];
+  b.G.gfx.capturePixels = () => new Promise(r => { resolve = r; });
+  b.api.open({ source: "race" });
+  const row = b.dom.byId("ps-visor-level"); row.value = "medium"; b.dom.dispatch(row, { type: "change" });
+  const capture = b.api.capture();
+  b.G.camEye[0] = 99;
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await capture, true);
+  assert.deepEqual(painted.eye, [1, 2, 3]);
+});
+
 test("photo visor lighting is opt-in and baked once before cropping, saving or downloading", async () => {
-  const calls = [], b = boot({ visorOptics: { captureLight(image, G, options) {
+  const calls = [], b = boot({ visorOptics: { captureSnapshot: () => undefined, captureLight(image, G, options) {
     calls.push({ width: image.width, height: image.height, options: { ...options }, G });
   } } });
   b.api.open({ source: "race" });
@@ -116,7 +133,7 @@ test("photo visor lighting is opt-in and baked once before cropping, saving or d
   assert.equal(b.dom.byId("ps-message").textContent, "Press Capture to preview the new visor lighting.");
   assert.equal(await b.api.capture(), true);
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].options, { level: "strong", beams: "off", style: "compact" });
+  assert.deepEqual(calls[0].options, { level: "strong", beams: "off", style: "compact", snapshot: undefined });
   assert.deepEqual([calls[0].width, calls[0].height], [160, 90]);
   assert.equal(calls[0].G, b.G);
   const frame = b.dom.byId("ps-aspect"); frame.value = "square"; b.dom.dispatch(frame, { type: "change" });
@@ -1154,6 +1171,52 @@ test("every lighting-tuner control stays available across race, garage and circu
     assert.deepEqual(b.LT, original["test|day|dry"], "every knob restores on close");
     assert.deepEqual(b.latchWrites, [], "photo edits never change renderer recovery settings");
   }
+});
+
+test("Home circuit photos resolve the selected tuner profile before showing lighting controls", () => {
+  const saved = { "test|day|dry": { exposureMul: 1.7, contrast: 1.3, sunElev: 23 } };
+  const b = boot({ profiles: saved });
+  let applied = 0;
+  b.G.applyRaceSettings = () => { applied++; Object.assign(b.LT, b.G._ltStore["test|day|dry"]); };
+  b.api.open({ source: "home-track" });
+  assert.equal(applied, 1, "prepare the selected atmosphere, not the authored track palette");
+  for (const [id, value] of Object.entries(saved["test|day|dry"])) {
+    assert.equal(+b.dom.byId("ps-lt-in-" + id).value, value);
+    assert.equal(+b.dom.byId("ps-lt-num-" + id).value, value);
+  }
+  const exposure = b.dom.byId("ps-lt-in-exposureMul"); exposure.value = "2"; exposure.dispatchEvent({ type: "input" });
+  b.api.close(false);
+  assert.equal(b.G._ltStore, saved); assert.equal(b.LT.exposureMul, 1.7);
+  b.api.open({ source: "race" });
+  assert.equal(applied, 1, "race entry preserves the current live atmosphere, including blends");
+  b.api.close(false);
+});
+
+test("lighting rows follow the selected time/weather profile and condition reset", () => {
+  const b = boot();
+  b.G.setTimeOfDay = v => { if (v !== undefined) { b.G.raceTimeOfDay = v; b.LT.exposureMul = v === "night" ? 1.8 : 1; } return b.G.raceTimeOfDay; };
+  b.api.open({ source: "race" });
+  const tod = b.dom.byId("ps-tod"); tod.value = "night"; b.dom.dispatch(tod, { type: "change" });
+  assert.equal(+b.dom.byId("ps-lt-in-exposureMul").value, 1.8);
+  assert.equal(+b.dom.byId("ps-lt-num-exposureMul").value, 1.8);
+  b.dom.byId("ps-cond-reset").click();
+  assert.equal(+b.dom.byId("ps-lt-in-exposureMul").value, 1);
+});
+
+test("online photos cannot alter or rewind the live weather when closed", () => {
+  const b = boot(), arc = { from: "dry", to: "rain", progress: .4 };
+  b.G.netPlay = { active: () => true }; b.G.weatherArc = arc;
+  b.api.open({ source: "race" });
+  assert.equal(b.dom.byId("ps-tod").disabled, true);
+  assert.equal(b.dom.byId("ps-weather").disabled, true);
+  for (const [id, value] of [["ps-tod", "night"], ["ps-weather", "storm"]]) {
+    const el = b.dom.byId(id); el.value = value; b.dom.dispatch(el, { type: "change" });
+  }
+  assert.equal(b.G.raceTimeOfDay, "day"); assert.equal(b.G.raceWeather, "dry");
+  b.G.raceWeather = "rain"; arc.progress = .7;
+  b.api.close(false);
+  assert.equal(b.G.raceWeather, "rain", "network weather progresses independently of the photo");
+  assert.equal(b.G.weatherArc, arc); assert.equal(arc.progress, .7);
 });
 
 test("Photo Lighting exact entry edits the session and follows range movement and reset", () => {

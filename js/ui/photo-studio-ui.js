@@ -196,9 +196,9 @@ function create(G, deps) {
   // G.weather → Atmosphere.applyRaceSettings). A preview only: open() records what the session had, RESET and
   // every close put it back, so a photo never leaks into a race, a career or a result.
   const cond = { tod: null, wx: null, arc: null, touched: false };
-  const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); }, id);
-  const setTod = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.setTimeOfDay(v); };
-  const setWx = (v) => { if (st.busy || st.closing || isGarage()) return; cond.touched = true; G.weather(v); };
+  const pick = (label, list, read, run, id) => select(label, list, read, (v) => { run(v); paintCond(); paintLight(); }, id);
+  const setTod = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.setTimeOfDay(v); };
+  const setWx = (v) => { if (st.busy || st.closing || isGarage() || G.netPlay?.active?.()) return; cond.touched = true; G.weather(v); };
   const todRow = pick("Time of day", TODS, () => G.setTimeOfDay(), setTod, "ps-tod");
   const wxRow = pick("Weather", WXS, () => G.weather(), setWx, "ps-weather");
   const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
@@ -212,16 +212,17 @@ function create(G, deps) {
   function paintCond() {
     for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
       SettingRow.paint(row, v);
+      SettingRow.disable(row, !!G.netPlay?.active?.());
     }
-    E["ps-cond-reset"].disabled = st.busy || !(G.setTimeOfDay() !== cond.tod || G.weather() !== cond.wx);
+    E["ps-cond-reset"].disabled = st.busy || !!G.netPlay?.active?.() || !(G.setTimeOfDay() !== cond.tod || G.weather() !== cond.wx);
   }
   function resetCond() {
-    if (cond.tod == null) return;
+    if (cond.tod == null || G.netPlay?.active?.()) return;
     if (G.setTimeOfDay() !== cond.tod) G.setTimeOfDay(cond.tod);
     if (G.weather() !== cond.wx || cond.touched) { G.weather(cond.wx); }
     if (cond.touched) G.weatherArc = cond.arc;   // a MIXED race's arc, dropped by weather()
     cond.touched = false;
-    if (st.open) paintCond();
+    if (st.open) { paintCond(); paintLight(); }
   }
   // GARAGE LOOKS: in the garage the bay's own room, crew and lighting stand in for TIME & WEATHER. The rows are the
   // TEAM tab's GARAGE / CREW / LIGHTING pickers (deps.garage.looks = SetupUI's lookRowSpecs, one table) and call the
@@ -393,6 +394,7 @@ function create(G, deps) {
       setLtTab(lightSess.tab || (LightTune.TUNE_DEFS[0] && LightTune.TUNE_DEFS[0].group));
       paintLight();
     } catch (_) {
+      G._ltStore = saved;
       lightSess.saved = lightSess.clone = lightSess.snap = null;
       lightSess.active = false; lightGroup.hidden = true;
     }
@@ -596,7 +598,9 @@ function create(G, deps) {
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();
     if (!isGarage()) {
-      cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
+      cond.tod = online ? null : G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
+      // Home flybys start with the track palette, not the selected tuner profile.
+      if (st.source === "home-track") G.applyRaceSettings?.();
       beginLight();
     } else { endLight(); }
     subjectGroup.hidden = !st.subject;
@@ -679,7 +683,8 @@ function create(G, deps) {
     pass.cancelRead?.();
     E["ps-body"].inert = false;
   }
-  async function frame(pass = null) {
+  /** @param {*} pass @param {(() => void) | null} rendered */
+  async function frame(pass = null, rendered = null) {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
@@ -690,6 +695,7 @@ function create(G, deps) {
       if (!gfx.renderCaptureFrame(deps.renderFrame)) throw new Error("The scene is still getting ready");
     } else if (deps.renderFrame) deps.renderFrame();
     if (pass && pass.draws === draws) throw new Error("The scene is not ready to sample");
+    rendered?.();
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
     if (gfx && gfx.capturePixels) {
@@ -735,6 +741,7 @@ function create(G, deps) {
       // Repaint immediately before a native canvas copy; no await may come
       // between this draw and drawImage below.
       deps.renderFrame();
+      rendered?.();
     }
     const canvas = mk("canvas");
     if (pixels) {
@@ -837,8 +844,8 @@ function create(G, deps) {
       return await run();
     } finally { release(); }
   }
-  async function sampledFrame(count, maxEdge) {
-    if (count === 1) return frame();
+  async function sampledFrame(count, maxEdge, rendered) {
+    if (count === 1) return frame(null, rendered);
     const pass = capturePass(count);
     activePass = samplePass = pass;
     E["ps-body"].inert = true;
@@ -848,7 +855,7 @@ function create(G, deps) {
         if (activePass !== pass || st.closing || G.netPlay?.active?.()) throw new Error("Capture cancelled");
         pass.index = i;
         say("Capturing sample " + (i + 1) + " of " + count + "…");
-        const src = await frame(pass);
+        const src = await frame(pass, rendered);
         if (activePass !== pass) throw new Error("Capture cancelled");
         if (!out) {
           sourceWidth = src.width; sourceHeight = src.height;
@@ -879,8 +886,10 @@ function create(G, deps) {
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
       const source = await fullRes(async () => {
-        const image = await sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge);
-        if (gen === st.generation && opts.visor.level !== "off") VisorOptics.captureLight(image, G, opts.visor);
+        let snapshot;
+        const rendered = opts.visor.level !== "off" ? () => { snapshot = VisorOptics.captureSnapshot(G); } : null;
+        const image = await sampledFrame(G.netPlay?.active?.() ? 1 : st.samples, opts.maxEdge, rendered);
+        if (gen === st.generation && opts.visor.level !== "off") VisorOptics.captureLight(image, G, { ...opts.visor, snapshot });
         return image;
       }, st.highRes); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;

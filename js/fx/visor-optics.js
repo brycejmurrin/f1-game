@@ -1112,6 +1112,13 @@ const VisorOptics = (function () {
     }, _sceneInternals);
   }
 
+  // Freeze the rendered camera/light values before asynchronous GPU readback.
+  function captureSnapshot(G) {
+    const source = sceneFromG(G), tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
+    const scene = Object.defineProperty(JSON.parse(JSON.stringify(source)), "track", { value: source.track });
+    return { scene, bloom: tune?.bloomMul ?? 1, glare: tune?.glareStr ?? .12 };
+  }
+
   // Photo-only additive light, after scene readback and before cropping. No helmet
   // DOM, saved preferences, animation cadence or cached driving lens is changed.
   function captureLight(canvas, G, opts = {}) {
@@ -1119,11 +1126,11 @@ const VisorOptics = (function () {
     if (!level) return null;
     const g = canvas.getContext("2d"), w = canvas.width, h = canvas.height;
     if (!g || !w || !h) throw new Error("Visor photo lighting is unavailable");
-    const source = sceneFromG(G), tune = typeof LightTune !== "undefined" ? LightTune.LT : null;
+    const snapshot = opts.snapshot || captureSnapshot(G);
     // Free-camera shots retain world occlusion, not a cached cockpit-only blocker.
-    const scene = Object.defineProperty({ ...source }, "track", { value: source.track });
+    const scene = snapshot.scene;
     const m = lightMap(scene, w, h, { level, beams: BEAMS[opts.beams] ?? 1, style: opts.style || "classic",
-      bloom: tune?.bloomMul ?? 1, glare: tune?.glareStr ?? .12, visibilitySamples: 9 });
+      bloom: snapshot.bloom, glare: snapshot.glare, visibilitySamples: 9 });
     const paths = typeof Path2D === "function" ? { rim: new Path2D(portPath(w, h, Math.min(w, h) * .03)) } : null;
     g.save();
     try { _paint(m, g, w, h, paths, false); } finally { g.restore(); }
@@ -1132,6 +1139,6 @@ const VisorOptics = (function () {
 
   // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
   // close over them; no js/ or test reader used the public VisorOptics.* forms.
-  return { bind, setCockpitOccluder, tick, clear, captureLight, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
+  return { bind, setCockpitOccluder, tick, clear, captureLight, captureSnapshot, lightField, frameLens, folded, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);
