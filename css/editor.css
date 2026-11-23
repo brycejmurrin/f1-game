@@ -750,9 +750,10 @@
 @container designer-shell (max-width: 500px) and (max-height: 600px) {
   #trackdesigner .td-body { min-height: calc(var(--tap) * 12); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
   #trackdesigner [data-role="mode-bar"] { grid-column: 1; grid-row: 1; }
-  #trackdesigner[data-pane="design"] .td-stage { height: calc(var(--tap) * 6); min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
+  /* Let the stage grow when the wrapped toolbar and both canvases need more space. */
+  #trackdesigner[data-pane="design"] .td-stage { min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
   #trackdesigner[data-pane="design"] .td-stage > .td-chips[data-role="toolbar"] { position: static; grid-column: 1; grid-row: 1; flex-flow: row wrap; }
-  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; contain: size; }
   #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 3; }
   #trackdesigner .td-rail { grid-column: 1; grid-row: 3; }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-body { grid-template-rows: minmax(0, 1fr); }
