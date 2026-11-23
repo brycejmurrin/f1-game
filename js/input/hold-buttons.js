@@ -112,6 +112,7 @@ const InputHoldButtons = (function () {
     function wireHold(id, apply, level, opts) {
       const el = document.getElementById(id);
       if (!el) return;
+      suppressLoupe(el);
       const axis = (opts && opts.axis) === "x" ? "x" : "y";
       const dir = (opts && opts.dir) || 1;
       const ids = new Set();
@@ -277,6 +278,7 @@ const InputHoldButtons = (function () {
     function wireTap(id, fire) {
       const el = document.getElementById(id);
       if (!el) return;
+      suppressLoupe(el);
       const enabled = () => !el.disabled && !(el.getAttribute && el.getAttribute("aria-disabled") === "true");
       el.addEventListener("pointerdown", function (e) {
         if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -304,10 +306,17 @@ const InputHoldButtons = (function () {
       pointerCounts: () => holdBtns.map((h) => h.ids.size) };
   }
 
-  // Native compatibility clicks can omit a second finger while a pedal is held.
-  // Bridge only that contact; primary touch, mouse and keyboard keep native activation.
-  function secondaryTap(el, { activate = (_e) => el.click(), cancel = () => {}, beforeActivate = (_e) => true } = {}) {
+  // WebKit can show its magnifier after tap-then-hold despite touch-action
+  // and user-select (bug 296492). Pointer events still drive the controls.
+  function suppressLoupe(el) {
+    el.addEventListener("touchstart", e => e.preventDefault(), { passive: false });
+  }
+
+  // With native touch activation cancelled, activate on pointerup. Mouse and
+  // keyboard keep their normal click path.
+  function hudTouchTap(el, { activate = (_e) => el.click(), cancel = () => {}, beforeActivate = (_e) => true } = {}) {
     if (!el || !el.addEventListener) return;
+    suppressLoupe(el);
     let down = null, consumed = null;
     const clear = () => { if (down && !down.cancelled) cancel(); if (down) down.cancelled = true; };
     const remember = e => { consumed = { id: e.pointerId, x: e.clientX, y: e.clientY, at: e.timeStamp }; };
@@ -316,7 +325,7 @@ const InputHoldButtons = (function () {
     window.addEventListener("pointerdown", e => { consumed = null; if (down && down.id === e.pointerId) { clear(); down = null; } }, true);
     el.addEventListener("pointerdown", e => {
       clear(); down = null;
-      if (e.pointerType !== "touch" || e.isPrimary !== false || !enabled()) return;
+      if (e.pointerType !== "touch" || !enabled()) return;
       down = { id: e.pointerId, x: e.clientX, y: e.clientY };
       try { el.setPointerCapture(e.pointerId); } catch (_) { /* implicit touch capture remains */ }
     });
@@ -343,6 +352,6 @@ const InputHoldButtons = (function () {
     }, true);
   }
 
-  return { create, secondaryTap };
+  return { create, hudTouchTap };
 })();
 Object.freeze(InputHoldButtons);

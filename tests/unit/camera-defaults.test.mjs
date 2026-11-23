@@ -91,11 +91,11 @@ test("CAM hold is judged by event times: a late-delivered short tap cycles, a re
   const h = camHarness();
   h.fire("pointerdown", 1000); h.runTimers();   // the timer ran first: the up was queued behind a long frame
   assert.equal(h.dom.byId("campicker").hidden, false);
-  h.fire("pointerup", 1080); h.fire("lostpointercapture"); h.button.onclick();
+  h.fire("pointerup", 1080); h.fire("lostpointercapture");
   assert.equal(h.dom.byId("campicker").hidden, true, "an 80 ms press is a tap, not a hold");
   assert.equal(h.G.camMode, 1, "…and the tap cycles the camera");
   h.fire("pointerdown", 5000); h.runTimers();
-  h.fire("pointerup", 5700); h.fire("lostpointercapture"); h.button.onclick();
+  h.fire("pointerup", 5700); h.fire("lostpointercapture");
   assert.equal(h.dom.byId("campicker").hidden, false, "a 700 ms press keeps the picker");
   assert.equal(h.G.camMode, 1);
 });
