@@ -92,8 +92,9 @@ test("appearance-studio text inputs / selects use an explicit 16px floor", () =>
   const size = decl(rules,
     '#appearance-studio input[type="text"], #appearance-studio input[type="number"], #appearance-studio input[type="search"], #appearance-studio input:not([type]), #appearance-studio select',
     "font-size");
-  assert.equal(size, "16px",
-    "APPEARANCE profile name + selects must be 16px (was var(--fs-2) = 15px)");
+  // #5236: 16 PAINTED px under the sheet zoom (a bare 16px painted 11.2 at UI SIZE 70).
+  assert.equal(size, "max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))))",
+    "APPEARANCE profile name + selects must floor at 16 painted px (was var(--fs-2) = 15px)");
   assert.ok(floorPx(size) >= FLOOR);
   assert.equal(tokenPx("--fs-2"), 15,
     "--fs-2 must still be 15px so this pin stays meaningful");

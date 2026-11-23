@@ -22,6 +22,7 @@ const DataStandings = (function () {
     // `tag` labels a table that is not this year's ("LAST SEASON · 2025 FINAL").
     function driverRows(drivers, tag) {
       const sec = el("div", "dh-standings-col");
+      sec.dataset.hubPart = "drivers";
       sec.appendChild(el("h3", "dh-section", tag ? "DRIVERS — " + tag : "DRIVERS"));
       if (!drivers.length) {
         sec.appendChild(emptyMsg("No driver standings yet — season hasn't started."));
@@ -72,6 +73,7 @@ const DataStandings = (function () {
 
     function constructorRows(cons, drivers, tag) {
       const sec = el("div", "dh-standings-col");
+      sec.dataset.hubPart = "constructors";
       sec.appendChild(el("h3", "dh-section", tag ? "CONSTRUCTORS — " + tag : "CONSTRUCTORS"));
       if (!cons.length) {
         sec.appendChild(emptyMsg("No constructor standings yet."));
@@ -131,6 +133,8 @@ const DataStandings = (function () {
         const wrap = el("div", "dh-tabbody dh-standings");
         wrap.appendChild(driverRows(t.drivers, tag));
         wrap.appendChild(constructorRows(t.cons, t.drivers, tag));
+        // Last season's final table stands in until the opener: re-ask soon (hunt #5694 B5).
+        if (t.year != null) wrap.nextFlipAt = Date.now() + 30 * 60 * 1000;
         return wrap;
       });
     }

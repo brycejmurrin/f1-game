@@ -13,6 +13,7 @@
 //
 // Pure Node: tools/lib/track-build-vm.cjs runs the real track build, no browser.
 
+import { trisOf, surfaceY } from "../helpers/mesh-surface.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -502,10 +503,11 @@ test("neither end of the complex lies in a corner: the exit closes before the fi
       assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `nurburgring: cornering at s=${s | 0} (sOut ${p.sOut | 0} + grow ${p.grow})`);
     assert.ok(p.exitRoadM >= P.EXIT_ROAD_MIN, `the exit road is at least ${P.EXIT_ROAD_MIN} m (${p.exitRoadM})`);
   }
-  // Where the straight cannot hold even the minimum (Mosport 24 m, Jerez 48 m)
+  // Where the straight cannot hold even the minimum (Mosport 24 m; Jerez was 48 m
+  // until #5078 moved its line onto the real start straight)
   // the exit sits on the floor, not at 130. (The ENTRY is clamped to
   // ENTRY_MIN the same way and may still open in a corner on such a circuit.)
-  for (const id of ["mosport", "jerez"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
+  for (const id of ["mosport"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
   // A long straight keeps the full exit — the rule only bites where a corner does.
   assert.equal(buildOnce("monza").pit.exitM, P.EXIT_M);
 });
@@ -865,38 +867,6 @@ test("the entry hatch is paint inside the road edge, from the road's start to wh
 // drawn single-sided, and four of the five box quads were wound down —
 // culled on all three backends, so only the team's front bar ever showed.
 const MIN_PAINT_GAP = 0.010;
-function trisOf(out, from = 0, to = out.idx.length) {
-  const V = (i) => [out.pos[i * 3], out.pos[i * 3 + 1], out.pos[i * 3 + 2]], T = [];
-  for (let i = from; i + 2 < to; i += 3) T.push([V(out.idx[i]), V(out.idx[i + 1]), V(out.idx[i + 2])]);
-  return T;
-}
-/** The highest surface triangle over (x, z), or null — a 2 m XZ grid over `tris`. */
-function surfaceY(tris) {
-  const CELL = 2, grid = new Map(), cellOf = (x, z) => Math.floor(x / CELL) + "," + Math.floor(z / CELL);
-  tris.forEach((T, i) => {
-    const xs = T.map((p) => p[0]), zs = T.map((p) => p[2]);
-    for (let cx = Math.floor(Math.min(...xs) / CELL); cx <= Math.floor(Math.max(...xs) / CELL); cx++)
-      for (let cz = Math.floor(Math.min(...zs) / CELL); cz <= Math.floor(Math.max(...zs) / CELL); cz++) {
-        const key = cx + "," + cz;
-        if (!grid.has(key)) grid.set(key, []);
-        grid.get(key).push(i);
-      }
-  });
-  return (x, z) => {
-    let best = null;
-    for (const i of grid.get(cellOf(x, z)) || []) {
-      const [a, b, c] = tris[i];
-      const d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
-      if (Math.abs(d) < 1e-12) continue;
-      const l1 = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d;
-      const l2 = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d, l3 = 1 - l1 - l2;
-      if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
-      const y = l1 * a[1] + l2 * b[1] + l3 * c[1];
-      if (best === null || y > best) best = y;
-    }
-    return best;
-  };
-}
 function clearance(paint, under, N = 6) {
   let min = Infinity, n = 0, missed = 0, down = 0;
   for (const [a, b, c] of paint) {
@@ -933,5 +903,26 @@ test("pit paint stands >= 10 mm clear of the lane (and the hatch of the road), e
     assert.ok(c.n > 100 && c.missed === 0, `${id} hatch: ${c.n} samples over the road, ${c.missed} off it`);
     assert.ok(c.min >= MIN_PAINT_GAP, `${id} hatch: ${(c.min * 1000).toFixed(1)} mm over the road at the lowest (>= 10 mm)`);
     assert.equal(c.down, 0, `${id} hatch: ${c.down} triangles wound down`);
+  }
+});
+
+test("the ENTRY road has a drivable floor: no circuit's peel is squeezed into a 30 m road (#5089)", () => {
+  // silverstone, suzuka and magny_cours got a 30 m entry road (ROAD_MIN), so
+  // the armed AI's line moved 7.35 m sideways in 15 m — ~7 g at the 80 km/h
+  // limit. The entry road now has its own floor, as the exit has had.
+  const T = tracksOnce(), P = ctxOnce().TrackPit;
+  assert.ok(P.ENTRY_ROAD_MIN >= 60 && P.ENTRY_ROAD_MIN <= P.ENTRY_ROAD, `ENTRY_ROAD_MIN ${P.ENTRY_ROAD_MIN}`);
+  const short = [];
+  for (const def of T.LIST) {
+    const p = buildOnce(def.id).pit, L = buildOnce(def.id).total;
+    if (!p || p.painted) continue;
+    const road = ((p.sIn - p.sA) % L + L) % L;
+    if (road < P.ENTRY_ROAD_MIN - 0.01) short.push(`${def.id} ${road.toFixed(0)}`);
+  }
+  assert.deepEqual(short, [], `entry roads under ${P.ENTRY_ROAD_MIN} m: ${short.join(", ")}`);
+  for (const id of ["silverstone", "suzuka", "magny_cours"]) {
+    const p = buildOnce(id).pit;
+    // The peel's ramp (the road less the wall's fade) keeps the lateral under ~2 g.
+    assert.ok(p.entryRoadM - p.grow >= 30, `${id}: peel ramp ${p.entryRoadM - p.grow} m`);
   }
 });

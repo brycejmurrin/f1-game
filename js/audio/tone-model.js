@@ -5,8 +5,8 @@ var GameAudioToneModel = (function () {
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
   // function of rev — so tools/check/audio-test.cjs's invariants (pitch monotonic in
-  // rev per gear, gear1 < gear4 at redline) hold for every voice by
-  // construction. rateTrim ±3% pitch offset · detune cents on the sample ·
+  // rev, and the same rate at the same rev in every gear: pitch is rpm alone) hold
+  // for every voice by construction. rateTrim ±3% pitch offset · detune cents on the sample ·
   // formantHz/Gain a peaking EQ between engFilter and engGain (0 gain = no
   // node) · cutTrim scales the lowpass (bright vs muffled) · whineHz/Lvl the
   // turbo/MGU character · synthSpread/subLvl shape the oscillator fallback.
@@ -23,7 +23,7 @@ var GameAudioToneModel = (function () {
   // the player instead of the team. It keeps the SAME constant-timbre contract
   // ENGINE_VOICES states above: every field is a fixed multiplier, never a
   // function of rev, so tools/check/audio-test.cjs's invariants (pitch
-  // monotonic in rev per gear, gear1 < gear4 at redline) hold by construction.
+  // monotonic in rev, the same at the same rev in every gear) hold by construction.
   //
   // THE PITCH CURVE IS FOUR KNOBS, and they are independent on purpose.
   //   rate(rev) = (IDLE_RATE * idle + SPAN_RATE * revRange * rev^curve) * pitch
@@ -41,8 +41,8 @@ var GameAudioToneModel = (function () {
   //
   // Every one of them is clamped strictly positive and none is a function of
   // rev, which is exactly what monotonicity needs: the rev term keeps its sign
-  // (rev^curve is increasing for any curve > 0), and both gears take the same
-  // factors, so the ordering is untouched. `sub` weights the sub-octave;
+  // (rev^curve is increasing for any curve > 0), and every gear takes the same
+  // factors, so equal rpm stays equal pitch. `sub` weights the sub-octave;
   // `gravel` the crank-rate roughness that fades with rev; `brakes` the
   // carbon-brake roar; `shift` the gear-change crack.
   //

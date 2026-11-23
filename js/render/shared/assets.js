@@ -2,15 +2,17 @@
 "use strict";
 
 const Assets = (function () {
-  // Pack URLs carry no ?v= cache-bust (index.html's version guard only rewrites
-  // the shell's own script/link tags), so these fetches use DEFAULT caching
-  // rather than force-cache: force-cache would serve a stale pack out of the
-  // HTTP cache indefinitely, and a rebaked pack would never reach anyone who
-  // had already loaded the old one. sw.js serves assets/pack/ NETWORK-FIRST
-  // (cache only as the offline / slow fallback), so normal revalidation is
-  // what makes a rebake land — from the first boot after the deploy.
+  // Pack URLs carry no ?v= (the version guard rewrites only the shell tags), so
+  // fetches use DEFAULT caching: force-cache would keep a stale pack forever.
+  // sw.js serves the pack network-first, so a rebake lands on the next boot. The
+  // manifest is asked under the PAGE build (`?b=<n>`, #5629), which sw.js answers
+  // stale-first (why: sw.js isBuildKeyedManifest). No build: bare URL.
   const PACK_DIR = "assets/pack/";
   const MANIFEST = PACK_DIR + "manifest.json";
+  function _manifestUrl() {
+    const b = typeof window !== "undefined" && window ? Number(window.__APEX_BUILD) : 0;
+    return Number.isSafeInteger(b) && b > 0 ? MANIFEST + "?b=" + b : MANIFEST;
+  }
   const MAT_LAYERS = 17;                 // MAT.FLAT(0) … MAT.ASPHALT(16)
 
   let _gfx = null;
@@ -21,19 +23,20 @@ const Assets = (function () {
   let _uploaded = false;
   let _err = null;                       // last failure reason, for __apex.assets()
   let _bytes = 0;                        // bytes fetched for the material arrays
-  let _tier = null;                      // "high" | "low" | "off"
+  let _tier = null;                      // "hd" | "high" | "low" | "off" | "browser-bake"
   const _models = Object.create(null);   // id -> {pos,nrm,col,mat,idx} | null (miss)
   const _modelPromises = Object.create(null);
   const _requests = new Set();
+  const TIMED_OUT = "timed out";
   const REQUEST_MS = 15000;              // shared transfer lifetime, separate from a caller's readiness wait
 
   function _request(url, body) {
     const controller = typeof AbortController === "function" ? new AbortController() : null;
     let timer = null, cancel;
     const deadline = new Promise((_, reject) => {
-      cancel = () => { if (controller) controller.abort(); reject(new Error("asset request canceled: " + url)); };
+      cancel = (why) => { if (controller) controller.abort(); reject(new Error("asset request " + (why === TIMED_OUT ? why : "canceled") + ": " + url)); };
       // Minimal VM schedulers may support task yields without cancellable timers.
-      if (typeof setTimeout === "function" && typeof clearTimeout === "function") timer = setTimeout(cancel, REQUEST_MS);
+      if (typeof setTimeout === "function" && typeof clearTimeout === "function") timer = setTimeout(() => cancel(TIMED_OUT), REQUEST_MS);
     });
     _requests.add(cancel);
     const work = (async () => {
@@ -43,10 +46,16 @@ const Assets = (function () {
     })();
     // Racing also settles a mock/transport that ignores AbortSignal. A late
     // body has no state writes here and cannot re-enter its former consumer.
-    return Promise.race([work, deadline]).finally(() => {
+    let settled = false;
+    const raced = Promise.race([work, deadline]).finally(() => {
+      settled = true;
       if (timer !== null) clearTimeout(timer);
       _requests.delete(cancel);
     });
+    // Callers that guessed a URL from the last pack can drop it when the fresh
+    // manifest names a different file. A settled request is left alone.
+    raced.cancel = () => { if (!settled) cancel(); };
+    return raced;
   }
 
   function init(gfx) { _gfx = gfx || null; }
@@ -84,10 +93,11 @@ const Assets = (function () {
 
   async function _fetchManifest(generation) {
     try {
-      const j = await _request(MANIFEST, "json");
+      const j = await _request(_manifestUrl(), "json");
       if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
+      rememberPack(j);
       return j;
     } catch (e) {
       if (generation === _loadGeneration) _err = "no-pack";
@@ -320,14 +330,16 @@ const Assets = (function () {
       }
       return _scratchGl;
     }
-    let cv = null;
-    try {
-      cv = (typeof OffscreenCanvas !== "undefined")
-        ? new OffscreenCanvas(size, size)
-        : Object.assign(document.createElement("canvas"), { width: size, height: size });
-    } catch (_) { return null; }
-    const gl = cv.getContext("webgl2", { premultipliedAlpha: false, antialias: false });
-    if (!gl) return null;
+    // DOM canvas if OffscreenCanvas lacks webgl2 (Safari 16.x)
+    const attrs = { premultipliedAlpha: false, antialias: false };
+    const tryCanvas = (make) => {
+      try { const c = make(); const g = c && c.getContext("webgl2", attrs); return g ? { cv: c, gl: g } : null; }
+      catch (_) { return null; }
+    };
+    const got = (typeof OffscreenCanvas !== "undefined" && tryCanvas(() => new OffscreenCanvas(size, size)))
+      || (typeof document !== "undefined" && tryCanvas(() => Object.assign(document.createElement("canvas"), { width: size, height: size })));
+    if (!got) return null;
+    const { cv, gl } = got;
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
@@ -405,14 +417,10 @@ const Assets = (function () {
   // readPixelsAsync does), then ONE fenceSync + gl.flush() marks the GPU work;
   // clientWaitSync is polled off a timer and, once the fence has signalled,
   // getBufferSubData copies each buffer into `data` — a copy that no longer
-  // waits on the GPU. One buffer PER LAYER is not style: Chromium keeps a
-  // single-use "shadow copy" per READ-usage buffer that the fence fills and
-  // the first getBufferSubData consumes (gles2_implementation.cc MapBufferRange
-  // + readback_buffer_shadow_tracker.cc); a second read of the same buffer
-  // falls back to a blocking round trip with "performance warning: READ-usage
-  // buffer was read back without waiting on a fence" — measured in-container:
-  // 12 warnings and a 3× slower copy with one shared buffer at slot offsets,
-  // none with one per layer (perf hunt 4, lane WGX). The uploads happen
+  // waits on the GPU. One buffer PER LAYER because Chromium's per-buffer READ
+  // shadow copy is single-use (readback_buffer_shadow_tracker.cc): a shared
+  // buffer read again blocks ("READ-usage buffer was read back without waiting
+  // on a fence"; measured: 12 warnings, 3× slower copy). The uploads happen
   // synchronously INSIDE this call, so a caller may close its ImageBitmaps the
   // moment it returns (assets.js does).
   //   https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
@@ -590,8 +598,31 @@ const Assets = (function () {
     return !!(c && (c.saveData || /2g$/.test(c.effectiveType || "")));
   }
 
+  // Phones take the 128 px tier only on GRAPHICS: LOW (#5225, superseding the
+  // HIGH-only lift of #4702 / #3110 F7 A): MEDIUM, the phone default, draws a
+  // 959-1278 px buffer where a 128 px texel (2-4 cm of tarmac) is magnified,
+  // and 256 px costs ~+1.1 MB download and ~+8.5 MB GPU. Desktop never takes
+  // the low tier here. GfxQuality is read at CALL time (no load-order edge);
+  // absent or throwing => stay low.
+  function _phoneLowPreset() {
+    if (!(_gfx.isMobile || _gfx.mobileTier)) return false;
+    try {
+      return !(typeof GfxQuality !== "undefined" && GfxQuality.current() !== "low");
+    } catch (_) { return true; }
+  }
+
+  // opts.tier wins (a missing variant reads "high"), then low-data / phone LOW, then hd: packHd (EXTREME,
+  // desktop TLX: GfxHi.hd, lazy) wants materials.hd (512 px), fetched only here, never precached. Else 256 px.
+  function _wantTier(mats, tier) {
+    if (tier) return tier === "low" && mats.low ? "low" : tier === "hd" && mats.hd ? "hd" : "high";
+    if (mats.low && (_phoneLowPreset() || _lowDataLink())) return "low";
+    return mats.hd && typeof GfxHi !== "undefined" && GfxHi.hd(_gfx) ? "hd" : "high";
+  }
+  let _lastWant = null;
+
   // Load + upload the baked material arrays. Resolves to true only when the
-  // arrays are actually live on the GPU; false (never a rejection) otherwise.
+  // arrays are prepared and handed to the backend; false (never a rejection)
+  // otherwise. TLX schedules lazy GPU upload, so true is not presentation evidence.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
   function load(opts) {
     if (_loadPromise) return _loadPromise;
@@ -614,25 +645,44 @@ const Assets = (function () {
   // session on procedural materials. game.js calls this at race entry and never
   // awaits it. No retry for an unsupported backend ("backend"), after an
   // explicit unload(), while a load is in flight, or once the pack is up.
+  // A strip that ran out REQUEST_MS (a whole-transfer deadline) was too big for
+  // this link, and the same tier would time out again: that retry takes the
+  // 128 px tier, a third of the bytes (#5555). Any other failure keeps its tier.
   let _retried = false;
   function retry() {
     if (_retried || _uploaded || _loadPromise || _tier !== "off" || !_err || _err === "backend") return false;
     _retried = true;
     Log.info("assets", "retrying the material pack after: " + _err);
+    // A failed hd load retries at 256 px.
+    load(_err.indexOf("asset request " + TIMED_OUT) === 0 ? { tier: "low" } : _lastWant === "hd" ? { tier: "high" } : undefined);
+    return true;
+  }
+
+  // Reload the material tier the GRAPHICS preset wants, off track only (#5561); a forced tier stays.
+  let _pinned = false;
+  function followQuality() {
+    if (!_uploaded || _pinned || (_tier !== "low" && _tier !== "high" && _tier !== "hd")) return false;
+    const mats = _manifest && _manifest.materials;
+    const want = mats ? _wantTier(mats, null) : "high";
+    if (want === _tier) return false;
+    Log.info("assets", "pack tier " + _tier + " -> " + want);
+    if (_gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
+    _uploaded = false; _tier = null; _bytes = 0; _loadPromise = null;
     load();
     return true;
   }
 
   async function _load(opts, generation) {
+    _pinned = !!opts.tier;
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
     if (generation !== _loadGeneration) return false;
     if (!m || !m.materials) { _tier = "off"; return false; }
     const mats = m.materials;
 
-    const wantLow = opts.tier ? opts.tier === "low"
-                              : !!(_gfx.isMobile || _gfx.mobileTier || _lowDataLink());
-    const variant = (wantLow && mats.low) ? mats.low : mats;
+    const want = _wantTier(mats, opts.tier);
+    _lastWant = want;
+    const variant = want === "low" ? mats.low : want === "hd" ? mats.hd : mats;
     const size = variant.size | 0;
     if (!size || !variant.albedo) { _err = "bad-materials"; _tier = "off"; return false; }
 
@@ -649,7 +699,8 @@ const Assets = (function () {
 
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
-      // Start both downloads together; decode and upload remain sequential.
+      // Start both downloads together. Albedo decodes first; the normal strip
+      // then inflates while the albedo array uploads.
       // The NORMAL strip is optional: its fetch and decode fail on their own
       // (normal = null, albedo still ships) — sharing the albedo's Promise.all
       // let a missing normal strip discard the whole pack (_tier "off").
@@ -663,11 +714,24 @@ const Assets = (function () {
         _discardLoad(albedo, normal, albedoTex, normalTex);
         return false;
       }
-      albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
-      if (!albedoTex) throw new Error("albedo-upload");
+      // The normal strip's inflate runs off this thread (DecompressionStream).
+      // Start it before the albedo GPU upload so the two overlap; a bad normal
+      // still leaves albedo live.
+      let normalP = null;
       if (normalBlob) {
-        try { normal = await _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration); }
-        catch (_) { normal = null; }   // undecodable normal strip: albedo alone
+        normalP = _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration)
+          .then((v) => v, (error) => { if (error === DECODE_CANCELED) throw error; return null; });
+      }
+      const quietNormal = () => { if (normalP) normalP.then(_releaseStrip, () => {}); };
+      albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
+      if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
+      // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
+      // path) hands back a token with `ready`; load() waits for that fill
+      // before publication. This does not prove GPU residency or presentation. A failed fill reads as the
+      // sync path's upload failure (no partial pack; a lost normal stays survivable).
+      if (albedoTex.ready && !(await albedoTex.ready)) { quietNormal(); throw new Error("albedo-upload"); }
+      if (normalP) {
+        normal = await normalP;
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;
@@ -675,11 +739,6 @@ const Assets = (function () {
         if (normal) normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
       }
-      // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
-      // path) hands back a token with `ready`; the pack is live — and load()
-      // resolves — only once every array is filled. A failed fill reads as the
-      // sync path's upload failure (no partial pack; a lost normal stays survivable).
-      if (albedoTex.ready && !(await albedoTex.ready)) throw new Error("albedo-upload");
       if (normalTex && normalTex.ready && !(await normalTex.ready)) { _freeTexture(normalTex); normalTex = null; }
       if (generation !== _loadGeneration) {
         _discardLoad(albedo, normal, albedoTex, normalTex);
@@ -701,7 +760,7 @@ const Assets = (function () {
 
     _gfx.setMaterialMaps({ albedo: albedoTex, normal: normalTex, scales: scales });
     _uploaded = true;
-    _tier = wantLow && mats.low ? "low" : "high";
+    _tier = want;
     _err = null;
     let n = 0;
     for (let i = 0; i < present.length; i++) if (present[i]) n++;
@@ -853,17 +912,55 @@ const Assets = (function () {
     return job;
   }
 
+  // The manifest is network-first, so a return visit waited out that revalidation
+  // before any model byte started. The last pack's file+md5 is content-addressed:
+  // sw.js answers `?h=` cache-first, and a rebake changes the md5. Remember it
+  // and start those fetches beside the manifest; a mismatch aborts the guess.
+  let _packIndex;
+  function packIndex() {
+    if (_packIndex !== undefined) return _packIndex;
+    _packIndex = null;
+    try {
+      const j = JSON.parse(localStorage.getItem("apex26.packIndex") || "null");
+      if (j && j.models && typeof j.models === "object") _packIndex = j;
+    } catch (e) { /* no stored index: models wait for the manifest */ }
+    return _packIndex;
+  }
+  function rememberPack(m) {
+    if (!m) return;
+    const models = {}, live = m.models || {};
+    for (const id in live) {
+      const rec = live[id];
+      if (!rec || typeof rec.file !== "string" || !/^[0-9a-f]{32}$/.test(rec.md5 || "")) continue;
+      models[id] = { file: rec.file, md5: rec.md5 };
+    }
+    _packIndex = { models };
+    try { localStorage.setItem("apex26.packIndex", JSON.stringify(_packIndex)); }
+    catch (e) { /* quota or private mode: this visit still has the manifest */ }
+  }
   function model(id) {
     if (id in _models) return Promise.resolve(_models[id]);
     if (_modelPromises[id]) return _modelPromises[id];
     const generation = _loadGeneration;
+    const hinted = packIndex();
+    const guess = hinted && hinted.models && hinted.models[id];
+    let early = null;
+    if (guess && guess.file) {
+      early = _request(_packUrl(guess.file, guess.md5), "arrayBuffer");
+      early.catch(() => {}); // a later cancel or a lost race must not reject unhandled
+      early.file = guess.file; early.md5 = guess.md5;
+    }
     const promise = (async () => {
       try {
         const m = await manifest();
-        if (generation !== _loadGeneration) return null;
+        if (generation !== _loadGeneration) { if (early) early.cancel(); return null; }
         const rec = m && m.models && m.models[id];
-        if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
-        const body = await _request(_packUrl(rec.file, rec.md5), "arrayBuffer");
+        if (!rec || !rec.file) { if (early) early.cancel(); if (m) _models[id] = null; return null; }
+        let body = null;
+        if (early && early.file === rec.file && early.md5 === rec.md5) {
+          try { body = await early; } catch (e) { body = null; }
+        } else if (early) early.cancel();
+        if (!body) body = await _request(_packUrl(rec.file, rec.md5), "arrayBuffer");
         if (generation !== _loadGeneration) return null;
         const parsed = await _decodeModel(body, generation);
         if (parsed && generation === _loadGeneration) _models[id] = parsed;
@@ -915,9 +1012,16 @@ const Assets = (function () {
   async function loadModelsFor(src) {
     if (!src) return 0;
     const generation = _loadGeneration;
+    const text = String(src);
+    // Start the remembered models now. manifest() is still in flight on a
+    // return visit; model() reconciles each id when the fresh manifest lands.
+    if (_manifest === null) {
+      const hinted = _idsNamedIn(packIndex(), text);
+      for (let i = 0; i < hinted.length; i++) model(hinted[i]);
+    }
     const m = await manifest();
     if (generation !== _loadGeneration) return 0;
-    const ids = _idsNamedIn(m, String(src));
+    const ids = _idsNamedIn(m, text);
     if (!ids.length) return 0;
     // Fetch in parallel (shared model() memos). The shared decode lane in
     // model() supplies task boundaries before synchronous model parses.
@@ -1003,7 +1107,7 @@ const Assets = (function () {
     return (_manifest && _manifest.credits) ? _manifest.credits.slice() : [];
   }
 
-  return { init, supported, manifest, load, retry, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
+  return { init, supported, manifest, load, retry, followQuality, unload, adopt, state, readLayerBytes, readLayerBytesAsync,
            model, modelSync, models, modelIds, loadModels, loadModelsFor, modelsReady, env, credits, MAT_LAYERS };
 })();
 

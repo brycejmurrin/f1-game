@@ -493,6 +493,6 @@ const Legends = (function () {
     return LIST.map((l) => Object.assign({ id: `legend_${l.id}`, legend: l.id }, l.livery));
   }
 
-  return { LIST, PERIOD, ERA_YEAR, seatOf, ratings, ratingsFor, statsFor, team, raceTeam, parts, liveries, byId, byCode };
+  return { LIST, PERIOD, ERA_YEAR, seatOf, ratings, team, raceTeam, parts, liveries, byId, byCode };
 })();
 Object.freeze(Legends);

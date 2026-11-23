@@ -63,10 +63,10 @@ const InstCells = (function () {
 
   /** Record the cell set that produced the bytes now resident. */
   function recordKey(batch, ks, kN) {
-    const cn = batch.cells.length;
-    let res = batch._cellKey;
-    if (!res || res.length < kN) res = batch._cellKey = new Int32Array(cn);
-    for (let i = 0; i < kN; i++) res[i] = ks[i];
+    // Each caller has finished packing from scratchKeys. Keep those indices as
+    // the resident snapshot and reuse the previous snapshot for the next sweep.
+    batch._cellKeyScratch = batch._cellKey;
+    batch._cellKey = ks;
     batch._cellKeyN = kN;
   }
 
@@ -75,6 +75,15 @@ const InstCells = (function () {
     if (batch) batch._cellKeyN = -1;
   }
 
-  return { enabled, collectVisible, sameRadial, recordRadial, scratchKeys, sameKey, recordKey, invalidate };
+  // Only private mirror views call this. The previous pass must have drawn
+  // this batch, and a cull snapshot must still describe its resident bytes.
+  // A zero-count pack is just as reusable as a nonempty one.
+  function holdMirror(batch, pass, freeze) {
+    const previous = batch._mirrorCullPass;
+    batch._mirrorCullPass = pass;
+    return freeze && previous === pass - 1 && !!batch._cullPlanes;
+  }
+
+  return { enabled, collectVisible, sameRadial, recordRadial, scratchKeys, sameKey, recordKey, invalidate, holdMirror };
 })();
 Object.freeze(InstCells);

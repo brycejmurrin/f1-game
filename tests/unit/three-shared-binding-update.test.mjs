@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {parse} from 'acorn';
-const source=fs.readFileSync(new URL('../../vendor/three-0.186.1/three.webgpu.min.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../../vendor/three-0.187.0/three.webgpu.min.js',import.meta.url),'utf8');
 const ast=parse(source,{ecmaVersion:'latest',sourceType:'module'});
 const classes=ast.body.filter(n=>n.type==='ClassDeclaration');
 const bindingClass=classes.find(n=>n.body.body.some(m=>m.key?.name==='_updateBindings'));
@@ -37,7 +37,7 @@ function run({fast=false,change=null,objectGroup=false,mixed=false,throws=false}
  const nodes={groupsData:{get(k){counts.groupMapGets++;return perBinding.get(k[1]);},set(k,v){perBinding.set(k[1],v);}},updateGroup(b){counts.bindingVisits++;return updateGroup.call(this,b);}};
  const textures={get(t){let d=textureData.get(t);if(!d)textureData.set(t,d={generation:0,bindGroups:new Set()});return d;},updateTexture(t){effects.push(['texture-upload',t.id,t.version]);this.get(t).generation=t.version;},updateSampler(b){effects.push(['sampler-update',b.id]);return 'sampler-'+b.id;},needsMipmaps(){return false;}};
  const groupData=new WeakMap();
- const context={backend,nodes,textures,attributes:{update(a,type){effects.push(['storage-update',a.id,type]);}},get(o){let d=groupData.get(o);if(!d)groupData.set(o,d={});return d;}};
+ const context={backend,nodes,textures,attributes:{update(a,type){effects.push(['storage-update',a.id,type]);},get(){return {generation:0};}},get(o){let d=groupData.get(o);if(!d)groupData.set(o,d={});return d;}};
  let thrown=false;
  function make(i,node=groupNode){
   const base={id:i,groupNode:node};

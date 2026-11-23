@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
-import { Matrix4, PerspectiveCamera } from '../../vendor/three-0.186.1/three.core.min.js';
+import { Matrix4, PerspectiveCamera } from '../../vendor/three-0.187.0/three.core.min.js';
 const read = p => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 function fn(source, name) {
   const start = source.indexOf('function ' + name + '('); assert.ok(start >= 0, name);
@@ -64,9 +64,8 @@ test('tier 4 keeps the main camera view and inverse projection current across le
       camEye: [3, 2, 7], camTgt: [1, 1, -4], _camUp: [0, 1, 0],
       PerfGov: { autoTier: () => tier }, _roadReflectionTransition: { value: 0 },
       frame: { proj, invProj: inverse, viewProj: vp }, camera, _wgpu: webgpu, renderer: { coordinateSystem: 2001 },
-      _mul4Col: M4.mulTo, _projGpu: new Float32Array(16), _tmpMat4: new Matrix4(), _tmpMat4b: new Matrix4(),
-      Z01: new Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, .5, .5, 0, 0, 0, 1).elements,
-    }, '');
+      _projGpu: new Float32Array(16), _tmpMat4: new Matrix4(), _tmpMat4b: new Matrix4(),
+    }, fn(tlx, 'remapClipDepth'));
     // First seed the inverse normally, then hold the fully shed, zero-SSR state.
     for (const [label, fov, aspect, near] of [
       ['baseline', 60, 2, .3], ['FOV', 80, 2, .3], ['rotation', 80, .5, .3], ['external camera near plane', 80, .5, .9],
@@ -85,7 +84,7 @@ for (const warm of [false, true]) test(`coalesced teardown retires object and ow
   const events = [], geometry = { dispose() { events.push('geometry'); } };
   const mesh = { geometry, material: {}, parent: { remove() { events.push('remove'); } }, dispatchEvent(e) { events.push(e.type); } };
   const source = {}, runs = new Map([[source, [{ imesh: mesh }]]]);
-  const c = ctx({ _warmPending: warm, _dropQueue: [], _coRuns: runs, _instRegistry: [mesh] }, fn(tlx, 'dropWrapper') + fn(tlx, 'flushDropped') + fn(tlx, '_coDrop'));
+  const c = ctx({ _warmPending: warm, _ownershipFreeDepth: 0, _dropQueue: [], _coRuns: runs, _instRegistry: [mesh] }, fn(tlx, 'dropWrapper') + fn(tlx, 'flushDropped') + fn(tlx, '_coDrop'));
   c._coDrop(source); c._coDrop(source);
   assert.equal(runs.size, 0); assert.equal(c._instRegistry.length, 0);
   assert.equal(events.filter(e => e === 'dispose').length, warm ? 0 : 1);
@@ -100,7 +99,7 @@ for (const warm of [false, true]) test(`coalesced teardown retires object and ow
 test('releaseGeometry holds its wrappers until a scene render, bounded by DROP_LATER_MAX', () => {
   const events = [];
   const wrap = (id) => ({ id, geometry: {}, material: {}, parent: null, dispatchEvent() { events.push(id); } });
-  const c = ctx({ _warmPending: false, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 3, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 } },
+  const c = ctx({ _warmPending: false, _ownershipFreeDepth: 0, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 3, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 } },
     fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper'));
   c.dropWrapper(wrap('a'), null, true); c.dropWrapper(wrap('b'), null, true);
   assert.deepEqual(events, [], 'held: no dispose before the next scene render');
@@ -116,11 +115,26 @@ test('releaseGeometry holds its wrappers until a scene render, bounded by DROP_L
   const own = wrap('g'); c.dropWrapper(own, { dispose() { events.push('geo'); } }, true);
   assert.deepEqual(events.slice(-2), ['g', 'geo'], 'an owned geometry is never held');
 });
+// The window session-quit-memory.spec.js waits out (waitDropsSettled): a held wrapper whose flush lands under a warm
+// moves to _dropQueue and keeps its render object until the first flushDropped() after the warm settles.
+test('a held wrapper flushed under a warm in flight is released only once the warm settles', () => {
+  const events = [];
+  const m = { geometry: {}, material: {}, parent: null, dispatchEvent() { events.push('dispose'); } };
+  const c = ctx({ _warmPending: null, _ownershipFreeDepth: 0, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 } },
+    fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper') + fn(tlx, 'flushDropped'));
+  c.dropWrapper(m, null, true);
+  c._warmPending = {}; c._sceneRenders++; c.flushDropLater(false);
+  assert.deepEqual([events.length, c._dropLater.length, c._dropQueue.length, !!m.geometry], [0, 0, 1, true], 'queued, not dropped: dropLater reads 0 while warming');
+  c._sceneRenders += 5; c.flushDropped();
+  assert.deepEqual([events.length, c._dropQueue.length], [0, 1], 'further presents under the warm release nothing');
+  c._warmPending = null; c.flushDropped();
+  assert.deepEqual([events, c._dropQueue.length, m.geometry], [['dispose'], 0, null], 'the first present after the warm drops it');
+});
 test('releaseGeometry holds the coalesced run too (the instanced lit program\'s last holder); a direct _coDrop does not', () => {
   const events = [];
   const run = (id) => ({ imesh: { id, geometry: { dispose() { events.push(id + ':view'); } }, material: {}, parent: null, dispatchEvent() { events.push(id); } } });
   const later = {}, now = {};
-  const c = ctx({ _warmPending: false, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 },
+  const c = ctx({ _warmPending: false, _ownershipFreeDepth: 0, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 },
     _coRuns: new Map([[later, [run('a')]], [now, [run('b')]]]), _instRegistry: [] },
     fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper') + fn(tlx, '_coDrop'));
   c._coDrop(later, true); c._coDrop(now);
@@ -129,8 +143,12 @@ test('releaseGeometry holds the coalesced run too (the instanced lit program\'s 
   assert.deepEqual(events, ['b', 'b:view', 'a', 'a:view'], 'the held run and its own view go after the render');
 });
 for (const requested of [null, '8', '999']) for (const cap of [1, 2, 4, 8, 16]) test(`material-array detail ${requested} respects cap ${cap}`, () => {
-  const c = ctx({ materialArrayDetail: null, localStorage: { getItem: () => requested }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
+  const c = ctx({ _detailOpt: () => false, materialArrayDetail: null, localStorage: { getItem: () => requested }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
   assert.equal(c.materialArrayAnisotropy(), Math.min(requested === '8' ? 8 : 4, cap));
+});
+for (const cap of [4, 16]) test(`material-array detail on desktop ULTRA asks for 16 and respects cap ${cap}`, () => {
+  const c = ctx({ _detailOpt: () => true, materialArrayDetail: null, localStorage: { getItem: () => '8' }, renderer: { getMaxAnisotropy: () => cap } }, fn(tlx, 'materialArrayAnisotropy'));
+  assert.equal(c.materialArrayAnisotropy(), cap);
 });
 
 test('alternate init revocation prevents late canvas claim and publication', async () => {
@@ -188,7 +206,7 @@ test('expanded renderer details shows post degradation and deliberate retry, cle
 
 
 test('material-array detail stays identical between placeholder and late pack upload',()=>{
-  let requested='8';const c=ctx({materialArrayDetail:null,localStorage:{getItem:()=>requested},renderer:{getMaxAnisotropy:()=>16}},fn(tlx,'materialArrayAnisotropy'));
+  let requested='8';const c=ctx({_detailOpt:()=>false,materialArrayDetail:null,localStorage:{getItem:()=>requested},renderer:{getMaxAnisotropy:()=>16}},fn(tlx,'materialArrayAnisotropy'));
   assert.equal(c.materialArrayAnisotropy(),8);requested=null;assert.equal(c.materialArrayAnisotropy(),8,'reload applies setting changes to a new renderer only');
 });
 

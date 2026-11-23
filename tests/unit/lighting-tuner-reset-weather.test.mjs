@@ -13,6 +13,8 @@
 //   M12  LAMP DENSITY > 1 never copies a hand-aimed `signal` kind into fills
 //   M37  floodEmit (lit windows / signage) follows TWILIGHT FLOOR / RAMP like
 //        the lamp emitter in game.js
+//   #5990  RESET keeps the player's global "*" layer for every other condition;
+//        the arc's held lamp-shape knobs land once its fade settles
 //
 // Real js/lighting + js/race/weather-arc.js in node VMs, no browser.
 //
@@ -26,6 +28,7 @@ import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { fakeG } from "../helpers/fake-g.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -78,13 +81,17 @@ function bootTuner(weather = "wet", saved = null) {
   const defs = [...DEFS, { id: "perChunkLights", def: 0, min: 0, max: 1 },
     { id: "roadChunkLamps", def: 1, min: 0, max: 1 }]
     .map((d) => ({ ...d, group: "LAMPS", label: d.id, step: 0.1 }));
+  defs.push({ id: "wetOverride", group: "Wet", label: "Wetness", fmt: "auto", def: -0.05, min: -0.05, max: 1, step: 0.005, help: "Negative uses weather." });
   const h = loadStore(weather, saved, defs), nodes = new Map(), storage = new Map();
   const element = () => ({ children: [], dataset: {}, textContent: "", hidden: false,
-    classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {},
+    classList: { toggle() {}, add() {}, remove() {} }, attrs: {},
+    setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; },
     appendChild(child) { this.children.push(child); if (child.id) nodes.set(child.id, child); },
     scrollIntoView() {}, focus() {}, setSelectionRange() {} });
   const $ = (id) => { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); };
   h.ctx.document = { createElement: element, getElementById: $, body: element() };
+  vm.runInContext(read("js/ui/setting-row.js"), h.ctx, { filename: absSrc("js/ui/setting-row.js") });
+  h.ctx.SettingRow = h.ctx.window.SettingRow;
   h.ctx.localStorage = { getItem: (k) => storage.get(k), removeItem: (k) => storage.delete(k) };
   h.ctx.PerfGov = { autoShed: () => h.tier || 0 };
   h.ctx.setTimeout = () => 1; h.ctx.clearTimeout = () => {};
@@ -95,6 +102,7 @@ function bootTuner(weather = "wet", saved = null) {
   vm.runInContext(symbolSource("function setLightTune(id, v)"), h.ctx);
   Object.assign(h.G, { $, els: {}, ltKey: h.store.key, setLightTune: h.ctx.setLightTune,
     persistLightTune: h.store.persist, applyLightTune: h.store.apply,
+    copyLightTune: h.store.copyToTracks, restoreLightTune: h.store.restore,
     setTimeOfDay: () => "dusk", weather: () => h.st.weather, gfx: h.ctx.gfx });
   h.G._ltStore = h.store.profiles;
   vm.runInContext(read("js/lighting/tuner-panel.js"), h.ctx, { filename: absSrc("js/lighting/tuner-panel.js") });
@@ -104,6 +112,53 @@ function bootTuner(weather = "wet", saved = null) {
   h.input = (id, value) => { const input = $("lt-in-" + id); input.value = String(value); input.oninput(); };
   return h;
 }
+
+test("the exact lighting field commits once through the knob setter and follows slider and profile resets", () => {
+  const h = bootTuner(), field = h.$("lt-num-sunElev"), slider = h.$("lt-in-sunElev");
+  assert.deepEqual([field.type, field.min, field.max, field.step, field.inputMode], ["number", -90, 90, 0.1, "text"]);
+  assert.equal(field.getAttribute("aria-label"), "sunElev exact value");
+  Object.defineProperty(field, "valueAsNumber", { get() { return Number(this.value); } });
+  field.validity = { valid: true };
+  field.value = "-4.2";
+  field.onchange();
+  assert.equal(h.LT.sunElev, -4.2);
+  assert.equal(+slider.value, -4.2);
+  field.onchange();
+  assert.equal(h.writes.length, 1);
+  assert.deepEqual(host(h.store.profiles), { "monaco|dusk|dry": { sunElev: -4.2 } });
+  field.value = "-4.256"; field.validity.valid = false;
+  field.onchange();
+  assert.equal(field.value, "-4.2", "an off-step edit restores the saved value");
+  h.input("sunElev", -1.1);
+  assert.equal(field.value, "-1.1");
+  assert.equal(h.writes.length, 1, "dragging does not persist on each tick");
+  h.$("lt-reset").onclick();
+  assert.equal(field.value, "0");
+});
+
+test("wetness announces Auto and help after reset, and precise entry retains focus in the row", () => {
+  const h = bootTuner(), range = h.$("lt-in-wetOverride"), field = h.$("lt-num-wetOverride");
+  assert.equal(range.getAttribute("aria-valuetext"), "AUTO");
+  assert.equal(field.dataset.padStep, range.step);
+  assert.equal(field.getAttribute("aria-describedby"), range.getAttribute("aria-describedby"));
+  assert.equal(h.$(range.getAttribute("aria-describedby")).textContent, "Negative uses weather.");
+  let focused = field;
+  range.focus = () => { focused = range; };
+  const key = (key) => field.onkeydown({ key, stopPropagation() {}, preventDefault() {} });
+  field.valueAsNumber = 0.005; field.validity = { valid: true };
+  field.reportValidity = () => field.validity.valid;
+  key("Enter");
+  assert.equal(range.getAttribute("aria-valuetext"), "0.005");
+  assert.equal(focused, range);
+  focused = field; field.validity.valid = false; field.value = "42";
+  key("Enter");
+  assert.equal(focused, field);
+  key("Escape");
+  assert.equal(focused, range);
+  assert.equal(field.value, "0.005");
+  h.$("lt-reset").onclick();
+  assert.equal(range.getAttribute("aria-valuetext"), "AUTO");
+});
 
 test("lighting-1: drag updates profile count and returning to baseline restores defaults without persistence", () => {
   const h = bootTuner();
@@ -115,6 +170,48 @@ test("lighting-1: drag updates profile count and returning to baseline restores 
   assert.deepEqual(h.writes, [], "input ticks do not persist");
   h.$("lt-in-lampLevel").onchange();
   assert.equal(h.writes.length, 1, "release persists once");
+});
+
+test("My Edits skips local reset values after reload, while Full Look copies them and Undo restores the target", () => {
+  const presets = {
+    "monaco|dusk|dry": { sunElev: 35 }, "spa|dusk|dry": { sunElev: 12 },
+    "monaco|dusk|wet": { lampLevel: 0.6 }, "spa|dusk|wet": { lampLevel: 0.3 },
+  };
+  const setup = (saved) => {
+    const h = bootTuner("wet", saved);
+    h.ctx.Tracks.LIST.push({ id: "spa" });
+    h.ctx.window.LightPresets = presets;
+    h.store.apply();
+    h.panel.refreshLightTunePanel();
+    return h;
+  };
+  const first = setup({ sunElev: 9, lampLevel: 0.8 });
+  first.$("lt-reset").onclick();
+  const h = setup(first.stored.lightTune);
+  const confirmCopy = (mode) => {
+    const button = h.$("lt-spread-" + mode);
+    button.onclick();
+    button.onclick();
+    return button.textContent;
+  };
+  assert.equal(h.$("lt-profile").textContent, "MONACO · DUSK · WET  (defaults)");
+  assert.equal(confirmCopy("edits"), "NOTHING TUNED");
+  assert.equal(h.writes.length, 0);
+
+  h.input("sunAzim", 42);
+  assert.equal(h.$("lt-profile").textContent, "MONACO · DUSK · WET  (1 tuned)");
+  assert.equal(confirmCopy("edits"), "COPIED 1 ✓");
+  assert.deepEqual(h.stored.lightTune["spa|dusk|dry"], { sunAzim: 42 });
+  assert.equal(h.stored.lightTune["spa|dusk|wet"], undefined);
+  h.$("lt-spread-undo").onclick();
+  const beforeLook = host(h.stored.lightTune);
+  assert.equal(beforeLook["spa|dusk|dry"], undefined);
+
+  assert.equal(confirmCopy("look"), "COPIED 1 ✓");
+  assert.equal(h.stored.lightTune["spa|dusk|dry"].sunElev, 35);
+  assert.equal(h.stored.lightTune["spa|dusk|wet"].lampLevel, 0.6);
+  h.$("lt-spread-undo").onclick();
+  assert.deepEqual(h.stored.lightTune, beforeLook);
 });
 
 test("lighting-2: shared sun slot exports next to wet edits, distinguishes dry knobs, and loads once per key", () => {
@@ -149,12 +246,12 @@ test("lighting-3: chunk knob edits refresh dependent notes, clear latch on risin
   h.panel.refreshLightTunePanel();
   h.input("roadChunkLamps", 0); h.input("roadChunkLamps", 1);
   assert.doesNotMatch(h.$("lt-v-perChunkLights").textContent, /held/);
+  // No backend note any more: GLX, TLX and WGX all bind per-chunk lamps, so the
+  // latch outranks the governor tier and is the first gate a note can name.
   h.tier = 2; h.ctx.gfx.hasPerChunkLights = false;
   h.storage.set("apex26.perChunkOff", "1");
-  h.input("perChunkLights", 0.6);
-  assert.match(h.$("lt-v-roadChunkLamps").textContent, /not supported/);
-  h.ctx.gfx.hasPerChunkLights = true;
   h.input("perChunkLights", 0.7);
+  assert.doesNotMatch(h.$("lt-v-roadChunkLamps").textContent, /not supported/);
   assert.match(h.$("lt-v-roadChunkLamps").textContent, /display reset/);
   h.storage.delete("apex26.perChunkOff");
   h.input("perChunkLights", 0.8);
@@ -203,6 +300,26 @@ test("L8: the RESET button goes through the store, not a bare delete of the weat
   assert.match(src, /LightStore\.tuned\(\)/);
 });
 
+test("#5990: RESET of one condition keeps the global layer for the others and still shows defaults here", () => {
+  const h = loadStore("dry", { lampLevel: 0.7 });   // a legacy flat save: the player's global "*" layer
+  assert.equal(h.LT.lampLevel, 0.7);
+  h.LS.reset(); h.store.apply();
+  assert.equal(h.LT.lampLevel, 0.2, "this condition is back on its default");
+  assert.equal(h.LS.tuned(), 0, "the pinned shipped value is a reset, not an edit: (defaults)");
+  assert.deepEqual(host(h.store.profiles["*"]), { lampLevel: 0.7 }, "the global layer survives");
+  h.st.weather = "wet"; h.store.apply();
+  assert.equal(h.LT.lampLevel, 0.7, "another condition still resolves through it");
+  h.store.set("lampLevel", 0.7);
+  assert.equal(h.LS.tuned(), 0, "an edit equal to the global layer stores nothing");
+});
+
+test("#5990: a RESET with no global layer writes no mask", () => {
+  const h = loadStore("dry");
+  h.store.set("lampLevel", 0.9);
+  h.LS.reset();
+  assert.deepEqual(host(h.store.profiles), {});
+});
+
 // ── R3-PERSISTENCE-3: legacy per-weather sun edits ─────────────────────────
 test("R3-PERSISTENCE-3: a pre-10-04 wet sun edit moves to |dry at load, applies, and the export carries no dead entry", () => {
   const h = loadStore("wet", { "monaco|dusk|wet": { sunElev: -6, sunAzim: 40, lampLevel: 0.5 } });
@@ -244,13 +361,13 @@ function bootArc({ headless = false } = {}) {
   ctx.GameAudio = { startRain() {}, stopRain() {} };
   vm.runInContext(read("js/race/weather-arc.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/race/weather-arc.js") });
   const applied = [];
-  const G = {
+  const G = fakeG({
     raceWeather: "dry", soundOn: false, track: {}, headlessMode: headless, frame: { wetness: 0 },
     announce() {}, simSeed: () => 1, raceRound: 0, lapsTarget: 3, raceLaps: 3, netPlay: { active: () => false },
     applyRaceSettings: (b) => applied.push(b),
-    isWetRoad: () => G.raceWeather === "wet" || G.raceWeather === "rain", isRaining: () => G.raceWeather === "rain",
+    isWetRoad: () => G.raceWeather === "wet" || G.raceWeather === "rain",
     initRainDrops() {}, trackWetness: () => 1,
-  };
+  });
   const wa = ctx.WeatherArc.create(G, { isTimeTrial: () => false, isQuali: () => false });
   return { G, wa, rain, applied };
 }
@@ -308,10 +425,12 @@ function bootAtmo() {
   vm.runInContext("LightTune = { LT: LightKnobs.LT, TUNE_DEFS: LightKnobs.TUNE_DEFS, buildTrackLights: () => [] };", sandbox);
   vm.runInContext(read("js/lighting/profiles.js"), sandbox, { filename: absSrc("js/lighting/profiles.js") });
   const saved = {};
-  const G = {
+  const G = fakeG({
     clamp: (v, a, b) => Math.min(b, Math.max(a, v)),
     store: { get: (k, d) => (k in saved ? saved[k] : d), set: (k, v) => { saved[k] = JSON.parse(JSON.stringify(v)); } },
-    satAdjust: (c) => c, isRaining: () => G.raceWeather === "rain", isWetRoad: () => G.raceWeather === "rain" || G.raceWeather === "wet",
+    // the atmosphere module writes these real G members (js/game.js declares them)
+    _cloudBase: undefined, _ltBase: undefined, _ltFlash: 0, _ltNextT: 0, _lastFloodEmit: undefined,
+    satAdjust: (c) => c, isWetRoad: () => G.raceWeather === "rain" || G.raceWeather === "wet",
     isFloodActiveSession: () => false, _nightAmbientBand: () => 0, initRainDrops: () => {},
     applyLightTune: (f, o) => ltStore.apply(f, o), applyRaceSettings: (b) => atmo.applyRaceSettings(b),
     frame: { ambientSky: [0.3, 0.3, 0.3], ambientGround: [0.1, 0.1, 0.1], sunDir: [0, 1, 0], sunColor: [1, 1, 1], fogColor: [0.5, 0.5, 0.5] },
@@ -319,10 +438,10 @@ function bootAtmo() {
     gfx: null, state: "race", raceTimeOfDay: "default", raceWeather: "dry",
     track: { def: { id: "t", night: false, palette: { sunDir: [0.4, 0.7, 0.3], sunColor: [1, 0.95, 0.9], sun: [1, 0.95, 0.9],
       ambientSky: [0.26, 0.33, 0.50], ambientGround: [0.24, 0.19, 0.12], zenith: [0.1, 0.3, 0.8], horizon: [0.7, 0.8, 0.9] } } },
-  };
+  });
   const ltStore = vm.runInContext("LightStore", sandbox).create(G);
   const atmo = vm.runInContext("Atmosphere", sandbox).create(G);
-  return { G, atmo, LT: vm.runInContext("LightKnobs.LT", sandbox) };
+  return { G, atmo, ltStore, LT: vm.runInContext("LightKnobs.LT", sandbox) };
 }
 
 test("M11: a blended re-apply that starts mid-strike fades from the pre-strike look", () => {
@@ -352,6 +471,30 @@ test("M11: with no strike the fade source is still the frame (unchanged behaviou
   G.raceWeather = "dry";
   atmo.applyRaceSettings(true);
   assert.deepEqual(host(G.frame.ambientSky), [0.9, 0.9, 0.9]);
+});
+
+test("#5990: the held lamp-shape knobs land when the weather fade settles, in one rebuild", () => {
+  const { G, atmo, ltStore, LT } = bootAtmo();
+  G.raceWeather = "rain";
+  const rainKey = ltStore.key();
+  ltStore.profiles = { [rainKey]: { lampDensity: 1.6 } };
+  G.raceWeather = "dry";
+  atmo.applyRaceSettings();
+  const dry = LT.lampDensity;
+  assert.notEqual(dry, 1.6);
+  G.track._lights = ["built"];
+  G.raceWeather = "rain";
+  atmo.applyRaceSettings(true);   // the arc's blended flip
+  atmo.tick(10);
+  assert.equal(LT.lampDensity, dry, "held through the fade");
+  assert.deepEqual(host(G.track._lights), ["built"], "no rebuild mid-fade");
+  atmo.tick(20);
+  assert.equal(atmo.wxBlend(), null, "the fade is over");
+  assert.equal(LT.lampDensity, 1.6, "the new weather's lamp density landed");
+  assert.equal(G.track._lights, null, "one rebuild at the end");
+  G.track._lights = ["rebuilt"];
+  atmo.tick(1);
+  assert.deepEqual(host(G.track._lights), ["rebuilt"], "and only one");
 });
 
 test("M37: floodEmit follows the TWILIGHT FLOOR / RAMP knobs (relational, no copy of the formula)", () => {
@@ -433,4 +576,41 @@ test("M12: fills still inherit an ordinary mast kind (the circuit's lamp colour)
   const track = ringTrack("sodium");
   const amber = redness(api.buildTrackLights(track)).filter((r) => r > 1.5);
   assert.ok(amber.length > track.lampPosts.length, "sodium amber carried onto the fill lamps");
+});
+
+test("#5041: TIME / WEATHER preview chips stand down in a live VS FRIEND race (the sim keeps stepping under the net pause)", () => {
+  const h = bootTuner("dry");
+  const picks = [];
+  let net = true;
+  h.G.netPlay = { active: () => net };
+  h.G.setTimeOfDay = (t) => { if (t != null) picks.push("tod:" + t); return "dusk"; };
+  h.G.weather = (w) => { if (w != null) picks.push("wx:" + w); return h.st.weather; };
+  h.G.els.pmsettings = { hidden: false };
+  // The panel destructured the setters at create(); rebuild it (chips too) on the spies.
+  h.$("lt-preview").dataset = {};
+  h.panel = vm.runInContext("TunerPanel", h.ctx).create(h.G);
+  h.panel.buildLightTunePanel();
+  h.$("pm-lighting").onclick();
+  assert.equal(h.$("lt-preview").hidden, true, "the chip rows are hidden while a net race is live");
+  h.$("lt-wx-wet").onclick(); h.$("lt-tod-night").onclick();
+  assert.deepEqual(picks, [], "a chip reached through a stale DOM still changes nothing");
+  h.panel.closeLightTuner(false);
+  net = false;
+  h.$("pm-lighting").onclick();
+  assert.equal(h.$("lt-preview").hidden, false, "single player keeps the preview");
+  h.$("lt-wx-wet").onclick();
+  assert.deepEqual(picks, ["wx:wet"], "and the chips still preview there");
+});
+
+test("#5066: LIGHTING DONE gives back VISUAL STUDIO (its tool page), never the HUD & CAMERA page", () => {
+  const h = bootTuner("dry");
+  h.G.els.pmsettings = { hidden: false }; h.G.paused = true;
+  h.$("pm-panel-visual").hidden = false; h.$("pm-panel-display").hidden = true;
+  h.$("pm-lighting").onclick();
+  assert.equal(h.G.els.pmsettings.hidden, true);
+  assert.equal(h.$("pm-panel-visual").hidden, true);
+  h.$("lt-close").onclick();
+  assert.equal(h.G.els.pmsettings.hidden, false);
+  assert.equal(h.$("pm-panel-visual").hidden, false);
+  assert.equal(h.$("pm-panel-display").hidden, true);
 });

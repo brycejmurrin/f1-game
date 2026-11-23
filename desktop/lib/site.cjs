@@ -76,4 +76,5 @@ function assertStagedSite(dir) {
   return ver;
 }
 
+// isCurrentStage is also imported by mobile/scripts/sync-web.mjs (same HEAD stamp rule).
 module.exports = { resolveSiteDir, extraResourcesSiteFrom, assertStagedSite, stagedSha, repoHead, isCurrentStage };

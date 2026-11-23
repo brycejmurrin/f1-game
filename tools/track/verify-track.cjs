@@ -20,6 +20,11 @@
 // the build logged. The VM used to stub console to silence, so a build that
 // warned "suppressed backdrop=295" reported plain OK.
 // Failure: prints the error and exits 1. The report never changes the exit code.
+// A shipped circuit also fails on its DATA (defChecks): `turns` unique, in lap
+// order and in [0,1]; `lengthKm` within 4 % of the built centreline; and no RED
+// from the designer's road rules (TrackValidate.judge: crossing at grade,
+// overlap, fold, …) beyond verify-track-baseline.json's shrink-only exceptions.
+// The guard builds with the baked asset pack, as tools/lib/track-build-vm.cjs does.
 
 "use strict";
 
@@ -48,7 +53,7 @@ if (args[0] === "--all") {
   try {
     // APEX_CIRCUITS narrows --all to a circuit-only pull request's circuits
     // (tools/lib/circuit-scope.cjs); unset = every track in Tracks.LIST.
-    uniqueIds = require("../lib/circuit-scope.cjs").scope(loadTrackIds());
+    uniqueIds = require("../lib/circuit-scope.cjs").scopeAll(loadTrackIds(), "verify-track --all");
   } catch (e) {
     console.error("FAIL: could not load track ids:", e.message);
     process.exit(1);
@@ -75,7 +80,7 @@ if (args[0] === "--all") {
   // designer's export), built by the same guard the 52 shipped circuits pass.
   const arg = args[1];
   if (!arg) { console.error("Usage: node tools/track/verify-track.cjs --custom <APXT1 code | design.apextrack.json> [--quiet]"); process.exit(1); }
-  const Tracks = buildContext(null, { quiet });
+  const Tracks = buildContext(null, { quiet, assets: true });
   const ctx = customContext(Tracks);
   const text = /^APXT\d+\./.test(arg) ? arg : fs.readFileSync(arg, "utf8");
   const fromFile = text === arg ? null : ctx.TrackCodec.fromFile(JSON.parse(text));
@@ -161,6 +166,12 @@ function buildContext(rootOverride, opts) {
   };
   // Many IIFEs reference `window.Foo` — make window an alias for the sandbox
   sandbox.window = sandbox;
+  // The baked asset pack, as a browser build (and tools/lib/track-build-vm.cjs)
+  // has it: without `Assets` bakedModel() returns false at its first line, so
+  // the guard built every circuit without its 36 baked models. Opt-in here
+  // (`assets: true`) because ~50 suites reuse this context for numbers measured
+  // without the pack; the CLI guard itself (verifyTrack, --all, --custom) asks.
+  if (opts.assets) sandbox.Assets = require("../lib/pack-assets.cjs").packAssets();
   const ctx = vm.createContext(sandbox);
 
   // Run a source file in the context, converting top-level `const` declarations
@@ -218,7 +229,7 @@ function loadTrackIds() {
 
 function verifyTrack(id, opts) {
   opts = opts || {};
-  const Tracks = buildContext(null, { quiet: !!opts.quiet });
+  const Tracks = buildContext(null, { quiet: !!opts.quiet, assets: opts.assets !== false });
 
   const def = Tracks.LIST.find(d => d.id === id);
   if (!def) {
@@ -329,6 +340,11 @@ function verifyDef(Tracks, def, opts) {
       "`node tools/track/centreline-kinks.cjs " + id + "` lists them; add a control point at the corner entry (#2209)");
   }
 
+  // Circuit DATA checks the build itself never trips on (2026-11-10: a
+  // centreline crossing itself at grade, duplicated / out-of-order turns, an
+  // apex at frac 1.7 and a lengthKm 20 % off the built lap all reported OK).
+  if (Tracks.LIST.some((t) => t.id === id) && !def.custom) defChecks(Tracks, def);
+
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +
     (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
   if (folds) console.log(folds);
@@ -340,6 +356,47 @@ function verifyDef(Tracks, def, opts) {
     `surface folds ${cl.foldCount}` + (cl.foldCount ? ` (nodes ${cl.foldNodes.join(",")}${cl.foldCount > cl.foldNodes.length ? ",…" : ""})` : ""));
   if (!opts.quiet) reportDiagnostics(diagnostics, Tracks._vmConsole || []);
   return { id, road, terrain, props, inst, total, folds, centreline: cl || null, diagnostics, track };
+}
+
+// lengthKm is the HUD / picker figure; it must describe the lap the engine
+// builds. Measured 2026-11-10 over all 52 circuits: the built centreline runs
+// -2.83 % (indianapolis) to +0.51 % (mugello) of lengthKm, median ~-0.6 %. 4 %
+// passes the whole fleet honestly and still catches a mistyped length.
+function lengthTol() { return 0.04; }   // a function, not a const: main() runs above this line
+function verifyBaseline() {
+  return JSON.parse(fs.readFileSync(path.join(__dirname, "verify-track-baseline.json"), "utf8"));
+}
+
+/** Throws on the first failing data check for a shipped def: `turns` (unique,
+ *  strictly increasing, every fraction in [0,1]), `lengthKm` against the built
+ *  centreline, and the editor's road rules (TrackValidate.judge — a crossing at
+ *  grade, an overlap, a fold, …) with verify-track-baseline.json's shrink-only
+ *  per-circuit exceptions. */
+function defChecks(Tracks, def, baseline) {
+  const id = def.id;
+  const turns = def.turns;
+  if (turns != null) {
+    if (!Array.isArray(turns)) throw new Error(`turns must be an array of lap fractions, got ${typeof turns}`);
+    turns.forEach((f, i) => {
+      if (typeof f !== "number" || !(f >= 0 && f <= 1)) throw new Error(`turns[${i}] = ${f} is not a lap fraction in [0,1]`);
+      if (i && f === turns[i - 1]) throw new Error(`turns[${i}] = ${f} duplicates turns[${i - 1}]`);
+      if (i && f < turns[i - 1]) throw new Error(`turns[${i}] = ${f} is before turns[${i - 1}] = ${turns[i - 1]} — turns run in lap order`);
+    });
+  }
+  const tr = Tracks.buildCenterline(def);
+  if (typeof def.lengthKm === "number") {
+    const builtKm = tr.total / 1000, off = builtKm / def.lengthKm - 1;
+    if (!(Math.abs(off) <= lengthTol()))
+      throw new Error(`lengthKm ${def.lengthKm} is ${(off * 100).toFixed(1)} % off the built centreline ${builtKm.toFixed(3)} km (tolerance ${lengthTol() * 100} %)`);
+  }
+  const V = customContext(Tracks).TrackValidate;
+  const reds = V.judge(tr, def).issues.filter((i) => i.level === "red");
+  const allowed = new Set(((baseline || verifyBaseline()).judgeReds || {})[id] || []);
+  const bad = reds.filter((i) => !allowed.has(i.code));
+  if (bad.length) throw new Error(`road rules (TrackValidate.judge) read RED: ` +
+    bad.map((i) => `${i.code} — ${i.msg}` + (i.s != null ? ` at ${Math.round(i.s)} m` : "")).join("; "));
+  const stale = [...allowed].filter((c) => !reds.some((i) => i.code === c));
+  if (stale.length) throw new Error(`verify-track-baseline.json lists ${id}: ${stale.join(", ")} but it no longer reads RED — drop it (shrink-only)`);
 }
 
 // Circuits whose CENTRELINE kinks tighter than the half-width somewhere (turn
@@ -455,4 +512,4 @@ function reportDiagnostics(diagnostics, consoleLines) {
 }
 
 // Reusable VM harness — consumed by tests (scenery-api-contract, foundation).
-module.exports = { buildContext, loadTrackIds, verifyTrack, verifyDef, customContext, customDef };
+module.exports = { buildContext, loadTrackIds, verifyTrack, verifyDef, defChecks, customContext, customDef, LENGTH_TOL: lengthTol() };

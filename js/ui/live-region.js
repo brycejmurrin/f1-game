@@ -1,6 +1,6 @@
 /* Apex 26 — LiveRegion: the ONE writer of #announce-live, the always-present
    polite region screen readers hear the race through. Four voices used to
-   write it on their own handles — the radio card (js/game.js showAnnounce),
+   write it on their own handles — the radio card (js/race/announce-banner.js),
    the flag (js/ui/hud.js sayFlag), the spoken HUD (js/ui/hud-readouts.js
    speaker) and the SESSION ONLY warning (js/ui/select-screen.js) — each as
    "clear, then write 60 ms later". Two in one tick landed ~1 ms apart, so the
@@ -26,8 +26,25 @@ const LiveRegion = (function () {
   const queue = [];
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
+  // An open modal makes #announce-live inert: speak through a polite twin inside the topmost one (UI hunt 3).
+  function modalRegion() {
+    let top = null;
+    try { const open = document.querySelectorAll(":modal"); top = open.length ? open[open.length - 1] : null; } catch (_) { return null; }
+    if (!top) return null;
+    let r = top.querySelector(":scope > [data-announce-modal]");
+    if (!r) {
+      r = document.createElement("div");
+      r.setAttribute("data-announce-modal", "");
+      r.setAttribute("role", "status"); r.setAttribute("aria-live", "polite"); r.setAttribute("aria-atomic", "true");
+      top.appendChild(r);
+    }
+    return r;
+  }
   function region() {
-    if (!el && typeof document !== "undefined" && document.getElementById) el = document.getElementById("announce-live");
+    if (typeof document === "undefined") return null;
+    const inModal = document.querySelectorAll && modalRegion();
+    if (inModal) return inModal;
+    if (!el && document.getElementById) el = document.getElementById("announce-live");
     return el;
   }
   // radioKind("penalty-hit") -> "penalty"; the radio card's other kinds are radio.
@@ -56,6 +73,12 @@ const LiveRegion = (function () {
     r.textContent = "";
     phase = "beat";
     timer = setTimeout(() => {
+      // The node captured at say() is wrong once a dialog opens or closes in
+      // this beat: showModal() makes #announce-live inert, and a closed dialog
+      // takes its twin with it. Speak on the region the reader is watching,
+      // with a fresh clear-then-write so the change is announced.
+      const live = region();
+      if (live !== r) { r.textContent = ""; write(item); return; }
       r.textContent = item.text;
       item.at = now();
       phase = "hold";
@@ -94,10 +117,25 @@ const LiveRegion = (function () {
     return false;
   }
 
-  /** A new session: nothing queued from the last one is read into this one. */
+  /** A new session: nothing queued from the last one is read into this one.
+   *  Clear every polite region. resetRace() runs while a dialog can still be
+   *  :modal (RESTART leaves #pausemenu up until clearMenuScreens), and
+   *  region() would blank only that dialog's twin — browse mode then kept the
+   *  last race call in #announce-live, and a closed dialog kept its own. */
   function reset() {
     clearTimeout(timer);
     timer = 0; phase = "idle"; current = null; queue.length = 0;
+    if (typeof document === "undefined") return;
+    const live = document.getElementById && document.getElementById("announce-live");
+    if (live) { live.textContent = ""; el = live; }
+    if (!document.querySelectorAll) return;
+    const blank = (n) => { if (n) n.textContent = ""; };
+    let twins = [];
+    try { twins = document.querySelectorAll("[data-announce-modal]"); } catch (_) { twins = []; }
+    for (const n of twins) blank(n);
+    let modals = [];
+    try { modals = document.querySelectorAll(":modal"); } catch (_) { modals = []; }
+    for (const top of modals) blank(top && top.querySelector && top.querySelector(":scope > [data-announce-modal]"));
   }
 
   /** Test / debug view of the announcer (never a source of game state). */

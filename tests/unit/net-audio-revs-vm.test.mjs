@@ -38,7 +38,7 @@ function fakeSession() {
 
 async function bootRaceNetGuest() {
   let fa = null;
-  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  const g = await createGame({ carMeshes: false, storage: { sound: true }, onSandbox: (sb) => { fa = install(sb); } });
   const sb = g.sandbox;
   sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse" });
   await settle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);

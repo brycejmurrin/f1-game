@@ -33,6 +33,8 @@ const SettingsNav = (function () {
       panel: () => document.getElementById("pm-panel-visual"), door: () => document.getElementById("pm-open-visual") }),
     progress: Object.freeze({ title: "PROGRESS", parent: "home", scope: "progress",
       panel: () => document.getElementById("pm-panel-progress"), door: () => document.getElementById("pm-open-progress") }),
+    credits: Object.freeze({ title: "ABOUT & CREDITS", parent: "home", scope: "info",
+      panel: () => document.getElementById("pm-panel-credits"), door: () => document.getElementById("pm-open-credits") }),
     practice: Object.freeze({ title: "PRACTICE", parent: null, scope: "session",
       panel: () => document.getElementById("pm-panel-practice"), door: null }),
     strategy: Object.freeze({ title: "PIT STRATEGY", parent: null, scope: "session",
@@ -63,13 +65,121 @@ const SettingsNav = (function () {
     }
   }
 
+  /* #4798 settings-lazy gate. Row-wiring initialisers (SettingRow.wire and the
+     like: no eval-time state, nothing a player sees before Settings) queue here
+     instead of running in the DOMContentLoaded task. The queue flushes, in
+     registration order, on the first Settings page enter, the first pointerdown
+     or keydown anywhere (capture, so it precedes the click / key it serves), or
+     idle (4 s cap). A complete document (tests, late loads) runs fn at once.
+     Callers queue from a DCL listener: deferred scripts evaluate at "interactive". */
+  let lazyQ = null;
+  function flushLazy() {
+    const q = lazyQ;
+    if (!q) return;
+    lazyQ = null;
+    if (typeof document !== "undefined") for (const t of ["pointerdown", "keydown"]) document.removeEventListener(t, flushLazy, true);
+    for (const fn of q) { try { fn(); } catch (e) { Log.warn("game", "SettingsNav.lazy init failed: " + (e && e.message)); } }
+  }
+  function lazy(fn) {
+    if (typeof fn !== "function") return;
+    if (typeof document === "undefined" || document.readyState === "complete") {
+      if (lazyQ) { lazyQ.push(fn); flushLazy(); } else fn();
+      return;
+    }
+    if (lazyQ) { lazyQ.push(fn); return; }
+    lazyQ = [fn];
+    for (const t of ["pointerdown", "keydown"]) document.addEventListener(t, flushLazy, true);
+    if (typeof requestIdleCallback === "function") requestIdleCallback(flushLazy, { timeout: 4000 });
+    else setTimeout(flushLazy, 1500);
+  }
+  // First in enterFns: a page's rows are wired before any other enter handler reads them.
+  enterFns.push(flushLazy);
+
+  // LAZY_UI_PRESETS: APPEARANCE's LAYOUT PRESET row (js/ui/layout-presets.js)
+  // loads on the first APPEARANCE enter, or on a SEPARATE orientation swap (AppearanceStudio, #4529);
+  // a failed load logs and the next call retries. presets() resolves true once LayoutPresets exists.
+  let presetsLoad = null;
+  const presetsLoaded = new Set();
+  function presets() {
+    const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
+    if (presetsLoad) return presetsLoad;
+    if (typeof LayoutPresets !== "undefined" && window.AppearanceArrangementPicker) return Promise.resolve(true);
+    if (!R || !R.LAZY_UI_PRESETS || typeof ScriptLoader === "undefined") return Promise.resolve(false);
+    const fail = (e) => { presetsLoad = null; Log.warn("ui", "the layout preset row did not load" + (e ? ": " + (e.message || e) : "")); return false; };
+    const files = R.LAZY_UI_PRESETS.filter(file => !["js/ui/screen-arranger.js", "js/ui/hud-arrange.js", "js/ui/hud-layout-editor.js", "js/ui/desktop-graphics.js"].includes(file));
+    presetsLoad = ScriptLoader.create().load(files, R.LAZY_UI_PRESETS_EDGES || [], { strict: true, loaded: presetsLoaded })
+      .then((ok) => (!ok || typeof LayoutPresets === "undefined" ? fail() : true), fail);
+    return presetsLoad;
+  }
+  async function graphicsDetails() {
+    const host = panel("graphics");
+    if (!host || typeof GLX === "undefined") return false;
+    let retry = host.querySelector("[data-graphics-retry]");
+    const mount = () => {
+      DesktopGraphics.mount();
+      const focused = retry && document.activeElement === retry;
+      retry?.remove();
+      if (focused && !host.hidden) host.querySelector("[data-desktop-graphics] summary")?.focus({ preventScroll: true });
+      return true;
+    };
+    if (typeof DesktopGraphics !== "undefined") return mount();
+    if (!retry) {
+      retry = document.createElement("button");
+      retry.type = "button"; retry.setAttribute("data-graphics-retry", ""); retry.className = "adv-more-btn";
+      retry.onclick = graphicsDetails;
+      host.appendChild(retry);
+    }
+    if (retry.disabled) return false;
+    retry.disabled = true;
+    retry.textContent = "Loading graphics details…";
+    try {
+      if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/desktop-graphics.js"], [], { strict: true, loaded: presetsLoaded });
+      if (typeof DesktopGraphics !== "undefined") return mount();
+    } catch (e) { Log.warn("ui", "Graphics details unavailable: " + e); }
+    retry.disabled = false;
+    retry.textContent = "Graphics details unavailable · Retry";
+    return false;
+  }
+  enterFns.push((id) => {
+    if (id === "appearance") {
+      presets();
+      if (typeof AppearanceStudio !== "undefined" && AppearanceStudio.loaded()) AppearanceStudio.initUI();
+    }
+    if (id === "graphics") graphicsDetails();
+  });
+  if (typeof document !== "undefined" && document.addEventListener) {
+    const owners = ["js/ui/screen-regions.js", "js/ui/screen-placement.js"];
+    const loadPlacement = (files) => ScriptLoader.create().load(files, [[owners[0], owners[1]]], { strict: true, loaded: presetsLoaded });
+    if (typeof GameStore !== "undefined" && typeof ScriptLoader !== "undefined") {
+      const restoreSavedLayout = () => {
+        if (typeof ScreenPlacement !== "undefined" || !GameStore.store.get("screenPlacement", null)) return;
+        loadPlacement(owners).catch(error => Log.warn("ui", "Saved layout could not load: " + error.message));
+      };
+      restoreSavedLayout();
+      GameStore.store.subscribe?.(change => {
+        if (change.key === "screenPlacement" || change.key === null) restoreSavedLayout();
+      });
+    }
+    document.addEventListener("apex:spotify-arrange-return", async () => {
+      try {
+        if (!await loadPlacement([...owners, "js/ui/screen-arranger.js"])) return;
+        const player = document.getElementById("spotifypanel");
+        if (!player || player.hidden) return;
+        const navigation = window.ScreenRegions[Symbol.for("apex.arrangementRoute")];
+        navigation.prepare = false;
+        navigation.pending = "spotifypanel";
+        navigation.reveal("spotifypanel");
+      } catch (error) { Log.warn("ui", "Player arrangement could not load: " + error.message); }
+    });
+  }
+
   function panels() {
     return Object.fromEntries(Object.keys(routes).filter((id) => id !== "home").map((id) => [id, panel(id)]));
   }
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
-    let current = "home", generation = 0, search = null;
+    let current = "home", generation = 0, /** @type {ReturnType<typeof SettingsSearch.create> | null} */ search = null;
     // The index door that opened a page. A dialog does not know about focus
     // changes inside its own sheet, so keep this explicitly and restore it on
     // the same page-stack BACK path that Escape presses.
@@ -95,7 +205,7 @@ const SettingsNav = (function () {
       return true;
     };
     let stopRestore = () => {};
-    const restoreFocus = (el) => {
+    const restoreFocus = (el, scroll) => {
       stopRestore();
       const placed = (typeof SettingsSearch !== "undefined" && SettingsSearch.reveal(el)) || quietFocus(el);
       if (placed && typeof ResizeObserver === "function") {
@@ -104,6 +214,12 @@ const SettingsNav = (function () {
         // Follow those size changes only until the player's next interaction.
         const observer = new ResizeObserver(() => {
           if (request !== generation || document.activeElement !== el || !visible(el)) { stopRestore(); return; }
+          // The sheet can change WIDTH between pages (a phone at 70 %): the saved offset only fits the settled one (#5358).
+          // Null-guard: a missing body must not throw — that would skip stop() and leave the window capture listeners.
+          if (scroll != null) {
+            const body = document.getElementById("pm-settings-body");
+            if (body) body.scrollTop = scroll;
+          }
           el.scrollIntoView({ block: "nearest" });
         });
         const events = ["pointerdown", "keydown", "wheel", "touchstart"];
@@ -161,22 +277,30 @@ const SettingsNav = (function () {
         try { window.ScrollFade.refresh(); } catch (_) { /* detached */ }
       }, 48);
     }
-    // audioTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
+    // bundleTried: undefined = not yet, "ok" / "failed" = the lazy bundle already
     // answered once for this open. Never gate twice: a failed ensureAudio leaves
     // the stub resident, so re-gating would retry forever. (Ship #1320 used a
     // boolean `ensured` flag; keep the richer "failed" → offline note path.)
-    function show(want, focus, after, audioTried) {
+    function show(want, focus, after, bundleTried) {
       stopRestore();
+      flushLazy();
       const request = ++generation;
       const id = Object.hasOwn(routes, want) ? want : "home";
       mark("apex:settings:show");
       // LAZY_AUDIO: same gate as the audio door — SettingRow must wire before
       // #audioset is revealed (programmatic show("audio") included). The door
       // click goes through here too, so it asks the bundle exactly once.
-      if (id === "audio" && !audioTried && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
-          && (typeof GameAudio === "undefined" || GameAudio._stub)) {
+      const loadAudio = id === "audio" && typeof AudioPanel !== "undefined" && typeof AudioPanel._ensure === "function"
+        && (typeof GameAudio === "undefined" || GameAudio._stub);
+      const loadTouch = id === "controls" && typeof Input !== "undefined" && Input.setPedalSlide
+        && typeof TouchButtonSettings === "undefined" && typeof ScriptLoader !== "undefined";
+      const loadFiles = id === "files" && typeof SettingsExport !== "undefined" && SettingsExport.loaded && !SettingsExport.loaded();
+      const loadAppearance = id === "appearance" && typeof AppearanceStudio !== "undefined" && !AppearanceStudio.loaded();
+      if (!bundleTried && (loadAudio || loadTouch || loadFiles || loadAppearance)) {
         let asked;
-        try { asked = Promise.resolve(AudioPanel._ensure()); } catch (_) { asked = Promise.resolve(false); }
+        try { asked = Promise.resolve(loadAppearance ? AppearanceStudio.ensureLoaded() : loadFiles ? SettingsExport.ready() : loadAudio ? AudioPanel._ensure()
+          : ScriptLoader.create().load(["js/ui/touch-button-settings.js"], [], { strict: true })); }
+        catch (_) { asked = Promise.resolve(false); }
         asked.then((ok) => ok, () => false).then((ok) => {
           // Closing hides this sheet; reopening calls showCurrent and owns a
           // new generation, even if the old audio request is still loading.
@@ -222,7 +346,8 @@ const SettingsNav = (function () {
         SettingsExport.ensureMounted();
       }
       Log.info("game", `SettingsNav.show ${id}`);
-      if (id === "audio") audioNote(pages.audio, audioTried === "failed");
+      if (id === "audio" || id === "controls" || id === "appearance") bundleNote(pages[id], id, bundleTried === "failed");
+      if (id === "controls" && typeof TouchButtonSettings !== "undefined") TouchButtonSettings.mountControls(_store, onSelect);
       // Lifecycle hooks also cover programmatic/search navigation, after lazy
       // loading, and before focus resolves newly mounted page controls.
       if (id === "progress" && typeof Badges !== "undefined") Badges.render();
@@ -239,17 +364,22 @@ const SettingsNav = (function () {
 
     // The audio bundle could not load (offline / UPDATE READY): the page still
     // reveals with the stub engine, so say why the sliders are silent.
-    function audioNote(panel, failed) {
-      let n = document.getElementById("audioset-offline");
+    function bundleNote(panel, page, failed) {
+      const noteId = page === "audio" ? "audioset-offline" : page === "appearance" ? "pm-appearance-offline" : "pm-touch-offline";
+      let n = panel?.querySelector("#" + noteId);
       if (!failed && !n) return;
       if (!n) {
         if (!panel || typeof document.createElement !== "function") return;
-        n = document.createElement("p");
-        n.id = "audioset-offline"; n.className = "adv-help"; n.setAttribute("role", "status");
+        n = document.createElement("p"); n.id = noteId;
+        n.className = "adv-help"; n.setAttribute("role", "status");
         panel.insertBefore(n, panel.firstChild);
       }
-      n.textContent = "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD";
+      // A role=status filled as it is inserted is not announced: say it once (uihunt4 #2).
+      const say = failed && (n.hidden || !n.textContent) && typeof LiveRegion !== "undefined";
+      n.textContent = page === "audio" ? "AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD" :
+        page === "appearance" ? "Appearance editor could not load. Reopen Appearance to retry." : "Touch button settings could not load. Reopen Controls to retry.";
       n.hidden = !failed;
+      if (say) LiveRegion.say(n.textContent, "hud");
     }
 
     function back() {
@@ -263,7 +393,7 @@ const SettingsNav = (function () {
         if (body) body.scrollTop = parent.scroll;
         // A rotation or scale change can move the launcher beyond its saved
         // offset. Keep the returning control visible in the current layout.
-        restoreFocus(parent.door) || focusPage(parent.page);
+        restoreFocus(parent.door, parent.scroll) || focusPage(parent.page);
         return false;
       }
       show("home", false);
@@ -286,6 +416,15 @@ const SettingsNav = (function () {
       if (search) search.cancel();
       enter(id, door);
     };
+    const index = document.getElementById("pm-settings-index");
+    if (index && !index.querySelector("h3")) {
+      for (const first of index.querySelectorAll("[data-settings-category]")) {
+        const heading = document.createElement("h3");
+        heading.className = "pm-group-h";
+        heading.textContent = first.dataset.settingsCategory;
+        index.insertBefore(heading, first);
+      }
+    }
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;
@@ -312,8 +451,10 @@ const SettingsNav = (function () {
     live = {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
-      // to a stale element from an earlier dialog instance.
-      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; if (search) search.cancel(); show("home", false); },
+      // to a stale element from an earlier dialog instance, and empty the
+      // search (a close is not signalled here: invalidate() also runs when a
+      // result steps into Race Settings, which returnToSearch() comes back from).
+      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; if (search) search.reset(); show("home", false); },
       returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
@@ -324,12 +465,13 @@ const SettingsNav = (function () {
 
   return {
     create, routes, panel, breadcrumb,
-    show: (id, focus) => { if (live) live.show(id, focus); },
+    show: (id, focus, after) => { if (live) live.show(id, focus, after); },
     current: () => live ? live.current() : "home",
     showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
+    lazy, flushLazy, presets, graphicsDetails,
   };
 })();
 Object.freeze(SettingsNav);

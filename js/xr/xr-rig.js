@@ -47,16 +47,28 @@ const XrRig = (function () {
    */
   function worldFromAnchorTo(out, eye, fwd, up) {
     let fx = fwd[0], fy = fwd[1], fz = fwd[2];
-    let fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+    let fl = Math.hypot(fx, fy, fz);
+    // Degenerate look (zero or near-zero) → car-forward +Z so the basis stays finite.
+    if (!(fl > 1e-8)) { fx = 0; fy = 0; fz = 1; }
+    else { fx /= fl; fy /= fl; fz /= fl; }
     let ux = up[0], uy = up[1], uz = up[2];
     let ul = Math.hypot(ux, uy, uz) || 1; ux /= ul; uy /= ul; uz /= ul;
     // right = fwd × up? No — right = up × (−fwd wait): OpenGL −Z is look dir,
     // so camera forward in world is +fwd for the driver, which is −Z in view.
     // right = normalize(cross(fwd, up))? Standard lookAt: right = cross(up, z)
     // where z = normalize(eye-target) = −fwd.
-    const zx = -fx, zy = -fy, zz = -fz;
+    let zx = -fx, zy = -fy, zz = -fz;
     let rx = uy * zz - uz * zy, ry = uz * zx - ux * zz, rz = ux * zy - uy * zx;
-    let rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+    let rl = Math.hypot(rx, ry, rz);
+    // fwd ∥ up (car pointed straight up/down) leaves right = 0; pick a
+    // non-parallel up and rebuild so both eyes stay orthonormal.
+    if (!(rl > 1e-8)) {
+      if (Math.abs(fy) < 0.9) { ux = 0; uy = 1; uz = 0; }
+      else { ux = 1; uy = 0; uz = 0; }
+      rx = uy * zz - uz * zy; ry = uz * zx - ux * zz; rz = ux * zy - uy * zx;
+      rl = Math.hypot(rx, ry, rz) || 1;
+    }
+    rx /= rl; ry /= rl; rz /= rl;
     // re-orthogonalise up
     ux = zy * rz - zz * ry; uy = zz * rx - zx * rz; uz = zx * ry - zy * rx;
     out[0] = rx; out[1] = ry; out[2] = rz; out[3] = 0;

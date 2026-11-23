@@ -9,6 +9,27 @@ import vm from "node:vm";
 import { ROOT, line, transportReplay, visibleTransportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
+test("WATCH steps from the same retirement slot after a paused seek or continuous playback", () => {
+  for (const path of ["play", "seek", "seek twice"]) for (const direction of [-1, 1]) {
+    const { replay, cars, drivers, options } = transportReplay();
+    const car = { code: "CCC" }, driver = { code: "CCC", num: 3, pos: 3, lapStart: [0] };
+    cars.push(car); drivers.push(driver); options.seats.set(car, driver);
+    options.camera = "heli";
+    // CCC starts third, overtakes BBB, then retires in second behind AAA.
+    options.traces.cars = { 1: line(-14, 58, 0, 0, 30), 2: line(-22, 25, 0, 0, 30), 3: line(-30, 53, 0, 0, 10) };
+    replay.start(options); replay.follow("CCC"); replay.setLocked(true);
+    if (path === "play") {
+      for (let i = 0; i < 80; i++) replay.tick(0.25);
+    } else {
+      replay.setPaused(true);
+      if (path === "seek twice") replay.seek(9);
+      replay.seek(20);
+    }
+    assert.equal(car.retired, true);
+    assert.equal(replay.follow(direction), direction < 0 ? "AAA" : "BBB", path + " / " + direction);
+  }
+});
+
 test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns the picture", () => {
   for (const owner of ["auto", "manual", "locked", "fixed"]) {
     const { replay, G, options, drivers } = transportReplay();
@@ -49,6 +70,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     ctx.RealRace = { replay: () => replay };
     ctx.HudLayout = { setCam: (id) => { layout = id; } };
     ctx.CamTunerPanel = { refresh() {} };
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     G.$ = (id) => id === "btn-cam" ? button : null;
     G.store = { set: (...args) => writes.push(args) };
@@ -92,6 +114,10 @@ test("WATCH transport pause holds the replay clock, and seek reposes ended and r
   const { replay, cars, snaps } = transportReplay();
   replay.setPaused(true); replay.tick(5);
   assert.equal(replay.status().T, 0, "paused playback does not advance");
+  replay.seek(5.004);
+  assert.equal(replay.status().T, 5, "public display clock is rounded");
+  assert.equal(replay.isPausedAt(5), false, "a nearby release still needs a seek");
+  assert.equal(replay.isPausedAt(5.004), true);
   replay.seek(20);
   assert.equal(cars[0].prog, 1000);
   assert.equal(cars[1].prog, 450, "a forward seek parks the stopped car at its final recorded position");
@@ -312,12 +338,7 @@ test("manual HIGHLIGHTS skip, chapter and seek retain intentional replay of over
 });
 
 test("overlapping automatic cuts keep active radio while large steps skip exhausted holds into the next forward segment", () => {
-  const clips = [];
-  const { replay, G, drivers, options } = transportReplay({ Audio: class {
-    constructor() { this.paused = true; clips.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; }
-  } }, { completeSubject: true });
+  const { replay, G, drivers, options } = transportReplay({}, { completeSubject: true });
   options.traces.cars = { 1: line(0, 50, 0, 0, 100), 2: line(0, 45, 0, 0, 100) };
   options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 16, by: 2, over: 1 }, { t: 50, by: 1, over: 2 }];
   drivers[1].pits = [1, 2]; drivers[1].pitT = [11, 16];
@@ -328,12 +349,12 @@ test("overlapping automatic cuts keep active radio while large steps skip exhaus
   replay.start({ ...options, reel: true }); resets = 0;
   for (let i = 0; i < 14; i++) replay.tick(1);
   assert.equal(replay.status().T, 16);
-  assert.equal(clips.length, 1); assert.equal(clips[0].paused, false, "continuous footage keeps its current radio clip");
+  assert.ok(replay.status().radio, "continuous footage keeps its current radio caption link");
   assert.equal(resets, 0);
   replay.tick(10);
   assert.equal(replay.status().T, 42, "exhaust all overlapping holds in one step before the next forward lead-in");
   assert.equal(replay.status().reelIdx, 4);
-  assert.equal(clips[0].paused, true, "a genuine forward time jump releases old audio");
+  assert.equal(replay.status().radio, null, "a genuine forward time jump releases the old radio link");
   assert.equal(resets, 1);
   replay.tick(20);
   assert.equal(replay.status().finished, true, "a large terminal step finishes without revisiting an old segment");
@@ -341,22 +362,18 @@ test("overlapping automatic cuts keep active radio while large steps skip exhaus
 });
 
 test("a short automatic forward cut does not re-fire a radio event inside the new caption window", () => {
-  const clips = [], messages = [];
-  const { replay, G, options } = transportReplay({ Audio: class {
-    constructor() { this.paused = true; clips.push(this); }
-    play() { this.paused = false; return Promise.resolve(); }
-    pause() { this.paused = true; }
-  } }, { completeSubject: true });
+  const messages = [];
+  const { replay, G, options } = transportReplay({}, { completeSubject: true });
   options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 25, by: 2, over: 1 }];
   options.script.radio = [{ t: 15, num: 1, url: "https://example.test/near-cut.mp3" }];
   G.soundOn = true; G.announce = (text) => { messages.push(text); return true; };
   replay.start({ ...options, reel: true });
   for (let i = 0; i < 13; i++) replay.tick(1);
-  assert.equal(clips.length, 1); assert.equal(clips[0].paused, false);
+  assert.ok(replay.status().radio, "the radio message is up");
   replay.tick(1);
-  assert.equal(replay.status().T, 17); assert.equal(clips[0].paused, true);
+  assert.equal(replay.status().T, 17); assert.equal(replay.status().radio, null, "the cut releases it");
   replay.tick(1);
-  assert.equal(clips.length, 1, "the recent radio event was already consumed before the forward cut");
+  assert.equal(replay.status().radio, null, "the recent radio event was already consumed before the forward cut");
   assert.equal(messages.filter((text) => text.includes("RADIO")).length, 1);
   replay.stop();
 });
@@ -381,12 +398,7 @@ test("WATCH paused seek repaints the timing tower and race clock without advanci
 
 test("WATCH manual and automatic reel cuts release radio and reset timeline presentation before snapping", () => {
   for (const automatic of [false, true]) for (const locked of [false, true]) {
-    const clips = [];
-    const { replay, G, cars, options } = transportReplay({ Audio: class {
-      constructor() { this.paused = true; clips.push(this); }
-      play() { this.paused = false; return Promise.resolve(); }
-      pause() { this.paused = true; }
-    } });
+    const { replay, G, cars, options } = transportReplay();
     options.reel = true;
     options.script.passes = [{ t: 10, by: 1, over: 2 }, { t: 50, by: 2, over: 1 }];
     options.script.radio = [{ t: 11, num: 1, url: "https://example.test/radio.mp3" }];
@@ -399,11 +411,11 @@ test("WATCH manual and automatic reel cuts release radio and reset timeline pres
     replay.start(options);
     replay.setLocked(locked);
     replay.tick(9); // Opening lead-in starts at T=2: the first radio fires at 11.
-    assert.equal(clips[0].paused, false);
+    assert.ok(replay.status().radio, "the radio message is up");
     snaps.length = pip.length = hud.length = 0;
     if (automatic) replay.tick(5); else { replay.setPaused(true); replay.skip(); }
     assert.equal(replay.status().T, 42);
-    assert.equal(clips[0].paused, true, "the previous segment's audio cannot cross a reel cut");
+    assert.equal(replay.status().radio, null, "the previous segment's radio link cannot cross a reel cut");
     assert.equal(G.raceT, 42, "HUD clock changes on the same cut");
     assert.equal(replay.status().follow, locked ? "AAA" : "BBB", "a cut respects a locked subject");
     assert.equal(snaps.at(-1).paint, false, "the cut snaps without forcing headless playback to render");
@@ -661,7 +673,8 @@ function cameraOwnersFixture() {
   ctx.XrSession = { bind: (b) => { bindings = b; }, on() {}, isPresenting: () => presenting };
   G.$ = () => null;
   G.store = { set(k, v) { stored.set(k, v); writes.push([k, v]); } };
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   G.setCamMode = ctx.CamModes.create(G).setCamMode;
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/xr/xr-boot.js"), "utf8") + "\n;globalThis.boot = XrBoot;", ctx, { filename: absSrc("js/xr/xr-boot.js") });
   ctx.XrBoot = ctx.boot;
@@ -735,4 +748,76 @@ test("WATCH restart under XR replaces only its own token and preserves manual WA
   assert.equal(h.current(), "far");
   h.enter(); h.leave();
   assert.equal(h.current(), "far", "re-entry does not retain the previous XR token");
+});
+
+// THE PHONE BAR (UI scaling contract gap 19, PR #5156). On the `(max-height: 520px) and
+// (min-width: 600px)` band the bar is ONE row: play, prev, next, DRIVER, the seek, then a ⋯
+// MORE chip whose box holds SPEED, CAMERA, AUTO, FOLLOW LOCK, PHOTO and the chapter row. Off
+// the band every node sits where the desktop bar built it. The band is the same query the
+// stylesheet styles the row with, and the bar's painted height reaches CSS as --wt-h.
+test("WATCH bar docks its secondary controls into the ⋯ popover on the phone band and undocks off it", () => {
+  function element(tag) {
+    const listeners = {}, attrs = {};
+    const el = { tagName: tag.toUpperCase(), dataset: {}, children: [], style: {}, hidden: false, open: false, disabled: false,
+      classList: { add() {}, remove() {} },
+      appendChild(n) { if (n.parentNode) n.parentNode.children = n.parentNode.children.filter((c) => c !== n); this.children.push(n); n.parentNode = this; return n; },
+      insertBefore(n, ref) { if (n.parentNode) n.parentNode.children = n.parentNode.children.filter((c) => c !== n); const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, n); n.parentNode = this; return n; },
+      remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this); },
+      setAttribute(k, v) { attrs[k] = v; }, getAttribute(k) { return k in attrs ? attrs[k] : null; },
+      addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); },
+      getBoundingClientRect() { return { height: 63.5 }; } };
+    return el;
+  }
+  const body = element("body"); body.style = { props: {}, setProperty(k, v) { this.props[k] = v; }, removeProperty(k) { delete this.props[k]; } };
+  let listener = null; const mq = { matches: true, addEventListener(_, fn) { listener = fn; }, removeEventListener() { listener = null; } };
+  const observed = [];
+  class RO { constructor(cb) { this.cb = cb; } observe(el) { observed.push(el); this.cb(); } disconnect() { observed.length = 0; } }
+  const ctx = vm.createContext({ document: { body, createElement: element, activeElement: null }, matchMedia: (q) => { mq.query = q; return mq; }, ResizeObserver: RO,
+    CamModes: { CAM_MODES: [{ id: "chase", label: "CHASE" }, { id: "tv", label: "TV" }] }, RealReplay: { LEAD_S: 8 } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx, { filename: absSrc("js/ui/watch-transport.js") });
+  const W = vm.runInContext("WatchTransport", ctx);
+  const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
+  const api = { describe: () => ({ name: "GP", drivers: [{ code: "AAA", name: "Alpha" }], events: [{ t: 20, lap: 2, kind: "pass", text: "X" }], speeds: [1, 2] }),
+    status: () => state, setPaused() {}, setSpeed() {}, follow: () => true, setLocked() {}, setAuto() {}, seek() {}, eventStep() {}, seekEvent() {} };
+  const ui = W.create({ camMode: 0, setCamMode() {}, snapGameCam() {}, openWatchPhoto() {} }, api); ui.start();
+  const css = fs.readFileSync(path.join(ROOT, "css/watch-transport.css"), "utf8");
+  assert.equal(mq.query, "(max-height: 520px) and (min-width: 600px)", "the JS band is the stylesheet's phone branch");
+  // Same assert.ok pin: band media + nowrap, no short+740 wrap fight, wrap only
+  // below 600, inset focus with the tokens ui-scale floor (was outset 2px).
+  assert.ok(
+    css.includes("@media " + mq.query + " {")
+      && /@media \(max-height: 520px\) and \(min-width: 600px\) \{[\s\S]*?\[data-wt="controls"\] \{ flex-wrap: nowrap/.test(css)
+      && !/@media \(max-height: 520px\) and \(max-width: 7\d{2}px\)/.test(css)
+      && /@media \(max-height: 520px\) and \(max-width: 599px\) \{[\s\S]*?flex-wrap: wrap/.test(css)
+      && /\.watch-transport :is\(button, select, input\):focus-visible \{[\s\S]*?outline:\s*max\(2px,\s*calc\(2px \/ var\(--ui-scale/.test(css)
+      && /\.watch-transport :is\(button, select, input\):focus-visible \{[\s\S]*?outline-offset:\s*calc\(-1 \* max\(2px/.test(css),
+    "css/watch-transport.css styles the same band, keeps phone-bar nowrap, and uses the house inset focus ring");
+  const find = (key, p = body) => p.dataset.wt === key ? p : p.children.map((n) => find(key, n)).find(Boolean);
+  const root = body.children[0], top = find("controls"), more = find("more"), box = find("more-box");
+  const keys = (el) => el.children.map((c) => c.dataset.wt || c.tagName.toLowerCase());
+  // ON the band: one row, the chip visible, the secondary controls and the chapter row in its box.
+  assert.equal(more.hidden, false);
+  assert.deepEqual(keys(top), ["play", "prev", "next", "driver-field", "timeline", "more"], "the one row: transport, DRIVER, seek, ⋯");
+  assert.deepEqual(keys(box), ["speed-field", "camera-field", "auto", "lock", "photo", "chapters"], "the popover holds the rest");
+  assert.equal(find("chapters").open, true, "the chapter row shows inside the popover (its own summary is hidden by CSS)");
+  assert.equal(more.open, false, "the popover is the player's to open");
+  assert.equal(body.style.props["--wt-h"], "63.5px", "the bar's painted height reaches CSS");
+  assert.match(css, /#bc-tower\s*\{[^}]*max-height:\s*calc\(100svh - var\(--wt-h, 180px\)/, "the tower cap reads the measured bar height");
+  for (const px of ["100px", "150px", "260px"]) assert.ok(!new RegExp("#bc-tower \\{ max-height: calc\\(100svh - " + px).test(css), "no per-band tower guess of " + px);
+  assert.match(css, /\[data-wt="more-box"\]\s*\{[^}]*position:\s*absolute;[^}]*right:\s*0;[^}]*bottom:\s*calc\(100% \+ var\(--gap\)\)/, "the popover hangs above the chip, right-aligned");
+  // every control still answers: the DOM walk the toolbar test does finds each key
+  for (const k of ["play", "prev", "next", "speed", "driver", "camera", "auto", "lock", "photo", "seek", "time", "duration", "chapter", "chapter-jump", "event", "director"]) assert.ok(find(k), "key " + k);
+  // OFF the band: the desktop bar, node for node.
+  mq.matches = false; listener();
+  assert.equal(more.hidden, true);
+  assert.deepEqual(keys(top), ["play", "prev", "next", "speed-field", "driver-field", "more", "camera-field", "auto", "lock", "photo"]);
+  assert.deepEqual(keys(root), ["controls", "timeline", "chapters", "caption"], "timeline and chapters are root rows again");
+  assert.equal(find("chapters").open, false, "the chapter drawer is closed again, as it is built");
+  mq.matches = true; listener();
+  assert.deepEqual(keys(top), ["play", "prev", "next", "driver-field", "timeline", "more"], "re-docks on a rotate");
+  ui.stop();
+  assert.equal(body.children.length, 0);
+  assert.equal(listener, null, "the band listener is removed with the bar");
+  assert.equal(observed.length, 0, "the observer is disconnected with the bar");
+  assert.equal(body.style.props["--wt-h"], undefined, "--wt-h leaves with the bar");
 });

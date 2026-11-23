@@ -71,12 +71,22 @@ test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
   assert.ok(jsRatio, "independent button default exists");
   assert.equal(Number(ratio[1]), Number(jsRatio[1]));
 
-  const jsDefaults = scaleJs.match(/scaleDefault = \(k\) => \(coarseUi\(\) \? \(k === "hudScale" \? (\d+) : (\d+)\) : 100\)/);
-  assert.ok(jsDefaults, "js/ui/scale.js must declare the coarse scaleDefault pair");
-  assert.equal(Number(jsDefaults[1]) / 100, Number(css["--hud-scale"]),
-    "--hud-scale and scale.js's hudScale default must agree");
-  assert.equal(Number(jsDefaults[2]) / 100, Number(css["--ui-scale"]),
-    "--ui-scale and scale.js's ui default must agree");
+  const tablet = bootScale({}, { innerWidth: 1024, innerHeight: 768, matchMedia: (q) => ({ matches: q === "(pointer: coarse)" }) });
+  assert.equal(Number(tablet.el("pm-hudscale").value), Number(css["--hud-scale"]) * 100);
+  assert.equal(Number(tablet.el("pm-uiscale").value) / 100, Number(css["--ui-scale"]));
+});
+
+test("a phone's first-paint UI SIZE and scale.js's phone default agree (#5358)", () => {
+  // The block right after the coarse one: touch AND a short side of at most 500 px, either orientation.
+  const m = tokens.match(/@media \(pointer: coarse\) and \(max-height: (\d+)px\), \(pointer: coarse\) and \(max-width: (\d+)px\)\s*\{\s*:root\s*\{\s*--ui-scale:\s*([\d.]+);\s*--hud-btn-mult:\s*([\d.]+);\s*\}/);
+  assert.ok(m, "css/tokens.css must declare the phone :root block");
+  const js = scaleJs.match(/const PHONE_UI_DEFAULT = (\d+);/);
+  assert.ok(js, "js/ui/scale.js must declare PHONE_UI_DEFAULT");
+  assert.equal(Number(m[3]), Number(js[1]) / 100, "the CSS mirror and the JS default are one number");
+  assert.equal(Number(m[4]) * 100, Number(scaleJs.match(/const PHONE_BTN_DEFAULT = ([\d.]+);/)[1]));
+  const side = scaleJs.match(/const phoneUi = \(\) => coarseUi\(\) && Math\.min\(window\.innerWidth, window\.innerHeight\) <= (\d+);/);
+  assert.ok(side, "phoneUi() is touch and a short side");
+  assert.deepEqual([Number(m[1]), Number(m[2])], [Number(side[1]), Number(side[1])], "the media query and phoneUi() test the same short side");
 });
 
 test("the touch default puts every driving control over the physical floor", () => {
@@ -128,8 +138,11 @@ test("--hud-scale carries no blanket touch bump, and the old size stays reachabl
 // UiScale.create(G) run for real in node:vm over stub elements: the slider
 // writes --hud-panel-a on <html> only once moved, clamps to 20-100, and its
 // revert clears it — the same contract as BUTTON OPACITY beside it.
-function bootScale(stored = {}) {
-  const rootStyle = new Map();
+// The second argument is a viewport ({matchMedia}) or {caps, viewport} (an in-race HUD with --hud-cap).
+function bootScale(stored = {}, opts = {}) {
+  const viewport = opts.matchMedia ? opts : (opts.viewport || { matchMedia: () => ({ matches: false }) });
+  const caps = opts.matchMedia ? undefined : opts.caps;
+  const rootStyle = new Map(caps ? [["--hud-cap", caps]] : []);
   const els = new Map();
   const el = (id) => {
     if (!els.has(id)) {
@@ -154,15 +167,67 @@ function bootScale(stored = {}) {
     SettingRow: { wire() {}, paint() {}, labels: (v) => v.map((x) => [x, x]) },
     PerfGov: { setAutoRes() {} },
     requestAnimationFrame: () => 0,
-    window: { matchMedia: () => ({ matches: false }) },
-    document: { documentElement: { style: {
-      setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k),
+    window: viewport,
+    document: { body: caps ? { classList: { contains: (c) => c === "in-race" } } : undefined, documentElement: { style: {
+      setProperty: (k, v) => rootStyle.set(k, String(v)), removeProperty: (k) => rootStyle.delete(k), getPropertyValue: (k) => rootStyle.get(k) ?? "",
     } } },
   });
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
   const api = vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: {}, updateTrackPreview() {} });
   return { api, el, rootStyle, stored };
 }
+
+test("roomy desktop menus follow the viewport until UI SIZE is set and resume on reset", () => {
+  const query = "(pointer: fine) and (min-width: 1600px) and (min-height: 900px)";
+  const block = tokens.split("@media " + query)[1]?.split("}")[0];
+  assert.match(block || "", /--ui-scale: 1\.15;/);
+  let onChange;
+  const desktop = { matches: true, addEventListener(event, cb) { if (event === "change") onChange = cb; } };
+  const viewport = { matchMedia: (q) => q === query ? desktop : { matches: false } };
+  const { api, el, rootStyle, stored } = bootScale({}, viewport);
+  const label = () => el("pm-uiscale-v").textContent;
+  assert.equal(label(), "100%");
+  assert.equal(rootStyle.has("--ui-scale"), false);
+  assert.equal(el("pm-hudscale").value, "100");
+  assert.equal(el("pm-btnscale").value, "100");
+  desktop.matches = false;
+  onChange();
+  assert.equal(label(), "100%");
+  api.setScale("uiScale", "--ui-scale", 120);
+  desktop.matches = true;
+  onChange();
+  assert.equal(label(), "104.35%");
+  assert.equal(rootStyle.get("--ui-scale"), "1.2");
+  el("pm-uiscale-r").onclick({ preventDefault() {}, stopPropagation() {} });
+  assert.equal(stored.uiScale, undefined);
+  assert.equal(rootStyle.has("--ui-scale"), false);
+  assert.equal(label(), "100%");
+});
+
+test("device-relative labels preserve physical values, keyboard increments, and reset", () => {
+  const viewport = { innerWidth: 393, innerHeight: 852, matchMedia: q => ({ matches: q === "(pointer: coarse)" }) };
+  const phone = bootScale({}, viewport);
+  for (const [key, id, baseline] of [["uiScale", "pm-uiscale", 70], ["hudScale", "pm-hudscale", 100], ["hudBtnScale", "pm-btnscale", 143.25]]) {
+    assert.equal(phone.el(id).value, String(baseline));
+    assert.equal(phone.el(id).ariaValueText, "100%");
+    assert.equal(phone.stored[key], undefined);
+    const input = phone.el(id);
+    const next = { target: { value: String(baseline + 0.25) } };
+    input.oninput(next);
+    if (input.onchange) input.onchange(next);
+    assert.equal(phone.stored[key], baseline + 0.25);
+    assert.equal(input.ariaValueText, Math.round((baseline + 0.25) * 10000 / baseline) / 100 + "%");
+    phone.el(id + "-r").onclick({ preventDefault() {}, stopPropagation() {} });
+    assert.equal(input.ariaValueText, "100%");
+  }
+  const old = bootScale({ uiScale: 50, hudBtnScale: 125 }, viewport);
+  assert.equal(old.el("pm-uiscale").ariaValueText, "71.43%");
+  assert.equal(old.el("pm-btnscale").ariaValueText, "87.26%");
+  assert.equal(old.rootStyle.get("--hud-btn-scale"), "1.25");
+  const tablet = bootScale({}, { ...viewport, innerWidth: 1024, innerHeight: 768 });
+  assert.equal(tablet.el("pm-btnscale").value, "125");
+  assert.equal(tablet.el("pm-btnscale").ariaValueText, "100%");
+});
 
 test("PANEL OPACITY: unset writes nothing; the slider clamps to 20-100 and reverts", () => {
   const { el, rootStyle, stored } = bootScale();
@@ -213,15 +278,16 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
     "unset is exactly 1 (shipped alphas unchanged) and no text plate thins under 0.45 of its alpha");
   const hc = tokens.match(/:root\[data-ui-contrast="high"\] \{([^}]*)\}/);
   assert.ok(hc && /--hud-panel-a-eff:\s*1;/.test(hc[1]), "HIGH CONTRAST must pin --hud-panel-a-eff at 1");
-  // Every listed plate multiplies its shipped alpha by the effective token.
-  for (const [sel, a] of [[".hud-box {", "0.78"], ["#hud-gearbox {", "0.6"], ["#hud-tach {", "0.72"],
-    ["#minimap {", "0.55"], ["#hud-sectors {", "0.72"], ["#hud-limits {", "0.72"], ["#announce {", "0.82"]]) {
+  // Every listed plate reads the one strip token, which multiplies the effective token.
+  assert.ok(hud.includes("--hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent);"),
+    "--hud-strip-bg is the one panel token");
+  for (const sel of [".hud-box {", ".hud-gaps {", "#hud-gearbox {", "#hud-tach {", "#minimap {", "#hud-sectors {",
+    "#hud-limits {", "#announce {", "#bc-tower {"]) {
     const at = hud.indexOf("\n" + sel);
     assert.ok(at >= 0, sel);
     const block = hud.slice(at, hud.indexOf("\n}", at + 1));
-    assert.ok(block.includes(`rgb(8 8 14 / calc(${a} * var(--hud-panel-a-eff)))`), sel + " plate");
+    assert.ok(block.includes("background: var(--hud-strip-bg);") || block.includes("background: var(--hud-strip-bg)"), sel + " plate");
   }
-  assert.match(hud, /background: rgb\(8 8 14 \/ calc\(0\.55 \* var\(--hud-panel-a-eff\)\)\); padding: 3px 8px;/, ".hud-gaps plate");
   // Lights, flags and the OT/AERO fills are signals, not plates.
   const lights = hud.indexOf("\n#lights {");
   assert.ok(lights >= 0, "#lights block");
@@ -230,14 +296,140 @@ test("PANEL OPACITY: the HUD plates read the effective token, and HIGH CONTRAST 
   assert.match(read("js/ui/settings-export.js"), /k: "hudPanelOpacity", lane: "json", group: "display", def: null/);
 });
 
-test("UiScale.defaultResMode() answers from the primary pointer, without create(G)", () => {
-  const run = (matches, throws) => {
-    const ctx = vm.createContext({ window: { matchMedia: (q) => { if (throws) throw new Error("no mq"); assert.equal(q, "(pointer: coarse)"); return { matches }; } } });
-    return vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx);
-  };
-  assert.equal(run(true), "low");
-  assert.equal(run(false), "auto");
-  assert.equal(run(false, true), "auto", "a throwing matchMedia is a pointer device");
+// #5166 moved the touch default LOW -> MED; #5227 moved it MED -> AUTO capped at MED's 0.75. What the
+// boot APPLIES, not just what the helper says: an unset phone starts at 0.75 with the governor's
+// resolution stage ON under a 0.75 ceiling, a stored choice wins over the default, and a pointer device
+// is unchanged (AUTO, ceiling 1). `scale0` is the backend's scale when the boot reaches applyResMode.
+function bootRes({ coarse, iphone = false, stored = {}, scale0 = 1 }) {
+  const calls = { scale: [], autoRes: [], painted: [], ceil: [], dpr: [] };
+  let live = scale0;
+  const ctx = vm.createContext({
+    Math, Number, String, JSON, isFinite, Object, Array,
+    Log: { info() {} },
+    SettingRow: { wire() {}, paint: (el, v) => { if (el && el.id === "pm-res") calls.painted.push(v); }, labels: (v) => v.map((x) => [x, x]) },
+    GfxQuality: { isIPhone: () => iphone },
+    PerfGov: { setAutoRes: (on) => calls.autoRes.push(on), setResCeil: (v) => calls.ceil.push(v) },
+    requestAnimationFrame: () => 0,
+    window: { matchMedia: (q) => ({ matches: q === "(pointer: coarse)" ? coarse : false }) },
+    document: { documentElement: { style: { setProperty() {}, removeProperty() {} } } },
+  });
+  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
+  const el = (id) => ({ id, value: "", textContent: "", hidden: true, classList: { toggle() {}, contains: () => false }, closest: () => null });
+  // GameStore semantics: set(k, undefined) REMOVES the key (null would be stored as JSON null).
+  const store = { get: (k, d) => (k in stored ? stored[k] : d), set: (k, v) => { if (v === undefined) delete stored[k]; else stored[k] = v; }, raw: () => null, rawSet() {} };
+  vm.runInContext("UiScale", ctx).create({ $: el, els: {}, store, gfx: { setRenderScale: (v) => { live = v; calls.scale.push(v); }, getRenderScale: () => live, setDprBoost: (n) => { calls.dpr.push(n); return false; } }, updateTrackPreview() {} });
+  calls.stored = stored;
+  return calls;
+}
+
+test("RESOLUTION: a non-iPhone touch device with nothing stored boots on AUTO at MED's 0.75, governor-driven under a 0.75 ceiling (#5227)", () => {
+  const c = bootRes({ coarse: true });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, [0.75], "the boot's 1.0 comes down to the phone ceiling: never sharper than MED");
+  assert.deepEqual(c.ceil, [0.75]);
+  assert.deepEqual(c.autoRes, [true], "the resolution stage is the governor's again");
+});
+
+test("fresh iPhone rendering pins HIGH while a saved AUTO still runs the governor", () => {
+  const fresh = bootRes({ iphone: true, coarse: true });
+  assert.deepEqual([fresh.painted, fresh.scale, fresh.autoRes], [["high"], [1], [false]]);
+  const saved = bootRes({ iphone: true, coarse: true, stored: { resMode: "auto", resSchema: 2 } });
+  assert.deepEqual([saved.painted, saved.scale, saved.autoRes], [["auto"], [0.75], [true]]);
+});
+
+test("RESOLUTION: a phone's AUTO never RAISES a scale that already sits under its ceiling", () => {
+  const c = bootRes({ coarse: true, scale0: 0.6 });
+  assert.deepEqual(c.scale, [], "0.6 is the governor's to climb from, not a jump to 0.75");
+  assert.deepEqual(c.ceil, [0.75]);
+  assert.deepEqual(c.autoRes, [true]);
+});
+
+test("RESOLUTION: a stored choice wins over the touch default", () => {
+  for (const [mode, v] of [["low", 0.5], ["high", 1.0], ["med", 0.75]]) {
+    const c = bootRes({ coarse: true, stored: { resMode: mode, resSchema: 2 } });
+    assert.deepEqual(c.painted, [mode], `stored ${mode} stays ${mode}`);
+    assert.deepEqual(c.scale, [v]);
+  }
+  const auto = bootRes({ coarse: true, stored: { resMode: "auto" } });
+  assert.deepEqual(auto.painted, ["auto"]);
+  assert.deepEqual(auto.scale, [0.75], "a phone's AUTO is capped at MED, stored or not");
+  assert.deepEqual(auto.autoRes, [true], "AUTO hands the scale to the governor");
+  const high = bootRes({ coarse: true, stored: { resMode: "high", resSchema: 2 } });
+  assert.deepEqual([high.scale, high.autoRes, high.ceil], [[1.0], [false], []], "a pinned HIGH is untouched by the AUTO ceiling");
+});
+
+// #5222: MAX is the only RESOLUTION that asks the renderer for the device's own DPR (3); every other mode, the
+// shipped AUTO default and Bryce's stored HIGH included, asks for none, so their pictures are today's.
+test("RESOLUTION MAX boosts the DPR to 3 at scale 1.0; AUTO, LOW, MED and HIGH ask for no boost (#5222)", () => {
+  const max = bootRes({ coarse: true, stored: { resMode: "max", resSchema: 2 } });
+  assert.deepEqual([max.painted, max.scale, max.autoRes, max.ceil, max.dpr], [["max"], [1.0], [false], [], [3]]);
+  for (const mode of ["auto", "low", "med", "high"]) {
+    assert.deepEqual(bootRes({ coarse: true, stored: { resMode: mode, resSchema: 2 } }).dpr, [0], mode);
+  }
+  assert.deepEqual(bootRes({ coarse: true }).dpr, [0], "nothing stored: the default asks for no boost");
+  const exp = JSON.parse(read("tests/data/settings-live-export-2026-11-10.json"));
+  assert.deepEqual(bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode, resSchema: 2 } }).dpr, [0], "Bryce's current export (HIGH)");
+});
+
+// Bryce's live export (2026-11-09) stores RESOLUTION HIGH: the #5227 default must not move him.
+test("RESOLUTION: Bryce's live export keeps its stored HIGH, pinned at 1.0", () => {
+  const exp = JSON.parse(read("tests/data/settings-live-export-2026-11-09.json"));
+  assert.equal(exp.settings.display.resMode, "high");
+  const c = bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode, resSchema: 2 } });
+  assert.deepEqual([c.painted, c.scale, c.autoRes, c.ceil], [["high"], [1.0], [false], []]);
+});
+
+// #5198 part 3: a phone's stored LOW from before #5166 was the old DEFAULT, not a choice (a settings
+// file saved then carried it as a value). Bryce's export: resMode "low", not in `changed`. resSchema 2
+// runs once: the implicit phone LOW follows the default again; a LOW picked after that is kept.
+test("RESOLUTION migration: a phone's pre-#5166 stored LOW boots at the default (AUTO at 0.75) and is unset, once", () => {
+  const c = bootRes({ coarse: true, stored: { resMode: "low" } });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, [0.75]);
+  assert.equal("resMode" in c.stored, false, "removed (not null), so a later default change applies too");
+  assert.equal(c.stored.resSchema, 2);
+  // The player then really picks LOW: the next boot keeps it (the migration does not re-run).
+  c.stored.resMode = "low";
+  const again = bootRes({ coarse: true, stored: c.stored });
+  assert.deepEqual(again.painted, ["low"]);
+  assert.deepEqual(again.scale, [0.5]);
+});
+
+test("RESOLUTION migration: only a phone's LOW moves; HIGH/MED/AUTO and a desktop's LOW stay", () => {
+  for (const mode of ["med", "high", "auto"]) {
+    const c = bootRes({ coarse: true, stored: { resMode: mode } });
+    assert.deepEqual(c.painted, [mode], `phone ${mode} kept`);
+    assert.equal(c.stored.resSchema, 2);
+  }
+  const desk = bootRes({ coarse: false, stored: { resMode: "low" } });
+  assert.deepEqual(desk.painted, ["low"], "LOW was never a desktop default, so it was chosen");
+  assert.deepEqual(desk.scale, [0.5]);
+  const fresh = bootRes({ coarse: true });
+  assert.equal(fresh.stored.resSchema, 2, "a fresh install is stamped, so a LOW it later picks survives");
+  assert.equal("resMode" in fresh.stored, false, "the migration writes no resMode of its own");
+});
+
+test("RESOLUTION migration: Bryce's own export is the case it fixes", () => {
+  const exp = JSON.parse(read("tests/data/settings-defaults-export.json"));
+  assert.equal(exp.settings.display.resMode, "low", "stored (a perDevice unset key exports null)");
+  assert.ok(!exp.changed.includes("display.resMode"), "equal to the default it shipped with, never chosen");
+  const c = bootRes({ coarse: true, stored: { resMode: exp.settings.display.resMode } });
+  assert.deepEqual(c.scale, [0.75]);
+});
+
+test("RESOLUTION: a pointer device with nothing stored is unchanged (AUTO, governor-driven)", () => {
+  const c = bootRes({ coarse: false });
+  assert.deepEqual(c.painted, ["auto"]);
+  assert.deepEqual(c.scale, []);
+  assert.deepEqual(c.ceil, [1], "a pointer device's AUTO may climb to full resolution");
+  assert.deepEqual(c.autoRes, [true]);
+});
+
+test("UiScale.defaultResMode() follows the iPhone graphics profile without create(G)", () => {
+  for (const [iphone, expected] of [[true, "high"], [false, "auto"]]) {
+    const ctx = vm.createContext({ GfxQuality: { isIPhone: () => iphone } });
+    assert.equal(vm.runInContext(scaleJs + "\n;UiScale.defaultResMode()", ctx), expected);
+  }
   assert.match(scaleJs, /store\.get\("resMode", defaultResMode\(\)\)/, "the live row reads the same helper SPEC consumes");
 });
 
@@ -252,4 +444,78 @@ test("UiScale.defaultResMode() answers from the primary pointer, without create(
   api.applyBtnScale();
   assert.equal(stored.hudBtnScale, 145);
   assert.equal(el("pm-btnscale").value, "145");
+});
+
+// #5256 option D (Bryce, `decision: top band D`, 2026-11-18T09:07Z): the tower and the gear row size independently, and
+// moving one slider never resizes the other. HUD SIZE paints each band at min(slider, its cap); when BUTTON SIZE moves
+// while the gear row is held under HUD SIZE, apex26.hudBotKeep remembers that row's size so freed room never grows it.
+// Caps are "top bot pedals steer steerKeep btnFloor": the owner cell's 852x393 tower 112 %, gear row 101 % (HUD SIZE 155 /
+// BUTTON SIZE 245 test profile, the options comment on #5256, 2026-11-11T21:03Z).
+const OWNER_CAPS = "1.12 1.01 2.5 2.6 2.4 0.82";
+test("#5256 D: a BUTTON SIZE move keeps the held gear row's size; a HUD SIZE move lets it go", () => {
+  const { el, api, stored, rootStyle } = bootScale({ hudScale: 155, hudBtnScale: 245 }, { caps: OWNER_CAPS });
+  assert.equal(el("pm-hudscale").value, "112", "HUD SIZE reads what the larger band paints");
+  assert.equal(el("pm-hudscale-v").textContent, "112% · bottom row 101% · max", "and names the held gear row");
+  assert.equal(rootStyle.has("--hud-bot-keep"), false, "nothing kept before a BUTTON SIZE move");
+  el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.deepEqual({ ...stored.hudBotKeep }, { hud: 112, bot: 101 }, "the gear row's painted size, against HUD SIZE's number");
+  assert.equal(stored.hudScale, 112, "HUD SIZE is pinned to what it painted (pinPainted)");
+  assert.equal(rootStyle.get("--hud-bot-keep"), "1.01", "fitHud caps the bottom band at it");
+  // A later caps read (the dock shrank, room freed) does not refresh the keep: it is the size the player had.
+  rootStyle.set("--hud-cap", "1.12 1.12 2.5 2.6 2.4 0.82");
+  el("pm-btnscale").oninput({ target: { value: "120" } });
+  assert.deepEqual({ ...stored.hudBotKeep }, { hud: 112, bot: 101 }, "a second BUTTON SIZE move keeps the first size");
+  assert.equal(rootStyle.get("--hud-bot-keep"), "1.01");
+  // It survives a reload.
+  assert.equal(bootScale({ ...stored }, { caps: OWNER_CAPS }).rootStyle.get("--hud-bot-keep"), "1.01", "kept across a reload");
+  // HUD SIZE moving is the player choosing both rows' number again.
+  el("pm-hudscale").oninput({ target: { value: "100" } });
+  assert.equal("hudBotKeep" in stored, false, "a HUD SIZE move clears it");
+  assert.equal(rootStyle.has("--hud-bot-keep"), false);
+  // Any other route that changes HUD SIZE (a profile restore, __apex.hudScale) voids a stale keep.
+  const b = bootScale({ hudScale: 155, hudBtnScale: 245 }, { caps: OWNER_CAPS });
+  b.el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.equal(b.rootStyle.get("--hud-bot-keep"), "1.01");
+  b.api.setScale("hudScale", "--hud-scale", 90);
+  assert.equal(b.rootStyle.has("--hud-bot-keep"), false, "a keep taken at 112 % does not hold HUD SIZE 90");
+});
+
+test("#5256 D: nothing is kept when the gear row is not held, HUD SIZE is unset, or outside a race", () => {
+  const fits = bootScale({ hudScale: 100, hudBtnScale: 245 }, { caps: "1.12 1.2 2.5 2.6 2.4 0.82" });
+  fits.el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.equal("hudBotKeep" in fits.stored, false, "both rows paint HUD SIZE's 100 %: nothing to remember");
+  // Bryce's own export (tests/data/settings-live-export-2026-11-10.json): "uiScale": 70, "hudBtnScale": 143.25, hudScale
+  // unset. The options comment says the remembered size never triggers for him; this is that line.
+  const live = JSON.parse(read("tests/data/settings-live-export-2026-11-10.json"));
+  const mine = live.settings.display;
+  assert.equal(mine.hudBtnScale, 143.25, "his BUTTON SIZE");
+  assert.equal(mine.hudScale ?? null, null, "his HUD SIZE is unset");
+  const his = bootScale({ hudBtnScale: mine.hudBtnScale, uiScale: mine.uiScale }, { caps: OWNER_CAPS });
+  his.el("pm-btnscale").oninput({ target: { value: "160" } });
+  assert.equal("hudBotKeep" in his.stored, false, "an unset HUD SIZE follows the fit: no keep");
+  const menu = bootScale({ hudScale: 155, hudBtnScale: 245 });
+  menu.el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.equal("hudBotKeep" in menu.stored, false, "no caps outside a race: nothing measured, nothing kept");
+});
+
+
+// ui-scale.spec cell D (CI runs on #5682 heads 30012f87 and 1eee6031): right after the first HUD SIZE move a fit read
+// mid-reflow published the tower's cap at ~1.17, so the row's range read [70, 117], and the next read [70, 119]. A range
+// the player has moved on never widens under the thumb; it only narrows until the window, BUTTON SIZE or the race changes.
+test("#5256 D: a HUD SIZE range never widens after a move, until its layout key changes", () => {
+  const { el, rootStyle } = bootScale({ hudScale: 119, hudBtnScale: 245 }, { caps: "1.184 1.122 1.25 2.611 2.544 0.82" });
+  const range = () => [+el("pm-hudscale").min, +el("pm-hudscale").max];
+  assert.deepEqual(range(), [70, 119], "untouched: the settled tower cap");
+  rootStyle.set("--hud-cap", "1.17 1.122 1.25 2.611 2.544 0.82");   // the mid-reflow read
+  el("pm-hudscale").oninput({ target: { value: "70" } });
+  assert.deepEqual(range(), [70, 117], "the move shows what the fit published");
+  rootStyle.set("--hud-cap", "1.184 1.122 1.25 2.611 2.544 0.82");  // the settled read
+  el("pm-hudscale").oninput({ target: { value: "81.75" } });
+  assert.deepEqual(range(), [70, 117], "a later reflow does not widen the range the slider showed");
+  rootStyle.set("--hud-cap", "1.15 1.122 1.25 2.611 2.544 0.82");
+  el("pm-hudscale").oninput({ target: { value: "90" } });
+  assert.deepEqual(range(), [70, 115], "it still narrows: the slider never offers a size that cannot paint");
+  rootStyle.set("--hud-cap", "1.184 1.122 1.25 2.611 2.544 0.82");
+  el("pm-btnscale").oninput({ target: { value: "200" } });
+  assert.deepEqual(range(), [70, 119], "a BUTTON SIZE move is a new layout: the range is read afresh");
 });

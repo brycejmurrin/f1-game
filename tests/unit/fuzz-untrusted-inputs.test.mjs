@@ -18,11 +18,13 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { fuzz, mutate, findBadLiveValues, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
+import { fuzz, mutate, findBadLiveValues, findPollutedObjects, makeRng, HOSTILE_ROW_VALUES } from "../helpers/seeded-fuzz.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -73,7 +75,8 @@ function assertCleanLive(label, value) {
 }
 
 // ── GhostShare.decode (#ghost= / pasted APXG1 / .apexghost.json) ───────────
-function bootGhostShare() {
+function bootGhostShare(opts = {}) {
+  const lengths = opts.lengths || {};
   const sandbox = {
     module: { exports: {} },
     TextEncoder, TextDecoder, Uint8Array, Blob, Response,
@@ -81,15 +84,32 @@ function bootGhostShare() {
     btoa, atob, URL,
     location: { origin: "https://example.test", pathname: "/f1-game/", href: "https://example.test/f1-game/", hash: "" },
     history: { state: {}, replaceState() {} },
-    Tracks: { LIST: [{ id: "monza" }, { id: "spa" }] },
+    Tracks: {
+      LIST: (opts.tracks || ["monza", "spa"]).map((id) => ({
+        id,
+        lengthKm: lengths[id],
+      })),
+    },
     Ghost: { track: () => "monza" },
   };
   Object.defineProperty(sandbox, "localStorage", {
     get() { throw new Error("guest sharing must not touch localStorage"); },
   });
   const ctx = vm.createContext(sandbox);
+  seedHash32(ctx);
   vm.runInContext(read("js/car/ghost-share.js"), ctx, { filename: absSrc("js/car/ghost-share.js") });
   return sandbox.module.exports || vm.runInContext("GhostShare", ctx);
+}
+
+/** One-lap synthetic at a plausible average speed (≤ 120 m/s). */
+function honestLap(lengthKm, timeS, n = 40) {
+  const len = lengthKm * 1000;
+  return {
+    time: timeS,
+    t: Array.from({ length: n }, (_, i) => i * timeS / (n - 1)),
+    s: Array.from({ length: n }, (_, i) => i * len / (n - 1)),
+    x: Array.from({ length: n }, () => 0),
+  };
 }
 
 const GHOST_CORPUS = [
@@ -119,6 +139,30 @@ test("GhostShare.decode never throws past the boundary (N=2000)", async () => {
       assert.equal(typeof result.track, "string");
     }
   });
+});
+
+// ── #5783 / #5999 I3 (track-in-hash): shipped this batch.
+test("I3: new envelopes hash the track id so a kept-h relabel fails (#5783/#5999)", async () => {
+  const lengths = { monza: 5.8, spa: 5.8 };            // same length: only the hash catches it
+  const GhostShare = bootGhostShare({ lengths, tracks: ["monza", "spa"] });
+  const g = honestLap(5.8, 95);
+  const file = GhostShare.fileExport(g, { track: "monza" });
+  assert.equal(file.ok, true);
+  const body = JSON.parse(file.text);
+  assert.equal(typeof body.h, "string");
+  assert.equal((await GhostShare.decode(file.text)).ok, true, "honest export still imports");
+  body.track = "spa";                                 // same arc length, wrong circuit
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, false,
+    "relabel with h kept must fail once the hash covers the track id");
+});
+
+test("I3: a legacy hashless (or pre-track h) envelope still loads on its own track (#5783/#5999)", async () => {
+  const GhostShare = bootGhostShare({ lengths: { monza: 5.8 } });
+  const g = honestLap(5.8, 95);
+  const body = JSON.parse(GhostShare.fileExport(g, { track: "monza" }).text);
+  delete body.h;
+  assert.equal((await GhostShare.decode(JSON.stringify(body))).ok, true,
+    "old links without h still load when the time binds to the trace");
 });
 
 // ── LobbyCodes.codeFrom + NetHandshake.peekCode / decodeCode (pasted invites)
@@ -260,6 +304,7 @@ test("NetSnapshot.decodeSnapshot never throws on hostile packets (N=2000)", asyn
   seedLog(logCtx);
   globalThis.Log = vm.runInContext("Log", logCtx);
   globalThis.M4 = eval(read("js/core/mat4.js") + ";M4");
+  globalThis.NetInterp = eval(read("js/net/interp.js") + ";NetInterp");
   const NetSnapshot = eval(read("js/net/snapshot.js") + ";NetSnapshot");
   const good = NetSnapshot.encodeSnapshot(1, [{
     id: 0,
@@ -295,6 +340,10 @@ function bootSettingsExport() {
       if (v === undefined || (typeof v === "number" && !Number.isFinite(v))) {
         store._bad.push({ k, v });
       }
+      // A value whose object prototype was swapped (`out["__proto__"] = [r,g,b]`
+      // in a decoder) stringifies clean, so look before the JSON round trip.
+      const polluted = findPollutedObjects(v);
+      if (polluted.length) store._bad.push({ k, polluted });
       disk.set("apex26." + k, JSON.stringify(v));
       return true;
     },
@@ -321,7 +370,10 @@ function bootSettingsExport() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/data/teams.js"), ctx, { filename: absSrc("js/data/teams.js") });
+  // The livery.custom.* door hands rows to CustomLiveries.normalizeImported.
+  vm.runInContext(read("js/car/custom-liveries.js"), ctx, { filename: absSrc("js/car/custom-liveries.js") });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(read("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // the LAZY_SAVES_DATA body (#4748)
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: false }, soundOn: false };
   return { SettingsExport, G, store, disk };
@@ -339,6 +391,8 @@ const GARAGE_CORPUS = [
   { format: "apex26-garage-v1", garage: { team: 2, driver: 0 } },
   { format: "apex26-garage-v1", garage: { team: "abc", customTeam: {} } },
   { format: "apex26-garage-v1", garage: { "__proto__": { polluted: 1 }, team: 1 } },
+  // A shape-sound custom livery, so mutate()'s own-"__proto__" rows reach cleanLivery.
+  { format: "apex26-garage-v1", garage: { "livery.custom.ferrari": [{ id: "mine", name: "Mine", c1: [1, 0, 0], c2: [0, 0, 1], c3: [0, 1, 0] }] } },
   null,
 ];
 
@@ -357,7 +411,7 @@ test("SettingsExport.applySettings/applyGarage never throw or poison store (N=20
     }
     assertNoThrowResult("applySettings", sRes, "ok-reason");
     assertNoThrowResult("applyGarage", gRes, "ok-reason");
-    assert.deepEqual(store._bad, [], `store received NaN/undefined: ${JSON.stringify(store._bad)}`);
+    assert.deepEqual(store._bad, [], `store received NaN/undefined or a prototype-swapped object: ${JSON.stringify(store._bad)}`);
   });
 });
 
@@ -502,7 +556,7 @@ test("TrackCodec.decode and CustomTracks.sanitize never throw or leak NaN (N=200
 function bootRealRace() {
   const ctx = vm.createContext({ console, Log: { debug() {}, info() {}, warn() {}, error() {} },
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {}, key() { return null; }, length: 0 } });
-  vm.runInContext(read("js/data/real-race-tab.js") + "\nthis.R = DataRealRace;", ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx, "\nthis.R = DataRealRace;");
   return ctx.R;
 }
 function assertSaneLaps(label, script) {

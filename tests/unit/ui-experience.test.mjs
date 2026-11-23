@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { absSrc } from '../helpers/abs-src.mjs';
 const code = fs.readFileSync(new URL('../../js/ui/experience.js', import.meta.url), 'utf8');
 const ctx = vm.createContext({}); vm.runInContext(code + ';globalThis.api=UiExperience;', ctx);
 test('Home solo practice stays in sync with the coach and does not offer goals requiring rivals', () => {
@@ -40,6 +42,9 @@ test('pause context reads live classification and distinguishes online practice'
   assert.equal(b.title, 'Monza'); assert.match(b.detail,/P2/); assert.match(b.detail,/LAP 2 \/ 12/); assert.match(b.detail,/PRACTICE/); assert.match(b.detail,/RACE CONTINUES/);
   G.timeTrial = true; G.session = 'tt'; G.netPlay.active=()=>false;
   assert.doesNotMatch(ctx.api.raceBrief(G).detail,/P2|\/ 12|ONLINE/);
+  // No race: the line under (or, on a short landscape phone, in place of) the PAUSED heading must not repeat it.
+  const idle = ctx.api.raceBrief({ player: null, track: null });
+  assert.equal(idle.title, 'NO RACE'); assert.doesNotMatch(idle.title + ' ' + idle.detail, /PAUSED/i);
 });
 test('pause context carries the career brief line from CareerExperience', () => {
   const local = vm.createContext({ CareerExperience: { objectiveStatus: (G) => G.session === 'race' ? 'OBJECTIVE · TARGET P6 · NOW P8' : '' } });
@@ -51,7 +56,8 @@ test('pause context carries the career brief line from CareerExperience', () => 
 test('task doors retain canonical close and settings destinations', () => {
   const html=fs.readFileSync(new URL('../../index.html',import.meta.url),'utf8');
   for(const id of ['mb-watch','mb-practice','mb-photo','menu-explore','pm-strategy','pm-review','pm-photo','pm-checkpoint-save']) assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(html,/id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="mb-practice"[\s\S]*id="mb-photo"[\s\S]*id="mb-garage"/);
+  // The shell ships TitleMenu.organize()'s groups (design pass 2c, #4240).
+  assert.match(html,/id="menu-primary"[\s\S]*id="mb-practice"[\s\S]*id="menu-garage"[\s\S]*id="mb-garage"[\s\S]*id="menu-explore"[\s\S]*id="mb-watch"[\s\S]*id="menu-create"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-photo"/);
   assert.doesNotMatch(html,/id="menu-secondary"[\s\S]*id="mb-garage"/);
   assert.match(html,/id="mb-photo"[\s\S]*CAPTURE/);
@@ -59,7 +65,7 @@ test('task doors retain canonical close and settings destinations', () => {
   assert.match(code,/sub && sub\.parentNode/,
     "setDoorLabel must tolerate game-vm's detached querySelector stub");
   assert.doesNotMatch(code,/photoButton\.textContent\s*=/);
-  assert.match(html,/id="photo-studio"[^>]*data-esc-close="ps-close"/);
+  assert.match(html,/id="photo-studio"[^>]*\bhidden>/);
   assert.match(code,/openSettingsPage\("strategy", "pm-pit-panel"\)/);
   assert.match(code,/openSettingsPage\("review", "pm-session-review"\)/);
 });
@@ -184,6 +190,48 @@ test('narrow resize does not stopHome/beginHome; debounced settle only calls gfx
   timers[0].fn();
   assert.equal(resizes, 1, 'settle calls gfx.resize once');
   assert.equal(begins, 1);
+});
+
+test('stopHome cancels a pending Home resize so settle cannot fire mid-race', () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  let resizes = 0, owned = false;
+  const timers = [];
+  const setupCam = {
+    captureCamera: () => ({}), restoreCamera() {},
+    beginHome() { owned = true; return true; },
+    endHome() { owned = false; }, homeState: () => owned ? {} : null, renderHome: () => true,
+  };
+  const listeners = {};
+  // 1-based ids (browsers never return 0): stopHome's `if (resizeTimer)` treats 0 as idle.
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1280, innerHeight: 720,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, wantsTrack: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'hero', onSceneChange() {} },
+    addEventListener(type, fn) { (listeners[type] || (listeners[type] = [])).push(fn); },
+    setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) timers[id - 1].fn = null; },
+    Log: { warn() {} } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local,
+    { filename: absSrc('js/race/race-insights.js') });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+  const gfx = { resize() { resizes++; } };
+  const ui = local.api.create({ $: dom.byId, state: 'menu', setupPreviewOn: false, gfx }, { setupCam, trackReady: () => true });
+  ui.renderHome(1 / 60);
+  sandbox.innerWidth = 500; sandbox.innerHeight = 900;
+  listeners.resize.forEach((fn) => fn());
+  assert.equal(timers.length, 1);
+  assert.ok(timers[0].fn, 'resize debounce armed');
+  ui.stopHome();
+  assert.equal(timers[0].fn, null, 'stopHome clearTimeouts the pending settle');
+  assert.equal(resizes, 0, 'no gfx.resize after leaving Home');
+  // Viewport churn while racing must not arm a new Home settle.
+  sandbox.innerWidth = 900; sandbox.innerHeight = 500;
+  listeners.resize.forEach((fn) => fn());
+  assert.ok(timers.every((t) => !t.fn), 'inactive Home ignores resize');
 });
 
 test('previewScene skips software GL and downscales capture edges', async () => {
@@ -546,4 +594,108 @@ test('WATCH pause omits driving strategy copy and restores the strategy door for
   assert.equal(dom.byId('pm-strategy').hidden, false);
   assert.equal(dom.byId('pm-strategy').disabled, false);
   assert.match(Array.from(dom.byId('pm-race-context').children, el => el.textContent).join(' '), /AUTO will fit/);
+});
+test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SETTINGS row and sits in the tray', () => {
+  const dom = makeDom({ tagFor: id => id === 'practice-goal' ? 'select' : id === 'pm-checkpoint' ? 'details' : 'div' });
+  let mode = 'full'; const saved = [];
+  const DrivingLine = { mode: () => mode, setMode(m) { mode = ['off', 'corner', 'full'].includes(m) ? m : 'off'; return mode; } };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, DrivingLine,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, state: () => ({}) }) },
+    GameStore: { store: { get: (_key, value) => value, set(k, v) { saved.push([k, v]); } } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'auto', onSceneChange() {} },
+    addEventListener() {} };
+  sandbox.window = sandbox;
+  sandbox.RaceInsights = { DRILLS: {}, needsRivals: () => false };   // a stub: the practice goal list is not under test here
+  const local = vm.createContext(sandbox);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: fileURLToPath(new URL('../../js/ui/experience.js', import.meta.url)) });
+  const tray = dom.byId('pm-quick-doors'), rewind = dom.byId('pm-checkpoint');
+  tray.appendChild(rewind);
+  local.api.create({ $: dom.byId, state: 'race', setupPreviewOn: false }, { coach: { paint() {}, practiceGoal: () => 'free', setPracticeGoal() {} }, trackReady: () => true });
+  const tile = dom.byId('pm-drivingline');
+  assert.equal(tile.parentNode, tray, 'a RACE TOOLS tile');
+  assert.equal(tray.children.indexOf ? tray.children.indexOf(tile) : Array.from(tray.children).indexOf(tile), Array.from(tray.children).indexOf(rewind) - 1, 'just before REWIND & RETRY');
+  assert.equal(tile.textContent, 'LINE: FULL');
+  tile.onclick(); assert.equal(mode, 'off'); assert.equal(tile.textContent, 'LINE: OFF');
+  tile.onclick(); assert.equal(tile.textContent, 'LINE: CORNERS');
+  tile.onclick(); assert.equal(tile.textContent, 'LINE: FULL');
+  assert.deepEqual(saved, [['drivingLine', 'off'], ['drivingLine', 'corner'], ['drivingLine', 'full']], 'the RACE SETTINGS row\'s store key');
+  assert.match(tile.getAttribute('aria-label'), /Driving line FULL/);
+  // #pm-line is ADVANCED's STEER ASSIST slider: a duplicate id there cut CAR HANDLING out of the arrow-key walk
+  const shell = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(shell, /id="pm-drivingline"/, 'the runtime tile id must not collide with a shell id');
+});
+
+test('#5743 P4: a second openPhoto while the studio is open keeps the first restore (race stays restorable)', () => {
+  const pause={hidden:false};
+  const G={paused:false,teamIdx:0,player:{lap:2},track:{def:{name:'Monza'}},$:id=>({pausemenu:pause})[id]};
+  ctx.Teams={LIST:[{name:'McLaren'}]};
+  let open=false, opens=0, closes=0, back=null; const paused=[];
+  const studio={state:()=>({open}),open:(o)=>{if(open)closes++;opens++;open=true;back=o.back;return true;},close:()=>{open=false;closes++;}};
+  const deps={source:'race',photoStudio:studio,setPaused:(v,why)=>{paused.push([v,why]);G.paused=v;}};
+  assert.equal(ctx.api.openPhoto(G,deps),true);
+  assert.equal(ctx.api.openPhoto(G,deps),true,'already open: answered, not reopened');
+  assert.equal(opens,1); assert.equal(closes,0);
+  assert.deepEqual(paused,[[true,'photo-studio']],'paused once, by the first open');
+  open=false; back();
+  assert.deepEqual(paused.at(-1),[false,'photo-done'],'the one restore unpauses to what the race had');
+});
+
+// AppearanceStudio.scene() is { mode, motion } only: the Home SHOT is homeVariation's (its fixed homeCamera,
+// else the visit's pick), on the stored scene and on a Photo SUBJECT override alike (lsp TS2339 on .shot).
+test('Home shot comes from the fixed homeCamera on the stored scene and on a Photo subject override', () => {
+  const dom = makeDom();
+  for (const id of ['photo-studio', 'pmsettings', 'pm-panel-appearance', 'carsetup']) dom.byId(id).hidden = true;
+  const begun = [];
+  const setupCam = { captureCamera: () => ({}), restoreCamera() {}, beginHome: (mode, o) => { begun.push([mode, o.shot]); return true; },
+    endHome() {}, homeState: () => ({}), renderHome: () => true };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, innerWidth: 1440, innerHeight: 900,
+    HomeWorld: { create: () => ({ begin: () => true, end() {}, active: () => false, wantsTrack: () => false, needsFrame: () => true, camera: () => null, didRender: () => false, state: () => ({}) }) },
+    GarageExperience: { freePane: () => ({ left: 0, right: .6, top: 0, bottom: 1 }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'night', motion: 'still' }), homeCamera: () => 'rear', onSceneChange() {} },
+    UiLayers: { top: () => null }, SettingsNav: { current: () => 'home' },
+    addEventListener() {}, Log: { warn() {} }, setTimeout, Date: { now: () => 0 } };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local, { filename: absSrc('js/race/race-insights.js') });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+  const G = { $: dom.byId, state: 'menu', setupPreviewOn: false };
+  const ui = local.api.create(G, { setupCam, trackReady: () => false, prepareTrack() {} });
+  ui.renderHome(1 / 60);
+  assert.deepEqual(begun.at(-1), ['night', 'rear'], 'the stored scene draws with the fixed camera');
+  assert.equal(dom.byId('overlay').dataset.homeShot, 'rear');
+  ui.photoSubject('garage');
+  ui.renderHome(1 / 60);
+  assert.deepEqual(begun.at(-1), ['garage', 'rear'], 'the Photo subject override keeps the fixed camera');
+  assert.equal(ui.state().scene.shot, 'rear');
+});
+
+test('a cold Photo launch leaves Settings usable and abandons the launch after navigation', async () => {
+  const nodes = { pmsettings: { hidden: false }, carsetup: { hidden: true }, pausemenu: { hidden: true } };
+  const G = { state: 'race', paused: true, $: id => nodes[id] };
+  let page = 'visual', finish, opens = 0;
+  const local = vm.createContext({ SettingsNav: { current: () => page } });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+  const studio = { loaded: () => false, ensureLoaded: () => new Promise(resolve => { finish = resolve; }), open: () => ++opens };
+  const deps = { source: 'race', photoStudio: studio, setPaused() { assert.fail('race pause state changed'); } };
+  const offline = local.api.openPhoto(G, deps);
+  finish(false);
+  assert.equal(await offline, false);
+  assert.equal(nodes.pmsettings.hidden, false);
+  const late = local.api.openPhoto(G, deps);
+  page = 'home'; finish(true);
+  assert.equal(await late, false);
+  assert.equal(opens, 0);
+});
+
+test('Photo launch restores caller visibility on synchronous and asynchronous errors', async () => {
+  for (const open of [() => false, () => Promise.resolve(null), () => Promise.reject(new Error('load failed'))]) {
+    const nodes = { pmsettings: { hidden: false }, carsetup: { hidden: true }, pausemenu: { hidden: true } };
+    const G = { state:'race', paused:true, teamIdx:0, player:{lap:1}, $: id => nodes[id] };
+    const local = vm.createContext({ Teams: { LIST:[{ name:'McLaren' }] } });
+    vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: absSrc('js/ui/experience.js') });
+    const result = await local.api.openPhoto(G, { source:'race', photoStudio:{ open }, setPaused(value) { G.paused=value; } });
+    assert.equal(result, false);
+    assert.equal(G.paused, true); assert.equal(nodes.pmsettings.hidden, false); assert.equal(nodes.pausemenu.hidden, true);
+  }
 });

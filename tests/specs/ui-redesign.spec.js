@@ -3,6 +3,7 @@
 // changed surface so SwiftShader boot cost is paid once rather than per assertion.
 import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { previewMapSettled } from "../../tools/ui/menu-readiness.mjs";
+import { settleLayout } from "../../tools/ui/explorer/transitions.mjs";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
@@ -101,6 +102,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       heroH: hero.height,
       mapInsideHero: r.top >= hero.top - 1 && r.bottom <= hero.bottom + 1 && r.left >= hero.left - 1 && r.right <= hero.right + 1,
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
+      sectionScroll: (() => { const s = document.getElementById("sel-track-section"); return s.scrollHeight - s.clientHeight; })(),
+      filterInTitleRow: (() => { const f = document.getElementById("sel-track-filter"), h = document.querySelector("#sel-inner > .sheet-head"); return !!f && Math.abs(f.getBoundingClientRect().top - h.getBoundingClientRect().top) < 12; })(),
     };
   });
   // 852×393 is under #sel-inner's --compact-at 480; there is no pane to pair.
@@ -112,6 +115,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(initialSelect.heroH, "the hero keeps a real still slot").toBeGreaterThan(80);
   expect(initialSelect.mapInsideHero, "the outline is drawn inside the hero").toBe(true);
   expect(initialSelect.skew, "the outline canvas is not CSS-squashed").toBeLessThan(0.05);
+  // #5153 gap 13 (UI contract 2026-11-06 §4.5): the phone card's hero never scrolls; the filter chips share the title row.
+  expect(initialSelect.sectionScroll, "the hero section is not a scroller").toBeLessThanOrEqual(1);
+  expect(initialSelect.filterInTitleRow, "the filter row shares the title row").toBe(true);
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
   // size. The toolbar must stay one pannable row and the strip must keep at
   // least one whole tile in view before the player scrolls anything.
@@ -121,10 +127,15 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     root.setProperty("--sab", "21px");
     if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(150);
   });
-  await page.waitForFunction(() => {
+  // #5824: the wait used to be density/shape alone, which was already true BEFORE uiScale(150), so it passed at once
+  // and the row was measured before SheetShape's two-frame reclassify (watchScale) had landed. Wait for the real
+  // settle: classification and geometry unchanged for 3 frames with no running animation.
+  const settled = await page.evaluate(settleLayout, { root: "#sel-inner" });
+  expect(settled.stable, "the picker settled after uiScale(150): " + (settled.reason || "")).toBe(true);
+  expect(await page.evaluate(() => {
     const sel = document.getElementById("sel-inner");
-    return sel?.dataset.density === "compact" && sel.dataset.shape !== "tall";
-  }, null, { polling: 100, timeout: 10_000 });
+    return [sel.dataset.density, sel.dataset.shape !== "tall"];
+  }), "150% on the phone keeps the compact, non-tall card").toEqual(["compact", true]);
   const compactCatalogue = await page.evaluate(() => {
     const list = document.getElementById("sel-tracks").getBoundingClientRect();
     const first = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
@@ -135,6 +146,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     return {
       firstVisible: Math.max(0, Math.min(list.right, first.right) - Math.max(list.left, first.left)),
       oneRow: Math.max(...controls.map((r) => r.top)) - Math.min(...controls.map((r) => r.top)) < 2,
+      tops: controls.map((r) => Math.round(r.top * 10) / 10),
       heroH: hero.height,
       geometry: {
         filter: [filter.top, filter.bottom, filter.height], list: [list.top, list.bottom, list.height],
@@ -142,7 +154,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       },
     };
   });
-  expect(compactCatalogue.oneRow, "compact filter oneRow").toBe(true);
+  expect(compactCatalogue.oneRow, "compact filter oneRow, control tops " + JSON.stringify(compactCatalogue.tops)).toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
   expect(compactCatalogue.heroH, "the still survives 150% on a notched phone").toBeGreaterThan(60);
   // At the slider maximum the toolbar stays ONE row (nowrap; it pans rather
@@ -182,7 +194,9 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => {
     const root = document.documentElement.style;
     root.removeProperty("--sal"); root.removeProperty("--sar"); root.removeProperty("--sab");
-    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(null);
+    // 109, not null: a phone's default is 70 % now (#5358), where 393 / 0.7 = 561 own px is a NORMAL-density garage;
+    // the compact cells below are the 109 % ones this test has always measured.
+    if (window.__apex && window.__apex.uiScale) window.__apex.uiScale(109);
   });
   const searched = await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
@@ -202,9 +216,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden, "empty hidden").toBe(true);
 
-  // Short landscape select: the body is not a scroller; the strip stays a
-  // sideways strip; the hero section is the ONLY vertical scroll region and the
-  // foot spans the sheet.
+  // Short landscape select (the phone card, #5153 gap 13): the body is not a
+  // scroller; the strip stays a sideways strip; the hero section is clipped and
+  // NEVER scrolls (the numbers ride on the still), so nothing in the sheet
+  // scrolls vertically; the foot spans the sheet.
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -247,10 +262,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
   expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOX);
   expect(stackedSel.listOY).toBe("hidden");
-  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.sectionOY);
-  // Whatever scrolls vertically here is the hero section (or its numbers
-  // column) — never the body, never the strip.
-  expect(stackedSel.vertical.every((id) => id === "sel-track-section" || id === "sel-preview-info"), JSON.stringify(stackedSel.vertical)).toBe(true);
+  expect(stackedSel.sectionOY, "the hero section is clipped, not a scroller (UI contract 2026-11-06 rule 3)").toBe("hidden");
+  // Nothing scrolls vertically on the phone card — not the body, not the strip,
+  // not the hero.
+  expect(stackedSel.vertical, "no vertical scroller anywhere in the picker").toEqual([]);
   expect(stackedSel.stripTop).toBeLessThan(stackedSel.heroTop);
   expect(stackedSel.footW / stackedSel.innerW).toBeGreaterThan(0.95);
   expect(stackedSel.active).toBe(true);
@@ -382,14 +397,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(endTab.selected).toBe("true");
   expect(endTab.labelled).toBe("cs-tab-livery");
 
-  // Settings: at 200%, landscape still spends one row on its three categories.
+  // Settings: at 200%, the grouped index keeps every door visible in landscape.
   await page.setViewportSize({ width: 852, height: 393 });
   await page.evaluate(() => {
     document.getElementById("cs-back").click();
     document.getElementById("sel-back").click();
     document.getElementById("mb-settings").click();
     const scale = /** @type {HTMLInputElement} */ (document.getElementById("pm-uiscale"));
-    scale.value = "200"; scale.dispatchEvent(new Event("input", { bubbles: true }));
+    scale.value = "200"; scale.dispatchEvent(new Event("input", { bubbles: true })); scale.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await page.waitForFunction(() => {
     const sheet = document.getElementById("pmsettings");
@@ -401,6 +416,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const doors = [...nav.querySelectorAll("button")];
     return {
       doorIds: doors.map((d) => d.id),
+      categories: [...nav.querySelectorAll("h3")].map((heading) => [heading.textContent, heading.nextElementSibling?.id]),
       allPainted: doors.every((d) => {
         const r = d.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
@@ -408,22 +424,16 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       overflowX: document.documentElement.scrollWidth - innerWidth,
     };
   });
-  // The SETTINGS doors, NAMED rather than counted. This used to be
-  // `toBe(6)`, and two shipped features walked past it: b8aa0b6 added the
-  // DRIVING door and nothing here moved, so the spec sat red on the deploy
-  // branch until an unrelated change happened to select it. A bare count
-  // fails with "expected 6, received 7", which says a door appeared but not
-  // WHICH — so the next session has to go and find it. This list says it.
-  // FIVE on this branch, not the trunk's seven: LIGHTING TUNER and CAMERA TUNER
-  // moved OUT of the index and under DISPLAY -> ADVANCED VISUALS. They are
-  // relocated, not removed — tests/unit/ui-sheets-audit.test.mjs asserts both
-  // ids still exist nested under #pm-panel-display, and this list is the same
-  // one it pins, so the two files cannot drift apart.
-  // BACKUP & RESTORE (#pm-open-files) became its own door when the settings
-  // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
+  expect(settings.categories).toEqual([
+    ["Controls and driving", "pm-open-controls"],
+    ["Display and sound", "pm-open-display"],
+    ["Player and data", "pm-open-progress"],
+  ]);
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
+    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-files",
+    "pm-open-credits",
+    "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
@@ -757,8 +767,11 @@ test("garage categories separate performance from finishing and setup", async ({
   await expect(page.locator("#carsetup")).toBeVisible();
   const rows = page.locator("#cs-tabs .cs-tab-row");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toHaveAttribute("aria-label", "Performance categories");
-  await expect(rows.nth(1)).toHaveAttribute("aria-label", "Finishing and setup categories");
+  await expect(rows.nth(0)).toHaveAttribute("data-tier", "Performance categories");
+  await expect(rows.nth(1)).toHaveAttribute("data-tier", "Finishing and setup categories");
+  // A tablist owns only tabs: the tier rows are layout, so every tab keeps its tablist parent.
+  await expect(rows.nth(0)).toHaveAttribute("role", "none");
+  await expect(page.getByRole("tablist", { name: "Garage categories" }).getByRole("tab")).toHaveCount(15);
   await expect(rows.nth(0)).toContainText("ENGINE");
   for (const label of ["FLOOR", "COCKPIT", "WHEELS", "SETUP", "LIVERY"])
     await expect(rows.nth(1)).toContainText(label);
@@ -930,10 +943,8 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await waitReady(page);
   const report = async (selector) => page.evaluate((sel) => {
     const host = document.querySelector(sel);
-    // FIND A SETTING (SettingsSearch) heads the settings index as its own
-    // full-bleed row; it is not a door, so it never counts toward the balance.
-    const children = [...host.children].filter((el) => !el.hidden && getComputedStyle(el).display !== "none"
-      && !el.matches("[data-settings-search]"));
+    // Measure the buttons. Settings also has full-width headings and a search row.
+    const children = [...host.querySelectorAll(":scope > button")].filter((el) => !el.hidden && getComputedStyle(el).display !== "none");
     const rows = [];
     for (const el of children) {
       const r = el.getBoundingClientRect();
@@ -1005,7 +1016,7 @@ test("settings offers concise throttle help and separate backup actions", async 
   for (const section of ["save", "restore", "share"]) {
     const button = page.locator("#pm-files-show-" + section);
     await button.click();
-    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(button).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#pm-files-" + section)).toBeVisible();
     const layout = await page.evaluate((section) => {
       const nav = document.getElementById("pm-files-nav").getBoundingClientRect();
@@ -1020,6 +1031,26 @@ test("settings offers concise throttle help and separate backup actions", async 
     }
   }
   }
+  await expect(page.locator("#pmsettings").getByRole("button", { name: "Arrange this screen", exact: true })).toHaveCount(0);
+  await page.click("#pm-settings-close");
+  await page.click("#pm-open-appearance");
+  await page.getByLabel("Screen to arrange").selectOption("pm-panel-files");
+  const arrange = page.locator(".arrange-route");
+  await arrange.click();
+  const editor = page.locator("#screen-arranger");
+  await editor.getByRole("button", { name: "Controls", exact: true }).click();
+  const region = editor.getByLabel("Region", { exact: true });
+  await region.selectOption("share-code-in");
+  await editor.getByLabel("Browse section").selectOption({ label: "Tab · Restore" });
+  await expect(region.locator('option[value="share-code-in"]')).toHaveCount(0);
+  await region.selectOption("settings-load");
+  await expect(page.locator("#pm-settings-load")).toHaveText("LOAD SETTINGS FILE");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(arrange).toBeFocused();
+  await page.click("#pm-settings-close");
+  await page.click("#pm-open-files");
+  await expect(page.locator("#pm-files-show-share")).toHaveAttribute("aria-selected", "true");
   await page.locator("#pm-share-code-in").fill("harmless invalid fixture");
   await page.locator("#pm-share-code-import").click();
   await expect(page.locator("#pm-share-code-status")).not.toBeEmpty();
@@ -1116,9 +1147,10 @@ test("data hub constructor names stay readable in phone landscape", async ({ pag
   const drivers = teams.flatMap(([team, g1, f1, c1, g2, f2, c2], i) => [
     { position: String(i * 2 + 1), points: String(300 - i * 40), wins: "1", Driver: { givenName: g1, familyName: f1, code: c1 }, Constructors: [{ name: team }] },
     { position: String(i * 2 + 2), points: String(280 - i * 40), wins: "0", Driver: { givenName: g2, familyName: f2, code: c2 }, Constructors: [{ name: team }] }]);
+  // `*`: api.js asks every Jolpica list for `?limit=100` (and pages by offset).
   const cons = teams.map(([team], i) => ({ position: String(i + 1), points: String(580 - i * 80), wins: String(4 - i), Constructor: { name: team } }));
-  await page.route("**/driverstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
-  await page.route("**/constructorstandings.json", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
+  await page.route("**/driverstandings.json*", (r) => r.fulfill({ contentType: "application/json", body: standings("DriverStandings", drivers) }));
+  await page.route("**/constructorstandings.json*", (r) => r.fulfill({ contentType: "application/json", body: standings("ConstructorStandings", cons) }));
   await page.setViewportSize({ width: 844, height: 390 });
   await waitReady(page);
   await page.click("#mb-data");
@@ -1148,6 +1180,9 @@ test("compact VS Friend CLOSE keeps its skewed corners inside the head-parked fo
   await page.waitForFunction(() => [...document.querySelectorAll('link[rel="stylesheet"]')]
     .filter(l => /\/(overlays|dialogs)\.css/.test(l.href)).every(l => l.media !== "print" && l.sheet),
     null, { polling: 100, timeout: 15_000 });
+  // The COMPACT foot is the subject. A phone ships UI SIZE 70 % (#5358), where 390 / 0.7 own px is the normal
+  // sheet; 100 % is the size that paints the compact one on this screen.
+  await page.evaluate(() => window.__apex.uiScale(100));
   await page.evaluate(() => document.getElementById("mb-vs").click());
   await page.waitForFunction(() => !document.getElementById("vsfriend").hidden, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.SheetShape?.reclassify());

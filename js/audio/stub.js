@@ -39,7 +39,7 @@ var GameAudio = (function () {
     overtakeReady: noop, xMode: noop, thunder: noop, uiTick: noop,
     uiSelect: noop, uiReject: noop, driveBrakeTone: noop, cornerCall: noop,
     volumes: noopObj, tuneDefaults: noopObj, layerDefaults: noopObj,
-    setTune: noop, ensure: noop, skipTrack: noop, prevTrack: noop,
+    setTune: noop, skipTrack: noop, prevTrack: noop,
     // Playlist API — real engine replaces these; stub must not throw if a
     // menu row or test races ahead of ensureAudio().
     playTrackId: () => false, currentTrackId: () => null, trackName: noopStr,
@@ -62,7 +62,7 @@ var ErsLayer = {
 var RivalAudio = {
   create: () => ({
     collect: () => [], emitFieldSfx: function () {},
-    attach: function () {}, detach: function () {}, tick: function () {}, silence: function () {},
+    attach: function () {}, detach: function () {}, silence: function () {},
     passByState: () => [], passByVoices: () => [],
   }),
   silence: function () {},
@@ -77,7 +77,7 @@ var DrivingCues = {
 var RadioVoice = (function () {
   function inert() {
     return {
-      stop: function () {}, speak: () => false, say: function () {}, sayPreRace: () => false, halt: function () {},
+      stop: function () {}, speak: () => false, say: function () {}, sayPreRace: () => false, halt: function () {}, flushDecoded: function () {},
       previewGeneration: () => 0, stopPreviewIfGeneration: () => false,
       prepare: function () {}, unlock: function () {}, enabled: () => false, setEnabled: function () {},
       setVolume: function () {}, volume: () => 0, pack: null, packOn: () => false,
@@ -116,7 +116,8 @@ var AudioPanel = {
     }
     if (els && els.soundbtn) {
       const stubClick = () => {
-        const next = !G.soundOn;
+        // Nothing has been audible yet, so this press asks to hear the game: keep (or turn) sound on.
+        const next = true;
         // game.js sets AudioPanel._ensure = ensureAudio while the stub is resident.
         const ensure = AudioPanel._ensure;
         if (typeof ensure === "function") {
@@ -131,12 +132,9 @@ var AudioPanel = {
         } else setSound(next);
       };
       els.soundbtn.onclick = stubClick;
-      // index.html's static label is SOUND ON; a saved SOUND OFF must show before the first gesture
-      // loads the real panel, or the button claims the opposite and its tap turns the sound ON.
-      if (G.soundOn === false) {
-        els.soundbtn.textContent = "SOUND OFF";
-        els.soundbtn.setAttribute("aria-pressed", "false");
-      }
+      // Reflect the restored master before the first gesture loads the real panel.
+      els.soundbtn.textContent = G.soundOn ? "SOUND ON" : "SOUND OFF";
+      els.soundbtn.setAttribute("aria-pressed", G.soundOn ? "true" : "false");
     }
     return { init: function () {}, _stub: true, setSound };
   },

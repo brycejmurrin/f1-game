@@ -16,9 +16,10 @@ const DesignerWorkspace = (function () {
     const foot = root.querySelector(".td-foot");
     const menu = el("details"); menu.dataset.role = "file-menu";
     const trigger = el("summary", "sel-chip", "SHARE & FILES");
+    ui.filesTrigger = trigger;
     files.remove(); menu.append(trigger, files);
     const closeMenu = (e) => {
-      if ((e.key === "Escape" || e.type === "cancel") && menu.open && !root.hidden) {
+      if ((e.key === "Escape" || e.type === "cancel") && menu.open && !root.hidden && !e.target?.closest?.("#screen-arranger")) {
         e.preventDefault(); e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         menu.open = false; trigger.focus();
@@ -56,8 +57,9 @@ const DesignerWorkspace = (function () {
       checks.disabled = !verdict;
       if (!verdict) return;
       checks.dataset.level = verdict.red ? "red" : verdict.amber ? "amber" : "ok";
-      checks.textContent = "CHECKS · " + (verdict.red ? verdict.red + " TO FIX" : verdict.amber ? verdict.amber + " WARNINGS" : "READY TO RACE");
-      checks.setAttribute("aria-label", "Review design checks: " + verdict.red + " errors, " + verdict.amber + " warnings");
+      const plural = (n, one, many) => n + (n === 1 ? one : many);
+      checks.textContent = "CHECKS · " + (verdict.red ? verdict.red + " TO FIX" : verdict.amber ? plural(verdict.amber, " WARNING", " WARNINGS") : "READY TO RACE");
+      checks.setAttribute("aria-label", "Review design checks: " + plural(verdict.red, " error, ", " errors, ") + plural(verdict.amber, " warning", " warnings"));
     }
     return { navigate, remember, refresh, review, closeMenu };
   }

@@ -14,12 +14,14 @@ function boot(withRail = false, withNested = false, withActions = false, withEnt
     el.prepend = (child) => el.insertBefore(child, el.children[0]);
     return el;
   };
-  let observe, resize;
+  let observe, resize, density, query;
   const media = { matches: true, addEventListener: (_, cb) => { resize = cb; } };
-  doc.defaultView = { matchMedia: () => media, MutationObserver: class {
-    constructor(cb) { observe = cb; } observe() {}
+  doc.defaultView = { matchMedia: (q) => { query = q; return media; }, MutationObserver: class {
+    constructor(cb) { this.cb = cb; }
+    observe(_, o) { if (o.attributeFilter.includes("data-density")) density = this.cb; else observe = this.cb; }
   } };
   const root = doc.createElement("div"), sheet = doc.createElement("div");
+  root.id = "camtune";
   sheet.className = "sheet"; root.append(sheet); root.hidden = true;
   const settings = doc.getElementById("pmsettings"), launcher = doc.getElementById("pm-camera");
   const nested = doc.getElementById("freecam"); nested.hidden = true;
@@ -34,10 +36,10 @@ function boot(withRail = false, withNested = false, withActions = false, withEnt
     const done = doc.createElement("button"); done.id = "ct-close";
     foot.append(action, done); sheet.append(foot);
   }
-  const ctx = vm.createContext({ document: doc });
+  const ctx = vm.createContext({ document: doc, SettingsNav: nav });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/editor-workspace.js", import.meta.url), "utf8") + "\nglobalThis.api = EditorWorkspace;", ctx);
   const api = ctx.api.attach(root, { entry: withEntry ? "pc-toggle" : null, title: "Camera", note: "Per camera", done: withActions ? "ct-close" : null, rail: withRail ? "ct-rail" : null, launcher: "pm-camera", nav, nested: withNested ? "freecam" : null });
-  return { foot, action, nested, doc, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media };
+  return { foot, action, nested, doc, nav, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media, density: () => density(), query: () => query };
 }
 
 test("preview furniture changes without closing the editor or taking over Escape", () => {
@@ -72,6 +74,32 @@ test("short screens collapse tools without dropping them; wide screens expand th
   assert.equal(tools.open, true);
   media.matches = true; resize();
   assert.equal(tools.open, false);
+});
+
+// #5562: css/tuner.css shows the summary on the sheet's OWN density (SheetShape, own px: UI SIZE moves it) or a narrow
+// window. A window-HEIGHT query closed the tools at UI SIZE 50-62 on a 390 px phone, where the sheet is not compact
+// and the summary is display:none: every tab, scope, RESET and COPY behind a door with no handle.
+test("tools fold on the sheet's own density, never on window height alone", () => {
+  const h = boot(true), tools = h.sheet.querySelector("details");
+  assert.equal(h.query(), "(max-width: 600px)", "the only window fact is the narrow width the CSS also reads");
+  h.media.matches = false; h.resize();
+  assert.equal(tools.open, true, "a short window whose sheet is not compact keeps its tools open");
+  h.sheet.dataset.density = "compact"; h.density();
+  assert.equal(tools.open, false, "the sheet going compact folds them (its summary is shown there)");
+  tools.open = true;
+  h.root.hidden = false; h.observe();
+  assert.equal(tools.open, false, "reopening a compact editor starts folded");
+  h.sheet.dataset.density = "normal"; h.density();
+  assert.equal(tools.open, true, "leaving compact hides the summary, so the tools must be open");
+});
+
+test("a tool keeps focus and stays visible when the sheet becomes compact", () => {
+  const h = boot(true, false, true);
+  h.media.matches = false; h.resize();
+  h.action.focus();
+  h.sheet.dataset.density = "compact"; h.density();
+  assert.equal(h.sheet.querySelector("details").open, true);
+  assert.equal(h.doc.activeElement, h.action);
 });
 
 test("closing restores the captured Settings page after domain cleanup", () => {
@@ -147,4 +175,109 @@ test("Free Camera stays on the toolbar when compact tools collapse", () => {
   h.media.matches = false; h.resize();
   h.media.matches = true; h.resize();
   assert.equal(entry.parentNode, h.sheet.querySelector(".ew-toolbar"));
+});
+
+function garage() {
+  const h = boot(), { doc } = h;
+  const root = doc.createElement("div"), sheet = doc.createElement("div"), rows = doc.createElement("div"), foot = doc.createElement("div");
+  root.hidden = true; sheet.className = "sheet"; rows.id = "ga-rows"; foot.className = "sheet-foot";
+  const angleRow = doc.createElement("div"), angle = doc.createElement("select");
+  angleRow.className = "set-row"; angle.id = "ga-angle"; angleRow.append(angle);
+  const otherRow = doc.createElement("div"); otherRow.className = "set-row";
+  const paragraphs = ["Sequence instructions", "Crew instructions", "Lighting instructions"].map(text => {
+    const p = doc.createElement("p"); p.className = "adv-help"; p.textContent = text; return p;
+  });
+  rows.append(paragraphs[0], otherRow, angleRow, paragraphs[1], paragraphs[2]);
+  const calls = [], sequences = [["ga-preview-out", "Race start"], ["ga-preview-in", "Pit entry"], ["ga-preview-pit-exit", "Pit exit"], ["ga-preview-home", "Race end"]];
+  const buttons = sequences.map(([id]) => { const b = doc.createElement("button"); b.id = id; b.onclick = () => calls.push(id); foot.append(b); return b; });
+  const reset = doc.createElement("button"), done = doc.createElement("button");
+  reset.id = "ga-reset"; reset.onclick = () => calls.push("reset"); done.id = "ga-close"; foot.append(reset, done);
+  const transport = doc.createElement("div"); transport.id = "ga-transport"; transport.hidden = true;
+  sheet.append(rows, foot); root.append(sheet, transport);
+  const api = h.workspace.attach(root, { rows: "ga-rows", first: "ga-angle", reset: "ga-reset", sequences, done: "ga-close",
+    defaultPreview: "ga-preview-out", previewSession: "ga-transport" });
+  return { ...h, root, sheet, rows, foot, angleRow, paragraphs, buttons, calls, reset, done, transport, api };
+}
+
+test("garage controls start with angle while instructions and Reset stay in closed help", () => {
+  const h = garage(), help = h.rows.querySelector("details");
+  assert.equal(h.rows.children[0], h.angleRow);
+  assert.equal(help.open, false);
+  assert.equal(help.querySelector("summary").textContent, "Help and reset");
+  assert.deepEqual(help.querySelectorAll(".adv-help"), h.paragraphs);
+  assert.equal(h.reset.parentNode, help);
+  assert.deepEqual(h.foot.querySelectorAll("button"), [h.done]);
+  help.open = true; h.reset.click();
+  assert.deepEqual(h.calls, ["reset"]);
+});
+
+test("compact garage sequence strip preserves each real preview handler and short label", () => {
+  const h = garage(), strip = h.sheet.querySelector(".balanced-row");
+  assert.equal(strip.getAttribute("aria-label"), "Preview sequence");
+  assert.deepEqual(strip.querySelectorAll("button"), h.buttons);
+  assert.deepEqual(h.buttons.map(b => b.textContent), ["Race start", "Pit entry", "Pit exit", "Race end"]);
+  for (const b of h.buttons) b.click();
+  assert.deepEqual(h.calls, ["ga-preview-out", "ga-preview-in", "ga-preview-pit-exit", "ga-preview-home"]);
+});
+
+test("garage furniture survives preview changes and remount without duplicated controls", () => {
+  const h = garage();
+  h.api.setPreview(true); h.api.setPreview(false);
+  assert.equal(h.workspace.attach(h.root), h.api);
+  assert.equal(h.sheet.querySelectorAll(".ew-toolbar").length, 1);
+  assert.equal(h.sheet.querySelectorAll(".balanced-row").length, 1);
+  assert.equal(h.rows.querySelectorAll("details").length, 1);
+  assert.deepEqual(h.sheet.querySelector(".balanced-row").querySelectorAll("button"), h.buttons);
+});
+
+
+test("garage toolbar Preview starts the real Race start action only after the user requests it", () => {
+  const h = garage();
+  h.root.hidden = false; h.observe();
+  assert.deepEqual(h.calls, [], "opening the editor does not autoplay");
+  h.sheet.querySelector(".ew-preview").click();
+  assert.deepEqual(h.calls, ["ga-preview-out"]);
+  assert.equal(h.sheet.dataset.editorView, "edit", "new playback visibility belongs to the domain");
+});
+
+test("garage toolbar Preview preserves the active sequence and paused editing transport", () => {
+  const h = garage();
+  h.buttons[3].click(); h.transport.hidden = false;
+  h.api.setPreview(false);
+  const toggle = h.sheet.querySelector(".ew-preview");
+  toggle.click(); toggle.click(); toggle.click();
+  assert.deepEqual(h.calls, ["ga-preview-home"], "the Race start action never replaces an existing Return session");
+  assert.equal(h.transport.hidden, false);
+  assert.equal(h.sheet.dataset.editorView, "preview");
+});
+
+test("generic editor Preview remains furniture-only", () => {
+  const h = boot(); let calls = 0;
+  h.doc.getElementById("ga-preview-out").onclick = () => calls++;
+  h.sheet.querySelector(".ew-preview").click();
+  assert.equal(calls, 0);
+  assert.equal(h.sheet.dataset.editorView, "preview");
+});
+
+
+test("stopping a toolbar-launched garage preview returns to visible edit controls", () => {
+  const h = garage(), toggle = h.sheet.querySelector(".ew-preview");
+  // Domain playback owns sheet visibility. Its Stop restores the sheet without
+  // calling furniture APIs, as setup-camera's start/stop preview contract does.
+  h.doc.getElementById("ga-preview-out").onclick = () => { h.sheet.hidden = true; h.transport.hidden = false; };
+  toggle.click();
+  assert.equal(h.sheet.hidden, true);
+  assert.equal(h.transport.hidden, false);
+  h.transport.hidden = true; h.sheet.hidden = false;
+  assert.equal(h.sheet.hidden, false);
+  assert.equal(h.sheet.dataset.editorView, "edit");
+  assert.equal(toggle.textContent, "Preview");
+  assert.equal(toggle.getAttribute("aria-pressed"), "false");
+});
+
+test("the live tuner toolbar keeps preview and camera controls available", () => {
+  const h = boot(true, false, true, true);
+  const toolbar = h.sheet.querySelector(".ew-toolbar");
+  assert.equal(h.doc.getElementById("pc-toggle").parentNode, toolbar);
+  assert.equal(toolbar.querySelectorAll("button").some(el => el.textContent === "Arrange this screen"), false);
 });

@@ -1,5 +1,7 @@
 # CI jobs review — structure, failures vs diffs (2026-10-16)
 
+Summary: Follow-up job-structure review, 2026-10-16: 323 runs / 4,263 jobs (8.8 h) joined to 96 PRs' changed files. Ranked proposals (changelog-fragments into the commit hook, tooling-fast `--bail`, a base-red detector), setup cost 7.9 %, train reuse hit rate 4 %, the new configuration measured where n allows.
+
 Follow-up to [CICD-REVIEW-2026-10-16.md](CICD-REVIEW-2026-10-16.md) (21.7 h, 1,200 runs). Question: which
 `ci.yml` / `pages.yml` jobs run on which diffs, where do they wait, what do they catch, and what would a
 different shape change? Analysis only: no workflow, tool or hook is edited here; every change below is a

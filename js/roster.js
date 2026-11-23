@@ -32,13 +32,17 @@
     "three": [
       "js/render/three/tsl-chunks.js",
       "js/render/three/tsl-viewport.js",
+      "js/render/three/tsl-carsurf.js",
       "js/render/three/tsl-lit.js",
       "js/render/three/tsl-sky.js",
       "js/render/three/tsl-fx.js",
+      "js/render/three/tsl-gi.js",
       "js/render/three/tsl-post.js",
+      "js/render/three/tsl-aa.js",
       "js/render/three/tlx-shadow.js",
       "js/render/three/tlx-chunked.js",
       "js/render/three/tlx-post.js",
+      "js/render/three/tlx-mem.js",
       "js/render/three/tlx.js"
     ]
   },
@@ -161,6 +165,7 @@
     ]
   ],
     LAZY_AGENT: [
+    "js/render/shared/puddles.js",
     "js/agent/agentview-raster.js",
     "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
@@ -170,7 +175,10 @@
     "js/agent/apex-lobby.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
-    "js/agent/apex.js"
+    "js/perf/three-inspector.js",
+    "js/agent/apex.js",
+    "js/agent/apex-bridge.js",
+    "js/agent/bridge-link.js"
   ],
     LAZY_EDGES: [
     [
@@ -198,18 +206,68 @@
       "js/agent/apex.js"
     ],
     [
+      "js/perf/three-inspector.js",
+      "js/agent/apex.js"
+    ],
+    [
       "js/agent/agentview-corners.js",
       "js/agent/agentview.js"
     ]
   ],
+    LAZY_DEV: [
+    "js/perf/gfx-debug-overlay.js"
+  ],
+    LAZY_PERF: [
+    "js/perf/soak-run.js",
+    "js/perf/gpu-test-run.js",
+    "js/perf/phone-recorder.js",
+    "js/perf/bench-capture.js",
+    "js/perf/bench-run.js",
+    "js/perf/metrics-panel.js"
+  ],
+    LAZY_PERF_EDGES: [],
+    LAZY_REAL_RACE: [
+    "js/race/tv-graphics.js",
+    "js/ui/watch-transport.js",
+    "js/race/real-replay.js",
+    "js/race/real-race-pace.js",
+    "js/race/real-race.js"
+  ],
+    LAZY_REAL_RACE_EDGES: [
+    [
+      "js/ui/watch-transport.js",
+      "js/race/real-replay.js"
+    ],
+    [
+      "js/race/real-replay.js",
+      "js/race/real-race.js"
+    ],
+    [
+      "js/race/real-race-pace.js",
+      "js/race/real-race.js"
+    ]
+  ],
+    LAZY_LEARN: [
+    "js/ui/learn-door.js"
+  ],
     LAZY_RACE: [
-    "js/lighting/presets.js"
+    "js/data/garage-entrance-motion.js",
+    "js/garage/entrance-motion.js",
+    "js/lighting/presets.js",
+    "js/garage/garage-data.js",
+    "js/garage/arrival-rows.js",
+    "js/garage/hi-prims.js"
   ],
     LAZY_RACE_SESSION: [
+    "js/input/touch-button-actions.js",
+    "js/data/garage-departure-motion.js",
+    "js/garage/departure-wheels.js",
     "js/race/reliability.js",
     "js/race/damage.js",
+    "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
     "js/race/radio-lines.js",
@@ -219,9 +277,26 @@
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
-    "js/race/jump-start-penalty.js"
+    "js/race/jump-start-penalty.js",
+    "js/ui/podium-beat.js",
+    "js/race/podium-beat.js",
+    "js/race/parc-ferme.js",
+    "js/race/cooldown-lap.js",
+    "js/race/ceremony.js",
+    "js/race/stopped-cars.js",
+    "js/race/retired-card.js",
+    "js/race/driving-coach.js",
+    "js/ui/hud-inputs.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
+    [
+      "js/ui/podium-beat.js",
+      "js/race/podium-beat.js"
+    ],
+    [
+      "js/race/pit-geom.js",
+      "js/race/pit-lane.js"
+    ],
     [
       "js/race/radio-lines.js",
       "js/race/race-radio.js"
@@ -236,60 +311,6 @@
     ]
   ],
     CIRCUITS_DIR: "js/circuits",
-    LAZY_CIRCUIT: [
-    "js/circuits/bahrain.js",
-    "js/circuits/monaco.js",
-    "js/circuits/silverstone.js",
-    "js/circuits/spa.js",
-    "js/circuits/monza.js",
-    "js/circuits/suzuka.js",
-    "js/circuits/singapore.js",
-    "js/circuits/cota.js",
-    "js/circuits/interlagos.js",
-    "js/circuits/vegas.js",
-    "js/circuits/madrid.js",
-    "js/circuits/zandvoort.js",
-    "js/circuits/jeddah.js",
-    "js/circuits/albert_park.js",
-    "js/circuits/shanghai.js",
-    "js/circuits/miami.js",
-    "js/circuits/imola.js",
-    "js/circuits/montreal.js",
-    "js/circuits/redbull.js",
-    "js/circuits/hungaroring.js",
-    "js/circuits/baku.js",
-    "js/circuits/mexico.js",
-    "js/circuits/qatar.js",
-    "js/circuits/abudhabi.js",
-    "js/circuits/hockenheim.js",
-    "js/circuits/nurburgring.js",
-    "js/circuits/catalunya.js",
-    "js/circuits/sepang.js",
-    "js/circuits/istanbul.js",
-    "js/circuits/paul_ricard.js",
-    "js/circuits/portimao.js",
-    "js/circuits/sochi.js",
-    "js/circuits/mugello.js",
-    "js/circuits/magny_cours.js",
-    "js/circuits/estoril.js",
-    "js/circuits/kyalami.js",
-    "js/circuits/watkins_glen.js",
-    "js/circuits/indianapolis.js",
-    "js/circuits/buenos_aires.js",
-    "js/circuits/jacarepagua.js",
-    "js/circuits/fuji.js",
-    "js/circuits/okayama.js",
-    "js/circuits/korea.js",
-    "js/circuits/jerez.js",
-    "js/circuits/donington.js",
-    "js/circuits/anderstorp.js",
-    "js/circuits/brands_hatch.js",
-    "js/circuits/zolder.js",
-    "js/circuits/dijon.js",
-    "js/circuits/buddh.js",
-    "js/circuits/mont_tremblant.js",
-    "js/circuits/mosport.js"
-  ],
     SCENERY_DIR: "js/circuits/scenery",
     LAZY_AUDIO: [
     "js/audio/signal.js",
@@ -298,6 +319,7 @@
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
+    "js/audio/mix-duck.js",
     "js/audio/engine.js",
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
@@ -331,6 +353,10 @@
     ],
     [
       "js/audio/ers-layer.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/mix-duck.js",
       "js/audio/engine.js"
     ],
     [
@@ -385,9 +411,12 @@
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
+    "js/data/ics.js",
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-script.js",
+    "js/data/real-race-fetch.js",
     "js/data/real-race-tab.js",
     "js/data/hub.js"
   ],
@@ -433,6 +462,10 @@
       "js/data/hub.js"
     ],
     [
+      "js/data/ics.js",
+      "js/data/hub.js"
+    ],
+    [
       "js/data/standings.js",
       "js/data/hub.js"
     ],
@@ -442,6 +475,14 @@
     ],
     [
       "js/data/live.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
       "js/data/hub.js"
     ],
     [
@@ -503,6 +544,18 @@
     [
       "js/data/telemetry-view.js",
       "js/data/telemetry.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-fetch.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-tab.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
+      "js/data/real-race-tab.js"
     ]
   ],
     LAZY_NET: [
@@ -512,22 +565,46 @@
     "js/net/sdp.js",
     "js/net/qr.js",
     "js/net/scan.js",
+    "js/net/ice.js",
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
     "js/net/lobby-settings.js",
+    "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/quali-wire.js",
+    "js/net/strategy-wire.js",
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
-    "js/input/phone-pad.js"
+    "js/input/phone-pad-codec.js",
+    "js/ui/touch-button-settings.js",
+    "js/input/phone-pad-page.js",
+    "js/input/phone-pad.js",
+    "js/net/phone-pairing-ui.js"
   ],
     LAZY_NET_EDGES: [
     [
+      "js/net/ice.js",
+      "js/net/transport.js"
+    ],
+    [
+      "js/net/interp.js",
+      "js/net/snapshot.js"
+    ],
+    [
       "js/net/snapshot.js",
       "js/net/session.js"
+    ],
+    [
+      "js/net/quali-wire.js",
+      "js/net/netplay.js"
+    ],
+    [
+      "js/net/strategy-wire.js",
+      "js/net/netplay.js"
     ],
     [
       "js/net/spectate.js",
@@ -576,11 +653,15 @@
     [
       "js/net/lobby-settings.js",
       "js/net/lobby.js"
+    ],
+    [
+      "js/input/phone-pad-codec.js",
+      "js/input/phone-pad.js"
+    ],
+    [
+      "js/input/phone-pad-page.js",
+      "js/input/phone-pad.js"
     ]
-  ],
-    LAZY_WORKER: [
-    "js/track/build-worker.js",
-    "js/workers/bitmap-decode-worker.js"
   ],
     LAZY_EDITOR: [
     "js/editor/shape.js",
@@ -593,6 +674,7 @@
     "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
+    "js/editor/zones.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/followup-tools.js",
@@ -625,6 +707,10 @@
     [
       "js/editor/shape.js",
       "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/zones.js"
     ],
     [
       "js/editor/shape.js",
@@ -672,6 +758,10 @@
     ],
     [
       "js/editor/elev-presets.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/zones.js",
       "js/editor/designer.js"
     ],
     [
@@ -734,11 +824,13 @@
     ]
   ],
     LAZY_CAM_EDITOR: [
+    "js/lighting/tuner-panel.js",
     "js/camera/tuner-panel.js",
     "js/camera/flyby-editor.js"
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-backup.js",
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],
@@ -748,25 +840,114 @@
       "js/career/career-ui.js"
     ]
   ],
+    LAZY_UI_PRESETS: [
+    "js/ui/desktop-graphics.js",
+    "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js",
+    "js/ui/screen-arranger.js",
+    "js/ui/hud-layout-editor.js",
+    "js/ui/dock-toolbar.js",
+    "js/ui/hud-arrange.js",
+    "js/ui/look-avail.js",
+    "js/ui/layout-presets.js",
+    "js/ui/appearance-arrangement-picker.js",
+    "js/ui/appearance-studio-ui.js",
+    "js/ui/photo-studio-ui.js"
+  ],
+    LAZY_UI_PRESETS_EDGES: [
+    [
+      "js/ui/screen-regions.js",
+      "js/ui/screen-placement.js"
+    ],
+    [
+      "js/ui/screen-regions.js",
+      "js/ui/appearance-arrangement-picker.js"
+    ],
+    [
+      "js/ui/appearance-arrangement-picker.js",
+      "js/ui/appearance-studio-ui.js"
+    ],
+    [
+      "js/ui/appearance-studio-ui.js",
+      "js/ui/photo-studio-ui.js"
+    ]
+  ],
+    LAZY_SAVES_DATA: [
+    "js/ui/save-health.js",
+    "js/ui/progress-backup.js",
+    "js/ui/settings-export-body.js"
+  ],
+    LAZY_SAVES_DATA_EDGES: [
+    [
+      "js/ui/save-health.js",
+      "js/ui/settings-export-body.js"
+    ]
+  ],
+    LAZY_RESULTS_SHEET: [
+    "js/share/share-card-data.js",
+    "js/share/share-card-layout.js",
+    "js/share/share-card.js",
+    "js/share/share-card-chips.js",
+    "js/ui/results-sheet.js",
+    "js/ui/quali-sheet.js"
+  ],
+    LAZY_RESULTS_SHEET_EDGES: [
+    [
+      "js/share/share-card-layout.js",
+      "js/share/share-card.js"
+    ]
+  ],
+    LAZY_GFX_HI: [
+    "js/render/shared/gfx-hi.js",
+    "js/car/car-hero.js"
+  ],
+    LAZY_GFX_HI_EDGES: [],
     LAZY_TRACK_BUILD: [
+    "js/render/shared/mesh-detail.js",
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
     "js/track/scenery/landmark-kit.js",
     "js/track/scenery/circuit-kit.js",
     "js/track/core/hidden-faces.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
+    "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
     "js/track/scenery/build-props.js"
   ],
     LAZY_TRACK_BUILD_EDGES: [
     [
+      "js/track/scenery/region.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
       "js/track/scenery/models.js",
       "js/track/scenery/circuit-kit.js"
+    ],
+    [
+      "js/track/scenery/landforms.js",
+      "js/track/scenery/nature.js"
+    ],
+    [
+      "js/track/scenery/stands.js",
+      "js/track/scenery/structures.js"
+    ],
+    [
+      "js/track/scenery/facade.js",
+      "js/track/scenery/city.js"
+    ],
+    [
+      "js/track/scenery/api-wrap.js",
+      "js/track/scenery/build-props.js"
     ],
     [
       "js/track/scenery/nature.js",
@@ -817,10 +998,15 @@
       "js/track/scenery/build-props.js"
     ]
   ],
+    LAZY_GARAGE_EXTERIOR: [
+    "js/garage/exterior-geometry.js",
+    "js/garage/exterior.js"
+  ],
     TRACK_VM: [
     "js/core/log.js",
     "js/core/dev-flags.js",
     "js/core/mat4.js",
+    "js/render/shared/mesh-detail.js",
     "js/track/core/geom.js",
     "js/track/core/pit.js",
     "js/track/scenery/data.js",
@@ -836,13 +1022,19 @@
     "js/track/core/mesh.js",
     "js/track/core/hidden-faces.js",
     "js/track/core/def.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
+    "js/track/scenery/region.js",
+    "js/track/scenery/detail.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",
@@ -850,6 +1042,7 @@
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
     "js/garage/scene-dress.js",
+    "js/garage/crew-draw.js",
     "js/garage/crew-motion.js",
     "js/garage/crew-service.js",
     "js/garage/crew-choreo.js",

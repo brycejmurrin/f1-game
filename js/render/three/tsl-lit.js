@@ -62,7 +62,7 @@
   // the same 192 and squeaks under with a lean hand-written shader; three/TSL
   // adds its own block on top and goes OVER, so the shader fails to LINK and
   // every lit surface draws nothing — while textured/emissive ones still draw.
-  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as samples/outputType in tlx.js.
+  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as antialias/outputType in tlx.js.
 
   function lit(THREE, TSL, ctx) {
     // Read from ctx so the cap is decided at factory time, BEFORE the TSL graph
@@ -79,7 +79,16 @@
       abs, max, min, normalize, length, reflect, select, sin, cos,
       dFdx, dFdy, fwidth,
     } = TSL;
+    // DESCENDING smoothstep (edge0 > edge1 reads 1 below `hi`, 0 above `lo`) written as the ascending builtin
+    // flipped: GLSL ES 3.00 leaves smoothstep undefined for edge0 >= edge1 (#5699 row 8). Same value wherever
+    // the descending form was defined. tests/unit/tlx-hunt3.test.mjs refuses a literal descending call.
+    const smoothstepDown = (hi, lo, x) => smoothstep(lo, hi, x).oneMinus();
     const { hash21, vnoise, vnoiseGrad, ignoise } = ctx.chunks;
+    // EXTREME CAR SURFACE (GfxQuality feature carSurf; js/render/three/tsl-carsurf.js), read ONCE per factory. Null
+    // (the feature off, the file absent, or a builder that throws) builds no node: today's program exactly.
+    const CSN = (() => {
+      try { return typeof TLXCarSurf !== "undefined" && TLXCarSurf.enabled() ? TLXCarSurf.nodes(TSL, ctx.chunks) : null; } catch (_) { return null; }
+    })();
     // ROAD NORMAL V2 (default ON; apex26.tlxRoadNormalV2=0 restores the old
     // shader exactly, for an A/B): the near micro-normal and the ASPHALT bump
     // take each octave's ANALYTIC gradient (vnoiseGrad, 4 hashes) instead of a
@@ -159,9 +168,19 @@
     // and a base with no uv emitted CubeTextureNode's default reflectVector —
     // a dead per-fragment normalView/reflect/mat4 chain plus two varyings.
     const envCubeNode = ENV_CUBE ? texGroup(cubeTexture(ENV_CUBE, vec3(0.0, 1.0, 0.0))) : null;
+    // envAll (EXTREME; GfxQuality.feature, decided in tlx.js and passed as ctx.detail): world glass, metal and wet
+    // road take the live cube at full strength (U.envWorld, the probe's ready bit) with a roughness-aware mip
+    // (sqrt(rough) x ENV_LODS) and a longer reach. Absent, the env blocks below are today's program exactly.
+    const ENV_ALL = !!(envCubeNode && ctx.detail && ctx.detail.envAll);
+    const ENV_LODS = ENV_ALL ? Math.max(1, Math.min(10, +ctx.detail.envLods || 7)) : 0;
     const shadowOn = !!(SHD && SHD.S.enabled && SHD.sunTex);
     const carShadowOn = !!(shadowOn && SHD.S.carEnabled && SHD.carTex);
     const lampShadowOn = !!(shadowOn && SHD.S.lampEnabled && SHD.lampTex);
+    // GRAPHICS: EXTREME shadow extras (tlx-shadow.js csmMath, through shadowSys.x): JS gates, so with both off no
+    // node below exists and every lit program is the pre-extras one. CSMX = 2 far sun cascades, LAMPXX = 2 more lamps.
+    const SHX = SHD && SHD.x ? SHD.x : null;
+    const CSMX = !!(shadowOn && SHX && SHX.csmN >= 2 && SHX.csmTex[0] && SHX.csmTex[1]);
+    const LAMPXX = !!(lampShadowOn && SHX && SHX.lampN >= 2 && SHX.lampTex[0] && SHX.lampTex[1]);
     const PI = 3.14159265359;
 
     /* frame + tune uniforms
@@ -308,6 +327,14 @@
     U.lampCol = uniformArray(lampCol);
     U.lampDir = uniformArray(lampDir);
     U.lampGeo = uniformArray(lampGeo);
+    if (ctx.circuitSurfaces) U.silverstoneSurface = uniform(0.0);
+    if (ctx.brakeSpill) U.brakeSpillCount = uniform(0.0);
+    if (envCubeNode && ctx.garageProbeRequested) {
+      U.garageBoxOn = uniform(0.0);
+      U.garageBox = uniform(new THREE.Vector3(1, 1, 1));
+      U.garageCentre = uniform(new THREE.Vector3());
+    }
+    if (ENV_ALL) U.envWorld = uniform(0.0);   // envAll: 1 while the live probe is sampleable (setEnvStr's 2nd arg)
     // SHARED FRAME BLOCK. Every member of U is written once per frame/pass
     // (updateFrame, setLampGrid, setEnvStr, setMaterialMaps) and never per
     // draw, so it belongs in three's render group: ONE uniform buffer per
@@ -322,6 +349,15 @@
     // them. apex26.tlxSharedUniforms=0 (ctx.sharedUniforms=false) restores the
     // per-object layout for an A/B; UniformArrayNode → BufferNode → UniformNode,
     // so the lamp arrays take setGroup too.
+    if (CSMX) {   // per-cascade VP; csmP = (half1, half2, biasK1, biasK2); csmOn = each map valid
+      U.csmVP0 = uniform(new THREE.Matrix4()); U.csmVP1 = uniform(new THREE.Matrix4());
+      U.csmP = uniform(new THREE.Vector4(240, 600, 1, 1)); U.csmOn = uniform(new THREE.Vector2(0, 0));
+    }
+    if (LAMPXX) {   // lampXP = (slot 0 frame.lights index, slot 1 index, slot 0 armed, slot 1 armed)
+      U.lampXVP0 = uniform(new THREE.Matrix4()); U.lampXVP1 = uniform(new THREE.Matrix4());
+      U.lampXP = uniform(new THREE.Vector4(-1, -1, 0, 0));
+      U.bakeShColX0 = uniform(new THREE.Vector3(0, 0, 0)); U.bakeShColX1 = uniform(new THREE.Vector3(0, 0, 0));
+    }
     const SHARED_UNIFORMS = !(ctx && ctx.sharedUniforms === false);
     if (SHARED_UNIFORMS) for (const k in U) U[k].setGroup(renderGroup);
 
@@ -370,9 +406,11 @@
         U.pitBox.value.set(pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
       }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
+      if (U.silverstoneSurface) U.silverstoneSurface.value = frame.trackId === "silverstone" ? 1 : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.rain.value = frame.rain != null ? frame.rain : 0;
       U.time.value = frame.time != null ? frame.time : 0;
+      if (_crowd && frame.crowdExcite != null) setCrowdExcite(frame.crowdExcite);   // CROWD LIFE (only once a crowd material exists)
       {
         const wd = k("windDir", 35) * (Math.PI / 180);
         U.wind.value.set(Math.cos(wd), Math.sin(wd), k("windSpeed", 1.0));
@@ -426,32 +464,61 @@
         U.shadowTexel.value = 1 / (SHD.sunSize || 2048);
         const _sc = frame.shadowCtr || frame.eye;
         if (_sc) U.shadowCtr.value.set(_sc[0], _sc[1], _sc[2]);
-        U.lightVP.value.fromArray(SHD.S.lightVP);
+        // These matrices feed gated shadow samples. Copy the current producer matrix on
+        // every active pass, including the first pass after the map becomes usable.
+        const sunVisible = U.shadowStr.value > 0;
+        if (sunVisible) U.lightVP.value.fromArray(SHD.S.lightVP);
+        if (CSMX) {
+          const C = SHD.S.csm;
+          if (sunVisible && C.on) {
+            if (C.valid[0]) U.csmVP0.value.fromArray(C.vp[0]);
+            if (C.valid[1]) U.csmVP1.value.fromArray(C.vp[1]);
+          }
+          U.csmP.value.set(C.half[0], C.half[1], C.biasK[0], C.biasK[1]);
+          U.csmOn.value.set(C.on && C.valid[0] ? 1 : 0, C.on && C.valid[1] ? 1 : 0);
+        }
         if (carShadowOn) {
-          U.carLightVP.value.fromArray(SHD.S.carLightVP);
+          if (sunVisible && SHD.S.carArmed) U.carLightVP.value.fromArray(SHD.S.carLightVP);
           U.carShadowOn.value = SHD.S.carArmed ? 1 : 0;
           U.carBiasScale.value = SHD.S.carBoxScale || 1;
         }
         if (lampShadowOn) {
-          U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
           const _lampOn = SHD.S.lampArmed && !mirror;
+          if (_lampOn) U.lampShadowVP.value.fromArray(SHD.S.lampLightVP);
           U.lampShadowOn.value = _lampOn ? 1 : 0;
           U.lampShadowIdx.value = SHD.S.lampIdx;
           const _sc = typeof LampBake !== "undefined" ? LampBake.shadowCol(frame, _lampOn ? SHD.S.lampIdx : -1, _bakeShScr) : _bakeShScr;
           U.bakeShCol.value.set(_sc[0], _sc[1], _sc[2]);
+          if (LAMPXX) {
+            const X = SHD.S.lampX, a = X.slots[0], b = X.slots[1];
+            const on0 = !!(X.on && a.armed && !mirror), on1 = !!(X.on && b.armed && !mirror);
+            if (on0) U.lampXVP0.value.fromArray(a.lightVP);
+            if (on1) U.lampXVP1.value.fromArray(b.lightVP);
+            U.lampXP.value.set(a.idx, b.idx, on0 ? 1 : 0, on1 ? 1 : 0);
+            const hasLB = typeof LampBake !== "undefined";
+            let c = hasLB ? LampBake.shadowCol(frame, on0 ? a.idx : -1, _bakeShScr) : _bakeShScr;
+            U.bakeShColX0.value.set(c[0], c[1], c[2]);
+            c = hasLB ? LampBake.shadowCol(frame, on1 ? b.idx : -1, _bakeShScr) : _bakeShScr;
+            U.bakeShColX1.value.set(c[0], c[1], c[2]);
+          }
         }
       }
       const L = frame.lights;
       const nL = L ? Math.min(MAX_LIGHTS, (L.length / 15) | 0) : 0;
       U.numLights.value = nL;
+      const brakeCount = U.brakeSpillCount && L && nL === L.length / 15 ? frame.brakeSpillCount || 0 : 0;
+      if (U.brakeSpillCount) U.brakeSpillCount.value = mirror ? 0 : brakeCount;
       // E9: the mirror's per-chunk cap (frame.mirrorLampCap, mirror-pass.js); every other pass runs uncapped.
-      uf1(U.lampCap, mirror && frame.mirrorLampCap > 0 ? Math.min(MAX_LIGHTS, frame.mirrorLampCap) : MAX_LIGHTS);
+      // lightsHi: frame.chunkLampCap trims the 48-lamp cells to the live cap (24 once shed) without a
+      // recompile; absent or 0 (every detail-0 frame) the cap stays MAX_LIGHTS exactly as before.
+      uf1(U.lampCap, mirror && frame.mirrorLampCap > 0 ? Math.min(MAX_LIGHTS, frame.mirrorLampCap)
+        : frame.chunkLampCap > 0 ? Math.min(MAX_LIGHTS, frame.chunkLampCap) : MAX_LIGHTS);
       const hasLB = typeof LampBake !== "undefined";
       for (let i = 0; i < nL; i++) {
         const o = i * 15;
         lampPos[i].set(L[o], L[o + 1], L[o + 2]);
         lampCol[i].set(L[o + 3], L[o + 4], L[o + 5]);
-        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], hasLB ? LampBake.liveOnlyAt(L, o) : 0);
+        lampDir[i].set(L[o + 7], L[o + 8], L[o + 9], i >= nL - brakeCount ? 1 : hasLB ? LampBake.liveOnlyAt(L, o) : 0);
         lampGeo[i].set(L[o + 6], L[o + 10], L[o + 11], L[o + 12]);
       }
     }
@@ -484,8 +551,9 @@
       if (cat.length > LGRID.IDXW * LGRID.IDXW) return off();
       if (!(g.gw > 0) || !(g.gh > 0) || g.gw > LGRID.G || g.gh > LGRID.G) return off();
 
+      // The shader bounds cell reads by lgSize. Every active grid cell is overwritten,
+      // and its indices reference only freshly packed lamps, including after a shrink.
       const lt = LGRID.lampTex.image.data;
-      lt.fill(0);
       for (let i = 0; i < nLamps; i++) {
         const o = i * 15, r = i * 16;            // 4 texels x RGBA
         lt[r]      = L[o];     lt[r + 1]  = L[o + 1]; lt[r + 2]  = L[o + 2]; lt[r + 3]  = L[o + 6];
@@ -495,10 +563,8 @@
         lt[r + 12] = L[o + 6]; lt[r + 13] = L[o + 10]; lt[r + 14] = L[o + 11]; lt[r + 15] = L[o + 12];
       }
       const it = LGRID.idxTex.image.data;
-      it.fill(0);
-      for (let k = 0; k < cat.length; k++) it[k] = cat[k];
+      it.set(cat);
       const gt = LGRID.gridTex.image.data;
-      gt.fill(0);
       // ROW BY ROW, through the shared helper, never a linear copy: the bake's
       // row stride is g.gw (the occupied extent, a few dozen cells); the
       // texture's is LGRID.G (256, fixed). The shader below reads ivec2(cx, cz),
@@ -538,28 +604,37 @@
     }
 
     /* BRDF leaves (js/render/glx/shaders/glsl-lit.js) — plain node composition, inlined */
-    const D_GGX = (NoH, a) => {
+    // LAYOUT, not style. Each lobe (lamp, lamp clearcoat, sun, sun clearcoat)
+    // and both env Fresnels inlined its own copy, and the fx program inlined
+    // the set again. Pure arguments only — the same rule as apexMatBumpHeight.
+    const D_GGX = Fn(([NoH, a]) => {
       const a2 = a.mul(a);
       const d = NoH.mul(NoH).mul(a2.sub(1.0)).add(1.0);
       return a2.div(max(d.mul(d).mul(PI), 1e-6));
-    };
+    }).setLayout({ name: "apexGgx", type: "float", inputs: [
+      { name: "NoH", type: "float" }, { name: "a", type: "float" }] });
     // Height-correlated Smith visibility (folds in 1/(4 NoL NoV)).
+    // The view root stays a JS arrow: the lamp loop caches it in a sentinel
+    // and passes it in, so a layout here would compile the sqrt twice.
     const smithViewRoot = (NoV, a) => {
       const a2 = a.mul(a);
       return sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2));
     };
-    const V_SmithGGX = (NoV, NoL, a, viewRoot) => {
+    const V_SmithGGX = Fn(([NoV, NoL, a, viewRoot]) => {
       const a2 = a.mul(a);
-      const gv = NoL.mul(viewRoot || sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
+      const gv = NoL.mul(viewRoot);
       const gl = NoV.mul(sqrt(NoL.mul(NoL).mul(a2.oneMinus()).add(a2)));
       return float(0.5).div(max(gv.add(gl), 1e-5));
-    };
+    }).setLayout({ name: "apexSmithGGX", type: "float", inputs: [
+      { name: "NoV", type: "float" }, { name: "NoL", type: "float" },
+      { name: "a", type: "float" }, { name: "viewRoot", type: "float" }] });
     // Roughness-aware Schlick (f90 capped by the caller — Frostbite trick).
-    const F_Schlick = (VoH, f0, f90) => {
+    const F_Schlick = Fn(([VoH, f0, f90]) => {
       const v = VoH.oneMinus();
       const v2 = v.mul(v);
       return f0.add(vec3(f90).sub(f0).mul(v2.mul(v2).mul(v)));
-    };
+    }).setLayout({ name: "apexSchlick", type: "vec3", inputs: [
+      { name: "VoH", type: "float" }, { name: "f0", type: "vec3" }, { name: "f90", type: "float" }] });
 
     /* cloud shadows (js/render/glx/shaders/glsl-lit.js) */
     // 2-octave FBM (per-pass tuning — matches LIT's cloudFBM, unrolled).
@@ -604,10 +679,58 @@
      * automatic flipY for depth textures flips it back to GL space — the same
      * double-flip three's own BasicShadowFilter relies on. */
     const flipUV = (u) => vec2(u.x, u.y.oneMinus());
+    // CSM far cascades (CSMX only): after the near map has run, a fragment it does not fully cover (w0 < 1: its
+    // 0.62..0.84 fade band, past its box, or past its far plane) takes cascade 1, and cascade 2 where cascade 1 fades
+    // (FADE bands, tlx-shadow.js csmWeight is the JS twin). Each cascade: the near map's world bias rescaled to its
+    // texel (csmBiasK), a fixed 4-tap PCF at 0.75 texel, no PCSS, no car map (cascade 1 carries the far cars itself:
+    // tlx-shadow.js's car layer draws them into its depth).
+    // BAND DITHER (CSM_DJ > 0, tlx-shadow.js CSM.DITHER / csmJitter): every band's distance moves by
+    // (ign - 0.5) x 2 DJ x its width on a world-anchored DITHER_CELL grid, so the ring where one map hands to the next
+    // is broken up instead of a line; the same taps, one ignoise. 0 (apex26.tlxCsmDither=0) builds no dither node.
+    const CSM_DJ = CSMX ? +SHX.csmDither || 0 : 0;
+    const csmJit = (wp) => ignoise(floor(wp.xz.div(SHX.csmDitherCell || 0.25))).sub(0.5);
+    const csmFar = !CSMX ? null : (wp, nrm, w0, sh0, res) => {
+      If(w0.lessThan(1.0), () => {
+        const F = SHX.csmFade || [[0.62, 0.84], [0.70, 0.92]];
+        const aDist0 = length(wp.sub(vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z))).toVar();
+        const jit = CSM_DJ > 0 ? csmJit(wp).toVar() : null;
+        const aDistAt = (half, fade) => (jit ? aDist0.add(jit.mul(half).mul(2 * CSM_DJ * (fade[1] - fade[0]))) : aDist0);
+        const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
+        const slopeBias = float(U.shadowTexel).mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
+        const bias0 = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).mul(U.shadowRange.div(80.0)).toVar();
+        const d = 0.75 / (SHX.csmSize || 2048);
+        // (weight, shadow) of one cascade; weight 0 outside it
+        const cascade = (vp, tex, half, biasK, on, fade) => {
+          const out = vec2(0.0, 1.0).toVar();
+          const lc = vp.mul(vec4(wp, 1.0));
+          const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
+          If(on.greaterThan(0.5).and(sc.z.lessThan(1.0)), () => {
+            const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy).mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
+            const w = smoothstep(half.mul(fade[0]), half.mul(fade[1]), aDistAt(half, fade)).oneMinus().mul(ef.x.mul(ef.y)).toVar();
+            If(w.greaterThan(0.0), () => {
+              const z = sc.z.sub(bias0.mul(biasK)).toVar();
+              const T = shadowMapNode(tex);
+              const tap = (px, py) => T.sample(flipUV(sc.xy.add(vec2(px * d, py * d)))).compare(z);
+              out.assign(vec2(w, tap(-1, -1).add(tap(1, -1)).add(tap(-1, 1)).add(tap(1, 1)).mul(0.25)));
+            });
+          });
+          return out;
+        };
+        const c1 = cascade(U.csmVP0, SHX.csmTex[0], U.csmP.x, U.csmP.z, U.csmOn.x, F[0]);
+        const eff = float(1.0).toVar();   // the outer cascade's factor, already faded toward 1
+        If(c1.x.lessThan(1.0), () => {
+          const c2 = cascade(U.csmVP1, SHX.csmTex[1], U.csmP.y, U.csmP.w, U.csmOn.y, F[1]);
+          eff.assign(mix(float(1.0), c2.y, c2.x));
+        });
+        eff.assign(mix(eff, c1.y, c1.x));
+        res.assign(max(0.0, mix(float(1.0), mix(eff, sh0, w0), U.shadowStr)));
+      });
+    };
     const sampleShadow = !shadowOn ? null : Fn(([wpIn, nrmIn]) => {
       const wp = vec3(wpIn).toVar();
       const nrm = vec3(nrmIn).toVar();
       const res = float(1.0).toVar();
+      const csmW = CSMX ? float(0.0).toVar() : null, csmSh = CSMX ? float(1.0).toVar() : null;   // the near map's weight / value
       // GLX parity (js/render/glx/shaders/glsl-lit.js sampleShadow): uShadowStr <= 0
       // collapses the whole function to 1.0 — mix(1, sh, 0) is identity — so
       // skip every PCF / car-map tap on overcast-night frames where the CPU
@@ -619,7 +742,9 @@
           // Yaw-invariant fade: eye XZ + look-target Y (js/render/glx/shaders/glsl-lit.js).
           const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
           const aDist = length(wp.sub(fadeCtr)).toVar();
-          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
+          // CSM band dither (csmFar's note): the near band moves with the same noise; off = the plain distance node.
+          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84),
+            CSM_DJ > 0 ? aDist.add(csmJit(wp).mul(U.shadowRange).mul(2 * CSM_DJ * 0.22)) : aDist)
             .oneMinus().toVar();
           // Thin UV border safety feather (js/render/glx/shaders/glsl-lit.js).
           const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
@@ -701,8 +826,9 @@
             });
             // Dynamic CAR map min-combine (js/render/glx/shaders/glsl-lit.js): ortho, so no
             // perspective divide; same bias; fixed tight 4-tap PCF.
+            // S2 exact-zero gate: csh >= 0, so min(0, csh) == 0 — no car taps when every static tap read 0.
             if (carShadowOn) {
-              If(U.carShadowOn.greaterThan(0.5), () => {
+              If(U.carShadowOn.greaterThan(0.5).and(sh.greaterThan(0.0)), () => {
                 const cc = U.carLightVP.mul(vec4(wp, 1.0));
                 const cs = cc.xyz.mul(0.5).add(0.5).toVar();
                 If(cs.x.greaterThan(0.0).and(cs.x.lessThan(1.0))
@@ -721,8 +847,10 @@
             }
             // Clamped: SHADOW DARKNESS extrapolates above t=1 (js/render/glx/shaders/glsl-lit.js).
             res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
+            if (CSMX) { csmW.assign(edgeFade); csmSh.assign(sh); }
           });
         });
+        if (CSMX) csmFar(wp, nrm, csmW, csmSh, res);
       });
       return res;
     });
@@ -734,21 +862,21 @@
       const hc = uv.x, y = uv.y;
       const h = float(0.0).toVar();
       If(mid.equal(1.0), () => {          // CONCRETE: aggregate + form-seam groove
-        const seam = smoothstep(0.05, 0.0, abs(fract(y.div(1.25)).sub(0.5)).sub(0.46));
+        const seam = smoothstepDown(0.05, 0.0, abs(fract(y.div(1.25)).sub(0.5)).sub(0.46));
         h.assign(vnoise(uv.mul(6.0)).mul(0.6).sub(seam.mul(0.5)));
       }).ElseIf(mid.equal(2.0), () => {   // BRICK: bricks proud, mortar recessed
         const ch = 0.20, bl = 0.42, mort = 0.06;
         const row = floor(y.div(ch));
         const off = mod(row, 2.0).mul(0.5 * bl);
         const bx = fract(hc.add(off).div(bl)), by = fract(y.div(ch));
-        const joint = max(smoothstep(mort, 0.0, min(bx, bx.oneMinus()).mul(bl)),
-                          smoothstep(mort, 0.0, min(by, by.oneMinus()).mul(ch)));
+        const joint = max(smoothstepDown(mort, 0.0, min(bx, bx.oneMinus()).mul(bl)),
+                          smoothstepDown(mort, 0.0, min(by, by.oneMinus()).mul(ch)));
         h.assign(joint.oneMinus().mul(0.5)
           .add(vnoise(vec2(floor(hc.add(off).div(bl)), row).mul(4.0)).mul(0.10)));
       }).ElseIf(mid.equal(4.0), () => {   // METAL: brushed streaks
         h.assign(vnoise(vec2(hc.mul(55.0), y.mul(3.0))).mul(0.3));
       }).ElseIf(mid.equal(5.0), () => {   // WOOD: plank seams + grain
-        const seam = smoothstep(0.05, 0.0, abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46));
+        const seam = smoothstepDown(0.05, 0.0, abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46));
         h.assign(seam.oneMinus().mul(0.4).add(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).mul(0.16)));
       }).ElseIf(mid.equal(6.0), () => {   // FOLIAGE: per-leaf-cluster lumps
         h.assign(vnoise(uv.mul(3.2)).mul(0.5).add(vnoise(uv.mul(11.0)).mul(0.3)));
@@ -786,7 +914,7 @@
       // call — 5.2 KB and ~25 node variables each, 31 KB of the 99 KB lit
       // fragment. Pure: no uniform, texture, varying or derivative read (the
       // fwidth widths are the caller's, passed in), which is what makes the
-      // layout legal at all — see vendor/three-0.186.1/PATCHES.md §4 and
+      // layout legal at all — see vendor/three-0.187.0/PATCHES.md §4 and
       // tsl-chunks.js. WGX declares the same helper as a real WGSL function
       // (wgsl-chunks.js `fn matBumpHeight`), so this is parity, not novelty.
       // `mid` stays float: TSL compares it with .equal(1.0), never as an int.
@@ -815,8 +943,9 @@
       const inRange = mid.greaterThan(0.5).and(mid.lessThan(16.5))
         .and(mid.notEqual(3.0)).and(mid.notEqual(15.0));
       // DERIVATIVES UNCONDITIONAL (roadMarkings / WGX fs_main pattern): fwidth
-      // inside If(inRange)/If(matWallLike) is non-uniform CF → hard WGSL error
-      // on TLX-WebGPU. Hoist footprints; branches only consume them.
+      // inside If(inRange)/If(matWallLike) is non-uniform CF — undefined values,
+      // and a hard WGSL error on Firefox (r187 switches derivative_uniformity off
+      // everywhere else). Hoist footprints; branches only consume them.
       const an0 = abs(N);
       const hc0 = select(an0.x.greaterThan(an0.z), wp.z, wp.x).toVar();
       const y0 = wp.y.toVar();
@@ -904,7 +1033,7 @@
      * per draw; WGX passes (offset, count) in a per-draw uniform. Three has
      * neither: every visible chunk is drawn from one pooled mesh sharing ONE
      * material, and a uniform belongs to the material. `drawIndex` looks like
-     * the way out and is not — in vendor/three-0.186.1 both the declaration of
+     * the way out and is not — in vendor/three-0.187.0 both the declaration of
      * `nodeUniformDrawId` and its only assignment are gated on
      * `object.isBatchedMesh`, so a plain Mesh reads nothing.
      *
@@ -997,7 +1126,8 @@
     // 17-layer array. Sampling `.depth(int(mid))` and `uMatTexScale[mid]` raw
     // is OOB on every painted/tyre/carbon fragment: SwiftShader/WebGL then
     // returns black (or discards), so the whole car vanishes. Clamp the layer for the
-    // hoisted sample (derivative_uniformity forbids an early-out around it)
+    // hoisted sample (an early-out around it is non-uniform CF: undefined
+    // derivatives, and a compile error on Firefox where r187 keeps the check)
     // and keep the apply-gate on the REAL id so cars stay procedural.
     const matTexLayer = (mid) => clamp(mid, float(0.0), float(16.0));
     const matTexInPack = (mid) => mid.greaterThanEqual(1.0).and(mid.lessThanEqual(16.0));
@@ -1068,6 +1198,169 @@
       return vec4(albedo, rough);
     }) : null;
 
+    /* DESKTOP MATERIAL DETAIL — feature `matDetail` (EXTREME, TLX WebGPU only: js/perf/quality-preset.js FEATURES,
+     * decided in tlx.js, passed as ctx.detail.matDetail). Absent, nothing below is built and the two functions above
+     * are the program, byte for byte. On, the fragment calls the *Hd pair instead:
+     *   a. stochastic hex tiling (Mikkelsen, JCGT 2022) on the ground layers in MD_HEX: three taps at hash-offset
+     *      copies on a triangle grid, colour blended variance-preserving about the layer mean (its deepest mip),
+     *      normals blended as derivatives. Tiles are offset, not rotated, so the derivatives need no rotation back;
+     *   b. biplanar (z,y)/(x,y) blending on wall-like layers instead of the hard x-or-z plane switch;
+     *   c. a close-range detail normal: the same layer at MD_DETAIL_FREQ x the frequency, gone by 15 m;
+     *   d. parallax: a MD_POM_STEPS linear relief search on the height in normal.B, gravel (ROCK, 10) inside 20 m.
+     *      Kerbs are MAT.FLAT (no baked layer) and cobbles are STONE, a wall-like layer: neither gets it yet;
+     *   e. twice today's reach: baked normal 44->160 m (was 22->80), albedo 180->520 m (was 90->260).
+     * Every tap takes EXPLICIT gradients from wp derivatives anchored in uniform flow (mdDx/mdDy in buildFragment):
+     * the hex offsets jump per cell, so implicit derivatives would spike the mip along every cell edge, and the
+     * taps sit inside non-uniform branches. The plain-JS twin of the weights is TLXShaders.matDetailMath (node
+     * tests: tests/unit/tlx-mat-detail.test.mjs). */
+    const MAT_DETAIL = !!(MAT_MAPS && matAlbedoNode && ctx.detail && ctx.detail.matDetail);
+    const MD_DETAIL_FREQ = 4.7, MD_DETAIL_AMT = 0.35, MD_POM_STEPS = 6, MD_POM_DEPTH = 0.045, MD_HEX_GAIN = 3;
+    const mdHex = (mid) => ctx.detail.hexTiling === false ? float(0).equal(1) : mid.equal(8.0).or(mid.equal(9.0)).or(mid.equal(11.0)).or(mid.equal(16.0));
+    // Triangle grid (Mikkelsen's TriangleGrid): barycentric weights (sum 1) and the three lattice vertices.
+    const mdHexGrid = (uv) => {
+      const st = uv.mul(2.0 * Math.sqrt(3.0));
+      const sk = vec2(st.x.sub(st.y.mul(0.57735027)), st.y.mul(1.15470054)).toVar();
+      const base = floor(sk).toVar();
+      const f = fract(sk).toVar();
+      const z = float(1.0).sub(f.x).sub(f.y);
+      const s = step(0.0, z.negate()).toVar();
+      const s2 = s.mul(2.0).sub(1.0);
+      const w = vec3(z.negate().mul(s2), s.sub(f.y.mul(s2)), s.sub(f.x.mul(s2))).toVar();
+      // Contrast gain (w^3, renormalised) narrows the blend bands, as the paper's Gain3 does.
+      const g = w.mul(w).mul(w);
+      const wg = g.div(max(g.x.add(g.y).add(g.z), 1e-6)).toVar();
+      const off = (v) => vec2(hash21(v), hash21(v.add(vec2(37.0, 17.0))));
+      return { w: wg, o1: off(base.add(vec2(s, s))), o2: off(base.add(vec2(s, s.oneMinus()))), o3: off(base.add(vec2(s.oneMinus(), s))) };
+    };
+    const mdVarScale = (w) => float(1.0).div(sqrt(max(dot(w, w), 1e-4)));   // 1/sqrt(sum w^2): 1 at a vertex, sqrt(3) at a centroid
+    const mdTap = (node, uv, gx, gy, layer) => node.sample(uv).grad(gx, gy).depth(layer);
+    // Biplanar weights for a wall-like layer: (z,y)-plane share from |n.x|^4, (x,y)-plane from |n.z|^4; the 1e-6
+    // floor splits a flat top face 50/50 instead of dividing 0 by 0.
+    const mdBiW = (n) => {
+      const a = abs(n);
+      const wx = a.x.mul(a.x).mul(a.x.mul(a.x)).add(1e-6), wz = a.z.mul(a.z).mul(a.z.mul(a.z)).add(1e-6);
+      return vec2(wx, wz).div(wx.add(wz)).toVar();
+    };
+    const mdLive = (mid) => U.matTexMix.greaterThan(0.001).and(matTexInPack(mid)).and(matTexScaleOf(mid).greaterThan(0.0));
+
+    // Parallax offset (world metres on xz) for gravel near the camera; vec2(0) everywhere else.
+    const mdPomOffset = MAT_DETAIL && ctx.detail.gravelRelief !== false && matNormalNode ? Fn(([mid, wpIn, Vin, vd, nGeoIn, dpx, dpy]) => {
+      const off = vec2(0.0).toVar();
+      const wp = vec3(wpIn).toVar();
+      const V = vec3(Vin).toVar();
+      const f = clamp(vd.sub(4.0).div(16.0).oneMinus(), 0.0, 1.0).mul(smoothstep(0.55, 0.85, normalize(vec3(nGeoIn)).y)).toVar();
+      If(mdLive(mid).and(mid.equal(10.0)).and(f.greaterThan(0.005)), () => {
+        const sc = max(matTexScaleOf(mid), float(0.0001));
+        const layer = int(matTexLayer(mid));
+        const dir = V.xz.negate().div(max(V.y, 0.25)).mul(f.mul(MD_POM_DEPTH)).toVar();
+        const gx = dpx.xz.div(sc), gy = dpy.xz.div(sc);
+        const hit = float(1.0).toVar(), done = float(0.0).toVar();
+        for (let i = 1; i <= MD_POM_STEPS; i++) {
+          const t = i / MD_POM_STEPS;
+          If(done.lessThan(0.5), () => {
+            const h = mdTap(matNormalNode, wp.xz.add(dir.mul(t)).div(sc), gx, gy, layer).z;
+            If(h.oneMinus().lessThanEqual(t), () => { hit.assign(t); done.assign(1.0); });
+          });
+        }
+        off.assign(dir.mul(hit));
+      });
+      return off;
+    }) : null;
+
+    const applyMaterialTexNormalHd = MAT_DETAIL && matNormalNode ? Fn(([mid, Nin, wpIn, vd, nGeoIn, dpx, dpy, pom]) => {
+      const N = vec3(Nin).toVar();
+      const wp = vec3(wpIn).toVar();
+      const nGeo = normalize(vec3(nGeoIn)).toVar();
+      const fade = clamp(vd.sub(44.0).div(116.0).oneMinus(), 0.0, 1.0).toVar();
+      const sc = max(matTexScaleOf(mid), float(0.0001)).toVar();
+      const layer = int(matTexLayer(mid));
+      const an = abs(nGeo);
+      const wall = matWallLike(matTexLayer(mid));
+      const xMajor = an.x.greaterThan(an.z);
+      // The primary plane (today's matTexUV choice) drives the AA footprint and the detail normal.
+      const pUV = select(wall, vec2(select(xMajor, wp.z, wp.x), wp.y), wp.xz.add(pom)).div(sc).toVar();
+      const pGx = select(wall, vec2(select(xMajor, dpx.z, dpx.x), dpx.y), dpx.xz).div(sc).toVar();
+      const pGy = select(wall, vec2(select(xMajor, dpy.z, dpy.x), dpy.y), dpy.xz).div(sc).toVar();
+      const fp = max(abs(pGx.x).add(abs(pGy.x)), abs(pGx.y).add(abs(pGy.y)));
+      const aa = clamp(fp.sub(0.02).div(0.30).oneMinus(), 0.0, 1.0).toVar();
+      const Tp = select(wall, select(xMajor, vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)), vec3(1.0, 0.0, 0.0));
+      const Bp = select(wall, vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
+      If(mdLive(mid).and(fade.greaterThan(0.005)).and(aa.greaterThan(0.005)), () => {
+        const d = vec3(0.0).toVar();
+        const dOf = (t) => t.xy.sub(0.5).mul(2.0);
+        If(wall, () => {
+          if (ctx.detail.wallBlend === false) {
+            const slope = dOf(mdTap(matNormalNode, pUV, pGx, pGy, layer));
+            d.assign(Tp.mul(slope.x).add(Bp.mul(slope.y)));
+            return;
+          }
+          const bw = mdBiW(nGeo);
+          const da = dOf(mdTap(matNormalNode, vec2(wp.z, wp.y).div(sc), vec2(dpx.z, dpx.y).div(sc), vec2(dpy.z, dpy.y).div(sc), layer));
+          const db = dOf(mdTap(matNormalNode, vec2(wp.x, wp.y).div(sc), vec2(dpx.x, dpx.y).div(sc), vec2(dpy.x, dpy.y).div(sc), layer));
+          d.assign(vec3(db.x.mul(bw.y), da.y.mul(bw.x).add(db.y.mul(bw.y)), da.x.mul(bw.x)));
+        }).ElseIf(mdHex(mid), () => {
+          const hx = mdHexGrid(pUV);
+          const d1 = dOf(mdTap(matNormalNode, pUV.add(hx.o1), pGx, pGy, layer));
+          const d2 = dOf(mdTap(matNormalNode, pUV.add(hx.o2), pGx, pGy, layer));
+          const d3 = dOf(mdTap(matNormalNode, pUV.add(hx.o3), pGx, pGy, layer));
+          const dd = d1.mul(hx.w.x).add(d2.mul(hx.w.y)).add(d3.mul(hx.w.z)).mul(mdVarScale(hx.w));
+          d.assign(vec3(dd.x, 0.0, dd.y));
+        }).Else(() => {
+          const dg = dOf(mdTap(matNormalNode, pUV, pGx, pGy, layer));
+          d.assign(vec3(dg.x, 0.0, dg.y));
+        });
+        // c. detail normal: the same layer at a finer tile, fading out between 6 and 15 m.
+        const df = clamp(vd.sub(6.0).div(9.0).oneMinus(), 0.0, 1.0).toVar();
+        if (ctx.detail.detailNormal !== false) If(df.greaterThan(0.005), () => {
+          const dt = dOf(mdTap(matNormalNode, pUV.mul(MD_DETAIL_FREQ), pGx.mul(MD_DETAIL_FREQ), pGy.mul(MD_DETAIL_FREQ), layer));
+          d.addAssign(Tp.mul(dt.x).add(Bp.mul(dt.y)).mul(df.mul(MD_DETAIL_AMT)));
+        });
+        const amt = select(mid.equal(16.0), float(0.10), float(0.55)).mul(U.matTexMix).mul(fade).mul(aa);
+        N.assign(normalize(N.add(d.mul(amt))));
+      });
+      return N;
+    }) : null;
+
+    // Returns vec4(albedo, rough), matching applyMaterialTex.
+    const applyMaterialTexHd = MAT_DETAIL ? Fn(([mid, albedoIn, roughIn, wpIn, nrmIn, vd, dpx, dpy, pom]) => {
+      const albedo = vec3(albedoIn).toVar();
+      const rough = float(roughIn).toVar();
+      const wp = vec3(wpIn).toVar();
+      const far = clamp(vd.sub(180.0).div(340.0).oneMinus(), 0.0, 1.0).toVar();
+      If(mdLive(mid).and(far.greaterThan(0.001)), () => {
+        const sc = max(matTexScaleOf(mid), float(0.0001)).toVar();
+        const layer = int(matTexLayer(mid));
+        const t = vec4(0.5).toVar();
+        If(matWallLike(matTexLayer(mid)), () => {
+          if (ctx.detail.wallBlend === false) {
+            const xMajor = abs(nrmIn.x).greaterThan(abs(nrmIn.z));
+            const uv = (v) => vec2(select(xMajor, v.z, v.x), v.y).div(sc);
+            t.assign(mdTap(matAlbedoNode, uv(wp), uv(dpx), uv(dpy), layer));
+            return;
+          }
+          const bw = mdBiW(normalize(vec3(nrmIn)));
+          const ta = mdTap(matAlbedoNode, vec2(wp.z, wp.y).div(sc), vec2(dpx.z, dpx.y).div(sc), vec2(dpy.z, dpy.y).div(sc), layer);
+          const tb = mdTap(matAlbedoNode, vec2(wp.x, wp.y).div(sc), vec2(dpx.x, dpx.y).div(sc), vec2(dpy.x, dpy.y).div(sc), layer);
+          t.assign(ta.mul(bw.x).add(tb.mul(bw.y)));
+        }).ElseIf(mdHex(mid), () => {
+          const uv = wp.xz.div(sc).toVar();
+          const gx = dpx.xz.div(sc), gy = dpy.xz.div(sc);
+          const hx = mdHexGrid(uv);
+          const mean = matAlbedoNode.sample(uv).level(float(16.0)).depth(layer).toVar();
+          const dv = mdTap(matAlbedoNode, uv.add(hx.o1), gx, gy, layer).sub(mean).mul(hx.w.x)
+            .add(mdTap(matAlbedoNode, uv.add(hx.o2), gx, gy, layer).sub(mean).mul(hx.w.y))
+            .add(mdTap(matAlbedoNode, uv.add(hx.o3), gx, gy, layer).sub(mean).mul(hx.w.z));
+          t.assign(clamp(mean.add(dv.mul(mdVarScale(hx.w))), 0.0, 1.0));
+        }).Else(() => {
+          t.assign(mdTap(matAlbedoNode, wp.xz.add(pom).div(sc), dpx.xz.div(sc), dpy.xz.div(sc), layer));
+        });
+        const k = U.matTexMix.mul(far).toVar();
+        albedo.assign(mix(albedo, albedo.mul(t.xyz).mul(2.0), k));
+        rough.assign(clamp(mix(rough, t.w, k.mul(0.8)), 0.04, 1.0));
+      });
+      return vec4(albedo, rough);
+    }) : null;
+
     /* roadMarkings (js/render/glx/shaders/glsl-lit.js) — the painted lines
      * The white edge lines and the dashed centre line are NOT geometry and NOT
      * vertex colour: js/track/core/mesh.js stopped emitting them as colour and
@@ -1119,56 +1412,59 @@
         // band strobe. Soft knee on the RAW footprint (same 0.10/0.55 as WGX).
         const mip = clamp(fwX.sub(0.10).div(0.55).oneMinus(), 0.0, 1.0).toVar();
         const base = max(edge, band.mul(dash)).toVar();
-
-        // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
-        // the road across the window, separated by a solid line. `through` uses
-        // the wrapped interval because the window straddles the start/finish
-        // line on every circuit.
-        const L = float(U.pitLane.w).toVar();
-        const lenM = float(U.pitLane.y).toVar();
-        const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
-        const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
-        const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
-        // WIDER than an edge line (0.20 against 0.10): the boundary is an
-        // instruction, not a hint about where the tarmac stops.
-        const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
-        const fadeIn = smoothstep(0.0, 2.0, through).toVar();
-        const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
-        const hasLane = select(lenM.greaterThan(0.0), float(1.0), float(0.0)).toVar();
-        const inWin = select(through.lessThanEqual(lenM), float(1.0), float(0.0)).toVar();
-        const gate = hasLane.mul(inWin).toVar();
-        // Everything on the pit side of the boundary — still branchless, and via
-        // select() rather than step(): step is NOT in this file's TSL destructure
-        // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
-        // failure mode the header warns about (boots clean, draws wrong). select
-        // is already the idiom two lines up.
-        const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
-        // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
-        // the very mark that says "the lane starts here" defeats the mark.
-        const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
-        // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
-        // it reads as a bay you park IN. Branchless throughout — select(), never
-        // step(), because step is not in this file's TSL destructure and a missing
-        // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
-        const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
-        const dBox = abs(through.sub(U.pitBox.x)).toVar();
-        const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
-        const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
-        const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
-                           smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
-        const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
-        const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(gate).mul(mip).toVar();
-        const pitFill = inLane.mul(fadeIn).mul(fadeOut).mul(gate).toVar();
-
         const m = base.mul(mip).toVar();
 
         albedo.assign(mix(albedo, vec3(0.95, 0.95, 0.97), m));
         rough.assign(mix(rough, 0.55, m));    // paint is smoother than tarmac
-        // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
-        // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
-        albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
-        albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
-        rough.assign(mix(rough, 0.55, pitLine));
+        // GLX's two branches (uniform y first, then the window): the skipped work
+        // mixes with weight exactly 0, and the bodies hold no derivative. w is the lap
+        // length (> 0; 1 when absent), so mod() never sees 0 (PitLane.laneUniform).
+        const lenM = float(U.pitLane.y).toVar();
+        If(lenM.greaterThan(0.0), () => {
+          // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
+          // the road across the window, separated by a solid line. `through` uses
+          // the wrapped interval because the window straddles the start/finish
+          // line on every circuit.
+          const L = float(U.pitLane.w).toVar();
+          const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
+          If(through.lessThanEqual(lenM), () => {
+            const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
+            const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
+            // WIDER than an edge line (0.20 against 0.10): the boundary is an
+            // instruction, not a hint about where the tarmac stops.
+            const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
+            const fadeIn = smoothstep(0.0, 2.0, through).toVar();
+            const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
+            // Everything on the pit side of the boundary — still branchless, and via
+            // select() rather than step(): step is NOT in this file's TSL destructure
+            // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
+            // failure mode the header warns about (boots clean, draws wrong). select
+            // is already the idiom two lines up.
+            const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
+            // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
+            // the very mark that says "the lane starts here" defeats the mark.
+            const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
+            // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
+            // it reads as a bay you park IN. Branchless throughout — select(), never
+            // step(), because step is not in this file's TSL destructure and a missing
+            // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
+            const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
+            const dBox = abs(through.sub(U.pitBox.x)).toVar();
+            const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
+            const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
+            const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
+                               smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
+            const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
+            const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(mip).toVar();
+            const pitFill = inLane.mul(fadeIn).mul(fadeOut).toVar();
+
+            // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
+            // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
+            albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
+            albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
+            rough.assign(mix(rough, 0.55, pitLine));
+          });
+        });
       });
       return vec4(albedo, rough);
     });
@@ -1205,9 +1501,11 @@
       If(inRange.and(far.greaterThan(0.001)), () => {
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
           albedo.mulAssign(vnoise(wp.xz.mul(0.09).add(y.mul(0.05))).sub(0.5).mul(0.16).mul(far).add(1.0));
-          albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {   // exact-zero gate (hunt 2 G4, as GLX)
+            albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
+          });
           // fwidth-AA the seam on the PRE-fract coordinate (js/render/glx/shaders/glsl-lit.js)
-          const seam = smoothstep(max(float(0.05), fwY125), 0.0,
+          const seam = smoothstepDown(max(float(0.05), fwY125), 0.0,
             abs(fract(y.div(1.25)).sub(0.5)).sub(0.46)).mul(0.14).mul(near);
           albedo.mulAssign(select(wall, seam.oneMinus(), float(1.0)));
           rough.assign(min(1.0, rough.add(far.mul(0.08))));
@@ -1218,8 +1516,8 @@
           const bx = fract(hc.add(off).div(bl)), by = fract(y.div(ch));
           // mort is WORLD-space — AA width = raw hc/y footprint (js/render/glx/shaders/glsl-lit.js)
           const mortAA = max(float(mort), max(fwHc, fwY));
-          const joint = max(smoothstep(mortAA, 0.0, min(bx, bx.oneMinus()).mul(bl)),
-                            smoothstep(mortAA, 0.0, min(by, by.oneMinus()).mul(ch)));
+          const joint = max(smoothstepDown(mortAA, 0.0, min(bx, bx.oneMinus()).mul(bl)),
+                            smoothstepDown(mortAA, 0.0, min(by, by.oneMinus()).mul(ch)));
           const bh = vnoise(vec2(floor(hc.add(off).div(bl)), row).mul(1.3));
           const brick = albedo.mul(bh.mul(0.42).add(0.82)).mul(vec3(1.06, 0.99, 0.92));
           const mortar = mix(albedo, vec3(0.60, 0.58, 0.55), 0.6);
@@ -1230,35 +1528,44 @@
           const gx = fract(hc.div(pw)), gy = fract(y.div(ph));
           // NORMALIZED-space AA: fwidth of the pre-fract pane fraction (js/render/glx/shaders/glsl-lit.js)
           const mullAA = max(float(mull), max(fwHcPw, fwYPh));
-          const bar = max(smoothstep(mullAA, 0.0, min(gx, gx.oneMinus())),
-                          smoothstep(mullAA, 0.0, min(gy, gy.oneMinus())));
+          const bar = max(smoothstepDown(mullAA, 0.0, min(gx, gx.oneMinus())),
+                          smoothstepDown(mullAA, 0.0, min(gy, gy.oneMinus())));
           albedo.mulAssign(vnoise(vec2(floor(hc.div(pw)), floor(y.div(ph))).mul(1.7)).sub(0.5).mul(0.5).mul(far).add(1.0));
           albedo.assign(mix(albedo, albedo.mul(0.32), bar.mul(near)));
           rough.assign(mix(rough, min(rough, 0.12), near));
         }).ElseIf(mid.equal(4.0), () => {   // METAL — brushed streaks, glossier
           const brushFade = clamp(vd.sub(26.0).div(29.0).oneMinus(), 0.0, 1.0);   // 26-55 m
-          albedo.mulAssign(vnoise(vec2(hc.mul(40.0), y.mul(2.0))).sub(0.5).mul(0.12).mul(brushFade).add(1.0));
+          If(brushFade.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc.mul(40.0), y.mul(2.0))).sub(0.5).mul(0.12).mul(brushFade).add(1.0));
+          });
           rough.assign(clamp(rough.sub(far.mul(0.15)), 0.05, 1.0));
         }).ElseIf(mid.equal(5.0), () => {   // WOOD — grain + plank seams
-          albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
+          });
           // normalized-space AA (as glass) — js/render/glx/shaders/glsl-lit.js
-          albedo.mulAssign(smoothstep(max(float(0.05), fwHc035), 0.0,
+          albedo.mulAssign(smoothstepDown(max(float(0.05), fwHc035), 0.0,
             abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46)).mul(0.16).mul(near).oneMinus());
         }).ElseIf(mid.equal(6.0), () => {   // FOLIAGE — dapple + green variation
-          const d = vnoise(wp.xz.mul(2.4).add(wp.y.mul(1.6))).mul(0.6)
-            .add(vnoise(wp.xz.mul(9.0)).mul(0.4).mul(near));
+          const d = vnoise(wp.xz.mul(2.4).add(wp.y.mul(1.6))).mul(0.6).toVar();
+          If(near.greaterThan(0.0), () => { d.addAssign(vnoise(wp.xz.mul(9.0)).mul(0.4).mul(near)); });
           albedo.mulAssign(d.sub(0.5).mul(0.34).mul(far).add(1.0));
           albedo.y.mulAssign(d.sub(0.5).mul(0.10).mul(far).add(1.0));
         }).ElseIf(mid.equal(7.0), () => {   // FABRIC — fine weave speckle
           const weaveFade = clamp(vd.sub(26.0).div(34.0).oneMinus(), 0.0, 1.0);   // 26-60 m
-          albedo.mulAssign(vnoise(vec2(hc, y).mul(26.0)).sub(0.5).mul(0.14).mul(weaveFade).add(1.0));
+          If(weaveFade.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc, y).mul(26.0)).sub(0.5).mul(0.14).mul(weaveFade).add(1.0));
+          });
         }).ElseIf(mid.equal(8.0), () => {   // SAND — grain + dune ripple
-          albedo.mulAssign(vnoise(wp.xz.mul(5.0)).sub(0.5).mul(0.12).mul(near)
+          const sandG = float(0.0).toVar();
+          If(near.greaterThan(0.0), () => { sandG.assign(vnoise(wp.xz.mul(5.0)).sub(0.5).mul(0.12).mul(near)); });
+          albedo.mulAssign(sandG
             .add(sin(wp.x.mul(0.7).add(vnoise(wp.xz.mul(0.2)).mul(6.0))).mul(0.05).mul(far))
             .add(1.0));
         }).ElseIf(mid.equal(9.0), () => {   // GRASS — bladed clumps + tone
-          const g = vnoise(wp.xz.mul(3.5)).mul(0.6)
-            .add(vnoise(wp.xz.mul(14.0)).mul(0.4).mul(near)).sub(0.5);
+          const g = vnoise(wp.xz.mul(3.5)).mul(0.6).toVar();
+          If(near.greaterThan(0.0), () => { g.addAssign(vnoise(wp.xz.mul(14.0)).mul(0.4).mul(near)); });
+          g.subAssign(0.5);
           albedo.mulAssign(g.mul(0.22).mul(far).add(1.0));
           albedo.y.mulAssign(g.mul(0.08).mul(far).add(1.0));
         }).ElseIf(mid.equal(10.0), () => {  // ROCK — craggy multi-scale tone
@@ -1271,14 +1578,18 @@
           albedo.mulAssign(s.mul(0.10).mul(far).add(1.0));
           albedo.z.mulAssign(s.mul(0.05).mul(far).oneMinus());
           const sparkleFade = clamp(vd.sub(26.0).div(34.0).oneMinus(), 0.0, 1.0);   // 26-60 m
-          albedo.mulAssign(vnoise(wp.xz.mul(24.0)).sub(0.5).mul(0.06).mul(sparkleFade).add(1.0));
+          If(sparkleFade.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(wp.xz.mul(24.0)).sub(0.5).mul(0.06).mul(sparkleFade).add(1.0));
+          });
           rough.assign(clamp(rough.sub(far.mul(0.10)), 0.05, 1.0));
         }).ElseIf(mid.equal(12.0), () => {  // ROOF — ridged courses, warm bands
           const ty = fract(y.div(0.34));
           const shadeAA = clamp(fwTy.mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/glx/shaders/glsl-lit.js)
           const shade = sin(ty.mul(3.14159)).mul(shadeAA);
           albedo.mulAssign(shade.mul(0.16).add(0.88));
-          albedo.mulAssign(vnoise(vec2(hc.mul(2.0), floor(y.div(0.34))).mul(3.0)).sub(0.5).mul(0.14).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(vec2(hc.mul(2.0), floor(y.div(0.34))).mul(3.0)).sub(0.5).mul(0.14).mul(near).add(1.0));
+          });
           rough.assign(min(1.0, rough.add(far.mul(0.10))));
         }).ElseIf(mid.equal(13.0), () => {  // STONE — jittered blocks, deep mortar
           const cell = floor(vec2(hc, y).mul(1.3));
@@ -1303,7 +1614,9 @@
           // whole race, so it gets tone variation rather than pattern. No
           // fract()/sin() term at all — nothing here can strobe, only soften.
           albedo.mulAssign(vnoise(wp.xz.mul(0.035)).sub(0.5).mul(0.10).mul(far).add(1.0));
-          albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
+          If(near.greaterThan(0.0), () => {
+            albedo.mulAssign(vnoise(wp.xz.mul(7.0)).sub(0.5).mul(0.13).mul(near).add(1.0));
+          });
           rough.assign(min(1.0, rough.add(far.mul(0.10))));
         });
       });
@@ -1352,10 +1665,19 @@
         // standing rule, because roadMarkings() takes derivatives of it.
         const trkA = chunked ? null : vec3(attribute("trk", "vec3")).toVar();  // vTrk
         // Hammered cotangent inputs: anchor derivatives before any If graph.
+        // Hammered (43) is a livery finish, so it only draws with carFinish (grade-tint.js carPaint, the garage
+        // mirror resolve), a per-draw UNIFORM: the derivatives stay in uniform control flow, and every other lit
+        // fragment skips their 10 components (#4556; the same gate as the fnDx finish anti-alias below).
         const hmUV = objP.xz.add(objP.y.mul(vec2(0.73, -0.61))).toVar();
-        const hmDP1 = dFdx(wp).toVar(), hmDP2 = dFdy(wp).toVar();
-        const hmDUV1 = dFdx(hmUV).toVar(), hmDUV2 = dFdy(hmUV).toVar();
+        const hmDP1 = vec3(0.0).toVar(), hmDP2 = vec3(0.0).toVar();
+        const hmDUV1 = vec2(0.0).toVar(), hmDUV2 = vec2(0.0).toVar();
+        If(matU.carFinish.greaterThan(0.5), () => {
+          hmDP1.assign(dFdx(wp)); hmDP2.assign(dFdy(wp));
+          hmDUV1.assign(dFdx(hmUV)); hmDUV2.assign(dFdy(hmUV));
+        });
         const vd = length(wp.sub(cameraPosition)).toVar();    // vDist
+        // matDetail: the baked taps' explicit gradients, taken here in uniform flow (absent below EXTREME).
+        const mdDx = MAT_DETAIL ? dFdx(wp).toVar() : null, mdDy = MAT_DETAIL ? dFdy(wp).toVar() : null;
         // Puddle shape (wet block): derivatives taken here, in uniform control flow
         // (the WebGPU path compiles this graph to WGSL, which requires it) — an If
         // on the UNIFORM wetness is still uniform, and dry frames skip them.
@@ -1423,6 +1745,8 @@
           fnCrease.assign(smoothstep(0.02, 0.20, dot(fnDx, fnDx).add(dot(fnDy, fnDy))));
         });
         const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(90.0)).toVar();
+        // carSurf: derivatives + model axes at the top level, then the rounded-edge catch (tsl-carsurf.js begin).
+        const cs = CSN && !chunked && !instanced ? CSN.begin({ objP, Ngeo, N, V, sunDir: U.sunDir, vd, classifiedCar }) : null;
         // 34 = METALLIC FLAKE, 35 = CANDY: paint responses (js/render/glx/shaders/glsl-lit.js); grain / saturation / rim below.
         const flakeSurface = surfaceId.equal(34.0).toVar();
         const candySurface = surfaceId.equal(35.0).toVar();
@@ -1467,10 +1791,14 @@
         const weave = float(0.5).toVar();
         const wvT = vec2(0.0).toVar();
         If(carbonFinish.or(carbonSurface), () => {
-          const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
           const wvFade = clamp(vd.sub(10.0).div(10.0).oneMinus(), 0.0, 1.0).toVar();
-          weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
-          wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
+          if (cs) CSN.weave(cs, wvFade);   // carSurf: footprint fade + the anisotropy it carries
+          // wvFade 0 (>= 20 m) leaves weave 0.5 / wvT 0 exactly; no derivative inside.
+          If(wvFade.greaterThan(0.0), () => {
+            const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
+            weave.assign(wv.x.sin().mul(wv.y.sin()).mul(wvFade).mul(0.5).add(0.5));
+            wvT.assign(vec2(wv.x.cos().mul(wv.y.sin()), wv.x.sin().mul(wv.y.cos())).mul(wvFade));
+          });
         });
         // FORGED CARBON (38): irregular chips faded to their mean 2/3 over 10-20 m (CarMaterialShade.FORGED; glsl-lit.js).
         const fgM = float(0.667).toVar();
@@ -1562,6 +1890,8 @@
           });
         });
 
+        // carSurf: coat peel, panel lines / fasteners, tyre sidewall + shoulder detail — before Nsaa, so SAA sees them.
+        if (cs) CSN.detail(cs, { N, Ngeo, paintLike, carFinish: matU.carFinish, rubber: rubberSurface, sidewall: sidewallSurface, classifiedCar });
         // SAA source: geo + peel, before wall/MAT bump (WGX saaVar mix).
         const Nsaa = vec3(N).toVar();
 
@@ -1593,7 +1923,9 @@
         // per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js)
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
-        if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nsaa));
+        const mdPom = mdPomOffset ? mdPomOffset(surfaceId, wp, V, vd, Nvary, mdDx, mdDy).toVar() : (MAT_DETAIL ? vec2(0.0) : null);
+        if (applyMaterialTexNormalHd) N.assign(applyMaterialTexNormalHd(surfaceId, N, wp, vd, Nsaa, mdDx, mdDy, mdPom));
+        else if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd, Nsaa));
 
         const L = vec3(U.sunDir).toVar();
         const H = normalize(L.add(V).add(vec3(1e-5))).toVar();   // +eps: V==-L NaN guard
@@ -1603,17 +1935,21 @@
         const VoH = max(dot(V, H), 0.0).toVar();
 
         const albedo = vec3(albedoIn).toVar();
+        if (cs) CSN.applyAO(cs, albedo);   // carSurf panel-line occlusion
 
         // procedural ground texture + patches + cracks (js/render/glx/shaders/glsl-lit.js)
         const patchM = float(0.5).toVar();
-        // fwidth(cr) in the detail If: a uniform gate (keep it one — a per-fragment
-        // gate is a WGSL derivative_uniformity error); detail-0 draws skip the vnoise.
+        // fwidth(cr) in the detail If: a uniform gate (keep it one — under a
+        // per-fragment gate the derivative is undefined across inactive lanes, and a
+        // hard WGSL derivative_uniformity error on Firefox; r187 switches that
+        // diagnostic off everywhere else); detail-0 draws skip the vnoise.
         If(matU.detail.greaterThan(0.0), () => {
           const cr = abs(vnoise(wp.xz.mul(0.9).add(3.3)).mul(2.0).sub(1.0)).toVar();
           const crAA = max(float(0.075), fwidth(cr).add(0.015)).toVar();
           const gxz = wp.xz;
           const fineFade = clamp(vd.sub(35.0).div(90.0).oneMinus(), 0.0, 1.0);
-          const n = vnoise(gxz.mul(0.35)).mul(0.60).add(vnoise(gxz.mul(2.1)).mul(0.40).mul(fineFade));
+          const n = vnoise(gxz.mul(0.35)).mul(0.60).toVar();
+          If(fineFade.greaterThan(0.0), () => { n.addAssign(vnoise(gxz.mul(2.1)).mul(0.40).mul(fineFade)); });
           albedo.mulAssign(n.sub(0.5).mul(matU.detail).add(1.0));
           patchM.assign(vnoise(gxz.mul(0.055).add(9.1)));
           const pm = smoothstep(0.52, 0.72, patchM);
@@ -1662,6 +1998,7 @@
         // METALLIC FLAKE (34) and CANDY (35): see js/render/glx/shaders/glsl-lit.js.
         If(flakeSurface, () => {
           const fkF = clamp(vd.sub(10.0).div(16.0).oneMinus(), 0.0, 1.0).toVar();
+          if (cs) fkF.mulAssign(CSN.flakeAlbedoFade(cs));   // carSurf: footprint fade of the 7 mm grain
           If(fkF.greaterThan(0.0), () => {
             const fkC = floor(objP.mul(140.0));
             const fkH = hash21(fkC.xy.add(fkC.z.mul(19.7)));
@@ -1716,9 +2053,45 @@
         albedo.assign(packedMat.xyz);
         rough.assign(packedMat.w);
         if (applyMaterialTex) {
-          const packedTex = applyMaterialTex(surfaceId, albedo, rough, wp, Nvary, vd);
+          const packedTex = applyMaterialTexHd ? applyMaterialTexHd(surfaceId, albedo, rough, wp, Nvary, vd, mdDx, mdDy, mdPom)
+            : applyMaterialTex(surfaceId, albedo, rough, wp, Nvary, vd);
           albedo.assign(packedTex.xyz);
           rough.assign(packedTex.w);
+        }
+
+        // Silverstone pilot. Work in metres along/across the road so the repair seams
+        // follow the bends. Footprints precede the material branch for WebGPU derivatives.
+        const filmRough = U.silverstoneSurface && trkA && !instanced ? float(0.30).toVar() : null;
+        if (filmRough) {
+          const pixel = fwidth(trkA.xy).toVar();
+          If(U.silverstoneSurface.greaterThan(0.5), () => {
+            const s = trkA.x, x = trkA.y;
+            // Use the track vertex material before the car finish remaps.
+            const terrainMaterial = floor(matA.add(0.5));
+            If(terrainMaterial.equal(16.0).and(trkA.z.greaterThan(0.5)).and(abs(x).lessThan(trkA.z)), () => {
+              // Three stretches of newer binder in the older, pale aggregate. A skewed
+              // end joint and a lateral joint describe each pass of the paving machine.
+              const edge = max(float(0.14), max(pixel.x, pixel.y)).toVar();
+              const slab = (centre, halfLength, lane, halfWidth) => {
+                const end = abs(s.sub(centre).add(x.mul(0.34))).sub(halfLength);
+                const side = abs(x.sub(lane)).sub(halfWidth);
+                return smoothstep(edge.negate(), edge, max(end, side)).oneMinus();
+              };
+              const repair = max(slab(170, 38, 2.4, 3.8), max(slab(2480, 68, -2.7, 3.4), slab(4520, 54, 0, 10))).toVar();
+              const wear = vnoise(vec2(s.mul(0.09), x.mul(0.7))).toVar();
+              albedo.mulAssign(mix(wear.mul(0.16).add(1.06), float(0.74), repair));
+              rough.assign(mix(rough.mul(0.9).add(wear.mul(0.10)), float(0.65), repair));
+              filmRough.assign(mix(float(0.36), float(0.22), repair));
+            }).ElseIf(terrainMaterial.equal(0.0).and(trkA.z.equal(0)).and(abs(x).greaterThan(2.0)), () => {
+              // The flat, track-addressed paint includes the striped kerbs and pit hatching.
+              // Leave the stripe boundaries intact; fade the paint scuffs as they minify.
+              const fade = smoothstep(0.15, 0.65, max(pixel.x, pixel.y)).oneMinus();
+              const scuff = smoothstep(0.55, 0.86, vnoise(vec2(s.mul(2), x.mul(4)))).mul(fade);
+              albedo.assign(mix(albedo, vec3(0.32, 0.31, 0.29), scuff.mul(0.44)));
+              rough.assign(mix(float(0.46), float(0.72), scuff));
+              filmRough.assign(mix(float(0.16), float(0.28), scuff));
+            });
+          });
         }
 
         // painted road markings (js/render/glx/shaders/glsl-lit.js)
@@ -1764,27 +2137,32 @@
           // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
           // reference; GLX glsl-lit.js constant for constant: two octaves of
           // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
-          const pn = vnoise(wp.xz.mul(0.13).add(4.7)).mul(0.70).add(vnoise(wp.xz.mul(0.29).add(11.3)).mul(0.30));
-          // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
-          // crown drains to the gutters (0.75 centre → 1.25 edge) and the low side
-          // of a banked turn holds the water (lateral downhill from the screen
-          // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
-          // chunked (city prop) variant, which has no road.
-          const pool = float(1.0).toVar();
-          if (trkA) {
-            If(trkA.z.greaterThan(0.5), () => {
-              const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
-              const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
-              const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
-              // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
-              pool.assign(mix(float(0.75), float(1.25), smoothstep(0.35, 0.95, abs(lat))).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
-            });
-          }
-          // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows,
-          // so drying shrinks the pools to their deepest spots first.
+          // Exact-zero gate (as GLX): puddle = ...*pg*upFace*(1-porous), so the noise, pool and
+          // smoothsteps are skipped where the weight is 0 (wetness < 0.6, PUDDLES 0, walls, porous). pg is
+          // uniform-only; the body has no derivatives (they are hoisted above).
           const pg = clamp(smoothstep(0.6, 1.0, U.wetness).mul(U.puddles), 0.0, 1.0);
-          const plo = pg.mul(0.38).oneMinus();
-          puddle.assign(smoothstep(plo, plo.add(0.20), pn.mul(pool)).mul(pg).mul(upFace).mul(porous.oneMinus()));
+          If(pg.greaterThan(0.0).and(upFace.greaterThan(0.0)).and(porous.lessThan(0.5)), () => {
+            const pn = vnoise(wp.xz.mul(0.13).add(4.7)).mul(0.70).add(vnoise(wp.xz.mul(0.29).add(11.3)).mul(0.30));
+            // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
+            // crown drains to the gutters (0.75 centre → 1.25 edge) and the low side
+            // of a banked turn holds the water (lateral downhill from the screen
+            // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
+            // chunked (city prop) variant, which has no road.
+            const pool = float(1.0).toVar();
+            if (trkA) {
+              If(trkA.z.greaterThan(0.5), () => {
+                const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
+                const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
+                const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
+                // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+                pool.assign(mix(float(0.75), float(1.25), smoothstep(0.35, 0.95, abs(lat))).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+              });
+            }
+            // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows,
+            // so drying shrinks the pools to their deepest spots first.
+            const plo = pg.mul(0.38).oneMinus();
+            puddle.assign(smoothstep(plo, plo.add(0.20), pn.mul(pool)).mul(pg).mul(upFace).mul(porous.oneMinus()));
+          });
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).
@@ -1813,7 +2191,7 @@
           albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.40), puddle));   // standing water: darker than the sheet
           wetSheen.assign(wet.mul(porous.oneMinus()));
-          rough.assign(mix(rough, 0.30, wetSheen));
+          rough.assign(mix(rough, filmRough || 0.30, wetSheen));
           rough.assign(mix(rough, 0.02, puddle));   // near-mirror inside the pool
           a.assign(rough.mul(rough));
           f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
@@ -1845,8 +2223,10 @@
         // shades on Ngeo. Skip the taps when the result cannot contribute.
         const shadow = float(1.0).toVar();
         If(NoL.greaterThan(0.0).or(clearcoat.greaterThan(0.001)), () => {
-          const sunSh = sampleShadow ? sampleShadow(wp, Nvary) : float(1.0);
-          shadow.assign(sunSh.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()));
+          if (!sampleShadow) { shadow.assign(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus()); return; }
+          // S1 exact-zero gate: sunSh (>= 0) == 0 makes the product 0 whatever the cloud FBM returns.
+          shadow.assign(sampleShadow(wp, Nvary));
+          If(shadow.greaterThan(0.0), () => { shadow.assign(shadow.mul(cloudShadow(wp).mul(U.cloudShadowDim).oneMinus())); });
         });
         const litNoL = NoL.mul(shadow).mul(U.keyMul).toVar();
 
@@ -1945,24 +2325,27 @@
         // the CHUNK'S slice; the index texture maps it to the track-lamp id.
         // The idx fetch sits INSIDE the select (an if/else in r186): off the per-chunk
         // path no iteration pays it. No .toVar() inside, or it would emit unconditionally.
-        const lampRow = PC ? (i) => {
+        const lampRow = PC ? (i, grid) => {
           const k = PC.base.add(float(i)), r = floor(k.div(U.lgIdxW));
-          return select(PC.use, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
+          return select(grid, textureLoad(LG_TEX.idx, ivec2(k.sub(r.mul(U.lgIdxW)), r)).r, float(0.0)).toVar();
         } : null;
         const _fetch = (row, col) => textureLoad(LG_TEX.lamp, ivec2(float(col), row));
-        const LGeo = PC ? ((i, r) => select(PC.use, _fetch(r, 3), U.lampGeo.element(i)))
+        const LGeo = PC ? ((i, r, grid) => select(grid, _fetch(r, 3), U.lampGeo.element(i)))
                         : ((i) => U.lampGeo.element(i));
-        const LPos = PC ? ((i, r) => select(PC.use, _fetch(r, 0).xyz, U.lampPos.element(i)))
+        const LPos = PC ? ((i, r, grid) => select(grid, _fetch(r, 0).xyz, U.lampPos.element(i)))
                         : ((i) => U.lampPos.element(i));
-        const LCol = PC ? ((i, r) => select(PC.use, _fetch(r, 1).xyz, U.lampCol.element(i)))
+        const LCol = PC ? ((i, r, grid) => select(grid, _fetch(r, 1).xyz, U.lampCol.element(i)))
                         : ((i) => U.lampCol.element(i));
         // xyz = beam aim; w = LIVE-ONLY: the bake leaves this lamp out, so no step-aside.
-        const LDirW = PC ? ((i, r) => select(PC.use, _fetch(r, 2), U.lampDir.element(i)))
+        const LDirW = PC ? ((i, r, grid) => select(grid, _fetch(r, 2), U.lampDir.element(i)))
                          : ((i) => U.lampDir.element(i));
         // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
         // compile-time constant — and breaks on whichever count applies.
         // The chunk's list is nearest-first (LampChunks), so min(n, lampCap) keeps its nearest lamps.
-        const lampN = PC ? select(PC.use, min(PC.n, U.lampCap), U.numLights) : U.numLights;
+        const cellCount = PC ? min(PC.n, U.brakeSpillCount ? max(U.lampCap.sub(U.brakeSpillCount), 0.0) : U.lampCap) : null;
+        const cellSpill = PC && U.brakeSpillCount;
+        const cellTotal = cellSpill ? min(U.lampCap, cellCount.add(U.brakeSpillCount)) : cellCount;
+        const lampN = PC ? select(PC.use, cellTotal, U.numLights) : U.numLights;
         // NoV and final wet roughness stay fixed across lamps. Negative sentinels
         // defer each positive root until its first accepted specular contribution;
         // zero lamps, rejected lamps and inactive clearcoat do no extra root work.
@@ -1971,9 +2354,14 @@
 
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
           If(float(i).greaterThanEqual(lampN), () => { Break(); });
-          const row = lampRow ? lampRow(i) : null;
-          const geo = LGeo(i, row);
-          const LP = LPos(i, row).sub(wp).toVar();
+          // A cell stores static lamps only. Use its spare slots for the
+          // hot-disc suffix of the global set, through the same BRDF and falloff.
+          const spill = cellSpill ? PC.use.and(float(i).greaterThanEqual(cellCount)) : null;
+          const grid = PC ? (spill ? PC.use.and(spill.not()) : PC.use) : null;
+          const slot = spill ? select(spill, int(U.numLights.sub(U.brakeSpillCount).add(float(i).sub(cellCount))), i) : i;
+          const row = lampRow ? lampRow(i, grid) : null;
+          const geo = LGeo(slot, row, grid);
+          const LP = LPos(slot, row, grid).sub(wp).toVar();
           const rad = geo.x;
           // Range-reject on the SQUARED distance before the root (GLX glsl-lit.js):
           // the tests differ only within an ulp of rad, where att == 0 anyway.
@@ -1986,7 +2374,7 @@
             const att = win.mul(win).div(distC.mul(distC).add(1.0)).toVar();
             If(att.greaterThanEqual(1e-6), () => {
               // ONE colour + ONE aim read per lit lamp: each accessor call is its own fetch.
-              const lCol = LCol(i, row).toVar(), lDir = LDirW(i, row).toVar();
+              const lCol = LCol(slot, row, grid).toVar(), lDir = LDirW(slot, row, grid).toVar();
               const cd = dot(Ld.negate(), lDir.xyz);
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
@@ -2002,6 +2390,7 @@
               // depth precision lives at the lens, the road receiver near the
               // far plane), 4-tap PCF at 1.5/512.
               const lampSh = float(1.0).toVar();
+              const lampCarve = LAMPXX ? vec3(U.bakeShCol).toVar() : null;   // the mapped lamp's bake colour (extras: its own)
               if (lampShadowOn) {
                 // NoLl GATE — js/render/glx/shaders/glsl-lit.js: lampSh's only readers
                 // are the NoLl-scaled diffuse and the specular block already
@@ -2033,13 +2422,37 @@
                   });
                 });
               }
+              // EXTREME: the two extra mapped lamps, same projection / bias / 4-tap PCF as the one above.
+              if (LAMPXX) {
+                const xs = [[U.lampXVP0, U.lampXP.x, U.lampXP.z, U.bakeShColX0, SHX.lampTex[0]],
+                  [U.lampXVP1, U.lampXP.y, U.lampXP.w, U.bakeShColX1, SHX.lampTex[1]]];
+                for (const [xvp, xidx, xon, xcol, xtex] of xs) {
+                  If(xon.greaterThan(0.5).and(float(i).equal(xidx)).and(NoLl.greaterThan(0.0))
+                     .and(PC ? PC.use.not() : float(1.0).greaterThan(0.5)), () => {
+                    const lpc = xvp.mul(vec4(wp, 1.0)).toVar();
+                    If(lpc.w.greaterThan(0.0), () => {
+                      const lps = lpc.xyz.div(lpc.w).mul(0.5).add(0.5).toVar();
+                      If(lps.x.greaterThan(0.002).and(lps.x.lessThan(0.998))
+                        .and(lps.y.greaterThan(0.002)).and(lps.y.lessThan(0.998))
+                        .and(lps.z.lessThan(1.0)), () => {
+                        const lpz = lps.z.sub(float(0.0012).add(float(0.004).mul(NoLl.oneMinus()))).toVar();
+                        const lpt = 1.5 / (SHX.lampSize || 512);
+                        const xT = shadowMapNode(xtex);
+                        const xtap = (px, py) => xT.sample(flipUV(lps.xy.add(vec2(px, py)))).compare(lpz);
+                        lampSh.assign(xtap(-lpt, -lpt).add(xtap(lpt, -lpt)).add(xtap(-lpt, lpt)).add(xtap(lpt, lpt)).mul(0.25));
+                        lampCarve.assign(xcol);
+                      });
+                    });
+                  });
+                }
+              }
               // diffuse pool — fades as the road wets (reflection takes over)
               // On a baked fragment the live term steps aside (1 - bakeW) and the
               // shadow-mapped lamp carves its shadow out of the pool in the pool's
               // own steady colour (bakeShCol; 1 - lampSh is 0 for every other lamp).
               const bakeWl = bakeW.mul(lDir.w.oneMinus()).toVar();
               color.addAssign(albedo.mul(lCol.mul(lampSh.mul(bakeWl.oneMinus()))
-                .sub(vec3(U.bakeShCol).mul(lampSh.oneMinus().mul(bakeWl))))
+                .sub((lampCarve || vec3(U.bakeShCol)).mul(lampSh.oneMinus().mul(bakeWl))))
                 .mul(att.mul(spotD)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
@@ -2083,9 +2496,11 @@
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
         If(NoL.greaterThan(0.0), () => {
           const D = D_GGX(NoH, a);
-          const Vis = V_SmithGGX(NoV, NoL, a);
+          const Vis = V_SmithGGX(NoV, NoL, a, smithViewRoot(NoV, a));
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
-          const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
+          // carSurf: the anisotropic carbon lobe (tsl-carsurf.js anisoSun); off, the same D*Vis node as ever
+          const DV = cs ? CSN.anisoSun(cs, { DV: D.mul(Vis), N, V, L, H, NoV, NoL, a }) : D.mul(Vis);
+          const specCol = F.mul(DV).mul(vec3(U.sunColor)).mul(litNoL).toVar();
           // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
           specCol.assign(specCol.div(specCol.div(U.specKnee).add(1.0)));
           color.addAssign(specCol);
@@ -2108,7 +2523,7 @@
           If(NoLg.greaterThan(0.0), () => {
             const ccA = min(sqrt(ccSaaVar.mul(0.25).add(0.035 * 0.035)), 0.30);
             const Dc = D_GGX(NoHg, ccA);
-            const Vc = V_SmithGGX(NoVg, NoLg, ccA);
+            const Vc = V_SmithGGX(NoVg, NoLg, ccA, smithViewRoot(NoVg, ccA));
             const Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), float(1.0)).x;
             const ccCol = vec3(U.sunColor).mul(Dc.mul(Vc).mul(Fc)).mul(NoLg)
               .mul(shadow).mul(U.keyMul).mul(clearcoat).toVar();
@@ -2117,6 +2532,25 @@
           });
         });
 
+        // A bay cube is photographed at its centre. Intersect the world
+        // reflection ray with its walls, then look up the hit from that centre.
+        // Only the local room uses this direction; sky/sun and race probes keep R.
+        const roomPos = U.garageBox ? wp.sub(U.garageCentre).toVar() : null;
+        const localProbeStrength = U.garageBox ? U.envStr.mul(mix(float(1.0),
+          smoothstep(0.0, 1.5, U.garageBox.z.sub(abs(roomPos.z))).mul(
+            smoothstep(0.0, 0.5, U.garageBox.x.sub(abs(roomPos.x)))), U.garageBoxOn)) : U.envStr;
+        function probeDirection(ray) {
+          if (!U.garageBox) return ray;
+          const direction = ray.toVar();
+          If(U.garageBoxOn.greaterThan(0.5), () => {
+            const signedPos = mix(roomPos.negate(), roomPos, step(vec3(0), ray));
+            const axis = abs(ray);
+            const distance = mix(vec3(1e6), U.garageBox.sub(signedPos).div(max(axis, vec3(0.00001))), step(vec3(0.00001), axis));
+            const travel = max(0.0, min(distance.x, min(distance.y, distance.z)));
+            direction.assign(roomPos.add(ray.mul(travel)));
+          });
+          return direction;
+        }
         // clearcoat ENV mirror (the analytic-clearcoat-ENV block in glsl-lit.js).
         //    uEnvStr = 0 -> analytic
         //    sky-gradient path only; > 0 blends in the M9 live cube fetch
@@ -2129,7 +2563,7 @@
           const NoVc = max(dot(Ngeo, V), 1e-4);
           const ccFb = NoVc.oneMinus();
           const ccF = ccFb.mul(ccFb);                          // fresnel² (mul not pow: pow(0,2) NaNs on mobile)
-          const probeLive = clamp(U.envStr, 0.0, 1.0);
+          const probeLive = clamp(localProbeStrength, 0.0, 1.0);
           // A TINTED VISOR IS A DIELECTRIC, NOT CHROME — mirrors the GLX split.
           // baseRefl is the ANGLE-INDEPENDENT mirror term; cutting it for the
           // visor keeps the 0.28*ccF grazing rim, so the visor holds an edge
@@ -2151,15 +2585,18 @@
             // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
             // clones with referenceNode = this base (mrdoob/three.js
             // CubeTextureNode.js). Do not call .uv() on a cube node.
-            const cubeRefl = cubeTexture(envCubeNode, Rg, rough.mul(2.5)).rgb;
+            const cubeRefl = cubeTexture(envCubeNode, probeDirection(Rg), rough.mul(2.5)).rgb;
             envCC.assign(mix(envCC, cubeRefl, probeLive));
           }
-          // sun disc in the mirror: pow-400 lobe widened by the AA variance
-          const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
-          const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
-          envCC.addAssign(vec3(U.sunColor)
-            .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
-            .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
+          // sun disc in the mirror: pow-400 lobe widened by the AA variance. A finite
+          // term times carSunGlint 0 (the mirror pass, MIRROR_TUNE) adds exactly 0: skip it.
+          If(U.carSunGlint.notEqual(0.0), () => {
+            const ccDiscA = sqrt(ccSaaVar.mul(0.25).add(0.0705 * 0.0705));
+            const ccDiscExp = max(float(2.0).div(ccDiscA.mul(ccDiscA)).sub(2.0), 32.0);
+            envCC.addAssign(vec3(U.sunColor)
+              .mul(pow(max(dot(Rg, U.sunDir), 1e-4), ccDiscExp))
+              .mul(U.carSunGlint).mul(shadow).mul(U.keyMul));
+          });
           ccTrans.assign(envW.mul(0.94).oneMinus());
           color.mulAssign(ccTrans);                             // absorb under the mirror
           const addCC = envCC.mul(envW).toVar();
@@ -2180,7 +2617,9 @@
 
         // metallic-flake sparkle (js/render/glx/shaders/glsl-lit.js), faded out at range AND inside 4 m (cockpit confetti)
         // U.carSparkle scales the whole add and the mirror pass zeroes it (MIRROR_TUNE): skip there.
-        If(carPaint.greaterThan(0.001).and(litNoL.greaterThan(0.0)).and(matU.sparkle.greaterThan(0.001))
+        // carSurf replaces it with the object-space, under-the-coat, footprint-LOD flake (tsl-carsurf.js sparkle).
+        if (cs) CSN.sparkle(cs, { color, Ngeo, V, L, sunColor: U.sunColor, litNoL, carSparkle: U.carSparkle, carPaint, sparkleU: matU.sparkle, albedo });
+        else If(carPaint.greaterThan(0.001).and(litNoL.greaterThan(0.0)).and(matU.sparkle.greaterThan(0.001))
           .and(U.carSparkle.notEqual(0.0)), () => {
           const spFade = clamp(vd.sub(14.0).div(30.0).oneMinus(), 0.0, 1.0).mul(smoothstep(1.5, 4.0, vd)).mul(matU.sparkle).toVar();
           spFade.mulAssign(smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b))));
@@ -2211,11 +2650,17 @@
           // the live env probe replaces the gradient near the car (GLX; faded
           // with eye distance — one cube is parallax-wrong far from its centre)
           if (envCubeNode) {
-            If(U.envStr.greaterThan(0.001), () => {
-              const probeW = clamp(U.envStr, 0.0, 1.0)
+            // envAll: a world pixel takes the probe at full strength (envWorld, not the CAR knob), out to 240 m,
+            // and a roughness-aware mip; a car pixel keeps today's weight and LOD.
+            const envOn = ENV_ALL ? max(localProbeStrength, U.envWorld) : localProbeStrength;
+            If(envOn.greaterThan(0.001), () => {
+              const probeW = clamp(localProbeStrength, 0.0, 1.0)
                 .mul(clamp(vd.sub(60.0).div(90.0).oneMinus(), 0.0, 1.0)).toVar();
+              if (ENV_ALL) probeW.assign(select(classifiedCar, probeW, U.envWorld.mul(clamp(vd.sub(90.0).div(150.0).oneMinus(), 0.0, 1.0))));
               If(probeW.greaterThan(0.001), () => {
-                envCubeTap.assign(vec4(cubeTexture(envCubeNode, R, rough.mul(2.5)).rgb, probeW));
+                const direction = probeDirection(R);
+                const tapAll = ENV_ALL ? cubeTexture(envCubeNode, direction, select(classifiedCar, rough.mul(2.5), sqrt(rough).mul(ENV_LODS))) : null;
+                envCubeTap.assign(vec4(tapAll ? tapAll.rgb : cubeTexture(envCubeNode, direction, rough.mul(2.5)).rgb, probeW));
                 envColor.assign(mix(envColor, envCubeTap.rgb, envCubeTap.w));
               });
             });
@@ -2246,9 +2691,9 @@
           const skyM = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rm.y, 0.0)));
           const envMet = mix(vec3(U.ambGround).mul(0.6), skyM, smoothstep(-0.12, 0.30, Rm.y)).toVar();
           if (envCubeNode) {
-            If(U.envStr.greaterThan(0.001), () => {
-              const cubeM = select(envCubeTap.w.greaterThan(0.0), envCubeTap.rgb, cubeTexture(envCubeNode, Rm, rough.mul(2.5)).rgb);
-              envMet.assign(mix(envMet, cubeM, clamp(U.envStr, 0.0, 1.0)));
+            If(localProbeStrength.greaterThan(0.001), () => {
+              const cubeM = select(envCubeTap.w.greaterThan(0.0), envCubeTap.rgb, cubeTexture(envCubeNode, probeDirection(Rm), rough.mul(2.5)).rgb);
+              envMet.assign(mix(envMet, cubeM, clamp(localProbeStrength, 0.0, 1.0)));
             });
           }
           const metAdd = envMet.mul(F_Schlick(NoV, albedo, rough.mul(0.5).oneMinus()))
@@ -2259,6 +2704,20 @@
             metAdd.mulAssign(clamp(metLum.mul(4.0), 0.0, 1.0).oneMinus().mul(0.32).add(1.0));
           });
           color.addAssign(metAdd.div(max(max(metAdd.r, metAdd.g), metAdd.b).add(1.0)));
+        });
+        // envAll: WORLD METAL (MAT 4: armco, gantries, fences) mirrors the live cube as a conductor, F0 from its
+        // albedo, roughness-aware mip, fading out by 240 m. Not built below EXTREME.
+        // `mid` is the raw WORLD material id (METAL = 4), not a car surface id (surface-id-parity scans those).
+        if (ENV_ALL) If(classifiedCar.not().and(floor(matA.add(0.5)).equal(4.0)).and(U.envWorld.greaterThan(0.5)), () => {
+          const fadeW = clamp(vd.sub(90.0).div(150.0).oneMinus(), 0.0, 1.0).toVar();
+          If(fadeW.greaterThan(0.001), () => {
+            const Rw = reflect(V.negate(), N);
+            const cubeW = cubeTexture(envCubeNode, Rw, sqrt(rough).mul(ENV_LODS)).rgb;
+            const f0W = mix(vec3(0.56), albedo, 0.5);
+            const wAdd = cubeW.mul(F_Schlick(NoV, f0W, float(1.0)))
+              .mul(rough.mul(0.7).oneMinus().mul(fadeW).mul(0.55)).toVar();
+            color.addAssign(wAdd.div(max(max(wAdd.r, wAdd.g), wAdd.b).add(1.0)));
+          });
         });
         // TINTED CHROME / CHAMELEON: the white lit terms take the livery hue (mirrors glsl-lit.js).
         If(tintedSurface, () => {
@@ -2343,7 +2802,7 @@
             const fvS = (sin(fvC.mul(70.0).add(sin(objP.z.mul(1.7).add(fvC.mul(9.0))).mul(1.2))).mul(0.5).add(0.5)).toVar();
             const fvBr = (smoothstep(-0.6, 0.2, sin(objP.z.mul(4.0).add(fvC.mul(37.0))))).toVar();
             const fvPer = (float(0.090).div(fnPx)).toVar();
-            const fv = (mix(smoothstep(0.50, 0.80, fvS).mul(fvBr), float(0.30), smoothstep(3.0, 1.5, fvPer)).mul(smoothstep(1.4, 0.2, objP.z))).toVar();
+            const fv = (mix(smoothstep(0.50, 0.80, fvS).mul(fvBr), float(0.30), smoothstepDown(3.0, 1.5, fvPer)).mul(smoothstepDown(1.4, 0.2, objP.z))).toVar();
             const fvGlow = (mix(vec3(0.78, 1.0, 0.30), vec3(0.05, 0.14, 0.0), smoothstep(0.35, 0.75, pvA))
               .mul(vec3(U.ambSky).mul(2.5).add(vec3(U.sunColor).mul(pvSun.mul(0.6))).add(0.15))).toVar();
             color.assign(mix(color, fvGlow, fv));
@@ -2364,7 +2823,7 @@
               .ElseIf(sfN.x.greaterThan(sfN.z), () => { sfUV.assign(vec2(objP.z, objP.y)); });
             const sfR = (smoothstep(0.15, 0.85, sfT).oneMinus().mul(0.62)).toVar();
             const sfW = (max(fnPx.mul(11.0), 0.02)).toVar();
-            const sfDot0 = (smoothstep(sfR.add(sfW), sfR.sub(sfW), length(fract(sfUV.mul(11.0)).sub(0.5)))).toVar();
+            const sfDot0 = (smoothstepDown(sfR.add(sfW), sfR.sub(sfW), length(fract(sfUV.mul(11.0)).sub(0.5)))).toVar();
             const sfDot = (mix(sfDot0, min(sfR.mul(sfR).mul(3.14159), 1.0), smoothstep(0.25, 0.45, sfW))).toVar();
             const sfS = (max(sfDot, smoothstep(0.08, 0.18, sfT).oneMinus())).toVar();
             color.assign(mix(vec3(min(pvLit, 3.0).mul(0.035)), vec3(pvLit).mul(vec3(0.70, 0.72, 0.76)), sfS));
@@ -2412,7 +2871,6 @@
               color.assign(vec3(0.010, 0.010, 0.011).mul(bLit.mul(0.6).add(1.0)).add(vec3(U.ambSky).mul(pvG.mul(0.010))));
             });
           }).ElseIf(finishId.greaterThanEqual(71.0), () => {
-            const aL = pvA;
             const lit = pvLit;
             If(finishId.equal(71.0), () => {   // truematte
               const tmAlb = (mix(vec3(pvA), albedo, 0.55)).toVar();
@@ -2491,8 +2949,8 @@
             fogCol.addAssign(lampFogC);
             color.assign(mix(color, fogCol, f));
           });
-          // low-lying ground mist: drifting 2-oct cloudFBM band
-          If(U.groundMist.greaterThan(0.001), () => {
+          // The mist ramp is zero through 8 m: the cockpit and near road need no band or noise.
+          If(U.groundMist.greaterThan(0.001).and(vd.greaterThan(8.0)), () => {
             const lowH = max(wp.y.sub(cameraPosition.y.sub(5.0)), 0.0);
             const band = exp(lowH.negate().mul(float(0.09).div(max(U.mistHeight, 0.05))));
             const mp = wp.xz.mul(0.020).add(vec2(U.time.mul(0.010), U.time.mul(0.006)));
@@ -2539,44 +2997,102 @@
      * NodeMaterial.setupPosition: instance → positionNode), and every world mesh
      * here draws at an identity model matrix, so the sway direction is world
      * xz on baked props and instanced pines alike — the same frame GLX uses. */
-    function vertexMotionNode() {
+    // A real branch, not select(): select() evaluates both arms, so every lit
+    // vertex (road, terrain, cars) paid ~7 sin plus the gust maths for a sway
+    // only flag and leaf vertices use (#4556). A draw's vertices are almost all
+    // static, so the branch is coherent.
+    // normalLocal and positionLocal are anchored as Fn-BODY statements before
+    // the If. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
+    // where the node is first built; built only inside the flag/foliage branch,
+    // that assignment landed there and every other vertex (the whole garage,
+    // the world soup) sent an UNINITIALISED normal varying to the fragment
+    // stage: lit surfaces black while decals and glare drew (shipped 2026-10-01
+    // as acdf1fed; the TLX gate passes on a blank readback, so no probe saw it).
+    // Same standing rule as the fragment anchors at the top of sharedFragment;
+    // tests/unit/tlx-shader-trims.test.mjs pins the order in the built shader.
+    const vertexMotionNode = () => Fn(() => {
+      const p = vec3(positionLocal).toVar();               // anchor
+      const nL = vec3(normalLocal).toVar();                // anchor (see above)
       const matA = attribute("mat", "float");
-      const mid = floor(matA.add(0.5));
-      const mfr = clamp(matA.sub(mid), 0.0, 1.0);
+      const mid = floor(matA.add(0.5)).toVar();
+      const mfr = clamp(matA.sub(mid), 0.0, 1.0).toVar();
+      const off = vec3(0.0).toVar();
       // FLAG — unchanged maths; the gate is the rounded id, not a half-open range
       // (GLX's own comment: a neighbour decoding a hair low has fract ~1.0).
-      const fw = mfr.mul(2.5);
-      const ph = U.time.mul(5.5).add(positionGeometry.x.mul(1.9)).add(positionGeometry.z.mul(1.9));
-      const wave = sin(ph).mul(0.085).add(sin(ph.mul(2.17).add(1.3)).mul(0.045)).mul(fw);
-      // FOLIAGE sway
-      const w = clamp(mfr.div(0.45), 0.0, 1.0);
-      const p = positionLocal;
-      const spd = U.wind.z;
-      const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
-      const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
-      const bend = sin(gust).mul(0.55)
-        .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
-        .add(0.45);                                                      // downwind lean bias
-      const amp = spd.mul(0.32).mul(w).mul(w);
-      const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
-      const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
-      const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
-      const isFlag = mid.equal(15.0);
-      const isLeaf = mid.equal(6.0).and(mfr.greaterThan(0.002));
-      // normalLocal is multiplied at the TOP LEVEL, never first inside a select
-      // branch. three r186 emits a VarNode's assignment (`normalLocal = normal;`)
-      // where the node is first built; built inside `select(isFlag, normalLocal
-      // .mul(wave), ...)` that assignment landed inside the flag/foliage `if`
-      // blocks only, and every other vertex (every non-instanced lit mesh — the
-      // whole garage, the world soup) sent an UNINITIALISED normal varying to
-      // the fragment stage: zero or garbage N, lit surfaces black while decals
-      // and glare drew (shipped 2026-10-01 as acdf1fed; the TLX gate passes on a
-      // blank readback, so no probe saw it). Same standing rule as the fragment
-      // anchors at the top of sharedFragment: build shared nodes before any
-      // conditional use.
-      const alongNormal = select(isFlag, wave, select(isLeaf, flutter, float(0.0)));
-      return positionLocal.add(normalLocal.mul(alongNormal)).add(select(isLeaf, sway, vec3(0.0)));
+      If(mid.equal(15.0), () => {
+        const fw = mfr.mul(2.5);
+        const ph = U.time.mul(5.5).add(positionGeometry.x.mul(1.9)).add(positionGeometry.z.mul(1.9));
+        const wave = sin(ph).mul(0.085).add(sin(ph.mul(2.17).add(1.3)).mul(0.045)).mul(fw);
+        off.assign(nL.mul(wave));
+      }).ElseIf(mid.equal(6.0).and(mfr.greaterThan(0.002)), () => {
+        // FOLIAGE sway
+        const w = clamp(mfr.div(0.45), 0.0, 1.0);
+        const spd = U.wind.z;
+        const along = p.x.mul(U.wind.x).add(p.z.mul(U.wind.y));          // metres downwind
+        const gust = U.time.mul(spd.mul(1.1).add(0.6)).sub(along.mul(0.07));
+        const bend = sin(gust).mul(0.55)
+          .add(sin(gust.mul(2.31).add(along.mul(0.19)).add(1.7)).mul(0.25))
+          .add(0.45);                                                      // downwind lean bias
+        const amp = spd.mul(0.32).mul(w).mul(w);
+        const sway = vec3(U.wind.x, 0.0, U.wind.y).mul(bend.mul(amp));
+        const flPh = U.time.mul(spd.mul(3.2).add(1.5)).add(p.x.mul(1.3)).add(p.z.mul(1.1)).add(p.y.mul(0.7));
+        const flutter = sin(flPh).mul(spd.mul(0.05)).mul(w);          // scalar, along the normal
+        off.assign(nL.mul(flutter).add(sway));
+      });
+      return p.add(off);
+    })();
+
+    /* CROWD LIFE (EXTREME crowd3d; js/track/scenery/detail.js crowdFigure): a variant positionNode that only the
+     * seated-figure batches draw with (tlx.js drawInstanced, batch.crowd; the attribute-instanced path only). Every
+     * other program, and the whole world below EXTREME, keeps vertexMotionNode above byte for byte: this graph and
+     * its uniform are built on the first crowd material, never before. The figure's FABRIC vertices carry
+     * TrackDetail.crowdMat's code in the id's fraction (0.02 + 0.06 x part, + 0.2 when the figure faces canonical -x):
+     * part 0 = legs (seated, still), 1 = torso / head, 2 = arms. The motion is in the figure's canonical space and
+     * goes to the world through the instance's own axes (iM0..2, scale included), so it bobs, leans to the track and
+     * stands with the figure whatever its row. The per-figure seed is its instance origin (iM3), stable under the
+     * cull pack's reordering. A wave crest travels across the venue; `crowdExcite` (0..1, setCrowdExcite / frame)
+     * and the camera's nearness (the chase camera rides the player's car) raise the bounce and the standing share. */
+    let _crowd = null;
+    function crowdUniforms() {
+      if (_crowd) return _crowd;
+      _crowd = { excite: uniform(0.0) };
+      if (SHARED_UNIFORMS) _crowd.excite.setGroup(renderGroup);
+      return _crowd;
     }
+    function setCrowdExcite(v) { if (_crowd) _crowd.excite.value = v > 0 ? Math.min(1, v) : 0; }
+    const crowdMotionNode = () => Fn(() => {
+      const CU = crowdUniforms();
+      const p = vec3(positionLocal).toVar();               // anchor (world: after the instance step)
+      vec3(normalLocal).toVar();                           // anchor (vertexMotionNode's rule)
+      const matA = attribute("mat", "float");
+      const mid = floor(matA.add(0.5)).toVar();
+      const mfr = clamp(matA.sub(mid), 0.0, 1.0).toVar();
+      const off = vec3(0.0).toVar();
+      If(mid.equal(7.0).and(mfr.greaterThan(0.01)), () => {
+        const neg = mfr.greaterThan(0.18);
+        const f = select(neg, float(-1.0), float(1.0));
+        const part = floor(mfr.sub(select(neg, float(0.2), float(0.0))).sub(0.02).div(0.06).add(0.5));
+        const upper = clamp(part, 0.0, 1.0), arm = clamp(part.sub(1.0), 0.0, 1.0);
+        const ax = attribute("iM0", "vec4").xyz, ay = attribute("iM1", "vec4").xyz, az = attribute("iM2", "vec4").xyz;
+        const o = attribute("iM3", "vec4").xyz;
+        const t = U.time;
+        const hs = fract(sin(dot(o.xz, vec2(12.9898, 78.233))).mul(43758.5453));
+        const near = float(1.0).sub(smoothstep(25.0, 110.0, length(o.sub(cameraPosition)))).mul(0.65);
+        const e = clamp(CU.excite.add(near), 0.0, 1.0);
+        // the wave: a narrow crest sweeping the venue every ~19 s; a figure stands as it passes
+        const crest = sin(o.x.mul(0.045).add(o.z.mul(0.032)).sub(t.mul(0.33)));
+        const wave = smoothstep(0.86, 0.985, crest);
+        const stand = max(wave, e.mul(smoothstep(0.55, 0.9, hs)).mul(smoothstep(0.2, 0.7, sin(t.mul(0.7).add(hs.mul(19.0))))));
+        const bob = sin(t.mul(hs.mul(0.9).add(1.2)).add(hs.mul(6.283))).mul(0.012)
+          .add(abs(sin(t.mul(hs.mul(2.0).add(6.0)).add(hs.mul(11.0)))).mul(0.045).mul(e));
+        const dy = upper.mul(bob.add(stand.mul(0.26))).add(arm.mul(stand.mul(0.22).add(e.mul(0.06).mul(sin(t.mul(9.0).add(hs.mul(5.0)))))));
+        const dx = upper.mul(f).mul(e.mul(0.05).add(sin(t.mul(0.5).add(hs.mul(13.0))).mul(0.012)));
+        const dz = upper.mul(sin(t.mul(0.8).add(hs.mul(7.0))).mul(0.02).mul(e.add(1.0)));
+        off.assign(ax.mul(dx).add(ay.mul(dy)).add(az.mul(dz)));
+      });
+      return p.add(off);
+    })();
+    let _crowdPos = null;
 
     /* material factory
      * makeMaterial(opts) -> THREE.MeshBasicNodeMaterial with the full lit
@@ -2726,8 +3242,14 @@
       // here is what made three.js cars invisible (see factory comment).
       m.opacityNode = packed.opacity;
       m.outputNode = packed.out;
-      m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
-      pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : ""));
+      const crowd = !!o.crowd && !!o.instanced && !o.chunked;   // CROWD LIFE: the seated-figure batches only
+      m.positionNode = crowd ? (_crowdPos || (_crowdPos = crowdMotionNode()))
+        : (_sharedPos || (_sharedPos = vertexMotionNode()));
+      pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : "") + (crowd ? "-crowd" : ""));
+      // Born on the program the pass already wants. setSsrMrt() only walks
+      // materials that exist when it runs; one created mid-frame used to
+      // compile the single-target key, then the MRT key on the next present.
+      if (_ssrOn) m.mrtNode = ud.tlxKeepSsrTag ? packed.mrtKeep : packed.mrt;
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -2841,7 +3363,7 @@
     // M9: live env-probe strength. tlx.js drives this each begin() from the
     // probe's ready state × the CAR ENV REFLECTION (carEnvCube) knob — 0 keeps
     // the analytic-gradient mirror only, >0 blends in the real cube fetch.
-    function setEnvStr(v) { U.envStr.value = +v || 0; }
+    function setEnvStr(v, live) { U.envStr.value = +v || 0; if (U.envWorld) U.envWorld.value = live ? 1 : 0; }
     // M9: swap the shared env-cube binding. tlx.js points it at a black dummy
     // cube while rendering INTO the probe (feedback-loop guard) and back at the
     // live cube for the main pass. No-op when there's no cube node.
@@ -2849,8 +3371,10 @@
     // Arm the second HDR attachment (ssrTag) only for the main scene render.
     // Env faces and the canvas fallback must keep mrtNode null — same
     // material, one color target.
+    let _ssrOn = false;
     function setSsrMrt(on) {
-      if (!SSR_TAG) return;
+      if (!SSR_TAG || _ssrOn === !!on) return;   // a repeated state walks nothing (materials minted later take _ssrOn)
+      _ssrOn = !!on;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
         const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced, !!m.userData.tlxFx);
@@ -2885,17 +3409,22 @@
      * the bodywork under it. Sun: a 4-tap box PCF on the static map with
      * sampleShadow's fade, slope bias and box compensation. Pools: the baked
      * lamp atlas at the decal's ground position, sampled at level 0 outside
-     * any branch (the WGSL uniformity rule), weighted toward up-facing marks. */
+     * any branch (the WGSL uniformity rule), weighted toward up-facing marks.
+     * CSMX: past the near box the far cascades take over exactly as in
+     * sampleShadow (csmFar on the near weight / value), so a far rival's
+     * livery darkens with its bodywork. */
     const decalShadow = !shadowOn ? null : Fn(([wpIn, nrmIn]) => {
       const wp = vec3(wpIn).toVar();
       const nrm = vec3(nrmIn).toVar();
       const res = float(1.0).toVar();
+      const csmW = CSMX ? float(0.0).toVar() : null, csmSh = CSMX ? float(1.0).toVar() : null;
       If(U.shadowStr.greaterThan(0.0), () => {
         const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
         const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
         If(sc.z.lessThan(1.0), () => {
           const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
-          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), length(wp.sub(fadeCtr)))
+          const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), CSM_DJ > 0
+            ? length(wp.sub(fadeCtr)).add(csmJit(wp).mul(U.shadowRange).mul(2 * CSM_DJ * 0.22)) : length(wp.sub(fadeCtr)))
             .oneMinus().toVar();
           const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
             .mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
@@ -2911,8 +3440,10 @@
             const tap = (px, py) => sunT.sample(flipUV(sc.xy.add(vec2(px, py).mul(o)))).compare(z);
             const sh = tap(-1.0, -1.0).add(tap(1.0, -1.0)).add(tap(-1.0, 1.0)).add(tap(1.0, 1.0)).mul(0.25);
             res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
+            if (CSMX) { csmW.assign(edgeFade); csmSh.assign(sh); }
           });
         });
+        if (CSMX) csmFar(wp, nrm, csmW, csmSh, res);
       });
       return res;
     });
@@ -2948,10 +3479,30 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, sharedUniforms: SHARED_UNIFORMS, updateFrame, setEnvStr, setEnvCube, setLampGrid, setLampGridColors, setLampBake, setCrowdExcite,
              decalLight: { shadow: decalShadow, pool: decalPool },
-             setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
+             setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS,
+             detail: { matDetail: MAT_DETAIL, envAll: ENV_ALL }, carSurf: !!CSN };
   }
 
-  window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit });
+  // The plain-JS twin of matDetail's weight maths (mdHexGrid / mdBiW / mdVarScale above), for node tests only:
+  // the shader builds the same expressions as TSL nodes, constant for constant.
+  const matDetailMath = Object.freeze({
+    hexGrid(u, v) {
+      const k = 2 * Math.sqrt(3), sx = u * k, sy = v * k;
+      const kx = sx - sy * 0.57735027, ky = sy * 1.15470054;
+      const bx = Math.floor(kx), by = Math.floor(ky), fx = kx - bx, fy = ky - by;
+      const z = 1 - fx - fy, s = -z >= 0 ? 1 : 0, s2 = 2 * s - 1;
+      const w = [-z * s2, s - fy * s2, s - fx * s2];
+      const g = w.map((x) => x * x * x), sum = Math.max(g[0] + g[1] + g[2], 1e-6);
+      return { bary: w, w: g.map((x) => x / sum), verts: [[bx + s, by + s], [bx + s, by + 1 - s], [bx + 1 - s, by + s]] };
+    },
+    varScale(w) { return 1 / Math.sqrt(Math.max(w[0] * w[0] + w[1] * w[1] + w[2] * w[2], 1e-4)); },
+    biplanar(nx, nz) {
+      const wx = nx ** 4 + 1e-6, wz = nz ** 4 + 1e-6;
+      return [wx / (wx + wz), wz / (wx + wz)];
+    },
+  });
+
+  window.TLXShaders = Object.assign(window.TLXShaders || {}, { lit, matDetailMath });
 })();

@@ -53,8 +53,11 @@ test("fitting a set owns explicit tread and rebuilds modifiers without accumulat
   s.fit(car, wet);
   assert.equal(car.flatSpot, 0, "fresh tyres clear flat-spot damage");
   assert.equal(car.tread, 2, "the fitted set, not the garage choice, owns weather grip");
-  assert.equal(car.mods.speed, base.speed * 0.88);
-  assert.equal(car.mods.cornering, base.cornering * 0.90);
+  // A treaded set costs the player what it costs the AI (#5289): wear off, nothing.
+  // These two lines REPLACE the catalog row's stats (0.88 / 0.90), which made a
+  // human ~11% slower than an AI on the same set and the same grip.
+  assert.equal(car.mods.speed, base.speed);
+  assert.equal(car.mods.cornering, base.cornering);
 
   s.fit(car, soft);
   const once = { ...car.mods };
@@ -62,6 +65,66 @@ test("fitting a set owns explicit tread and rebuilds modifiers without accumulat
   assert.deepEqual(car.mods, once, "refitting must rebuild from the tyre-free base");
   assert.equal(car.mods.speed, base.speed * 0.97);
   assert.equal(car.mods.cornering, base.cornering * 1.12);
+});
+
+test("a wet or inter set costs a human exactly what it costs an AI: 1 + off on vmax with wear on, nothing else (#5289)", () => {
+  const base = { speed: 1.1, accel: 0.9, cornering: 1.05, braking: 1.02 };
+  const G = { lapsTarget: 5, track: { total: 5386, def: {} }, LAT_MAX: 22, raceTyreWear: "off" };
+  const s = T.create(G);
+  const sets = [T.classRecord("wet"), T.classRecord("inter"),
+                T.optionRecord(TYRES.find((o) => o.id === "wet_full")), T.optionRecord(TYRES.find((o) => o.id === "intermediate"))];
+  for (const level of ["off", "light", "real"]) {
+    s.setLevel(level);
+    for (const rec of sets) {
+      const car = { human: true, tread: 0, tyreBaseMods: base, mods: {} };
+      s.fit(car, rec);
+      // game.js: an AI's vmax takes (1 + c.tyre.off) with wear on and nothing with it off; a
+      // human's takes mods.speed. Same set, same loss.
+      const ai = s.on() ? 1 + T.classRecord(T.classForTread(rec.tread)).off : 1;
+      assert.equal(car.mods.speed, base.speed * ai, `${level} ${rec.id}: speed`);
+      for (const k of ["accel", "cornering", "braking"]) assert.equal(car.mods[k], base[k], `${level} ${rec.id}: ${k}`);
+      assert.equal(car.tread, rec.tread, "the set still owns its tread (weather grip)");
+    }
+  }
+  // The session's applyCompound (game.js recomputePlayerMods) agrees with fit.
+  s.setLevel("real");
+  const car = { human: true, tread: 0, tyreBaseMods: base, mods: {} };
+  s.applyCompound(car, T.classRecord("wet"));
+  assert.equal(car.mods.speed, base.speed * (1 + T.classRecord("wet").off));
+  // A slick still carries its catalog row: the dry compound pace lives in mods.
+  s.fit(car, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  assert.equal(car.mods.cornering, base.cornering * 1.12);
+});
+
+test("wear OFF: a garage slick follows the weather's tread; a garage wet set, wear on and the AI sentinel do not (#5253)", () => {
+  const slick = T.optionRecord(TYRES.find((o) => o.id === "soft")), inter = TYRES.find((o) => o.id === "intermediate");
+  let wet = 0;
+  const G = { lapsTarget: 5, track: { total: 5386, def: {} }, LAT_MAX: 22, raceTyreWear: "off",
+              raceWeather: "dry", weatherArc: null, trackWetness: () => wet };
+  const s = T.create(G);
+  const car = { human: true, tread: 0, tyreOpt: TYRES.find((o) => o.id === "soft"), tyreBaseMods: { speed: 1, accel: 1, cornering: 1, braking: 1 }, mods: {} };
+  s.fit(car, slick);
+  assert.equal(car.wxFollow, true);
+  const key = JSON.stringify([car.tread, car.mods]);
+  wet = 1; G.raceWeather = "rain"; s.update(car, 1 / 60);
+  assert.equal(car.tyre.code, "W"); assert.equal(T.treadOf(car, "rain", 1), 2);
+  wet = 0.5; G.raceWeather = "wet"; s.update(car, 1 / 60);
+  assert.equal(car.tyre.code, "I"); assert.equal(T.treadOf(car, "wet", 0.5), 1);
+  wet = 0; G.raceWeather = "dry"; s.update(car, 1 / 60);
+  assert.equal(car.tyre.id, "soft"); assert.equal(T.treadOf(car, "dry", 0), 0);
+  assert.equal(JSON.stringify([car.tread, car.mods]), key, "c.tread / c.mods (the session-record key) never move");
+  // A treaded set the player chose stays theirs; an explicit tread on it is honoured.
+  const own = { human: true, tread: 0, tyreOpt: inter, tyreBaseMods: car.tyreBaseMods, mods: {} };
+  s.fit(own, T.optionRecord(inter));
+  assert.equal(own.wxFollow, false); assert.equal(T.treadOf(own, "dry", 0), 1);
+  own.tread = 0; assert.equal(T.treadOf(own, "rain", 1), 0, "a caller's pinned tread wins");
+  // The AI field keeps its sentinel; wear on keeps the fitted set (there is a pit lane).
+  const ai = { tread: null }; s.fit(ai, T.classRecord("medium"));
+  assert.equal(ai.wxFollow, false); assert.equal(T.treadOf(ai, "rain", 1), 2);
+  s.setLevel("real");
+  const on = { human: true, tread: 0, tyreOpt: car.tyreOpt, tyreBaseMods: car.tyreBaseMods, mods: {} };
+  s.fit(on, slick);
+  assert.equal(on.wxFollow, false); assert.equal(T.treadOf(on, "rain", 1), 0);
 });
 
 test("fitting preserves the ordinary AI null-tread competent-field sentinel", () => {
@@ -91,6 +154,34 @@ test("an AI plan overrides a MY TEAM mate's saved starting tyre", () => {
 
   const player = { human: true, tyreOpt: savedWet, pitPlan: { start: "hard" } };
   assert.equal(T.startRecord(player).id, "wet_full", "a player's reference plan must not choose their set");
+});
+
+test("wear OFF: a car on its own garage slick is fitted the weather's tread at the lights (no pit lane, no recourse)", () => {
+  // Measured in the VM (silverstone, rain, TYRE WEAR off): player grip 0.72 on the
+  // garage slick against an AI field at 0.97, PitLane.enabled() false all race.
+  const slick = TYRES.find((o) => !o.wetTread), inter = TYRES.find((o) => o.wetTread === 1);
+  const G = { lapsTarget: 5, track: { total: 5386, def: {} }, LAT_MAX: 22, raceTyreWear: "off" };
+  const s = T.create(G);
+  assert.equal(s.on(), false);
+  const player = { human: true, tyreOpt: slick };
+  assert.equal(s.startRecord(player, 2).tread, 2, "rain, no stop possible: full wets");
+  assert.equal(s.startRecord(player, 1).tread, 1, "damp: intermediates");
+  assert.equal(s.startRecord(player, 0).id, slick.id, "dry: the garage set");
+  const mate = { human: false, tyreOpt: slick, tyreClass: "soft" };
+  assert.equal(s.startRecord(mate, 2).tread, 2, "a MY TEAM mate carries the same garage slick");
+  if (inter) assert.equal(s.startRecord({ human: true, tyreOpt: inter }, 2).id, inter.id, "a treaded set of their own stays theirs");
+  // …and the session fits it: the car's explicit tread follows the record.
+  const car = { human: true, tyreOpt: slick, tread: 0 };
+  s.fit(car, s.startRecord(car, 2));
+  assert.equal(car.tread, 2);
+  // Wear ON fits the weather's tread at the lights too (#5251, Bryce's decision 2026-11-10). This
+  // assertion REPLACES one that pinned the opposite as intended ("wear on: the player's own set,
+  // whatever the sky"): a slick on a wet grid was a forced stop on lap 1 against 21 AI on wets.
+  s.setLevel("real");
+  assert.equal(s.startRecord(player, 2).tread, 2, "wear on, rain: full wets at the lights, as the field");
+  assert.equal(s.startRecord(player, 1).tread, 1, "wear on, damp: intermediates");
+  assert.equal(s.startRecord(player, 0).id, slick.id, "wear on, dry: the garage set");
+  if (inter) assert.equal(s.startRecord({ human: true, tyreOpt: inter }, 2).id, inter.id, "wear on: a treaded set of their own stays theirs");
 });
 
 test("an AI car starts a WET race on the tread the weather wants, not the plan's slick", () => {
@@ -273,27 +364,24 @@ test("qualifying runs light, on a set its out-lap has warmed", () => {
   assert.equal(r.tyreTs, T.T_BLANKET, "…and off the blankets");
 });
 
-test("the player's top speed pays for worn rubber, as the AI's does", () => {
-  // The AI's vmax took tractionMul; the player's took none, and perfMul only
-  // slows the climb to vmax (ACCEL·perfMul·(1 − v/vmax)), never the cap.
+test("updateCar's shared trMul is the model's tractionMul exactly", () => {
+  // The BEHAVIOUR (the player's terminal speed drops on a worn set, as the AI's
+  // does) is executed in tests/unit/physics-rows-vm.test.mjs; this pins the
+  // equation updateCar evaluates once per car (tyreGrip shared after the tyre
+  // and pit updates) against TyreModel.tractionMul over the wear/temperature/
+  // defect grid, so the shared value cannot drift from the model's own.
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  // updateCar shares this car's tread grip after tyre/pit updates. Its traction
-  // still uses the model's exact long-share equation, and still caps the player.
-  assert.match(src, /else if \(c\.human\) vmax \*= (?:tyres\.tractionMul\(c\)|trMul)/,
-    "the human branch of the speed target must carry the tyre's traction");
-  if (/vmax \*= trMul/.test(src)) {
-    const init = src.match(/\btyreGrip = ([^,;]+), trMul = ([^,;]+)/);
-    assert.ok(init, "the production traction initializer is available");
-    const traction = new Function("tyres", "TyreModel", "c", `const tyreGrip = ${init[1]}; return ${init[2]};`);
-    const model = ctxFor(), car = freshCar(model, 0.74);
-    for (const level of ["off", "real"]) {
-      model.setLevel(level);
-      for (const wear of [0, 0.15, 0.6, 1, 1.5]) for (const temp of [20, T.T_BLANKET, T.optTemp(0.74), 150])
-        for (const grain of [0, 0.4]) for (const blister of [0, 0.7]) {
-          Object.assign(car, { tyreWear: wear, tyreTs: temp, tyreGrain: grain, tyreBlister: blister });
-          assert.equal(traction(model, T, car), model.tractionMul(car), `${level}: wear ${wear}, temperature ${temp}, grain ${grain}, blister ${blister}`);
-        }
-    }
+  const init = src.match(/\btyreGrip = ([^,;]+), trMul = ([^,;]+)/);
+  assert.ok(init, "the production traction initializer is available");
+  const traction = new Function("tyres", "TyreModel", "c", `const tyreGrip = ${init[1]}; return ${init[2]};`);
+  const model = ctxFor(), car = freshCar(model, 0.74);
+  for (const level of ["off", "real"]) {
+    model.setLevel(level);
+    for (const wear of [0, 0.15, 0.6, 1, 1.5]) for (const temp of [20, T.T_BLANKET, T.optTemp(0.74), 150])
+      for (const grain of [0, 0.4]) for (const blister of [0, 0.7]) {
+        Object.assign(car, { tyreWear: wear, tyreTs: temp, tyreGrain: grain, tyreBlister: blister });
+        assert.equal(traction(model, T, car), model.tractionMul(car), `${level}: wear ${wear}, temperature ${temp}, grain ${grain}, blister ${blister}`);
+      }
   }
 });
 
@@ -381,11 +469,10 @@ test("grip falls linearly across the stint, then falls off a cliff", () => {
 test("traction loses a smaller share of the same drop than cornering", () => {
   // A tyre that lost only CORNERING grip reads as a handling bug. A tyre that
   // lost as much traction as cornering reads as an engine failure.
-  for (const w of [0.5, 1.0, 1.5]) {
-    const lat = 1 - T.gripFor(w), lng = 1 - T.longFor(w);
-    assert.ok(lng > 0 && lng < lat, `at wear ${w}, traction drop ${lng} must be between 0 and the lateral drop ${lat}`);
-    assert.ok(Math.abs(lng - lat * T.LONG_SHARE) < 1e-9);
-  }
+  // The live path is tractionMul (1 - drop x LONG_SHARE); the test-only longFor
+  // twin was removed (#3109 row 15).
+  assert.ok(T.LONG_SHARE > 0 && T.LONG_SHARE < 1, `LONG_SHARE ${T.LONG_SHARE} must be a share`);
+  for (const w of [0.5, 1.0, 1.5]) assert.ok(1 - T.gripFor(w) > 0, `wear ${w} costs grip`);
 });
 
 test("a full tank wears the tyre faster than an empty one", () => {
@@ -835,6 +922,20 @@ test("a mid-grid AI on a clean lap scores about one, like the player's path", ()
   assert.ok(T.aiLoad({ consistency: 0.75, accSm: 0, offroad: true }, aTop) > ragged, "off-track outweighs a ragged lap");
 });
 
+// #4936: W_OFF sat inside each path's clamp, before its own divisor, so a metre of
+// grass cost the player W_OFF/LOAD_REF = 2.45 load units and the AI W_OFF/LOAD_AI_REF
+// = 0.98, about 2.5x apart. One price on the shared normalised scale; the player's
+// own number is unchanged (it is the price kept).
+test("running off the road costs the player and the AI the same tyre load", () => {
+  const humanOff = T.humanLoad({ speed: 40, offroad: true }, 30) - T.humanLoad({ speed: 40 }, 30);
+  const aiOff = T.aiLoad({ consistency: 0.75, accSm: 0, offroad: true }, 10) - T.aiLoad({ consistency: 0.75, accSm: 0 }, 10);
+  assert.ok(Math.abs(humanOff - aiOff) < 1e-9, `one off-road price: player ${humanOff.toFixed(4)} vs AI ${aiOff.toFixed(4)}`);
+  assert.ok(Math.abs(humanOff - 1.20 / 0.49) < 1e-9, `the player's price is kept (${humanOff.toFixed(4)})`);
+  // the player's whole load is unchanged, including at the ceiling: a sliding, kerbing car off the road
+  const hard = { speed: 80, yawRateCur: 0.6, axFrac: 1, skidIntensity: 1, onKerb: true, offroad: true };
+  assert.ok(Math.abs(T.humanLoad(hard, 22) - 3.0 / 0.49) < 1e-9, "the player's ceiling is unchanged");
+});
+
 // ── The HUD letter, over the whole catalog ──────────────────────────────────
 // There used to be two ladders. AI_CLASS codes its soft at life 0.48 "S";
 // optionRecord's own inline ternary cut at 0.40, so EVERY soft a player can
@@ -1004,6 +1105,24 @@ test("info() reports trackTemp above ambient in the dry", () => {
   const c = freshCar(s, 0.74);
   const info = s.info(c);
   assert.ok(info.trackTemp > info.ambient, `${info.trackTemp} vs ambient ${info.ambient}`);
+});
+
+test("HUD temperature read uses only the surface sensor and compound, with diagnostic rounding", () => {
+  const s = ctxFor();
+  assert.equal(s.temperatureInfo(null), null);
+  for (const life of [undefined, 0.74, 1.05]) {
+    for (const ts of [undefined, 65.04, 65.06, NaN]) {
+      const car = { tyre: life == null ? null : { life }, tyreTs: ts };
+      const { tempS, tempOpt, tempWindow } = s.info(car);
+      const display = s.temperatureInfo(new Proxy(car, {
+        get(target, key) {
+          assert.ok(key === "tyre" || key === "tyreTs", "unexpected diagnostic read: " + key);
+          return target[key];
+        },
+      }));
+      assert.deepEqual({ ...display }, { tempS, tempOpt, tempWindow });
+    }
+  }
 });
 
 test("belowWindow preserves info's rounding, missing-state and non-finite behavior", () => {
@@ -1237,4 +1356,28 @@ test("physical set age keeps pre-line pit adjustment across a red-flag scoring r
   assert.equal(c.tyreWear, 0.4);
   c.lap++; c.prog += total;
   assert.equal(s.lapsOn(c), 2, "the next physically driven lap still ages the adjusted set normally");
+});
+
+test("lapsLeft measures the wear rate over the laps AND the part-lap driven on the set", () => {
+  // n / w with whole-lap n and continuous w read (n + 1) / n high late in a lap: at 2.95 laps
+  // and wear 0.54 the set has 2.5 laps left, not 1.7 (VM: every AI boxed wet-for-wet on that).
+  const G = { lapsTarget: 5, track: { total: 1000, def: {} }, LAT_MAX: 22, raceTyreWear: "real" };
+  const s = T.create(G); s.setLevel("real");
+  const c = { human: false, lap: 0, prog: 0, tread: null };
+  s.fit(c, T.classRecord("wet"));
+  c.lap = 3; c.prog = 2950; c.tyreWear = 0.54;
+  const left = s.lapsLeft(c);
+  assert.ok(Math.abs(left - (2.95 / 0.54) * 0.46) < 1e-9, `2.95 laps for 0.54 of the set: ${left}`);
+  c.prog = 2000;   // at the line the whole-lap count is exact, as before
+  assert.ok(Math.abs(s.lapsLeft(c) - (2 / 0.54) * 0.46) < 1e-9);
+});
+
+test("tyre care (#1566): an AI's style scales its tyre load symmetrically; the human load ignores it", () => {
+  const base = { consistency: 0.75, accSm: 2 };
+  const mid = T.aiLoad(base, 7), kind = T.aiLoad({ ...base, tyreCare: 1 }, 7), hard = T.aiLoad({ ...base, tyreCare: -1 }, 7);
+  assert.ok(kind < mid && mid < hard, `${kind} < ${mid} < ${hard}`);
+  assert.ok(Math.abs((mid - kind) - (hard - mid)) < 1e-9, "zero-mean column, zero-mean wear");
+  assert.equal(T.aiLoad({ ...base, tyreCare: NaN }, 7), mid, "a bad value is neutral");
+  const h = { human: true, speed: 50, yawRateCur: 0.3, axFrac: 0.2 };
+  assert.equal(T.humanLoad({ ...h, tyreCare: 1 }, 40), T.humanLoad(h, 40), "never the player");
 });

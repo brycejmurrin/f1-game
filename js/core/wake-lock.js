@@ -14,25 +14,36 @@ function create() {
 let raceWake = null;
 let raceWakePending = null;
 let raceWakeWanted = false;
+let raceWakeOnRelease = null;
+let raceWakeCoalesce = false; // a hold() that joined an in-flight request: retried once if that request rejects
+function clearReleaseListener(lock) {
+  if (lock && raceWakeOnRelease) {
+    try { lock.removeEventListener("release", raceWakeOnRelease); } catch (_) { /* sentinel may be dead */ }
+    raceWakeOnRelease = null;
+  }
+}
 function hold() {
   raceWakeWanted = true;
   try {
-    if (!navigator.wakeLock || raceWake || raceWakePending) return;
+    if (!navigator.wakeLock || raceWake || raceWakePending) { if (raceWakePending) raceWakeCoalesce = true; return; }
     const pending = navigator.wakeLock.request("screen");
     raceWakePending = pending;
     pending.then((lock) => {
       if (raceWakePending === pending) raceWakePending = null;
+      raceWakeCoalesce = false;
       if (!raceWakeWanted || document.hidden) {
         releaseLock(lock, "late wake-lock release failed");
         return;
       }
+      clearReleaseListener(lock);
       raceWake = lock;
       // An old sentinel may release after a replacement exists: compare identity.
       // UA may release a visible document (battery / power saver) with no
       // visibilitychange. Re-arm next turn so a hide in this turn is seen.
       // drop() will not re-arm: it nulls raceWake and clears wanted first.
-      lock.addEventListener("release", () => {
+      raceWakeOnRelease = () => {
         if (raceWake !== lock) return;
+        clearReleaseListener(lock);
         raceWake = null;
         if (!raceWakeWanted || (typeof document !== "undefined" && document.hidden)) return;
         setTimeout(() => {
@@ -40,15 +51,29 @@ function hold() {
           if (typeof document !== "undefined" && document.hidden) return;
           hold();
         }, 0);
-      });
-    }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
+      };
+      lock.addEventListener("release", raceWakeOnRelease);
+    }).catch(() => {
+      if (raceWakePending === pending) raceWakePending = null;
+      // Only a coalesced hold retries: a lone refusal must not spin request() forever.
+      const again = raceWakeCoalesce;
+      raceWakeCoalesce = false;
+      if (again && raceWakeWanted) setTimeout(() => {
+        if (!raceWakeWanted || raceWake || raceWakePending || (typeof document !== "undefined" && document.hidden)) return;
+        hold();
+      }, 0);
+    });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }
 function drop() {
   raceWakeWanted = false;
+  raceWakeCoalesce = false;
   const held = raceWake;
   raceWake = null;
-  if (held) releaseLock(held, "wake lock was already released");
+  if (held) {
+    clearReleaseListener(held);
+    releaseLock(held, "wake lock was already released");
+  }
 }
 
 return { hold, drop, wanted: () => raceWakeWanted };

@@ -210,7 +210,7 @@ Vertex-animation-texture crowds (GPU Gems 3 ch. 2): a few poses from
 Quaternius' CC0 animated people baked to a small pose texture, a per-seat
 phase, sampled in the vertex shader; flipbook cards on mobile. The payoff is
 the broadcast and flyby cameras
-([`2026-09-30-broadcast-feel.md`](2026-09-30-broadcast-feel.md)). Budget it
+(`2026-09-30-broadcast-feel.md` (archived)). Budget it
 in `apex_frame_report` before design.
 
 **Plan (2026-10-19):** [`2026-10-19-crowd-vat.md`](2026-10-19-crowd-vat.md)

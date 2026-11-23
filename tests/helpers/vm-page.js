@@ -222,6 +222,7 @@ export class VmPage {
   async reload() {
     if (this._handle) { try { this._handle.close(); } catch (_) {} }
     this._handle = null;
+    this._runner = null;   // compiled functions belong to exactly one vm.Context
     this._seen = { console: 0, rejections: 0, scripts: 0 };
     await this._boot();
     return null;
@@ -334,7 +335,7 @@ export class VmPage {
   isClosed() { return this._handle == null; }
   async close() {
     try { if (this._handle) this._handle.close(); }
-    finally { this._handle = null; }
+    finally { this._handle = null; this._runner = null; }
   }
 }
 

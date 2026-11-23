@@ -42,15 +42,11 @@ const Ghost = (function () {
     return Math.round(v * m) / m;
   }
 
-  // Parsed once and kept: setTrack() runs on EVERY loadTrack (each menu-flyby
-  // build), and re-parsing the whole store to read one entry was a ~40 KB
-  // JSON.parse per circuit browse. Only a plain object is accepted —
-  // `JSON.parse(raw) || {}` let "5", "true" and "[]" through, and every later
-  // `store[id] = snap` then threw for the rest of the session. The `{}`
-  // fallback is memoised too, so a corrupt key costs one parse.
+  // Browsing circuits reuses the parsed store. Storage notifications replace it.
   let storeCache = null;
   let accessClock = Date.now();
   let repairQueued = false;
+  let needsBudgetCheck = true;
   const pending = new Map();
   function loadStore() {
     if (storeCache) return storeCache;
@@ -63,15 +59,14 @@ const Ghost = (function () {
       if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
     storeCache = parsed;
+    needsBudgetCheck = true;
     return storeCache;
   }
   function touch(g) {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
   }
-  // ONE encoder, not one per call. trimStore() asks for a byte length after
-  // every eviction, so a fresh TextEncoder per question allocated one per
-  // iteration on top of encoding the whole store again.
+  // Reuse the encoder across store budget checks and evictions.
   let _enc = null;
   function byteLength(json) {
     if (typeof TextEncoder === "function") {
@@ -93,7 +88,7 @@ const Ghost = (function () {
     g.x = indices.map(i => g.x[i]);
     return true;
   }
-  function trimStore(store) {
+  function trimStore(store, detachTrace = false) {
     let json = JSON.stringify(store);
     if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
     let changed = false;
@@ -101,19 +96,9 @@ const Ghost = (function () {
       if (!valid(store[id])) { delete store[id]; changed = true; }
     }
     json = JSON.stringify(store);
-    const oldest = Object.keys(store).sort((a, b) => {
-      const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
-      const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
-      return at - bt;
-    });
-    // O(n) rather than O(n^2). Re-serialising the WHOLE store after each
-    // eviction meant encoding up to MAX_STORE_BYTES (512 KB) once per entry
-    // dropped, on a path that already runs on the lap-line frame's idle
-    // callback. A JSON object's length is its entries plus their separators,
-    // so an entry's own contribution is exactly computable and can simply be
-    // subtracted; the loop then costs one stringify per entry it measures
-    // instead of one per entry it drops, and the exact length is recomputed
-    // once at the end so nothing downstream reads an estimate.
+    const used = (g) => Number.isFinite(g && g._used) ? g._used : 0;
+    const oldest = Object.keys(store).sort((a, b) => used(store[a]) - used(store[b]));
+    // Deduct each evicted entry’s serialized size, then verify the final serialized store.
     let size = byteLength(json);
     while (oldest.length > 1 && size > MAX_STORE_BYTES) {
       const id = oldest.shift();
@@ -125,6 +110,8 @@ const Ghost = (function () {
     }
     json = JSON.stringify(store);
     const last = oldest[0];
+    // A candidate deletion shares the surviving trace with the live cache until the write commits.
+    if (detachTrace && last) store[last] = { ...store[last] };
     while (last && byteLength(json) > MAX_STORE_BYTES && thinTrace(store[last])) {
       changed = true;
       json = JSON.stringify(store);
@@ -136,11 +123,12 @@ const Ghost = (function () {
     return { changed };
   }
   function queueRepair() {
-    if (repairQueued) return;
+    if (!needsBudgetCheck || repairQueued) return;
     repairQueued = true;
     const run = () => {
       repairQueued = false;
       if (!storeCache) return;
+      needsBudgetCheck = false;
       const repaired = trimStore(storeCache);
       if (!repaired.changed) return;
       const result = GameStore.store.write(STORE_KEY, storeCache);
@@ -177,13 +165,17 @@ const Ghost = (function () {
       if (winner) fresh[id] = winner;
     }
     storeCache = fresh;
+    needsBudgetCheck = true;
     const current = storageId == null ? null : fresh[storageId];
     best = valid(current) ? current : null;
+    if (best) touch(best);
+    queueRepair();
   }
   if (typeof GameStore.store.subscribe === "function") GameStore.store.subscribe(onStoreChange);
   function saveStore(store) {
     storeCache = store;
     trimStore(store);
+    needsBudgetCheck = false;
     const result = GameStore.store.write(STORE_KEY, store);
     return result;
   }
@@ -193,6 +185,17 @@ const Ghost = (function () {
     const stable = (v) => Array.isArray(v) ? v.map(stable) : v && typeof v === "object"
       ? Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])])) : v;
     return JSON.stringify(stable(value));
+  }
+  // The circuit LAYOUT revision a comparable-class key was recorded on: the
+  // first entry of its `layout` ([def.revision || 1, n, total], set by
+  // js/race/session-records.js). A key without one — the pre-v2 legacy rows,
+  // or anything unparsable — was recorded on revision 1.
+  function layoutRevision(key) {
+    if (typeof key !== "string" || !key) return 1;
+    try {
+      const c = JSON.parse(key), rev = c && Array.isArray(c.layout) ? c.layout[0] : null;
+      return Number.isFinite(rev) && rev >= 1 ? rev : 1;
+    } catch (_) { return 1; }
   }
   function valid(g) {
     if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
@@ -239,18 +242,18 @@ const Ghost = (function () {
   function record(t, s, x) {
     if (!rec) return;
     if (!Number.isFinite(t) || !Number.isFinite(s) || !Number.isFinite(x)) return;   // a NaN frame would become the stored best
+    // Period-advance (not lastSampleT=t): summed 1/60 steps undershoot 1/HZ in
+    // float and would otherwise skip to ~15 Hz (#5783 I4).
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
     if (rec.t.length >= MAX_SAMPLES || (rec.t.length && t - rec.t[0] > MAX_LAP_S)) { rec = null; return; }
     if (rec.s.length && s < rec.s[rec.s.length - 1]) return;
-    lastSampleT = t;
+    lastSampleT = rec.t.length ? lastSampleT + 1 / HZ : t;
     rec.t.push(round(t, 3));
     rec.s.push(round(s, 2));
     rec.x.push(round(x, 2));
   }
 
-  // The store write is deferred: loadStore/saveStore parse and stringify EVERY
-  // circuit's ghost (~40 KB each) and finishLap runs inside updateCar on the
-  // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
+  // Defer trimming and writing the shared circuit store off the lap-line frame.
   function scheduleSave(id, snap) {
     touch(snap);
     pending.set(id, snap);
@@ -288,7 +291,8 @@ const Ghost = (function () {
       };
       requestIdleCallback(idle);
     }
-    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    // No rIC (iOS Safari): the same capped wait, not a 0 ms timer behind the PB lap-line frame (#5629).
+    else if (typeof setTimeout === "function") setTimeout(write, IDLE_CAP_MS);
     else write();   // bare VM harness: no scheduler, write now
   }
   // Leaving the page with a record still pending: write it now (synchronous
@@ -381,19 +385,16 @@ const Ghost = (function () {
   }
 
   function clear(id) {
-    if (id == null) {
-      pending.clear();
-      saveStore({});
-      best = null;
-      return;
-    }
-    const store = loadStore();
-    const contextPrefix = id.startsWith("v2:") ? null : "v2:" + id + ":";
-    const matches = key => key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    const contextPrefix = id != null && !id.startsWith("v2:") ? "v2:" + id + ":" : null;
+    const matches = key => id == null || key === id || (contextPrefix != null && key.startsWith(contextPrefix));
+    const next = id == null ? {} : { ...loadStore() };
+    for (const key of Object.keys(next)) if (matches(key)) delete next[key];
+    trimStore(next, true);
+    if (!GameStore.store.write(STORE_KEY, next, { requireDurable: true }).durable) return false;
+    storeCache = next;
     for (const key of pending.keys()) if (matches(key)) pending.delete(key);
-    for (const key of Object.keys(store)) if (matches(key)) delete store[key];
-    saveStore(store);
-    if (storageId != null && matches(storageId)) best = null;
+    if (id == null || (storageId != null && matches(storageId))) best = null;
+    return true;
   }
   function speedAt(t) {
     if (!best || !Number.isFinite(t) || t < 0 || t > best.time) return null;
@@ -403,7 +404,7 @@ const Ghost = (function () {
   }
 
   return {
-    setTrack, startLap, record, finishLap, at, timeAt, contextKey, MAX_LAP_S, HZ,
+    setTrack, startLap, record, finishLap, at, timeAt, contextKey, layoutRevision, MAX_LAP_S, HZ,
     context: () => context, track: () => trackId,
     hasGhost, bestTime, snapshot, meta, medal, clear, speedAt, flush,
   };

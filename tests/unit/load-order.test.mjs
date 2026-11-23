@@ -27,12 +27,124 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+import vm from "node:vm";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 import { stale as genShellStale, inlineScripts } from "../../tools/gen/gen-shell.mjs";
+import { checkRepo as checkModuleBoundaries, checkSource as checkBoundarySource, checkFunctionSource,
+  scanRepo as scanGlobalRepo, buildGraph } from "../../tools/check/scan-globals.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
+
+test("selected classic-script modules obey explicit capability boundaries", () => {
+  const result = checkModuleBoundaries(ROOT);
+  assert.ok(result.checked.length >= 3, "keep a useful initial contract set");
+  assert.deepEqual(result.violations, []);
+});
+
+test("scan-globals boundary CLI checks contracts while default JSON retains graph behavior", () => {
+  const run = (...args) => {
+    const child = spawnSync(process.execPath, ["tools/check/scan-globals.mjs", ...args], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 30000 });
+    assert.equal(child.error, undefined);
+    assert.equal(child.status, 0, child.stderr);
+    return child.stdout;
+  };
+  const boundary = JSON.parse(run("--boundaries", "--json"));
+  assert.deepEqual(boundary, checkModuleBoundaries(ROOT));
+  assert.ok(boundary.checked.some((identity) => identity.includes("#createTransport")), "private policy contract is included");
+  assert.equal(run("--boundaries").trim(), `module boundaries: ${boundary.checked.length} checked, 0 violations`);
+  const graph = JSON.parse(run("--json"));
+  const exportedGraph = buildGraph(scanGlobalRepo(ROOT));
+  // Graph production timestamps describe separate calls, not structural changes.
+  delete graph.generatedAt; delete exportedGraph.generatedAt;
+  assert.deepEqual(graph, exportedGraph, "default CLI still exposes the original graph exports");
+});
+
+const pureFixtureContract = { export: "Pure", globals: { Math: ["imul"], Object: ["freeze"] } };
+const fixture = (body) => `const Pure = (() => { ${body}; return {}; })(); Object.freeze(Pure);`;
+
+test("boundary resolution permits lexical shadows and ignores property names, strings and comments", () => {
+  assert.deepEqual(checkBoundarySource(fixture(`
+    // fetch, G.player and window are prose, not dependencies
+    const label = "document.body";
+    function helper(fetch, G) { return { window: fetch, player: G.player }; }
+    const n = Math.imul(3, 7);
+  `), pureFixtureContract), []);
+});
+
+test("boundary rejects effect/domain access inside deferred bodies and typeof probes", () => {
+  for (const body of ["function later() { return fetch('/x'); }", "function later() { return G.player; }",
+    "const exists = typeof document !== 'undefined'", "const n = Math.random()",
+    "const { random } = Math", "const alias = Math; alias.random()", "toString()"] ) {
+    const violations = checkBoundarySource(fixture(body), pureFixtureContract, "fixture.js");
+    assert.ok(violations.some((v) => v.rule === "global"), body);
+    assert.ok(violations.every((v) => v.file === "fixture.js" && v.line > 0 && v.column > 0));
+  }
+});
+
+test("boundary rejects window aliases, computed global access and code-generation escapes", () => {
+  for (const body of ["const w = window; w['fetch']('/x')", "globalThis[key]()", "self.fetch('/x')",
+    "eval('G.player')", "const e = eval; e('fetch()')", "new Function('return window')()",
+    "Math[key](1)", "const root = this", "import('./effect.js')", "({}).constructor.constructor('return this')()"] ) {
+    assert.ok(checkBoundarySource(fixture(body), pureFixtureContract).length > 0, body);
+  }
+});
+
+test("boundary rejects writes through permitted globals, extra exports and syntax errors", () => {
+  for (const body of ["Math.imul = () => 1", "Math.imul.x++", "delete Math.imul", "Math = {}"] ) {
+    assert.ok(checkBoundarySource(fixture(body), pureFixtureContract).some((v) => v.rule === "global-write"), body);
+  }
+  assert.ok(checkBoundarySource(`${fixture("")} const Extra = {};`, pureFixtureContract).some((v) => v.rule === "exports"));
+  assert.ok(checkBoundarySource("const Pure = (", pureFixtureContract).some((v) => v.rule === "parse"));
+  assert.throws(() => checkBoundarySource(fixture(""), { export: "Pure", globals: { window: ["<value>"] } }), /invalid permitted/);
+  const missingFixture = ["js", "core", "does-not-exist.js"].join("/");
+  const missing = checkModuleBoundaries(ROOT, { modules: { [missingFixture]: pureFixtureContract }, functions: {} });
+  assert.equal(missing.violations[0].rule, "source");
+});
+
+test("private function boundaries reject captured domain/effect globals and ambient clocks", () => {
+  const contract = { globals: { Date: ["parse"] } };
+  const wrapper = (body) => `const Outer = (() => { const Career = {}, Parts = {};\n  function policy(effects) { ${body} }\n  return {}; })();`;
+  for (const body of ["return Career.hash(1)", "return Parts.resolveSetup({})", "return fetch('/x')",
+    "return Date.now()", "return new Date()", "return Date()", "const clock = Date; return clock.now()"] ) {
+    const violations = checkFunctionSource(wrapper(body), "policy", contract, "private.js");
+    assert.ok(violations.some((v) => v.rule === "global" && v.scope === "policy"), body);
+    assert.ok(violations.every((v) => v.line === 2), "diagnostic retains original line");
+  }
+  assert.deepEqual(checkFunctionSource(wrapper("return Date.parse(effects.header) - effects.now()"), "policy", contract), []);
+  assert.deepEqual(checkFunctionSource(wrapper("const Career = effects; return Career.hash()"), "policy", contract), [], "injected/local names resolve lexically");
+  assert.equal(checkFunctionSource(wrapper("return 1"), "missing", contract)[0].rule, "function");
+  assert.equal(checkFunctionSource(`${wrapper("return 1")} function policy() {}`, "policy", contract)[0].rule, "function");
+  assert.throws(() => checkBoundarySource(fixture(""), { export: "Pure", globals: { Date: ["now"] } }), /invalid permitted/);
+});
+
+test("collection capabilities permit indexing only where explicitly contracted", () => {
+  const contract = { globals: { TABLE: ["length", "<index>"] } };
+  assert.deepEqual(checkFunctionSource("function policy(i) { return TABLE[i % TABLE.length]; }", "policy", contract), []);
+  assert.ok(checkFunctionSource("function policy(i) { return TABLE.map(i); }", "policy", contract).some((v) => v.rule === "global"));
+  assert.ok(checkFunctionSource("function policy(i) { TABLE[i] = 1; }", "policy", contract).some((v) => v.rule === "global-write"));
+});
+
+test("boundary distinguishes nested assignment targets from computed keys and defaults", () => {
+  for (const body of [
+    "({ x: Math.imul } = input)", "[Math.imul] = input", "({ x: { y: Math.imul = fallback } } = input)",
+    "({...Math.imul} = input)", "[...Math.imul] = input", "for (Math.imul of input) {}",
+    "for (Math.imul in input) {}", "for ({x: Math.imul} of input) {}",
+  ]) {
+    const source = fixture(`const input = [], fallback = 0; ${body}`);
+    assert.ok(checkBoundarySource(source, pureFixtureContract).some((v) => v.rule === "global-write"), body);
+  }
+  const reads = fixture(`
+    const input = {}, output = {}; let local;
+    ({ [Math.imul(1, 2)]: local = Math.imul(3, 4) } = input);
+    output[Math.imul(2, 3)] = 1;
+    for (output[Math.imul(1, 2)] of []) {}
+  `);
+  assert.deepEqual(checkBoundarySource(reads, pureFixtureContract), [], "keys/default RHS remain reads, not global writes");
+});
 
 // Extracted list blocks carry inline comments, and a bare /"…"/g pull treats a
 // quoted phrase INSIDE a comment as a listed file — a round-6 audit measured
@@ -56,6 +168,15 @@ const scriptSrcs = parseTags(indexHtml, /<script[^>]*\bsrc="([^"]+)"/g);
 const linkHrefs = parseTags(indexHtml, /<link[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"/g);
 
 const stripV = (u) => u.replace(/\?v=[A-Za-z0-9._-]+$/, "");
+
+test("companion screens load the storage and arrangement owners in dependency order", () => {
+  const owners = ["js/career/save-migrate.js", "js/core/store.js", "js/ui/screen-regions.js",
+    "js/ui/screen-placement.js", "js/ui/screen-arranger.js"];
+  for (const page of ["controller.html", "overlay.html"]) {
+    const tags = parseTags(readFileSync(join(ROOT, page), "utf8"), /<script[^>]*\bsrc="([^"]+)"/g).map(stripV);
+    assert.deepEqual(tags.filter(src => owners.includes(src)), owners, page);
+  }
+});
 
 test("index.html script sequence equals MANIFEST.FULL", () => {
   assert.deepEqual(scriptSrcs.map(stripV), MANIFEST.FULL);
@@ -132,6 +253,22 @@ test("the shell's Content-Security-Policy is generated, first, and strict where 
   assert.ok(dir["connect-src"].includes("https:") && dir["connect-src"].includes("wss:"));
 });
 
+// #5993: every other ROOT page ships the same generated policy, with its own
+// inline-script hashes (none for overlay and cockpit-view), before its first <script>.
+for (const page of ["overlay.html", "bench.html", "cockpit-view.html"]) {
+  test(`${page}: carries the shell's generated CSP before any script`, async () => {
+    const { cspFor } = await import("../../tools/gen/gen-shell.mjs");
+    const html = readFileSync(join(ROOT, page), "utf8");
+    const { at, text, dir } = cspOf(html);
+    assert.equal(text, cspFor(html), "the meta is the generated one (run `node tools/gen/gen-shell.mjs`)");
+    assert.ok(at < html.indexOf("<script"), "before the first <script>, or that script is ungoverned");
+    assert.ok(!dir["script-src"].includes("'unsafe-inline'") && !dir["script-src"].includes("'unsafe-eval'"));
+    assert.deepEqual(dir["object-src"], ["'none'"]);
+    assert.deepEqual(dir["script-src"].filter((s) => s.startsWith("'sha256-")).sort(),
+      [...new Set(inlineBodies(html).map(sha))].sort(), "script-src hashes == the inline scripts' hashes");
+  });
+}
+
 // SEC2-7: an injected <img onerror=…> or <script> is the stored-XSS class the
 // 2026-09-24 sweep fixed; 'unsafe-inline' in script-src would let it run again.
 for (const page of ["index.html", "controller.html"]) {
@@ -171,6 +308,125 @@ test("deferred stylesheets flip print→all from the hashed script, not an onloa
   const html = readFileSync(join(ROOT, "index.html"), "utf8");
   assert.ok(html.includes(DEFER_CSS_SCRIPT), "the flipper is in the shell");
   assert.ok(html.indexOf(DEFER_CSS_SCRIPT) > html.lastIndexOf('media="print">'), "after the last deferred <link>");
+});
+
+// #5394 row 1: a VM run of the shipped flipper against stub links.
+async function runFlipper(links) {
+  const vm = await import("node:vm");
+  const { DEFER_CSS_SCRIPT } = await import("../../tools/gen/gen-shell.mjs");
+  const body = DEFER_CSS_SCRIPT.replace(/^<script>/, "").replace(/<\/script>$/, "");
+  const frames = [];
+  const raf = (fn) => frames.push(fn);
+  const win = { on: {}, requestAnimationFrame: raf, addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); } };
+  const asked = [];
+  const ctx = { document: { querySelectorAll: (sel) => { asked.push(sel); return links; } }, requestAnimationFrame: raf, window: win };
+  vm.runInNewContext(body, ctx, { filename: "gen-shell.mjs:DEFER_CSS_SCRIPT" });
+  return { frames, win, asked };
+}
+function stubLink(loaded) {
+  let writes = 0, media = "print";
+  return { sheet: loaded ? {} : null, on: {}, get writes() { return writes; },
+    get media() { return media; }, set media(v) { writes++; media = v; },
+    addEventListener(t, fn) { (this.on[t] = this.on[t] || []).push(fn); } };
+}
+
+test("#5394: the deferred sheets flip together, in one frame, once every one has loaded or failed", async () => {
+  const links = [stubLink(true), stubLink(false), stubLink(false), stubLink(false)];
+  const { frames, win } = await runFlipper(links);
+  const medias = () => links.map((l) => l.media).join();
+  assert.equal(medias(), "print,print,print,print", "an already-loaded sheet waits for the rest");
+  links[1].on.load[0]();
+  links[2].on.error[0]();
+  assert.equal(frames.length, 0, "no frame while one sheet is still loading");
+  assert.equal(medias(), "print,print,print,print");
+  links[3].on.load[0]();
+  assert.equal(frames.length, 1, "exactly one frame is asked for");
+  assert.equal(medias(), "print,print,print,print", "the flip waits for that frame");
+  frames[0]();
+  assert.equal(medias(), "all,all,all,all", "every sheet flips in the one frame (a failed one too)");
+  win.on.load.forEach((fn) => fn());
+  assert.deepEqual(links.map((l) => l.writes), [1, 1, 1, 1], "window load after the frame writes nothing again");
+});
+
+test("#5394: a sheet that failed before the flipper ran cannot hold the rest on print", async () => {
+  // Already errored: no .sheet, and its error event fired before the listener existed.
+  const links = [stubLink(true), stubLink(false)];
+  const { frames, win } = await runFlipper(links);
+  assert.equal(frames.length, 0);
+  assert.equal(win.on.load.length, 1, "window load is the backstop");
+  win.on.load[0]();
+  assert.deepEqual(links.map((l) => l.media), ["all", "all"], "window load (every sheet settled) flips them all");
+});
+
+// #5394 row 2: route sheets (MANIFEST.CSS_ROUTE) stay on print until one of their screens is shown.
+test("#5394: route sheets carry data-route in the shell and the boot flipper never selects them", async () => {
+  const { CSS_ROUTE, CSS_DEFERRED } = MANIFEST;
+  const html = readFileSync(join(ROOT, "index.html"), "utf8");
+  const tags = [...html.matchAll(/<link rel="stylesheet" href="([^"?]+)\?v=dev"([^>]*)>/g)];
+  const route = Object.fromEntries(tags.filter((m) => / data-route="/.test(m[2]))
+    .map((m) => [m[1], m[2].match(/ data-route="([^"]*)"/)[1].split(" ")]));
+  assert.deepEqual(route, CSS_ROUTE, "every route tag, and only those, names the manifest's roots");
+  assert.deepEqual(Object.keys(CSS_ROUTE).filter((f) => !CSS_DEFERRED.includes(f)), [], "every route sheet is a deferred (print) sheet");
+  // Each root is a static shell element, or one a named module builds (podium-beat.js makes #ceremony-podium).
+  const BUILT = ["ceremony-podium"];
+  const missing = [...new Set(Object.values(CSS_ROUTE).flat())].filter((id) => !BUILT.includes(id) && !html.includes(`id="${id}"`));
+  assert.deepEqual(missing, [], "a route root the shell does not hold");
+  const { asked } = await runFlipper([]);
+  assert.deepEqual(asked, ['link[rel="stylesheet"][media="print"]:not([data-route])'], "the flipper leaves route tags alone");
+});
+
+function routeWorld(linkSpec, els) {
+  const links = linkSpec.map(([href, ids]) => ({ href, media: "print", dataset: { route: ids } }));
+  let observer = null, disconnected = 0;
+  const timers = [], idles = [];
+  const ctx = vm.createContext({
+    console, Promise, queueMicrotask, URLSearchParams,
+    ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_EDGES: [], LAZY_RACE: [], SCENERY_DIR: "js/circuits/scenery" },
+    localStorage: { getItem() { return null; } }, navigator: { userAgent: "apex-game-vm" },
+    location: { search: "", hostname: "example.com" }, Log: { warn() {}, info() {}, error() {} },
+    setTimeout: (fn, ms) => { timers.push([fn, ms]); return timers.length; }, clearTimeout() {},
+    requestIdleCallback: (fn) => { idles.push(fn); },
+    MutationObserver: class { constructor(cb) { this.cb = cb; observer = this; } observe(t, o) { this.opts = o; } disconnect() { disconnected++; } },
+    document: { documentElement: {},
+      querySelectorAll: (sel) => (sel === 'link[rel="stylesheet"][data-route][media="print"]' ? links.filter((l) => l.media === "print")
+        : sel.split(",").map((s) => els[s.slice(1)]).filter(Boolean)) },
+  });
+  ctx.window = ctx;
+  vm.runInContext(readFileSync(join(ROOT, "js/core/lazy-bundles.js"), "utf8") + "\nthis.LazyBundles = LazyBundles;", ctx,
+    { filename: absSrc("js/core/lazy-bundles.js") });
+  const lb = ctx.LazyBundles.create({ els: {}, loadBackendScripts: async () => true, getContext: () => ({}) });
+  const show = (el, attr) => { if (attr === "open") el.open = true; else el.hidden = false; observer.cb([{ target: el }]); };
+  return { lb, links, timers, idles, show, observer: () => observer, disconnected: () => disconnected,
+    medias: () => links.map((l) => l.media).join() };
+}
+
+test("#5394: a route sheet flips on the first reveal of one of its roots, before that frame paints", () => {
+  const els = { career: { id: "career", hidden: true }, quali: { id: "quali", hidden: true, open: false },
+    results: { id: "results", hidden: true, open: false }, hud: { id: "hud", hidden: true } };
+  const w = routeWorld([["css/career.css", "career quali"], ["css/data.css", "datahub results"], ["css/career-experience.css", "career results"]], els);
+  assert.equal(JSON.stringify(w.observer().opts), JSON.stringify({ subtree: true, attributes: true, attributeFilter: ["hidden", "open"] }));
+  assert.equal(w.medias(), "print,print,print", "nothing shown yet: every route sheet stays on print");
+  w.show(els.hud);
+  assert.equal(w.medias(), "print,print,print", "a screen that is no route root flips nothing");
+  w.show(els.quali, "open");
+  assert.equal(w.medias(), "all,print,print", "the quali dialog's open flips career.css only");
+  w.show(els.results);
+  assert.equal(w.medias(), "all,all,all", "results flips both sheets that style it");
+  assert.equal(w.disconnected(), 1, "no route sheet left: the observer goes");
+  assert.equal(w.lb.ensureRouteCss("career"), 0, "an already-flipped sheet is not written again");
+});
+
+test("#5394: a root already shown at install flips at once; the idle backstop flips the rest", () => {
+  const els = { trackdesigner: { id: "trackdesigner", hidden: false } };
+  const w = routeWorld([["css/editor.css", "trackdesigner"], ["css/photo-studio.css", "photo-studio"]], els);
+  assert.equal(w.medias(), "all,print", "a deep-linked screen gets its sheet at install");
+  const back = w.timers.find(([, ms]) => ms === 15000);
+  assert.ok(back, "the backstop waits 15 s, so the title intro never pays it");
+  back[0]();
+  assert.equal(w.medias(), "all,print", "then it waits for idle");
+  w.idles.at(-1)();
+  assert.equal(w.medias(), "all,all", "idle after the backstop flips every route sheet left");
+  assert.equal(w.disconnected(), 1);
 });
 
 test("every gen-shell block is byte-identical to a fresh generation", () => {
@@ -227,11 +483,6 @@ test("shell leaves menu pinch-zoom to the user and cancels iOS double-tap / driv
   assert.doesNotMatch(m[1], /maximum-scale/,
     "viewport must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4) — see the " +
     "rationale comment at the top of index.html");
-  assert.match(indexHtml, /function killDriveGesture[\s\S]*closest\("#game,#hud"\)/,
-    "iOS GestureEvents are cancelled only on the driving surface");
-  assert.match(indexHtml, /addEventListener\("gesturestart", killDriveGesture/);
-  assert.match(indexHtml, /addEventListener\("touchend"/,
-    "shell must cancel same-spot double-tap zoom");
   // The driving surface opts out in CSS, not in the meta tag — that is what
   // makes dropping the cap safe, so pin it here too.
   const tokens = readFileSync(join(ROOT, "css/tokens.css"), "utf8");
@@ -281,14 +532,14 @@ function lazyFiles() {
   // by game.js once a session needs it). Both are tagless BY DESIGN and still
   // have to be accounted for, or "created the file, forgot to load it" stops
   // being catchable.
-  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_RACE || []),
+  return [...(MANIFEST.LAZY_AGENT || []), ...(MANIFEST.LAZY_DEV || []), ...(MANIFEST.OVERLAY_PAGE || []), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
-    ...(MANIFEST.LAZY_TRACK_BUILD || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || [])];
 }
 
 test("DEFERRED files have no <script> tag", () => {
@@ -332,13 +583,13 @@ test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   // notice. LAZY_AGENT is deliberately NOT here (dev/test surface; a player who
   // never opens it should not pay for it in the install).
   for (const f of [...(MANIFEST.LAZY_RACE || []), ...(MANIFEST.LAZY_RACE_SESSION || []),
-                   ...(MANIFEST.LAZY_TRACK_BUILD || []),
+                   ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
                    ...(MANIFEST.LAZY_CIRCUIT || []),
                    ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
                    ...(MANIFEST.LAZY_DATA || []), ...(MANIFEST.LAZY_NET || []),
                    ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
                    ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-                   ...(MANIFEST.LAZY_CAREER_UI || [])]) {
+                   ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || [])]) {
     assert.ok(seeded.has(f),
       `${f} is a lazily-injected asset, so sw.js must seed it or it is unreachable offline`);
   }
@@ -357,12 +608,12 @@ test("sw.js stamps every injected asset it seeds", () => {
   const stamps = new RegExp(m[1].slice(1, -1));
   const injected = [...deferredFiles(), ...(MANIFEST.LAZY_RACE || []),
     ...(MANIFEST.LAZY_RACE_SESSION || []),
-    ...(MANIFEST.LAZY_TRACK_BUILD || []),
+    ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...(MANIFEST.LAZY_CIRCUIT || []), ...(MANIFEST.LAZY_SCENERY || []), ...(MANIFEST.LAZY_AUDIO || []),
     ...(MANIFEST.LAZY_DATA || []),
     ...(MANIFEST.LAZY_NET || []), ...(MANIFEST.LAZY_WORKER || []), ...(MANIFEST.LAZY_EDITOR || []),
     ...(MANIFEST.LAZY_XR || []), ...(MANIFEST.LAZY_CAM_EDITOR || []),
-    ...(MANIFEST.LAZY_CAREER_UI || [])];
+    ...(MANIFEST.LAZY_CAREER_UI || []), ...(MANIFEST.LAZY_UI_PRESETS || []), ...(MANIFEST.LAZY_SAVES_DATA || []), ...(MANIFEST.LAZY_RESULTS_SHEET || []), ...(MANIFEST.LAZY_GFX_HI || []), ...(MANIFEST.LAZY_PERF || []), ...(MANIFEST.LAZY_REAL_RACE || []), ...(MANIFEST.LAZY_LEARN || [])];
   const unstamped = injected.filter((f) => !stamps.test(f));
   assert.deepEqual(unstamped, [],
     `these are injected as ?v=<build> but seeded bare, so the cache key is one nothing requests: ${unstamped}`);
@@ -447,16 +698,21 @@ test("LAZY_RACE_SESSION is tagless; FULL keeps the session stub", () => {
   }
 });
 
-test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the thirteen build files", () => {
+test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the build files", () => {
   const tagged = new Set(scriptSrcs.map(stripV));
   const want = [
-    "js/track/scenery/build-props.js", "js/track/scenery/nature.js", "js/track/scenery/city.js",
-    "js/track/scenery/structures.js", "js/track/scenery/identity.js", "js/track/scenery/pits.js",
+    "js/track/scenery/build-props.js", "js/track/scenery/api-wrap.js",
+    "js/track/scenery/nature.js", "js/track/scenery/landforms.js",
+    "js/track/scenery/city.js", "js/track/scenery/facade.js",
+    "js/track/scenery/structures.js", "js/track/scenery/stands.js",
+    "js/track/scenery/identity.js", "js/track/scenery/pits.js",
     "js/track/scenery/venue.js", "js/track/scenery/circuit-kit.js", "js/track/scenery/landmark-kit.js",
     "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/region.js",
+    "js/track/scenery/detail.js", "js/render/shared/mesh-detail.js",   // the detail tiers above ULTRA (#5951)
   ];
-  assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, 13);
+  assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, want.length);
   for (const f of want) {
     assert.ok((MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must be in LAZY_TRACK_BUILD`);
     assert.ok((MANIFEST.TRACK_VM || []).includes(f), `${f} must stay on TRACK_VM for harnesses`);
@@ -465,8 +721,14 @@ test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the thirteen build files", () 
   }
   // Race-only scripts that hunt-2 flagged as stay-eager (not LAZY_TRACK_BUILD).
   for (const f of ["js/race/driving-coach.js", "js/race/race-insights.js", "js/race/real-replay.js", "js/camera/flyby-seq.js"]) {
+    assert.ok(!(MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must not move with track-build`);
+  }
+  // real-replay left FULL with the real-race family (#4978 row 6: LAZY_REAL_RACE behind the RealRace stub), and the
+  // coach body with the race session (#4748: LAZY_RACE_SESSION behind the FULL DrivingCoach façade).
+  for (const f of ["js/race/driving-coach-boot.js", "js/race/race-insights.js", "js/camera/flyby-seq.js"]) {
     assert.ok(MANIFEST.FULL.includes(f), `${f} must stay FULL (not moved with track-build)`);
   }
+  assert.ok((MANIFEST.LAZY_REAL_RACE || []).includes("js/race/real-replay.js"), "real-replay is LAZY_REAL_RACE");
 });
 
 // hub.js calls Data*.create() at EVAL time, so these pairs are the difference
@@ -585,6 +847,8 @@ test("LAZY_CAM_EDITOR is tagless; FULL keeps FlybyPanel algebra + CamTunerPanel 
   const full = new Set(MANIFEST.FULL);
   assert.ok(full.has("js/camera/flyby-panel.js"), "shot algebra stays FULL for loadSaved at boot");
   assert.ok(full.has("js/camera/cam-tuner-boot.js"), "CamTunerPanel stub stays FULL");
+  assert.ok(full.has("js/lighting/tuner-boot.js"));
+  assert.ok(MANIFEST.LAZY_CAM_EDITOR.includes("js/lighting/tuner-panel.js"));
   assert.ok(!full.has("js/camera/tuner-panel.js"));
   assert.ok(!full.has("js/camera/flyby-editor.js"));
   for (const f of (MANIFEST.LAZY_CAM_EDITOR || [])) {

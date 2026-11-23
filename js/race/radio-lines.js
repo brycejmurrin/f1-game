@@ -147,7 +147,12 @@ var RadioLines = (function () {
   function gapText(s) {
     if (!(s >= 0) || !Number.isFinite(s)) return null;
     // Never "0.0": two cars that close are a tenth apart on any real timing screen.
-    return s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s));
+    // 9.96.toFixed(1) is "10.0". The voice reads that as "ten point zero", and the
+    // recorded pack has "9.9" and "10" but no "10.0" clip, so a gap that sits in
+    // that band (a matched car, a whole stint) drops every line that names it.
+    // The announcer already maps the same rounding to "10" (announcer.js secs).
+    const r = s < 10 ? Math.max(0.1, s).toFixed(1) : String(Math.round(s));
+    return r === "10.0" ? "10" : r;
   }
   /** "1:32.4" — the tenth is what an engineer reads out, not the thousandth. */
   function timeText(s) {
@@ -181,9 +186,22 @@ var RadioLines = (function () {
     return poolLen > 1 ? Math.min(3, poolLen - 1) : 0;
   }
 
+  /** The variants for `key`: an explicit `pools` table, else the active locale's `radio.<key>` pool
+   *  (js/core/i18n.js, locales/<lang>.json), else the English POOLS above. Language picks WORDS only: the
+   *  seeded stream and the anti-repeat window never see it. */
+  function poolFor(key, pools) {
+    if (pools) return pools[key];
+    const loc = typeof I18n !== "undefined" && I18n.raw ? I18n.raw("radio." + key) : null;
+    return Array.isArray(loc) && loc.length ? loc : POOLS[key];
+  }
+  /** A retirement reason as words, in the active locale (English WHY when none ships). */
+  function why(code) {
+    const loc = typeof I18n !== "undefined" && I18n.raw ? I18n.raw("radio.why." + code) : null;
+    return typeof loc === "string" && loc ? loc : WHY[code] || WHY.mechanical;
+  }
+
   /** A phrasebook dealer over POOLS (or `pools`), with per-pool recent history. */
   function create(seed, pools) {
-    const P = pools || POOLS;
     const rand = rng(seed);
     const recent = new Map();   // key -> [idx…] oldest first
 
@@ -221,7 +239,7 @@ var RadioLines = (function () {
     let pending = null;
     function pick(key, vars, peek) {
       pending = null;
-      const pool = P[key];
+      const pool = poolFor(key, pools);
       if (!pool || !pool.length) return "";
       const tried = new Set();
       for (let tries = 0; tries < pool.length; tries++) {
@@ -242,6 +260,6 @@ var RadioLines = (function () {
     return { pick, commit, reset() { recent.clear(); pending = null; } };
   }
 
-  return Object.freeze({ POOLS, WHY, create, fill, gapText, timeText, surname });
+  return Object.freeze({ POOLS, WHY, why, create, fill, gapText, timeText, surname });
 })();
 Object.freeze(RadioLines);

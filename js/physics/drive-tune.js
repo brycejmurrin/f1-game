@@ -3,9 +3,9 @@
 const DriveTune = (function () {
   "use strict";
 
-  function create() {
+  function create(pace = 1.0) {
     return {
-      PACE: 1.0,
+      PACE: pace,
       WHEELBASE: 3.2,
       STEER_EXPO: 2.4,
       STEER_MAX_SLIP: 0.32,
@@ -16,8 +16,10 @@ const DriveTune = (function () {
       YAW_INERTIA: 0.58,
       PLAYER_GRIP: 1.15,
       ROAD_FOLLOW: 0,
-      // Opt-in torque-balanced wheel state (#1628). Live gate is
-      // WheelState.setEnabled / apex26.wheelState; game.js mirror is follow-up.
+      // Opt-in torque-balanced wheel state (#1628), OFF by decision (option B,
+      // 2026-10-27). The live gate is WheelState (apex26.wheelState); this field
+      // is its default. __apex.tuning().wheelState reads it, setPhysics({wheelState})
+      // sets it for the session.
       WHEEL_STATE: false,
     };
   }

@@ -1,11 +1,16 @@
 /* Apex 26 — SEPANG INTERNATIONAL CIRCUIT definition (data only).
-   Retired circuit (`classic: true`): last Malaysian GP 2017.
+   Malaysian GP 1999-2017, and back on the calendar in 2026: the FIA lists the
+   round as the "2026 Bahrain Grand Prix in Malaysia" (Oct 2-4; fia.com event
+   documents, e.g. 2026_bahrain_grand_prix_in_malaysia_-_final_race_classification.pdf).
+   `classic: true` still groups it with the retired circuits in the picker; the
+   2026 round reaches it through REAL_2026 (js/career/season-cal.js).
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "sepang",
+    revision: 2,
     classic: true,
     // Upstream my-1999 runs clockwise, matching the racing direction.
     reverse: false,
@@ -39,6 +44,7 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.90, s1: 0.10 },  // pits + main straight
       { kind: "foliage", s0: 0.30, s1: 0.40 },              // wide open infield
+      { kind: "foliage", s0: 0.780, s1: 0.786, side: 1 },   // authored palm row beside back straight
     ],
     // Equatorial haze: white-hot high sun, heavy humidity, saturated jungle.
     pal: {
@@ -53,10 +59,19 @@
       grass:         [0.17, 0.42, 0.17],
       sunDir:        [0.20, 0.90, 0.14],
     },
+    // Formula 1 longitudinal profile: T3 to T11 rises 22 m. Align the two
+    // extremes with the terrain-sampled centreline; preserve the smaller rolls.
+    // https://media.formula1.com/image/upload/content/dam/fom-website/manual/Misc/Topography/malaysia.webp
     elevations: [
-      { s: 0.22, halfM: 420, rise: -5.0 },
-      { s: 0.46, halfM: 380, rise: 4.5 },
-      { s: 0.74, halfM: 460, rise: -4.0 },
+      { s: 0.0896, halfM: 424, rise: 3.11 },
+      { s: 0.1560, halfM: 498, rise: -13.30 },
+      { s: 0.2727, halfM: 302, rise: 5.18 },
+      { s: 0.3769, halfM: 407, rise: 3.76 },
+      { s: 0.4408, halfM: 384, rise: 2.56 },
+      { s: 0.5220, halfM: 169, rise: -2.57 },
+      { s: 0.5835, halfM: 469, rise: 8.81 },
+      { s: 0.6808, halfM: 202, rise: -3.16 },
+      { s: 0.8837, halfM: 137, rise: 2.43 },
     ],
     hwZones: [
       // Temporary T15 geometry constraint, not a sourced racing width: removing
@@ -66,7 +81,7 @@
     ],
     bankZones: [
       { turn: 1, angleDeg: 3.5, widthM: 140 },   // T1-T2 loop; re-seated frac 0.045 (was 144 m off any apex)
-      { frac: 0.330, angleDeg: 4.0, widthM: 150 },   // T5-T6 sweep
+      { turn: 5, angleDeg: 4.0, widthM: 150 },   // T5-T6 sweep (was frac 0.330, 183 m before T5)
       { frac: 0.660, angleDeg: 3.0, widthM: 130 },   // T12-T13
     ],
 

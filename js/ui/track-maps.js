@@ -25,19 +25,22 @@ const TrackMaps = (function () {
   // lightness and chroma, which every colour-vision type keeps. The literals
   // are only the fallback for a context with no computed style.
   const SECTOR_TOKENS = ["--gold", "--silver", "--bronze"];
+  // A COLOUR VISION mode swaps them for CvdPalette's sec1-3 (#1595).
   const SECTOR_COLORS = ["#ffd700", "#c0c0c0", "#cd9b5a"];
+  const cvdOn = () => typeof CvdPalette !== "undefined" && CvdPalette.mode() !== "off";
   function sectorColors() {
+    if (cvdOn()) return ["sec1", "sec2", "sec3"].map((k) => CvdPalette.hex(k));
     const root = typeof document !== "undefined" && document.documentElement;
     const cs = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
     return SECTOR_TOKENS.map((k, i) => (cs && String(cs.getPropertyValue(k) || "").trim()) || SECTOR_COLORS[i]);
   }
 
-  const CLASS_COLORS = {
-    HAIRPIN: "#f87171",
-    SLOW: "#fb923c",
-    MEDIUM: "#facc15",
-    FAST: "#4ade80"
-  };
+  // Corner class → CvdPalette row (its off shades are the old red → green
+  // ramp; a COLOUR VISION mode turns it into a lightness ramp, #1595).
+  const CLASS_KEY = { HAIRPIN: "cnrHairpin", SLOW: "cnrSlow", MEDIUM: "cnrMedium", FAST: "cnrFast" };
+  function classColor(cls) {
+    return CLASS_KEY[cls] && typeof CvdPalette !== "undefined" ? CvdPalette.hex(CLASS_KEY[cls]) : "";
+  }
 
   // Classify from approximate apex radius (m) + heading sweep (deg).
   // Peak |curvature| alone called every chicane a HAIRPIN (Rettifilo, Bus Stop);
@@ -81,12 +84,13 @@ const TrackMaps = (function () {
     return crns;
   }
 
-  function measureApex(tr, frac) {
+  function measureApex(tr, frac, win) {
     const total = tr.total, n = tr.n, ds = total / n;
     const f = (((frac % 1) + 1) % 1);
     const s0 = f * total;
+    const w = win > 0 ? Math.min(50, win) : 50;
     let kPeak = Math.abs(Tracks.curvature(tr, s0)), sPeak = s0;
-    for (let d = -50; d <= 50; d += 2) {
+    for (let d = -w; d <= w; d += 2) {
       const s = ((s0 + d) % total + total) % total;
       const k = Math.abs(Tracks.curvature(tr, s));
       if (k > kPeak) { kPeak = k; sPeak = s; }
@@ -127,12 +131,12 @@ const TrackMaps = (function () {
     return { v: kPeak, r: r, ang: ang, cls: classifyCorner(r, ang), fPeak: ((sPeak / total) % 1 + 1) % 1 };
   }
 
-  function cornerAt(tr, frac, n) {
+  function cornerAt(tr, frac, n, win) {
     const m = tr.map.length;
     const f = (((frac % 1) + 1) % 1);
     const idx = Math.floor(f * m) % m;
     const mp = tr.map[idx];
-    const mes = measureApex(tr, f);
+    const mes = measureApex(tr, f, win);
     // `f` is the apex's LAP FRACTION, and it is the only field here expressed in
     // track space rather than minimap space — measureApex already computes it.
     // The flyby sequencer anchors shots
@@ -175,12 +179,22 @@ const TrackMaps = (function () {
       // on the picker's UI thread. It warmed nothing the race uses either: the
       // menu builds the SELECTED world at once (loadTrackStepped), which bakes
       // and memoises its own line, and RACE! adopts that world.
-      const tr = Tracks.buildCenterline(def, { line: false });
+      // A 2-D map needs elevation and curvature, but no cross-track banking.
+      const tr = Tracks.buildCenterline(def, { line: false, banking: false });
       if (tr && tr.map && tr.map.length > 2) {
         const pts = tr.map.map((p) => [p[0], p[1]]);
         let crns;
         if (def.turns && def.turns.length) {
-          crns = def.turns.map((frac, i) => cornerAt(tr, frac, i + 1));
+          // Each turn searches for its apex only up to half the gap to its
+          // neighbour (capped at 50 m in measureApex): with a fixed ±50 m, the two
+          // turns of a chicane resolved to the SAME apex and one took the other's
+          // direction, class and flyby target (clean-room fix 44: 26 such pairs).
+          const tl = def.turns, nt = tl.length;
+          crns = tl.map((frac, i) => {
+            if (nt < 2) return cornerAt(tr, frac, i + 1);
+            const gap = Math.min(((frac - tl[(i - 1 + nt) % nt]) % 1 + 1) % 1, ((tl[(i + 1) % nt] - frac) % 1 + 1) % 1) * tr.total;
+            return cornerAt(tr, frac, i + 1, Math.max(4, gap / 2));
+          });
         } else {
           crns = detectCorners(tr);
         }
@@ -191,8 +205,9 @@ const TrackMaps = (function () {
         const sectors = (def.sectors && def.sectors.length === 2) ? def.sectors.slice() : null;
         out = { pts: pts, py: tr.py, corners: crns, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
       }
-    } catch {
-      out = null;
+    } catch (e) {
+      Log.warn("track", "track-maps compute failed for " + def.id + ": " + (e && e.message));
+      return null; // not cached: a one-off throw must not blank the map for the page's life
     }
     cache[def.id] = out;
     return out;
@@ -434,7 +449,10 @@ const TrackMaps = (function () {
 
   function draw(canvas, def, opts) {
     opts = opts || {};
-    const g = canvas.getContext("2d");
+    // Same null as drawElevProfile (#4469): the preview outline is the next
+    // painter on that path, and clearRect on a null context throws the overlay.
+    const g = canvas && canvas.getContext && canvas.getContext("2d");
+    if (!g) return false;
     const W = canvas.width, H = canvas.height, pad = opts.pad != null ? opts.pad : 14;
     g.clearRect(0, 0, W, H);
     const data = compute(def);
@@ -566,7 +584,7 @@ const TrackMaps = (function () {
         for (let i = 0; i < cs.length; i++) {
           const x = PX(cs[i].x), y = PY(cs[i].y);
           const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
-          const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+          const col = classColor(cls) || (opts.cornerColor || "#fff");
           g.fillStyle = col;
           g.beginPath(); g.arc(x, y, Math.max(1.5, rDot * 0.4), 0, Math.PI * 2); g.fill();
         }
@@ -577,7 +595,7 @@ const TrackMaps = (function () {
       for (let i = 0; i < cs.length; i++) {
         const x = PX(cs[i].x), y = PY(cs[i].y);
         const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
-        const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+        const col = classColor(cls) || (opts.cornerColor || "#fff");
         let dx = x - cx, dy = y - cy;
         const len = Math.hypot(dx, dy) || 1;
         dx /= len; dy /= len;
@@ -641,10 +659,10 @@ const TrackMaps = (function () {
       // was unreadable on the modal. Silver S2 is the grey sector stroke.
       if (opts.legend !== false && W >= 280 && H >= 200) {
         const legend = [
-          ["HAIRPIN", CLASS_COLORS.HAIRPIN],
-          ["SLOW", CLASS_COLORS.SLOW],
-          ["MEDIUM", CLASS_COLORS.MEDIUM],
-          ["FAST", CLASS_COLORS.FAST],
+          ["HAIRPIN", classColor("HAIRPIN")],
+          ["SLOW", classColor("SLOW")],
+          ["MEDIUM", classColor("MEDIUM")],
+          ["FAST", classColor("FAST")],
           ["S2", sectorColors()[1]]
         ];
         const fontPx = Math.max(12, Math.round(Math.min(W, H) / 36));
@@ -668,7 +686,7 @@ const TrackMaps = (function () {
 
   return {
     outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
-    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses,
+    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, classColor, classifyCorner, measureApex, assignCornerClasses,
     invalidate, cachedIds: () => Object.keys(cache),
   };
 })();

@@ -1,0 +1,228 @@
+/* fitHud's per-tick key reads each dock button's `hidden`, not a fresh
+ * querySelectorAll over both docks: the list is cached and re-queried only
+ * when a dock's groups move (game.js layoutDocks), the docks swap (pickDocks)
+ * or the fit is invalidated. HudTyres.paint queries its #hud-tyre-code chip
+ * once per widget. Mini-dom VM, no browser.
+ *
+ * Run: node --test tests/unit/hud-dock-btn-cache.test.mjs
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
+const ctx2d = () => new Proxy({}, { get: () => () => {}, set: () => true });
+
+function boot({ portrait = false, extra = {} } = {}) {
+  const dom = makeDom();
+  const rawCreate = dom.document.createElement;
+  dom.document.createElement = (tag) => {
+    const el = rawCreate(tag);
+    if (String(tag).toLowerCase() === "canvas") el.getContext = () => ctx2d();
+    return el;
+  };
+  const sb = {
+    Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, WeakSet, RegExp, Date,
+    parseFloat, parseInt, isFinite, Infinity,
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false, DEBUG: 4 },
+    document: dom.document, innerWidth: 844, innerHeight: 390, devicePixelRatio: 1,
+    M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
+    PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 },
+    Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
+    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
+    TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
+    setTimeout: () => 1, clearTimeout: () => {}, performance: { now: () => 1000 },
+    matchMedia: (q) => ({ matches: portrait && /portrait/.test(q), addListener() {}, removeListener() {} }),
+    getComputedStyle: () => ({ getPropertyValue: () => "", columnGap: "0px", rowGap: "0px", transform: "none" }),
+  };
+  Object.assign(sb, extra);
+  sb.window = sb;
+  for (const f of ["js/ui/live-region.js", "js/ui/hud-minimap.js", "js/ui/hud-radio-lane.js", "js/ui/hud.js", "js/race/overtake-mode.js"]) {
+    vm.runInNewContext(src(f), sb, { filename: absSrc(f) });
+  }
+  const $ = (id) => dom.byId(id);
+  const minimap = $("minimap");
+  minimap.getContext = () => ctx2d();
+  const els = {
+    pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
+    speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
+    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
+    gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
+    flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
+    announceLive: $("announce-live"), pausebtn: $("pausebtn"), btnCam: $("btn-cam"),
+  };
+  dom.document.body.classList.add("in-race");
+  const player = {
+    team: { id: "t1", color: [1, 0, 0] }, code: "YOU", rank: 1, lap: 1, lapTime: 12, best: Infinity,
+    speed: 50, energy: 0.5, gear: 3, rpm: 5000, boostOn: false,
+    otT: 0, otArmed: false, otE: 0, otEarned: false, aeroX: 0, xArmed: false, s: 10, prog: 10, retired: false,
+  };
+  const G = {
+    els, player, cars: [player], ranked: [player], timeTrial: false, state: "race",
+    lapsTarget: 5, track: { map: [[0, 0], [1, 1]], total: 100, def: {} },
+    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity],
+    fieldSectorBests: [Infinity, Infinity, Infinity], aeroZones: [{}], ttRecord: Infinity,
+    fmtTime: (t) => String(t), dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
+    cssCol: () => "#f00",
+  };
+  const hud = sb.GameHud.create(G);
+  const mk = (cls, parent, id) => {
+    const e = dom.document.createElement("div");
+    e.className = cls; if (id) e.id = id;
+    parent.appendChild(e);
+    return e;
+  };
+  mk("hud-top", dom.body);
+  // A laid-out bottom cluster, so fitPass's portrait GEAR-vs-ladder cap (bottom > 0) runs.
+  const rect = (l, w) => () => ({ left: l, right: l + w, width: w, top: 300, bottom: 340, height: 40, x: l, y: 300 });
+  mk("", mk("hud-bottom", dom.body), "hud-gearbox").getBoundingClientRect = rect(300, 200);
+  const bar = mk("", dom.body, "hud-dock");
+  const dockL = $("dock-left"), dockR = $("dock-right");
+  for (const d of [dockL, dockR]) { if (d.parentNode) d.parentNode.removeChild(d); bar.appendChild(d); }
+  // game.js layoutDocks moves whole GROUPS between the docks.
+  const pedals = mk("dock-grp", dockL, "grp-pedals"), taps = mk("dock-grp", dockR, "grp-taps");
+  pedals.getBoundingClientRect = rect(10, 60); taps.getBoundingClientRect = rect(770, 60);
+  mk("touchbtn", pedals, "btn-brake").getBoundingClientRect = rect(10, 60); mk("touchbtn", pedals, "btn-throttle");
+  const boost = mk("touchbtn", taps, "btn-boost"); mk("touchbtn", taps, "btn-ot2");
+  const calls = { n: 0 };
+  for (const d of [dockL, dockR]) {
+    const q = d.querySelectorAll;
+    d.querySelectorAll = (sel) => { calls.n++; return q(sel); };
+  }
+  return { hud, sb, dom, calls, dockL, dockR, pedals, taps, boost, tick: () => hud.updateHud(true) };
+}
+
+test("fitHud: 30 steady ticks run no dock querySelectorAll after the first", () => {
+  const h = boot();
+  h.tick(); h.tick();   // the first fit picks the dock handles; the next reads their buttons
+  const first = h.calls.n;
+  assert.ok(first >= 1, "the first fit queries the docks");
+  for (let i = 0; i < 30; i++) h.tick();
+  assert.equal(h.calls.n - first, 0, "steady ticks re-queried the docks " + (h.calls.n - first) + " times");
+});
+
+test("fitHud: a dock re-layout, a dock swap or an invalidate re-queries; a hidden flip does not", () => {
+  const h = boot();
+  for (let i = 0; i < 3; i++) h.tick();
+  let n = h.calls.n;
+  h.boost.hidden = true; h.tick(); h.tick();
+  assert.equal(h.calls.n, n, "a button's hidden flag is read from the cached list");
+  h.dockL.appendChild(h.taps);   // layoutDocks: taps change side
+  h.tick();
+  assert.ok(h.calls.n > n, "a group moving between docks re-queries");
+  n = h.calls.n; h.tick(); h.tick();
+  assert.equal(h.calls.n, n, "…once");
+  h.sb.document.body.classList.add("mirror-controls");   // pickDocks swaps the handles at the next fit
+  h.sb.GameHud.invalidateFit();
+  h.tick();
+  assert.ok(h.calls.n > n, "a swap / invalidate re-queries");
+});
+
+// #3108 row 4: the PORTRAIT cap (GEAR vs the ladder discs) walked both docks with a fresh
+// querySelectorAll on every fit pass; it reads the same cached dockButtons() list now.
+// Measured (mini-dom, 844x390 rects): 6 dock querySelectorAll per invalidated portrait fit before, 2 after (the cache refill).
+test("fitHud portrait: the GEAR-vs-ladder cap reads the cached dock list, no extra querySelectorAll", () => {
+  for (const portrait of [false, true]) {
+    const h = boot({ portrait });
+    for (let i = 0; i < 3; i++) h.tick();
+    const n = h.calls.n;
+    h.sb.GameHud.invalidateFit(); h.tick();
+    assert.equal(h.calls.n - n, 2, (portrait ? "portrait" : "landscape") + ": one query per dock per invalidated fit, got " + (h.calls.n - n));
+  }
+});
+
+// #3108 row 3: HudMinimap's measure key concatenated body.className and three style reads
+// on every HUD tick. With a MutationObserver it is rebuilt only after a watched write.
+// Measured (mini-dom, 30 steady ticks): the key build (body.className + 3 style reads + 8 concats) ran 30 times before, 0 after.
+test("minimap: the measure key is rebuilt only after a watched attribute write, not per tick", () => {
+  const obs = [];
+  class MO {
+    constructor(cb) { this.cb = cb; this.q = []; this.targets = []; obs.push(this); }
+    observe(t, o) { this.targets.push([t, o]); }
+    takeRecords() { const q = this.q; this.q = []; return q; }
+  }
+  const h = boot({ extra: { MutationObserver: MO } });
+  const body = h.dom.document.body;
+  // The key's own read: body.dataset.density (nothing else in the HUD reads it).
+  let reads = 0, density = "";
+  Object.defineProperty(body.dataset, "density", { configurable: true, enumerable: true,
+    get() { reads++; return density; }, set(v) { density = v; } });
+  h.tick(); h.tick();
+  const first = reads;
+  assert.ok(first >= 1, "the first draw builds the key");
+  for (let i = 0; i < 30; i++) h.tick();
+  assert.equal(reads - first, 0, "steady ticks rebuilt the key " + (reads - first) + " times");
+  assert.equal(obs.length, 1, "one observer");
+  const watched = obs[0].targets.map(([t, o]) => (t === body ? "body" : t.id || t.tagName || "root") + ":" + o.attributeFilter.join(","));
+  assert.deepEqual(["body:class,data-density", "minimap:style"].filter((w) => !watched.includes(w)), [], "missing from the watched set: " + watched.join(" "));
+  assert.equal(watched.length, 3, "body, <html> and #minimap are watched");
+  obs[0].q.push({ type: "attributes" });   // a body class write earlier in this task (takeRecords path)
+  h.tick();
+  assert.equal(reads - first, 1, "a watched write rebuilds the key once");
+  obs[0].cb([]);   // the async delivery path
+  h.tick(); h.tick();
+  assert.equal(reads - first, 2, "a delivered record rebuilds it once more");
+});
+
+test("HudTyres.paint: 10 paints query the chip at most once; a detached chip is re-queried", () => {
+  const ctx = { console };
+  vm.createContext(ctx); withI18n(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-tyres.js"), "utf8"), ctx, { filename: absSrc("js/ui/hud-tyres.js") });
+  ctx.HudTyres = vm.runInContext("HudTyres", ctx);
+  let chip = { dataset: {}, textContent: "M", isConnected: true }, q = 0;
+  const el = { dataset: {}, querySelector: (sel) => { q++; return sel === "#hud-tyre-code" ? chip : null; },
+    setAttribute() {}, getAttribute: () => null };
+  for (let i = 0; i < 10; i++) ctx.HudTyres.paint(el, { tempS: 90, tempOpt: 90, tempWindow: 15 }, { code: "M", spent: 0.1 });
+  assert.ok(q <= 1, "querySelector ran " + q + " times in 10 paints");
+  chip.isConnected = false; chip = { dataset: {}, textContent: "M", isConnected: true };
+  ctx.HudTyres.paint(el, { tempS: 90, tempOpt: 90, tempWindow: 15 }, { code: "M", spent: 0.1 });
+  assert.equal(q, 2, "a chip that left the tree is re-queried");
+});
+
+
+function fitKeyFor(set, desktop = false) {
+  const HUD = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
+  const ids = HUD.slice(HUD.indexOf("const _HL_CSS_HID"), HUD.indexOf("\n", HUD.indexOf("const _HL_CSS_HID")) + 1);
+  const body = { dataset: { hlSet: set }, classList: { contains: (c) => c === "desktop" && desktop } };
+  const ctx = vm.createContext({ document: { body }, Set });
+  vm.runInContext(ids + "let _hlEls = [];\n" + fnSource(HUD, "function hlKey()") + "\nthis.k = (els) => { _hlEls = els; return hlKey(); };", ctx, { filename: absSrc("js/ui/hud.js") });
+  return ctx.k;
+}
+
+test("hlKey: a chip the touch-cockpit CSS hides keys as hidden, so its words never move the fit key (perf hunt 8)", () => {
+  const chip = (id, text, attrs = []) => ({ id, hidden: false, textContent: text, hasAttribute: (a) => attrs.includes(a) });
+  const run = ({ set, desktop, aero, user = [] }) => fitKeyFor(set, desktop)([chip("hud-aero", aero, user), chip("hud-gear", "4")]);
+  const words = ["AERO 899m", "99m", "9m", "STRAIGHT MODE"];   // four distinct lengths
+  const keys = (o) => new Set(words.map((aero) => run({ ...o, aero })));
+  assert.equal(keys({ set: "cockpit", desktop: false }).size, 1, "touch cockpit: the hidden AERO chip's words never change the key");
+  assert.equal(keys({ set: "cockpit", desktop: true }).size, words.length, "desktop cockpit shows the chip: its length is still keyed");
+  assert.equal(keys({ set: "chase", desktop: false }).size, words.length, "another layout set shows it: still keyed");
+  assert.equal(keys({ set: "cockpit", desktop: false, user: ["data-hl-user"] }).size, words.length, "a player-placed chip is shown (the CSS excludes it): still keyed");
+});
+
+test("helmet speed keeps its fit across digit thresholds and refits when units or visibility change", () => {
+  const key = fitKeyFor("helmet");
+  const unit = { textContent: "KM/H" };
+  const speed = { id: "hud-speed", hidden: false, textContent: "", lastElementChild: unit };
+  function at(n) {
+    speed.textContent = n + unit.textContent;
+    return key([speed]);
+  }
+  const baseline = at(0);
+  for (const n of [9, 10, 99, 100, 99, 999]) assert.equal(at(n), baseline);
+  unit.textContent = "MPH";
+  const imperial = at(99);
+  assert.notEqual(imperial, baseline);
+  speed.hidden = true;
+  assert.notEqual(at(99), imperial);
+  speed.hidden = false;
+  assert.equal(at(100), imperial);
+});

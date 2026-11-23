@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { absSrc } from "../helpers/abs-src.mjs";
 import { gameSource } from "../helpers/game-source.mjs";
 
@@ -20,7 +21,8 @@ function rig({ phone = false, saveData = false, stored = null, build = "1700", h
     select: { hidden: true }, "race-settings": { hidden: true },
   };
   const disk = new Map(stored === null ? [] : [["titleWarm", stored]]);
-  const store = { raw: (k) => (disk.has(k) ? disk.get(k) : null), rawSet: (k, v) => { disk.set(k, String(v)); return true; } };
+  const calls = { schedule: 0, storage: 0, dom: 0 };
+  const store = { raw: (k) => { calls.storage++; return disk.get(k) ?? null; }, rawSet: (k, v) => { disk.set(k, String(v)); return true; } };
   const clock = { t: 0 };
   const ctx = vm.createContext({
     performance: { now: () => clock.t },
@@ -32,10 +34,9 @@ function rig({ phone = false, saveData = false, stored = null, build = "1700", h
   });
   for (const f of ["js/garage/prebuild.js", "js/perf/title-warm.js"]) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const G = { state: "menu", setupPreviewOn: false, headlessMode: false, gfx: { isMobile: phone, warm() {} } };
-  const calls = { schedule: 0 };
   let ready = false;
   const W = vm.runInContext("TitleWarm", ctx).create(G, {
-    $: (id) => els[id], ui: () => ({ state: () => ({ home }) }), store, idleMs: 1200,
+    $: (id) => { calls.dom++; return els[id]; }, ui: () => ({ state: () => ({ home }) }), store, idleMs: 1200,
     warmable: () => warmable, schedule: () => { calls.schedule++; }, prepReady: () => ready,
   });
   const tick = (ms) => { clock.t += ms; W.poll(); };
@@ -71,6 +72,24 @@ test("a phone that already warmed this build skips it; a new build warms again; 
   const desk = rig({ phone: false, stored: "1700", build: "1700" });
   desk.idle();
   assert.equal(desk.calls.schedule, 1, "desktop / hardware: every session");
+});
+
+test("the 1 Hz poll stops once this build is done (or already done on a phone) (perf hunt)", () => {
+  // Unit rig has no setInterval: drive poll() and check the latch + stop() path.
+  const phoneDone = rig({ phone: true, stored: "1700", build: "1700" });
+  phoneDone.tick(100);
+  phoneDone.tick(5000);
+  assert.equal(phoneDone.W.state().last.why.includes("done-this-build"), true);
+  assert.equal(phoneDone.W.state().doneBuild, "1700");
+  assert.equal(phoneDone.calls.schedule, 0);
+  const finish = rig({ phone: false, stored: null, build: "1700" });
+  finish.idle();
+  finish.setReady(true);
+  finish.tick(1000);
+  finish.tick(5000);
+  assert.equal(finish.disk.get("titleWarm"), "1700");
+  assert.equal(finish.W.state().doneBuild, "1700");
+  assert.equal(finish.calls.schedule, 1);
 });
 
 test("never under Save-Data, a 3D Home, no warm(), a hidden tab, or off the title", () => {
@@ -116,13 +135,54 @@ test("leaving the menus mid-prep re-arms it; tapping RACE keeps it running throu
   assert.equal(g.calls.schedule, 2, "back on an idle title: it starts again");
 });
 
+test("racing abandons pending title work without polling the menu until it returns", () => {
+  const h = rig();
+  h.idle();
+  assert.equal(h.W.wants(), true);
+  h.G.state = "race";
+  const before = { ...h.calls };
+  for (let i = 0; i < 60; i++) h.tick(1000);
+  assert.equal(h.W.wants(), false);
+  assert.deepEqual(h.calls, before);
+  h.G.state = "menu";
+  h.tick(1000);
+  assert.equal(h.calls.schedule, 1);
+  h.tick(1300);
+  assert.equal(h.calls.schedule, 2);
+});
+
 test("game.js wiring: the prep's current() accepts a title warm, and the poll is created and started", () => {
   const GAME = gameSource();
   const at = GAME.indexOf("const current = prep.current = ");
   const cur = GAME.slice(at, GAME.indexOf("\n  const prepare = ", at));
   assert.ok(cur.includes('|| (typeof titleWarm !== "undefined" && titleWarm.wants())'), "scheduleFlybyTrack's liveness includes the title warm (typeof: canary sandboxes lift it alone)");
-  assert.ok(GAME.includes("schedule: () => scheduleFlybyTrack(true)") && GAME.includes("titleWarm.start();"), "created and started");
+  assert.ok(GAME.includes("schedule: () => scheduleFlybyTrack(true)"), "created with the menu prep as its schedule (started: the game-VM test below)");
   assert.ok(GAME.includes("p.world && p.done && p.warmed && p.warmFrames === 0 && !p.warming"), "done = census-entry menuPrepReady's test");
   assert.ok(read("tools/manifest.cjs").includes('"js/perf/title-warm.js"'), "loaded");
   assert.ok(read("js/core/save-schema-registry.js").includes('"titleWarm": entry('), "store key registered");
+});
+
+test("the booted game starts the title-warm poll: its state() advances when the VM's timers run", async () => {
+  // The real js/game.js in the game VM. TitleWarm.create is wrapped as the module
+  // lands (onSandbox runs before any game script), so the test holds the very
+  // instance game.js created. start() arms the 1 s poll; without it no timer
+  // exists and state().last never leaves null however long the title idles.
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const made = [];
+  const g = await createGame({ carMeshes: false, onSandbox(sandbox) {
+    let mod;
+    Object.defineProperty(sandbox, "TitleWarm", { configurable: true, enumerable: true, get: () => mod,
+      set: (v) => { mod = v && { ...v, create(G, d) { const w = v.create(G, d); made.push(w); return w; } }; } });
+  } });
+  try {
+    assert.equal(made.length, 1, "game.js created exactly one TitleWarm");
+    const w = made[0];
+    assert.equal(g.G.state, "menu");
+    assert.equal(w.state().last, null, "no poll has run before the VM's timers fire");
+    g.flushTimers();
+    const s1 = w.state().last;
+    assert.ok(s1 && Number.isFinite(s1.at) && Array.isArray(s1.why), "the poll ran and recorded why it may or may not start: " + JSON.stringify(s1));
+    g.flushTimers();
+    assert.notStrictEqual(w.state().last, s1, "the poll re-arms: a second timer pass polls again");
+  } finally { g.close(); }
 });

@@ -114,6 +114,8 @@ var FlyingStart = (function () {
     return { update, stop, owns: (c) => !!(handover && handover.c === c), active: () => !!handover };
   }
 
-  return { create, runUpMetres, HANDOVER_S, MARGIN_S, MIN_RUN_M, MAX_RUN_FRAC };
+  // runUpMetres + hand-over scalars stay module-local: create() owns placement;
+  // no external caller reads the constants or the pure helper.
+  return { create };
 })();
 Object.freeze(FlyingStart);

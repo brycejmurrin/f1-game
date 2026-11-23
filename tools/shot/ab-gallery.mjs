@@ -7,6 +7,7 @@ import {createHash, randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {parseArgs} from 'node:util';
 import sharp from 'sharp';
+import { BRYCE_WINDOWS } from '../lib/bryce-phone.mjs';
 
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const TEMPLATE=path.join(ROOT,'examples/visor-lab');
@@ -18,7 +19,7 @@ Selector metadata: --race monza --timing night --weather dry --camera helmet --e
 Writes comparisons.html + comparisons.json + content-addressed images; retains existing pairs.
 Recipe: {"pairs":[{"id":"rain-visor","title":"Rain visor","scene":{"track":"bahrain","tod":"night","weather":"rain","camera":"helmet","frac":0.18},"a":{"label":"Original","visor":"off"},"b":{"label":"Clear shield","visor":"clear","visorRefraction":"strong","visorReflections":"strong"}}]}
 Captures use one disposable WebGL2 browser, Ultra, 1920x1080, reduced motion and a frozen shared scene.
-  --viewport 844x390 --touch   phone landscape with a touch HUD (the owner's profile); --tag phone suffixes every pair id
+  --viewport ${BRYCE_WINDOWS.standalone.width}x${BRYCE_WINDOWS.standalone.height} --touch   iPhone 15 logical landscape size, touch HUD, DPR 1 comparison; --tag phone suffixes every pair id
 Wetness is pinned to the weather target for comparison; rainfall may still be ramping.
 Import equal-size images to compare different code revisions or any other captured settings.
 Serve the gallery over HTTP; publish separately. No credentials or hosting identity are needed.
@@ -50,7 +51,7 @@ export function recipePairs(data){
   return {id:key,title:String(p.title||key),note:String(p.note||''),scene,a,b,selection:selectionFields({race:scene.track,timing:scene.tod,weather:scene.weather,camera:scene.camera,position:scene.frac,effect})};
  });
 }
-export async function installViewer(gallery){
+async function installViewer(gallery){
  await fs.mkdir(gallery,{recursive:true});
  for(const name of ['comparisons.html','comparisons.js','comparisons.css'])if(path.resolve(TEMPLATE)!==path.resolve(gallery))await fs.copyFile(path.join(TEMPLATE,name),path.join(gallery,name));
 }
@@ -76,13 +77,13 @@ export async function addPair({gallery,id:pairId,title,a,b,aLabel='Original',bLa
  return pair;
  }finally{await lock.close();await fs.unlink(lockPath);}
 }
-export function parseViewport(raw){
+function parseViewport(raw){
  if(raw==null||raw==='')return {width:1920,height:1080};
  const m=/^(\d{3,4})x(\d{3,4})$/.exec(String(raw));
- if(!m)throw new Error('--viewport takes WxH, e.g. 844x390');
+ if(!m)throw new Error('--viewport takes WxH, e.g. 852x393');
  return {width:+m[1],height:+m[2]};
 }
-export async function capturePairs(pairs,gallery,{viewport=null,touch=false,tag=''}={}){
+async function capturePairs(pairs,gallery,{viewport=null,touch=false,tag=''}={}){
  viewport=viewport||{width:1920,height:1080};
  if(tag&&!/^[a-z0-9][a-z0-9_-]{0,19}$/.test(tag))throw new Error('--tag must be a short lowercase slug');
  if(tag)pairs=pairs.map(p=>({...p,id:p.id+'-'+tag,title:p.title+' · '+tag}));

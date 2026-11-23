@@ -38,7 +38,7 @@ Variable British summer sky: pale grey-blue overcast (`ATM.britishOvercast`), so
 Light ground fog; gentle distance haze fading greens toward grey.
 
 ## 3. Elevation
-Very flat — total change ~15–20 m. Subtle dips around Abbey/Farm (s≈0.55) and a slight rise through Maggotts/Becketts (s≈0.10–0.15). Treat as near-level; use gentle grade only, no dramatic climbs.
+Very flat. The built centreline peaks +7.04 m at racing s≈0.269 and dips -7.13 m at s≈0.703 (trackProfile 2026-10-15, the def's own `elevations` comment; an older note here placed them at 0.12/0.55). Treat as near-level; use gentle grade only, no dramatic climbs.
 
 ## 4. Landmarks & surroundings by lap position
 S=0.0 sits at the modern Wing/pit straight (`startFrac: 0.5224`), not the

@@ -1,5 +1,7 @@
 # PERF › IPHONE AUDIT 2026-10-21: live-site freeze, governor ladder §2u, TLX phone costs, BrowserStack profiling map
 
+Summary: External audit of the live site: freeze, governor ladder, TLX phone costs and a BrowserStack profiling map.
+
 An external audit of the live site (https://brycejmurrin.github.io/f1-game/) run two ways on
 2026-10-21 — a browser agent in a software-GL Chromium, and a local Playwright run — plus a
 code-level pass over the iPhone render path and a capability check of BrowserStack for real-device
@@ -138,8 +140,8 @@ Already built, do not engage (this branch, in order):
 1. **Governor ladder §2u** — let the ladder reach rungs 2–4 on compute-bound phones via the
    `_pendingVerify` scale-response discriminator (§3). Largest lever.
 2. **SGSR1 spatial upscale default ON at phone MEDIUM/LOW** (#1652) — was blocked on a real-GPU
-   A/B. **Decision still pending** the real-device evidence; do not flip the default on this
-   branch.
+   A/B. **Decided 2026-10-27: stays OFF** (iPhone 14 A/B, PR #3708; UPSCALING-2026-09 §7.7).
+   Do not flip the default.
 3. **Thermal → render rate** — auto-engage the RenderRate 45 fps tier from ThermalDrift's due
    signal, only when the player's render-rate setting is "auto"; never override an explicit
    player choice.

@@ -45,12 +45,22 @@ const NAME = /^-?[_a-zA-Z][\w-]*$/;
 // that reads as a hook and is in fact decoration, with the selector that does
 // the real work. Adding a row is a decision; leaving one out is a test failure.
 export const KNOWN = {
-  // PHONE AS CONTROLLER page state (js/input/phone-pad.js pad()): both are
+  // The phone-bridge LINK box (js/agent/apex-bridge.js askToken): styled inline, the class exists only so
+  // tests/unit/css-layers.test.mjs's el("dialog", "<class>") scan can name the runtime <dialog>.
+  "apex-bridge-link": "js/agent/apex-bridge.js LINK <dialog> — inline styles; the class names it for css-layers",
+  // PHONE AS CONTROLLER page state (js/input/phone-pad-page.js pad()): both are
   // defined in controller.html's own <style>, which is a root page like
   // bench.html and not under css/ — `body.linked` swaps the pairing screen
   // for the pedals, `#status.bad` colours a refusal.
   "bad": "controller.html <style> (#status.bad) — the phone page, not css/",
+  "feedback-off": "controller.html <style> (.pedal.feedback-off.on hides the pedal input meter)",
+  "grip-cue": "controller.html <style> (.pedal.grip-cue shows the grip mark on the held pedal)",
   "linked": "controller.html <style> (body.linked) — the phone page, not css/",
+  "awaiting": "controller.html <style> (body.awaiting: link open, not yet admitted, no controls) — the phone page, not css/",
+  "placed": "controller.html <style> (.placed, a control moved by MOVE & SIZE) — the phone page, not css/",
+  "picked": "controller.html <style> (body.arranging .picked) — the phone page, not css/",
+  "clash": "controller.html <style> (body.arranging .clash, two overlapping controls) — the phone page, not css/",
+  "lay-row": "controller.html <style> (.lay-row, the WHEEL LAYOUT sheet's per-key rows) — the phone page, not css/",
   // …and the wheel's LCD states PhonePad.paintHud() toggles on #screen, every
   // one styled in that same <style> (#screen.redline / .boost / .ot-on /
   // .ot-ready / .x-open / .caution / .idle); `redline` also has a css/ rule.

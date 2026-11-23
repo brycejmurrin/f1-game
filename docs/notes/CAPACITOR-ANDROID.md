@@ -1,5 +1,7 @@
 # Capacitor Android research citations (task 45)
 
+Summary: Capacitor 8 pins, config/SystemBars/Filesystem URLs, import-map floor, plugins-without-bundler decision for `NativeDownload` (2026-09-29).
+
 Fetched 2026-09-29 while adding `mobile/`. Training-data versions are not
 evidence; these URLs were read in-session.
 

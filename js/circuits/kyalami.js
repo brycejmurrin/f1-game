@@ -1,8 +1,13 @@
 /* Apex 26 — KYALAMI GRAND PRIX CIRCUIT definition (data only).
    Retired from F1 (`classic: true`): last South African GP 1993, on the 1992
-   layout. The trace below is the 2016 rebuild's 4.5 km layout, run clockwise
-   (`reverse: true` on this source; built lap's net turning is -360°, T1
-   Crowthorne a right-hander).
+   layout. The trace below is the 2016 rebuild's 4.5 km layout, run
+   ANTICLOCKWISE as the real circuit is (`reverse: false`: the source trace's
+   own order; T1 The Kink a flat-out right, T2 Crowthorne a left, T16 Ingwe the
+   slow left onto the straight). It ran clockwise until 2026-11-18 (#5316
+   CIRC2-05, Bryce's `decision: Kyalami A`). Source for direction, turn names,
+   pit side and timing lines: SRO/IGTC 2023 Kyalami 9 Hour briefing notes,
+   https://www.intercontinentalgtchallenge.com/documents/notice/3374/2023+Kyalami+9+hr+V1+Briefing+Notes.pdf
+   (p. 8 circuit map, p. 9 pit-lane drawing).
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
@@ -10,8 +15,21 @@
   {
     id: "kyalami",
     classic: true,
-    reverse: true,
-    startFrac: 0.01,
+    // Layout revision 2: the anticlockwise lap. A saved Kyalami ghost, input
+    // ghost or time-trial board row was recorded with revision 1 (clockwise)
+    // in its comparable-class key, so it no longer matches and is never
+    // replayed or compared; it stays in storage, untouched (js/track/core/def.js).
+    revision: 4, // Leeukop approach and Mineshaft descent
+    reverse: false,
+    // The line on control node 0, 201 m (built arc) toward Ingwe from the old
+    // node-1 line: the SRO pit-lane drawing puts S/F at the end of the pit
+    // building with Ingwe 268 m back and The Kink 252 m on (Wikipedia: "a few
+    // hundred metres after the start/finish line"). Node 0 is the only control
+    // point in the 150-250 m band the build plan bounded (85-point trace).
+    startFrac: 0,
+    // The scenery (sceneryCoordinates "racing") stays keyed to the old line's
+    // node; js/circuits/scenery/kyalami.js re-keyed its fracs f -> 1 - f.
+    sceneryStartFrac: 0.01,
     name: "KYALAMI",
     gp: "South African GP",
     country: "South Africa",
@@ -21,16 +39,16 @@
     tyreSeverity: 1.05,  // Moderate African permanent; slight above neutral
     baseHW: 7.5,
     sceneryCoordinates: "racing",
-    // The pit complex (TrackPit): LEFT of the main straight in the (clockwise)
-    // racing direction — the OUTSIDE of the lap, as the 2016 pit building
-    // stands (IGTC 9 Hour briefing pit-lane map: pit wall and exit on the left,
-    // T1 Crowthorne a right-hander). Engine -1 here is scenery side +1, where
-    // the circuit's own paddock (scenery/kyalami.js) is built.
+    // The pit complex (TrackPit): LEFT of the main straight in the
+    // (anticlockwise) racing direction — the INFIELD, north of the straight,
+    // as the SRO briefing's p. 9 pit-lane drawing has it: entry just after
+    // Ingwe, exit before The Kink. On this forward lap engine and scenery
+    // side agree: the paddock (scenery/kyalami.js) is built on -1 too.
     pit: { side: -1 },
     terrainOuter: 120,
     dressingExclusions: [
-      { kinds: ["foliage"], s0: 0.92, s1: 0.10 },
-      { kind: "foliage", s0: 0.36, s1: 0.48 },
+      { kinds: ["foliage"], s0: 0.90, s1: 0.08 },   // scenery frame (sceneryStartFrac)
+      { kind: "foliage", s0: 0.52, s1: 0.64 },
     ],
     pal: {
       zenith:        [0.14, 0.36, 0.76],
@@ -48,30 +66,41 @@
       sunDir:        [0.30, 0.82, 0.24],
     },
     elevations: [
-      { s: 0.16, halfM: 300, rise: -10.0 },  // drop away from Crowthorne
-      { s: 0.36, halfM: 340, rise: 13.0 },   // the long climb
-      { s: 0.58, halfM: 300, rise: 8.0 },    // up to the high point
-      { s: 0.80, halfM: 340, rise: -14.0 },  // the plunge back down
+      // 2020 Kyalami 9 Hour programme, p. 12: 43 m relief, highest at T10.
+      // The 48-point Copernicus terrain sample on the modern route puts the
+      // low on the run to Crowthorne and the broad crest above Mineshaft.
+      // Smooth those features over their approaches; heights are relative.
+      { s: 0.070, halfM: 480, rise: -14 },  // between The Kink and Crowthorne
+      { s: 0.360, halfM: 340, rise:  10 },  // upper section toward Clubhouse
+      // Paired 30 m SRTM and Copernicus terrain sections resolve the
+      // Leeukop shoulder. The Mineshaft road loses about 29 m by lap 0.729.
+      { s: 0.598, halfM: 460, rise:  29 },  // Leeukop, racing fraction 0.633
+      { s: 0.800, halfM: 340, rise:  -4 },  // lower return through Crocodiles
     ],
     hwZones: [
-      { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },
+      { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },    // source-frame index (unchanged by the flip)
       { s0: 0.540, s1: 0.585, hw: 6.2, ease: 0.012 },
-      { s0: 0.9281, s1: 0.9625, hw: 6.3, ease: 0.012 },  // T1 Crowthorne (source-frame index; racing arc 0.105-0.150)
+      { s0: 0.9281, s1: 0.9625, hw: 6.3, ease: 0.012 },  // T16 Ingwe (source-frame index)
     ],
     bankZones: [
-      { turn: 1, angleDeg: 4.0, widthM: 120 },   // Crowthorne; re-seated frac 0.075 (was 137 m off any apex)
-      { frac: 0.400, angleDeg: 3.5, widthM: 130 },
-      { frac: 0.700, angleDeg: 4.5, widthM: 140 },
+      // By turn index (the corners the old frac windows re-seated onto, measured).
+      { turn: 2, angleDeg: 4.0, widthM: 120 },   // T2 Crowthorne
+      { turn: 11, angleDeg: 3.5, widthM: 130 },  // T11, after Leeukop (was frac 0.400)
+      { turn: 6, angleDeg: 4.5, widthM: 140 },   // T6 Sunset (was frac 0.700)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
-    // researched real turn count. No researched sectors — consumers fall back to thirds.
-    sectors: [0.333, 0.646],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1055, 0.1650, 0.2260, 0.3910, 0.4115, 0.5255, 0.5395, 0.5475, 0.6140, 0.7020, 0.8180, 0.8625, 0.8975],
+    // turns: the 16 SRO turns (briefing p. 8) on the built curvature peaks, lap
+    // order: T1 The Kink (r ~500 m, flat), T2 Crowthorne, T3-4 Jukskei Sweep,
+    // T5 Barbeque, T6 Sunset, T7 Clubhouse, T8-9 The Esses, T10 Leeukop, T11,
+    // T12 Mineshaft, T13-14 The Crocodiles, T15 Cheetah, T16 Ingwe.
+    // sectors: the SRO timing lines Int 1 (1470 m) and Int 2 (3253 m, "before
+    // turn 12") of the stated 4522 m, as lap fractions; both on straights.
+    sectors: [0.325, 0.719],
+    turns: [0.0576, 0.1473, 0.1821, 0.2018, 0.2268, 0.3429, 0.4366, 0.4973, 0.5196, 0.6330, 0.6536, 0.7393, 0.8187, 0.8473, 0.8804, 0.9402],
     furniture: { tree: "acacia", fol: [0.33, 0.38, 0.21], lamp: "none", sparse: true },  // grey-green thorn; sparse keeps the veld open
     kit: { marshal: "cabin",     rail: "cable",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["sandstone", "orange", "concrete"],  // bleached masonry, red-oxide iron, raw terracing

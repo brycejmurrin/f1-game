@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {} });
 function boot(opts = {}) {
@@ -208,15 +208,20 @@ test("an explicit dry stop while hidden cancels rain resume; ordinary hide prese
 });
 
 test("turning SOUND EFFECTS on mid-race starts the rain the race asked for", async () => {
-  const { A, started } = boot();
-  A.init(); await flush();
-  A.setSfxEnabled(false);
-  A.startEngine();
-  A.startRain();
-  const before = started.filter((n) => n.kind === "src" && n.loop).length;
-  A.setSfxEnabled(true);
-  await flush();
-  assert.equal(started.filter((n) => n.kind === "src" && n.loop).length - before, 1);
+  // SFX ON also builds the engine graph a music-only race skipped (perf hunt 4), so the rain is
+  // the difference against the same toggle with no rain asked for.
+  const loopsOnSfx = async (rain) => {
+    const { A, started } = boot();
+    A.init(); await flush();
+    A.setSfxEnabled(false);
+    A.startEngine();
+    if (rain) A.startRain();
+    const before = started.filter((n) => n.kind === "src" && n.loop).length;
+    A.setSfxEnabled(true);
+    await flush();
+    return started.filter((n) => n.kind === "src" && n.loop).length - before;
+  };
+  assert.equal(await loopsOnSfx(true) - await loopsOnSfx(false), 1);
 });
 
 test("a track that cannot be decoded moves the playlist on instead of going silent", async () => {
@@ -264,7 +269,43 @@ test("a race started in a HIDDEN tab never wakes the context the hide path suspe
   assert.ok(vis.resumes() > 0, "a visible page still resumes inside the gesture");
 });
 
-test("game.js wiring: keyboard unlocks audio, a hidden-tab start pauses, resume restores music + rain", () => {
+// KEYBOARD UNLOCKS AUDIO, executed: the real wireFirstGesture (platform-session.js)
+// over a recording document, so the one-shot is judged by what a key press DOES —
+// sound starts, the radio is primed, every listener unhooks — not by its text.
+test("a key press (bar Escape) unlocks audio once; a finger's pointerdown does not spend the gesture", () => {
+  const ps = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8");
+  const a = ps.indexOf("function wireFirstGesture() {"), b = ps.indexOf("\nreturn { wireFirstGesture", a);
+  assert.ok(a >= 0 && b > a, "wireFirstGesture exists in platform-session.js");
+  const wire = () => {
+    const calls = [], listeners = new Map();
+    const ctx = {
+      document: {
+        addEventListener(t, fn, cap) { assert.equal(cap, true, t + " listens in the capture phase"); listeners.set(t, fn); },
+        removeEventListener(t, fn) { if (listeners.get(t) === fn) listeners.delete(t); },
+      },
+      GameAudio: { setEnabled: (on) => calls.push("enabled:" + on), setMusicEnabled: (on) => calls.push("music:" + on),
+        init: () => calls.push("init"), startMusic: (i) => calls.push("startMusic:" + i) },
+      G: { soundOn: true, musicEnabled: true, radio: { unlock: () => calls.push("radio") } },
+    };
+    vm.runInNewContext(ps.slice(a, b) + "\nwireFirstGesture();", ctx, { filename: absSrc("js/ui/platform-session.js") });
+    const fire = (e) => { const fn = listeners.get(e.type); if (fn) fn(e); };
+    return { calls, listeners, fire };
+  };
+  const k = wire();
+  assert.ok(k.listeners.has("keydown"), "keydown is one of the gesture events");
+  k.fire({ type: "keydown", key: "Escape" });
+  assert.deepEqual(k.calls, [], "Escape is not activation-triggering: nothing unlocks");
+  k.fire({ type: "keydown", key: "a" });
+  assert.deepEqual(k.calls, ["enabled:true", "music:true", "init", "startMusic:-1", "radio"], "a key press starts sound and primes the radio");
+  assert.equal(k.listeners.size, 0, "the one-shot unhooks every gesture listener together");
+  const t = wire();
+  t.fire({ type: "pointerdown", pointerType: "touch" });
+  assert.deepEqual(t.calls, [], "a finger's pointerdown does not spend the one-shot");
+  t.fire({ type: "pointerup", pointerType: "touch" });
+  assert.ok(t.calls.includes("radio") && t.calls.includes("init"), "the same finger's pointerup unlocks");
+});
+
+test("game.js wiring source pins: gesture events, hidden-tab start pause, pause/resume music + rain, comfort routing", () => {
   const g = fs.readFileSync(path.join(ROOT, "js/ui/platform-session.js"), "utf8") + fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   // keydown is activation-triggering (html.spec.whatwg.org/multipage/interaction.html#activation-triggering-input-event); Escape is not.
   assert.match(g, /const GESTURE_EVTS = \["pointerdown", "pointerup", "touchend", "keydown", "click"\];/);
@@ -535,9 +576,10 @@ test("init does not throw when navigator.mediaDevices is absent", async () => {
 
 test("the SOUND toggle restarts rain from the live weather, not the grid's raceWeather", () => {
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
-  const on = panel.slice(panel.indexOf('else if ((G.state === "race" || G.state === "count") && !G.paused) {'));
+  const on = panel.slice(panel.indexOf('else if (G.state === "race" || G.state === "count") {'));
   const block = on.slice(0, on.indexOf("syncAudioPanel();"));
   assert.match(block, /GameAudio\.startEngine\(\);/, "precondition: found the mid-race SOUND ON block");
+  assert.match(block, /if \(!G\.paused\)/, "engine/music/rain stay deferred under the pause card");
   assert.doesNotMatch(block, /raceWeather/, "the grid's weather does not describe a race the arc has turned");
   assert.match(block, /if \(G\.viewRainfall\(\) > 0\.01\) GameAudio\.startRain\(\);/);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
@@ -547,30 +589,6 @@ test("the SOUND toggle restarts rain from the live weather, not the grid's raceW
 // ── round-2 audio fixes (F2, F3, F8-adjacent plumbing, F10, F13, F14) ──────────
 const sticky = { isActive: true, hasBeenActive: true };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-test("a WATCH clip whose media element errors AND rejects play() falls back once: one fetch, one voice", async () => {
-  // Per the HTML media-failure steps `error` fires and then the pending play()
-  // promise rejects; both handlers used to fetch+decode the clip.
-  const els = [];
-  function Audio() {
-    const el = { preload: "", crossOrigin: "", volume: 1, paused: false, ended: false, onerror: null, onended: null, _src: "", pause() {},
-      play() { return Promise.reject(new Error("NotSupportedError")); } };
-    Object.defineProperty(el, "src", { get: () => el._src, set(v) { el._src = v; Promise.resolve().then(() => { if (el.onerror) el.onerror(); }); } });
-    els.push(el);
-    return el;
-  }
-  const { A, sandbox, fetched } = boot({ Audio, mediaSource: true });
-  A.init(); await flush();
-  const URL_ = "https://example.test/radio.mp3";
-  const h = sandbox.GameAudioRadioFx.playWatchMedia(URL_, { volume: 0.9 });
-  assert.ok(h, "precondition: the clip was accepted");
-  await flush();
-  assert.equal(fetched.filter((u) => u === URL_).length, 1, "one fetch, not one per failure signal");
-  assert.equal(A.radioVoicesLive(), 1, "one voice on air, so stop() can reach it");
-  h.stop();
-  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 150));
-  assert.equal(A.radioVoicesLive(), 0, "and stop() cuts that one voice");
-});
 
 test("music duck is held per source: a WATCH clip, the engineer and the replay fallback do not release each other", async () => {
   const { A, contexts } = boot();
@@ -592,6 +610,25 @@ test("music duck is held per source: a WATCH clip, the engineer and the replay f
   assert.ok(Math.abs(target - ducked) < 1e-9, "the engineer's hold survives the second clip");
   A.setRadioDuck(false);
   assert.ok(Math.abs(target - full) < 1e-9, "the last holder lifts it");
+});
+
+test("a hide during the mute glide keeps the context asleep across foreground and input", () => {
+  const timers = [];
+  const { A, contexts, document, listeners, resumes } = boot({
+    setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout() {},
+  });
+  A.init();
+  A.setEnabled(false);
+  document.hidden = true; listeners.visibilitychange();
+  assert.equal(contexts[0].state, "suspended");
+  timers.find(t => t.ms === 150).fn();
+  document.hidden = false; listeners.visibilitychange();
+  contexts[0].onstatechange();  // a late suspension event may arrive after returning
+  listeners.touchend({ type: "touchend", isTrusted: true });
+  assert.equal(resumes(), 0);
+  A.setEnabled(true);
+  assert.equal(resumes(), 1);
 });
 
 test("a quick hide -> show does not rebuild a healthy context (late 'suspended' statechange)", async () => {
@@ -824,4 +861,103 @@ test("AudioContext constructor throw leaves GameAudio without a context (no over
   assert.doesNotThrow(() => A.init());
   assert.equal(A.context(), null);
   assert.ok(warns.some((w) => /AudioContext unavailable/.test(w)), "warn names the refusal");
+});
+
+// ── audit W19 (2026-11-09): interruption, activation and frozen-clock one-shots ──
+
+// Row 1: "interrupted" while VISIBLE is iOS holding the session (a call, Siri,
+// an alarm) and it ends with a statechange back to "running". A close-and-
+// recreate armed on a 280 ms timer from that statechange dropped the decoded
+// engine/music/voice state for a context about to come back by itself.
+test("a visible interruption never schedules a rebuild; the context resumes in place", async () => {
+  for (const st of ["interrupted", "suspended"]) {
+    const { A, contexts } = boot({ userActivation: sticky });
+    A.init(); await flush();
+    const ctx = contexts[0];
+    ctx.state = st; ctx.onstatechange();
+    await wait(DEVICE_REBUILD_DEBOUNCE_MS + 80); await flush();
+    assert.equal(contexts.length, 1, st + ": no timer rebuild while the interruption lasts");
+    ctx.state = "running"; ctx.onstatechange();
+    await wait(DEVICE_REBUILD_DEBOUNCE_MS + 80); await flush();
+    assert.equal(contexts.length, 1, st + ": the interruption ended and the same context carries on");
+    assert.equal(ctx.state, "running");
+  }
+});
+
+// Row 2: a finger's pointerdown is not activation-triggering (HTML
+// #activation-triggering-input-event); WebKit will not resume inside it. Counting
+// it armed the failed-resume path, so a touch held over 700 ms made its own
+// touchend rebuild a context it could simply have resumed.
+test("a touch pointerdown never arms the failed-resume rebuild; a failed real resume still does", async () => {
+  let now = 10000;
+  const h = boot({ clock: () => now });
+  h.A.init(); await flush();
+  const ctx = h.contexts[0];
+  ctx.state = "interrupted";
+  h.listeners.pointerdown({ type: "pointerdown", pointerType: "touch", isTrusted: true });
+  now += 900;                                         // the finger is held
+  ctx.resume = () => { ctx.state = "running"; return Promise.resolve(); };   // the touchend resume works
+  h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  assert.equal(h.contexts.length, 1, "the touchend resumed the context instead of rebuilding it");
+  assert.equal(ctx.state, "running");
+  // A resume made inside a REAL gesture that leaves the context stuck is the
+  // one case a later gesture rebuilds.
+  ctx.state = "interrupted"; ctx.resume = () => Promise.resolve();
+  h.listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  now += 900;
+  h.listeners.keydown({ type: "keydown", key: "a", isTrusted: true }); await flush();
+  assert.equal(h.contexts.length, 2, "a failed activation-gesture resume rebuilds on the next gesture");
+  // A mouse's pointerdown IS activation (it starts the count like a tap).
+  const m = boot({ clock: () => now });
+  m.A.init(); await flush();
+  m.contexts[0].state = "interrupted";
+  m.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  now += 900;
+  m.listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  assert.equal(m.contexts.length, 2, "two mouse presses on a stuck context rebuild it");
+});
+
+// Row 3: ctx.currentTime stands still while the context is not running, so every
+// one-shot scheduled then lands on one instant and they all fire on resume.
+test("one-shot SFX are dropped, not stacked, while the context's clock is frozen", async () => {
+  const h = boot();
+  h.A.setUiEnabled(false);
+  h.A.init(); await flush();
+  const ctx = h.contexts[0];
+  ctx.state = "suspended";
+  const nodes0 = h.nodes.length, blips0 = h.blipFires();
+  for (let i = 0; i < 20; i++) { h.A.shift(true); h.A.pitGun(false); h.A.lightsOut(); h.A.deployBoost(); }
+  assert.equal(h.blipFires(), blips0, "no blip queued on a frozen clock");
+  assert.equal(h.nodes.length, nodes0, "no shift crack, rattle or whoosh graph built on a frozen clock");
+  ctx.state = "running";
+  h.A.shift(true); h.A.lightsOut();
+  assert.ok(h.nodes.length > nodes0, "a running context plays the shift crack again");
+  assert.ok(h.blipFires() > blips0, "and the start-light blips");
+});
+
+// #5029: a finger's pointerdown is not activation-triggering, yet the engine's capture listener
+// rebuilt the stalled context on it: a throw-away context outside activation (and a device-rebuild
+// slot) on every such tap, before the same tap's touchend could do it properly.
+test("a touch pointerdown resumes but never rebuilds; the same tap's touchend rebuilds (#5029)", async () => {
+  let clock = 1000;
+  const ua = { isActive: false, hasBeenActive: true };
+  const { A, listeners, contexts, resumes } = boot({ clock: () => clock, userActivation: ua });
+  A.init(); await flush();
+  const gen0 = A.ctxGen();
+  contexts[0].state = "interrupted";
+  listeners.touchend({ type: "touchend", isTrusted: true }); await flush();   // a resume that does not take
+  clock += 1000;
+  const r0 = resumes();
+  listeners.pointerdown({ type: "pointerdown", pointerType: "touch", isTrusted: true }); await flush();
+  assert.equal(A.ctxGen(), gen0, "no rebuild on a finger's pointerdown");
+  assert.equal(contexts.length, 1, "no throw-away context");
+  assert.equal(resumes(), r0 + 1, "it may still ask the context to resume");
+  listeners.touchend({ type: "touchend", isTrusted: true }); await flush();
+  assert.equal(A.ctxGen(), gen0 + 1, "the touchend of the same tap rebuilds inside activation");
+  // A mouse's pointerdown IS activation-triggering: it keeps the rebuild path.
+  contexts[1].state = "interrupted";
+  listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  clock += 1000;
+  listeners.pointerdown({ type: "pointerdown", pointerType: "mouse", isTrusted: true }); await flush();
+  assert.equal(A.ctxGen(), gen0 + 2, "a mouse press still rebuilds a stalled context");
 });

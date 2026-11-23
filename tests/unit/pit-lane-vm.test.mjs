@@ -483,8 +483,17 @@ test("THE DIRECTIONS, FOLLOWED, MAKE THE STOP: every cue fires at the model's ow
   //    second rivals([]) only moves whoever was ~800 m ahead to just behind, so
   //    the field is retired (closingCar skips a retired car).
   g.G.cars.forEach((o, i) => { if (!o.isPlayer) a.retire(i, "bench"); });
+  // A driver already taught (any stop after the first) must not re-write pitTaught at the release:
+  // a store write bumps store.rev, and every team's livery/parts memo re-resolves on that frame (perf hunt 8).
+  const st = g.G.store, taughtBefore = !!st.get("pitTaught", 0);
+  const set0 = st.set;
+  let taughtWrites = 0;
+  st.set = function (k, ...rest) { if (k === "pitTaught") taughtWrites++; return set0.call(this, k, ...rest); };
   const go =run(a, pits, () => ({ x: a.pit().laneX, throttle: true }), (c, q) => q.state === "out", 6);
+  st.set = set0;
   assert.ok(go, "the hold never released");
+  assert.equal(taughtWrites, taughtBefore ? 0 : 1, `pitTaught writes at the release (taught before: ${taughtBefore})`);
+  assert.equal(!!st.get("pitTaught", 0), true, "the first completed stop still ends the teach");
   assert.equal(go.c.phase, "served"); assert.equal(go.c.text, "GO GO GO");
   const out = run(a, pits, (ps, q) => ({ x: q.driveX != null ? q.driveX : ps.x }), (c) => c && c.phase !== "served", 4);
   assert.ok(out, "GO GO GO never ended");
@@ -581,11 +590,13 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   doc.getElementById("cs-arrival-skip").onclick();
   assert.equal(g.G.paused, true, "skip keeps the race paused for work");
   assert.equal(doc.getElementById("cs-inner").inert, false);
+  doc.getElementById("cs-back").onclick();         // BACK plays the pit-out beat (#4745); a second press finishes it
   doc.getElementById("cs-back").onclick();
   assert.equal(g.G.paused, false);
   assert.equal(car.pitT, heldBefore, "animation and inspection add no work charge");
   doc.getElementById("hud-work").onclick();
   doc.getElementById("cs-done").onclick();
+  doc.getElementById("cs-done").onclick();         // the second DONE skips the pit-out beat
   assert.equal(doc.getElementById("cs-arrival").hidden, true);
   assert.equal(g.G.paused, false, "early exit cleans up arrival and resumes");
   // THE PRICE, charged to the hold that is left — so the field drives past
@@ -596,6 +607,11 @@ test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async
   assert.ok(Math.abs(car.pitT - (held + pits.workS)) < 1e-6,
             `the hold grew by it (${held.toFixed(2)} → ${car.pitT.toFixed(2)})`);
   assert.equal(car.pitWorked, pits.workS, "…and the summary knows what the stop really cost");
+  const chargedHold = car.pitT;
+  a.step(1 / 60, Math.ceil(chargedHold * 60) + 1);
+  assert.equal(car.pitState, "out", "the worked stop releases after the extension");
+  const summary = a.logs({ ns: "race" }).findLast(row => row.msg.startsWith("Pit stop done car=" + car.code));
+  assert.ok(summary && summary.msg.includes("held=" + chargedHold.toFixed(1) + "s"), summary?.msg);
   // Off the jacks, the offer is gone — a menu you could open while rolling down
   // the lane is a menu you can open at 300 km/h. Asked of STUBS, and this test
   // runs LAST on purpose: it drives a whole stop, and with it ahead of the

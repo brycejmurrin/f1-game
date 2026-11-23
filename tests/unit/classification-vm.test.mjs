@@ -39,7 +39,10 @@ test("a lapped car that takes the flag is classified behind a lead-lap car still
   place(B, L - 100, 2, 75);                                        // a lap down, just behind on the road
   place(C, L - 440, 3, 80);                                        // lead lap, ~5 s back
   a.setInput({ throttle: true, steer: 0 });
-  for (let i = 0; i < 60 * 12 && G.state === "race"; i++) g.step(1);
+  // A wait cap, not a measured value. C used to keep its 0.45 rad getaway heading at 80 m/s, run to the
+  // right-hand wall and scrub along it (results at step 716-724, by barrier geometry); since #5338 a car whose
+  // speed is set starts facing the road: it holds the line (max |x| 0.21 m) and the results come at step 495.
+  for (let i = 0; i < 60 * 15 && G.state === "race"; i++) g.step(1);
   assert.equal(G.state, "results");
   assert.equal(P.finPos, 1);
   assert.ok(C.finPos < B.finPos, `the lead-lap car (P${C.finPos}) must be ahead of the lapped one (P${B.finPos})`);
@@ -300,7 +303,7 @@ test("the live loop flags a lapped human on the same step as the winner in eithe
       await game.race("monza", "day", "dry", { laps: 3 });
       const p = G.player, lead = G.cars.find((c) => !c.human), L = G.track.total;
       for (const c of G.cars) if (c !== p && c !== lead) a.retire(G.cars.indexOf(c));
-      a.jump((L - 0.4) / L, 50, -4); a.aim(0);
+      a.jump((L - 0.4) / L, 50, -4, { keepLap: true }); a.aim(0);   // a fabricated lap: keep it
       p.lap = 2; p._prevS = p.s; p.prog = 2 * L - 0.4; p.lapTime = 70;
       Object.assign(lead, { lap: 3, s: L - 0.1, _prevS: L - 0.1, prog: 3 * L - 0.1, speed: 50, x: 4, lapTime: 60 });
       const rest = G.cars.filter((c) => c !== p && c !== lead);

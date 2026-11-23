@@ -19,6 +19,7 @@ const Particles = (function () {
   let _cr, _cg, _cb;          // tint (HDR allowed for additive)
   let _a0;                    // base alpha
   let _drg, _grv;             // drag rate (1/s) + downward gravity (m/s²)
+  let _stoneFloor = null;      // allocated on first gravel event, NaN for airborne-only effects
   let _add;                   // Uint8: 1 = additive (spark) group
   let _n = 0;                 // live count
   let _mobile = false;        // gfx.mobileTier at init — the spray plume shrinks with the pool
@@ -55,8 +56,11 @@ const Particles = (function () {
   let _kWind = NaN, _kRainSpd = NaN, _kOp = NaN, _kShW = NaN, _kShL = NaN, _kDir = NaN;
   const RAIN_CELL_M = 2;
   let _statUpload = 0, _statExpand = 0, _statSkip = 0, _statAlphaExpand = 0, _statAddExpand = 0;
-
-  function markDirty() { _dirty = true; }
+  // #5387 primeRace: idle groups draw one empty particle so TLX wraps its buffer.
+  let _prime = false;
+  const CURTAIN_SAMPLES = 9;
+  let _curtain = null, _curtainFloats = 0, _hadCurtain = false;
+  const _curtainSample = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 0 };
 
   function init(gfx) {
     Log.info("game", "Particles.init");
@@ -75,11 +79,24 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
-    // The alpha batch also carries the rain shower (rainFill): size for both.
-    _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
+    _stoneFloor = null;
+    // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
+    // A second init (tests, a future gfx-recreate path) must DROP any armed
+    // shower: rainFill writes wetCap quads into _vertA, and reallocating only
+    // MAX*FLOATS_PER under a live _rainN silently overflowed the TypedArray
+    // (OOB stores are no-ops — streaks vanished / corrupted). rainSeed re-arms.
+    _rainN = 0; _rainOn = false; _rainLastShown = 0; _rainFed = false;
+    _lastRainLive = false; _rainEyeOk = false; _rainAcc = 0;
+    _rox = _roy = _roz = null; _rspd = _rlen = _ralpha = null;
+    _rainCellX = _rainCellY = _rainCellZ = 0x7fffffff;
+    _kTone = -1; _kShown = -1; _kSpdQ = -1;
+    _kSpdS = _kLenS = _kWind = _kRainSpd = _kOp = _kShW = _kShL = _kDir = NaN;
+    _vertA = new Float32Array(MAX * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
+    _prime = false;
+    _curtainFloats = 0; _hadCurtain = false;
   }
 
   // Drop the live pool and one-frame flares. Does NOT hide or unseed rain
@@ -88,8 +105,10 @@ const Particles = (function () {
   // so a re-issue cannot resurrect the previous frame's geometry after quit.
   function clear() {
     _sprK = 0; _sprThr = Infinity; _n = 0; _flN = 0;
+    _curtainFloats = 0; _hadCurtain = false;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
     _rainFed = false; _lastRainLive = false; _rainAcc = 0;
+    _prime = false;   // startRace clear must not leave a pending idle prime
   }
   function count() { return _n; }
   function capacity() { return MAX; }
@@ -138,7 +157,7 @@ const Particles = (function () {
     return best;
   }
 
-  function spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, alpha, drag, grav, additive) {
+  function spawn(x, y, z, vx, vy, vz, life, size, grow, r, g, b, alpha, drag, grav, additive, floor = NaN) {
     if (!MAX) return;                   // never allocate
     const i = _n < MAX ? _n++ : oldest();
     _px[i] = x; _py[i] = y; _pz[i] = z;
@@ -149,6 +168,7 @@ const Particles = (function () {
     _a0[i] = alpha;
     _drg[i] = drag; _grv[i] = grav;
     _add[i] = additive ? 1 : 0;
+    if (_stoneFloor) _stoneFloor[i] = floor;
     _dirty = true;
   }
 
@@ -170,9 +190,10 @@ const Particles = (function () {
 
   function sparks(x, y, z, dirx, dirz, speed, count) {
     const m = mul(); if (m <= 0) return;
-    let n = Math.round(count * Math.min(m, 2) / shedDiv());
+    // nOf (not Math.round): same hitch ceiling as scrape/smoke — at particleMul 2 a
+    // hard collision's count≈20 used to dump 40 embers in one call and starve the pool.
     const baseA = Math.atan2(dirx, dirz);
-    for (; n > 0; n--) {
+    for (let n = nOf(count * Math.min(m, 2) / shedDiv()); n > 0; n--) {
       const a = baseA + rnd(1.15);
       const v = speed * (0.25 + Math.random() * 0.6);
       spawn(x + rnd(0.3), y + rnd(0.12), z + rnd(0.3),
@@ -229,6 +250,19 @@ const Particles = (function () {
     }
   }
 
+  // Short-lived stones bounce on the local contact plane. Reserve most of the
+  // shared pool for primary effects and stop emitting as soon as the governor sheds.
+  function gravel(x, y, z, vx, vz, tint, count) {
+    if (!MAX || _mobile || shedDiv() > 1 || _n >= MAX * 0.4) return;
+    for (let n = nOf(count * Math.min(mul(), 2)); n > 0 && _n < MAX * 0.4; n--) {
+      if (!_stoneFloor) { _stoneFloor = new Float32Array(MAX); _stoneFloor.fill(NaN); }
+      const tone = 0.55 + Math.random() * 0.55;
+      spawn(x, y + 0.08, z, vx * 0.12 + rnd(2), 1.1 + Math.random() * 1.5, vz * 0.12 + rnd(2),
+        0.95 + Math.random() * 0.4, 0.045 + Math.random() * 0.035, 0,
+        tint[0] * tone, tint[1] * tone, tint[2] * tone, 1, 0.8, 9.81, 0, y + 0.03);
+    }
+  }
+
   // One-frame additive disc (see FLARE_MAX): returns false when the frame's
   // flare budget is spent. A lamp, not an effect: it ignores particleMul.
   // `lamp` = a steady race lamp (start gantry, marshal panel) re-issued every
@@ -245,9 +279,7 @@ const Particles = (function () {
 
   // RAIN SPRAY: a lingering plume, not a puff — and THE wet-race visibility
   // problem: most of an F1 car's spray comes off the floor and diffuser, not
-  // the tyres (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/),
-  // and F1 24's was reviewed as "particularly average"
-  // (https://traxion.gg/time-to-box-box-box-f1-24-review/). Three layers per call:
+  // the tyres. Three layers per call:
   //  · PLUME — drop-clouds living 1.1-1.9 s, buoyant, growing to ~3.5 m;
   //  · ROOSTER TAIL — a tight jet thrown UP and BACK off the diffuser, its
   //    height and life scaling with strength (speed × wetness × Storm.sprayK);
@@ -342,6 +374,7 @@ const Particles = (function () {
           _cr[i] = _cr[l]; _cg[i] = _cg[l]; _cb[i] = _cb[l];
           _a0[i] = _a0[l]; _drg[i] = _drg[l]; _grv[i] = _grv[l];
           _add[i] = _add[l];
+          if (_stoneFloor) _stoneFloor[i] = _stoneFloor[l];
         }
         continue;
       }
@@ -349,11 +382,63 @@ const Particles = (function () {
       _vx[i] *= d; _vz[i] *= d;
       _vy[i] = (_vy[i] - _grv[i] * dt) * d;
       _px[i] += _vx[i] * dt; _py[i] += _vy[i] * dt; _pz[i] += _vz[i] * dt;
+      if (_stoneFloor && _py[i] < _stoneFloor[i]) {
+        _py[i] = _stoneFloor[i];
+        _vy[i] = -_vy[i] * 0.42;
+        _vx[i] *= 0.65; _vz[i] *= 0.65;
+      }
       i++;
     }
   }
 
-  function draw() {
+  // Sample the moving shower along the actual circuit, including elevation and lap wrap.
+  // Soft world-space quads share the existing depth-tested alpha draw with local rain.
+  function rainCurtain(track, weather, eye, fog) {
+    const { cell, t } = weather.arc;
+    if (!track || !cell || t >= cell.life || !eye || !fog || !MAX) return;
+    const centre = cell.c0 * cell.total + cell.v * t;
+    const span = 2 * cell.h * track.total / CURTAIN_SAMPLES;
+    const halfWidth = Math.min(260, Math.max(75, span * 0.9));
+    if (!_curtain) _curtain = new Float32Array(CURTAIN_SAMPLES * FLOATS_PER);
+    let p = 0;
+    for (let i = 0; i < CURTAIN_SAMPLES; i++) {
+      const offset = i - (CURTAIN_SAMPLES - 1) / 2;
+      const s = centre + offset * span;
+      Tracks.sample(track, s, _curtainSample);
+      const [x, y, z] = _curtainSample.p;
+      const dx = x - eye[0], dz = z - eye[2], distance = Math.hypot(dx, dz);
+      // Fade into the camera-local streaks as the camera enters the shower.
+      const alpha = 0.23 * weather.rainfallAt(s) * _clamp01((distance - 100) / 240)
+        * (1 - 0.6 * Math.abs(offset) / (CURTAIN_SAMPLES / 2));
+      if (alpha < 0.004) continue;
+      const rightX = dz / distance * halfWidth, rightZ = -dx / distance * halfWidth;
+      const height = 230 + 35 * Math.cos(offset);
+      for (let v = 0; v < 12; v += 2) {
+        const u = _CORNERS[v], w = _CORNERS[v + 1];
+        _curtain[p++] = u; _curtain[p++] = w;
+        _curtain[p++] = x + u * rightX; _curtain[p++] = y + height * (w + 0.85); _curtain[p++] = z + u * rightZ;
+        _curtain[p++] = fog[0] * 0.57; _curtain[p++] = fog[1] * 0.64; _curtain[p++] = fog[2] * 0.72;
+        _curtain[p++] = 0; _curtain[p++] = alpha;
+      }
+    }
+    _curtainFloats = p;
+  }
+
+  function armPrime() { _prime = true; }
+  // A billboard's farthest corner is sqrt(2) times its half-size from its centre.
+  // The normalized near plane comes from the actual view-projection matrix.
+  function behindNear(plane, x, y, z, size) {
+    return plane && plane[0] * x + plane[1] * y + plane[2] * z + plane[3] < -Math.SQRT2 * size;
+  }
+  const unclipped = [0, 0, 0, 0], lastPlane = new Float64Array(4);
+  function draw(nearPlane) {
+    _draw(nearPlane);
+    if (!_prime || !_gfx || !_gfx.drawParticles || !MAX) return;
+    _prime = false;
+    if (!_lastPa) { _vertA.fill(0, 0, 60); _gfx.drawParticles(_vertA, 60, false, true); }
+    if (!_lastPb) { _vertB.fill(0, 0, 60); _gfx.drawParticles(_vertB, 60, true, true); }
+  }
+  function _draw(nearPlane) {
     // The shower draws only on a frame its owner advanced it (rainUpdate, which
     // game.js calls only while the road is wet): a field nobody updates is a
     // frozen box of streaks at a stale eye — what a drying weather arc left
@@ -363,9 +448,22 @@ const Particles = (function () {
     if (hasRain !== _lastRainLive) _dirty = true;
     _lastRainLive = hasRain;
     if (!_gfx || !_gfx.drawParticles) { _flN = 0; return; }
-    if (!_n && !_flN && !(rainLive && _rainN && _rainOn)) {
+    const curtainFloats = _curtainFloats;
+    _curtainFloats = 0;
+    if (curtainFloats || _hadCurtain) _dirty = true;
+    _hadCurtain = curtainFloats > 0;
+    if (!_n && !_flN && !hasRain && !curtainFloats) {
       _lastPa = _lastPb = 0;
       return;
+    }
+    // Live particles survive a camera cut or look-back. An unchanged pool may
+    // reuse its upload only under the same plane (including the unclipped XR path).
+    if (_n) {
+      const plane = nearPlane || unclipped;
+      for (let i = 0; i < 4; i++) {
+        if (lastPlane[i] !== plane[i]) _dirty = true;
+        lastPlane[i] = plane[i];
+      }
     }
     // Clean: re-issue the last upload without expanding (rain-cell / idle pool).
     if (!_dirty && !_flareDirty && (_lastPa || _lastPb)) {
@@ -380,6 +478,12 @@ const Particles = (function () {
     if (alphaDirty) _statAlphaExpand++;
     _statAddExpand++;
     let pa = alphaDirty ? 0 : _lastPa, pb = 0;
+    if (curtainFloats) {
+      const need = (MAX + _rainN + CURTAIN_SAMPLES) * FLOATS_PER;
+      if (_vertA.length < need) _vertA = new Float32Array(need);
+      _vertA.set(_curtain);
+      pa = curtainFloats;
+    }
     const hadFlare = _flN > 0;
     for (let i = 0; i < _n; i++) {
       if (!alphaDirty && !_add[i]) continue;
@@ -389,6 +493,7 @@ const Particles = (function () {
       const alpha = _a0[i] * fade;
       if (alpha <= 0.004) continue;
       const size = _sz[i] + _grw[i] * _age[i];
+      if (behindNear(nearPlane, _px[i], _py[i], _pz[i], size)) continue;
       const out = _add[i] ? _vertB : _vertA;
       let p = _add[i] ? pb : pa;
       const x = _px[i], y = _py[i], z = _pz[i], r = _cr[i], g = _cg[i], b = _cb[i];
@@ -403,6 +508,7 @@ const Particles = (function () {
     for (let f = 0; f < _flN; f++) {
       const o = f * 8;
       const x = _fl[o], y = _fl[o + 1], z = _fl[o + 2], size = _fl[o + 3];
+      if (behindNear(nearPlane, x, y, z, size)) continue;
       const r = _fl[o + 4], g = _fl[o + 5], b = _fl[o + 6], alpha = _fl[o + 7];
       for (let v = 0; v < 12; v += 2) {
         _vertB[pb++] = _CORNERS[v]; _vertB[pb++] = _CORNERS[v + 1];
@@ -455,6 +561,7 @@ const Particles = (function () {
   let _rox = null, _roy = null, _roz = null;          // offset from the eye (m)
   let _rspd = null, _rlen = null, _ralpha = null;     // fall speed (m/s), streak-length scale, opacity
   const _rainEye = [0, 0, 0];
+  let _rainCamera;
   let _rainEyeOk = false;                              // false until the first update after a seed/show (no finite difference)
   const _camVel = [0, 0, 0];
   let _windX = 0, _windZ = 0;
@@ -580,7 +687,7 @@ const Particles = (function () {
   // velocity is its finite difference, and a cut (> 40 m in one frame) resets
   // it rather than painting one frame of 4 km/h streaks. Render-only: reads the
   // handed-in eye, never writes physics state.
-  function rainUpdate(dt, eye, raining) {
+  function rainUpdate(dt, eye, raining, camera, cut = false) {
     if (!_rainN || !_rainOn || !eye) return;
     if (!(dt > 0)) dt = 0;
     if (dt > 0.1) dt = 0.1;      // tab-back / hitch: don't teleport the field
@@ -597,6 +704,8 @@ const Particles = (function () {
     const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6, dzLen = LT.drizzleLen != null ? LT.drizzleLen : 0.5;
     _rainSpeedScale = dzSpeed + (1 - dzSpeed) * shape; _rainLenScale = dzLen + (1 - dzLen) * shape;
     _rainFed = true;
+    if (cut || camera !== _rainCamera) { _rainEyeOk = false; _dirty = true; }
+    _rainCamera = camera;
     if (_rainEyeOk && dt > 0) {
       const dx = eye[0] - _rainEye[0], dy = eye[1] - _rainEye[1], dz = eye[2] - _rainEye[2];
       if (dx * dx + dy * dy + dz * dz < 40 * 40) { _camVel[0] = dx / dt; _camVel[1] = dy / dt; _camVel[2] = dz / dt; }
@@ -673,6 +782,8 @@ const Particles = (function () {
       const halfW = 0.014 + dist * 0.0022;                      // ~1 px floor at distance (62° fov, 1080p: 1 px ≈ 0.0011 m per m)
       const a = _ralpha[i] * alphaMul * _clamp01((dist - 0.4) / 1.6);   // fade the drops right at the lens
       if (a <= 0.004) continue;
+      // TypedArray OOB stores are silent no-ops — refuse rather than corrupt.
+      if (p + FLOATS_PER > out.length) break;
       const cx = ex + tx, cy = ey + ty, cz = ez + tz;
       for (let v = 0; v < 12; v += 2) {
         const kx = _CORNERS[v], ky = _CORNERS[v + 1];
@@ -687,7 +798,7 @@ const Particles = (function () {
     return p;
   }
 
-  return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
-           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats, markDirty };
+  return { init, clear, count, capacity, update, draw, armPrime, tyreSmoke, sparks, scrape, kickup, gravel, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
+           flare, flareCount, rainCurtain, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats };
 })();
 Object.freeze(Particles);

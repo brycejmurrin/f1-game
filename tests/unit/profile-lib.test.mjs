@@ -243,3 +243,116 @@ test("query CLI handles shared flag spellings and rejects invalid limits, cyclic
     const cycle = query(file, "--json"); assert.equal(cycle.status, 1, cycle.error?.message); assert.match(cycle.stderr, /cycle/); assert.equal(cycle.stdout, "");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// Copies the production entrypoint and policy, with real inert child processes.
+// Any browser/server acquisition is recorded and refused before it can start.
+function profileCliFixture() {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+  const scratch = join(root, "scratch"); mkdirSync(scratch, { recursive: true });
+  const dir = mkdtempSync(join(scratch, "profile-cli-unit-"));
+  const cli = join(dir, "tools/perf/profile.mjs"), marker = join(dir, "acquisitions.jsonl");
+  for (const sub of ["tools/perf", "tools/lib", "tools/shot", "tools/gfx"]) mkdirSync(join(dir, sub), { recursive: true });
+  for (const file of ["tools/perf/profile.mjs", "tools/perf/lib.mjs", "tools/lib/cli-args.mjs"])
+    writeFileSync(join(dir, file), readFileSync(join(root, file), "utf8"));
+  writeFileSync(join(dir, "tools/lib/harness.mjs"), `
+    import { appendFileSync } from "node:fs";
+    const refuse = kind => { appendFileSync(process.env.PROFILE_MARKER, JSON.stringify({ kind }) + "\\n"); throw new Error("forbidden " + kind); };
+    export function launchChromium() { refuse("browser"); }
+    export function startStaticServer() { refuse("server"); }
+    export async function shutdown() {}
+  `);
+  const child = `
+    import { appendFileSync } from "node:fs";
+    appendFileSync(process.env.PROFILE_MARKER, JSON.stringify({ kind: "child", argv: process.argv.slice(2) }) + "\\n");
+    console.error("inert profiler diagnostic");
+    if (process.argv[2] === "signal") process.kill(process.pid, "SIGTERM");
+    else process.exit(process.argv[2] === "7" ? 7 : 0);
+  `;
+  for (const file of ["tools/shot/profile-gameloop.mjs", "tools/gfx/frame-hitch.mjs"])
+    writeFileSync(join(dir, file), child);
+  return {
+    dir,
+    invoke(args, env = {}) {
+      rmSync(marker, { force: true });
+      const r = spawnSync(process.execPath, [cli, ...args], { cwd: dir,
+        env: { ...process.env, PROFILE_MARKER: marker, ...env }, encoding: "utf8", timeout: 3000 });
+      let acquisitions = [];
+      try { acquisitions = readFileSync(marker, "utf8").trim().split("\n").filter(Boolean).map(JSON.parse); }
+      catch (e) { if (e.code !== "ENOENT") throw e; }
+      return { ...r, acquisitions };
+    },
+    close: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+test("profile child modes preserve numeric exits and reject signal or spawn failure", () => {
+  const f = profileCliFixture();
+  try {
+    for (const mode of ["cpu", "hitch"]) {
+      const script = mode === "cpu" ? "tools/shot/profile-gameloop.mjs" : "tools/gfx/frame-hitch.mjs";
+      for (const code of [0, 7]) {
+        const r = f.invoke([String(code), "--mode", mode]);
+        assert.deepEqual({ status: r.status, stderr: r.stderr },
+          { status: code, stderr: "inert profiler diagnostic\n" }, `${mode} preserves the complete numeric-exit outcome`);
+      }
+      const signalled = f.invoke(["signal", "--mode", mode]);
+      assert.deepEqual({ status: signalled.status, stderr: signalled.stderr },
+        { status: 1, stderr: `inert profiler diagnostic\nprofile child ${script} terminated by SIGTERM\n` },
+        `${mode} reports the complete signalled-child outcome`);
+      const missing = f.invoke(["0", "--mode", mode], { PATH: f.dir });
+      assert.deepEqual({ status: missing.status, stderr: missing.stderr, acquisitions: missing.acquisitions },
+        { status: 1, stderr: `profile child ${script} failed: spawnSync node ENOENT\n`, acquisitions: [] },
+        `${mode} reports the complete failed-spawn outcome`);
+    }
+  } finally { f.close(); }
+});
+
+test("profile CLI validates every mode's explicit controls before acquisition, in both valued spellings", () => {
+  const f = profileCliFixture();
+  const controls = { frames: "90", steps: "100", warm: "0", repeat: "3", base: "HEAD", json: null, capture: null, "cpu-throttle": "2" };
+  const supported = {
+    spans: ["frames", "repeat", "base", "json", "capture"], cpu: [], hitch: ["frames", "capture"],
+    trace: ["frames", "capture"], step: ["steps", "warm", "repeat", "base", "json", "capture", "cpu-throttle"],
+  };
+  try {
+    for (const [mode, allowed] of Object.entries(supported)) {
+      const plain = f.invoke(["--mode", mode]);
+      assert.equal(plain.status, ["cpu", "hitch"].includes(mode) ? 0 : 1);
+      assert.deepEqual(plain.acquisitions, ["cpu", "hitch"].includes(mode)
+        ? [{ kind: "child", argv: mode === "cpu" ? ["vegas"] : ["vegas", "--seconds", "10"] }] : [{ kind: "server" }]);
+      for (const [name, value] of Object.entries(controls)) {
+        const spellings = value == null ? [[`--${name}`]] : [[`--${name}`, value], [`--${name}=${value}`]];
+        for (const flags of spellings) {
+          const r = f.invoke(["monza", "--mode", mode, ...flags]);
+          if (!allowed.includes(name)) {
+            assert.deepEqual({ status: r.status, stderr: r.stderr, acquisitions: r.acquisitions },
+              { status: 2, stderr: `profile: --mode ${mode} does not support --${name}\n`, acquisitions: [] });
+          } else if (mode === "hitch") {
+            assert.deepEqual({ status: r.status, acquisitions: r.acquisitions }, { status: 0,
+              acquisitions: [{ kind: "child", argv: ["monza", "--seconds", name === "frames" ? "15" : "10", ...(name === "capture" ? ["--capture"] : [])] }] });
+          } else {
+            assert.equal(r.status, 1, "valid browser modes reach the forbidden-server boundary");
+            assert.deepEqual(r.acquisitions, [{ kind: "server" }]);
+            if (mode === "step" && name === "warm")
+              assert.equal(r.stderr.split("\n")[0], "profile step: monza, warm 0 + 3000 steps x 1 repeat", "warm zero is preserved");
+          }
+        }
+      }
+      for (const name of ["json", "capture", "help"]) for (const value of ["true", "false"]) {
+        const r = f.invoke(["monza", "--mode", mode, `--${name}=${value}`]);
+        const message = name !== "help" && !allowed.includes(name) ? `--mode ${mode} does not support --${name}`
+          : `--${name} takes no assigned value; use the bare switch`;
+        assert.deepEqual({ status: r.status, stderr: r.stderr, acquisitions: r.acquisitions },
+          { status: 2, stderr: `profile: ${message}\n`, acquisitions: [] });
+      }
+    }
+    const capture = f.invoke(["monza", "--mode=hitch", "--frames=600", "--capture"]);
+    assert.deepEqual(capture.acquisitions, [{ kind: "child", argv: ["monza", "--seconds", "100", "--capture"] }]);
+    assert.equal(capture.status, 0);
+    for (const help of ["--help", "-h"]) {
+      const r = f.invoke(["--mode", "cpu", "--repeat", "3", "--capture=false", help]);
+      assert.equal(r.status, 0, "bare help remains an early successful exit");
+      assert.deepEqual(r.acquisitions, []);
+    }
+  } finally { f.close(); }
+});

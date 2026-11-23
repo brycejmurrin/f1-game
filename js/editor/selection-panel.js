@@ -10,10 +10,10 @@ const DesignerSelection = (function () {
     }
     const summary = el("div", "td-hint"); summary.setAttribute("role", "status");
     const row = el("div", "td-chips"); row.dataset.role = "point-picker";
-    const prev = btn("PREV", "sel-chip", () => onCycle(-1)); prev.setAttribute("aria-label", "Select previous control point");
+    const prev = btn("PREV", "sel-chip", () => onCycle(-1)); prev.setAttribute("aria-label", "Prev: select previous control point");
     const point = el("input", "td-input"); point.type = "number"; point.min = "1"; point.step = "1";
     point.placeholder = "Point #"; point.setAttribute("aria-label", "Selected point number");
-    const next = btn("NEXT", "sel-chip", () => onCycle(1)); next.setAttribute("aria-label", "Select next control point");
+    const next = btn("NEXT", "sel-chip", () => onCycle(1)); next.setAttribute("aria-label", "Next: select next control point");
     const pickPoint = () => {
       if (state && point.value.trim() && Number.isInteger(+point.value)) onSelect(+point.value - 1, -1);
       if (state) { refresh(state); point.value = state.sel < 0 ? "" : String(state.sel + 1); }

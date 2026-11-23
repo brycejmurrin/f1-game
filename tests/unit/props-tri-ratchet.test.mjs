@@ -37,6 +37,23 @@ const require = createRequire(import.meta.url);
 // 2026-10-05: Buddh 210980 -> 190604 (sparse field-boundary scatter) and
 // Korea 264747 -> 235195 (tree:"none" on the salt fill) after the fold-clear
 // chord samples. Fuji 612418 stays inside the 612361 ±0.5 % band.
+// 2026-11-11 W21 (#5303): cota 301685 -> 303352 (+0.55 %), mexico 342242 -> 344035
+// (+0.52 %), fuji 564203 -> 567976 (+0.67 %). Two visible fixes add geometry: a
+// grandstandEx that seats no rows no longer records its solid, so trees now grow
+// where the phantom stand stood (mexico +17 trees, cota +2); and curved stand rows
+// span midpoint to midpoint instead of stopping short (#2204: fuji's back terraces
+// gapped up to 28.8 m). Compaction stays identical on every circuit.
+// 2026-11-21 (#6035/#6036): spa 348438 -> 390048 (+11.9 %). Spa's furniture.bakedPines was OFF, so every pine was
+// the procedural tiered cone again. The VM always saw the pack models, so the prior row had measured the baked pine
+// (a square trunk with six leaf slivers: no crown) that players got only on 2026-11-20.
+// 2026-11-21 (#6037): spa 390048 -> 376884 with bakedPines ON again after the crown rebake (instanced pack pine).
+// Compaction stays identical (props-tris.cjs spa: identical true).
+// 2026-11-18 (#5303, Bryce `decision: A`): hungaroring 213167 -> 214279 (+0.52 %). The
+// deploy tip alone measured 214232 (+0.4996 %); this PR's midpoint-to-midpoint stand
+// rows (stands.js, #2204) add the last 47 tris.
+// 2026-11-10 W5 (#5279): Magny-Cours 249802 -> 240416 (-3.8 %): the Adelaide and
+// Lycée kits moved onto their corners and three treeline/poplar runs were trimmed
+// clear of the relocated stands.
 // 2026-10-09: Silverstone 398229 -> 422978 (+6.2 %): Racing Kit light posts, banner towers,
 // camera pods and radar (baked CC0 models), generic lamp posts (furniture.lamp "post")
 // and far-hedgerow understorey bushes — the survey found the circuit using 7 of 77 models.
@@ -54,6 +71,31 @@ const require = createRequire(import.meta.url);
 // fence line and the hidden-face strip deleted the enclosed run, so the growth
 // is authored barrier coming back into view (korea: +4830 of +7154 from
 // structures.js guardrail/fence instances), not new geometry.
+// 2026-11-09 (#4967): curveTier's curve cap had the bend sign inverted, so tier rows on the OUTSIDE of a
+// bend were cut short (gaps) and inside rows were not. Rows on the outside now run their full chord, which
+// keeps rows that were dropped under 1 m and lengthens crowd bands (speckle per ~6 m). Measured, not widened:
+// abudhabi 283451 -> 285519 (+0.73 %), catalunya 187691 -> 188873 (+0.63 %), jerez 202989 -> 205360 (+1.17 %).
+// 2026-11-10 (#5080 #5088, PR #5254): a groundPatch the road hits is trimmed per cell instead of dropped
+// whole, so qatar draws 51 green verges the base dropped. Sochi's plaza strips are draped groundPatches
+// (6 columns of cells and skirts) instead of flat road-frame boxes. Measured, not widened:
+// qatar 193250 -> 194966 (+0.89 %), sochi 199785 -> 202847 (+1.53 %).
+// 2026-11-18 (#5652, PR #5696): hungaroring 213167 -> 215237 (+0.97 %). Measured per edit on the
+// merged tree: the tip with neither file changed is 214232; the six bank zones re-anchored onto
+// T2-T14 ({ turn: N }) add +465 (props drape on the banked edges); the T1 tyre wall moved to the
+// outside of the hairpin, the T11 terrace and the T5 gravel moved onto their corners add +540.
+// Measured, not widened.
+// 2026-11-19 (#5699 row 18, PR #5747, sync onto 8bb193ac / #5303): remeasured on the merged
+// tree with tools/track/props-tris.cjs. fuji 567976 — the W21 pin; row 18's reserve-after-land
+// is already in that count (the earlier 567046 pin was against tip f25747de, before W21).
+// cota 303352 -> 301674 and mexico 344035 -> 343891: the W21 ceilings sat above the current
+// build, so they are pinned to the measured post-strip counts. hungaroring stays 215237.
+// Measured, not widened.
+// 2026-11-20 (#5998, PR #6006, Bryce `decision: A` 15:01Z): the pit-straight crowd moves behind
+// the run-off and yields to the circuit's own stand. Lowered to the measured count:
+// brands_hatch 322469, mosport 245130, jacarepagua 177137, magny_cours 237733, indianapolis
+// 267530. buenos_aires 226645 -> 227818 (+0.52 %): pre-strip 239587 on the tip and on this PR
+// (fence or banks put back alike), so nothing is added; the strip removes 475 fewer faces once
+// the crowd emits after def.scenery().
 const BASELINE = JSON.parse(readFileSync(path.join(ROOT, "tools", "track", "props-tris-baseline.json"), "utf8"));
 const GROW = 1.005, STALE = 0.99;
 

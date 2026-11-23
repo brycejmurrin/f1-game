@@ -5,7 +5,7 @@
  * `.dh-card`). Inside a zoomed subtree CSS lengths are LOCAL; getBoundingClientRect
  * on Chromium / modern Safari returns VISUAL (zoomed) pixels; pre-26.4 WebKit
  * returned LOCAL. Mixing a visual rect with `clientWidth`, `--pair-at` or
- * `scrollTop` is the A13 class of bug (docs/ARCHITECTURE-REVIEW.md).
+ * `scrollTop` is the A13 class of bug (docs/notes/ARCHITECTURE-REVIEW.md).
  *
  * Prefer `clientWidth` / `clientHeight` for the element's own box in local
  * units — they never need a probe. `viewportRect` mixes with `clientX`/`clientY`
@@ -38,18 +38,24 @@ window.CssZoom = (function () {
     return (typeof z === "number" && z > 0) ? z : 1;
   }
 
-  function viewportRect(el) {
-    const r = el.getBoundingClientRect();
-    const z = of(el);
-    if (rectsAreVisual() || z === 1) return r;
-    return new DOMRect(r.x * z, r.y * z, r.width * z, r.height * z);
+  // Product of ancestors' computed `zoom`: local-rect engines (WebKit < 26.4) lack currentCSSZoom (MDN BCD).
+  function computedZoom(el) {
+    let z = 1;
+    try {
+      for (let n = el; n && n.nodeType !== 9; n = n.parentElement) {
+        const v = parseFloat(getComputedStyle(n).zoom);
+        if (v > 0 && Number.isFinite(v)) z *= v;
+      }
+    } catch (_) { /* detached or no computed style: unzoomed */ }
+    return z;
   }
 
-  function localRect(el) {
+  function viewportRect(el) {
     const r = el.getBoundingClientRect();
-    const z = of(el);
-    if (!rectsAreVisual() || z === 1) return r;
-    return new DOMRect(r.x / z, r.y / z, r.width / z, r.height / z);
+    if (rectsAreVisual()) return r;
+    const z = el.currentCSSZoom > 0 ? el.currentCSSZoom : computedZoom(el);
+    if (z === 1) return r;
+    return new DOMRect(r.x * z, r.y * z, r.width * z, r.height * z);
   }
 
   // Always local — preferred for SheetShape thresholds vs --pair-at.
@@ -61,5 +67,6 @@ window.CssZoom = (function () {
     return viewportPx / of(el);
   }
 
-  return { of, rectsAreVisual, viewportRect, localRect, localBox, toLocalDelta };
+  // rectsAreVisual stays module-local (viewportRect only).
+  return { of, viewportRect, localBox, toLocalDelta };
 })();

@@ -81,7 +81,7 @@ var RaceRadio = (function () {
     let comm = readSetting("commentary", COMM, "tv");
 
     let battleOn = !!(store && store.get && store.get("battleEarcon", false));
-    let battle = null;
+    let /** @type {ReturnType<typeof BattleEarcon.create> | null} */ battle = null;
     function battleService() {
       // AUDIO is lazy: constructing the race need not load or unlock sound.
       if (!battle && typeof BattleEarcon !== "undefined" && typeof GameAudio !== "undefined") battle = BattleEarcon.create(GameAudio);
@@ -498,7 +498,7 @@ var RaceRadio = (function () {
           break;
         case "retire":
           offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire",
-            vars: { a: S(e.car), why: RadioLines.WHY[e.why] || RadioLines.WHY.mechanical }, ttl: 12 });
+            vars: { a: S(e.car), why: RadioLines.why(e.why) }, ttl: 12 });
           break;
         case "mistake": {
           if (f.caution >= 2) break;
@@ -612,12 +612,15 @@ var RaceRadio = (function () {
       m.wasPit = !!f.pitting;
       if (f.pitting) m.pitLap = f.lap;
       if (f.caution > 0) m.cautionLap = f.lap;
+      evalT -= dt;
+      // Facts and driver requests stay current every tick. Between rule evaluations,
+      // an empty queue and no event leave nothing for either channel to schedule.
+      if (!ev.length && evalT > 0 && !queue.eng.size && !queue.tv.size) return;
       const tv = tvLive(f);
       for (const e of ev) {
         if (!watch) engineerEvent(e, f, p);   // a replay has no engineer
         if (tv) tvEvent(e, f);
       }
-      evalT -= dt;
       if (evalT <= 0) {
         evalT = EVAL_S;
         if (!watch) engineerState(f, p);
@@ -634,6 +637,7 @@ var RaceRadio = (function () {
       // A VS FRIEND race keeps running under the pause menu; the radio waits.
       if (G.paused) return;
       if (watch && watch.radioBusy && watch.radioBusy()) return;   // never over a real team radio clip
+      if (watch && watch.paused && watch.paused()) return;   // the replay's own pause is not G.paused (#5557)
       const traffic = spotter && spotter.occupied();
       const e = best("eng");
       if (e) {
@@ -712,7 +716,7 @@ var RaceRadio = (function () {
           return true;
         }
         case "out":
-          offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire", vars: { a: S(a), why: RadioLines.WHY.mechanical }, ttl: 12 });
+          offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire", vars: { a: S(a), why: RadioLines.why("mechanical") }, ttl: 12 });
           return true;
         case "fastest":
           if (!(h.dur > 0)) return false;
@@ -772,6 +776,6 @@ var RaceRadio = (function () {
     };
   }
 
-  return Object.freeze({ create, durFor, CHAT, COMM, GAP_S, TV_CAMS });
+  return Object.freeze({ create, durFor });
 })();
 Object.freeze(RaceRadio);

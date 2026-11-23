@@ -1,17 +1,30 @@
-(() => {
+(async () => {
   "use strict";
+  // frameElement is null for standalone and cross-origin embeds.
+  const host = window.frameElement;
+  if (!host && !window.PhysicsConsts) {
+    const ready = await new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = "../../js/physics/consts.js";
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+    if (!ready) {
+      document.querySelector("main").textContent = "Aero Lab could not load the driving model.";
+      return;
+    }
+  }
   const get = id => document.getElementById(id);
   const canvas = get("flow");
   const ctx = canvas.getContext("2d");
   const gap = get("gap");
   const offset = get("offset");
   const motion = get("motion");
-  const constants = window.PhysicsConsts;
+  const constants = host ? host.ownerDocument.defaultView.PhysicsConsts : window.PhysicsConsts;
   const model = constants.DirtyAir;
   const tow = {range: constants.TOW_RANGE, fade: constants.TOW_FADE, halfW: constants.TOW_HALF_W};
   const preference = matchMedia("(prefers-reduced-motion: reduce)");
-  // frameElement is null for standalone and cross-origin embeds.
-  const host = window.frameElement;
   const hostRoot = host?.ownerDocument.documentElement;
   get("lessonTitle").hidden = Boolean(host);
   const root = document.documentElement;

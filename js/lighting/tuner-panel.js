@@ -28,10 +28,7 @@ function gateNote(d, v) {
     return held ? " · held after a display reset — set to 0 and back on to retry" : "";
   }
   if (!isChunk || !(v > 0)) return "";
-  // The BACKEND gate first: three.js has no per-chunk lamp binding at all, so
-  // on TLX the knob can never do anything however the tier and latch sit.
-  const g = G.gfx;
-  if (g && g.hasPerChunkLights === false) return " · not supported by the three.js renderer — switch to WebGL2 or WebGPU";
+  // No backend note: GLX, TLX and WGX all bind per-chunk lamps.
   let latched = false;
   try { latched = localStorage.getItem("apex26.perChunkOff") === "1"; } catch (_) { /* no storage: fall through to the tier check */ }
   if (latched) return " · held after a display reset — set to 0 and back on to retry";
@@ -57,6 +54,12 @@ let _ltPrevTOD = null, _ltPrevWx = null;
 // drops it, and restoring the weather alone left a MIXED race frozen at its
 // current stage — grip included (TyreModel.wetness reads the arc).
 let _ltPrevArc, _ltArcSaved = false;
+// NOT IN A VS FRIEND RACE (#5041): the net pause does not stop the sim, so a
+// chip there is a live change the rival never sees — a WEATHER chip moves this
+// phone's grip and tyre temperatures mid-race, a TIME chip rebuilds the track.
+// The chips stand down while a net session is live; the sliders stay (they
+// only touch this phone's picture).
+const netLive = () => !!(G.netPlay && typeof G.netPlay.active === "function" && G.netPlay.active());
 const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
 const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
 function refreshLtPreviewActive() {
@@ -87,7 +90,7 @@ function buildLtPreview() {
     ids.forEach((id, i) => {
       const btn = document.createElement("button");
       btn.className = "opt-btn lt-preview-btn"; btn.id = prefix + id; btn.textContent = labels[i];
-      btn.onclick = () => { onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
+      btn.onclick = () => { if (netLive()) return; onPick(id); refreshLtPreviewActive(); refreshLightTunePanel(); };
       row.appendChild(btn);
     });
     host.appendChild(row);
@@ -279,23 +282,39 @@ function buildLightTunePanel() {
         span.appendChild(document.createTextNode(" (DESKTOP ONLY)"));
         inp.setAttribute("aria-label", d.label + " (desktop only)");
       }
-      inp.oninput = () => {
-        if (!setLightTune(d.id, parseFloat(inp.value))) return;
+      const number = SettingRow.numberInput(inp, () => LT[d.id], (v) => {
+        if (update(v)) { inp.value = LT[d.id]; persistLightTune(); }
+      });
+      number.id = "lt-num-" + d.id;
+      function update(v) {
+        if (!setLightTune(d.id, v)) return false;
+        number.value = String(LT[d.id]);
         b.textContent = fmtTune(d, LT[d.id]);
+        inp.setAttribute("aria-valuetext", b.textContent);
         if (d.id === "perChunkLights" || d.id === "roadChunkLamps") {
           const other = TUNE_DEFS.find((t) => t.id === (d.id === "perChunkLights" ? "roadChunkLamps" : "perChunkLights"));
           const value = other && $("lt-v-" + other.id);
-          if (value) value.textContent = fmtTune(other, LT[other.id]);
+          if (value) {
+            value.textContent = fmtTune(other, LT[other.id]);
+            $("lt-in-" + other.id).setAttribute("aria-valuetext", value.textContent);
+          }
         }
         updateLtProfileLabel();
-      };
+        return true;
+      }
+      inp.oninput = () => update(parseFloat(inp.value));
       // Persist on release (range "change" fires once), not on every drag tick —
       // persistLightTune() does a synchronous JSON.stringify + localStorage.setItem
       // of the whole profile store, which is too heavy to run on every oninput.
       inp.onchange = () => persistLightTune();
       lab.appendChild(span); lab.appendChild(inp);
-      item.appendChild(lab);
-      if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }
+      item.appendChild(lab); item.appendChild(number);
+      if (d.help) {
+        const p = document.createElement("p"); p.id = "lt-help-" + d.id;
+        p.className = "adv-help"; p.textContent = d.help; item.appendChild(p);
+        inp.setAttribute("aria-describedby", p.id);
+        number.setAttribute("aria-describedby", p.id);
+      }
       wrap.appendChild(item);
     }
     // Build one tab chip per group.
@@ -324,7 +343,12 @@ function refreshLightTunePanel() {
   for (const d of TUNE_DEFS) {
     const inp = $("lt-in-" + d.id), b = $("lt-v-" + d.id);
     if (inp) inp.value = LT[d.id];
-    if (b) b.textContent = fmtTune(d, LT[d.id]);
+    const number = $("lt-num-" + d.id);
+    if (number) number.value = String(LT[d.id]);
+    if (b) {
+      b.textContent = fmtTune(d, LT[d.id]);
+      if (inp) inp.setAttribute("aria-valuetext", b.textContent);
+    }
   }
   updateLtProfileLabel();
   ltDisarm();
@@ -334,8 +358,7 @@ $("lt-help-on").onchange = (e) => {
 };
 $("lt-reset").onclick = () => {
   // Drop this condition's LOCAL edits so it falls back to the shipped file /
-  // defaults. The shipped file is never touched; other CONDITIONS are only
-  // reached through the legacy global layer cleared with it. The sun knobs live
+  // defaults; other CONDITIONS keep the global layer. The sun knobs live
   // in the "|dry" slot whatever the weather, so the store clears them there too.
   LightStore.reset();
   persistLightTune();
@@ -344,9 +367,9 @@ $("lt-reset").onclick = () => {
   $("lt-json").hidden = true;
 };
 /* COPY VALUES HANDS OVER THE EDITS, NOT THE WHOLE FILE. The file+local MERGE —
-   every shipped preset plus the local overrides — measures 805 conditions,
-   7071 knobs and 182,569 characters against the
-   shipped light-presets.js. That is the right input for bake.mjs (a full
+   every shipped preset plus the local overrides — is every key of
+   js/lighting/presets.js (over a thousand conditions, several thousand knob
+   values: count them there, they move). That is the right input for bake.mjs (a full
    REPLACE needs a full snapshot) and the wrong thing entirely for the person
    holding the phone: it cannot be pasted into a message, and #lt-json is a
    10px box capped at 120px, so hand-selecting ~4,500 lines through it is not
@@ -423,22 +446,24 @@ $("lt-copy").onclick = () => {
   };
   ApexClipboard.write(json, { preferSync: true }).then(flash);
 };
-$("pm-lighting").onclick = () => {
+function openLightTuner() {
   Log.info("game", "TunerPanel.open");
   buildLightTunePanel();
   _ltPrevTOD = setTimeOfDay();   // capture the race's real conditions
   _ltPrevWx = weather();
   _ltPrevArc = G.weatherArc; _ltArcSaved = true;
   refreshLtPreviewActive();
+  $("lt-preview").hidden = netLive();
   $("lt-json").hidden = true;
   $("lighting").hidden = false;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pmsettings.hidden = true;     // unobstructed live preview (opened from settings)
-  // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
-  // .hidden survives underneath and reappears the moment pmsettings does.
-  const displayPage = $("pm-panel-display");
-  if (displayPage) displayPage.hidden = true;
-};
+  // Nested under VISUAL STUDIO (#pm-panel-visual): hide that page too, and give
+  // exactly it back on close; never the HUD & CAMERA page (#5066).
+  const visualPage = $("pm-panel-visual");
+  if (visualPage) visualPage.hidden = true;
+}
+$("pm-lighting").onclick = openLightTuner;
 function closeLightTuner(showPauseMenu) {
   Log.info("game", "TunerPanel.close");
   if (G.photoMode) exitPhotoMode();
@@ -452,12 +477,12 @@ function closeLightTuner(showPauseMenu) {
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
-    const displayPage = $("pm-panel-display");
-    if (displayPage) displayPage.hidden = false;   // ...specifically its DISPLAY page
+    const visualPage = $("pm-panel-visual");
+    if (visualPage) visualPage.hidden = false;   // ...specifically its VISUAL STUDIO page
   }
 }
 $("lt-close").onclick = () => closeLightTuner(true);
-return { buildLightTunePanel, refreshLightTunePanel, closeLightTuner };
+return { buildLightTunePanel, refreshLightTunePanel, openLightTuner, closeLightTuner };
 }
 
 return { create };

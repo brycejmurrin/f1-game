@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["istanbul"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         pine, tree, bush, ridge, building, grandstandEx,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
@@ -194,7 +194,7 @@
       gantry(0.965, 8.0, [0.15, 0.15, 0.18]);
       grandstandEx(0.005, -1, 11, 150, null, null,
         { livery: "sandstone", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      grandstandEx(0.955, -1, 11, 90, null, null, { livery: "terracotta", endWalls: true });
+      grandstandEx(0.955, -1, 11, 90, null, null, { livery: "terracotta", endWalls: false });
       for (const [i, s] of [[0, 0.952], [1, 0.966], [2, 0.994]]) {
         const a = anchor(K(s), 1, 44);
         const b = [a.r, a.u, a.t];
@@ -220,23 +220,21 @@
         building(K(0.925 + i * 0.013), 1, 66, 24, 12, 18,
           { kind: "chevron", wall: [0.84, 0.80, 0.74], window: [0.30, 0.34, 0.42], floor: 4.5, roof: true });
       }
-      every(46, (k) => {
-        const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
-        // Further out on flatter apron (was 56+h*10 → bury on the grade).
-        if (h < 0.72) return;
-        motorhome(k, 1, 80 + h * 16, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
-      });
+      // Place the paddock motorhomes on the level part of the pit straight.
+      for (const s of [0.963, 0.979]) {
+        motorhome(K(s), 1, 78, 10, 4, 6, { wall: [0.84, 0.64, 0.66] });
+      }
       broadcastCompound(K(0.915), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.16, 0.14]);
 
       // Silver 3 — uncovered stand on the right after Turn 6, before the T8
       // amphitheatre (grandprixgrandtours Turkey circuit guide; Biletix 2021
       // seating map: Silver 3 at Turn 6 / 6–7, open-top numbered seats).
-      grandstandEx(0.290, 1, 24, 48, null, null,
+      // (Was s=0.290, 113 m short of def T4 and 399 m before T6: re-seated after T6.)
+      grandstandEx(0.372, 1, 24, 48, null, null,
         { livery: "sandstone", roof: "none", endWalls: true });
 
-      groundPatch(K(0.055), -1, 6, [34, 0.18, 48], GRAVEL,
+      groundPatch(K(0.055), -1, 8, [34, 0.18, 48], GRAVEL,
         { id: "istanbul-t1-gravel", samples: 8 });
       tyreWall(0.040, 0.075, -1, 5, [0.86, 0.20, 0.18]);
       grandstandEx(0.060, 1, 20, 84, null, null, { livery: "sandstone", tiers: 2, endWalls: true });
@@ -250,7 +248,7 @@
 
       groundPatch(K(0.905), -1, 5, [26, 0.18, 34], GRAVEL,
         { id: "istanbul-t13-gravel", samples: 6 });
-      tyreWall(0.888, 0.920, -1, 4, [0.85, 0.78, 0.20]);   // a stack at 0.922 (T14 apex) stood on the road
+      tyreWall(0.888, 0.920, -1, 4, [0.85, 0.78, 0.20]);   // T13 outside (left of a right-hander), beside the t13 gravel; ends 0.920 because a stack at 0.922 stood on the road
       // Silver 8 — final-corner complex (guide: Silver 8 at T12–14 / final
       // corner). Was grandstandEx(0.900, 1, 20, 76): every crowdBank riser
       // hit the neighbouring-leg fold (rejBox) → hollow 2-prim shell, slope 0
@@ -310,7 +308,7 @@
         cameraTower(K(s), side, gap, { h: 16, col: [0.62, 0.58, 0.52] });
 
       {
-        const a = anchor(K(0.930), -1, 44);   // 52 overhung the T13 carriageway (0.912) inside the loop
+        const a = anchor(K(0.930), -1, 44);   // just past T14; gap 52 overhung the carriageway at 0.912 inside the loop
         const b = [a.r, a.u, a.t];
         modelGroup("istanbul-stone-portal", {
           center: vadd(a.c, a.u, 9), size: [12, 22, 34], basis: b,
@@ -330,17 +328,20 @@
         }, { required: true });
       }
 
-      for (const [id, s, side, gap] of [
-        ["t1", 0.070, 1, 58], ["t4", 0.170, -1, 60],
-        ["t9", 0.640, 1, 60], ["t12", 0.790, -1, 58],
+      // End the earthworks before their offset paths fold back through the
+      // preceding hillside panels on the tight bends.
+      for (const [id, side, gap, stations] of [
+        ["t1", 1, 58, [0.064, 0.076, 0.088]],
+        ["t4", -1, 60, [0.152, 0.164, 0.176]],
+        ["t9", 1, 60, [0.634, 0.646, 0.658]],
+        ["t12", -1, 58, [0.772, 0.784, 0.796, 0.808]],
       ]) {
         for (let t = 0; t < 2; t++) {
           groundedSegments({
             id: `istanbul-hillside-${id}-${t + 1}`,
-            points: [0, 1, 2, 3].map((j) => ({
-              k: K(s + (j - 1.5) * 0.012), side, dist: gap + t * 24,
+            points: stations.map((s) => ({
+              k: K(s), side, dist: gap + t * 24,
             })),
-            // Two tiers, shorter chords — cuts tris and clears self-flatCoplanar.
             width: 8.0, height: 1.4 + t * 1.1,
             color: t & 1 ? [0.27, 0.33, 0.18] : [0.33, 0.38, 0.21],   // grass-toned: pale tan read as planks
           });

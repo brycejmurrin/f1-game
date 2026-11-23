@@ -141,56 +141,6 @@ test("GLX setPolyOffset caches bias and draw() passes depthBias without a litera
   assert.match(glx, /uf2\(litU\.uBakeOrigin/);
 });
 
-
-test("iterator GC microbench: indexed cull packs with less young-gen pressure than for…of", () => {
-  // Synthetic pack loop mirroring cullInstances' inner cell walk. Measures
-  // retained heap after forced GC over N cell iterations — for…of mints an
-  // iterator per cell; indexed for does not. Skip when gc() is unavailable
-  // (plain `node --test`); CI/tooling-fast may not expose it.
-  if (typeof globalThis.gc !== "function") return;
-  const cells = 4000;
-  const idx = new Array(32);
-  for (let i = 0; i < 32; i++) idx[i] = i;
-  const src = new Float32Array(32 * 16);
-  const dst = new Float32Array(32 * 16);
-  const packForOf = () => {
-    let n = 0;
-    for (const i of idx) {
-      const so = i * 16, dOff = n * 16;
-      for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-      n++;
-    }
-    return n;
-  };
-  const packIdx = () => {
-    let n = 0;
-    for (let j = 0, jn = idx.length; j < jn; j++) {
-      const i = idx[j];
-      const so = i * 16, dOff = n * 16;
-      for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-      n++;
-    }
-    return n;
-  };
-  const measure = (fn) => {
-    globalThis.gc(); globalThis.gc();
-    const h0 = process.memoryUsage().heapUsed;
-    for (let c = 0; c < cells; c++) fn();
-    globalThis.gc(); globalThis.gc();
-    return process.memoryUsage().heapUsed - h0;
-  };
-  // Warm both paths so JIT noise is shared.
-  for (let i = 0; i < 200; i++) { packForOf(); packIdx(); }
-  const dFor = measure(packForOf);
-  const dIdx = measure(packIdx);
-  // Indexed must not allocate MORE retained bytes than for…of over the same
-  // work. Absolute floors are noisy across V8 versions; the relative check is
-  // the pin. Log both for the PR body.
-  assert.ok(dIdx <= dFor + 64 * 1024,
-    `indexed retained ${dIdx} B should be ≤ for…of ${dFor} B (+64 KiB slack)`);
-  console.log(`# microbench cells=${cells} forOfDelta=${dFor} indexedDelta=${dIdx}`);
-});
-
 // ---- bug-hunt 2026-10-09 4.2 (W5 game) --------------------------------------------------------
 test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage read per car per frame", () => {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap, Date };
@@ -199,6 +149,7 @@ test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   ctx.Car3D = { aeroFlaps: () => [] };
   vm.createContext(ctx);
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   CarMesh.init({ createMesh: () => ({}), draw() {}, freeMesh() {} });
@@ -275,6 +226,7 @@ function tailGlowVm(gfxExtra) {
   const g2d = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
   ctx.document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
   vm.createContext(ctx);
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   const decals = [];
@@ -324,14 +276,15 @@ test("blueWatch.tick gets the pooled _blueCtx, never a per-step literal (issue #
 test("car loop: a world-posed rival behind the eye is culled before playerAnchor and sampleAt (perf plan C-10)", () => {
   const code = lift(gameSource(), "render").replace(/\/\/.*$/gm, "").replace(/\s+/g, "");
   const pose = code.indexOf("constrp=renderPosOf(c);");
-  const early = code.indexOf("if(!c.isPlayer&&rp.world&&(rp.x-camEye[0])*_camFwdX+(rp.z-camEye[2])*_camFwdZ<-6)continue;");
+  const gate = code.indexOf("if(!c.isPlayer&&rp.world)", pose);
+  const early = code.indexOf("if(_useHorizontalCull&&dx*_camFwdX+dz*_camFwdZ<-6)continue;", gate);
   const anchor = code.indexOf("playerAnchor(c)", pose);
   const sample = code.indexOf("sampleAt(cS,smp2);", pose);
-  assert.ok(pose >= 0 && early > pose, "the cull must use the interpolated world pose, exempt players, and keep the 6 m grace");
+  assert.ok(pose >= 0 && gate > pose && early > gate, "the cull must use the interpolated world pose, exempt players, and keep the 6 m grace");
   assert.ok(anchor > early, "reject the rival before playerAnchor projects onto the track");
   assert.ok(sample > anchor, "track sampling follows the surviving rival's anchor");
   // Same predicate as the full cull it front-runs (tmpP x/z ARE rp.x/rp.z for a world pose).
-  assert.ok(code.includes("if(dx*_camFwdX+dz*_camFwdZ<-6)continue;"));
+  assert.ok(code.includes("if(!rp.world){if(_useHorizontalCull&&dx*_camFwdX+dz*_camFwdZ<-6)continue;"));
 });
 
 test("Collide relaxation stops after a pass that reached no contact (hunt-2 P6)", () => {

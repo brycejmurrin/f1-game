@@ -1,5 +1,7 @@
 # TLX phone-shaped pass census: triangles, draws, culled chunks (2026-10-23)
 
+Summary: TLX phone-shaped pass census: triangles, draws and culled chunks (A·W41; steps of #2657 and #2631).
+
 Step 1 of [#2657](https://github.com/brycejmurrin/f1-game/issues/2657) and the measurement half of
 [#2631](https://github.com/brycejmurrin/f1-game/issues/2631), re-done for the phone (Fleet A "Phone perf" lane,
 A·W41). Question: on Bryce's path (TLX, THREE PATH: WEBGPU, iPhone), is the per-frame cost in triangles, in draws,

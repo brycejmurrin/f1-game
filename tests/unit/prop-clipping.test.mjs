@@ -148,6 +148,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // 2026-10-10 round-2 bug hunt (#1309): sepang 2 -> 1 and bahrain 1 -> 0 — the hwZone
 // re-key (Sepang's final hairpin) and the hairpin fold clamp moved the road off
 // two props that used to clip it. Lowered to the measured tree.
+// 2026-11-10 (#5080, PR #5254): monza 2 -> 3. The Rettifilo gravel trap
+// (monza-rettifilo-gravel, frac 0.099 left) was dropped WHOLE on the base,
+// because the whole-box road test fired. The per-cell guard now draws its clear
+// cells, and the default tyre-wall stack (sunk base, structures.js tyreWall) stands
+// in one of them: the one new spot (1.03 m, frac 0.093) is emit[groundPatch] x
+// addCyl[tyre stack]. The 1.03 m is the bounding box of one draped cell over a
+// ~1 m terrain rise. Visually it is a barrier standing in gravel, not a prop
+// through a prop. Fleet clip-audit --all: only monza moved (46 -> 47).
 
 mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
 const BASELINE = JSON.parse(
@@ -203,7 +211,9 @@ test("stale-row policy: strict locally, scoped to the diff on a PR, advisory on 
 test("clip-audit --lower ratchets one row down and is idempotent", () => {
   // APEX_CIRCUITS narrows this to the scoped circuit; one build, a few seconds.
   const { scope } = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs");
-  const id = scope(Object.keys(BASELINE))[0];
+  // A scoped circuit with no baseline row (kyalami: 0 severe) leaves nothing to lower:
+  // the run then exercises --lower on the first baseline circuit instead of on `undefined`.
+  const id = scope(Object.keys(BASELINE))[0] || Object.keys(BASELINE)[0];
   const dir = mkdtempSync(path.join(ROOT, "scratch", "clip-lower-"));
   try {
     const file = path.join(dir, "baseline.json");

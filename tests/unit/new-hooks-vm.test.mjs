@@ -417,8 +417,8 @@ test("Silverstone uses grounded required landmarks and airfield-scale terrain", 
 
   gte(elevationRange, 10);
   lte(elevationRange, 20);
-  lt(Math.abs(peak.frac - 0.265), 0.03);
-  lt(Math.abs(trough.frac - 0.6975), 0.03);
+  lt(Math.abs(peak.frac - 0.580), 0.03);
+  lt(Math.abs(trough.frac - 0.993), 0.03);
   assert.equal(ground.every(({ lat, sample }) =>
     (lat === 0 || sample.terrainY != null) && (sample.gap == null || sample.gap <= 0.18)), true);
   assert.equal(walls.anyNaN, false);
@@ -477,7 +477,7 @@ test("Miami emits validated water, grouped heroes, and safe overpasses", async (
   assert.equal(spans.length, 2);
   assert.equal(spans.every((entry) => entry.overhead && entry.clearance >= 4.8), true);
   const peak = profile.reduce((best, point) => point.y > best.y ? point : best);
-  lt(Math.abs(peak.frac - 0.8583), 0.04);
+  lt(Math.abs(peak.frac - 0.6152), 0.003);
   gt(peak.y, 3);
   gt(walls.tightFrac, 0.35);
   assert.equal(groundGaps.every((gap) => gap === null || gap <= 0.18), true);
@@ -565,10 +565,11 @@ test("Singapore migration keeps models, walls, terrain, and elevation intentiona
   assert.equal(walls.tightFrac, 1);
   gte(walls.minOverHw, 0);
   assert.equal(terrainGaps.every((gap) => gap === null || gap <= 0.18), true);
-  gt(high.y - low.y, 4);
-  lt(high.y - low.y, 6);
-  closeTo(low.frac, 0.10, 1);
-  closeTo(high.frac, 0.62, 1);
+  const hairpinRise = profile[Math.round(0.6007 * profile.length)].y - low.y;
+  lt(Math.abs(high.y - low.y - 5.4), 0.4);
+  lt(Math.abs(hairpinRise - 5.05), 0.3);
+  lt(Math.abs(low.frac - 0.122), 0.012);
+  lt(Math.abs(high.frac - 0.63), 0.035);
 });
 
 test("Shanghai declares safe required heroes and reflective water", async () => {

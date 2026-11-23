@@ -9,6 +9,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = fs.readFileSync(path.join(ROOT, 'js/ui/settings-export.js'), 'utf8');
+const bodySource = fs.readFileSync(path.join(ROOT, 'js/ui/settings-export-body.js'), 'utf8');
 const plain = (v) => JSON.parse(JSON.stringify(v));
 function boot() {
   const disk = new Map(), writes = [], full = (k) => k.startsWith('apex26.') ? k : 'apex26.' + k;
@@ -28,7 +29,9 @@ function boot() {
   });
   ctx.window = ctx;
   for (const path of ['js/core/mat4.js','js/physics/consts.js','js/garage/setup-tune.js','js/garage/setup-presets.js','js/input/controller-profiles.js']) vm.runInContext(fs.readFileSync(ROOT + '/' + path, 'utf8'), ctx, { filename: absSrc(path) });
-  const api = vm.runInContext(source + ';SettingsExport', ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(source, ctx, { filename: absSrc("js/ui/settings-export.js") });
+  vm.runInContext(bodySource, ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // LAZY_SAVES_DATA (#4748)
+  const api = vm.runInContext('SettingsExport', ctx);
   const tune = vm.runInContext('SetupTune.defaults("mercedes")', ctx);
   return { api, tune: plain(tune), disk, writes, store, G: { gfx: { isMobile: false } }, ctx,
     settings: (driving, display) => api.applySettings({ format: api.FORMAT, settings: { driving, display } }),
@@ -40,7 +43,7 @@ const library = (h) => ({ v: 1, items: [{ id: 'wet', name: 'Wet race', trackId: 
 
 test('new settings export canonical defaults and strict authored lanes', () => {
   const h = boot(), all = plain(h.api.collect('all', h.G)), changes = plain(h.api.collect('changes', h.G));
-  assert.equal(all.settings.driving.conditionCues, false);
+  assert.equal(all.settings.driving.conditionCues, true);
   assert.deepEqual(all.settings.driving.padProfiles, { v: 1, devices: [], legacyClaimed: false });
   assert.equal(all.settings.display.xrInput, 'controllers');
   for (const key of ['driving.conditionCues','driving.padProfiles','display.xrInput']) assert.ok(!changes.changed.includes(key));
@@ -57,11 +60,11 @@ test('new settings export canonical defaults and strict authored lanes', () => {
 test('ALL and CHANGED round-trip physical profiles without immediate input reapplication', () => {
   for (const mode of ['all','changes']) for (const claimed of [true, false]) {
     const a = boot(), b = boot();
-    a.store.set('padProfiles', profile(claimed)); a.store.set('conditionCues', true); a.store.rawSet('xrInput', 'existing');
+    a.store.set('padProfiles', profile(claimed)); a.store.set('conditionCues', false); a.store.rawSet('xrInput', 'existing');
     const file = plain(a.api.collect(mode, a.G));
     assert.equal(b.api.applySettings(file, b.G).failed, 0);
     assert.deepEqual(plain(b.store.get('padProfiles')), profile(claimed), mode + ' preserves version and explicit legacy state');
-    assert.equal(b.store.get('conditionCues'), true); assert.equal(b.store.raw('xrInput'), 'existing');
+    assert.equal(b.store.get('conditionCues'), false); assert.equal(b.store.raw('xrInput'), 'existing');
   }
   const h = boot();
   h.store.set('padProfiles', { v: 1, devices: [], legacyClaimed: true });
@@ -143,6 +146,6 @@ test('named preset context survives garage backups while malformed metadata cann
 });
 
 test('import UI retains its existing durable-success reload path', () => {
-  assert.match(source, /if \(!r\.applied\)[\s\S]*?reloading = true; b\.disabled = true;[\s\S]*?location\.reload\(\)/);
-  assert.ok(!source.includes('Input.setControllerProfiles('), 'no extra live reapply added to a reload-based importer');
+  assert.match(bodySource, /if \(!r\.applied\)[\s\S]*?reloading = true; b\.disabled = true;[\s\S]*?location\.reload\(\)/);
+  assert.ok(!(source + bodySource).includes('Input.setControllerProfiles('), 'no extra live reapply added to a reload-based importer');
 });

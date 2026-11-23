@@ -13,7 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import * as espree from "espree";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
-import { ROOT, jsFiles, walk, storageReceiver } from "../helpers/store-key-scan.mjs";
+import { ROOT, jsFiles, walk, storageReceiver, lsWrappers } from "../helpers/store-key-scan.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const WRITE_OPS = new Set(["set", "write", "rawSet", "setItem", "remove", "removeItem"]);   // removes count: a stale or unregistered key is dropped or migrated by name
@@ -22,13 +22,16 @@ const PREFIX_WRITES = [
   { prefix: "livery.", re: /["']livery\.["']\s*\+/ },
   { prefix: "livery.custom.", re: /["']livery\.custom\.["']\s*\+/ },
   { prefix: "setup.", re: /["']setup\.["']\s*\+/ },
+  { prefix: "setupPresets.", re: /\bkey\s*\(\s*team\s*\)/ },
   { prefix: "ttlb.", re: /["']ttlb\.["']\s*\+/ },
   { prefix: "pitPlan.", re: /["']pitPlan\.["']\s*\+/ },
   { prefix: "setup.", re: /\bKEY\s*\+\s*teamId/ },
+  // SetupTune.keyFor(team): setup.<team> in free play, careerSetup.<flavour>.<slot>.<team> in a career (#5036).
+  { prefix: "careerSetup.driver.0.", re: /\bkeyFor\s*\(/ },
 ];
 
 /** Literal keys READ but deliberately unregistered, by file: hand-set dev / A-B flags with no writer
- *  (store-registry.test.mjs WRITERLESS) and one latch whose writer lives in another file. */
+ *  (store-registry.test.mjs WRITERLESS). */
 const READ_EXEMPT = new Map([
   ["js/camera/cockpit-opts.js", new Set(["cockpitTurnChase"])],   // hand-set reload-only camera A/B flag
   ["js/car/car-draw.js", new Set(["mirrorBodyLod"])],   // hand-set reload-only mirror body LOD experiment; see docs/DEBUG-HOOKS.md
@@ -36,7 +39,7 @@ const READ_EXEMPT = new Map([
   ["js/game.js", new Set(["tlxWarmBeforePack"])],   // hunt 5 A kill switch, set by hand
   ["js/render/renderer-boot.js", new Set(["gfxBootStepMs"])],   // slow-CI boot step cap, set by specs
   ["js/render/three/tlx.js", new Set(["tlxFixedTargets", "tlxPackAsync"])],   // hand-set TLX A/B kill switches
-  ["js/xr/xr-opts.js", new Set(["xrCaps"])],   // latch written by js/xr/apex-xr.js (LS_CAPS const, not a literal there)
+  ["js/render/three/tlx-post.js", new Set(["tlxMir11", "tlxTag8", "tlxGodray11"])],   // hand-set phone format trims (#2649), read through _fmtOn
 ]);
 const READ_OPS = new Set(["get", "getItem", "raw"]);   // M1-17: a read of a key the registry cannot resolve is a typo or an orphan
 
@@ -46,11 +49,12 @@ const PASSTHROUGH_FILES = new Set([
   "js/career/custom-team.js",   // identitySet/Get relays: keys are customTeam / livery.* below
   "js/car/custom-liveries.js",   // setIdentityValue relay for livery.* keys
   "js/career/restore-points.js",   // writes the captured slot key back, never a new one
-  "js/ui/settings-export.js",
+  "js/ui/settings-export-body.js",   // the SPEC relay moved with the body (#4748)
   "js/ui/scale.js",
   "js/ui/screen-looks.js",
   "js/ui/pause-opts.js",
   "js/ui/appearance-studio.js",
+  "js/ui/appearance-studio-ui.js", // VISUAL_KEYS relay moved with the body (#4978 row 5)
   "js/ui/key-binds.js",
   "js/ui/share-code.js",
   "js/input/steer-tuning.js",
@@ -62,10 +66,22 @@ const PASSTHROUGH_FILES = new Set([
   "js/race/pit-lane.js",
 ]);
 
+/** Files whose DYNAMIC raw-localStorage writes are a relay or a sweep over keys owned elsewhere
+ *  (M1-17 write half: any other unresolved ls key is a finding). Literal keys are still checked. */
+const LS_DYNAMIC_EXEMPT = new Map([
+  ["js/core/store.js", "GameStore itself: every registered key passes through its write/remove/quota sweep"],
+  ["js/data/api-transport.js", "transport read/write/remove relay for js/data/api.js (apex26.api.* prefix)"],
+  ["js/data/real-race-fetch.js", "apex26.api.* / apex26.realrace.v1.* cache entries keyed by url or session"],
+  ["js/perf/bench-run.js", "benchmark snapshot restore: writes back exactly the keys it captured"],
+  ["js/perf/renderer-picker.js", "clears the RENDERER_LS_KEYS list (each one a literal key, checked there)"],
+  ["js/xr/xr-boot.js", "restores the PIN_KEYS pair (gfxBackend, tlxForceGL) from apex26.xrPrevBackend"],
+]);
+
 /** The only literal keys deliberately unregistered, by file. */
 const LITERAL_EXEMPT = new Map([
   ["js/car/ghost.js", new Set(["apex_ghost_v1"])],   // legacy key, only ever read and removed after migration to the registered ghost store
   ["js/perf/phone-recorder.js", new Set(["phoneRec"])],   // transient soak-run scratch blob, kept out of export/backup on purpose
+  ["js/input/phone-pad-page.js", new Set(["padLayout"])],   // controller.html's own WHEEL LAYOUT, written by the phone page's localStorage (never GameStore, the registry's only runtime reader), no export/backup; kept off the eager boot budget (#5803)
 ]);
 
 function loadRegistry() {
@@ -81,12 +97,16 @@ function loadRegistry() {
   return vm.runInContext("SaveSchemaRegistry", ctx);
 }
 
-function scanStoreCalls(file, ops) {
+const STORE_OPS = new Set([...READ_OPS, ...WRITE_OPS]);
+const scannedFiles = new Map();
+
+function scanStoreCalls(file) {
+  if (scannedFiles.has(file)) return scannedFiles.get(file);
   const rel = file;
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   const lines = src.split("\n");
   let ast;
-  try { ast = espree.parse(src, { ecmaVersion: 2022, loc: true }); }
+  try { ast = espree.parse(src, { ecmaVersion: 2022, loc: true, range: true }); }
   catch (e) { throw new Error(`${file}: ${e.message}`); }
 
   const alias = new Map();
@@ -95,18 +115,39 @@ function scanStoreCalls(file, ops) {
     if (n.init && n.init.type === "Literal" && typeof n.init.value === "string") alias.set(n.id.name, n.init.value);
   });
 
-  const sites = [];
+  // M1-17 write half: a file-local wrapper `function lsSet(k, v) { localStorage.setItem(k, v) }`
+  // is a storage call too. Map wrapper name -> the localStorage op it relays its FIRST param to;
+  // the relay site inside the wrapper body is the wrapper itself, not a dynamic write.
+  const wrappers = lsWrappers(ast);   // name -> { op, param, range } (tests/helpers/store-key-scan.mjs)
+  const insideWrapperRelay = (kNode) => {
+    for (const w of wrappers.values()) {
+      if (kNode.name === w.param && kNode.range[0] >= w.range[0] && kNode.range[1] <= w.range[1]) return true;
+    }
+    return false;
+  };
+
+  const reads = [], writes = [];
   walk(ast, (n) => {
     if (n.type !== "CallExpression") return;
     const c = n.callee;
-    if (!c || c.type !== "MemberExpression" || c.computed) return;
-    const how = c.property && c.property.name;
-    if (!ops.has(how)) return;
-    const recv = storageReceiver(c.object);
-    const onLs = recv === "ls", onStore = recv === "store";
-    if (!onLs && !onStore) return;
+    if (!c) return;
+    let onLs = false, onStore = false, how = null;
+    if (c.type === "Identifier" && wrappers.has(c.name)) {
+      how = wrappers.get(c.name).op;
+      if (!STORE_OPS.has(how)) return;
+      onLs = true;
+    } else {
+      if (c.type !== "MemberExpression" || c.computed) return;
+      how = c.property && c.property.name;
+      if (!STORE_OPS.has(how)) return;
+      const recv = storageReceiver(c.object);
+      onLs = recv === "ls"; onStore = recv === "store";
+      if (!onLs && !onStore) return;
+    }
     const kNode = n.arguments && n.arguments[0];
     if (!kNode) return;
+    if (onLs && kNode.type === "Identifier" && insideWrapperRelay(kNode)) return;
+    if (kNode.type === "Literal" && typeof kNode.value !== "string") return;   // mirrorForeign(null): "all keys", not a key
     let key = null;
     if (kNode.type === "Literal" && typeof kNode.value === "string") {
       key = kNode.value.replace(/^apex26\./, "");
@@ -118,16 +159,21 @@ function scanStoreCalls(file, ops) {
       key = alias.get(kNode.expressions[0].name);
     }
     const line = kNode.loc ? kNode.loc.start.line : 0;
-    if (key) sites.push({ file: rel, line, key, kind: onLs ? "ls" : "store" });
-    else if (onStore) sites.push({ file: rel, line, key: null, kind: "dynamic", text: lines[line - 1] || "" });
+    const sites = READ_OPS.has(how) ? reads : writes;
+    if (key) sites.push({ file: rel, line, key, kind: onLs ? "ls" : "store", op: how, value: n.arguments[1] || null });
     else if (onLs && kNode.type === "Literal") sites.push({ file: rel, line, key: String(kNode.value).replace(/^apex26\./, ""), kind: "ls" });
+    // An ls key the scan cannot resolve (a non-alias identifier, a call, a concat) is a
+    // dynamic write like a store one: never silently dropped (M1-17 write half).
+    else if (sites === writes) writes.push({ file: rel, line, key: null, kind: "dynamic", text: lines[line - 1] || "" });
   });
-  return sites;
+  const result = { reads, writes };
+  if (file.startsWith("js/")) scannedFiles.set(file, result);
+  return result;
 }
 
-const scanStoreWrites = (file) => scanStoreCalls(file, WRITE_OPS);
+const scanStoreWrites = (file) => scanStoreCalls(file).writes;
 /** Reads with a literal / const-alias key; a dynamic read key is never a finding (see PASSTHROUGH_FILES). */
-const scanStoreReads = (file) => scanStoreCalls(file, READ_OPS).filter((x) => x.key);
+const scanStoreReads = (file) => scanStoreCalls(file).reads;
 
 function dynamicCovered(text) {
   for (const p of PREFIX_WRITES) if (p.re.test(text)) return p.prefix + "*";
@@ -152,6 +198,7 @@ test("every store/localStorage write in js/ resolves in the manifest", () => {
       // A passthrough file may relay a DYNAMIC key (resolved by its caller); a
       // LITERAL apex26.* key written there must still resolve (review M1-17).
       if (PASSTHROUGH_FILES.has(site.file) && !site.key) continue;
+      if (LS_DYNAMIC_EXEMPT.has(site.file) && !site.key) continue;
       if (site.key) {
         if (LITERAL_EXEMPT.get(site.file)?.has(site.key)) continue;
         if (!R.resolve(site.key)) bad.push(`${site.file}:${site.line} apex26.${site.key}`);
@@ -193,6 +240,31 @@ test("the read scan sees literal and aliased reads and ignores writes and dynami
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("the write scan sees a file-local ls wrapper and never drops an unresolved ls key (M1-17 write half)", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "ssr-"));
+  try {
+    const rel = path.relative(ROOT, path.join(dir, "probe.js"));
+    fs.writeFileSync(path.join(ROOT, rel), [
+      'const LS_K = "apex26.wrapped";',
+      'function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (_) { return false; } }',
+      'const lsDel = (k) => localStorage.removeItem(k);',
+      'lsSet(LS_K, "1"); lsDel("apex26.wrappedDel"); localStorage.setItem(someKey, "x");',
+    ].join("\n"));
+    const w = scanStoreWrites(rel);
+    assert.deepEqual(w.filter((x) => x.key).map((x) => x.key).sort(), ["wrapped", "wrappedDel"],
+      "a wrapper call with an alias or literal key resolves to that key");
+    assert.deepEqual(w.filter((x) => !x.key).map((x) => x.line), [4],
+      "the non-alias identifier key is a dynamic site; the wrapper bodies' own relays are not");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("LS_DYNAMIC_EXEMPT names only files that still make a dynamic ls write", () => {
+  for (const [file, why] of LS_DYNAMIC_EXEMPT) {
+    assert.ok(why.length > 10, `${file}: an exemption needs a reason`);
+    assert.ok(scanStoreWrites(file).some((x) => !x.key), `${file} no longer writes a dynamic ls key: drop its LS_DYNAMIC_EXEMPT row`);
+  }
+});
+
 test("career validator rejects non-objects and accepts a minimal save", () => {
   const R = loadRegistry();
   assert.equal(R.validateKey("career.driver.0", null, "json"), true);
@@ -210,6 +282,28 @@ test("SaveMigrate.validateCareerSave matches registry career slots", () => {
   assert.equal(SM.validateCareerSave("nope"), false);
 });
 
+test("setupPresets.<team> resolves (garage named sheets; review F1)", () => {
+  const R = loadRegistry();
+  const e = R.resolve("setupPresets.mercedes");
+  assert.ok(e, "setupPresets.mercedes must resolve");
+  assert.equal(e.owner, "js/garage/setup-presets.js");
+  assert.equal(e.lane, "json");
+  R.strict = true;
+  assert.doesNotThrow(() => R.noteWrite("setupPresets.haas", "json"));
+});
+
+test("careerSetup.<flavour>.<slot>.<team> resolves to SetupTune; a malformed slot does not (#5036)", () => {
+  const R = loadRegistry();
+  for (const k of ["careerSetup.driver.0.mercedes", "careerSetup.myteam.2.custom"]) {
+    const e = R.resolve(k);
+    assert.ok(e, k + " must resolve");
+    assert.equal(e.owner, "js/garage/setup-tune.js");
+  }
+  assert.equal(R.resolve("careerSetup.driver.3.mercedes"), null);
+  R.strict = true;
+  assert.doesNotThrow(() => R.noteWrite("careerSetup.driver.1.haas", "json"));
+});
+
 test("the automatic UI flags (designerCoached, camComfortPref) are registered, typed, and device-local (#2320)", () => {
   const R = loadRegistry();
   R.strict = true;   // an unregistered write would throw
@@ -223,4 +317,31 @@ test("the automatic UI flags (designerCoached, camComfortPref) are registered, t
   assert.ok(!exported.has("designerCoached") && !exported.has("camComfortPref"));
   // Unknown-key detection is not weakened.
   assert.throws(() => R.noteWrite("apex26.designerCoachedTypo"), /unregistered save key/);
+});
+
+/** The lane a write site implies: store.rawSet writes raw text, store.set/write JSON-encodes,
+ *  a bare localStorage.setItem is raw unless its value is a JSON.stringify(...) call. */
+function impliedLane(site) {
+  if (site.kind === "store") return site.op === "rawSet" ? "raw" : (site.op === "set" || site.op === "write") ? "json" : null;
+  if (site.op !== "setItem" || !site.value) return null;
+  const v = site.value;
+  const isStringify = v.type === "CallExpression" && v.callee && v.callee.type === "MemberExpression"
+    && v.callee.object && v.callee.object.name === "JSON" && v.callee.property && v.callee.property.name === "stringify";
+  return isStringify ? "json" : "raw";
+}
+
+test("a raw-text write site is never registered on the json lane (#5023)", () => {
+  const R = loadRegistry();
+  const bad = [];
+  for (const f of jsFiles("js")) {
+    for (const site of scanStoreWrites(f)) {
+      if (!site.key) continue;
+      const want = impliedLane(site), e = R.resolve(site.key);
+      // Only raw text registered json is a defect: a store.get JSON.parse-fails and dropCorrupt deletes
+      // the value. JSON text in a raw-lane key reads back as the same string (iosInstallSeen, packIndex).
+      if (want !== "raw" || !e || e.lane !== "json") continue;
+      bad.push(`${site.file}:${site.line} apex26.${site.key} ${site.kind}.${site.op} writes ${want}, registered ${e.lane}`);
+    }
+  }
+  assert.deepEqual(bad, [], `lane mismatch(es):\n${bad.join("\n")}`);
 });

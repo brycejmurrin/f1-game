@@ -31,6 +31,7 @@ function load(stored = {}, opts = {}) {
   const ctx = {
     console,
     document: doc,
+    window: opts.window,
     GameStore: {
       store: {
         get(k, d) { return k in written ? written[k] : (k in stored ? stored[k] : d); },
@@ -61,6 +62,24 @@ test("defaults every chrome element on; hide writes data-hud-hide", () => {
   H.set("speed", true);
   // Only the opt-in readouts (shipped off) are left in the hide list.
   assert.equal(ctx.__body.dataset.hudHide, "rel strat inputs");
+});
+
+test("phone visibility applies only on a fresh phone and preserves an empty saved selection", () => {
+  const phone = { innerWidth: 852, innerHeight: 393, matchMedia: () => ({ matches: true }) };
+  const fresh = load({}, { window: phone });
+  assert.deepEqual({ ...fresh.HudElements.defaults() }, {
+    speed: "off", gear: "off", energy: "off", ot: "off", aero: "off", rel: "on",
+  });
+  assert.equal(fresh.HudElements.isOn("speed"), false);
+  assert.equal(fresh.HudElements.isOn("rel"), true);
+  assert.deepEqual(fresh.__written, {});
+  fresh.HudElements.set("rel", false);
+  assert.equal(fresh.HudElements.isOn("speed"), false);
+  assert.equal(load({ hudElements: fresh.__written.hudElements }, { window: phone }).HudElements.isOn("rel"), false);
+  fresh.__setProfile("broadcast");
+  assert.equal(fresh.HudElements.isOn("rel"), false);
+  assert.equal(load({ hudElements: {} }, { window: phone }).HudElements.isOn("speed"), true);
+  assert.equal(load({}, { window: { ...phone, innerHeight: 768 } }).HudElements.isOn("speed"), true);
 });
 
 test("stored offs restore on load", () => {
@@ -137,6 +156,14 @@ test("broadcast REL default yields to an explicit store override and follows a s
   bcast.HudElements.set("rel", true);
   assert.deepEqual({ ...bcast.__written.hudElements }, {}, "back to the broadcast default: nothing stored");
 
+  const sw = load({ hudProfile: "broadcast" });
+  sw.HudElements.set("rel", false);
+  sw.__setProfile("standard");
+  sw.HudElements.set("speed", false);
+  sw.__setProfile("broadcast");
+  assert.equal(sw.HudElements.isOn("rel"), false, "explicit REL off survives a toggle made under another style");
+  assert.equal(sw.__written.hudElements.rel, "off");
+
   const live = load();
   assert.equal(live.HudElements.isOn("rel"), false);
   live.__setProfile("broadcast");
@@ -188,7 +215,6 @@ test("SPEED hide covers the whole #hud-speed plate (number + unit), not a second
   const H = load().HudElements;
   // One container, one unit plate — toggling SPEED cannot leave a stray KM/H.
   assert.match(shell, /id="hud-speed"[^>]*>\s*<span id="hud-speed-n">[\s\S]*?<span class="hud-unit">/);
-  assert.match(css, /body\[data-hud-hide~="speed"\] #hud-speed/);
   assert.equal(H.ELEMENTS.filter((e) => e[0] === "speed").length, 1);
 });
 

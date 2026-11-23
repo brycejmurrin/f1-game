@@ -28,11 +28,13 @@ import { readCssSource } from "../helpers/css-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { gameSource } from "../helpers/game-source.mjs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
@@ -87,7 +89,7 @@ test("fold summaries preserve identical DOM, including normalized entities, and 
 });
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null }) {
+function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null, catalogue = null }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -96,13 +98,15 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
     GameStore: { store: stubStore() },
     Tracks: { LIST: tracks, SEASON: tracks },
     Teams: { POINTS, LIST: [{ id: "red", name: "RED", color: [1, 0, 0] }, { id: "blue", name: "BLUE", color: [0, 0, 1] }] },
-    Ghost: { hasGhost: () => false, bestTime: () => Infinity, clear() {} },
+    GhostShare: { hasGuest: () => false },
+    Ghost: { snapshot: () => null, hasGhost: () => false, bestTime: () => Infinity, clear() {} },
     Career: { objectiveLabel: () => "", OBJ_BONUS: 0 },
     GameAudio: { finish() {} },
     ...globals,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  if (catalogue) { withI18n(ctx); ctx.I18n._installCatalog("de", catalogue); }
   seedLog(ctx);
   seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
@@ -111,13 +115,13 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: absSrc("js/ui/results-story.js") });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
-  const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
+  const els = { results: dom.byId("results"), resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
   const G = {
     $: (id) => dom.byId(id), els, season, cars, state, seasonMode, track: { def: tracks[0] },
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
     netPlay,
   };
-  const api = vm.runInContext("GameResults", ctx).create(G);
+  const api = vm.runInContext("GameResultsSheet", ctx).create(G);
   return { dom, G, api, SeasonCal, els };
 }
 
@@ -166,12 +170,17 @@ test("RESULTS top-10 and the CHAMPION panel rank by countback, like STANDINGS", 
 
   // The STANDINGS sheet — already on rank().
   h.api.buildStandings();
+  const rankingKinds = parent => parent.children.filter(child => child.getAttribute("data-results-part") === "ranking")
+    .map(child => child.getAttribute("data-ranking"));
+  assert.deepEqual(rankingKinds(h.dom.byId("standings-body")), ["drivers", "constructors"],
+    "arrangement can target each rebuilt standings table independently of its translated label");
   const standings = rowsOf(h.dom.byId("standings-body")).slice(0, 2).map(nameOf);
   assert.equal(standings[0], "BBB  Bravo");
 
   // The RESULTS sheet's "DRIVERS — AFTER ROUND" list must agree with it.
   h.api.buildResults(cars.slice());
   const table = h.els.resultsTable;
+  assert.deepEqual(rankingKinds(table), ["race", "drivers", "constructors"]);
   const drivers = rowsOf(table).slice(cars.length, cars.length + 2).map(nameOf);
   assert.deepEqual(drivers, ["BBB  Bravo", "AAA  Alpha"], "results-sheet top-10 uses countback");
   assert.equal(h.els.resNext.textContent, "NEXT ROUND");
@@ -557,7 +566,7 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
     radioFxLevel: () => 1,
     setRadioFx: (v) => v,
   };
-  const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => track.name : k === "musicSource" ? () => track.source
+  const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => track.name : k === "musicStalled" ? () => !!track.stalled : k === "musicSource" ? () => track.source
     : k === "sourceCounts" ? () => ({ builtin: 4, user: 0 }) : k === "setMusicSource" ? (v) => v
     : TONE_STUB[k] ? TONE_STUB[k]
     : k === "setMusicVolume" || k === "setSfxVolume" ? (v) => v : (...a) => { calls.push([k, ...a]); }) });
@@ -577,6 +586,7 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
   for (const [id, label] of [["as-music", "MUSIC"], ["as-sound", "SOUND EFFECTS"], ["as-src", "SOURCE"], ["as-p", "PROFILE"]]) {
     dom.body.appendChild(SettingRow.build(id, label).row);
   }
+  dom.byId("audioset-inner").appendChild(dom.makeElement("details"));   // a fold: MASTER SOUND goes above it
   seedDom(ctx);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: absSrc("js/audio/panel.js") });
   const store = stubStore();
@@ -584,8 +594,61 @@ function bootAudio({ soundOn, musicEnabled, followPause = false }) {
   // SOUND ON reads falling rain. Match the live game.js facade in this fixture.
   const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0, viewRainfall: () => 0 };
   const api = vm.runInContext("AudioPanel", ctx).create(G);
-  return { dom, G, api, calls, track, tone, layers, counts, observers, timers };
+  return { dom, G, api, calls, track, tone, layers, counts, observers, timers, ctx };
 }
+
+// #5584: Bryce's export (master SOUND off, MUSIC on). Every row read ON, the hints named rows that were already
+// ON, a stepper never writes an unchanged value, and the page had no master control: no way to make a sound.
+test("MUSIC & SOUND has a MASTER SOUND row that reads the master and lifts it; a muted bus says MUTED and no hint names a dead row", () => {
+  const h = bootAudio({ soundOn: false, musicEnabled: true });
+  // Voices present, so the radio / announcer notes reach their master-off branch (with none they say so instead).
+  h.G.radio = { available: () => true };
+  h.G.announcer = { available: () => true };
+  h.api.init();
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  const fold = (id) => h.dom.byId(id).innerHTML.replace(/<[^>]+>/g, "");
+  const inner = h.dom.byId("audioset-inner"), row = h.dom.byId("as-master"), sel = h.dom.byId("as-master-sel");
+  assert.equal(inner.children[0], row, "the master row is the first thing on the page, above the folds");
+  assert.equal(h.dom.byId("as-master-label").textContent, "MASTER SOUND");
+  assert.equal(sel.value, "off", "it reads the master, which is off");
+  assert.equal(!!sel.disabled, false);
+  assert.equal(fold("as-music-sum"), "MUSIC · MUTED · DEFAULT", "the closed MUSIC fold no longer claims ON");
+  assert.equal(fold("as-sound-sum"), "SOUND · MUTED");
+  for (const id of ["as-radio-note", "as-ann-note"]) {
+    assert.equal(h.dom.byId(id).textContent, "Master sound is off \u2014 MASTER SOUND ON, at the top of this page, turns it on.", id + " names the control that works");
+  }
+  h.dom.byId("as-master-next").onclick();   // the row wraps: either arrow flips it
+  assert.equal(h.G.soundOn, true, "one tap on the row turns master sound on");
+  assert.equal(h.G.store.get("sound"), true, "and saves it");
+  assert.equal(sel.value, "on");
+  assert.equal(h.G.musicEnabled, true, "the buses keep their saved state");
+  assert.equal(fold("as-music-sum"), "MUSIC · ON · DEFAULT");
+  assert.equal(h.dom.byId("as-now").textContent, "Song A", "and music is live");
+  h.dom.byId("as-master-next").onclick();
+  assert.equal(h.G.soundOn, false, "the same row turns it off again");
+  assert.equal(h.dom.byId("as-now").textContent, "Sound off");
+});
+
+// #5584: offline in the installed app every shipped track fails (sw.js leaves music Range requests to the network).
+test("NOW PLAYING does not name a track when the whole list failed to load", () => {
+  const h = bootAudio({ soundOn: true, musicEnabled: true, followPause: true });
+  h.api.init();
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Song A");
+  h.track.stalled = true;
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Music could not load", "no track name over silence");
+  assert.equal(h.dom.byId("as-skip").disabled, true, "nothing to skip to");
+  assert.equal(h.dom.byId("pm-now").textContent, "Music could not load", "the pause card says the same");
+  assert.equal(h.dom.byId("as-play").textContent, "\u25b6", "a stalled list shows play, not pause");
+  vm.runInContext("this.navigator = { onLine: false }", h.ctx);
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Music needs a connection", "offline: it names what is missing");
+  h.track.stalled = false;
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  assert.equal(h.dom.byId("as-now").textContent, "Song A", "a track that plays again is named again");
+  assert.equal(h.dom.byId("as-play").textContent, "\u275a\u275a", "and its button reads pause again");
+});
 
 test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT", () => {
   const h = bootAudio({ soundOn: false, musicEnabled: true });
@@ -644,13 +707,43 @@ test("pause music timer updates the visible card without syncing hidden audio se
   assert.equal(h.dom.byId("as-now").textContent, "Song B", "opening MUSIC performs a full sync");
   assert.ok(h.counts.tuneReads > 0);
   h.G.musicEnabled = false; [...h.timers.values()].forEach((fn) => fn());
-  assert.equal(now.textContent, "Music off"); assert.equal(card.hidden, true); assert.equal(next.disabled, true);
+  assert.equal(now.textContent, "Music off"); assert.equal(next.disabled, true);
+  assert.equal(card.hidden, false, "music stopped while the menu is up: the card stays so its play button can bring it back (#5543)");
   h.G.musicEnabled = true; h.G.soundOn = false; [...h.timers.values()].forEach((fn) => fn());
-  assert.equal(now.textContent, "Sound off"); assert.equal(play.disabled, true);
+  assert.equal(now.textContent, "Sound off"); assert.equal(!!play.disabled, false, "play lifts the master, so it is never disabled");
   h.G.soundOn = true; [...h.timers.values()].forEach((fn) => fn());
   assert.equal(card.hidden, false); assert.equal(next.disabled, false); assert.equal(play.disabled, false);
   pause.hidden = true; observer.fn();
   assert.equal(h.timers.size, 0, "closing pause stops polling");
+});
+
+// #5543: Bryce's export has MUSIC on under a master SOUND off, and the phone pause card has no other audio control.
+test("pause NOW PLAYING shows while MUSIC is on, its play button lifts a shut master, and it outlives a pause from the card", () => {
+  const h = bootAudio({ soundOn: false, musicEnabled: true, followPause: true });
+  h.api.init();
+  const pause = h.dom.byId("pausemenu"), card = h.dom.byId("pm-now-card"), play = h.dom.byId("pm-play");
+  const observer = h.observers.find((o) => o.root === pause);
+  pause.hidden = false; observer.fn();
+  assert.equal(card.hidden, false, "music on, master off: the card is up and says why nothing plays");
+  assert.equal(h.dom.byId("pm-now").textContent, "Sound off");
+  assert.equal(play.textContent, "\u25b6");
+  assert.equal(play.getAttribute("aria-label"), "Turn sound on and play music");
+  assert.equal(!!play.disabled, false);
+  assert.equal(h.dom.byId("pm-skip").disabled, true, "nothing to skip until the master is lifted");
+  play.onclick();
+  assert.equal(h.G.soundOn, true, "play lifted the master");
+  assert.equal(h.G.musicEnabled, true, "and left MUSIC on rather than toggling it off");
+  assert.equal(h.dom.byId("pm-now").textContent, "Song A");
+  assert.equal(play.textContent, "\u275a\u275a");
+  assert.equal(h.dom.byId("pm-skip").disabled, false);
+  play.onclick();
+  assert.equal(h.G.musicEnabled, false);
+  assert.equal(card.hidden, false, "paused from the card: it stays until the menu closes");
+  assert.equal(play.getAttribute("aria-label"), "Play music");
+  pause.hidden = true; observer.fn();
+  assert.equal(card.hidden, true, "closing the menu drops a card whose music is off");
+  pause.hidden = false; observer.fn();
+  assert.equal(card.hidden, true, "and a pause with MUSIC off opens without it");
 });
 
 test("engine tone sync skips unchanged readouts and layer ARIA while retaining immediate edits", () => {
@@ -699,8 +792,8 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-skip-results", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"],
-    "SETTINGS has the ten top-level doors in task order");
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-files", "pm-open-credits"],
+    "SETTINGS has the eleven top-level doors in category order (ABOUT & CREDITS last)");
   assert.doesNotMatch(settingsIndex, /id="pm-advanced"/);
   assert.match(html, /id="pm-panel-controls"[\s\S]*id="pm-advanced"[^>]*>ADVANCED INPUT &amp; HANDLING/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
@@ -891,8 +984,7 @@ test("CONSTRUCTORS ties break like Career.teamStandings (points, then tier), not
 // used G.fmtTime, the two-decimal HUD clock, so two board entries 0.004 s apart
 // printed as the same time. The sheets use Dom.fmtLap; the HUD keeps its clock.
 test("the TIME TRIAL sheet prints YOUR BEST and the board to the thousandth", () => {
-  const h = bootResults({ season: null, cars: [], seasonMode: false,
-    globals: { GhostShare: { hasGuest: () => false }, Ghost: { hasGhost: () => false, bestTime: () => Infinity, clear() {}, snapshot: () => null } } });
+  const h = bootResults({ season: null, cars: [], seasonMode: false });
   Object.assign(h.G, {
     player: { best: 81.1634 }, ttNewRecord: false, ttSessionTs: 10, fmtTime: (t) => t.toFixed(2),
     records: { board: () => [{ t: 81.1634, code: "AAA", name: "Alpha", teamId: "red", ts: 11 }, { t: 81.1674, code: "BBB", name: "Bravo", teamId: "blue", ts: 1 }] },
@@ -956,12 +1048,47 @@ test("friend-race results are honest: RACE AGAIN (SOLO), a NEW FRIEND ROOM door,
   assert.equal(friend.els.resMenu.textContent, "NEW FRIEND ROOM");
   const hint = friend.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room");
   assert.ok(hint, "the sheet says the room is gone");
-  assert.match(hint.children[0].textContent, /VS FRIEND/);
+  assert.match(hint.children[0].textContent, /RACE A FRIEND on the title screen/);
   const solo = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => false, ownsClassification: () => false, peerResult: () => null } });
   solo.api.buildResults(cars.slice());
   assert.equal(solo.els.resNext.textContent, "RACE AGAIN");
   assert.equal(solo.els.resMenu.textContent, "MENU");
   assert.equal(solo.els.resultsTable.children.find((c) => c.getAttribute("data-results-part") === "room"), undefined);
+});
+
+// #5739 row 1: the guest's BYE can land after the sheet is built. NEW FRIEND ROOM must still open a room,
+// so the click reads what buildResults painted (dataset.friend), never netPlay.active() at click time.
+test("#5739 row 1: NEW FRIEND ROOM opens VS FRIEND even after the guest leaves; MENU stays MENU", () => {
+  const { cars } = tiedSeason();
+  let live = true;
+  const h = bootResults({ season: null, cars, seasonMode: false, netPlay: { active: () => live, ownsClassification: () => false, peerResult: () => null } });
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "NEW FRIEND ROOM");
+  assert.equal(h.els.resMenu.dataset.friend, "1");
+  // The handler game.js installs, run as written against stubs.
+  const src = gameSource();
+  const m = src.match(/els\.resMenu\.onclick = (\(\) => \{[\s\S]*?\n\});/);
+  assert.ok(m, "game.js wires #res-menu");
+  const run = (els) => {
+    const calls = [];
+    const fn = new Function("els", "netPlay", "quitToMenu", "$", "return " + m[1].replace(/;$/, ""))(
+      els, { active: () => live }, () => calls.push("quit"), (id) => (id === "mb-vs" ? { click: () => calls.push("mb-vs") } : null));
+    fn();
+    return calls;
+  };
+  live = false;   // the guest's BYE: NetPlay is down while the sheet still says NEW FRIEND ROOM
+  assert.deepEqual(run(h.els), ["quit", "mb-vs"], "the label's action: a fresh room");
+  clear(h.els.resultsTable);
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.resMenu.textContent, "MENU");
+  assert.equal(h.els.resMenu.dataset.friend, "");
+  live = true;    // a live peer at click time cannot turn MENU into a room either
+  assert.deepEqual(run(h.els), ["quit"]);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  live = true; clear(h.els.resultsTable); h.api.buildResults(cars.slice());
+  clear(h.els.resultsTable); h.api.buildTTResults();
+  assert.equal(h.els.resMenu.dataset.friend, "", "TT clears the friend action with the label");
 });
 
 test("friend-race labels do not outlive the race: the next solo build restores MENU", () => {
@@ -973,23 +1100,54 @@ test("friend-race labels do not outlive the race: the next solo build restores M
   live = false; clear(h.els.resultsTable);
   h.api.buildResults(cars.slice());
   assert.equal(h.els.resMenu.textContent, "MENU");
-  // buildTTResults needs the whole ghost stack to run here; pin its reset at the source.
-  assert.match(read("js/ui/results-sheet.js"), /function buildTTResults\(\) \{[\s\S]{0,400}resMenu\.textContent = "MENU"/);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  clear(h.els.resultsTable);
+  h.api.buildTTResults();
+  assert.equal(h.els.resMenu.textContent, "MENU", "TT clears the previous friend-room action label");
 });
 
-test("RESULTS scrolls .res-row.you into view when the sheet builds", () => {
+test("RESULTS opens at the top with the winner in the head; your row sticks inside its ranking list only", () => {
   const { season, cars } = tiedSeason();
   const h = bootResults({ season, cars });
+  const head = h.dom.document.createElement("div");
+  head.appendChild(h.els.resultsTitle);
   const scrolls = [];
   const orig = h.dom.document.createElement.bind(h.dom.document);
   h.dom.document.createElement = (tag) => {
     const el = orig(tag);
-    el.scrollIntoView = (opts) => { scrolls.push({ className: el.className, opts }); };
+    el.scrollIntoView = () => { scrolls.push(el.className); };
     return el;
   };
+  h.els.resultsTable.scrollTop = 1260;
   h.api.buildResults(cars.slice());
-  assert.ok(scrolls.some((s) => /\byou\b/.test(s.className)),
-    "the player row must scrollIntoView on open (sticky alone leaves it below the fold)");
+  assert.deepEqual(scrolls, [], "no scrollIntoView: it opened 844x390 ~1260px down, podium and winner off-screen");
+  assert.equal(h.els.resultsTable.scrollTop, 0, "the sheet opens at its top");
+  const chip = head.children.find((c) => c.id === "res-winner");
+  assert.ok(chip && !chip.hidden, "a winner chip sits in the head, outside the scroller");
+  assert.equal(chip.textContent, "P1 " + cars[0].code);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  h.G.referencePole = () => 0;
+  h.api.buildTTResults();
+  assert.equal(chip.hidden, true, "Time Trial has no race winner");
+  const css = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(decl(css, "#results-table .res-row.you", "position"), "relative", "the TT headline (no list) stays in flow");
+  const pinned = ruleFor(css, '#results-table [data-results-part="ranking"] > .res-row.you', "position").decls;
+  assert.deepEqual([pinned.get("position"), pinned.get("top"), pinned.get("bottom")], ["sticky", "0", "0"], "pinned at whichever edge, within its list");
+  assert.equal(decl(css, "#results-table .res-row.you:has([data-stint-details][open])", "position"), "relative",
+    "an open TYRE STINTS fold drops the row into flow instead of covering the rows after it");
+  // UI contract #5153 gap 12 (PR D): the PINNED PODIUM is keyed on the SHEET's density and shape, never the body's, and
+  // the pin count comes from the pane through data-pins (results-sheet.js): 2 keeps P1 + YOU, 1 keeps YOU alone.
+  const raw = readCssSource("css/overlays.css");
+  assert.doesNotMatch(raw, /body\[data-density="compact"\]\[data-shape="wide"\]\) #results-table/,
+    "the podium pins read the sheet's flags, not the body's (a desktop window at a small UI SIZE is a compact wide BODY too)");
+  const KEY = ':where(#results .sheet[data-density="compact"]:not([data-shape="tall"])) #results-table';
+  assert.ok(raw.includes(KEY + ' .res-row[role="listitem"]:is(.p1, .p2, .p3) { position: sticky;'), "P1-P3 stick under the sheet key");
+  assert.ok(raw.includes(KEY + '[data-pins="2"] .res-row[role="listitem"]:is(.p2, .p3):not(.you) { position: static; }'), "two pins: P2 and P3 scroll");
+  assert.ok(raw.includes(KEY + '[data-pins="2"] .res-row[role="listitem"].you:not(.p1) { top: var(--rr-h); }'), "two pins: YOU sits under P1");
+  assert.ok(raw.includes(KEY + '[data-pins="1"] .res-row[role="listitem"]:is(.p1, .p2, .p3):not(.you) { position: static; }'), "one pin: the podium scrolls");
+  assert.ok(raw.includes(KEY + '[data-pins="1"] .res-row[role="listitem"].you { top: 0; }'), "one pin: YOU at the top edge");
 });
 
 test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis", () => {
@@ -1002,9 +1160,30 @@ test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis",
 test("finishRace does not stamp the go() 0.5s floor as official winner elapsed", () => {
   // go() floors raceT at 0.5; a harness finishRace that copied it printed
   // OFFICIAL WINNER ELAPSED 0:00.500. Only stamp a clock when raceT has left that floor.
-  const apex = read("js/agent/apex.js");
-  assert.match(apex, /clock = ran > 0\.5 \? ran : 0/);
-  assert.match(apex, /c\.finishT = clock/);
+  // The REAL RaceCeremony.finishThrough (the __apex.finishRace body) marks the
+  // field and hands the order to the REAL RESULTS sheet; the sheet is read back.
+  const Ceremony = vm.runInNewContext(src("js/race/ceremony.js") + "\n;RaceCeremony", { Object, Number, Math }, { filename: absSrc("js/race/ceremony.js") });
+  const team = (id, color) => ({ id, name: id.toUpperCase(), color });
+  const field = () => [
+    { driverId: "w", code: "WIN", name: "Winner", team: team("red", [1, 0, 0]), lap: 5, penalty: 0 },
+    { driverId: "s", code: "SEC", name: "Second", team: team("blue", [0, 0, 1]), lap: 5, penalty: 0 },
+  ];
+  const finishAt = (raceT) => {
+    const cars = field(), h = bootResults({ season: null, cars, seasonMode: false });
+    h.G.raceT = raceT;
+    Ceremony.finishThrough(h.G, (order) => h.api.buildResults(order), (cs) => cs.slice(), {});
+    const summary = h.els.resultsTable.children.find((c) => /OFFICIAL WINNER ELAPSED/.test(c.textContent || ""));
+    return { cars, summary };
+  };
+  const floor = finishAt(0.5);
+  assert.ok(floor.cars.every((c) => c.finished), "finishRace marks the field finished");
+  assert.ok(floor.cars.every((c) => c.finishT === 0), `at the floor no clock is stamped: ${floor.cars.map((c) => c.finishT)}`);
+  assert.equal(floor.summary, undefined, `RESULTS prints no official elapsed off the 0.5 s floor: ${floor.summary && floor.summary.textContent}`);
+  // A race that actually ran stamps its clock, and the sheet prints it.
+  const ran = finishAt(100);
+  assert.ok(ran.cars.every((c) => c.finishT === 100));
+  assert.ok(ran.summary, "a real race clock is the official elapsed");
+  assert.match(ran.summary.textContent, /WIN.*1:40\.00/);
 });
 
 
@@ -1058,4 +1237,205 @@ test("career settlement displays final sponsor target, MET/MISSED and reason wit
   assert.ok(met.includes("Sponsor target — " + target + " | MET · Target met"));
   assert.equal(met.filter(text => text === "Sponsor bonus | +125 cr").length, 1);
   assert.deepEqual(build(null), build(undefined), "legacy and absent verdict keep the existing debrief");
+});
+
+
+// UI hunt 3: the earnings card was a role=status region built already filled,
+// which screen readers do not announce. It is spoken once per result instead.
+test("the round's earnings are spoken once per result, as words, and a rebuild stays quiet", () => {
+  const { cars } = tiedSeason();
+  const said = [], timers = [];
+  const h = bootResults({ season: null, cars, seasonMode: false, globals: {
+    LiveRegion: { say: (text, kind) => said.push([text, kind]) }, setTimeout: (fn) => timers.push(fn) } });
+  h.els.results.hidden = false;
+  h.G.careerSettlement = { pos: 1, pts: 25, money: 500, rep: 50, sponsorPay: 0 };
+  const order = cars.slice();
+  h.api.buildResults(order);
+  const box = h.els.resultsTable.children.find((e) => e.classList.contains("res-settle"));
+  assert.equal(box.getAttribute("role"), null, "no pre-filled live region");
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1);
+  assert.equal(said[0][1], "save");
+  assert.ok(said[0][0].startsWith("ROUND SETTLED "), "heading and figures are separate words: " + said[0][0]);
+  h.api.buildResults(order);
+  timers.splice(0).forEach((fn) => fn());
+  assert.equal(said.length, 1, "a rebuild of the same result is not spoken again");
+});
+
+test("translated results views expose stable navigation state and replace stale champion state", () => {
+  const { season, cars } = tiedSeason();
+  const h = bootResults({ season, cars, catalogue: {
+    "results.worldChampion": "WELTMEISTER", "results.finalStandings": "ENDSTAND",
+    "results.points": "{points} Punkte", "results.championAnnouncement": "{code} IST WELTMEISTER!",
+    "results.mainMenu": "HAUPTMENÜ",
+  } });
+  let announcement;
+  h.G.announce = (text) => { announcement = text; };
+  h.api.buildChampion();
+  assert.equal(h.els.resultsTitle.textContent, "WELTMEISTER");
+  assert.equal(h.els.resultsTable.children[0].textContent, "BBB  Bravo");
+  assert.equal(rowsOf(h.els.resultsTable)[0].children.find(c => c.classList.contains("res-pts")).textContent, "25 Punkte");
+  assert.equal(announcement, "BBB IST WELTMEISTER!");
+  assert.equal(h.els.resNext.textContent, "HAUPTMENÜ");
+  assert.equal(h.els.results.dataset.resultsView, "champion", "navigation reads the view, independent of translated copy");
+  h.api.buildStandings();
+  assert.equal(h.els.results.dataset.resultsView, "champion", "the separate standings panel preserves the active champion view");
+  clear(h.els.resultsTable);
+  h.G.seasonMode = false;
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.results.dataset.resultsView, "race", "race results replace a previous champion marker");
+  h.G.seasonMode = true;
+  clear(h.els.resultsTable); h.api.buildResults(cars.slice(), { sprint: true });
+  assert.equal(h.els.results.dataset.resultsView, "race", "sprint results cannot retain the champion action");
+  clear(h.els.resultsTable);
+  h.api.buildChampion();
+  assert.equal(h.els.results.dataset.resultsView, "champion");
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  clear(h.els.resultsTable);
+  h.api.buildTTResults();
+  assert.equal(h.els.results.dataset.resultsView, "tt", "time trial replaces a previous champion marker");
+});
+
+
+test("resNext uses the results view through translated first and second champion clicks", () => {
+  const { season, cars } = tiedSeason();
+  season.round = 3;
+  const h = bootResults({ season, cars, catalogue: { "results.mainMenu": "HAUPTMENÜ" } });
+  const source = read("js/game.js");
+  const start = source.indexOf("els.resNext.onclick = () => {");
+  assert.ok(start >= 0);
+  const end = source.indexOf("\n};", start);
+  assert.ok(end > start);
+  let championBuilds = 0, cleared = 0, menus = 0;
+  const ctx = vm.createContext({
+    els: h.els, season,
+    resultsCam: { reset() {} }, RaceCeremony: { resetLive() {} }, announcer: { stop() {} },
+    isCareer: () => false, isChampionship: () => true,
+    SeasonCal: { rounds: () => 3, clear: () => { cleared++; return { ok: true }; } },
+    buildChampion: () => { championBuilds++; h.api.buildChampion(); },
+    quitToMenu: () => { menus++; },
+  });
+  vm.runInContext(source.slice(start, end + 3), ctx);
+  // A stale English label must not turn an explicitly marked race view into
+  // the second click. The real builder supplies the translated next action.
+  h.els.results.dataset.resultsView = "race";
+  h.els.resNext.textContent = "MAIN MENU";
+  h.els.resNext.onclick();
+  assert.equal(championBuilds, 1);
+  assert.equal(menus, 0);
+  assert.equal(cleared, 0);
+  assert.equal(h.els.results.dataset.resultsView, "champion");
+  assert.equal(h.els.resNext.textContent, "HAUPTMENÜ");
+  h.els.resNext.onclick();
+  assert.equal(championBuilds, 1, "translated second click must not rebuild the champion panel");
+  assert.equal(cleared, 1);
+  assert.equal(menus, 1);
+  assert.equal(ctx.season, null);
+  assert.equal(h.els.resultsTitle.style.color, "");
+});
+
+
+test("translated stint accessibility and craft debrief localise prose ranges and counts", () => {
+  const { cars } = tiedSeason();
+  const h = bootResults({ season: null, cars, seasonMode: false, catalogue: {
+    "results.tyre.S": "Weich", "results.stints.range": "{compound} — Runden {from}-{to}",
+    "results.stints.tooltip": "{code} — Runden {from}-{to}", "results.stints.label": "Reifen: {stints}",
+    "results.craftCount": "{label}: {count}", "results.craftLaps": "Runde {laps}",
+  } });
+  h.G.tyres = { on: () => true, stints: () => [{ code: "S", lap0: 1000, lap1: 2000, laps: 1000, colour: [1, 0, 0] }] };
+  h.G.careerSettlement = { money: 500, rep: 50, craft: .9 };
+  h.G.coach = { insights: { settle: () => [], debrief: () => [{ label: "Bremse", count: 1000, laps: [1000, 2000] }] } };
+  h.api.buildResults(cars.slice());
+  const row = rowsOf(h.els.resultsTable)[0], strip = row.children.find(e => e.classList.contains("res-stints"));
+  assert.equal(strip.getAttribute("aria-label"), "Reifen: Weich — Runden 1.000-2.000");
+  assert.equal(strip.children[0].title, "S — Runden 1.000-2.000");
+  const detail = row.children.find(e => e.classList.contains("res-name")).children.find(e => e.getAttribute("data-stint-details") != null);
+  assert.equal(detail.children[1].textContent, "Weich — Runden 1.000-2.000");
+  const box = h.els.resultsTable.children.find(e => e.classList.contains("res-settle"));
+  const debrief = box.children.find(e => e.classList.contains("craft"));
+  assert.deepEqual(debrief.children.map(e => e.textContent), ["Bremse: 1.000", "Runde 1.000, 2.000"]);
+});
+
+test("INCIDENTS: one before the first line crossing is LAP 1, never LAP 0 (#5883)", () => {
+  const { cars } = tiedSeason();
+  const h = bootResults({ season: null, cars, seasonMode: false });
+  h.G.coach = { insights: { settle: () => [{ lap: 0, text: "Car contact" }, { lap: 3, text: "Track limits" }], debrief: () => [] } };
+  h.api.buildResults(cars.slice());
+  const card = h.els.resultsTable.children.find((e) => e.id === "res-incidents");
+  assert.equal(card.children[1].textContent, "LAP 1 · Car contact  ·  LAP 3 · Track limits");
+});
+
+// #5672: CLEAR GHOST deleted the PB ghost AND its medal on one tap, and YOUR PB read +0.000s on every record
+// (Ghost.finishLap had already made this lap the ghost). The clear arms first; the PB row compares with the
+// best the record replaced (meta.prevBest, written by session-records.js before finishLap).
+function bootTT(meta) {
+  let cleared = 0;
+  const ghost = { snapshot: () => null, hasGhost: () => true, bestTime: () => 131.055, meta: () => meta, medal: () => null, clear() { cleared++; return true; } };
+  const h = bootResults({ season: null, cars: [], seasonMode: false, globals: { Ghost: ghost } });
+  const armed = new Set(), labels = [];
+  Object.assign(h.G, {
+    player: { best: 131.0552 }, ttNewRecord: true, ttSessionTs: 10,
+    records: { board: () => [{ t: 131.055, code: "AAA", name: "Alpha", teamId: "red", ts: 11 }] }, teamById: () => null,
+    // game.js armConfirm's contract: the first press arms (label swap), the second runs the action.
+    armConfirm: (btn, text, action) => { if (!armed.has(btn)) { armed.add(btn); labels.push(text); btn.textContent = text; return false; } armed.delete(btn); action(); return true; },
+  });
+  h.api.buildTTResults();
+  return { h, labels, cleared: () => cleared };
+}
+const ttRow = (h, name) => rowsOf(h.els.resultsTable).find((r) => nameOf(r) === name);
+const ttPts = (row) => row.children.find((c) => c.classList.contains("res-pts")).textContent;
+
+test("TIME TRIAL: YOUR PB shows the gain over the replaced best on a new record (#5672)", () => {
+  assert.equal(ttPts(ttRow(bootTT({ prevBest: 132.252 }).h, "YOUR PB")), "-1.197s");
+  assert.equal(ttPts(ttRow(bootTT({}).h, "YOUR PB")), "+0.000s", "an old ghost with no prevBest (the first lap ever) keeps the old row");
+});
+
+test("TIME TRIAL: CLEAR GHOST arms on the first tap and clears only on the second (#5672)", () => {
+  const t = bootTT({ prevBest: 132.252 });
+  const btn = () => t.h.els.resultsTable.children.find((c) => c.id === "res-ghost-clear");
+  btn().onclick();
+  assert.deepEqual([t.cleared(), btn().textContent, t.labels], [0, "TAP AGAIN TO CLEAR", ["TAP AGAIN TO CLEAR"]]);
+  btn().onclick();
+  assert.equal(t.cleared(), 1);
+});
+
+// Clean-room audit fixes 54 and 72 (results sheet, screen-reader side).
+function bootSpoken(extra = {}) {
+  const said = [], observers = [], timers = [];
+  const MutationObserver = class {
+    constructor(fn) { this.fn = fn; this.on = false; observers.push(this); }
+    observe(target) { this.target = target; this.on = true; }
+    disconnect() { this.on = false; }
+  };
+  const h = bootResults({ season: null, cars: [], seasonMode: false, globals: {
+    LiveRegion: { say: (text) => said.push(text) }, MutationObserver, setTimeout: (fn) => { timers.push(fn); return timers.length; }, ...extra } });
+  h.els.results.hidden = true;
+  const show = () => { h.els.results.hidden = false; for (const o of observers.slice()) if (o.on && o.target === h.els.results) o.fn([]); };
+  const hide = () => { h.els.results.hidden = true; for (const o of observers.slice()) if (o.on && o.target === h.els.results) o.fn([]); };
+  return { ...h, said, show, hide };
+}
+const raceOf = (winner) => {
+  const team = { id: "red", name: "RED", color: [1, 0, 0] };
+  return [winner, "B", "C"].map((code, i) => ({ driverId: code + i, code: code.padEnd(3, "X"), name: code, team, best: 80 + i,
+    finished: true, lap: 5, finishT: 400 + i, penalty: 0, gridPos: i + 1, isPlayer: i === 1 }));
+};
+
+test("results announcements from races quit while the sheet was hidden do not pile up on the next one", () => {
+  const h = bootSpoken();
+  for (const w of ["VER", "NOR", "LEC"]) { const cars = raceOf(w); h.G.player = cars[1]; h.api.buildResults(cars); }
+  const cars = raceOf("HAM"); h.G.player = cars[1]; h.api.buildResults(cars);
+  h.show();
+  assert.deepEqual(h.said.map((t) => /HAM/.test(t)), [true], "one announcement, for the sheet shown: " + JSON.stringify(h.said));
+});
+
+test("each driver's tyre-stint disclosure is named for that driver", () => {
+  const stints = () => [{ code: "M", laps: 5, lap0: 1, lap1: 5, colour: [1, 1, 1] }];
+  const h = bootSpoken();
+  h.G.tyres = { on: () => true, stints };
+  const cars = raceOf("VER"); h.G.player = cars[1]; h.api.buildResults(cars);
+  const names = [];
+  const walk = (n) => { if (n.tagName && n.tagName.toLowerCase() === "summary") names.push(n.getAttribute("aria-label") || n.textContent); (n.children || []).forEach(walk); };
+  walk(h.els.resultsTable);
+  assert.deepEqual(names, ["TYRE STINTS — VER", "TYRE STINTS — B", "TYRE STINTS — C"]);
 });

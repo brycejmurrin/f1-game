@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -23,6 +24,8 @@ function load(extra = {}) {
   const timers = [];
   const ctx = { console, Math, Number, Float32Array, setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {}, ...extra };
   vm.createContext(ctx);
+  // The page loads js/race/sporting-regs.js first (FULL order); blueFlag shares its predicate.
+  vm.runInContext(src("js/race/sporting-regs.js"), ctx, { filename: absSrc("js/race/sporting-regs.js") });
   vm.runInContext(SRC + "; this.HudReadouts = HudReadouts;", ctx);
   return { R: ctx.HudReadouts, timers };
 }
@@ -41,15 +44,21 @@ test("lapsApart / lapGapText: a lap or more is laps", () => {
   assert.equal(R.lapGapText("▼", "BEA", -3, true), "▼ -3L");
 });
 
-test("energy: MJ of the 4 MJ store, deploy/harvest as glyph and words", () => {
+test("energy: MJ of the 4 MJ store, deploy/harvest as words; the glyph is CSS (#4270 §5)", () => {
   const { R } = load({ PhysicsConsts: { ES_MJ: 4 } });
   assert.equal(R.ersState(true, 0.5, 0.6), "deploy");
   assert.equal(R.ersState(false, 0.51, 0.5), "harvest");
   assert.equal(R.ersState(false, 0.5, 0.5), "idle");
   assert.equal(R.ersState(false, 0.5, NaN), "idle");
   assert.deepEqual({ ...R.energy(0.8, "idle") }, { text: "3.2 MJ", label: "Energy 3.2 megajoules" });
-  assert.equal(R.energy(0.5, "deploy").text, "▼ 2.0 MJ");
+  // One text length in every state: hud.js hlKey keys the fit on it, and a deploy flip was a full fit.
+  assert.deepEqual(["idle", "deploy", "harvest"].map((st) => R.energy(0.5, st).text), ["2.0 MJ", "2.0 MJ", "2.0 MJ"]);
   assert.equal(R.energy(0.5, "harvest").label, "Energy 2.0 megajoules, harvesting");
+  // The glyph the text lost: one slot in every state, unseen while idle, ▲ only for harvest.
+  const rules = cssRules(read("css/hud.css")), N = "#hud-energy-n::before";
+  assert.deepEqual([decl(rules, N, "content"), decl(rules, N, "visibility")], ['"▼ "', "hidden"]);
+  assert.equal(decl(rules, "#hud-energy[data-ers] " + N, "visibility"), "visible");
+  assert.equal(decl(rules, '#hud-energy[data-ers="harvest"] ' + N, "content"), '"▲ "');
 });
 
 test("bbText: the set-up sheet's half-percent steps", () => {
@@ -117,6 +126,41 @@ test("blueFlag: only a car a lap up, physically just behind, within ~1.2 s", () 
   assert.equal(R.blueFlag(p, [p, sameLap, far, lapper], L, 25), lapper);
   assert.equal(R.blueFlag(p, [p, { ...lapper, retired: true }], L, 25), null);
   assert.equal(R.blueFlag({ ...p, finished: true }, [lapper], L, 25), null);
+});
+
+test("blueFlag: no HUD blue flag where race control has none — pit lane on either car", () => {
+  // SportingRegs.blueFlagCar exempts a car in the pit lane; the HUD chip and its spoken
+  // "BLUE FLAG, LET … THROUGH" used to show for one race control said did not apply.
+  const { R } = load();
+  const L = 5000;
+  const p = { prog: 2000, speed: 60, pitState: "none" };
+  const lapper = { code: "VER", prog: 2000 + L - 50, speed: 70, pitState: "none" };
+  assert.equal(R.blueFlag(p, [p, lapper], L, 25), lapper, "control: on track, flagged");
+  assert.equal(R.blueFlag(p, [p, { ...lapper, pitState: "entry" }], L, 25), null, "the lapper is in the pit lane");
+  assert.equal(R.blueFlag({ ...p, pitState: "box" }, [lapper], L, 25), null, "the player is in the pit lane");
+});
+
+test("blueFlag holds a flagged lapper out to 1.6 s: a gap hovering at 1.2 s flags once, not every corner (perf hunt 8)", () => {
+  const { R } = load();
+  const L = 5000, p = { prog: 2000, speed: 60 };
+  const at = (gapS) => ({ code: "VER", prog: 2000 + L - gapS * 70, speed: 70 });   // a lap up, gapS seconds back
+  // A lapper sawing 1.1 ↔ 1.3 s behind through a sequence of corners and straights.
+  const series = [1.3, 1.25, 1.15, 1.1, 1.25, 1.3, 1.15, 1.28, 1.1, 1.3, 1.22, 1.12];
+  const flips = (hold) => {
+    let held = null, shown = false, n = 0;
+    for (const g of series) {
+      const o = at(g);
+      const car = R.blueFlag(p, [p, o], L, 25, hold && held ? o : null);
+      held = car;
+      if (!!car !== shown) { shown = !!car; n++; }
+    }
+    return n;
+  };
+  assert.equal(flips(true), 1, "with the hold: one show, no blinking");
+  assert.ok(flips(false) > 3, "control: without the held car the same gap series blinks");
+  assert.equal(R.blueFlag(p, [p, at(1.5)], L, 25), null, "a NEW car still needs 1.2 s to be flagged");
+  const far = at(1.7);
+  assert.equal(R.blueFlag(p, [p, far], L, 25, far), null, "a held car past 1.6 s loses the flag");
 });
 
 test("lapTrace: adopts a lap only when it became the new best, then interpolates", () => {
@@ -195,8 +239,10 @@ function boot(opts = {}) {
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
+  vm.runInNewContext(src("js/race/sporting-regs.js"), sb, { filename: absSrc("js/race/sporting-regs.js") });   // blueFlag's one predicate (FULL loads it first)
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
   const $ = (id) => dom.byId(id);
@@ -278,7 +324,7 @@ test("hud.js: ENERGY number + state, BB chip, the energy fill has its own colour
   tick();
   assert.equal($("hud-energy-n").textContent, "2.0 MJ");
   player.deploying = true; tick();
-  assert.equal($("hud-energy-n").textContent, "▼ 2.0 MJ");
+  assert.equal($("hud-energy-n").textContent, "2.0 MJ", "the deploy glyph is css/hud.css ::before, not text");
   assert.equal($("hud-energy").dataset.ers, "deploy");
   assert.equal($("hud-bb").textContent, "BB 56.5%");
   const css = read("css/hud.css");
@@ -363,6 +409,7 @@ test("LiveRegion: a lower-priority line waits out the hold; stale HUD lines are 
   assert.equal(live.textContent, "RACE CONTROL: 5 SECOND PENALTY", "the region is left as it was");
   L.say("ENGINEER: PUSH", "race"); L.reset();
   assert.deepEqual(JSON.parse(JSON.stringify(L.state())), { phase: "idle", current: null, queued: [] }, "a new session starts empty");
+  assert.equal(live.textContent, "", "reset clears #announce-live so browse mode keeps no race call");
 });
 
 // UI-05 (hunt2): a flag preempting a HUD line mid-beat re-queues that older
@@ -416,6 +463,14 @@ test("hud.js: POS is session-aware — TT, Q in qualifying, PRAC in practice, ra
   assert.equal(els.pos.textContent, "PRAC", "practice ranks road order with nothing at stake");
   G.practice = false; G.timeTrial = true; tick();
   assert.equal(els.pos.textContent, "TT");
+});
+
+test("hud.js: POS in the countdown is the grid slot, not '-/N' (#5883)", () => {
+  const { els, player, tick } = boot();
+  player.rank = 0; player.gridPos = 2; tick();   // rank is only computed once the race is green
+  assert.equal(els.pos.textContent, "2/2");
+  player.gridPos = undefined; tick();
+  assert.equal(els.pos.textContent, "-/2", "no rank and no grid slot still reads '-'");
 });
 
 test("hud.js: the gap chips carry no sign — the arrow is the direction, as RELATIVE agrees", () => {
@@ -695,4 +750,88 @@ test("hud.js: hidden blue-flag changes preserve per-car/per-lap speech across sh
   assert.equal(said.length, 2, "the later lapping is spoken while HUD-hidden");
   h.els.hud.hidden = false; h.frame(1);
   assert.equal(said.length, 2, "show does not repeat the same lapping");
+});
+
+test("hud.js: the gap chip is a time gap, steady under the player's own braking (#5678)", () => {
+  const { els, rival, player, G, tick } = boot();
+  G.track.total = 5000; G.raceT = 0; player.prog = 0; rival.prog = 1500; player.speed = rival.speed = 50;
+  for (let n = 0; n < 400; n++) { tick(); G.raceT += 0.1; player.prog += 5; rival.prog += 5; }
+  tick();
+  assert.equal(els.gapA.textContent, "▲ BEA 30.0s", "1500 m at 50 m/s");
+  player.speed = 15;   // braking: metres ÷ max(15, 0.26·vTop) read 64.1 s here
+  for (let n = 0; n < 20; n++) { G.raceT += 0.1; player.prog += 1.5; rival.prog += 5; tick(); }
+  const s = +els.gapA.textContent.match(/([\d.]+)s$/)[1];
+  assert.ok(s >= 30 && s < 30 * 1.15, "within 15 % of the steady gap after 2 s at 15 m/s: " + els.gapA.textContent);
+});
+
+test("hud.js: LAP 1/N and TIME agree from lights out — the grid-to-line run is off the lap clock (#5678)", () => {
+  const { els, player, G, tick } = boot();
+  G.fmtTime = (t) => t.toFixed(2);
+  player.lap = 0; player.lapTime = 3.33; tick();
+  assert.equal(els.lap.textContent, "1/5");
+  assert.equal(els.time.textContent, "0.00", "lap 0 shows the lap clock (0), not a run-up that rewinds at the line");
+  player.lap = 1; player.lapTime = 0.6; tick();
+  assert.equal(els.time.textContent, "0.60", "from the line the lap clock counts");
+  G.session = "quali"; player.lap = 0; player.lapTime = 3.33; tick();
+  assert.equal(els.time.textContent, "3.33", "qualifying's out-lap clock is untouched");
+});
+
+test("pedal feedback follows the active pedal's grip and distinguishes classic rear slip from wheelspin", () => {
+  const { R } = load({ TyreModel: { CURVE_PEAK_X: 1.5, CURVE_HOLD_R: 2.5 } });
+  const car = { throttleDemand: 0.6, brakeDemand: 0, wheelSpin: 0.8, wheelLock: 0.6, rearUtil: 2, frontUtil: 0.5 };
+  assert.equal(R.pedalGrip(car, true), "spin");
+  assert.equal(R.pedalGrip(car, false), "slip");
+  car.frontUtil = 1.5;
+  assert.equal(R.pedalGrip(car, false), "");
+  car.wheelSpin = 0.1;
+  assert.equal(R.pedalGrip(car, true), "");
+  car.brakeDemand = 0.4;
+  assert.equal(R.pedalGrip(car, true), "lock");
+  car.wheelLock = 0;
+  assert.equal(R.pedalGrip(car, false), "");
+  car.throttleDemand = car.brakeDemand = 0;
+  car.wheelSpin = 1;
+  assert.equal(R.pedalGrip(car, true), "");
+});
+
+test("a hidden race HUD keeps the shared timing clock current through a rival's stop", () => {
+  const { G, dom, player, rival, sb, frame, els } = boot();
+  G.track.total = 5000;
+  for (let t = 0; t <= 100; t++) {
+    dom.body.classList.toggle("hud-hidden", t > 0 && t < 100);
+    G.raceT = t;
+    player.prog = t * 10;
+    rival.prog = Math.min(t * 50, 1100);
+    frame(1000);
+  }
+  assert.equal(sb.HudReadouts.gaps.gap(rival, player), 80);
+  assert.match(els.gapA.textContent, /80\.0s/, "first restored reading discards the old display average");
+});
+
+test("hiding race readouts preserves the touch controls and ages sector indications", () => {
+  const { $, G, dom, els, player, frame, tick, hud } = boot();
+  G.hudProfile = "standard"; G.hudMetricsLayout = "full";
+  G.sectorLast[0] = G.sectorBests[0] = 30;
+  els.workBtn = $("hud-pit-work"); els.endSessionBtn = $("hud-pit-end-session");
+  G.timeTrial = true;
+  G.pits = { commitFrac: () => 0, cue: () => null, canWork: c => c.pitState === "box" };
+  tick();
+  dom.body.classList.add("hud-hidden");
+  player.pitState = "box";
+  player.otArmed = true;
+  G.sectorLast[0] = 31;
+  hud.flashSector(0);
+  frame(100);
+  assert.equal(els.workBtn.hidden, false);
+  assert.equal(els.endSessionBtn.hidden, false);
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "false");
+  assert.equal(els.btnAero.getAttribute("aria-disabled"), "true");
+  player.pitState = "none"; player.xArmed = true;
+  frame(4000);
+  assert.equal(els.workBtn.hidden, true);
+  assert.equal(els.btnAero.getAttribute("aria-disabled"), "false");
+  dom.body.classList.remove("hud-hidden");
+  tick();
+  assert.equal(els.hudSectors.children[0].children[1].textContent, "▲31.000");
+  assert.equal(hud.secFlash().flash[0], 0);
 });

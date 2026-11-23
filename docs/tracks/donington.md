@@ -16,13 +16,15 @@ Drops sharply from Redgate down through Craner Curves to the Old Hairpin, then c
 
 ## 4. Landmarks & surroundings by lap position
 
-Clockwise lap, so `+1` (right of the centreline) is the INFIELD — pits, paddock
-and the ex-Collection hall sit on that side. `-1` is the outside, which is
-where the parkland, the woods and most of the spectator banking live.
+Clockwise lap: lateral `+x` is the driver's right (engine), so `+1` is the
+INFIELD and `-1` the outside. The real pit wall and garages sit on the
+driver's LEFT (`pit.side: -1`, outside the loop on the Wheatcroft Straight);
+parkland, woods and most spectator banking share that outside. Infield
+(+1) still holds the Collection hall and the open parkland views.
 
 | s | Side | Distance | Box description |
 |---|---|---|---|
-| 0.005 | +1 | 14 | Pit lane and garages: one long, low `building` run — a club-circuit pit block, flat roof, no towers. A short `motorhome` row and a small `broadcastCompound` behind it in the paddock, with a `cameraTower` at the start/finish gantry line. |
+| 0.005 | −1 | 14 | Pit lane and garages (engine `pit.side: -1`): one long, low `building` run — a club-circuit pit block, flat roof, no towers. A short `motorhome` row and a small `broadcastCompound` behind it in the paddock, with a `cameraTower` at the start/finish gantry line. Scenery still authored on +1 until #6007 re-dresses the frontage. |
 | 0.022 | -1 | 20 | Start/finish `grandstandEx`, modest and mostly open — two shallow banks of seats, not a Grand Prix stand. `sponsorHoarding` runs the length of the debris fence in front of it. |
 | 0.048 | +1 | 34 | **Ex-Donington Collection** (closed Nov 2018): long, low, flat-roofed exhibition `building` kept as a disused hall behind the paddock, coach/visitor apron and screening `hedge`. Do not present as an open museum. |
 | 0.0663 | -1 | 12 | **Redgate.** `guardrail` then `tyreWall` on the outside of the right-hander, backed by the `spectatorHill` bank that carries the Hollywood-side crowd. A `marshalPost` at the apex and a single `billboard` on the exit fence. |
@@ -69,3 +71,9 @@ where the parkland, the woods and most of the spectator banking live.
 | East Midlands Airport runway ~365 m east of track | **Sourced** | [Wikipedia — Donington Park](https://en.wikipedia.org/wiki/Donington_Park); OSM adjacency ([map](https://www.openstreetmap.org/#map=14/52.8305/-1.3700)) |
 | McLeans / Coppice under EMA departure path | **Sourced** | Spotter / forum reports (PPRuNe thread on EMA + Donington); airport CTR wraps the estate ([Donington airport guidelines](https://www.donington-park.co.uk/airport-guidelines)) |
 | Dunlop Bridge | **Removed** — Adroit 2010 rebuild left it out (MSA/FIA regs); do not re-add | Wikipedia — Donington Park |
+
+## Start line (2026-11-11, #5316 leftovers)
+
+Moved onto the real start/finish line from the driver61 circuit guide coordinate; derivation, source and the scenery fixes are in [START-LINES.md](START-LINES.md) "donington, brands_hatch — MOVED 2026-11-11".
+- Pit side **fixed 2026-11-21**: `pit: { side: -1 }` — driver's LEFT of the Wheatcroft Straight (ukCircuits / oversteer48 / driver61). Engine apron measured level under −1; scenery frontage re-dress stays with #6007.
+- Corner-name comments in `scenery/donington.js` look keyed to a v0-as-line reading ("Redgate" at authored 0.0663, "Goddards" at 0.9437); placement is by fraction, so nothing is misplaced, but the names need checking against a real map.

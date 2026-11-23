@@ -13,7 +13,7 @@ const TrackStamps = (function () {
   "use strict";
   const S = TrackShape;
   const DEG = Math.PI / 180;
-  const R_MIN = 15;           // the hairpin floor the validator reds below (built radius)
+  const R_MIN = 15;           // stamp floor = TrackValidate.LIMITS.rAmber (RED is rMin 9 m)
   const SPACING = 8;          // control points never closer than this
   const CHORD_MAX = 25;       // …nor further apart on an arc than the 25 m straights beside it
   // The Dubins rejoin: straights every ≤ 60 m, arcs on 8-25 m chords at the
@@ -130,11 +130,17 @@ const TrackStamps = (function () {
     // Downstream candidates: the span end itself, then further points.
     const covered = (j) => S.wrapI(j - i0, N);   // how many points from i0 to j
     // An INSERT (i0 === i1) adds road the loop must absorb, so it may reach
-    // further downstream for its rejoin than a replacement does.
-    const insert = i0 === i1, reach = insert ? 12 : 7;
+    // further downstream for its rejoin than a replacement does. A rejoin
+    // that adds self-crossings (the fill looping back across the road behind
+    // the stamp's end) is skipped while a further candidate might be clean;
+    // the first tangled one is the last resort.
+    const insert = i0 === i1, reach = insert ? 24 : 7;
+    const knots = (P) => S.crossings(P.map((q) => q[0]), P.map((q) => q[1]), P.length, 3).length, was = knots(pts);
+    let tangled = null;
     for (let k = 0; k < reach; k++) {
       const j = S.wrapI(i1 + (insert ? 1 : 0) + k, N);
       if (j === i0 || covered(j) > N - 4) break;   // never eat the whole loop
+      if (i1 >= i0 && j > 0 && j < i0) break;        // a span short of the start line never rejoins past it: index 0 stays the start
       const B = pts[j], goal = { x: B[0], z: B[1], th: S.heading(pts, j) };
       const E = st.end, straight = Math.hypot(B[0] - E.x, B[1] - E.z);
       let fill = null;
@@ -178,8 +184,11 @@ const TrackStamps = (function () {
         selB -= a - pre.length; selA -= a - pre.length;
         if (out.length > 200) return { ok: false, reason: "too many points — delete some first" };
       }
-      return { ok: true, pts: out, sel: [selA, selB], word: fill.word };
+      const res = { ok: true, pts: out, sel: [selA, selB], word: fill.word };
+      if (knots(out) > was) { if (!tangled) tangled = res; continue; }
+      return res;
     }
+    if (tangled) return tangled;
     return { ok: false, reason: "no room to rejoin the loop here — pick a longer span or a smaller stamp" };
   }
 

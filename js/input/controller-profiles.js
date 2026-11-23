@@ -25,7 +25,7 @@ const ControllerProfiles = (function () {
   function create({ store, snapshot, apply, defaults, changed, legacyMatches = () => true }) {
     const read = () => clean(store.get(KEY, null));
     let legacy = clone(snapshot());
-    let current = null, applying = false, legacyClaimed = read().legacyClaimed, saved = true;
+    let current = null, currentMapping, applying = false, legacyClaimed = read().legacyClaimed, saved = true;
     const persist = (map) => { saved = store.set(KEY, clean(map)) !== false; if (changed) changed(); };
     function save() {
       if (applying) return;
@@ -43,13 +43,13 @@ const ControllerProfiles = (function () {
       // uses it; an idle standard pad must neither inherit nor consume it.
       legacyClaimed = legacyClaimed || map.legacyClaimed;
       const adopt = !row && !legacyClaimed && legacyMatches(pad);
-      current = id;
+      current = id; currentMapping = pad.mapping;
       if (adopt) legacyClaimed = true;
       applying = true;
       try { apply(row || (adopt ? legacy : defaults())); } finally { applying = false; }
       save();
     }
-    function reload() { const id = current; current = null; if (id) activate({ id }); }
+    function reload() { const id = current; current = null; if (id) activate({ id, mapping: currentMapping }); }
     function replace(raw) { persist(clean(raw)); reload(); return read(); }
     function reset() {
       if (!current) return false;
@@ -60,6 +60,7 @@ const ControllerProfiles = (function () {
     return { activate, save, reset, reload, replace, data: read,
       current: () => current ? { id: current, label: current, saved, count: read().devices.length } : null };
   }
-  return { create, clean, KEY, MAX, idOf };
+  // idOf stays module-local: create.activate owns pad-id slicing; no external caller.
+  return { create, clean, KEY, MAX };
 })();
 Object.freeze(ControllerProfiles);

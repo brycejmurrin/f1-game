@@ -1,5 +1,7 @@
 # CI test selection and tiering — plan (2026-10-16)
 
+Summary: Test selection and tiering plan, 2026-10-16: what each job × tier caught in 40 h (2,097 runs; 58 % of failed jobs inherited from a red tip), 160 merges replayed through the selectors (node fail-safes, HUD/editor/CSS routing), the train since train-on-push, what Meta/Google/Ekstazi say about diff-based selection, ten ranked proposals and three owner decisions.
+
 Third pass after [CICD-REVIEW-2026-10-16](CICD-REVIEW-2026-10-16.md) and
 [CICD-JOBS-REVIEW-2026-10-16](CICD-JOBS-REVIEW-2026-10-16.md). The ask (Bryce, 2026-10-16): dive into runs, how jobs
 and tests are selected and their history; research how diff-based selection is best set up; draft a plan.

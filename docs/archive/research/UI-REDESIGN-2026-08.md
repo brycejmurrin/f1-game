@@ -6,7 +6,7 @@ with the Chrome DevTools MCP, plus a corrected `tools/layout-audit.mjs` sweep of
 from the stylesheet.
 
 This is a design proposal, not a description of current behaviour. The current
-behaviour is in `docs/LAYOUT-AUDIT.md` (mechanism), `docs/COMPONENTS.md`
+behaviour is in `docs/COMPONENTS.md` (mechanism), `docs/COMPONENTS.md`
 (inventory) and `UI-SCALE-AND-ZOOM.md` (the scale mechanism and
 its measured costs). This document argues that those three describe **three
 systems doing one job**, and proposes collapsing them to one.
@@ -48,7 +48,7 @@ rules in their head, and the boundary between them is invisible in the source.
 **B. Three ways to ask "how much room did I get".** `@media` on the viewport,
 `@container sheet` on the panel, and a `data-shape` attribute written by
 `js/game/sheetshape.js`. The correct answer is documented
-(`docs/LAYOUT-AUDIT.md`'s seven axes) and is genuinely good. It is also
+(`docs/COMPONENTS.md`'s seven axes) and is genuinely good. It is also
 routinely disobeyed: `css/data.css` has **28 media queries and 0 container
 queries**, and decides a two-pane split on `(orientation: landscape) and
 (max-height: 520px)` — so the phone gets the good layout and a 1920x1080 desktop

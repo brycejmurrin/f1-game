@@ -21,6 +21,7 @@
  *      (npm run test:tooling-fast / test:state-unit)
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -65,7 +66,7 @@ function loadHarness(options = {}) {
     id: "haas", name: "Haas", tier: 4, stats: {},
     drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }],
   };
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise, Blob,
     isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask,
     URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
@@ -111,7 +112,10 @@ function loadHarness(options = {}) {
   vm.runInContext(src("js/core/store.js"), ctx, { filename: absSrc("js/core/store.js") });
   vm.runInContext(src("js/career/career-backup.js"), ctx, { filename: absSrc("js/career/career-backup.js") });
   // The MY TEAM identity is shape-gated by the GARAGE file's garageValue.
-  if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+  if (options.settingsExport !== false) {
+    vm.runInContext(src("js/ui/settings-export.js"), ctx, { filename: absSrc("js/ui/settings-export.js") });
+    vm.runInContext(src("js/ui/settings-export-body.js"), ctx, { filename: absSrc("js/ui/settings-export-body.js") });   // LAZY_SAVES_DATA (#4748)
+  }
   vm.runInContext(src("js/career/team-identity.js"), ctx, { filename: absSrc("js/career/team-identity.js") });
   vm.runInContext(src("js/career/career.js"), ctx, { filename: absSrc("js/career/career.js") });
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: absSrc("js/career/season-cal.js") });
@@ -468,14 +472,36 @@ test("older backup keeps the Grand Prix stage after a zero-point sprint", () => 
   }
 });
 
-test("seasonAhead compares the cleaned round: round 250 is 0, so a local round-5 season stays", () => {
+test("a backup season with round 250 is refused, so a local round-5 season stays", () => {
+  // round>200 is season-invalid (same as recovery), not coerced to 0. Local
+  // progress still stays because validate/apply refuse the whole envelope.
   const h = loadHarness();
   const local = { round: 5, pts: {}, teamPts: {}, driverCodes: {} };
   h.store.write("season", local);
   const envelope = { format: "apex26-career-backup-v1", slots: [], season: { round: 250, pts: {}, teamPts: {}, driverCodes: {} } };
-  assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
-  assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  const preview = h.CareerBackup.preview(envelope);
+  assert.equal(preview.ok, false);
+  assert.equal(preview.reason, "season-invalid");
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "season-invalid");
   assert.equal(h.store.get("season", null).round, 5);
+});
+
+test("a standalone season with round>200 is refused, not silently reset to round 0 with its points", () => {
+  const h = loadHarness();
+  const envelope = {
+    format: h.CareerBackup.FORMAT,
+    slots: [],
+    season: { round: 201, pts: { "haas:0": 400 }, teamPts: { haas: 400 }, driverCodes: {} },
+  };
+  const checked = h.CareerBackup.validate(envelope);
+  assert.equal(checked.ok, false);
+  assert.equal(checked.reason, "season-invalid");
+  const result = h.CareerBackup.apply(envelope);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "season-invalid");
+  assert.equal(h.store.get("season", null), null);
 });
 
 test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {
@@ -777,7 +803,7 @@ test("malformed history / offers / moves / roster rows import without crashing c
   assert.equal(r.ok, true);
   const d0 = JSON.parse(h.disk.get("apex26.career.driver.0"));
   assert.deepEqual(d0.history, [{ year: 2025, pos: 1, wins: 2 }]);
-  assert.deepEqual(d0.offers, [{ team: "haas" }]);
+  assert.deepEqual(d0.offers, [], "a row with no Teams.LIST teamId can never be signed: dropped, or it locks GO RACING");
   assert.deepEqual(d0.moves, [{ id: "m" }]);
   assert.equal(JSON.parse(h.disk.get("apex26.career.myteam.0")).roster, null);
   const rows = h.Career.slots();
@@ -977,7 +1003,7 @@ function bootBackupUi(options = {}) {
     refreshCareerButton() {}, qualiClear() {}, announce: (text) => notices.push(text),
     armConfirm: (btn, txt, act) => { act(); return true; },
   };
-  const sb = {
+  const sb = { I18n: i18nStub(),
     Math, console, Object, Array, Number, String, JSON, Map, Set, Date,
     parseFloat, parseInt, isFinite,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
@@ -1009,12 +1035,14 @@ function bootBackupUi(options = {}) {
   const ui = sb.CareerScreen.create(G);
   ui.openSlots();
 
-  function clickImport(side = "left") {
+  // The confirming tap awaits CareerBackup.applyWithUndo; settle its result.
+  async function clickImport(side = "left") {
     const button = G.$("cr-" + side).querySelector('[data-cr-act="import"]');
     assert.ok(button);
     // mini-dom does not clear children on textContent="", unlike the browser.
     G.$("cr-left").replaceChildren(); G.$("cr-right").replaceChildren();
     button.onclick({ stopPropagation() {} });
+    for (let i = 0; i < 4; i++) await Promise.resolve();
   }
   async function selectBackup(envelope, side = "left") {
     clickImport(side);
@@ -1028,12 +1056,12 @@ function bootBackupUi(options = {}) {
   return { G, dom, ui, exports, notices, clickImport, selectBackup };
 }
 
-test("career slot cards expose EXPORT and IMPORT buttons", () => {
+test("career file actions identify their scope and slot cards offer recovery", () => {
   const { G, exports } = bootBackupUi();
   const left = G.$("cr-left");
   const acts = left.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
-  assert.ok(acts.includes("EXPORT"), "used slot must offer EXPORT");
-  assert.ok(acts.includes("IMPORT"), "slot cards must offer IMPORT");
+  assert.ok(acts.includes("EXPORT ALL CAREER SAVES"), "one export includes both modes");
+  assert.ok(acts.includes("RESTORE DRIVER CAREER SAVES"), "restore belongs to the mode");
   const dels = left.querySelectorAll(".cr-slot-del").map((n) => n.textContent);
   assert.deepEqual(dels, ["DELETE"], "cr-slot-del is DELETE-only (never EXPORT/IMPORT)");
 
@@ -1045,11 +1073,30 @@ test("career slot cards expose EXPORT and IMPORT buttons", () => {
   // Empty slots still get IMPORT (restore into an empty card).
   const right = G.$("cr-right");
   const emptyActs = right.querySelectorAll("[data-cr-act]").map((n) => n.textContent);
-  assert.ok(emptyActs.includes("IMPORT"));
-  assert.ok(!emptyActs.includes("EXPORT"), "empty slots do not EXPORT");
+  assert.ok(emptyActs.includes("RESTORE MY TEAM SAVES"));
+  assert.ok(emptyActs.includes("RECOVER SLOT 1"));
+  assert.equal(right.querySelectorAll('[data-cr-act="import"]').length, 1);
+  assert.equal(right.querySelectorAll('[data-cr-act="export"]').length, 0, "one export across both modes");
   assert.equal(right.querySelectorAll(".cr-slot-del").length, 0, "empty slots have no DELETE");
 });
 
+
+test("finishing a previous restore preserves a newer file review", async () => {
+  const h = loadHarness();
+  let finish;
+  const ui = bootBackupUi({ Career: h.Career, store: h.store, CareerBackup: {
+    ...h.CareerBackup, applyWithUndo: () => new Promise(resolve => { finish = resolve; }),
+  } });
+  const envelope = { format: h.CareerBackup.FORMAT, slots: [{ flavour: "driver", i: 0, data: save() }] };
+  await ui.selectBackup(envelope);
+  await ui.clickImport();
+  ui.ui.close(); ui.ui.openSlots();
+  await ui.selectBackup(envelope, "right");
+  finish({ ok: true, needsConfirm: true });
+  await Promise.resolve();
+  assert.equal(ui.G.$("cr-right").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
+  assert.equal(ui.G.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "RESTORE DRIVER CAREER SAVES");
+});
 
 test("IMPORT confirmation keeps the reviewed revision and previews backup destinations", async () => {
   const h = loadHarness();
@@ -1067,7 +1114,7 @@ test("IMPORT confirmation keeps the reviewed revision and previews backup destin
   assert.equal(h.store.get("career.driver.1").money, 100, "review does not apply the backup");
   h.disk.set("apex26.career.driver.1", JSON.stringify(save({ money: 200 })));
   h.foreign("apex26.career.driver.1");
-  ui.clickImport();
+  await ui.clickImport();
   assert.equal(ui.notices.at(-1), "SAVE CONFLICT — IMPORT REFUSED");
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.1")).money, 200);
 });
@@ -1086,7 +1133,7 @@ test("backup preview follows mode/extras scope and explains shared identity with
   const second = h.CareerBackup.preview(envelope, { flavours: ["myteam"], includeProgressExtras: false });
   assert.equal(second.slots.length, 1);
   assert.equal(second.extras.length, 1);
-  assert.match(second.extras[0], /MY TEAM identity: restore separately with each imported career/);
+  assert.equal(second.extras[0], "MY TEAM identity: restore separately with each imported career; other careers and one-off GP appearance are preserved");
   assert.equal(h.CareerBackup.preview(envelope, { includeExtras: false }).extras.length, 1, "slot-owned identity still accompanies the slot");
   assert.equal(JSON.stringify([...h.disk]), before);
 });
@@ -1111,8 +1158,8 @@ test("slot and extras quota failures preserve session success but never claim co
     assert.equal(h.disk.has("apex26." + failedKey), false);
     const ui = bootBackupUi(h);
     await ui.selectBackup(envelope);
-    ui.clickImport();
-    assert.match(ui.notices.at(-1), /RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+    await ui.clickImport();
+    assert.equal(ui.notices.at(-1), "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP");
   }
 });
 
@@ -1126,7 +1173,7 @@ test("a rejected extra after slot restoration reports partial application", asyn
     slots: [{ flavour: "driver", i: 1, data: save({ money: 75 }) }], badges: { earned: ["a"] } };
   const ui = bootBackupUi(h);
   await ui.selectBackup(envelope);
-  ui.clickImport();
+  await ui.clickImport();
   assert.equal(h.store.get("career.driver.1").money, 75);
   assert.equal(h.store.get("badges", null), null);
   assert.equal(ui.notices.at(-1), "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP");
@@ -1158,13 +1205,13 @@ test("the other-mode preview names the incoming team and retains an earlier savi
   };
   const ui = bootBackupUi(h);
   await ui.selectBackup(envelope);
-  ui.clickImport();
+  await ui.clickImport();
   const notes = ui.G.$("cr-left").querySelectorAll(".cr-note").map(n => n.textContent).join(" ");
   assert.match(notes, /press ALL MODES\? to apply/);
   assert.match(notes, /Backup: 2026 · Murrin GP/);
   h.ctx.localStorage.setItem = put;
-  ui.clickImport();
-  assert.match(ui.notices.at(-1), /SAVE NOT CONFIRMED; KEEP YOUR BACKUP/);
+  await ui.clickImport();
+  assert.equal(ui.notices.at(-1), "RESTORED FOR THIS SESSION — SAVE NOT CONFIRMED; KEEP YOUR BACKUP");
   assert.equal(h.store.get("career.myteam.0").money, 5150);
 });
 
@@ -1179,7 +1226,7 @@ for (const focus of ["driver", "myteam"]) {
     const ui = bootBackupUi(h);
     const side = focus === "driver" ? "left" : "right";
     await ui.selectBackup(envelope, side);
-    ui.clickImport(side);
+    await ui.clickImport(side);
     assert.equal(ui.notices.at(-1), "CAREER RESTORED — CONFIRM OTHER MODE?");
     const other = focus === "driver" ? "myteam" : "driver";
     assert.equal(h.disk.has(`apex26.career.${other}.0`), false);
@@ -1189,7 +1236,7 @@ for (const focus of ["driver", "myteam"]) {
     h.store.set(key, progressed);
     h.store.set("daily.v1", { best: 20 });
     h.store.set("records", { laps: 2 });
-    ui.clickImport(side);
+    await ui.clickImport(side);
     assert.equal(ui.notices.at(-1), "CAREER RESTORED");
     assert.equal(h.store.get(key).money, 9999, "the first mode is never replayed");
     assert.equal(h.store.get(`career.${other}.0`).money, other === "myteam" ? 5150 : 123);
@@ -1209,10 +1256,10 @@ test("ALL MODES refuses changes to the remaining mode since file selection", asy
   h.Career.start({ teamId: "haas", seed: 1 });
   const ui = bootBackupUi(h);
   await ui.selectBackup(envelope);
-  ui.clickImport();
+  await ui.clickImport();
   h.disk.set("apex26.career.myteam.0", JSON.stringify(save({ flavour: "myteam", team: "custom", money: 8000 })));
   h.foreign("apex26.career.myteam.0");
-  ui.clickImport();
+  await ui.clickImport();
   assert.equal(ui.notices.at(-1), "SAVE CONFLICT — IMPORT REFUSED");
   assert.equal(h.store.get("career.myteam.0").money, 8000);
   assert.equal(h.store.get("customTeam", null), null, "conflicted import cannot replace team identity");
@@ -1250,7 +1297,7 @@ test("IMPORT leaves a changed empty backup destination alone while restoring pop
   await ui.selectBackup(envelope);
   h.disk.set("apex26.career.driver.1", JSON.stringify(save({ money: 200 })));
   h.foreign("apex26.career.driver.1");
-  ui.clickImport();
+  await ui.clickImport();
   assert.equal(ui.notices.at(-1), "CAREER RESTORED");
   assert.equal(h.store.get("career.driver.0").money, 50);
   assert.equal(h.store.get("career.driver.1").money, 200, "a null row neither overwrites nor conflicts");
@@ -1272,7 +1319,7 @@ for (const focus of ["driver", "myteam"]) {
       const ui = bootBackupUi(h);
       const side = focus === "driver" ? "left" : "right";
       await ui.selectBackup(envelope, side);
-      ui.clickImport(side);
+      await ui.clickImport(side);
       assert.equal(ui.notices.at(-1), "CAREER RESTORED — CONFIRM OTHER MODE?");
       assert.equal(h.Career.slotRevision(other, 0), revision, "refresh must not re-save the unconfirmed live mode");
       assert.equal(h.disk.get("apex26." + otherKey), before);
@@ -1282,7 +1329,7 @@ for (const focus of ["driver", "myteam"]) {
         h.disk.set("apex26." + otherKey, JSON.stringify(peer));
         h.foreign("apex26." + otherKey);
       }
-      ui.clickImport(side);
+      await ui.clickImport(side);
       assert.equal(ui.notices.at(-1), peerWrite ? "SAVE CONFLICT — IMPORT REFUSED" : "CAREER RESTORED");
       assert.equal(h.store.get(otherKey).money, peerWrite ? 8000 : other === "driver" ? 123 : 5150);
     });
@@ -1312,6 +1359,8 @@ function legacyImportUI(h) {
   };
 }
 const legacyFile = (careers) => ({ format: "apex26-career-v1", careers });
+// File read, then the awaited CareerBackup.applyWithUndo, then its result.
+const settleLegacy = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
 
 for (const flavour of ["driver", "myteam"]) test(`legacy file picker refuses a peer's ${flavour} write before touching any slots`, async () => {
   const h = loadHarness();
@@ -1328,8 +1377,8 @@ for (const flavour of ["driver", "myteam"]) test(`legacy file picker refuses a p
   if (flavour === "driver") assert.equal(h.Career.conflicted(), true);
   resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }),
     "career.myteam.0": save({ flavour: "myteam", money: 60 }), careerSlot: "myteam:0" })));
-  await Promise.resolve(); await Promise.resolve();
-  assert.match(ui.button.textContent, /CONFLICT/);
+  await settleLegacy();
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — CONFLICT");
   assert.deepEqual(slotSnap(h.disk), before, "even the unchanged destination is not partly imported");
   assert.equal(h.disk.get("apex26.careerSlot"), pointer);
   assert.equal(ui.timers.some((t) => t.ms === 600), false, "a refused file never reloads");
@@ -1343,8 +1392,8 @@ test("legacy file confirmation captures revisions on the first tap, including th
   const before = slotSnap(h.disk);
   ui.button.onclick();
   ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }), careerSlot: "driver:0" }))));
-  await Promise.resolve(); await Promise.resolve();
-  assert.match(ui.button.textContent, /CONFLICT/);
+  await settleLegacy();
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — CONFLICT");
   assert.deepEqual(slotSnap(h.disk), before);
   assert.equal(JSON.parse(h.disk.get("apex26.careerSlot")), "myteam:2");
 });
@@ -1355,8 +1404,8 @@ test("legacy file imports both modes and refreshes the selected career through t
   ui.button.onclick(); ui.button.onclick();
   ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.0": save({ money: 50 }),
     "career.myteam.0": save({ flavour: "myteam", team: "custom", money: 60 }), careerSlot: "myteam:0" }))));
-  await Promise.resolve(); await Promise.resolve();
-  assert.match(ui.button.textContent, /3 APPLIED, RELOADING/);
+  await settleLegacy();
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — 3 APPLIED, RELOADING…");
   assert.equal(JSON.parse(h.disk.get("apex26.career.driver.0")).money, 50);
   assert.equal(h.Career.data().money, 60);
   assert.equal(h.Career.slot().flavour, "myteam");
@@ -1371,7 +1420,7 @@ test("empty and malformed legacy files preserve saves and do not reload", async 
     const ui = legacyImportUI(h);
     ui.button.onclick(); ui.button.onclick();
     ui.choose(Promise.resolve(typeof file === "string" ? file : JSON.stringify(file)));
-    await Promise.resolve(); await Promise.resolve();
+    await settleLegacy();
     assert.deepEqual(slotSnap(h.disk), before);
     assert.equal(h.disk.get("apex26.careerSlot"), pointer);
     assert.equal(ui.timers.some((t) => t.ms === 600), false);
@@ -1386,8 +1435,8 @@ test("legacy imports report refused storage and stay on the page", async () => {
   h.ctx.localStorage.setItem = () => { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; };
   ui.button.onclick(); ui.button.onclick();
   ui.choose(Promise.resolve(JSON.stringify(legacyFile({ "career.driver.1": save({ money: 50 }), careerSlot: "driver:1" }))));
-  await Promise.resolve(); await Promise.resolve();
-  assert.match(ui.button.textContent, /STORAGE FULL/);
+  await settleLegacy();
+  assert.equal(ui.button.textContent, "LOAD CAREER FILE — STORAGE FULL — 1 NOT SAVED");
   assert.equal(h.disk.get("apex26.career.driver.1"), original);
   assert.equal(h.disk.get("apex26.careerSlot"), pointer);
   assert.equal(ui.timers.some((t) => t.ms === 600), false);
@@ -1583,7 +1632,7 @@ test('recovery qualifying uses the merged PR1517 validator without losing owners
  const restored=h.store.get('season');for(const key of ['qualiOrder','qualiTrack','qualiMode','qualiSeat'])assert.deepEqual(JSON.parse(JSON.stringify(restored[key])),season[key]);
 });
 async function chooseRecovery(ui, raw) {
- const button=ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1];
+ const button=ui.G.$('cr-left').querySelectorAll('[data-cr-act="recover"]')[1];
  ui.G.$('cr-left').replaceChildren();ui.G.$('cr-right').replaceChildren();button.onclick({stopPropagation(){}});
  const picker=ui.dom.document.body.querySelector('input'),text=JSON.stringify(raw);
  picker.files=[{size:text.length,text:async()=>text}];picker.onchange();await Promise.resolve();await Promise.resolve();
@@ -1597,7 +1646,8 @@ test('recovery file UI previews its chosen destination and Cancel leaves every s
 });
 test('recovery file UI confirms only its reviewed card and reports durable completion',async()=>{
  const h=loadHarness();h.Career.start({teamId:'haas',seed:1});const ui=bootBackupUi({Career:h.Career,CareerBackup:h.CareerBackup,store:h.store});
- await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777})});ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1].onclick({stopPropagation(){}});
+ await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777})});ui.G.$('cr-left').querySelectorAll('[data-cr-act="recover"]')[1].onclick({stopPropagation(){}});
+ for(let i=0;i<4;i++)await Promise.resolve(); // the confirm awaits CareerBackup.applyWithUndo
  assert.equal(h.store.get('career.driver.1').money,777);assert.notEqual(h.store.get('career.driver.0').money,777);assert.equal(ui.notices.at(-1),'CAREER RESTORED');
 });
 
@@ -2013,4 +2063,188 @@ test("read-only career screen explains ownership, disables mutations and keeps e
     h.G.$("cr-go").onclick();
     assert.equal(h.notices.at(-1), notice.textContent, "programmatic entry has the same explicit refusal");
   }
+});
+
+// WP-G3: an import that replaces a saved slot keeps a "before-import" restore
+// point first and WAITS for it. The capture used to be fire-and-forget, so a
+// missing, blocked or slow IndexedDB replaced the slot with no undo.
+function withPoints(h, capture) {
+  const calls = [];
+  h.ctx.CareerRestorePoints = { capture: async (flavour, i, data, options) => {
+    calls.push({ flavour, i, money: data.money, reason: options && options.reason });
+    return capture(flavour, i);
+  } };
+  return calls;
+}
+const overwrite = (h) => ({ format: h.CareerBackup.FORMAT, slots: [
+  { flavour: "driver", i: 1, data: save({ money: 777 }) },
+  { flavour: "driver", i: 2, data: save({ money: 888 }) },
+] });
+
+for (const refusal of [{ ok: false, durable: false, reason: "history-unavailable" }, null, "throw"]) {
+  test(`a failed before-import capture refuses the import and leaves every slot (${JSON.stringify(refusal)})`, async () => {
+    const h = loadHarness();
+    h.store.set("career.driver.1", save({ money: 100 }));
+    const before = slotSnap(h.disk);
+    const calls = withPoints(h, () => { if (refusal === "throw") throw new Error("idb"); return refusal; });
+    const result = await h.CareerBackup.applyWithUndo(overwrite(h));
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "undo-unavailable");
+    assert.equal(result.slot, "driver:1");
+    assert.deepEqual([...result.written], []);
+    assert.deepEqual(calls, [{ flavour: "driver", i: 1, money: 100, reason: "before-import" }]);
+    assert.deepEqual(slotSnap(h.disk), before, "neither the saved nor the empty destination is written");
+  });
+}
+
+test("a captured before-import point lets the import replace only after it is saved", async () => {
+  const h = loadHarness();
+  h.store.set("career.driver.1", save({ money: 100 }));
+  let release;
+  const calls = withPoints(h, () => new Promise((r) => { release = () => r({ ok: true, durable: true, id: "p1" }); }));
+  const pending = h.CareerBackup.applyWithUndo(overwrite(h));
+  await Promise.resolve();
+  assert.equal(h.store.get("career.driver.1").money, 100, "no write while the restore point is still saving");
+  release();
+  const result = await pending;
+  assert.equal(result.ok, true);
+  assert.deepEqual([...result.written], ["driver:1", "driver:2"]);
+  assert.deepEqual(calls.map((c) => c.i), [1], "an empty destination needs no restore point");
+  assert.equal(h.store.get("career.driver.1").money, 777);
+  assert.equal(h.store.get("career.driver.2").money, 888);
+});
+
+test("a slot changed while its restore point saves refuses as a conflict", async () => {
+  const h = loadHarness();
+  h.store.set("career.driver.1", save({ money: 100 }));
+  withPoints(h, () => { h.store.set("career.driver.2", save({ money: 555 })); return { ok: true, durable: true }; });
+  const result = await h.CareerBackup.applyWithUndo(overwrite(h));
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "conflict");
+  assert.equal(h.store.get("career.driver.1").money, 100);
+  assert.equal(h.store.get("career.driver.2").money, 555);
+});
+
+test("with restore history loaded, the synchronous writers refuse to replace a saved slot without one", () => {
+  const h = loadHarness();
+  h.store.set("career.driver.1", save({ money: 100 }));
+  const calls = withPoints(h, () => ({ ok: true, durable: true }));
+  const before = slotSnap(h.disk);
+  const applied = h.CareerBackup.apply(overwrite(h));
+  assert.equal(applied.ok, false);
+  assert.equal(applied.reason, "undo-required");
+  assert.equal(h.CareerBackup.writeSlot("driver", 1, save({ money: 999 })).reason, "undo-required");
+  assert.deepEqual(slotSnap(h.disk), before);
+  assert.deepEqual(calls, [], "the synchronous path never starts an unawaited capture");
+  assert.equal(h.CareerBackup.writeSlot("driver", 0, save({ money: 321 })).ok, true, "an empty slot has nothing to undo");
+});
+
+test("the career IMPORT card surfaces a refused restore point and keeps the save", async () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  h.store.set("career.driver.1", save({ money: 100 }));
+  withPoints(h, () => ({ ok: false, durable: false, reason: "history-unavailable" }));
+  const ui = bootBackupUi(h);
+  await ui.selectBackup({ format: h.CareerBackup.FORMAT, slots: [{ flavour: "driver", i: 1, data: save({ money: 50 }) }] });
+  await ui.clickImport();
+  assert.equal(ui.notices.at(-1), "IMPORT REFUSED — COULD NOT KEEP A RESTORE POINT OF THE SAVE IT WOULD REPLACE; NOTHING CHANGED");
+  assert.equal(h.store.get("career.driver.1").money, 100);
+});
+
+// PR #3940 race (career-hub.spec "Daily class merges…" → "Daily merge refused:
+// conflict"): the hub opened by __apex.career() builds after a lazy load and
+// its Career.objective() draw SAVES the live slot. Landing inside the
+// before-import capture's IndexedDB await, that own save moved the pinned
+// revision and the import refused itself. The capture resolves a microtask
+// later, as IndexedDB does, after the live career's own save.
+function liveSaveDuringCapture(h, write) {
+  let n = 0;
+  return withPoints(h, async () => {
+    await Promise.resolve();
+    if (n++ === 0) write();
+    return { ok: true, durable: true, id: "p" + n };
+  });
+}
+const liveImport = (h) => ({ format: h.CareerBackup.FORMAT, slots: [{ flavour: "driver", i: 0, data: save({ money: 777 }) }] });
+
+test("the live career's own save during the before-import capture is captured again, not a conflict", async () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const calls = liveSaveDuringCapture(h, () => { h.Career.data().money = 4242; h.Career.save(); });
+  const result = await h.CareerBackup.applyWithUndo(liveImport(h));
+  assert.equal(result.ok, true, "reason: " + result.reason);
+  assert.deepEqual([...result.written], ["driver:0"]);
+  assert.equal(calls.length, 2, "the newer live save gets its own restore point");
+  assert.equal(calls[1].money, 4242, "the undo holds the save the import replaced, not the stale one");
+  assert.equal(h.store.get("career.driver.0").money, 777);
+  assert.equal(h.Career.conflicted(), false);
+});
+
+test("a foreign write to the live slot during the before-import capture still refuses", async () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  liveSaveDuringCapture(h, () => {
+    h.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 9000 })));
+    h.foreign("apex26.career.driver.0");
+  });
+  const result = await h.CareerBackup.applyWithUndo(liveImport(h));
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "conflict");
+  assert.equal(h.store.get("career.driver.0").money, 9000);
+});
+
+// UI hunt 2026-10-29 #7: BACK / Esc (#cr-back is the data-esc-close door) from
+// the NEW CAREER wizard skipped the slot picker it came from and left to the title.
+test("NEW CAREER BACK steps back to the slot picker and restores the borrowed live slot", () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const ui = bootBackupUi({ Career: h.Career, CareerBackup: h.CareerBackup, store: h.store });
+  let toTitle = 0;
+  ui.G.refreshCareerButton = () => { toTitle++; };
+  ui.G.els.overlay.hidden = true;
+  const empty = () => ui.G.$("cr-left").querySelectorAll(".cr-slot-main").find((b) => b.getAttribute("aria-label") === "SLOT 2 EMPTY Start a career here, Driver career");
+  const card = empty();
+  assert.ok(card, "an empty driver slot card");
+  ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();
+  card.onclick();
+  assert.equal(h.Career.active(), false, "the wizard borrows the empty slot");
+  ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();
+  ui.G.$("cr-back").onclick();
+  assert.equal(toTitle, 0, "BACK from the wizard does not leave to the title");
+  assert.equal(ui.dom.byId("career").hidden, false);
+  assert.equal(ui.G.els.overlay.hidden, true);
+  assert.deepEqual({ ...h.Career.slot() }, { flavour: "driver", i: 0 }, "the live slot is restored");
+  assert.equal(h.Career.active(), true);
+  assert.ok(empty(), "the slot picker is shown again");
+  ui.G.$("cr-back").onclick();
+  assert.equal(toTitle, 1, "BACK from the title-opened picker then leaves to the title");
+});
+
+test("a MY TEAM identity captured on a device with no GP keys falls back to the caller's default (#4945)", () => {
+  const b = loadHarness();
+  b.Career.start({ flavour: "myteam", teamId: "custom", seed: 1 });
+  assert.equal(b.Career.data().flavour, "myteam");
+  assert.ok(Object.hasOwn(b.Career.data().myTeamIdentity, "livery.custom"), "the nulls are captured as own keys");
+  b.Career.engage(true);
+  assert.equal(b.Career.inCareer(), true);
+  assert.equal(b.Career.identityValue("livery.custom", "default"), "default");
+  assert.equal(b.Career.identityValue("customTeam", "fallback"), "fallback");
+});
+
+test("a refused slot-card deletion keeps the active save available for retry", () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const key = "apex26.career.driver.0", raw = h.disk.get(key);
+  const ui = bootBackupUi(h);
+  const clickDelete = () => ui.G.$("cr-left").querySelectorAll(".cr-slot-del").at(-1).onclick({ stopPropagation() {} });
+  const storage = h.ctx.localStorage, write = storage.setItem;
+  storage.setItem = () => { throw Object.assign(new Error("denied"), { name: "SecurityError" }); };
+  clickDelete(); clickDelete();
+  assert.equal(h.Career.active(), true);
+  assert.equal(h.disk.get(key), raw);
+  assert.equal(ui.notices.at(-1), "SAVE NOT DELETED");
+  storage.setItem = write;
+  clickDelete(); clickDelete();
+  assert.equal(h.Career.active(), false);
+  assert.equal(loadHarness({ disk: h.disk }).store.get("career.driver.0", null), null);
 });

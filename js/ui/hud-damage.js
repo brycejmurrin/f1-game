@@ -15,12 +15,17 @@ const HudDamage = (function () {
   /** 0 none … 3 severe. */
   function level(v) { return v >= 0.75 ? 3 : v >= 0.45 ? 2 : v >= 0.15 ? 1 : 0; }
 
-  /** Text fallback: the worst part in a few characters, + SUSP for a knock. */
-  function text(r) {
-    if (!r) return "";
+  function worstPart(r) {
     let best = -1, bv = 0;
     for (let i = 0; i < PARTS.length; i++) { const v = r[PARTS[i][0]]; if (v > bv) { bv = v; best = i; } }
-    const t = best >= 0 && bv >= 0.15 ? PARTS[best][1] + " " + Math.round(bv * 10) * 10 + "%" : "";
+    return bv >= 0.15 ? best : -1;
+  }
+
+  /** Text fallback: the worst part in a few characters, + SUSP for a knock. */
+  function text(r, best) {
+    if (!r) return "";
+    if (best === undefined) best = worstPart(r);
+    const t = best >= 0 ? PARTS[best][1] + " " + Math.round(r[PARTS[best][0]] * 10) * 10 + "%" : "";
     return r.knock ? (t ? t + " SUSP" : "SUSP") : t;
   }
   /** Screen-reader label: every damaged part in words. */
@@ -30,8 +35,8 @@ const HudDamage = (function () {
       const v = r[PARTS[i][0]];
       if (v >= 0.15) out.push(PARTS[i][2] + " " + Math.round(v * 10) * 10 + "%");
     }
-    if (r && r.knock) out.push("suspension knock");
-    return "Car damage: " + (out.length ? out.join(", ") : "none");
+    if (r && r.knock) out.push(I18n.t("hud.damage.knock", null, "suspension knock"));
+    return I18n.t("hud.damage.label", { parts: out.length ? out.join(", ") : I18n.t("hud.damage.none", null, "none") }, "Car damage: {parts}");
   }
 
   // Quantized signature of what is drawn; a repaint only when it changes.
@@ -48,7 +53,8 @@ const HudDamage = (function () {
     const on = !!(r && show);
     if (el.hidden === on) el.hidden = !on;
     if (!on) return false;
-    const s = sig(r);
+    const best = worstPart(r);
+    const s = sig(r) * (PARTS.length + 1) + best;
     if (el._dmgSig === s) return true;
     el._dmgSig = s;
     for (let i = 0; i < PARTS.length; i++) {
@@ -58,7 +64,7 @@ const HudDamage = (function () {
     const k = el.querySelector('[data-part="knock"]');
     if (k) k.setAttribute("data-lvl", r.knock ? "3" : "0");
     const t = el.querySelector("[data-dmg-text]");
-    if (t) t.textContent = text(r);
+    if (t) t.textContent = text(r, best);
     el.setAttribute("aria-label", label(r));
     return true;
   }
@@ -70,8 +76,12 @@ const HudDamage = (function () {
     if (typeof Damage === "undefined" || typeof document === "undefined") return false;
     if (!_el || !_el.isConnected) _el = document.getElementById("hud-damage");
     const r = player ? Damage.get(player) : null;
-    return paint(_el, r, Damage.worst(r) > Damage.SHOW);
+    const show = Damage.worst(r) > Damage.SHOW;
+    // ARRANGE HUD unhides the chip as a sample box; the race tick must not re-hide it under the editor (#5256).
+    if (!show && _el && !_el.hidden && document.body.hasAttribute("data-hud-arrange")) return false;
+    return paint(_el, r, show);
   }
 
-  return Object.freeze({ paint, sync, level, text, label });
+  // label stays module-local (paint owns aria-label; tests pin paint/level/text).
+  return Object.freeze({ paint, sync, level, text });
 })();

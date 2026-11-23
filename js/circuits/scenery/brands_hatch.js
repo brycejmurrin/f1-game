@@ -40,7 +40,7 @@
         guardrail, fence, wall, tyreWall, marshalPost, cameraTower,
         broadcastCompound,
         billboard, signBoard, sponsorHoarding, gantry,
-        place, groundPatch, ridge, addBox } = api;
+        place, groundPatch, ridge, addBox, bakedModel } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       // Frame selector for the shared helpers below: block 1 and the far-lap
@@ -81,7 +81,7 @@
       const WOODS_A = 0.378, WOODS_B = 0.845;
       const inWoods = (s) => s >= WOODS_A && s <= WOODS_B;
       // Marshal posts inside the woods (blocks 5/6) — the verge scrub yields.
-      const WOOD_POSTS = [[0.430, 1], [0.458, -1], [0.528, -1], [0.630, -1], [0.756, 1]];
+      const WOOD_POSTS = [[0.430, 1], [0.458, -1], [0.523, -1], [0.630, -1], [0.756, 1]];
 
       /* 0. SHARED HELPERS — the three things the bowl needs a lot of:      */
       /*    parked cars, boundary planting, and a guarded set-back test.    */
@@ -198,10 +198,10 @@
       // a grass bank: catering units, a toilet block, a burger van and the
       // programme hut. Small, low and repeated, never a wall of buildings.
       for (const [s, d] of [
-        [0.066, 34], [0.074, 34], [0.082, 35], [0.090, 36],
+        [0.066, 40], [0.074, 34], [0.082, 35], [0.090, 36],
         [0.180, 33], [0.190, 33], [0.200, 34],
         [0.850, 35], [0.858, 35], [0.866, 44], [0.876, 35],
-        [0.900, 34], [0.910, 34], [0.922, 35], [0.934, 36],
+        [0.900, 41], [0.910, 34], [0.922, 35], [0.934, 36],
         [0.310, 44], [0.340, 37], [0.368, 36],
       ]) {
         const k = K(s);
@@ -211,7 +211,9 @@
       }
       // Burger vans, awnings and portaloo blocks scattered on the rim.
       for (const [s, d, sz, col] of [
-        [0.070, 41, [3.0, 3.2, 7.5], CHALK], [0.086, 42, [2.6, 3.0, 6.5], STEEL],
+        // (0.086 van dropped: the 2026-11 line move re-rounds every K() node
+        // by one, and it then stood 2.3 m inside the 0.082/0.090 rim hut.)
+        [0.070, 41, [3.0, 3.2, 7.5], CHALK],
         // (0.184 burger van dropped: built-frame it lands on the Paddock Hill
         // catering row, block 2, and stood inside its first hut.)
         [0.204, 41, [2.4, 2.8, 6.0], RENDER],
@@ -264,8 +266,8 @@
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
           tree(k, side, dist, 8 + h * 5, h < 0.6 ? OAK : OAK_L);
-          if (h > 0.80 && clear(k, side, dist + 12, 9)) {
-            tree(k, side, dist + 12, 7 + h * 4, OAK_D);
+          if (h > 0.80 && clear(k, side, dist + 10, 9)) {
+            tree(k, side, dist + 10, 7 + h * 4, OAK_D);
           }
         }
       });
@@ -274,7 +276,7 @@
       // The bowl is tight, so these sit on the OUTSIDE only: a hedgerow run on
       // the infield would cross the far side of the loop and be guard-dropped.
       hedge(0.104, 0.166, -1, 44, 2.2, OAK_D);
-      hedge(0.222, 0.296, -1, 46, 2.2, OAK_D);
+      hedge(0.222, 0.281, -1, 46, 2.2, OAK_D);   // ends short of 0.285: its boxes fought on the Clark Curve exit
       hedge(0.894, 0.952, -1, 42, 2.0, OAK_D);
       // Post-and-rail between the rim path and the car park fields (instanced).
       wall(0.056, 0.146, -1, 70, 1.3, RENDER);
@@ -486,7 +488,7 @@
       signBoard(K(sl(0.022)), -1, 30, 10, 6, DKGREY);
       signBoard(K(sl(0.052)), -1, 28, 8, 5, DKGREY);
       // Catering and the bank's own toilet block, behind the standing crowd.
-      for (const [s, d] of [[0.020, 35], [0.032, 32], [0.046, 31], [0.058, 33]]) {
+      for (const [s, d] of [[0.020, 35], [0.032, 32], [0.046, 31], [0.058, 24]]) {
         const k = K(sl(s));
         if (clear(k, -1, d, 10)) house(k, -1, d, 7, 3.2, 6, {});
       }
@@ -520,18 +522,19 @@
       if (clear(K(sl(0.950)), 1, 40, 10)) {
         building(K(sl(0.950)), 1, 40, 15, 6.0, 13, {});
       }
-      // Gap 42: the office row above the bays runs 27..41 m (w 14).
-      if (clear(K(sl(0.942)), 1, 42, 10)) {
-        house(K(sl(0.942)), 1, 42, 10, 4.5, 9, {});
-      }
+      // (sl(0.942) house dropped with the line move to the real Brabham
+      // straight: there it stood inside the Clark Curve lock-up row, block 3.)
 
       // The KENTAGON — circuit bar/clubhouse opposite Paddock Hill Grandstand
       // (docs/tracks brief; historical fan name). MSV 2022 venue doc lists
       // "Hailwoods Restaurant" separately — see PR UNCERTAIN note.
-      // Gap 38 (not 20): modelGroup preflight treats the pit-complex band as
-      // superseded, so a required group at gap 20 is dropped.
+      // Gap 50 (was 38, before that 20): modelGroup preflight treats the
+      // pit-complex band as superseded, and with the line on the real Brabham
+      // straight (2026-11-18, #5316) the complex reaches Paddock Hill, so at 38
+      // the Kentagon was dropped as "superseded by the pit complex" (46 and 54
+      // clip a tree).
       {
-        const a = anchor(K(sl(0.018)), 1, 38);
+        const a = anchor(K(sl(0.018)), 1, 50);
         const b = [a.r, a.u, a.t];
         const gy = terrainYAt(a.c[0], a.c[2]);
         const dy = gy != null ? (gy - a.c[1]) : 0;
@@ -819,7 +822,7 @@
       // (row 0.532/-1, 12 m). The only furniture in the wood besides barriers.
       groundPatch(K(0.534), -1, 20, [22, 0.3, 30], GRAVEL);
       groundPatch(K(0.545), -1, 18, [18, 0.3, 22], GRAVEL);
-      marshalPost(K(0.528), -1, 13);
+      marshalPost(K(0.523), -1, 13);   // just short of the 0.526 tyre wall it stood in
       // Gravel at the other two places the GP loop needs it, plus Surtees and
       // the drop out of Sheene.
       groundPatch(K(0.468), 1, 17, [20, 0.3, 26], GRAVEL);
@@ -932,4 +935,18 @@
       farHill(0.46, 1, 1140, 1886, 96, -37);
       farHill(0.68, -1, 1020, 1517, 67, -30);
       farHill(0.88, 1, 1050, 1640, 80, -33);
+
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      // Paddock/pit complex travels with sl(); bowl/woods cameras stay in ID frame.
+      // 52 m, not 70: on the real Brabham straight the paddock is ~70-100 m
+      // deep, so 70 m reached the Graham Hill / Cooper Straight tree line.
+      for (const s of [0.030, 0.045, 0.055]) {
+        if (clear(K(sl(s)), 1, 52, 22)) bakedModel("k_tentlong", K(sl(s)), 1, 52, { scale: 2.4 });
+      }
+      bakedModel("k_camera_exclusive", K(sl(0.014)), -1, 13, { scale: 3 }); // Paddock Hill
+      for (const [s, side] of [[0.076, -1], [0.190, -1], [0.378, -1], [0.914, -1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
   };

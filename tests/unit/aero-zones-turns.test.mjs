@@ -1,10 +1,8 @@
-// aero-zones-turns.test.mjs — AERO_ZONE_TURNS (js/physics/aero-zones.js) must
-// reproduce EXACTLY the zone set the length-only selection already ships,
-// for every circuit it names. That is the whole safety property: the table
-// re-expresses an already-sourced selection (ZONE_COUNT) in turn-keyed form,
-// it does not re-derive which straight is correct, so it must never disagree
-// with the length-only fallback it is meant to be equivalent to. A mismatch
-// here means a stale AERO_ZONE_TURNS entry, not a bug in def.turns.
+// aero-zones-turns.test.mjs — how AERO_ZONE_TURNS pairs resolve on the built
+// centreline. The table itself is checked against the sourced FIA 2026
+// fixture (tests/data/aero-zones-fia-2026.json) in aero-zone-tables.test.mjs;
+// it used to be compared here with a length-only selection derived from the
+// same table, which proved nothing about the real zones.
 //
 // Second guard: bahrain and jeddah must NEVER get a turn-pair entry until a
 // located start coordinate is recorded (bahrain) or turn-pair spans are
@@ -22,39 +20,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const require2 = createRequire(import.meta.url);
 const { buildContext } = require2("../../tools/track/verify-track.cjs");
 
-const X_ZONE_K = 0.0014;
-const X_ZONE_STEP = 8;
-
 function loadAeroZones(Tracks) {
   const ctx = Tracks._vmContext;
   const src = fs.readFileSync(path.join(ROOT, "js/physics/aero-zones.js"), "utf8")
     .replace(/^const\b/gm, "var");
   vm.runInContext(src, ctx, { filename: absSrc("js/physics/aero-zones.js") });
   return ctx.AeroZones;
-}
-
-// Independent re-implementation of the length-only "N longest straights"
-// selection, mirroring js/physics/aero-zones.js's build() but WITHOUT consulting
-// AERO_ZONE_TURNS — the reference this test checks the real module against.
-function lengthOnlyZones(Tracks, def, want) {
-  const track = Tracks.buildCenterline(def);
-  const total = track.total, n = Math.max(8, Math.round(total / X_ZONE_STEP));
-  const straight = new Array(n);
-  for (let i = 0; i < n; i++) {
-    straight[i] = Math.abs(Tracks.curvature(track, (i + 0.5) * total / n)) <= X_ZONE_K;
-  }
-  let i0 = 0;
-  while (i0 < n && straight[i0]) i0++;
-  const runs = [];
-  let cur = null;
-  for (let k = 0; k < n; k++) {
-    const i = (i0 + k) % n;
-    if (straight[i]) { if (!cur) cur = { start: i * total / n, len: 0 }; cur.len += total / n; }
-    else if (cur) { cur.end = cur.start + cur.len; runs.push(cur); cur = null; }
-  }
-  if (cur) { cur.end = cur.start + cur.len; runs.push(cur); }
-  return runs.slice().sort((a, b) => b.len - a.len).slice(0, want)
-             .sort((a, b) => a.start - b.start);
 }
 
 const Tracks = buildContext();
@@ -67,35 +38,17 @@ test("AERO_ZONE_TURNS never names bahrain or jeddah", () => {
     "jeddah turn-pair spans are not re-keyed yet — ZONE_COUNT fallback only");
 });
 
-test("every AERO_ZONE_TURNS entry reproduces the length-only selection exactly", () => {
-  const mismatches = [];
-  for (const id of Object.keys(AeroZones.AERO_ZONE_TURNS)) {
-    const def = Tracks.LIST.find((d) => d.id === id);
-    assert.ok(def, `AERO_ZONE_TURNS names unknown circuit "${id}"`);
-    const want = AeroZones.ZONE_COUNT[id];
-    assert.ok(want != null, `"${id}" has turn pairs but no ZONE_COUNT`);
-
-    const track = Tracks.buildCenterline(def);
-    const G = { track };
-    const az = AeroZones.create(G);
-    const turnKeyed = az.build();
-
-    const reference = lengthOnlyZones(Tracks, def, want);
-
-    if (turnKeyed.length !== reference.length) {
-      mismatches.push(`${id}: turn-keyed gave ${turnKeyed.length} zones, length-only gives ${reference.length}`);
-      continue;
-    }
-    for (let i = 0; i < reference.length; i++) {
-      const a = turnKeyed[i], b = reference[i];
-      if (Math.abs(a.start - b.start) > 1e-6 || Math.abs(a.end - b.end) > 1e-6) {
-        mismatches.push(`${id} zone ${i}: turn-keyed [${a.start.toFixed(1)},${a.end.toFixed(1)}] ` +
-          `!= length-only [${b.start.toFixed(1)},${b.end.toFixed(1)}]`);
-      }
-    }
-  }
-  assert.deepEqual(mismatches, [], "AERO_ZONE_TURNS disagrees with the sourced length-only selection:\n  " +
-    mismatches.join("\n  "));
+test("a pair spans every straight between its two apexes — a kink does not split an FIA zone", () => {
+  // Kemmel (Spa T4 -> T5) is split by a flat kink into two straight runs; the
+  // FIA zone A3 starts after T4 and runs to Les Combes, so the built zone must
+  // cover both runs, not just the longer one (the old occurrence-index scheme).
+  const def = Tracks.LIST.find((d) => d.id === "spa");
+  const track = Tracks.buildCenterline(def);
+  const zones = AeroZones.create({ track }).build();
+  const L = track.total, t4 = def.turns[3] * L, t5 = def.turns[4] * L;
+  const kemmel = zones.filter((z) => z.start > t4 && z.end < t5);
+  assert.equal(kemmel.length, 1, "one Kemmel zone");
+  assert.ok(kemmel[0].len > 900, `Kemmel zone ${kemmel[0].len.toFixed(0)} m — the kink split it`);
 });
 
 test("every ZONE_COUNT circuit still resolves to exactly its published count", () => {

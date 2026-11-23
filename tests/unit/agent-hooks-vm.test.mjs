@@ -10,6 +10,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
@@ -49,6 +50,27 @@ test("rollout stops at the flag instead of averaging frozen frames", async () =>
   assert.equal(again.error, "RaceOverError");
 });
 
+test("agent steps move the cooldown field until player control ends", async () => {
+  await load();
+  const { player, cars } = g.G;
+  const rival = cars.find(c => c !== player);
+  rival.speed = 40;
+  g.apex.finishRace({ ceremony: true });
+  assert.equal(g.apex.ceremony().inputOwner, "player");
+  const pos = player.finPos, time = player.finishT;
+  const start = player.s, rivalStart = rival.s;
+  g.apex.step(1 / 60, 3);
+  assert.notEqual(player.s, start);
+  assert.notEqual(rival.s, rivalStart);
+  assert.equal(player.finPos, pos);
+  assert.equal(player.finishT, time);
+
+  g.apex.ceremony("results");
+  const parked = cars.map(c => c.s);
+  g.apex.step(1 / 60, 3);
+  assert.deepEqual(cars.map(c => c.s), parked);
+});
+
 test("rollout refuses a policyHz that is not positive", async () => {
   await load("monza", 0.05, 50);
   for (const policyHz of [0, -5]) {
@@ -69,6 +91,32 @@ test("a lapped rival a few metres ahead on the road is ahead, not a lap away", a
   lt(r.gapM, 15);
   assert.equal(r.lapsAhead, -1);
   assert.notEqual(r.threat, "clear");
+  // describe("car:N") must use the same road-gap wrap as rivals() — raw prog
+  // used to report "behind" by nearly a lap for this same car.
+  const d = g.apex.describe("car:" + id);
+  assert.equal(d.rel, "ahead");
+  lt(d.gapToPlayerM, 15);
+});
+
+test("objective and world() agree on overtake / X-mode (no stale cooldown or 3 s look-ahead)", async () => {
+  await load("monza", 0.1, 50);
+  const trade = g.apex.objective().tradeoffs.join("\n");
+  assert.doesNotMatch(trade, /16 s of cooldown|4 s of boost then/i);
+  assert.match(trade, /detection line/i);
+  assert.match(trade, /0\.5 MJ/);
+  const note = g.apex.world({ detail: "full" }).ego.aero.note;
+  assert.doesNotMatch(note, /3 s of straight/);
+  assert.doesNotMatch(note, /\+7\.5%/);
+  assert.match(note, /X-mode zone|activation zone/i);
+  const help = g.apex.agentHelp();
+  const notes = (help.notes || []).join("\n");
+  assert.doesNotMatch(notes, /no agent hook returns null/i);
+  assert.match(notes, /obs|physState|probe/i);
+  // Cold car: these read hooks return null (the note must not claim otherwise).
+  const px = g.G.player.px;
+  g.G.player.px = undefined;
+  assert.equal(g.apex.obs(), null);
+  g.G.player.px = px;
 });
 
 test("same-lap rivals do not invent lapsAhead from nearest-prog wrap", async () => {
@@ -259,6 +307,28 @@ test("a stepped race switch under go() keeps the loop alive and step() safe whil
   } finally { h.close(); }
 });
 
+/* go() skips the lights, and so does goRolling (a real-race jump-in). Race entry defers each rear-grid car's atlas
+ * upload and shadow caster to drainDeferredCarWarm, which tickBody ran only in state "count": after a green that
+ * skipped the count the pieces stayed queued and each built on its first draw, mid-lap (a 140-250 ms Car3D.build
+ * when a deferred rival entered caster range). perf-idle-pipeline-churn read that as a bind group + object buffer
+ * in an idle window (#5830: `[car] build haas` / `build ferrari` inside the counted stretch). The race frames
+ * drain it now, a budget a frame. Own handle: it reorders the grid. */
+test("a green that skipped the lights still drains the rear grid's deferred car warm (#5830)", async () => {
+  const h = await createGame({ track: "monza" });
+  try {
+    const cd = vm.runInContext("CarDraw.instance()", h.ctx);
+    const me = h.G.cars.find((c) => c.isPlayer);
+    let k = 2; for (const c of h.G.cars) c.gridPos = c === me ? 1 : k++;   // pole: every rival but P2 is rear grid
+    assert.equal(await cd.warmCarAssetsAsync(() => true, 8, { deferRear: true }), true, "race entry's stepped warm");
+    gt(cd.drainDeferredCarWarm(1e-9), 0, "the warm queued rear-grid pieces for the lights (one taken here)");
+    h.apex.go();
+    assert.equal(h.G.state, "race", "go(): green with no countdown");
+    let now = h.sandbox.performance.now();
+    for (let i = 0; i < 10; i++) { now += 16.7; h.pumpFrame(now); }
+    assert.equal(cd.drainDeferredCarWarm(1e-9), 0, "race frames drained what the skipped lights owed");
+  } finally { h.close(); }
+});
+
 /* jump() under updateCarAdvance's 20 m teleport threshold (the browser's pole
  * at Monza sits 14 m behind the line, and a rAF frame has already stamped
  * _prevS before the spec's jump(0)): with _prevS left at the old s the next step
@@ -371,4 +441,214 @@ test("a def without turns gets the smoothed-peak corner table, not __apex.corner
   } finally {
     def.turns = turns;
   }
+});
+
+// UI contract 2026-11-06 rule 8: __apex.sheetFit is SheetShape.layoutProbe behind a selector, so a spec cell and a
+// shell probe read one implementation. Pin the alias and its empty answers. The VM DOM's querySelector is a stub that
+// mints a fresh element (tools/lib/game-vm.cjs), so the element form carries the identity check and the selector form
+// is pinned only as "routes through querySelector" — tests/specs/ui-resize.spec.js reads the real one.
+test("sheetFit is SheetShape.layoutProbe behind an element, a selector or the first painted sheet", () => {
+  const doc = g.sandbox.document, el = doc.getElementById("pmsettings-inner");
+  truthy(el, "the settings sheet is in the shell");
+  const byEl = g.apex.sheetFit(el);
+  assert.deepEqual(byEl, g.sandbox.SheetShape.layoutProbe(el), "the alias adds nothing and drops nothing");
+  assert.equal(byEl.id, "pmsettings-inner");
+  for (const k of ["own", "painted", "host", "viewport", "inner", "body", "zoom"]) assert.ok(k in byEl, k);
+  const bySel = g.apex.sheetFit("#pmsettings-inner");
+  truthy(bySel && typeof bySel === "object", "a selector string is looked up, not probed as an element");
+  assert.equal(g.apex.sheetFit(), null, "no argument and no painted .sheet / .fit-managed answers null");
+  assert.equal(g.apex.sheetFit(0), null, "a non-element, non-string argument answers null");
+});
+
+// ── W25 rows 9 and 11 (2026-11-10): lap integrity, replayable reset, the 1/60 step, spin's sign ──
+
+/* jump() 60 m before the line, then across it, banked the time since the last
+ * crossing as a lap: a 2.97-3.57 s best. A teleport is not a driven lap, so it
+ * is deleted; {keepLap:true} is the fixture opt-out. fieldLaps()/lapHistory()
+ * log both crossings, the deleted one valid:false. */
+test("jump() deletes the lap in progress, {keepLap:true} keeps it, and fieldLaps() logs both", async () => {
+  await load("monza", 0.05, 60);
+  const G = g.G, p = G.player, T = G.track.total;
+  const cross = () => { const from = p.lap; for (let i = 0; i < 600 && p.lap === from; i++) g.apex.step(1 / 60, 1); assert.equal(p.lap, from + 1, "never reached the line"); };
+  g.apex.setInput({ steer: 0, throttle: true });
+  p.lap = Math.max(p.lap, 1);
+  g.apex.jump((T - 60) / T, 70, 0);
+  cross();
+  assert.equal(isFinite(p.best), false, `a teleported lap set a best of ${p.best}`);
+  g.apex.step(1 / 60, 30);
+  g.apex.jump((T - 60) / T, 70, 0, { keepLap: true });
+  cross();
+  gt(p.lastLap, 0, "the opted-out lap is timed");
+  g.apex.clearInput();
+  const mine = g.apex.fieldLaps().find((r) => r.id === G.cars.indexOf(p));
+  const tail = mine.laps.slice(-2).map((l) => l.valid);
+  assert.equal(tail.join(), "false,true", JSON.stringify(mine.laps));
+  assert.equal(mine.laps.at(-1).time, +p.lastLap.toFixed(3));
+  assert.equal(g.apex.lapHistory().laps.slice(-2).map((l) => l.valid).join(), "false,true");
+});
+
+test("reset() without a seed replays the last seeded episode (the RNG stream is rewound)", async () => {
+  await load("monza", 0.05, 0);
+  const run = (seed) => {
+    if (seed === undefined) g.apex.reset(0, 0, 0); else g.apex.reset(0, 0, 0, seed);
+    g.apex.setInput({ steer: 0, throttle: true });
+    const st = [];
+    for (let k = 0; k < 3; k++) { g.apex.step(1 / 60, 60); st.push(g.G.cars.map((c) => c.prog.toFixed(4)).join(",")); }
+    return st.join("|");
+  };
+  run(7);   // warm-up: the first episode after a load still differs (pre-existing, not this row)
+  const seeded = run(7), unseeded = run(), again = run(7);
+  g.apex.clearInput();
+  assert.equal(again, seeded, "fixture: the same seed replays");
+  assert.equal(unseeded, seeded, "reset() without a seed continued the draw stream");
+});
+
+test("step(dt) runs whole 1/60 physics steps: 1/120 x 240 and 1/30 x 60 equal 1/60 x 120", async () => {
+  await load("monza", 0.05, 0);
+  const prog = (dt, n) => { g.apex.reset(0, 0, 0, 7); g.apex.setInput({ steer: 0, throttle: true }); g.apex.step(dt, n); return Array.from(g.G.cars, (c) => c.prog); };
+  prog(1 / 60, 120);   // warm-up episode (see the reset() test above)
+  const ref = prog(1 / 60, 120), half = prog(1 / 120, 240), dbl = prog(1 / 30, 60);
+  g.apex.clearInput();
+  assert.deepEqual(half, ref, "a 120 Hz step is not the game physics");
+  assert.deepEqual(dbl, ref);
+  truthy(g.record.console.some((c) => /runs as whole 1\/60/.test(c[1])), "the quantisation warns");
+});
+
+test("spin(+deg) turns the nose LEFT (counter-clockwise from above), as its doc now says", async () => {
+  await load("monza", 0.03, 40);
+  g.apex.setInput({ steer: 0, throttle: false });
+  g.apex.spin(15);
+  g.apex.step(1 / 60, 30);
+  g.apex.clearInput();
+  lt(g.G.player.x, -1, `x ${g.G.player.x}: + x is right of the centreline`);
+});
+
+test("classification() orders a live field and caution({force}) flies a scripted flag", async () => {
+  await load("monza", 0.05, 0);
+  const c = g.apex.classification();
+  assert.equal(c.final, false);
+  assert.equal(c.rows.length, g.G.cars.length);
+  assert.deepEqual(c.rows.map((r) => r.pos), c.rows.map((_, i) => i + 1));
+  truthy(c.rows.every((r) => r.status === "running" || r.status === "retired"));
+  assert.equal(g.apex.caution({ force: 2, cause: "test" }).level, 0, "the hold lands on the next tick");
+  g.apex.step(1 / 60, 1);
+  assert.equal(g.apex.caution().level, 2);
+  g.apex.caution({ force: 0 });
+  assert.equal(g.apex.caution().level, 0, "force:0 releases at once");
+});
+
+// W25 row 10: headless races never raised a flag, so the safety-car queue had no VM test.
+// caution({force:3}) flies the SC by script; the AI field must close up behind it at SC pace
+// and race again once force:0 hands the flag back. Measured on monza (seed 1): the largest
+// gap between consecutive AI cars went 74 m -> 34 m in 75 s, top AI speed 55 -> 30 m/s, and
+// back to 49 m/s within 10 s of the release.
+test("caution({force:3}) queues the AI field behind the safety car and force:0 releases it", async () => {
+  await load("monza", 0.05, 60);
+  const ai = () => g.G.cars.filter((c) => !c.retired && !c.isPlayer && !c.human);
+  const maxGap = () => {
+    const p = ai().map((c) => c.prog).sort((a, b) => b - a);
+    let m = 0; for (let i = 1; i < p.length; i++) m = Math.max(m, p[i - 1] - p[i]);
+    return m;
+  };
+  const vMax = () => Math.max(...ai().map((c) => c.speed));
+  g.apex.step(1 / 60, 60 * 40);
+  const greenGap = maxGap(), greenV = vMax();
+  g.apex.caution({ force: 3, cause: "test" });
+  g.apex.step(1 / 60, 60 * 75);
+  assert.equal(g.apex.caution().level, 3);
+  const scGap = maxGap(), scV = vMax();
+  lt(scGap, greenGap * 0.7, `queue closes: ${scGap.toFixed(0)} m vs ${greenGap.toFixed(0)} m green`);
+  lt(scV, greenV * 0.7, `SC pace: ${scV.toFixed(1)} vs ${greenV.toFixed(1)} m/s green`);
+  g.apex.caution({ force: 0 });
+  g.apex.step(1 / 60, 60 * 10);
+  assert.equal(g.apex.caution().level, 0);
+  gt(vMax(), scV * 1.3, "the field races again after the release");
+});
+
+// finishRace() must end the race through G.endRace as it is AT CALL TIME: RealRace wraps
+// G.endRace after boot, and a boot-time capture skipped that wrap (a script DSQ was lost).
+test("finishRace() calls the current G.endRace, not a boot-time capture", async () => {
+  await load("monza", 0.1, 40);
+  const orig = g.G.endRace;
+  let calls = 0;
+  g.G.endRace = function (...a) { calls++; return orig.apply(this, a); };
+  try {
+    g.apex.finishRace();
+    assert.equal(calls, 1);
+    assert.equal(g.apex.info().state, "results");
+  } finally { g.G.endRace = orig; }
+});
+
+// Live-play audit 2026-11: at the title GameAudio is the eager stub (no profiles()), and
+// audio() threw a TypeError instead of the documented no_audio answer; carState()[i].best
+// was Infinity before a lap, the only non-finite number any hook returned.
+test("audio() at the title answers no_audio, and carState() holds only finite numbers or null", async () => {
+  const fresh = await createGame({});
+  try {
+    const a = fresh.apex.audio();
+    assert.equal(a.ok, false);
+    assert.equal(a.error, "no_audio");
+  } finally { fresh.close(); }
+  await load("monza", 0.05, 40);
+  const cs = g.apex.carState();
+  assert.equal(cs[0].best, null, "no lap yet: best is null, not Infinity");
+  const bad = cs.flatMap((o) => Object.entries(o)).filter(([, v]) => typeof v === "number" && !Number.isFinite(v));
+  assert.equal(bad.length, 0, JSON.stringify(bad));
+});
+
+// bankingDeg reports the peak centreline roll over the corner window (#5712).
+// Hugenholtz varies from 4.5° inside to 19° outside; the centreline has their mean gradient.
+test("Zandvoort's progressive T3 and uniform T14 report their peak centreline bank", async () => {
+  await load("zandvoort", 0.03, 60);
+  const cs = g.apex.trackInfo({ what: "corners" }).corners;
+  const at = (t) => cs.find((c) => c.turn === t);
+  assert.equal(at("T3").bankingDeg, 11.9);
+  assert.equal(at("T14").bankingDeg, -18);
+});
+
+// The VM twin has no dynamic-import loader, so Rapier never loads and every
+// debris hazard reads 0; debris() names that instead of a bare `ready:false`.
+test("debris() says the VM cannot load the physics world", async () => {
+  await load("monza", 0.05, 60);
+  g.apex.debris(true);
+  let st = g.apex.debris();
+  for (let i = 0; i < 200 && st.loadState === 1; i++) { await new Promise((r) => setImmediate(r)); st = g.apex.debris(); }
+  assert.equal(st.loadState, -1);
+  assert.equal(st.vmUnsupported, true);
+  assert.equal(st.active, false);
+});
+
+// Feel and pit loss were on G and never on __apex (#5712).
+test("world full carries feel; pit() carries the lane loss", async () => {
+  await load("monza", 0.05, 60);
+  const feel = g.apex.world({ detail: "full" }).feel;
+  assert.deepEqual(Object.keys(feel), ["shake", "hitStop", "camRoll"]);
+  assert.equal(feel.shake, 0);
+  assert.equal(feel.hitStop, 0);
+  const pit = g.apex.pit();
+  // Monza's lane at racing speed (the real figure is ~22-24 s).
+  assert.equal(pit.lossS, 22.54);
+});
+
+test("race() leaves a career in the saved free-play seat on the requested circuit", async () => {
+  const game = await createGame({ storage: { trackId: "monza" }, carMeshes: false });
+  try {
+    const { apex, G } = game;
+    const teams = game.sandbox.Teams.LIST;
+    G.store.set("team", teams.findIndex(t => t.id === "mclaren"));
+    G.store.set("driver", 0);
+    apex.career({ teamId: "haas", seat: 1, seed: 7 });
+    assert.equal(teams[G.teamIdx].id, "haas");
+    assert.equal(G.driverIdx, 1);
+    assert.equal(apex.race("unknown-circuit"), false);
+    assert.equal(G.flow, "career");
+
+    await game.race("bahrain");
+    assert.equal(G.flow, "gp");
+    assert.equal(G.track.def.id, "bahrain");
+    assert.equal(G.player.team.id, "mclaren");
+    assert.equal(G.driverIdx, 0);
+    assert.equal(apex.career().team, "haas");
+    assert.equal(apex.career().seat, 1);
+  } finally { game.close(); }
 });

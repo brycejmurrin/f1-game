@@ -60,7 +60,13 @@ const DesignerCanvas = (function () {
     let stale = false;               // the built road no longer matches the loop being dragged
     let issues = [];
     let sel = -1, span = -1, hover = -1, tool = "select";
-    let scale = 0.1, cx = 0, cz = 0, fitted = false;
+    // viewMoved: the player panned, zoomed or focused since the last fit — a
+    // resize then keeps their view; otherwise it re-fits the loop to the new box.
+    // fitHeld: START FROM hydration (and similar) pins the view so a Loading /
+    // SW reflow cannot re-fit under a drag the caller already aimed (#6031).
+    let scale = 0.1, cx = 0, cz = 0, fitted = false, viewMoved = false, fitHeld = 0;
+    let idleWaiters = [];
+    let preIns = null;               // sel/span before an insert-drag, for a pinch that abandons it (#5743 D4)
     let mode = "none", dragI = -1, inserted = false, moved = false, start = null, path = null, rangeAnchor = -1;
     // Group drag: when a SPAN is selected, moving any member translates the whole
     // group by the same delta (origins snapshotted at beginDrag).
@@ -102,20 +108,20 @@ const DesignerCanvas = (function () {
       const spanX = Math.max(60, b.x1 - b.x0), spanZ = Math.max(60, b.z1 - b.z0);
       scale = clamp(Math.min(W / spanX, H / spanZ) * 0.82, MIN_SCALE, MAX_SCALE);
       cx = (b.x0 + b.x1) / 2; cz = (b.z0 + b.z1) / 2;
-      fitted = true;
+      fitted = true; viewMoved = false;
       if (hooks.onView) hooks.onView(view());
     }
     function view() { return { scale, cx, cz, w: W, h: H }; }
     function zoomAt(f, sx, sy) {
       const wx = toWX(sx), wz = toWZ(sy);
-      scale = clamp(scale * f, MIN_SCALE, MAX_SCALE);
+      scale = clamp(scale * f, MIN_SCALE, MAX_SCALE); viewMoved = true;
       cx = wx - (sx - W / 2) / scale; cz = wz - (sy - H / 2) / scale;
       if (hooks.onView) hooks.onView(view());
     }
     function focusAt(s) {
       if (!built || !built.n) return;
       const k = Math.round((((s / built.total) % 1) + 1) % 1 * built.n) % built.n;
-      cx = built.px[k]; cz = built.pz[k];
+      cx = built.px[k]; cz = built.pz[k]; viewMoved = true;
       if (scale < 0.6) scale = 0.6;
       render();
     }
@@ -136,9 +142,17 @@ const DesignerCanvas = (function () {
       resizeRetry = 0;
       dpr = Math.min(3, window.devicePixelRatio || 1);
       if (w === W && h === H && canvas.width === Math.round(w * dpr)) return;
+      const prevW = W, prevH = H;
       W = w; H = h;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      if (!fitted) fit();
+      // Keep the same world point under each screen pixel when we do not re-fit:
+      // toSX = (x - cx) * scale + W/2, so ΔW shifts handles by ΔW/2 unless cx follows.
+      const keep = viewMoved || fitHeld > 0 || pointers.size > 0;
+      if (!fitted || !keep) fit();
+      else if (scale) {
+        cx += (W - prevW) / (2 * scale);
+        cz += (H - prevH) / (2 * scale);
+      }
       render();
     }
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
@@ -254,6 +268,9 @@ const DesignerCanvas = (function () {
         if (mode === "drag" || mode === "held" || mode === "press") {
           work = null; stale = false; dragI = -1; press = null;
           dragGroup = null; dragOrigins = null; drag0 = null;
+          // An insert the pinch threw away: its spliced index (N on the closing
+          // segment) is no point at all — hand the prior selection back.
+          if (inserted) { inserted = false; moved = false; if (preIns) { sel = preIns.sel; span = preIns.span; } preIns = null; tellSelect(); }
         }
         if (mode === "draw") { path = null; }
         const [a, b] = [...pointers.values()];
@@ -297,6 +314,7 @@ const DesignerCanvas = (function () {
         if (hooks.onLimit) hooks.onLimit("points");
       } else if (k >= 0 && tool === "select" && !ev.shiftKey && !pickOnly) {
         taps[taps.length - 1] = { kind: "insert", i: k + 1 };
+        preIns = { sel, span };
         beginDrag(k + 1, true);
         placeGroup(toWX(p.x), toWZ(p.y));
         sel = dragI; span = -1; tellSelect();
@@ -329,7 +347,7 @@ const DesignerCanvas = (function () {
       if (mode === "pinch" && pointers.size >= 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-        scale = clamp(pinch0.scale * d / pinch0.dist, MIN_SCALE, MAX_SCALE);
+        scale = clamp(pinch0.scale * d / pinch0.dist, MIN_SCALE, MAX_SCALE); viewMoved = true;
         const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         cx = pinch0.wx - (mx - W / 2) / scale; cz = pinch0.wz - (my - H / 2) / scale;
         render();
@@ -346,51 +364,58 @@ const DesignerCanvas = (function () {
         return;
       }
       if (mode === "pan") {
-        cx -= (p.x - prev.x) / scale; cz -= (p.y - prev.y) / scale;
+        cx -= (p.x - prev.x) / scale; cz -= (p.y - prev.y) / scale; viewMoved = true;
         render();
         return;
       }
       if (mode === "draw" && path) {
         const lastPt = path[path.length - 1], wx = toWX(p.x), wz = toWZ(p.y);
-        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) path.push([wx, wz]);
+        if (Math.hypot(wx - lastPt[0], wz - lastPt[1]) >= Math.max(1.5, 2 / scale)) {
+          if (path.length === 1 && hooks.onBegin) hooks.onBegin();
+          path.push([wx, wz]);
+        }
         render();
       }
     }
     function onUp(ev) {
       if (!pointers.has(ev.pointerId)) return;
-      cancelHold();
-      pointers.delete(ev.pointerId);
-      try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
-      if (mode === "held") { mode = "none"; press = null; render(); return; }
-      if (mode === "pinch") { if (pointers.size < 2) { mode = pointers.size === 1 ? "pan" : "none"; pinch0 = null; if (hooks.onView) hooks.onView(view()); } return; }
-      if (mode === "press") {
-        // Tap / click / below-threshold jitter: select only — coordinates unchanged.
-        const i = press ? press.i : -1;
-        const shift = !!(ev.shiftKey || (press && press.shift));
-        press = null; mode = "none";
-        if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: shift, altKey: !!ev.altKey });
-        render();
-        return;
+      try {
+        cancelHold();
+        pointers.delete(ev.pointerId);
+        try { canvas.releasePointerCapture(ev.pointerId); } catch (_) { /* not captured */ }
+        if (mode === "held") { mode = "none"; press = null; render(); return; }
+        if (mode === "pinch") { if (pointers.size < 2) { mode = pointers.size === 1 ? "pan" : "none"; pinch0 = null; if (hooks.onView) hooks.onView(view()); } return; }
+        if (mode === "press") {
+          // Tap / click / below-threshold jitter: select only — coordinates unchanged.
+          const i = press ? press.i : -1;
+          const shift = !!(ev.shiftKey || (press && press.shift));
+          press = null; mode = "none";
+          if (i >= 0 && hooks.onPick) hooks.onPick(i, { shiftKey: shift, altKey: !!ev.altKey });
+          render();
+          return;
+        }
+        if (mode === "drag") {
+          if (moved && taps.length) taps[taps.length - 1] = { kind: "move", i: dragI };
+          const out = work; work = null; mode = "none"; stale = false;
+          const kind = inserted ? "insert" : (dragGroup && dragGroup.length > 1 ? "move-span" : "move");
+          const pickShift = !!ev.shiftKey;
+          press = null;
+          if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, kind); }
+          else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: pickShift, altKey: !!ev.altKey });
+          dragI = -1; dragGroup = null; dragOrigins = null; drag0 = null; render();
+          return;
+        }
+        if (mode === "draw") {
+          const out = path; path = null; mode = "none";
+          if (out && out.length >= 3 && hooks.onDraw) hooks.onDraw(out);
+          render();
+          return;
+        }
+        mode = "none"; press = null;
+        if (hooks.onView) hooks.onView(view());
+      } finally {
+        notifyIdle();
       }
-      if (mode === "drag") {
-        if (moved && taps.length) taps[taps.length - 1] = { kind: "move", i: dragI };
-        const out = work; work = null; mode = "none"; stale = false;
-        const kind = inserted ? "insert" : (dragGroup && dragGroup.length > 1 ? "move-span" : "move");
-        const pickShift = !!ev.shiftKey;
-        press = null;
-        if (out && (moved || inserted)) { if (hooks.onChange) hooks.onChange(out, kind); }
-        else if (hooks.onPick) hooks.onPick(dragI, { shiftKey: pickShift, altKey: !!ev.altKey });
-        dragI = -1; dragGroup = null; dragOrigins = null; drag0 = null; render();
-        return;
-      }
-      if (mode === "draw") {
-        const out = path; path = null; mode = "none";
-        if (out && out.length >= 3 && hooks.onDraw) hooks.onDraw(out);
-        render();
-        return;
-      }
-      mode = "none"; press = null;
-      if (hooks.onView) hooks.onView(view());
     }
     // pointercancel AND lostpointercapture: a dialog hidden mid-drag takes the
     // capture without a pointerup, which left a stale pointer behind and the
@@ -402,12 +427,29 @@ const DesignerCanvas = (function () {
       if (pointers.size === 0) reset();
       else if (mode === "pinch" && pointers.size < 2) { mode = "pan"; pinch0 = null; }
     }
+    function busy() {
+      return mode === "press" || mode === "drag" || mode === "draw";
+    }
+    function notifyIdle() {
+      if (busy() || !idleWaiters.length) return;
+      const waiters = idleWaiters; idleWaiters = [];
+      for (const resolve of waiters) resolve();
+    }
+    function whenIdle() {
+      if (!busy()) return Promise.resolve();
+      return new Promise((resolve) => { idleWaiters.push(resolve); });
+    }
+    function holdFit(on) {
+      if (on) fitHeld++;
+      else fitHeld = Math.max(0, fitHeld - 1);
+    }
     function reset() {
       cancelHold();
       pointers.clear(); taps = []; last = null; press = null;
       work = null; path = null; pinch0 = null; mode = "none"; dragI = -1; inserted = false; moved = false; stale = false; hover = -1;
       dragGroup = null; dragOrigins = null; drag0 = null;
       render();
+      notifyIdle();
     }
     function onWheel(ev) {
       ev.preventDefault();
@@ -425,8 +467,8 @@ const DesignerCanvas = (function () {
     }
     // Keyboard: the canvas owns its arrows while a point is selected
     // (js/ui/menu-nav.js stands aside for a focused <canvas> unless it says
-    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] / Tab walk the
-    // selection; Escape clears it.
+    // data-arrows="pass"), 1 m a press, 10 m with Shift; [ ] walk the
+    // selection; Escape clears it. Tab is the browser's: focus leaves the map.
     function cycleSel(dir) {
       const N = base.length; if (!N) return;
       hover = -1;
@@ -447,7 +489,6 @@ const DesignerCanvas = (function () {
         case "ArrowDown": dz = step; break;
         case "[": cycleSel(-1); ev.preventDefault(); return;
         case "]": cycleSel(1); ev.preventDefault(); return;
-        case "Tab": cycleSel(ev.shiftKey ? -1 : 1); ev.preventDefault(); return;
         case "Escape": if (sel >= 0 || span >= 0) { sel = -1; span = -1; tellSelect(); render(); ev.preventDefault(); } return;
         case "Delete": case "Backspace": if (pickOnly) return; if (sel >= 0 && hooks.onDelete) { ev.preventDefault(); hooks.onDelete(sel); } return;
         case "Enter": case " ": if (sel >= 0 && hooks.onPick) { ev.preventDefault(); hooks.onPick(sel, { shiftKey: !!ev.shiftKey, altKey: !!ev.altKey }); } return;
@@ -712,8 +753,12 @@ const DesignerCanvas = (function () {
       g.fillStyle = COL.chipBg; g.fillRect(x, y, tw + 10, 16);
       g.fillStyle = COL.chipText; g.fillText(c.text, x + 5, y + 2);
     }
+    // Setters inside batch() repaint once at the end (an edit used to redraw ~3-7 times).
+    let held = 0, dirty = false;
+    function paint() { if (held) dirty = true; else render(); }
     function render() {
       if (destroyed) return;
+      dirty = false;
       // MenuNav (js/ui/menu-nav.js) reads this: a focused canvas owns the
       // arrows only while they move something.
       const arrows = (sel >= 0 && !pickOnly) ? "own" : "pass";
@@ -729,11 +774,11 @@ const DesignerCanvas = (function () {
 
     // ── api ─────────────────────────────────────────────────────────────────
     const api = {
-      setPoints(pts) { base = Array.isArray(pts) ? pts : []; ghostKey = null; if (sel >= base.length) sel = -1; if (span >= base.length) span = -1; if (!fitted && base.length) fit(); render(); },
+      setPoints(pts) { base = Array.isArray(pts) ? pts : []; ghostKey = null; if (sel >= base.length) sel = -1; if (span >= base.length) span = -1; if (!fitted && base.length) fit(); paint(); },
       // A preview the PREVIOUS edit scheduled can land mid-drag: the road it
       // brings is still the old loop, so a moved drag stays stale.
-      setBuilt(tr) { built = tr && tr.n ? tr : null; ringsFor = null; ringsL = ringsR = null; if (!(mode === "drag" && moved)) stale = false; render(); },
-      setIssues(list) { issues = Array.isArray(list) ? list : []; render(); },
+      setBuilt(tr) { built = tr && tr.n ? tr : null; ringsFor = null; ringsL = ringsR = null; if (!(mode === "drag" && moved)) stale = false; paint(); },
+      setIssues(list) { issues = Array.isArray(list) ? list : []; paint(); },
       setScenery(design, on) {
         sceneryOn = !!on && typeof DesignerSceneryPreview !== "undefined";
         if (sceneryOn) {
@@ -743,7 +788,7 @@ const DesignerCanvas = (function () {
           }
         }
         if (canvas.dataset) canvas.dataset.mapView = sceneryOn ? "scenery" : "outline";
-        render();
+        paint();
       },
       /** SPEED: per-node speeds (m/s, the built road's n) paint the road; null clears. */
       setHeat(v, kind) {
@@ -754,9 +799,9 @@ const DesignerCanvas = (function () {
           heatLow = Math.min(heatLow, value); heatHigh = Math.max(heatHigh, value);
         }
         if (canvas.dataset) canvas.dataset.heatMap = heat ? heatKind : "off";
-        render();
+        paint();
       },
-      setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; render(); },
+      setSelection(i, j) { ghostKey = null; sel = Number.isInteger(i) ? i : -1; span = Number.isInteger(j) ? j : -1; paint(); },
       /** previewFn (optional): (pointIndex) → { pts: [[x, z]…] } | null, world
        *  coords — drawn as the dashed ghost of what the tool would stamp there.
        *  opts.pickOnly: select only (no insert / drag / nudge / double-tap delete). */
@@ -764,7 +809,7 @@ const DesignerCanvas = (function () {
         tool = name || "select"; canvas.style.cursor = tool === "draw" ? "crosshair" : "default";
         pickOnly = !!(opts && opts.pickOnly);
         const fn = typeof previewFn === "function" ? previewFn : null;
-        if (fn || preview) { preview = fn; ghost = null; ghostKey = null; render(); }
+        if (fn || preview) { preview = fn; ghost = null; ghostKey = null; paint(); }
       },
       selection() { return { sel, span }; },
       hover() { return hover; },
@@ -772,9 +817,13 @@ const DesignerCanvas = (function () {
       fit() { fit(); render(); },
       focusAt,
       render,
+      batch(fn) { held++; try { return fn(); } finally { if (!--held && dirty) render(); } },
       resize,
       view,
       zoom(f) { zoomAt(f, W / 2, H / 2); render(); },
+      busy,
+      whenIdle,
+      holdFit,
       reset,
       destroy() {
         if (destroyed) return;
@@ -817,6 +866,6 @@ const DesignerCanvas = (function () {
     return true;
   }
 
-  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS, HOLD_MS, COL };
+  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, HOLD_MS, COL };
 })();
 Object.freeze(DesignerCanvas);

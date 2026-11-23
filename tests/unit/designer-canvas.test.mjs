@@ -493,6 +493,10 @@ test("destroy removes every input subscription and is idempotent", () => {
   const remove = h.canvas.removeEventListener;
   h.canvas.removeEventListener = (type, fn) => { removed.push(type); remove(type, fn); };
   h.cv.destroy(); h.cv.destroy();
+  // Every registration must be gone, not just a remove call per type: a
+  // destroy that removed a different function reference leaves the real one live.
+  const live = [...h.canvas._listeners].filter(([, l]) => l.length).map(([t, l]) => `${t}×${l.length}`);
+  assert.deepEqual(live, [], "listeners still registered after destroy");
   assert.deepEqual(removed.sort(), ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'keydown', 'wheel', 'dblclick', 'pointerleave'].sort());
   const before = JSON.stringify(h.ev);
   h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });
@@ -522,4 +526,85 @@ test("HEIGHT heat stays visible at whole-lap zoom: a 6 px colour ribbon and hand
   assert.ok(new Set(ribbon.map((s) => s.style)).size >= 4, "thin road gets a ≥6 px ribbon in the height colours");
   const gap = 2 * Math.PI * 750 * h.cv.view().scale / n;
   assert.ok(h.rec.arcs.length && h.rec.arcs.every((r) => r < 4.5 && r <= gap * 0.5), "idle handle dots are no wider than the point spacing");
+});
+
+test("batch() coalesces setter repaints into one render (#4476)", () => {
+  const h = boot();
+  const count = () => h.rec.fills.length + h.rec.strokes.length;
+  h.rec.fills.length = 0; h.rec.strokes.length = 0;
+  h.cv.setIssues([]); h.cv.setSelection(2, -1); h.cv.setBuilt(null);
+  const three = count();
+  h.rec.fills.length = 0; h.rec.strokes.length = 0;
+  h.cv.batch(() => { h.cv.setIssues([]); h.cv.setSelection(2, -1); h.cv.setBuilt(null); });
+  const one = count();
+  assert.ok(three > 0 && one > 0);
+  assert.ok(one <= Math.ceil(three / 3) + 1, `batched ${one} draws vs ${three} unbatched`);
+  h.rec.fills.length = 0; h.rec.strokes.length = 0;
+  h.cv.batch(() => {});
+  assert.equal(count(), 0, "a batch that changed nothing paints nothing");
+});
+
+// The destroy test above trusts tests/helpers/mini-dom.mjs's registry: removing
+// a function that was never added must remove NOTHING. The helper's old
+// splice(indexOf(fn), 1) took -1 as "the last listener", so a destroy() that
+// removed a different reference still emptied the list and could not fail.
+for (const where of ["element", "document"]) {
+  test(`mini-dom ${where}: removing an unregistered function keeps every listener`, () => {
+    const dom = makeDom();
+    const target = where === "element" ? dom.document.createElement("canvas") : dom.document;
+    const a = (e) => e.hits.push("a"), b = (e) => e.hits.push("b");
+    const send = () => {
+      const ev = { type: "keydown", hits: [] };
+      if (where === "element") dom.dispatch(target, ev); else target.dispatchEvent(ev);
+      return ev.hits;
+    };
+    target.addEventListener("keydown", a);
+    target.addEventListener("keydown", b);
+    target.removeEventListener("keydown", () => {});
+    target.removeEventListener("keyup", a);
+    assert.deepEqual(send(), ["a", "b"], "a stray remove must not drop the last listener");
+    target.removeEventListener("keydown", a);
+    assert.deepEqual(send(), ["b"], "a real remove drops exactly that function");
+    target.removeEventListener("keydown", a);
+    assert.deepEqual(send(), ["b"], "removing it twice is a no-op");
+    target.removeEventListener("keydown", b);
+    assert.deepEqual(send(), []);
+  });
+}
+
+// Hunt #5743 D4: an insert-drag cut short by a second finger (a pinch started on
+// the road) left sel on the spliced index — N on the closing segment, no point.
+test("a pinch that starts on the closing segment hands the prior selection back, in range", () => {
+  const h = boot({}, [[0, 0], [400, 0], [400, 400], [200, 500], [0, 400]]);
+  const N = h.pts.length;
+  h.cv.setSelection(2, -1);
+  const a = h.pts[N - 1], b = h.pts[0];
+  const mid = h.scr([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+  h.fire("pointerdown", mid, 1, { pointerType: "mouse" });   // mouse radius: the mid-segment is clear of both handles
+  assert.equal(h.cv.selection().sel, N, "the insert-drag selects the spliced index while it lives");
+  h.fire("pointerdown", h.off(mid, 120, 40), 2, { pointerType: "mouse" });
+  assert.deepEqual(plain(h.cv.selection()), { sel: 2, span: -1 });
+  assert.deepEqual(plain(h.ev.selects.at(-1)), { i: 2, j: -1 });
+  h.fire("pointerup", mid, 1); h.fire("pointerup", h.off(mid, 120, 40), 2);
+  assert.equal(h.ev.changes.length, 0, "the abandoned insert never commits");
+  assert.ok(h.cv.selection().sel < N);
+});
+
+test("a resize re-fits the loop unless the player moved the view (clean-room 67)", () => {
+  const h = boot();
+  h.canvas._rect = { left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 };
+  h.cv.resize(); h.cv.fit();
+  const wide = h.cv.view();
+  // Rotate to a portrait phone: the whole 600 × 400 m loop must still be on the map.
+  h.canvas._rect = { left: 0, top: 0, right: 390, bottom: 844, width: 390, height: 844 };
+  h.cv.resize();
+  const tall = h.cv.view();
+  assert.ok(tall.scale < wide.scale, "re-fitted to the narrow box: " + wide.scale + " → " + tall.scale);
+  for (const p of h.pts) { const s = h.scr(p); assert.ok(s.clientX >= 0 && s.clientX <= 390 && s.clientY >= 0 && s.clientY <= 844, "point on screen: " + JSON.stringify(s)); }
+  // A wheel zoom is the player's view: the next resize keeps it.
+  h.dom.dispatch(h.canvas, { type: "wheel", deltaY: -400, clientX: 195, clientY: 422, preventDefault() {} });
+  const zoomed = h.cv.view().scale;
+  h.canvas._rect = { left: 0, top: 0, right: 844, bottom: 390, width: 844, height: 390 };
+  h.cv.resize();
+  assert.equal(h.cv.view().scale, zoomed, "a zoomed view survives the resize");
 });

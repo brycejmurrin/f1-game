@@ -106,8 +106,9 @@ test("#code private-room mode keeps a 16px floor (was clamp(12px,…))", () => {
 test(".td-input uses 16px, not var(--fs-2) (15px at default scale)", () => {
   const rules = cssRules(read("css/editor.css"));
   const size = decl(rules, ".td-input", "font-size");
-  assert.equal(size, "16px",
-    "track-designer text/number fields must be 16px, not --fs-2 (15px)");
+  // #5236: 16 PAINTED px — the field sits under the sheet zoom, so the floor divides by it.
+  assert.equal(size, "max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))))",
+    "track-designer text/number fields must floor at 16 painted px, not --fs-2 (15px)");
   assert.ok(floorPx(size) >= FLOOR);
   // Confirm the token that used to paint under the floor is still 15px — so
   // this pin stays meaningful if someone "restores" var(--fs-2).

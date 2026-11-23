@@ -86,17 +86,39 @@ function hugeString(rng) {
   return out.slice(0, n);
 }
 
+/* AN OWN "__proto__" KEY ONLY COMES FROM JSON.parse. `{ __proto__: x }` in a
+   literal and `o.__proto__ = x` both call the prototype setter, so they never
+   make the key a hostile import file carries: the key a decoder's
+   `k === "__proto__"` guard exists for. Values cover the three shapes a
+   decoder might copy: an object, an rgb triple (a colour slot) and a string. */
+const PROTO_VALUES = ['{"polluted":true}', "[0.5,0.5,0.5]", '"polluted"'];
+
+/** `node` (a plain JSON object) plus an OWN `__proto__` key holding `json`. */
+function withOwnProto(node, json) {
+  const rest = JSON.stringify(node).slice(1);   // "...}" or "}" for {}
+  return JSON.parse('{"__proto__":' + json + (rest === "}" ? "}" : "," + rest));
+}
+
 function protoObject(rng) {
-  const body = {
-    __proto__: { polluted: true },
+  const body = withOwnProto({
     constructor: { prototype: { polluted: true } },
-    v: NaN,
-    money: Infinity,
-    team: undefined,
-    nested: { __proto__: { x: 1 }, y: rng.int(9) },
-  };
-  if (rng.bool()) body["__proto__"] = { again: true };
+    nested: withOwnProto({ y: rng.int(9) }, rng.pick(PROTO_VALUES)),
+  }, rng.pick(PROTO_VALUES));
+  // The non-JSON leftovers a decoder must also survive.
+  body.v = NaN; body.money = Infinity; body.team = undefined;
   return body;
+}
+
+/** Give EVERY plain object in a JSON tree an own `__proto__` key, so the key
+ *  reaches nested rows (a livery inside garage["livery.custom.<team>"]). */
+function pollutePlainObjects(v, rng) {
+  if (Array.isArray(v)) return v.map((x) => pollutePlainObjects(x, rng));
+  if (!v || typeof v !== "object") return v;
+  const out = {};
+  for (const k of Object.keys(v)) {
+    Object.defineProperty(out, k, { value: pollutePlainObjects(v[k], rng), enumerable: true, writable: true, configurable: true });
+  }
+  return withOwnProto(out, rng.pick(PROTO_VALUES));
 }
 
 function mutateBytes(bytes, rng) {
@@ -148,10 +170,7 @@ export function mutate(corpus, rng) {
   if (typeof corpus === "object") {
     try {
       const clone = JSON.parse(JSON.stringify(corpus));
-      if (kind === 5) {
-        clone.__proto__ = { polluted: true };
-        return clone;
-      }
+      if (kind === 5) return pollutePlainObjects(clone, rng);
       if (kind === 6) {
         const keys = Object.keys(clone);
         if (keys.length) {
@@ -163,7 +182,9 @@ export function mutate(corpus, rng) {
         return clone;
       }
       if (kind === 7) {
-        clone[rng.pick(["__proto__", "constructor", "toString", "valueOf"])] = protoObject(rng);
+        // defineProperty: plain assignment to "__proto__" is the setter, not a key.
+        Object.defineProperty(clone, rng.pick(["__proto__", "constructor", "toString", "valueOf"]),
+          { value: protoObject(rng), enumerable: true, writable: true, configurable: true });
         return clone;
       }
       if (kind === 8) return null;
@@ -199,6 +220,20 @@ export function findBadLiveValues(value, path = "") {
     // keys with undefined, that is still a live-state leak.
     bad.push(...findBadLiveValues(value[k], path ? path + "." + k : k));
   }
+  return bad;
+}
+
+/** Paths of objects whose prototype is not a plain Object/Array one (any
+ *  realm): what `out[k] = v` with k === "__proto__" leaves behind. */
+export function findPollutedObjects(value, path = "", seen = new Set()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return [];
+  seen.add(value);
+  const p = Object.getPrototypeOf(value);
+  const plain = Array.isArray(value)
+    ? Array.isArray(p) && Object.getPrototypeOf(Object.getPrototypeOf(p)) === null
+    : p === null || Object.getPrototypeOf(p) === null;
+  const bad = plain ? [] : [path || "<root>"];
+  for (const k of Object.keys(value)) bad.push(...findPollutedObjects(value[k], path ? path + "." + k : k, seen));
   return bad;
 }
 

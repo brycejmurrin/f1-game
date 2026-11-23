@@ -20,6 +20,11 @@ const GameStore = (function () {
   // again once storage has room (a name alone could only be reported, never healed).
   const _writeFails = new Map();
   const _rawOverrides = new Map();   // failed raw sets, or null tombstones, usable this session
+  // Keys whose raw getItem threw (private mode / blocked storage). Same contract as
+  // get()'s remembered miss: XROpts.xrInput and PerfGov read the raw lane every
+  // frame, and re-throwing + Log.info 60×/s flooded the diag buffer the JSON
+  // lane already stopped flooding.
+  const _rawReadFail = new Set();
 
   // A shipped default is shared data: handing out the object itself let a
   // caller that edits what get() returned (the garage sheet mutates its parts
@@ -81,6 +86,8 @@ const GameStore = (function () {
         }
         this._cache.set(key, v);
       }
+      // Stored null under an object/array default is a miss (W34: the garage threw); a null default keeps null.
+      if (v === null && d !== null && typeof d === "object") return this._def(k, d);
       return v === undefined ? this._def(k, d) : v;
     },
     // What the PLAYER stored (or set this session), with no shipped default and
@@ -155,6 +162,13 @@ const GameStore = (function () {
         try { beforeDisk = localStorage.getItem(key); } catch (_) { /* unavailable */ }
       }
       try {
+        // The legacy line-speed flag and the predictive slider shared one key. Under quota
+        // pressure a smaller notch could fit even while copying the flag to its own key fails.
+        // Keep the notch in the normal session/retry queue until the flag has reached disk.
+        const pendingCue = k === "brakeCue" && _writeFails.get("apex26.lineBrakeCue");
+        if (pendingCue && ['"on"', '"off"'].includes(localStorage.getItem(key))) {
+          throw Object.assign(new Error("Line-speed cue migration is pending"), { name: pendingCue.name });
+        }
         if (json === undefined) localStorage.removeItem(key);
         else setRoomy(key, json);
         _writeFails.delete(key);
@@ -204,27 +218,28 @@ const GameStore = (function () {
     keyRevision(k) {
       return this._clearRev + ":" + (this._keyRev.get(fullKey(k)) || 0);
     },
-    // THE RAW STRING LANE. The settings panels (GfxQuality, CockpitOpts,
-    // GameMetrics), the perf sentinel, BodyAttitude and the Spotify client keep
-    // bare "1"/"0" flags and ids under the same "apex26." prefix, read here
-    // rather than each inside its own `catch (_) {}`. Same storage,
-    // same prefix (accepted spelled either way, like keyRevision), but NOT the
-    // JSON cache above: a raw read hits the disk every call, so a devtools edit
-    // or another tab's write is seen at once, and the on-disk form stays the
-    // legacy bare string — no key changes, no quoting. What
-    // they gain is `broken`: a failed raw write is recorded and reported once,
-    // the same as a failed JSON write, instead of vanishing.
+    // THE RAW STRING LANE: bare "1"/"0" flags and ids (settings panels, perf
+    // sentinel, Spotify) under the same "apex26." prefix, but NOT the JSON
+    // cache: a raw read hits the disk every call, so another tab's write is
+    // seen at once, and the disk form stays the legacy bare string. A failed
+    // raw write is recorded and notified (the NOT SAVING banner) like a JSON one.
     raw(k) {
       // null means NEVER SET on this lane, and several call sites read that as
       // meaningful — so a shipped default is substituted only for a key
       // js/data/settings-defaults.js actually names. Everything else still
       // answers null exactly as before.
       const short = shortKey(k);
+      const key = fullKey(k);
       const def = () => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(short))
         ? SettingsDefaults.get(short) : null;
-      if (_rawOverrides.has(fullKey(k))) { const v = _rawOverrides.get(fullKey(k)); return v === null ? def() : v; }
-      try { const v = localStorage.getItem(fullKey(k)); return v === null ? def() : v; }
-      catch (e) { noteBroken(e, "read " + k); return def(); }
+      if (_rawOverrides.has(key)) { const v = _rawOverrides.get(key); return v === null ? def() : v; }
+      if (_rawReadFail.has(key)) return def();
+      try { const v = localStorage.getItem(key); return v === null ? def() : v; }
+      catch (e) {
+        noteBroken(e, "read " + k);
+        _rawReadFail.add(key);
+        return def();
+      }
     },
     rawSet(k, v) {
       if (!careerWriteStatus(k).ok) return false;
@@ -234,8 +249,8 @@ const GameStore = (function () {
       this.rawRev++;
       v = String(v);
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
-      try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
-      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); return false; }
+      try { setRoomy(key, v); _writeFails.delete(key); _rawOverrides.delete(key); _rawReadFail.delete(key); return true; }
+      catch (e) { noteBroken(e, "write " + k); _rawOverrides.set(key, v); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "set", v }); this._notifyRawFail(k, e); return false; }
     },
     rawDel(k) {
       if (!careerWriteStatus(k).ok) return false;
@@ -243,13 +258,19 @@ const GameStore = (function () {
       this._cache.delete(key);
       this.rawRev++;
       this._keyRev.set(key, (this._keyRev.get(key) || 0) + 1);
-      try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); return true; }
-      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); return false; }
+      try { localStorage.removeItem(key); _writeFails.delete(key); _rawOverrides.delete(key); _rawReadFail.delete(key); return true; }
+      catch (e) { noteBroken(e, "remove " + k); _rawOverrides.set(key, null); _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "raw", op: "delete" }); this._notifyRawFail(k, e); return false; }
     },
     subscribe(fn) {
       if (typeof fn !== "function") return () => {};
       this._listeners.add(fn);
       return () => { this._listeners.delete(fn); };
+    },
+    _notifyRawFail(k, e) {   // stop re-entry loops
+      if (this._rawFailing) return;
+      this._rawFailing = true;
+      try { this._notify({ key: k, durable: false, reason: this.broken || (e && e.name) || "Error", local: true, raw: true }); }
+      finally { this._rawFailing = false; }
     },
     _notify(change) {
       for (const fn of this._listeners) {
@@ -283,13 +304,14 @@ const GameStore = (function () {
       if (e.key === null) {
         _writeFails.clear();
         mirrorForeign(null);
-        _rawOverrides.clear(); this.rawRev++;
+        _rawOverrides.clear(); _rawReadFail.clear(); this.rawRev++;
         this._cache.clear(); this._clearRev++; this.rev++; this.foreign++;
         this._notify({ key: null, foreign: true, clear: true });
         return true;
       }
       if (typeof e.key !== "string" || e.key.indexOf("apex26.") !== 0) return false;
       _rawOverrides.delete(e.key);
+      _rawReadFail.delete(e.key);
       _writeFails.delete(e.key);
       mirrorForeign(e.key);
       this.rawRev++;
@@ -321,13 +343,16 @@ const GameStore = (function () {
     const ok = (k != null && !careerKey(k)) || careerWriter.state === "owned";
     return { ok, durable: false, reason: ok ? null : "writer-" + careerWriter.state };
   }
+  const WRITER_WAIT_MS = 1500;
   function acquireCareerWriter() {
     // Non-browser consumers have no other documents. Browsers without the lock
     // API fail closed, with an explicit status, rather than persisting unlocked.
     if (typeof navigator === "undefined") return Promise.resolve(true);
     return new Promise((resolve) => {
+      let done = false;
       const finish = (state) => {
-        careerWriter.state = state;
+        if (done) return;
+        done = true; careerWriter.state = state;
         // Reads made before lock acquisition cannot arm a new writer. Reload
         // them after the asynchronous acquisition boundary, while exclusively
         // owning all participating primary/mirror writers.
@@ -343,12 +368,23 @@ const GameStore = (function () {
       };
       try {
         if (!navigator.locks || typeof navigator.locks.request !== "function") { finish("unavailable"); return; }
-        navigator.locks.request("apex26-career-writer", { mode: "exclusive", ifAvailable: true }, (lock) => {
-          if (!lock) { finish("busy"); return; }
-          // Return a pending promise to retain ownership until the document
-          // dies. pagehide must not release it while a mirror commit is live.
-          finish("owned");
-          return new Promise(() => {});
+        const locks = navigator.locks, name = "apex26-career-writer";
+        // Return a pending promise to retain ownership until the document
+        // dies. pagehide must not release it while a mirror commit is live.
+        const hold = () => { finish("owned"); return new Promise(() => {}); };
+        // An in-app reload can ask before the dying document's lock is gone
+        // (the release is asynchronous; WebKit bug 283528 kept it past unload).
+        // Queue ONCE, bounded, still "pending": a live second tab holds the
+        // lock past the deadline and this document ends busy as before.
+        const queue = () => {
+          if (typeof AbortController !== "function" || typeof setTimeout !== "function") { finish("busy"); return; }
+          const ac = new AbortController(), timer = setTimeout(() => ac.abort(), WRITER_WAIT_MS);
+          locks.request(name, { mode: "exclusive", signal: ac.signal }, () => { clearTimeout(timer); return hold(); })
+            .catch((e) => { clearTimeout(timer); finish(e && e.name === "AbortError" ? "busy" : "unavailable"); });
+        };
+        locks.request(name, { mode: "exclusive", ifAvailable: true }, (lock) => {
+          if (lock) return hold();
+          queue();
         }).catch(() => { finish("unavailable"); });
       } catch (_) { finish("unavailable"); }
     });
@@ -361,7 +397,7 @@ const GameStore = (function () {
   }
   // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
   // (apex26.api.*, js/data/api.js) and its real-race scripts (apex26.realrace.*,
-  // js/data/real-race-tab.js) are disposable and could fill the whole 5 MiB
+  // js/data/real-race-fetch.js) are disposable and could fill the whole 5 MiB
   // origin quota, after which every career/settings/ghost write failed.
   // On a failed write, drop those caches and try once more.
   const DISPOSABLE_PREFIXES = ["apex26.api.", "apex26.realrace."];
@@ -451,8 +487,11 @@ const GameStore = (function () {
     _mirrorDb = null;
     mirror.supported = false;
   }
+  // iOS drops the connection behind a suspended page, often with no close
+  // event: a throwing transaction() (InvalidStateError) or an UnknownError
+  // abort is the only sign. Either way this handle is dead; reopen next flush.
   function mirrorTransactionFailed(db, error) {
-    if (error && error.name === "InvalidStateError") mirrorInvalidate(db);
+    if (error && (error.name === "InvalidStateError" || error.name === "UnknownError")) mirrorInvalidate(db);
   }
 
   function mirrorOpen() {
@@ -629,7 +668,7 @@ const GameStore = (function () {
         for (const [k, v] of committed) { if (v === null) _mirrorSeen.delete(k); else _mirrorSeen.set(k, v); }
         mirror.flushed += committed.size; res(true);
       };
-      t.onerror = t.onabort = () => { res(false); };
+      t.onerror = t.onabort = (ev) => { mirrorTransactionFailed(db, t.error || (ev && ev.target && ev.target.error)); res(false); };
     })).then((ok) => {
       if (!ok && batch.size) {
         mirror.failed += batch.size;
@@ -672,7 +711,7 @@ const GameStore = (function () {
       try { r = db.transaction(MIRROR_STORE, "readonly").objectStore(MIRROR_STORE).getAll(); }
       catch (e) { mirrorTransactionFailed(db, e); res([]); return; }
       r.onsuccess = () => res(r.result || []);
-      r.onerror = () => res([]);
+      r.onerror = () => { mirrorTransactionFailed(db, r.error); res([]); };
     })).then((rows) => {
       const restored = [];
       let authoredTotal = 0, authoredCount = 0;
@@ -723,6 +762,18 @@ const GameStore = (function () {
         restored.push(row.k);
       }
       mirror.authoredBytes = authoredTotal; mirror.authoredKeys = authoredCount;
+      // Re-seed keys with no row: after a lost database only rewritten keys came back.
+      if (epoch === _foreignEpoch) {
+        const mirrored = new Set(rows.map((row) => row && row.k));
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k || mirrored.has(k) || _mirrorPending.has(k) || !mirrorKey(k) || !careerWriteStatus(k).ok) continue;
+            const v = localStorage.getItem(k);
+            if (v !== null) mirrorQueue(k, v, true, { migration: true });
+          }
+        } catch (_) { /* storage unreadable */ }
+      }
       if (restored.length) {
         store.rev++;
         mirror.restored += restored.length;
@@ -814,9 +865,9 @@ const GameStore = (function () {
   function ttRead(trackId) {
     return ttParseBoard(store.get("ttlb." + trackId, []));
   }
-  function ttWrite(trackId, laps) {
+  function ttPackBoard(laps) {
     const classes = [], at = new Map();
-    return store.write("ttlb." + trackId, { v: 2, classes, laps: laps.map(e => {
+    return { v: 2, classes, laps: laps.map(e => {
       const o = {};
       for (const k of Object.keys(e)) if (k !== "context") o[k] = e[k];
       if (e.context) {
@@ -824,26 +875,30 @@ const GameStore = (function () {
         o.c = at.get(e.context);
       }
       return o;
-    }) });
+    }) };
   }
+  function ttWrite(trackId, laps) {
+    return store.write("ttlb." + trackId, ttPackBoard(laps));
+  }
+  const ttCtx = (e) => e.context || null;
   function ttBoard(trackId, context) {
-    return ttRead(trackId).filter(e => context === undefined || (e.context || null) === context);
+    return ttRead(trackId).filter(e => context === undefined || ttCtx(e) === context);
   }
   function ttBoardAddResult(trackId, entry) {
-    if (!isFinite(entry.t) || entry.t <= 0) return { ok: false, durable: false, reason: "invalid-lap", laps: ttBoard(trackId) };
+    const t = entry.t;
+    if (!(typeof t === "number" && Number.isFinite(t) && t > 0.0))
+      return { ok: false, durable: false, reason: "invalid-lap", laps: ttBoard(trackId) };
     const b = ttBoard(trackId);
     b.push(entry);
     b.sort((a, z) => a.t - z.t);
     // Ten laps PER comparable class. Existing unversioned entries stay legacy.
-    const counts = new Map();
-    let kept = b.filter(e => { const k = e.context || null; const n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
-    const last = new Map();
-    for (const e of kept) { const k = e.context || null; last.set(k, Math.max(last.has(k) ? last.get(k) : -Infinity, Number(e.ts) || 0)); }
+    const counts = new Map(), last = new Map();
+    let kept = b.filter(e => { const k = ttCtx(e), n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
+    for (const e of kept) { const k = ttCtx(e); last.set(k, Math.max(last.has(k) ? last.get(k) : -Infinity, +e.ts || 0)); }
     if (last.size > TT_CLASS_MAX) {
-      const keep = new Set([kept[0].context || null, entry.context || null]);
-      const rest = [...last.keys()].filter(k => !keep.has(k)).sort((a, z) => last.get(z) - last.get(a));
-      for (const k of rest.slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
-      kept = kept.filter(e => keep.has(e.context || null));
+      const keep = new Set([ttCtx(kept[0]), ttCtx(entry)]);
+      for (const k of [...last.keys()].filter(k => !keep.has(k)).sort((a, z) => last.get(z) - last.get(a)).slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
+      kept = kept.filter(e => keep.has(ttCtx(e)));
     }
     return { ...ttWrite(trackId, kept), laps: kept };
   }
@@ -869,7 +924,8 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttRead, ttParseBoard,
+  // ttRead stays module-private (ttBoard / ttBoardAdd* / ttParseBoard cover callers).
+  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttParseBoard, ttPackBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

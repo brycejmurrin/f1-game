@@ -1,1 +1,0 @@
-Fixed: starting a race straight from Daily, the Data Hub or a season while the circuit picker was still building the same track no longer builds the track twice (and can no longer drop back to the title when the two builds finish out of order).

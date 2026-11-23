@@ -16,7 +16,6 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DESKTOP = path.resolve(HERE, "..");
-const DIST = path.join(DESKTOP, "dist");
 
 /**
  * @param {{ desktopRoot?: string, platform?: NodeJS.Platform }} [opts]

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-wWx+z9KMUGEcBO5lr2IV0QGE1Fkqx0HRvn6hrkRx0g4=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-q0ndYNrAdl0CgzcMQvTQppH3yoeiArTr3lND3YTE0d8=' 'sha256-1w1yl/TNcaFZP0XfX2zkL2S38GnupgOV68Xh6JN4HBg=' 'sha256-63DOtKbAFjuLShpe6j+y09XKhwCoHWjv5i/dwaPLCUE=' 'sha256-rRCUE+YvfRr2q8WXGMvSesHb84Lhqt92fxdk9ppVtck=' 'sha256-fdjnL+DyHyVypDKJ+raB4EBUJYLzTtT3memEypclyqg=' 'sha256-bjdQSwLkXL1qmMcFQJPHJkki3M/aYwlAsAJYFiVWCyk=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -68,11 +68,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Apex 26">
 <meta name="theme-color" content="#0c0c14">
-<meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 52 real circuits in the browser with career, garage, and live data.">
+<meta name="description" content="Apex 26 — an unofficial racing fan game. Drive 52 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
 <meta name="apex-build" content="1695">
-<title>Apex 26 — F1 Racing &amp; Data</title>
+<title>Apex 26 — unofficial racing fan game</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-180.png">
@@ -124,6 +124,7 @@
 <link rel="stylesheet" href="css/carsetup.css?v=dev" media="print">
 <link rel="stylesheet" href="css/hud.css?v=dev" media="print">
 <link rel="stylesheet" href="css/fonts-hud.css?v=dev" media="print">
+<link rel="stylesheet" href="css/touch-button-colors.css?v=dev" media="print">
 <link rel="stylesheet" href="css/touch-controls.css?v=dev" media="print">
 <link rel="stylesheet" href="css/overlays.css?v=dev" media="print">
 <link rel="stylesheet" href="css/loading.css?v=dev" media="print">
@@ -131,19 +132,20 @@
 <link rel="stylesheet" href="css/responsive.css?v=dev">
 <link rel="stylesheet" href="css/menu-destinations.css?v=dev">
 <link rel="stylesheet" href="css/track-detail.css?v=dev" media="print">
-<link rel="stylesheet" href="css/career.css?v=dev" media="print">
-<link rel="stylesheet" href="css/data.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career.css?v=dev" media="print" data-route="career career-offers career-guide career-history quali results standings">
+<link rel="stylesheet" href="css/data.css?v=dev" media="print" data-route="datahub track-detail trackdesigner results spotifypanel">
 <link rel="stylesheet" href="css/appearance-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/screen-arranger.css?v=dev" media="print">
 <link rel="stylesheet" href="css/watch-transport.css?v=dev" media="print">
-<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print">
+<link rel="stylesheet" href="css/career-experience.css?v=dev" media="print" data-route="career results ceremony-podium">
+<link rel="stylesheet" href="css/garage-experience.css?v=dev" media="print" data-route="carsetup customize">
+<link rel="stylesheet" href="css/photo-studio.css?v=dev" media="print" data-route="photo-studio">
 <link rel="stylesheet" href="css/experience.css?v=dev" media="print">
-<link rel="stylesheet" href="css/editor.css?v=dev" media="print">
+<link rel="stylesheet" href="css/editor.css?v=dev" media="print" data-route="trackdesigner">
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
 <link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <link rel="stylesheet" href="css/helmet-visor.css?v=dev" media="print">
-<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>
+<script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]:not([data-route])'),n=L.length,d=0;function flip(){if(d)return;d=1;for(var i=L.length;i--;)L[i].media="all"}function done(){if(--n===0){if(window.requestAnimationFrame)requestAnimationFrame(flip);else setTimeout(flip,0)}}window.addEventListener("load",flip);for(var i=0;i<L.length;i++)(function(l){if(l.sheet)done();else{l.addEventListener("load",done);l.addEventListener("error",done)}})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
@@ -252,7 +254,9 @@
     fetch("version.json?_=" + Date.now(), { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (v) {
-        if (!v || !v.build || v.build <= loaded) return;
+        if (!v || !v.build) return;
+        window.__apexGuardOk = 1;  // UpdateCheck's throttle starts at boot only on a real read (#4925)
+        if (v.build <= loaded) return;
         var key = "apex26.shellReloadedTo";
         if (sessionStorage.getItem(key) === String(v.build)) return;  // already tried this build
         sessionStorage.setItem(key, String(v.build));
@@ -278,7 +282,33 @@
   // of which would otherwise overwrite the one line that says WHY — leaving the
   // player looking at "SeasonCal is not defined" with no hint that the file
   // simply never arrived. First pin wins; nothing unpins.
-  var pinned = false;
+  var pinned = false, shows = 0;
+  // THE WAY OUT (#4994). An installed PWA has no reload button and no
+  // pull-to-refresh, so a dismiss-only card over a dead loop (LoopHealth at its
+  // fault cap) or a missing module left force-quit as the only exit. Those two
+  // cards carry RELOAD; a stopped loop also offers BACK TO MENU, which presses
+  // QUIT TO MENU and re-arms the loop (LoopHealth.recover). Buttons sit under
+  // the title, above the stack, so a long trace cannot push them off a phone.
+  function loopStopped() {
+    try { return typeof LoopHealth !== "undefined" && !!LoopHealth.state().stopped; } catch (e) { return false; }
+  }
+  function addButton(bar, id, label, fn) {
+    var b = document.createElement("button");
+    b.id = id; b.type = "button"; b.textContent = label;
+    b.style.cssText = "min-height:48px;min-width:132px;margin:0 12px 12px 0;padding:0 18px;border:0;"
+      + "border-radius:6px;background:#ffb3b3;color:#12060a;font:700 14px/1 ui-monospace,Menlo,Consolas,monospace";
+    b.onclick = function (ev) { try { ev.stopPropagation(); } catch (e) {} fn(); };
+    bar.appendChild(b);
+  }
+  function backToMenu() {
+    var seen = shows, ok = false;
+    // A quit that throws repaints this card through the error listener: keep it up.
+    try { var q = document.getElementById("pm-quit"); if (q) q.click(); } catch (e) {}
+    if (shows !== seen) return;
+    try { ok = LoopHealth.recover(); } catch (e) {}
+    var d = document.getElementById("__err_overlay");
+    if (ok && d) d.style.display = "none";
+  }
   function show(title, msg, stack, pin) {
     if (pinned && !pin) return;
     // scriptRetry is reloading with caches swept; downstream ReferenceErrors from
@@ -290,14 +320,30 @@
       if (!d) {
         d = document.createElement("div"); d.id = "__err_overlay";
         d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#12060a;color:#ffb3b3;"
-          + "font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;padding:16px;overflow:auto;"
+          + "font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;overflow:auto;"
+          + "padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) "
+          + "max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));"
           + "white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text";
-        d.onclick = function () { d.style.display = "none"; };
+        // A dead loop's card stays: dismissing it left a frozen canvas and no way back to the buttons.
+        d.onclick = function () { if (!loopStopped()) d.style.display = "none"; };
         (document.body || document.documentElement).appendChild(d);
       }
       d.style.display = "block";
-      d.textContent = "⚠ " + title + "\n\n" + (msg || "") + "\n\n" + (stack || "")
-        + "\n\n(tap to dismiss · build " + (window.__APEX_BUILD || "?") + ")";
+      shows++;
+      var stopped = loopStopped();
+      var head = "⚠ " + title + "\n\n";
+      var rest = (stopped ? "The game loop has stopped.\n\n" : "") + (msg || "") + "\n\n" + (stack || "")
+        + "\n\n(" + (stopped ? "" : "tap to dismiss · ") + "build " + (window.__APEX_BUILD || "?") + ")";
+      // The ordinary card stays one text node, as it always was; only a card that needs buttons builds nodes.
+      d.textContent = head + rest;
+      if (pin || stopped) {
+        var bar = document.createElement("div");
+        addButton(bar, "__err_reload", "RELOAD", function () { try { location.reload(); } catch (e) {} });
+        if (stopped && !pinned) addButton(bar, "__err_menu", "BACK TO MENU", backToMenu);
+        d.textContent = head;
+        d.appendChild(bar);
+        d.appendChild(document.createTextNode(rest));
+      }
     } catch (e) {}
   }
   // Build number for the overlay footer — parsed from the shell generation meta
@@ -434,8 +480,8 @@
   // ever sees the CONSEQUENCE (the ReferenceError from the first file that
   // needed the missing global), by which point the cause is off-screen.
   //
-  // The repair is a ONE-SHOT reload with the stale entries dropped: sweep the
-  // service-worker caches, re-request the failed URL with cache:"reload" to
+  // The repair is a ONE-SHOT reload with the stale entries dropped: delete the
+  // failed URL from the service-worker caches, re-request it with cache:"reload" to
   // punch the HTTP cache entry, then reload. Scripts load before js/game.js
   // evaluates, so nothing is lost by restarting here. sessionStorage bounds it
   // to a single attempt: if the file is genuinely absent from the build, the
@@ -490,8 +536,13 @@
       .then(function () {
         if (!window.caches) return null;
         return caches.keys().then(function (names) {
-          // Only OUR caches: github.io is a SHARED origin, so keys() also lists other projects' Cache Storage.
-          return Promise.all(names.filter(function (n) { return n.indexOf("apex26-") === 0; }).map(function (n) { return caches.delete(n); }));
+          // Only OUR numbered build generations (shared origin; apex26-voice is ~111 MB of voice packs, #4479).
+          // SURGICAL (#5009): drop the failed URL's entry from each, never the whole cache. Deleting the
+          // active generation took its INSTALL markers and every precached lazy file with it, and
+          // nothing re-precaches an unchanged worker: offline status read "unknown" until the next deploy.
+          return Promise.all(names.filter((n) => /^apex26-\d+$/.test(n)).map(function (n) {
+            return caches.open(n).then(function (c) { return c.delete(el.src); });
+          }));
         }).then(go, go);
       }, offline);
   }, true);
@@ -529,18 +580,19 @@
     // OFF never. Focus ring: apex26.focusRing ("high" → data-focus). Colourblind
     // cues: apex26.cbCues ("on" → data-cb-cues).
     // Intro: apex26.titleIntro ("full" | "quick" | "off"); unset = full.
-    // Wash: apex26.menuWash ("full" | "soft" | "off"); unset = full.
-    // Title art: apex26.titleArt ("on" | "soft" | "off"); unset = on.
+    // Wash: apex26.menuWash ("full" | "medium" | "soft" | "off"); unset = full.
+    // Title art: apex26.titleArt ("on" | "medium" | "soft" | "off"); unset = on.
     // Pause menu (js/ui/pause-opts.js): apex26.pauseLayout ("list" |
     // "compact" | "wide" | "sidebar"),
     // apex26.pauseSide ("left" | "right"), apex26.pauseDim ("soft" | "off").
     // Help text (js/ui/appearance-opts.js): apex26.menuHelp ("off").
     // Unset, or the shipped answer, writes nothing.
-    var mv = null, ti = null, mw = null, ta = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
+    var mv = null, ti = null, mw = null, ta = null, ts = null, pl = null, ps = null, pd = null, mh = null, fr = null, cb = null;
     try { mv = JSON.parse(localStorage.getItem("apex26.motion")); } catch (e) { /* unset */ }
     try { ti = JSON.parse(localStorage.getItem("apex26.titleIntro")); } catch (e) { /* unset */ }
     try { mw = JSON.parse(localStorage.getItem("apex26.menuWash")); } catch (e) { /* unset */ }
     try { ta = JSON.parse(localStorage.getItem("apex26.titleArt")); } catch (e) { /* unset */ }
+    try { ts = JSON.parse(localStorage.getItem("apex26.titleButtonStyle")); } catch (e) { /* unset */ }
     try { pl = JSON.parse(localStorage.getItem("apex26.pauseLayout")); } catch (e) { /* unset */ }
     try { ps = JSON.parse(localStorage.getItem("apex26.pauseSide")); } catch (e) { /* unset */ }
     try { pd = JSON.parse(localStorage.getItem("apex26.pauseDim")); } catch (e) { /* unset */ }
@@ -562,10 +614,11 @@
       if (ti === "quick" || ti === "off") document.documentElement.dataset.titleIntro = ti;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
-      if (mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
+      if (mw === "medium" || mw === "soft" || mw === "off") document.documentElement.dataset.menuWash = mw;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
-      if (ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
+      if (ts === "flat" || ts === "racing") document.documentElement.dataset.titleButtonStyle = ts;
+      if (ta === "medium" || ta === "soft" || ta === "off") document.documentElement.dataset.titleArt = ta;
     } catch (e) { /* TitleFx answers at eval */ }
     try {
       var de = document.documentElement.dataset;
@@ -581,7 +634,16 @@
         .getPropertyValue("--ui-scale")) || 1;
       var at = parseFloat(getComputedStyle(b)
         .getPropertyValue("--compact-at")) || 380;
-      var hOwn = window.innerHeight / scale, wOwn = window.innerWidth / scale;
+      // THE LAYOUT VIEWPORT, not innerWidth/innerHeight: on a Home Screen
+      // landscape launch iOS can still report the portrait pair here while
+      // CSS already lays out landscape (#5152), which stamped body tall +
+      // normal and put every screen on the wrong tier. The ICB is what the
+      // media queries see (UI contract 2026-11-06 rule 1); inner* only when
+      // there is no layout yet. js/ui/sheet-shape.js viewportPx() is the twin.
+      var de0 = document.documentElement;
+      var vw = de0.clientWidth > 0 ? de0.clientWidth : window.innerWidth;
+      var vh = de0.clientHeight > 0 ? de0.clientHeight : window.innerHeight;
+      var hOwn = vh / scale, wOwn = vw / scale;
       b.setAttribute("data-density", hOwn < at ? "compact" : "normal");
       // data-shape, for the same reason and from the same place. It was the
       // half of this pair that stayed on the far side of first paint: measured
@@ -597,6 +659,33 @@
         .getPropertyValue("--tall-at")) || 1.05;
       b.setAttribute("data-shape", (hOwn / wOwn) >= tallAt ? "tall" : "wide");
     } catch (e) { /* a wrong first shape is survivable; a boot failure is not */ }
+    // Boot progress: --boot-p = scripts downloaded / script tags, read by the
+    // wordmark rule until game.js wires the doors (css/title.css PRE-BOOT).
+    // Monotonic (#5995): bt grows as later script tags parse, so bn/bt alone
+    // can shrink between callbacks and run the stripe backwards.
+    try {
+      var bn = 0, bp = 0, bpo = new PerformanceObserver(function (l) {
+        l.getEntries().forEach(function (e) { if (e.initiatorType === "script") bn++; });
+        var bt = document.querySelectorAll("script[src]").length;
+        if (bt) { bp = Math.max(bp, Math.min(1, bn / bt)); document.documentElement.style.setProperty("--boot-p", bp.toFixed(2)); }
+        if (bt && bn >= bt) bpo.disconnect();
+      });
+      bpo.observe({ type: "resource", buffered: true });
+    } catch (e) { /* the rule just stays short */ }
+    // BOOT TAP (#5995): a door tapped before game.js wires it is marked
+    // aria-busy (the last one wins); js/ui/title-menu.js replays it.
+    try {
+      document.addEventListener("click", function (e) {
+        var de1 = document.documentElement;
+        if (de1.hasAttribute("data-booted")) return;
+        var d = e.target && e.target.closest ? e.target.closest("#menu-buttons button") : null;
+        if (!d) return;
+        e.preventDefault();
+        var was = document.querySelector("#menu-buttons [aria-busy]");
+        if (was) was.removeAttribute("aria-busy");
+        d.setAttribute("aria-busy", "true");
+      }, true);
+    } catch (e) { /* the tap is just lost, as before */ }
     // Title layout: apex26.titleLayout (object | unset), AFTER data-shape
     // above: the store keeps one layout per shape, {v: 2, wide, tall} (a
     // missing shape is shipped), and a v1 object (no `v`) is both. Stored only
@@ -604,7 +693,12 @@
     // arithmetic as TitleLayout.vars, held equal by tests/unit/title-layout.test.mjs.
     try {
       var tl = JSON.parse(localStorage.getItem("apex26.titleLayout")), de = document.documentElement;
-      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[b.getAttribute("data-shape") === "tall" ? "tall" : "wide"];
+      var tallTitle = b.getAttribute("data-shape") === "tall";
+      if (tl && typeof tl === "object" && tl.v === 2) tl = tl[tallTitle ? "tall" : "wide"];
+      if (!(tl && typeof tl === "object") && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches && Math.min(innerWidth, innerHeight) <= 500) {
+        tl = tallTitle ? { btns: { size: 105 } } :
+          { btns: { size: 106, width: 25 }, title: { size: 108 }, art: { x: -7, y: -2, size: 86 } };
+      }
       if (tl && typeof tl === "object") {
         ["btns", "title", "art"].forEach(function (k) {
           var o = tl[k] || {};
@@ -626,7 +720,7 @@
       var hsRaw = null;
       try { hsRaw = JSON.parse(localStorage.getItem("apex26.homeScene")); } catch (e4) { /* unset */ }
       var hsModes = ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"];
-      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "photo";
+      var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "static";
       if (hsMode === "auto") {
         // homeVariation.peek before enter() — index starts at 0 (homeVisit applies
         // only once renderHome calls enter(), after the first paint).
@@ -653,7 +747,8 @@
 </div>
 
 <!-- race HUD -->
-  <div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
+  <button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
+<div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
   <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
        a child position, so adding or re-ordering a box cannot hide the wrong one.
        DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
@@ -707,7 +802,10 @@
            stop, there is nothing to steer — and because it must be impossible
            to press by accident at 300 km/h, which is why it only exists for the
            two seconds the car is stationary. -->
-      <button id="hud-work" type="button" hidden>WORK ON CAR</button>
+      <div id="hud-pit-actions">
+        <button id="hud-work" type="button" hidden>WORK ON CAR</button>
+        <button id="hud-end-session" type="button" hidden>END SESSION</button>
+      </div>
       <div id="hud-ot" class="ot-off" role="img">OVERTAKE</div>
       <div id="hud-aero" class="ax-off" role="img">CORNER MODE</div>
       <!-- BRAKE BIAS, the set-up sheet's front share (c.brakeBias). -->
@@ -793,7 +891,7 @@
 <!-- iOS: Add to Home Screen is the only real fullscreen this platform has.
      Shown once, dismissible, and only where it applies (js/game.js). -->
 <div id="ios-install" role="note" hidden>
-  <span>Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
+  <span id="ios-install-msg">Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
   <button id="ios-install-x" type="button" aria-label="Dismiss">&times;</button>
 </div>
 <!-- Android / desktop Chromium: the browser's own install offer, behind one tap
@@ -829,7 +927,6 @@
 </div>
 
 <button id="btn-cam" hidden aria-label="CHASE camera">CHASE</button>
-<button id="pausebtn" hidden aria-label="Pause">&#10074;&#10074;</button>
 <!-- Shown only while the HUD is hidden (body.hud-hidden): the one control that
      brings the HUD + buttons back. Tiny, top-right, out of the way. -->
 <button id="hud-restore" aria-label="Show HUD">&#128065;</button>
@@ -895,35 +992,89 @@
     <div class="sheet-head"><h2 id="dlg-settings" data-i18n="settings.title">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
-        <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
+        <button id="pm-open-controls" data-settings-category="Controls and driving" type="button" autofocus>CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
         <button id="pm-open-driving" type="button">DRIVING AIDS&hellip;<small>Presets, assistance, gears &amp; coaching</small></button>
-        <button id="pm-open-display" type="button">HUD &amp; CAMERA&hellip;<small>HUD layout, map &amp; view</small></button>
-        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Colours, UI size &amp; every screen&rsquo;s look</small></button>
+        <button id="pm-open-display" data-settings-category="Display and sound" type="button">HUD &amp; CAMERA&hellip;<small>HUD layout, map &amp; view</small></button>
+        <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Themes, UI size &amp; menu layouts</small></button>
         <button id="pm-open-a11y" type="button">ACCESSIBILITY&hellip;<small>Motion, keyboard focus &amp; colourblind cues</small></button>
-
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
-        <button id="pm-open-files" type="button">SAVES &amp; DATA&hellip;<small>Preferences, storage &amp; restore points</small></button>
         <button id="pm-open-graphics" type="button">GRAPHICS&hellip;<small>Renderer, resolution & effects</small></button>
         <button id="pm-open-visual" type="button">VISUAL STUDIO&hellip;<small>Camera, lighting, flyby & garage arrival</small></button>
-        <button id="pm-open-progress" type="button">PROGRESS&hellip;<small>Licence badges</small></button>
+        <button id="pm-open-progress" data-settings-category="Player and data" type="button">PROGRESS&hellip;<small>Licence badges</small></button>
+        <button id="pm-open-files" type="button">SAVES &amp; DATA&hellip;<small>Preferences, storage &amp; restore points</small></button>
+        <button id="pm-open-credits" type="button">ABOUT &amp; CREDITS&hellip;<small>Data sources, licences &amp; notices</small></button>
       </nav>
       <div class="pm-groups">
         <section id="pm-panel-progress" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-badges-panel">
-            <summary class="adv-more-btn">LICENCE BADGES</summary>
+            <summary class="adv-more-btn" data-i18n="pause.badges">LICENCE BADGES</summary>
             <p id="pm-badges-summary" class="adv-help" data-help="keep">No badges yet.</p>
             <ol id="pm-badges-list"></ol>
           </details>
         </section>
 
+        <!-- ABOUT & CREDITS: the block between the markers is written by
+             desktop/scripts/notices.mjs from the vendor licence / MANIFEST files and
+             the assets CREDITS files (npm run gen; gen:check fails on drift). -->
+        <section id="pm-panel-credits" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <!-- @gen-notices:credits -->
+          <p class="adv-help" data-help="keep">This game is unofficial and is not associated in any way with the Formula 1 companies. F1, FORMULA ONE, FORMULA 1, FIA FORMULA ONE WORLD CHAMPIONSHIP, GRAND PRIX and related marks are trade marks of Formula One Licensing B.V.</p>
+          <details open id="credits-data">
+            <summary class="adv-more-btn">LIVE DATA</summary>
+            <ul>
+              <li><a href="https://github.com/jolpica/jolpica-f1" target="_blank" rel="noopener noreferrer">Jolpica F1</a> &middot; CC BY-NC-SA 4.0, non-commercial use only &middot; schedule and standings (the Ergast-compatible API)</li>
+              <li><a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1</a> &middot; CC BY-NC-SA 4.0, non-commercial use only &middot; results, live timing, telemetry, WATCH replays and team radio captions</li>
+            </ul>
+          </details>
+          <details id="credits-software">
+            <summary class="adv-more-btn">SOFTWARE</summary>
+            <ul>
+              <li><a href="https://threejs.org" target="_blank" rel="noopener noreferrer">three.js</a> 0.187.0 &middot; <a href="vendor/three-0.187.0/LICENSE.txt" target="_blank" rel="noopener">MIT</a> &middot; 3D renderer, including the opt-in Inspector panel</li>
+              <li><a href="https://rapier.rs" target="_blank" rel="noopener noreferrer">Rapier (rapier3d-compat)</a> 0.19.3 &middot; <a href="vendor/rapier-0.19.3/LICENSE" target="_blank" rel="noopener">Apache-2.0</a> &middot; physics engine</li>
+              <li><a href="https://github.com/cozmo/jsQR" target="_blank" rel="noopener noreferrer">jsQR</a> 1.4.0 &middot; <a href="vendor/jsqr-1.4.0/LICENSE" target="_blank" rel="noopener">Apache-2.0</a> &middot; QR code reader (phone controller pairing)</li>
+              <li><a href="https://github.com/dmotz/trystero" target="_blank" rel="noopener noreferrer">Trystero</a> 0.25.4 &middot; <a href="vendor/trystero-0.25.4/LICENSE-trystero" target="_blank" rel="noopener">MIT</a> &middot; peer-to-peer rooms (RACE A FRIEND)</li>
+              <li><a href="https://github.com/paulmillr/noble-secp256k1" target="_blank" rel="noopener noreferrer">noble-secp256k1</a> &middot; <a href="vendor/trystero-0.25.4/LICENSE-noble-secp256k1" target="_blank" rel="noopener">MIT</a> &middot; signing for Trystero's Nostr signalling</li>
+              <li><a href="https://spector.babylonjs.com" target="_blank" rel="noopener noreferrer">Spector.js</a> 0.9.30 &middot; <a href="vendor/gpu-capture/SPECTOR-LICENSE.txt" target="_blank" rel="noopener">MIT</a> &middot; opt-in GPU frame capture (developer tool)</li>
+              <li><a href="https://github.com/greggman/webgl-lint" target="_blank" rel="noopener noreferrer">webgl-lint</a> 1.11.4 &middot; <a href="vendor/gpu-capture/WEBGL-LINT-LICENSE.md" target="_blank" rel="noopener">MIT</a> &middot; opt-in WebGL checker (developer tool)</li>
+              <li><a href="https://github.com/SnapdragonStudios/snapdragon-gsr" target="_blank" rel="noopener noreferrer">Snapdragon Game Super Resolution 1</a> &middot; <a href="vendor/sgsr/LICENSE" target="_blank" rel="noopener">BSD-3-Clause</a> &middot; upscaling shader, adapted</li>
+            </ul>
+          </details>
+          <details id="credits-fonts">
+            <summary class="adv-more-btn">FONTS &amp; ICONS</summary>
+            <ul>
+              <li><a href="https://fonts.google.com/specimen/Titillium+Web" target="_blank" rel="noopener noreferrer">Titillium Web</a> &middot; <a href="assets/fonts/titillium-web-OFL.txt" target="_blank" rel="noopener">OFL-1.1</a> &middot; typeface</li>
+              <li><a href="https://github.com/jpt/barlow" target="_blank" rel="noopener noreferrer">Barlow Condensed</a> &middot; <a href="assets/fonts/barlow-condensed-OFL.txt" target="_blank" rel="noopener">OFL-1.1</a> &middot; typeface</li>
+              <li><a href="https://github.com/Omnibus-Type/Saira" target="_blank" rel="noopener noreferrer">Saira</a> &middot; <a href="assets/fonts/saira-OFL.txt" target="_blank" rel="noopener">OFL-1.1</a> &middot; typeface (subset)</li>
+              <li><a href="https://lucide.dev" target="_blank" rel="noopener noreferrer">Lucide icons</a> &middot; <a href="assets/icons/lucide-LICENSE.txt" target="_blank" rel="noopener">ISC</a> &middot; menu icons</li>
+            </ul>
+          </details>
+          <details id="credits-assets">
+            <summary class="adv-more-btn">SOUND &amp; ART</summary>
+            <ul>
+              <li>Music (6 tracks) &middot; licence not on record &middot; <a href="assets/music/CREDITS.txt" target="_blank" rel="noopener">credits</a></li>
+              <li>Engine sound &middot; licence not on record &middot; <a href="assets/sfx/CREDITS.txt" target="_blank" rel="noopener">credits</a></li>
+              <li>Radio voices &middot; Apache-2.0 &middot; <a href="assets/voice/CREDITS.txt" target="_blank" rel="noopener">credits</a></li>
+              <li>Kenney &middot; CC0 &middot; 22 model items in the asset pack</li>
+              <li>Apex 26 &middot; Apex26-Procedural &middot; 18 env / material items in the asset pack</li>
+              <li>Apex 26 &middot; CC0 &middot; 6 model items in the asset pack</li>
+            </ul>
+          </details>
+          <p class="adv-help" data-help="keep">Full licence texts ship beside each component (the links above) and in THIRD-PARTY-NOTICES, in the project&rsquo;s repository and inside the desktop and Android apps. The Android app also includes Capacitor 8.6.2 (MIT), Capacitor Filesystem 8.1.5 (MIT) and Capacitor Share 8.0.2 (MIT).</p>
+          <!-- /@gen-notices:credits -->
+        </section>
+
         <section id="pm-panel-review" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-session-review">
-            <summary class="adv-more-btn">SESSION REVIEW</summary>
+            <summary class="adv-more-btn" data-i18n="pause.review">SESSION REVIEW</summary>
             <p id="pm-coach-summary" class="adv-help" data-help="keep">No coaching tips recorded this session.</p>
             <p id="pm-connection" class="adv-help" data-help="keep" hidden></p>
             <ol id="pm-incident-log"></ol>
+            <details id="pm-last-lap-energy">
+              <summary class="adv-more-btn">LAST LAP · ENERGY REVIEW</summary>
+              <p id="pm-last-lap-energy-text" class="adv-help" data-help="keep">Complete one full clean lap in stable conditions for a measured sector-by-sector review. Partial laps, pits, incidents, cautions and changed conditions are excluded.</p>
+            </details>
             <details id="pm-technical-data">
-              <summary class="adv-more-btn">TECHNICAL DATA</summary>
+              <summary class="adv-more-btn" data-i18n="pause.techdata">TECHNICAL DATA</summary>
               <p class="adv-help">Optional JSON download: recent driving samples, race events and estimates. Driving samples are recorded while coach or practice is active.</p>
               <button id="pm-driving-trace" type="button" disabled>DOWNLOAD SESSION DATA</button>
               <p class="adv-help">AI passing decisions: each rival’s latest choice. An earlier commitment may still be active.</p>
@@ -934,9 +1085,9 @@
 
         <section id="pm-panel-strategy" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-pit-panel">
-            <summary class="adv-more-btn">PIT STRATEGY</summary>
+            <summary class="adv-more-btn" data-i18n="pause.pit">PIT STRATEGY</summary>
             <div id="pm-pit-choice" class="set-row" role="group" aria-labelledby="pm-pit-choice-label">
-              <span class="tune-label" id="pm-pit-choice-label">NEXT TYRES</span>
+              <span class="tune-label" id="pm-pit-choice-label" data-i18n="pause.nexttyres">NEXT TYRES</span>
               <div>
                 <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous tyre choice">&lsaquo;</button>
                 <select id="pm-pit-choice-sel" aria-labelledby="pm-pit-choice-label" aria-describedby="pm-pit-help"></select>
@@ -952,11 +1103,27 @@
 
         <section id="pm-panel-practice" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-practice-panel">
-            <summary class="adv-more-btn">PRACTICE A SECTION</summary>
+            <summary class="adv-more-btn" data-i18n="pause.practice">PRACTICE A SECTION</summary>
             <p id="pm-practice-help" class="adv-help">Choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal. REWIND 10s steps the car back without one. A Time Trial is always practice; in a race or qualifying, ARM PRACTICE first — that makes the session unscored and cannot be undone.</p>
+            <details id="pm-practice-pathway">
+              <summary class="adv-more-btn">PRACTICE PATHWAY · CLEAN EXITS</summary>
+              <p class="adv-help">A self-guided checklist, not verified drill completion. Practise braking, brake release into a turn, then a clean lap. Choose a goal, save a starting point and resume. No settings or assists change.</p>
+              <div>
+                <button id="pm-pathway-braking" type="button" aria-describedby="pm-practice-state">CHOOSE 1. Controlled stop</button>
+                <label style="display:block;min-height:var(--tap-paint)"><input id="pm-pathway-check-braking" type="checkbox"> I practised this step</label>
+              </div>
+              <div>
+                <button id="pm-pathway-trail" type="button" aria-describedby="pm-practice-state">CHOOSE 2. Brake release into a turn</button>
+                <label style="display:block;min-height:var(--tap-paint)"><input id="pm-pathway-check-trail" type="checkbox"> I practised this step</label>
+              </div>
+              <div>
+                <button id="pm-pathway-lap" type="button" aria-describedby="pm-practice-state">CHOOSE 3. Full clean lap</button>
+                <label style="display:block;min-height:var(--tap-paint)"><input id="pm-pathway-check-lap" type="checkbox"> I practised this step</label>
+              </div>
+            </details>
             <button id="pm-practice-arm" type="button" aria-describedby="pm-practice-state" hidden>ARM PRACTICE (UNSCORED)</button>
             <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
-              <span class="tune-label" id="pm-drill-label">PRACTICE GOAL</span>
+              <span class="tune-label" id="pm-drill-label" data-i18n="pause.goal">PRACTICE GOAL</span>
               <div>
                 <button id="pm-drill-prev" type="button" data-step="-1" aria-label="Previous practice goal">&lsaquo;</button>
                 <select id="pm-drill-sel" aria-labelledby="pm-drill-label" aria-describedby="pm-drill-status"></select>
@@ -989,7 +1156,7 @@
             <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
             <div id="pm-display-adv-body" role="group" aria-label="Renderer">
               <div id="pm-res" class="set-row" role="group" aria-labelledby="pm-res-label">
-                <span class="tune-label" id="pm-res-label">RESOLUTION</span>
+                <span class="tune-label" id="pm-res-label" data-i18n="pause.resolution">RESOLUTION</span>
                 <div>
                   <button id="pm-res-prev" type="button" data-step="-1" aria-label="Previous resolution">&lsaquo;</button>
                   <select id="pm-res-sel" aria-labelledby="pm-res-label"></select>
@@ -998,7 +1165,7 @@
               </div>
               <p class="adv-help">How sharp the 3D scene is drawn. LOW and MED draw fewer pixels for a smoother, cooler-running phone; HIGH is full sharpness; AUTO lowers it only when the frame rate drops. Menus and the HUD always stay sharp.</p>
               <div id="pm-fullscreen" class="set-row" role="group" aria-labelledby="pm-fullscreen-label">
-                <span class="tune-label" id="pm-fullscreen-label">FULLSCREEN</span>
+                <span class="tune-label" id="pm-fullscreen-label" data-i18n="pause.fullscreen">FULLSCREEN</span>
                 <div>
                   <button id="pm-fullscreen-prev" type="button" data-step="-1" aria-label="Previous fullscreen">&lsaquo;</button>
                   <select id="pm-fullscreen-sel" aria-labelledby="pm-fullscreen-label"></select>
@@ -1008,7 +1175,7 @@
               <p id="pm-fullscreen-note" class="adv-help">Fills the screen and, where the browser allows it, keeps Esc as your pause key instead of spending it on leaving fullscreen.</p>
               <button id="pm-install" type="button" hidden>INSTALL APP</button>
               <div id="pm-upscale" class="set-row" role="group" aria-labelledby="pm-upscale-label">
-                <span class="tune-label" id="pm-upscale-label">UPSCALE</span>
+                <span class="tune-label" id="pm-upscale-label" data-i18n="pause.upscale">UPSCALE</span>
                 <div>
                   <button id="pm-upscale-prev" type="button" data-step="-1" aria-label="Previous upscale">&lsaquo;</button>
                   <select id="pm-upscale-sel" aria-labelledby="pm-upscale-label"></select>
@@ -1021,7 +1188,7 @@
                    backend that cannot do it (js/ui/scale.js), because a row
                    that sits there doing nothing is worse than no row. -->
               <div id="pm-occlusion" class="set-row" role="group" aria-labelledby="pm-occlusion-label">
-                <span class="tune-label" id="pm-occlusion-label">OCCLUSION</span>
+                <span class="tune-label" id="pm-occlusion-label" data-i18n="pause.occlusion">OCCLUSION</span>
                 <div>
                   <button id="pm-occlusion-prev" type="button" data-step="-1" aria-label="Previous occlusion setting">&lsaquo;</button>
                   <select id="pm-occlusion-sel" aria-labelledby="pm-occlusion-label"></select>
@@ -1034,7 +1201,7 @@
                    spall, marbles and trackside furniture. OFF costs no lap
                    time, no penalty and nothing on the car. -->
               <div id="pm-debris" class="set-row" role="group" aria-labelledby="pm-debris-label">
-                <span class="tune-label" id="pm-debris-label">DEBRIS</span>
+                <span class="tune-label" id="pm-debris-label" data-i18n="pause.debris">DEBRIS</span>
                 <div>
                   <button id="pm-debris-prev" type="button" data-step="-1" aria-label="Previous debris setting">&lsaquo;</button>
                   <select id="pm-debris-sel" aria-labelledby="pm-debris-label"></select>
@@ -1043,7 +1210,7 @@
               </div>
               <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
               <div id="pm-ssao" class="set-row" role="group" aria-labelledby="pm-ssao-label">
-                <span class="tune-label" id="pm-ssao-label">AMBIENT OCCLUSION</span>
+                <span class="tune-label" id="pm-ssao-label" data-i18n="pause.ssao">AMBIENT OCCLUSION</span>
                 <div>
                   <button id="pm-ssao-prev" type="button" data-step="-1" aria-label="Previous ambient occlusion setting">&lsaquo;</button>
                   <select id="pm-ssao-sel" aria-labelledby="pm-ssao-label"></select>
@@ -1052,7 +1219,7 @@
               </div>
               <p class="adv-help">Soft shading in creases and the contact shadows under cars and kerbs. It shares one graphics pass with GOD-RAYS: turn both OFF to skip it for a cooler-running phone.</p>
               <div id="pm-godrays" class="set-row" role="group" aria-labelledby="pm-godrays-label">
-                <span class="tune-label" id="pm-godrays-label">GOD-RAYS</span>
+                <span class="tune-label" id="pm-godrays-label" data-i18n="pause.godrays">GOD-RAYS</span>
                 <div>
                   <button id="pm-godrays-prev" type="button" data-step="-1" aria-label="Previous god-rays setting">&lsaquo;</button>
                   <select id="pm-godrays-sel" aria-labelledby="pm-godrays-label"></select>
@@ -1061,7 +1228,7 @@
               </div>
               <p class="adv-help">Shafts of light through the haze, and floodlight beams at night. It shares one graphics pass with AMBIENT OCCLUSION: turn both OFF to skip it for a cooler-running phone.</p>
               <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
-                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
+                <span class="tune-label" id="pm-buildworker-label" data-i18n="pause.buildworker">BUILD IN BACKGROUND</span>
                 <div>
                   <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
                   <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
@@ -1071,13 +1238,19 @@
               <p class="adv-help">Experimental. Builds the circuit on a second thread while the loading screen plays, so fewer frames stall. Takes effect on the next circuit you load.</p>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
-              <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to ULTRA. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
+              <p class="adv-help">RENDERER is the drawing engine: THREE.JS is the default, WEBGL2 the most compatible, WEBGPU experimental. GRAPHICS trades detail for frame rate, LOW to EXTREME on desktop. Either may reload the game. The buttons below are for troubleshooting: RESET RENDERER returns to the defaults if the picture breaks, and COPY DIAG copies a report for a bug report.</p>
             </div>
           </details>
         </section>
 
         <section id="pm-panel-a11y" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
-        <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden></section>
+        <section id="pm-panel-files" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <details id="daily-history" class="adv-help" data-help="keep" style="grid-column:1 / -1;min-width:0">
+            <summary class="adv-more-btn">DAILY HISTORY · RECENT DAYS</summary>
+            <p id="daily-history-note">Up to 7 saved days and 4 classes per day on this device. Class numbers are local to each day, not a comparison across days. Historical medals are not available.</p>
+            <ul id="daily-history-list" style="overflow-wrap:anywhere"><li>No saved Daily laps yet. Complete a valid Daily lap to start your history.</li></ul>
+          </details>
+        </section>
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
 <details id="adv-feel-details">
@@ -1090,7 +1263,7 @@
     </div>
     <div class="adv-item">
       <div id="pm-feel" class="set-row" role="group" aria-labelledby="pm-feel-label">
-        <span class="tune-label" id="pm-feel-label">STEERING</span>
+        <span class="tune-label" id="pm-feel-label" data-i18n="pause.steering">STEERING</span>
         <div>
           <button id="pm-feel-prev" type="button" data-step="-1" aria-label="Previous steering">&lsaquo;</button>
           <select id="pm-feel-sel" aria-labelledby="pm-feel-label"></select>
@@ -1285,7 +1458,7 @@
                can only change by quitting to the menu is one you cannot change
                when you discover you want it.
                MANUAL by default: the button IS the mechanic. AUTO exists because
-               inside a zone X-mode is never the wrong choice, so a player who
+               inside a zone straight mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
           <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
             <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
@@ -1402,7 +1575,7 @@
                   <button id="pm-linecolor-next" type="button" data-step="1" aria-label="Next line colour">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help">The DRIVING LINE's speed cue. F1's green/amber/red is the pair red-green colour blindness cannot separate; COLOUR-BLIND uses blue, orange and magenta instead.</p>
+              <p class="adv-help">The DRIVING LINE's on-pace colour: F1 GREEN, CYAN, BLUE, WHITE, PURPLE or PINK, with amber to lift and red to brake. F1's green/amber/red is the pair red-green colour blindness cannot separate; COLOUR-BLIND uses blue, orange and magenta instead.</p>
               <div id="pm-lineopacity" class="set-row" role="group" aria-labelledby="pm-lineopacity-label">
                 <span class="tune-label" id="pm-lineopacity-label">LINE OPACITY</span>
                 <div>
@@ -1414,11 +1587,11 @@
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="70" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-              <p class="adv-help">Scales the race readouts: speed, position, timing and the map. The sample below shows the size.</p>
+              <p class="adv-help">100% uses the default size for race speed, position, timing and map readouts. The sample below shows the size. The MIRROR keeps its own size: set it in ARRANGE HUD.</p>
               <!-- Independent touch-control preference. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>reset button size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="300" step="0.25" value="100" aria-label="Touch button size"></label>
-              <p class="adv-help">The on-screen pedals, arrows and race buttons. Independent of HUD SIZE; only the screen limits their size.</p>
+              <p class="adv-help">100% uses the default pedal, arrow and race button size for this window. Available space limits the maximum.</p>
               <!-- BUTTON OPACITY. XAG 104 asks for an adjustable backing behind
                    anything read over live gameplay, and the dock sits over a
                    bright, moving 3D scene. Its own 20-100 range, not the size
@@ -1467,7 +1640,7 @@
               <button id="pm-uitheme-next" type="button" data-step="1" aria-label="Next theme">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">DARK is the classic look. LIGHT is easier to read in bright sun. SYSTEM matches your phone.</p>
+          <p class="adv-help">DARK is the classic look. LIGHT suits bright sun. SYSTEM follows your device. ENDURANCE pairs deep green with ivory headings. DRAFTING uses crisp blue panels. Themes preserve your layout, accents and accessibility choices.</p>
           <div id="pm-menuaccent" class="set-row" role="group" aria-labelledby="pm-menuaccent-label">
             <span class="tune-label" id="pm-menuaccent-label">MENU ACCENT</span>
             <div>
@@ -1497,7 +1670,7 @@
           <h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h5>
           <label class="tune-row">
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size" aria-describedby="pm-uiscale-help"></label>
-          <p id="pm-uiscale-help" class="adv-help">Scales every menu and settings screen. The race HUD and the touch buttons have their own sizes under DISPLAY › HUD.</p>
+          <p id="pm-uiscale-help" class="adv-help">100% uses the default menu size for this window. HUD &amp; CAMERA lets you size the race HUD separately.</p>
           <div id="pm-textsize" class="set-row" role="group" aria-labelledby="pm-textsize-label">
             <span class="tune-label" id="pm-textsize-label">TEXT SIZE</span>
             <div>
@@ -1506,7 +1679,7 @@
               <button id="pm-textsize-next" type="button" data-step="1" aria-label="Next text size">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help" id="pm-textsize-help">Bigger words in the menus and settings. The race HUD has its own size under DISPLAY.</p>
+          <p class="adv-help" id="pm-textsize-help">Bigger words in the menus and settings. The race HUD has its own size in HUD &amp; CAMERA.</p>
           <div id="pm-contrast" class="set-row" role="group" aria-labelledby="pm-contrast-label">
             <span class="tune-label" id="pm-contrast-label">HIGH CONTRAST</span>
             <div>
@@ -1598,7 +1771,7 @@
                   <button id="pm-menuwash-next" type="button" data-step="1" aria-label="Next menu wash" aria-hidden="true" tabindex="-1">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help" id="pm-menuwash-help">The coloured glow behind the main menu. SOFT tones it down; OFF leaves a plain dark background.</p>
+              <p class="adv-help" id="pm-menuwash-help">Choose FULL, MEDIUM or SOFT for the coloured glow behind the main menu. OFF removes it.</p>
               <div id="pm-titleart" class="set-row" role="group" aria-labelledby="pm-titleart-label">
                 <span class="tune-label" id="pm-titleart-label">TITLE ART</span>
                 <div>
@@ -1607,7 +1780,7 @@
                   <button id="pm-titleart-next" type="button" data-step="1" aria-label="Next title art" aria-hidden="true" tabindex="-1">&rsaquo;</button>
                 </div>
               </div>
-              <p class="adv-help" id="pm-titleart-help">The car drawing behind the main menu. SOFT fades it; OFF removes it.</p>
+              <p class="adv-help" id="pm-titleart-help">Choose ON, MEDIUM or SOFT for the car drawing behind the main menu. OFF hides the drawing.</p>
               <button type="button" id="pm-replay-intro" class="pm-replay-intro">REPLAY INTRO<small>play the title reveal again</small></button>
             </div>
           </details>
@@ -1620,8 +1793,8 @@
 
 
     <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
-    <label class="tune-row">
-      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-describedby="pm-pace-help"></label>
+    <label class="tune-row" for="pm-pace">
+      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed" aria-valuetext="84%" aria-describedby="pm-pace-help"></label>
     <p id="pm-pace-help" class="adv-help">How fast the whole field runs, you and the AI alike, as a share of real F1 speed. Lower gives more time to react; it does not change who is quicker.</p>
 
 
@@ -1642,8 +1815,8 @@
       <button id="pm-tiltdeg-jump" type="button" class="adv-more-btn" data-settings-jump="controls" data-jump-target="pm-tiltsimple">TILT SENSITIVITY is in CONTROLS › FEEL &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
-        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
+      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">3</b></span>
+        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="3" aria-label="Steer smoothing"></label>
       <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
     </div>
     <div class="adv-item">
@@ -1695,29 +1868,29 @@
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help, fine steps"></label>
+      <label class="tune-row"><span class="tune-label">DRIVING HELP · FINE <b id="pm-help-v">1</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="1" aria-label="Driving help, fine steps"></label>
       <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob. GRIP STEER (below, and in ROOKIE / RELAX) caps lock at the front peak without reading the road arc.</p>
       <button id="pm-help-jump" type="button" class="adv-more-btn" data-settings-jump="driving" data-jump-target="pm-helplevel-sel">DRIVING HELP is in DRIVING AIDS &rsaquo;</button>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
-        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5" aria-label="Response"></label>
+      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">2</b></span>
+        <input id="pm-rate" type="range" min="1" max="10" step="1" value="2" aria-label="Response"></label>
       <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
-        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5" aria-label="Linearity"></label>
+      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">6</b></span>
+        <input id="pm-expo" type="range" min="1" max="10" step="1" value="6" aria-label="Linearity"></label>
       <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
-        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5" aria-label="Steer lock"></label>
+      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">7</b></span>
+        <input id="pm-lock" type="range" min="1" max="10" step="1" value="7" aria-label="Steer lock"></label>
       <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
     </div>
     <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
-        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5" aria-label="Speed steer"></label>
+      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">7</b></span>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="7" aria-label="Speed steer"></label>
       <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
     </div>
     <div class="adv-item">
@@ -1735,7 +1908,7 @@
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">STEER ASSIST · FINE <b id="pm-line-v">OFF</b></span>
         <input id="pm-line" type="range" min="-5" max="5" step="1" value="0" aria-label="Steer assist, fine steps"></label>
-      <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
+      <p class="adv-help">PULL (+) adds steering toward the apex. PUSH (&minus;) adds steering away from it. Both act even with your steering centred. Choose OFF for manual steering.</p>
       <button id="pm-line-jump" type="button" class="adv-more-btn" data-settings-jump="driving" data-jump-target="pm-linemode-sel">STEER ASSIST is in DRIVING AIDS &rsaquo;</button>
     </div>
     </div><!-- /#adv-extra -->
@@ -1748,7 +1921,7 @@
       <!-- Closed like DISPLAY: the summary is the label and carries ON / source.
            ON/OFF live in the body so a summary tap only opens the fold. -->
       <details id="as-music-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
+        <summary class="adv-more-btn" id="as-music-sum">MUSIC · OFF · ALL</summary>
         <div id="as-music" class="set-row" role="group" aria-labelledby="as-music-label">
           <span class="tune-label" id="as-music-label">MUSIC</span>
           <div>
@@ -1757,8 +1930,8 @@
             <button id="as-music-next" type="button" data-step="1" aria-label="Next music">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">MUSIC VOLUME <b id="as-mvol-v">5</b></span>
-          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+        <label class="tune-row"><span class="tune-label">MUSIC VOLUME · % OF DEFAULT MIX <b id="as-mvol-v">100%</b></span>
+          <input id="as-mvol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="7" aria-label="Music volume"></label>
         <p class="as-note">The soundtrack in the menus and on track. VOLUME sets the music alone; SOURCE picks which songs play.</p>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
              once it is connected; picking another source releases it without
@@ -1792,7 +1965,7 @@
       </details>
 
       <details id="as-sound-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
+        <summary class="adv-more-btn" id="as-sound-sum">SOUND · MUTED</summary>
         <div id="as-sound" class="set-row" role="group" aria-labelledby="as-sound-label">
           <span class="tune-label" id="as-sound-label">SOUND EFFECTS</span>
           <div>
@@ -1801,8 +1974,8 @@
             <button id="as-sound-next" type="button" data-step="1" aria-label="Next sound effects">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME <b id="as-svol-v">10</b></span>
-          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
+        <label class="tune-row"><span class="tune-label">EFFECTS VOLUME · % OF DEFAULT MIX <b id="as-svol-v">100%</b></span>
+          <input id="as-svol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="4" aria-label="Sound effects volume"></label>
         <div id="as-ui" class="set-row" role="group" aria-labelledby="as-ui-label">
           <span class="tune-label" id="as-ui-label">MENU SOUNDS</span>
           <div>
@@ -1820,7 +1993,7 @@
            it, and binding it there would look right and then desync the moment
            somebody turned SFX off and left the radio on. -->
       <details id="as-radio-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF</summary>
+        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF · NORMAL · SPOTTER OFF</summary>
         <div id="as-radio" class="set-row" role="group" aria-labelledby="as-radio-label">
           <span class="tune-label" id="as-radio-label">TEAM RADIO</span>
           <div>
@@ -1888,7 +2061,7 @@
         </div>
         <p id="as-focus-note" class="as-note">STANDARD uses the usual sound mix. Choose 4, 8 or 12 dB to lower engines and rival cars during radio speech while keeping tyre, braking and corner cues at their normal level.</p>
         <div id="as-rpack" class="set-row" role="group" aria-labelledby="as-rpack-label">
-          <span class="tune-label" id="as-rpack-label">RADIO VOICE</span>
+          <span class="tune-label" id="as-rpack-label">RACE VOICE SOURCE</span>
           <div>
             <button id="as-rpack-prev" type="button" data-step="-1" aria-label="Previous radio voice">&lsaquo;</button>
             <select id="as-rpack-sel" aria-labelledby="as-rpack-label"></select>
@@ -1903,8 +2076,8 @@
             <button id="as-rpreset-next" type="button" data-step="1" aria-label="Next radio sound">&rsaquo;</button>
           </div>
         </div>
-        <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
-          <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
+        <label class="tune-row"><span class="tune-label">VOICE VOLUME · % OF DEFAULT MIX <b id="as-rvol-v">100%</b></span>
+          <input id="as-rvol" aria-valuetext="100% of default mix" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <!-- RADIO FX — the key click, the hiss under the line and the squelch
              tail (js/audio/engine.js radioSting). NOT gated on the TEAM RADIO
              switch above and deliberately so: that switch is the SPOKEN radio,
@@ -1913,7 +2086,7 @@
              them — which is exactly what the voice volume above cannot do. -->
         <label class="tune-row"><span class="tune-label">RADIO FX <b id="as-rfx-v">10</b></span>
           <input id="as-rfx" type="range" min="0" max="15" step="1" value="10" aria-label="Team radio effect level"></label>
-        <p class="as-note">Choose a recorded voice below for each channel — any of the six voices can be your engineer, race control, the coach or the commentator — then TEST to hear it. RADIO SOUND changes your engineer and spotter: a clean headset, modern radio or vintage radio. VOICE VOLUME sets all speech; RADIO FX sets the clicks and hiss. Recorded voices are AI-generated.</p>
+        <p class="as-note">Race voice source applies to your engineer, race control and coach. Choose a voice for each channel below, then TEST to hear it. The announcer has a separate voice choice. RADIO SOUND changes your engineer and spotter: a clean headset, modern radio or vintage radio. VOICE VOLUME sets all speech; RADIO FX sets the clicks and hiss. Recorded voices are AI-generated.</p>
 
         <!-- PER-CHANNEL VOICES. js/audio/radio-voice.js already partitions every
              announcement into three speakers — RACE CONTROL, the COACH and the
@@ -1939,7 +2112,7 @@
            ships OFF, this talks over a menu and ships ON, and a control that
            greys out with a switch it does not obey is a lie about the wiring. -->
       <details id="as-ann-details" class="as-sec">
-        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · ON</summary>
+        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · MUTED · TV CAMERAS</summary>
         <div id="as-ann" class="set-row" role="group" aria-labelledby="as-ann-label">
           <span class="tune-label" id="as-ann-label">ANNOUNCER</span>
           <div>
@@ -2002,52 +2175,52 @@
         <p class="as-note">How the note climbs with the revs. Each readout is a trim percentage on that control (100&nbsp;=&nbsp;1&times;). TEAM profile is your manufacturer&rsquo;s factory mix, so the numbers are not all 100&nbsp;&mdash; PITCH, REV&nbsp;RANGE, SUB and DEPTH follow the team sound. RESET&nbsp;TO&nbsp;TEAM&nbsp;SOUND restores that profile. IDLE is the bottom, PITCH shifts the whole note, REV&nbsp;RANGE the spread to the limiter, CURVE how early it rises.</p>
         <label class="tune-row"><span class="tune-label">IDLE <b id="as-t-idle-v">100</b></span>
           <input id="as-t-idle" type="range" min="0" max="22" step="1" value="10" aria-label="Idle pitch"></label>
-        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
-          <input id="as-t-pitch" type="range" min="0" max="24" step="1" value="8" aria-label="Engine pitch"></label>
-        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
-          <input id="as-t-range" type="range" min="0" max="38" step="1" value="8" aria-label="Rev range"></label>
+        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">85</b></span>
+          <input id="as-t-pitch" type="range" min="0" max="120" step="1" value="25" aria-label="Engine pitch"></label>
+        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">130</b></span>
+          <input id="as-t-range" type="range" min="0" max="380" step="1" value="110" aria-label="Rev range"></label>
         <label class="tune-row"><span class="tune-label">CURVE <b id="as-t-curve-v">100</b></span>
-          <input id="as-t-curve" type="range" min="0" max="21" step="1" value="6" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
+          <input id="as-t-curve" type="range" min="0" max="42" step="1" value="12" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
         <h3 class="adv-sec">CHARACTER</h3>
         <p class="as-note">The engine&rsquo;s timbre: GRAVEL is low-rev roughness, DETUNE a thicker, less pure note, BRIGHTNESS the treble, SUB the low-octave weight.</p>
         <label class="tune-row"><span class="tune-label">GRAVEL LEVEL <b id="as-t-gravel-v">100</b></span>
-          <input id="as-t-gravel" type="range" min="0" max="16" step="1" value="4" aria-label="Low-rev roughness"></label>
-        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
-          <input id="as-t-detune" type="range" min="0" max="16" step="1" value="4" aria-label="Engine detune"></label>
+          <input id="as-t-gravel" type="range" min="0" max="80" step="1" value="20" aria-label="Low-rev roughness"></label>
+        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">0</b></span>
+          <input id="as-t-detune" type="range" min="0" max="80" step="1" value="0" aria-label="Engine detune"></label>
         <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
-          <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
-        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">100</b></span>
-          <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
+          <input id="as-t-bright" type="range" min="0" max="220" step="1" value="70" aria-label="Engine brightness"></label>
+        <label class="tune-row"><span class="tune-label">SUB LEVEL <b id="as-t-sub-v">25</b></span>
+          <input id="as-t-sub" type="range" min="0" max="80" step="1" value="5" aria-label="Sub-octave weight"></label>
         <h3 class="adv-sec">LIMITER</h3>
         <p class="as-note">The rev-limiter cut: DEPTH is how hard it chops, RATE how fast, PITCH SAG how far the note dips on each cut.</p>
-        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
-        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">100</b></span>
-          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="6" aria-label="Rev limiter chop rate"></label>
-        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">100</b></span>
-          <input id="as-t-limsag" type="range" min="0" max="16" step="1" value="4" aria-label="Rev limiter pitch sag on each cut"></label>
+        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">225</b></span>
+          <input id="as-t-lim" type="range" min="0" max="60" step="1" value="45" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">80</b></span>
+          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="4" aria-label="Rev limiter chop rate"></label>
+        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">0</b></span>
+          <input id="as-t-limsag" type="range" min="0" max="80" step="1" value="0" aria-label="Rev limiter pitch sag on each cut"></label>
         <h3 class="adv-sec">BOOST</h3>
         <p class="as-note">While ERS deploys: LEVEL is the electric whine and whoosh, REV LIFT how far the note rises.</p>
-        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">100</b></span>
-          <input id="as-t-boost" type="range" min="0" max="100" step="1" value="25" aria-label="ERS deploy whine and whoosh level"></label>
+        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">112</b></span>
+          <input id="as-t-boost" type="range" min="0" max="400" step="1" value="112" aria-label="ERS deploy whine and whoosh level"></label>
         <label class="tune-row"><span class="tune-label">REV LIFT <b id="as-t-boostlift-v">100</b></span>
           <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
         <p class="as-note">The sounds stacked on the engine. The sliders set their levels; the switches under them mute a layer entirely.</p>
-        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="200" step="1" value="50" aria-label="Turbo whine and wastegate level"></label>
+        <label class="tune-row"><span class="tune-label">TURBO LEVEL <b id="as-t-whine-v">62</b></span>
+          <input id="as-t-whine" type="range" min="0" max="400" step="1" value="62" aria-label="Turbo whine and wastegate level"></label>
         <label class="tune-row"><span class="tune-label">HARVEST LEVEL <b id="as-t-harvest-v">100</b></span>
-          <input id="as-t-harvest" type="range" min="0" max="16" step="1" value="4" aria-label="MGU-K harvest whirr level"></label>
+          <input id="as-t-harvest" type="range" min="0" max="80" step="1" value="20" aria-label="MGU-K harvest whirr level"></label>
         <label class="tune-row"><span class="tune-label">WIND LEVEL <b id="as-t-wind-v">100</b></span>
-          <input id="as-t-wind" type="range" min="0" max="16" step="1" value="4" aria-label="Airflow level"></label>
+          <input id="as-t-wind" type="range" min="0" max="80" step="1" value="20" aria-label="Airflow level"></label>
         <label class="tune-row"><span class="tune-label">TYRES LEVEL <b id="as-t-tyres-v">100</b></span>
-          <input id="as-t-tyres" type="range" min="0" max="16" step="1" value="4" aria-label="Tyre screech level"></label>
+          <input id="as-t-tyres" type="range" min="0" max="80" step="1" value="20" aria-label="Tyre screech level"></label>
         <label class="tune-row"><span class="tune-label">BRAKES LEVEL <b id="as-t-brakes-v">100</b></span>
-          <input id="as-t-brakes" type="range" min="0" max="16" step="1" value="4" aria-label="Brake roar level"></label>
+          <input id="as-t-brakes" type="range" min="0" max="80" step="1" value="20" aria-label="Brake roar level"></label>
         <label class="tune-row"><span class="tune-label">SHIFT LEVEL <b id="as-t-shift-v">100</b></span>
-          <input id="as-t-shift" type="range" min="0" max="12" step="1" value="4" aria-label="Gear-shift crack level"></label>
+          <input id="as-t-shift" type="range" min="0" max="60" step="1" value="20" aria-label="Gear-shift crack level"></label>
         <label class="tune-row"><span class="tune-label">RIVALS LEVEL <b id="as-t-rivals-v">100</b></span>
-          <input id="as-t-rivals" type="range" min="0" max="16" step="1" value="4" aria-label="Rival engine level"></label>
+          <input id="as-t-rivals" type="range" min="0" max="80" step="1" value="20" aria-label="Rival engine level"></label>
         <label class="tune-row"><span class="tune-label">SPACE LEVEL <b id="as-t-rev-v">100</b></span>
           <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
         <label class="tune-row"><span class="tune-label">OVERRUN LEVEL <b id="as-t-ovr-v">100</b></span>
@@ -2160,12 +2333,12 @@
 </dialog>
 
 <!-- Non-modal photo dock: camera pointer controls remain available; its own CLOSE door restores the caller. -->
-<div id="photo-studio" class="screen" role="region" aria-label="Photo Studio" data-esc-close="ps-close" hidden></div>
+<div id="photo-studio" class="screen" role="region" aria-label="Photo Studio" hidden></div>
 
 <!-- main menu. data-intro ships in the shell so the first paint is already
      the title intro's start state; js/ui/title-fx.js takes it off after one
      pass (css/menus.css THE TITLE INTRO). -->
-<div id="overlay" class="grain" data-intro>
+<div id="overlay" class="grain" data-intro role="main" aria-label="Title menu">
   <!-- THE TITLE CAR — decorative, static, and deliberately not a renderer.
        #game is visibility:hidden on this screen, so the title costs no GL boot;
        drawing the hero in SVG keeps it that way. STATIC because WCAG SC 2.2.2
@@ -2266,60 +2439,69 @@
            the &#9834; character: U+266A is in none of the bundled fonts, so the
            text glyph fell back to a host font and the phone title baseline
            flaked on it (tests/data/flaky-quarantine.json). No extra shell node. -->
-      <button id="soundbtn" class="minibtn" aria-pressed="true">SOUND ON</button>
-      <p id="disclaimer">Unofficial fan project &mdash; not affiliated with FIA or Formula 1</p>
+      <button id="soundbtn" class="minibtn" aria-pressed="false">SOUND OFF</button>
+      <!-- Never hidden (css/menus.css). One short line: the full trade-mark sentence
+           Formula 1's fan guidelines give (formula1.com/en/toolbar/guidelines.html)
+           ran 8 lines in portrait and pushed Home past one screen (390x844: 556px
+           in a 440px box), so it heads Settings > ABOUT & CREDITS instead
+           (desktop/scripts/notices.mjs TRADEMARK; TITLE_NOTICE is this line). -->
+      <p id="disclaimer">Unofficial fan game, not associated with Formula 1 companies</p>
     </div>
   </div>
   <button id="home-motion" class="minibtn" type="button" hidden>PAUSE BACKGROUND</button>
-  <div id="menu-buttons">
+  <div id="menu-buttons" data-destinations="true">
     <!-- Inline Lucide icons (ISC — assets/icons/lucide-LICENSE.txt). stroke=currentColor
          so they inherit the button's text colour; sized via .btn-ico in css/menus.css. -->
     <!-- HERO: the long game, on its own and taller than everything under it.
          It used to sit in a flat stack of five identical red buttons, which gave
-         a 24-round career the same weight as a single time trial. #mb-career-sub
+         a 23-round career the same weight as a single time trial. #mb-career-sub
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
-    <div id="menu-hero">
-    <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career · My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19A3 3 0 1 0 3 19A3 3 0 1 0 9 19Z M21 5A3 3 0 1 0 15 5A3 3 0 1 0 21 5Z"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span><span class="mb-label">CAREER MODES</span> <span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
+    <div id="menu-hero" role="group" aria-label="Continue and career">
+    <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career · My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19A3 3 0 1 0 3 19A3 3 0 1 0 9 19Z M21 5A3 3 0 1 0 15 5A3 3 0 1 0 21 5Z"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span><span class="mb-label" data-i18n="title.career">CAREER MODES</span> <span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     <div id="menu-retention" class="balanced-row">
       <button id="mb-continue" class="bigbtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M10 8L16 12L10 16L10 8Z"/></svg><span>CONTINUE <span id="mb-continue-sub" class="mb-sub"></span></span></button>
       <button id="mb-daily" class="bigbtn" aria-label="Daily time trial — Today's challenge"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4 M16 2v4 M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/></svg><span>DAILY TIME TRIAL <span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></span></button>
     </div>
     </div>
-    <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
-         rather than four. Dark plates with a red leading edge: the hero is the
-         only solid red on the screen. -->
-    <div id="menu-primary" class="balanced-row">
-    <button id="mb-race" class="bigbtn" aria-label="Race — One Grand Prix"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE <span class="mb-sub">ONE GRAND PRIX</span></span></button>
-    <button id="mb-tt" class="bigbtn" aria-label="Time Trial — You against the clock"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2L14 2 M12 14L15 11 M20 14A8 8 0 1 0 4 14A8 8 0 1 0 20 14Z"/></svg><span>TIME TRIAL <span class="mb-sub">YOU AGAINST THE CLOCK</span></span></button>
+    <!-- DESTINATIONS, AS SHIPPED: the grouping js/ui/title-menu.js organize()
+         used to build at game.js eval. On Slow 4G that was ~12 s after this grid
+         first painted, and every door moved under the thumb as the groups landed
+         (design pass 2c, docs/notes/DESIGN-PASS-2C-MOTION-2026-10-30.md). The
+         shell now carries the end state; organize() only wires it. The inline
+         line after USE AS CONTROLLER is Input.touchControlsNeeded()'s query, so
+         the phone's utility row has its fourth cell from the first frame. -->
+    <div id="menu-primary" class="balanced-row menu-destination" role="group" aria-label="Play">
+    <button id="mb-race" class="bigbtn" aria-label="Race — One Grand Prix"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE <span class="mb-sub" data-i18n="title.race.sub">ONE GRAND PRIX</span></span></button>
+    <button id="mb-tt" class="bigbtn" aria-label="Time Trial — You against the clock"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2L14 2 M12 14L15 11 M20 14A8 8 0 1 0 4 14A8 8 0 1 0 20 14Z"/></svg><span>TIME TRIAL <span class="mb-sub" data-i18n="title.tt.sub">YOU AGAINST THE CLOCK</span></span></button>
     <button id="mb-vs" class="bigbtn" aria-label="Race a Friend — Private 2–4 player race"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg><span>RACE A FRIEND <span class="mb-sub">PRIVATE 2&ndash;4 PLAYER RACE</span></span></button>
-    <button id="mb-season" class="bigbtn" aria-label="Season — A championship, your rules"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2 M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2 M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3 M4 22h16 M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON <span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
+    <button id="mb-season" class="bigbtn" aria-label="Season — A championship, your rules"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2 M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2 M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3 M4 22h16 M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON <span class="mb-sub" data-i18n="title.season.sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
+    <button id="mb-practice" class="bigbtn" type="button" aria-label="Practice — Goals &amp; checkpoints"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M18 12A6 6 0 1 0 6 12A6 6 0 1 0 18 12Z M14 12A2 2 0 1 0 10 12A2 2 0 1 0 14 12Z"/></svg><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
     </div>
-    <!-- EXPLORE: Watch / Practice / Photo Studio / Garage — the H3 Home
-         rooms plus the car workshop. Forced 2x2 so Photo is not a leftover
-         banner and Garage is not a leftover utility chip. SECONDARY stays
-         the chrome rooms (standings + controller when shown). -->
-    <div id="menu-explore" class="balanced-row">
-    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="3" rx="2" ry="2"/><polyline points="8 21 12 17 16 21"/></svg><span>WATCH <span class="mb-sub">BROADCAST / REAL RACES</span></span></button>
-    <button id="mb-practice" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M18 12A6 6 0 1 0 6 12A6 6 0 1 0 18 12Z M14 12A2 2 0 1 0 10 12A2 2 0 1 0 14 12Z"/></svg><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
-    <button id="mb-photo" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z M15 13a3 3 0 1 0-6 0a3 3 0 1 0 6 0z"/></svg><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
-    <button id="mb-garage" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
+    <div id="menu-garage" class="balanced-row menu-destination" role="group" aria-label="Garage">
+    <button id="mb-garage" class="bigbtn" type="button" aria-label="Garage — Setup &amp; livery"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
     </div>
-    <!-- SECONDARY: everything that is not a way to play. Half-height,
-         two across, so the rooms never compete with the modes for the eye. -->
-    <div id="menu-secondary" class="balanced-row">
-    <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.477 12.89l1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526 M18 8a6 6 0 1 0-12 0a6 6 0 1 0 12 0z"/></svg>STANDINGS</button>
+    <div id="menu-explore" class="balanced-row menu-destination" role="group" aria-label="Watch &amp; Explore">
+    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="3" rx="2" ry="2"/><polyline points="8 21 12 17 16 21"/></svg><span>WATCH <span class="mb-sub" data-i18n="title.watch.sub">BROADCAST / REAL RACES</span></span></button>
     <button id="mb-data" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 14l4-4 M3.34 19a10 10 0 1 1 17.32 0"/></svg>DATA HUB</button>
+    </div>
+    <div id="menu-create" class="balanced-row menu-destination" role="group" aria-label="Create">
+    <button id="mb-photo" class="bigbtn" type="button" aria-label="Photo Studio — Capture &amp; backgrounds"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z M15 13a3 3 0 1 0-6 0a3 3 0 1 0 6 0z"/></svg><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
     <button id="mb-designer" class="bigbtn alt minibtn" aria-label="Track designer — build and race your own circuits"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14c0-4 3-6 7-6s4 3 7 3 3 3 1 5-5 3-9 2-6-1-6-4z"/><circle cx="7" cy="14" r="1"/><circle cx="17" cy="11" r="1"/></svg>TRACK DESIGNER</button>
+    <button id="mb-visual" type="button" class="bigbtn alt minibtn">VISUAL STUDIO</button>
+    </div>
+    <div id="menu-secondary" class="balanced-row menu-destination" role="group" aria-label="Utilities">
+    <button id="mb-standings" class="bigbtn alt minibtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.477 12.89l1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526 M18 8a6 6 0 1 0-12 0a6 6 0 1 0 12 0z"/></svg>STANDINGS</button>
     <button id="mb-settings" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>SETTINGS</button>
-    <!-- Unhidden (2026-08): the handler was live the whole time while the
-         button carried a permanent `hidden` — the only tutorial door a
-         first-time player could find was SETTINGS ▸ MORE ▸ HOW TO PLAY. -->
-    <!-- USE AS CONTROLLER: the PHONE'S door to controller.html (type the room
-         code there, or arrive by QR). Coarse pointers only — syncPointerKind()
-         in js/game.js flips `hidden` live; a mouse never sees it. -->
     <button id="mb-phonepad" class="bigbtn alt minibtn" hidden aria-label="Use as controller: this phone steers a game on another screen"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>USE AS CONTROLLER</button>
+    <!-- The OTHER end of the same feature, for the screen you play on: a fine pointer
+         (a desktop) is the game a phone steers, so it gets PHONE CONTROLLER, which opens
+         Settings › CONTROLS and starts the pairing there (js/ui/platform-session.js).
+         Exactly one of the two shows, from the first frame (the script below). -->
+    <button id="mb-steerphone" class="bigbtn alt minibtn" type="button" hidden aria-label="Phone controller: steer this game with a phone">PHONE CONTROLLER</button>
+    <script>if(matchMedia("(pointer: coarse)").matches)document.getElementById("mb-phonepad").hidden=false;else document.getElementById("mb-steerphone").hidden=false</script>
     <button id="mb-help" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3 M12 17h.01"/></svg>HOW TO PLAY</button>
+    <button id="mb-saves" type="button" class="bigbtn alt minibtn">SAVES &amp; DATA</button>
     </div>
   </div>
 </div>
@@ -2451,7 +2633,7 @@
     <div class="sheet-foot">
       <button id="sel-back" class="bigbtn alt">BACK</button>
       <button id="sel-car" class="bigbtn alt"><span>CHANGE CAR</span><small id="sel-car-current">CURRENT CAR</small></button>
-      <button id="sel-go" class="bigbtn">RACE SETUP</button>
+      <button id="sel-go" autofocus class="bigbtn">RACE SETUP</button>
     </div>
   </div>
 </div>
@@ -2535,7 +2717,7 @@
         <div id="vs-code-input" hidden>
           <input id="vs-code-in" class="vs-code vs-codebox" type="text" inputmode="latin"
                  autocapitalize="characters" autocomplete="off" spellcheck="false"
-                 maxlength="8" placeholder="ABC123" aria-label="Room code">
+                 maxlength="12" placeholder="ABCD2345" aria-label="Room code">
           <button id="vs-code-go" class="bigbtn">JOIN</button>
         </div>
       </div>
@@ -2666,7 +2848,7 @@
 </dialog>
 
 <!-- track detail fullscreen overlay -->
-<!-- A REAL <dialog>, not a div with role="dialog" aria-modal="true". The
+<!-- A REAL dialog element, not a div with role="dialog" aria-modal="true". The
      hand-written version told assistive tech the page behind was inert while
      Tab walked straight out into #select — the worst combination. showModal()
      supplies that semantics for real, so the ARIA attributes are gone: the
@@ -2900,8 +3082,8 @@
       </details>
     </div>
     <div class="sheet-foot">
-      <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
-      <button id="rs-go" class="bigbtn">START RACE</button>
+      <button id="rs-cancel" class="bigbtn alt">BACK</button>
+      <button id="rs-go" autofocus class="bigbtn">START RACE</button>
     </div>
   </div>
 </dialog>
@@ -3131,7 +3313,7 @@
       </span>
       <div id="cs-aero-bar">
         <button type="button" id="cs-aero" aria-pressed="false"
-                title="Active aero: open and close the front and rear wing flaps (Z-mode = downforce, X-mode = low drag)">
+                title="Active aero: open and close the front and rear wing flaps (Corner Mode = downforce, Straight Mode = low drag)">
           <span class="cs-aero-lbl">ACTIVE AERO</span>
           <span class="cs-aero-val">CORNER MODE</span>
         </button>
@@ -3184,7 +3366,7 @@
     <div class="sheet-body pane">
       <section id="htp-controls" aria-labelledby="htp-start">
         <h3 id="htp-start" class="pm-group-h">QUICK START</h3>
-        <p>Wait for lights out, accelerate, then brake before turning. Ease off the brake as you steer and add throttle as the car straightens.</p>
+        <p>Wait for lights out, accelerate, then brake before turning. Throttle held as the lights go out is a +5 s FALSE START. Ease off the brake as you steer and add throttle as the car straightens.</p>
         <div id="htp-inputs">
           <details data-input="keyboard" open>
             <summary class="adv-more-btn">KEYBOARD</summary>
@@ -3200,9 +3382,9 @@
             <summary class="adv-more-btn">TOUCH / MOBILE</summary>
             <p>Choose SETTINGS › CONTROLS › STEERING INPUT. Rotate to landscape to drive. Stuck or facing the wrong way? Tap PAUSE, then RECOVER CAR.</p>
             <p><b>TILT:</b> roll the phone to steer; use GAS and BRAKE. It calibrates at the lights. If motion permission is denied, the game switches to BUTTONS.</p>
-            <p><b>BUTTONS:</b> hold an on-screen arrow and slide back to ease steering. Pedals sit opposite the arrows.</p>
+            <p><b>BUTTONS:</b> tap an arrow to steer, or hold it and slide toward the other arrow to ease off. In SETTINGS › CONTROLS › TOUCH BUTTON RESPONSE, choose Left, Right, Gas or Brake. PROGRESSIVE starts light and builds as you drag away from where you touched.</p>
             <p><b>TOUCH:</b> drag from where your finger lands on the track. Gas is automatic; use BRAKE to slow down. A tap alone does not steer.</p>
-            <p>CONTROLS also has pedal layout and handedness. DISPLAY lets you size the interface, HUD and touch buttons separately.</p>
+            <p>CONTROLS also has pedal layout and handedness. APPEARANCE lets you size menus. HUD &amp; CAMERA lets you size race readouts.</p>
           </details>
         </div>
       </section>
@@ -3211,33 +3393,35 @@
         <dd>Toggle electric power on or off. It drains the energy bar, which recharges when you lift or brake. Power tapers at very high speed.</dd>
         <dt>ACTIVE AERO</dt>
         <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. STRAIGHT MODE (the flaps open) reduces drag and grip; braking or leaving the zone closes the wings.
-          <br>SETTINGS › CONTROLS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
+          <br>SETTINGS › DRIVING AIDS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
         <dt>OVERTAKE</dt>
-        <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dd>Follow within one second at the detection line to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, the Safety Car or red flag, or low grip in the wet. An allowance you do not use by the next lap is lost. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt id="htp-2026rules">2026 RULES &mdash; ENERGY &amp; OVERTAKE</dt>
-        <dd><b>Energy harvest and super-clipping.</b> The hybrid recovers energy when you brake or lift. With a <b>full battery</b> (about 4 MJ on the energy bar), the car cannot keep harvesting on a long straight &mdash; the ICE is <b>super-clipped</b> so the MGU-K has headroom. You may feel a slowdown at part throttle or when you lift even though you are not braking hard. Spend charge with <span class="key">BOOST</span> or <span class="key">OVERTAKE</span>, or arrive at the straight with less than a full pack.
+        <dd><b>Energy harvest.</b> The hybrid recovers energy when you brake or lift. With a <b>full battery</b> (about 4 MJ on the energy bar) there is nowhere to put it: braking and lifting recover nothing more, and you hear the engine note clip while it is full. The car does not slow down, but that energy is wasted. Spend charge with <span class="key">BOOST</span> or <span class="key">OVERTAKE</span> so the pack has room before the next braking zone.
           <br><b>Overtake Mode</b> is separate from BOOST and Active Aero: it is an extra 0.5 MJ allowance earned when you follow within one second at the detection line, then spent at will that lap (see <span class="key">OVERTAKE</span> above). It does not drain the main energy bar.</dd>
         <dt>GEARS</dt>
         <dd>Choose SETTINGS › DRIVING AIDS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
         <dt>RACE CONTROL</dt>
-        <dd>Yellow flags, the virtual safety car, the safety car and the red flag are OFF by default. Turn them on in RACE SETTINGS › CAUTIONS. Cars a lap down move aside for the car lapping them.</dd>
+        <dd>Yellow flags, the virtual safety car, the safety car and the red flag are OFF by default. Turn them on in RACE SETTINGS › CAUTIONS. Under a virtual safety car, safety car or red flag, give back any places race control asks you to return within 5 s or before you finish. Keeping one place costs 10 s, two cost 20 s and three or more cost 30 s.<br>A blue flag means a car is about to lap you. Holding it up for 4 s triggers a warning. At 8 s you receive a 5 s penalty.</dd>
         <!-- PIT STOPS came from the deploy branch while this branch restructured
              the sheet around it. The nav above links #htp-pits, so the section is
              carried over rather than lost to the restructure. -->
         <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
         <dd><span class="key">RACE SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">REAL</span>: tyres lose grip over a stint at the full rate, so pit stops matter and a stop is part of the race. <span class="key">LIGHT</span> wears at about half the real rate, so a set lasts nearly twice as long and stopping is a choice rather than a schedule.
-          <br>Turn it to <span class="key">OFF</span> and <b>there is no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either</dd>
+          <br>Turn it to <span class="key">OFF</span> and <b>a race has no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either. A time trial keeps its pit lane whatever the setting: stop in your box and choose WORK ON CAR to edit parts and keep driving, or END SESSION to finish in the garage (a lap through the pit lane does not count)</dd>
         <dt>THERE IS NO PIT BUTTON</dt>
         <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
         <dt>FINDING THE LANE</dt>
         <dd>The lane is the strip of road on the pit side with the <b>blue line</b> along its inner edge, and it exists only for the last few hundred metres before the start/finish line. <b>A blue bar across its mouth</b> marks where it begins &mdash; that is what you steer into.
-          <br>The HUD counts it down for you &mdash; <span class="key">PIT 340m</span> with an arrow to the pit side, then <span class="key">PIT ENTRY</span> once you are on the entry road. It deliberately stays quiet until a stop is worth making, so on a fresh set you will see nothing at all</dd>
+          <br>The HUD counts it down for you &mdash; <span class="key">PIT 340m</span> with an arrow to the pit side, then <span class="key">HOLD THE LANE</span> on the entry road. Even on fresh tyres, the cue appears if you need different tread for the weather or still owe a second dry compound with five laps or fewer remaining.</dd>
         <dt>THE LANE AND THE BOX</dt>
-        <dd>Inside the lane you are limited to 80 km/h (60 on a street circuit) &mdash; the limiter is automatic, you do not switch it on. Drive down to <b>your team&rsquo;s box</b> and stop there: each team has its own, spread along the lane, and team-mates share one.
+        <dd>Inside the lane you are limited to 80 km/h (60 at Monaco) &mdash; the limiter is automatic, you do not switch it on. Drive down to <b>your team&rsquo;s box</b> and stop there: each team has its own, spread along the lane, and team-mates share one.
           <br><b>You have to stop IN the lane.</b> Halt on the racing line and the stop does not happen &mdash; the crew is not standing there. Coming up to the box the HUD says <span class="key">KEEP RIGHT</span> (or LEFT) if you have drifted out. Blowing through at the limit misses it too: you have to actually stop.
-          <br>The stop itself is 2.4 s, then <span class="key">TYRES ON &mdash; GO GO GO</span></dd>
+          <br>The stop itself is 2.2 s, then <span class="key">TYRES ON &mdash; GO GO GO</span></dd>
         <dt>WHAT IT COSTS</dt>
         <dd>The whole lap through the pits, against racing the same stretch, plus the time stood still &mdash; which is why it is worth different amounts at different circuits rather than a fixed penalty. A long pit straight costs more than a short one. That difference is what decides one stop against two</dd>
+        <dt>TWO DRY COMPOUNDS</dt>
+        <dd>A dry race of eight laps or more must use two different dry compounds (S, M, H). Finish on one and you are disqualified; the engineer warns you five laps out. A red-flag finish costs 30 s instead. Not in a sprint, a wet race, after fitting intermediates or wets, or with tyre wear off.</dd>
       <dt id="htp-driving">DRIVING COACH</dt>
       <dd>Open <b>SETTINGS &rarr; DRIVING AIDS</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
         <br><b>Where the lap went.</b> Once you have a saved best lap on a circuit, each completed lap is compared with it corner by corner, and the corner that cost the most time is named when you cross the line. The DRIVING page shows the lap total and the two worst corners. Each figure covers a corner and the straight after it, because a slow straight is usually paid for at the apex before it, and the comparison only exists against your own best lap in the same car.
@@ -3250,8 +3434,8 @@
         <br><b>Rear tyres sliding:</b> the coach distinguishes accelerating, braking and coasting, so the suggested correction matches your inputs.
         <br><b>Off the track:</b> ease your inputs and rejoin carefully. The coach does not know whether there is a safe gap in traffic.
         <br><b>Coasting:</b> neither pedal was used at speed for over a second. Be on the brake or the throttle.
-        <br><b>X-mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
-        <br><b>Track limits:</b> a warning was recorded for leaving the track. Four in a row cost five seconds.</dd>
+        <br><b>Straight Mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
+        <br><b>Track limits:</b> a warning was recorded for leaving the track. The third brings the black-and-white flag; the fourth and every one after it in the race cost five seconds each.</dd>
       <dt>PRACTICE A SECTION</dt>
       <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>PAUSE &rarr; PRACTICE</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved grid, race clock and practice goal. <b>REWIND 10s</b> needs no starting point: it steps every car and the race clock back about ten seconds.
         <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set or you rewind. Restart the session to set records again. A solo race or qualifying session can use checkpoints and rewind after you choose ARM PRACTICE (UNSCORED), which cannot be undone for that session; daily challenges, multiplayer, season and career races cannot be armed.</dd>
@@ -3270,33 +3454,33 @@
         <dt>RACE SETTINGS</dt>
         <dd>Shown before each race: LAPS, WEATHER, CONDITIONS (MIXED lets the weather change), TIME OF DAY, DIFFICULTY, GRID, DUEL, CAUTIONS, RELIABILITY, DRIVING LINE and TYRE WEAR. QUICK RACE, FULL WEEKEND and ENDURANCE set several at once.</dd>
         <dt>SETTINGS</dt>
-        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page. SAVES &amp; DATA saves your preferences; garage files stay in GARAGE › TEAM, and career progress is separate.</dd>
+        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page. SAVES &amp; DATA has separate file actions for preferences, garage builds and career saves.</dd>
         <dt>CONTROLS</dt>
         <dd>Choose input, pedals and steering feel here. Gears and active aero are in DRIVING AIDS. Rebind keyboard and controller actions, calibrate a controller, or set up a wheel. A keyboard or connected controller can be used alongside touch controls.
           <br>THROTTLE: HOLD keeps your thumb on GAS, LATCH makes GAS a tap-on, tap-off switch, AUTO drives the throttle so you only steer and brake. LEFT-HANDED swaps the two on-screen thumb groups. RECALIBRATE TILT makes the way you hold the phone straight ahead. MANUAL GEARS need tilt, a keyboard or a pad.
           <br>STEER THIS GAME WITH A PHONE shows a room code and QR code: scan or type it on a phone and the phone becomes the wheel (both need internet). In CONTROLLER, BUTTON NAMES fixes prompts that name the wrong buttons, CALIBRATE STICK cures a drifting stick, SET UP A WHEEL maps a wheel and pedals the browser cannot, and RESET CONTROLLER restores the default buttons.</dd>
         <dt>DRIVING AIDS</dt>
         <dd>Choose driving presets, gears, active aero and steering aids here. Fine response curves and dead zones are under CONTROLS › ADVANCED INPUT &amp; HANDLING. STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING AIDS. Open CONTROLS › ADVANCED INPUT &amp; HANDLING for detailed steering adjustments.
-          <br><b>PRESETS</b> set every handling slider at once. ROOKIE is the easiest: the most corner help and line pull, the earliest braking cue, and AUTO throttle. RELAX is nearly as forgiving but leaves the throttle to you. STANDARD is the default car with no corner help. PRO is STANDARD with sharper RESPONSE. Moving any slider afterwards shows CUSTOM. OVERALL SPEED is separate: it slows or speeds the whole field, you and the AI alike.
+          <br><b>PRESETS</b> change several handling settings together. ROOKIE is the easiest: the most corner help and line pull, the earliest braking cue, and AUTO throttle. RELAX is nearly as forgiving but leaves the throttle to you. STANDARD uses the default steering settings with corner help off. CAR WEIGHT is set separately and defaults to 10 on a touchscreen with a coarse primary pointer and 5 elsewhere. PRO is STANDARD with sharper RESPONSE. Changing a preset-controlled setting afterwards shows CUSTOM. OVERALL SPEED is separate: it slows or speeds the whole field, you and the AI alike.
           <br><b>FEEL:</b> TILT SENSITIVITY, and STEERING from SUPER EASY through ASSISTED and NORMAL to SIM (SIM also quickens turn-in).
           <br><b>AIDS:</b> DRIVING HELP (OFF, MEDIUM, HIGH) steers part of each corner for you. STEER ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page. TRIGGER HAPTICS (when the pad supports it) routes lock-up to the brake trigger and wheelspin to the throttle; adaptive trigger resistance is not available from a web page.
-          <details><summary class="adv-more-btn">ADVANCED SLIDERS</summary><p>TILT and TOUCH: how far you tilt or drag for full lock, smoothing, and the curve near centre. CONTROLLER: STICK CURVE, DEAD ZONE (raise it only for a drifting stick, after CALIBRATE STICK) and SATURATION (for a worn stick that cannot reach full lock). STEER RATE: how fast a held key or arrow winds on lock. CAR HANDLING, for every input: DRIVING HELP, RESPONSE (turn-in), LINEARITY (gentle or direct near centre), STEER LOCK, SPEED STEER (steering kept at high speed), STEADY AT SPEED (softens tilt, drag and stick as speed rises) and WEIGHT. RACING LINE biases you toward the apex (PULL) or wider (PUSH) and never overrides your steering.</p></details></dd>
+          <details><summary class="adv-more-btn">ADVANCED SLIDERS</summary><p>TILT and TOUCH: how far you tilt or drag for full lock, smoothing, and the curve near centre. CONTROLLER: STICK CURVE, DEAD ZONE (raise it only for a drifting stick, after CALIBRATE STICK) and SATURATION (for a worn stick that cannot reach full lock). STEER RATE: how fast a held key or arrow winds on lock. CAR HANDLING, for every input: DRIVING HELP, RESPONSE (turn-in), LINEARITY (gentle or direct near centre), STEER LOCK, SPEED STEER (steering kept at high speed), STEADY AT SPEED (softens tilt, drag and stick as speed rises) and WEIGHT. STEER ASSIST adds steering toward the apex (PULL) or away from it (PUSH), even when your steering is centred.</p></details></dd>
         <dt>HUD &amp; CAMERA / GRAPHICS</dt>
         <dd>Adjust HUD and button sizes separately (UI SIZE, for the menus, is in APPEARANCE); PANEL OPACITY lightens the plates behind the readouts. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. GRAPHICS holds renderer and performance controls. VISUAL STUDIO opens lighting, camera, flyby and garage-arrival tools; track-dependent previews require a race.
-          <br>In the HUD fold: STYLE (MINIMAL, STANDARD, or BROADCAST with a TV timing tower); LAYOUT (AUTO shows every readout scaled to fit, TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither); MAP; GAPS to the cars ahead and behind; MIRROR (AUTO in the onboard cameras, ON in every camera; tap it mid-race to tuck it away); LINE COLOUR (COLOUR-BLIND uses blue, orange and magenta); LINE OPACITY; BUTTON OPACITY.
+          <br>In the HUD fold: STYLE (MINIMAL, STANDARD, or BROADCAST with a TV timing tower); LAYOUT (AUTO shows every readout scaled to fit, TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither); MAP; GAPS to the cars ahead and behind; MIRROR (AUTO in the onboard cameras, ON in every camera; tap it mid-race to tuck it away); LINE COLOUR (the on-pace colour: F1 GREEN, CYAN, BLUE, WHITE, PURPLE or PINK, with amber to lift and red to brake; COLOUR-BLIND uses blue, orange and magenta); LINE OPACITY; BUTTON OPACITY.
           <br>In the RENDERER fold: RESOLUTION (LOW or MED runs smoother and cooler on a phone; AUTO lowers it only when the frame rate drops), FULLSCREEN, UPSCALE, OCCLUSION (turn it off if scenery flickers or vanishes) and DEBRIS (looks only; OFF never changes lap time, penalties or damage). RENDERER and GRAPHICS may reload the game; RESET RENDERER fixes a broken picture. COCKPIT picks the wheel, seat, halo and interior of the cockpit view.</dd>
         <dt>APPEARANCE</dt>
         <dd>Changes apply at once, with a preview. UI SIZE (under READABILITY) scales every menu and settings screen. THEME: DARK, LIGHT (easier in bright sun) or SYSTEM. MENU ACCENT and HUD ACCENT recolour highlights and HUD stripes; TEAM uses your team&rsquo;s colour and CUSTOM any colour. TEXT SIZE enlarges menu text, HIGH CONTRAST adds solid panels and stronger outlines, SPEED UNITS switches KM/H and MPH, and HELP TEXT: HIDE shortens the settings by dropping the grey explanations. MOTION: REDUCED turns off screen slides, camera shake and the pre-race flyby. Those all live in the GENERAL fold. PAUSE MENU sets the pause card&rsquo;s layout (GRID, LIST, COMPACT, WIDE or SIDEBAR), side, background, button size, gap, corners and style, and whether QUIT and RESTART need a second tap. TITLE INTRO, MENU WASH and TITLE ART tone down the title screen; REPLAY INTRO plays it again. DATA HUB, TRACK SELECTOR, RACE SETTINGS, CAREER, GARAGE and POPUPS each have a fold: WIDTH, DENSITY, BUTTON HEIGHT, CORNERS, BACKGROUND and HEADINGS, plus their own (tile size, panel side, columns, row height&hellip;). While you change one, the settings page fades and the real screen shows behind it; PEEK holds that view, and a tap or Esc brings the settings back. RESET puts one screen back as shipped.</dd>
         <dt>BACKUP &amp; RESTORE</dt>
-        <dd>SAVE ALL SETTINGS writes your preferences, tuners and control bindings to a file; SAVE CHANGED SETTINGS writes only what differs from the defaults. LOAD SETTINGS FILE asks twice, then reloads. Career progress is not included; cars, setups and liveries have their own file buttons in GARAGE › TEAM.</dd>
+        <dd>Open SAVES &amp; DATA to save preferences, restore a file or import a share code. The Save tab lists what each file includes, with separate exports for settings, the garage and career saves.</dd>
         <dt>MUSIC &amp; SOUND</dt>
         <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND. SOURCE picks which songs play; with your own Spotify connected there, OPEN PLAYER shows what is playing and lets you change it.</dd>
         <dt id="htp-modes">RACE</dt>
-        <dd>22 cars by default, five red lights, then lights out. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1. In RACE SETTINGS, GRID sets the starting order and DUEL races one rival instead of the field.</dd>
+        <dd>22 cars by default, five red lights, then lights out; throttle held as they go out is a +5 s FALSE START. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1. In RACE SETTINGS, GRID sets the starting order and DUEL races one rival instead of the field.</dd>
         <dt>SEASON</dt>
         <dd>Race the calendar in order. Championship progress is saved between visits. SEASON SETUP picks the rounds, qualifying and sprint weekends; STANDINGS on the title menu shows the table.</dd>
         <dt>TIME TRIAL</dt>
-        <dd>Drive solo for your fastest lap against a ghost of your best one. Your track record is saved and shown on the circuit list. DAILY TIME TRIAL sets one circuit and conditions a day, the same for every player, and keeps your best and your streak.</dd>
+        <dd>Drive solo for your fastest lap against a ghost of your best one. Your track record is saved and shown on the circuit list. DAILY TIME TRIAL sets one circuit and conditions for each day of your local date, and keeps your best and your streak.</dd>
         <dt>CAREER</dt>
         <dd>Sign for a team as a DRIVER or run your own in MY TEAM. Qualify, race, earn prize money and develop the car. Each mode has three save slots and its own guide under CAREER MODES.</dd>
         <dt>QUALIFYING</dt>
@@ -3311,7 +3495,7 @@
         <dd>RESUME, RESTART RACE (starts this session again with the same settings; not in multiplayer), SETTINGS, HOW TO PLAY, STANDINGS during a championship, and QUIT TO MENU. While music plays, the pause menu shows the song with skip buttons.</dd>
         <dt>RESULTS</dt>
         <dd>After the flag: the finishing order and points (+FL marks a season&rsquo;s fastest-lap point), YOUR RACE, any new badges and, with the coach on, a COACH INSIGHT that opens the DRIVING page. With tyre wear on, each car shows its tyre stints. MENU leaves; NEXT reads RACE AGAIN (WATCH AGAIN after a replay), NEXT ROUND in a season, or TRY AGAIN in a time trial.
-          <br>A time trial shows your best against your ghost, a MEDAL (gold beats the reference pole time, silver is within 3%, bronze within 7%) and a leaderboard for the same setup and conditions. COPY LINK, COPY CODE or DOWNLOAD shares your ghost lap; a friend who opens the link races it in a time trial as a RIVAL GHOST. COPY DAILY RESULT shares a daily challenge.</dd>
+          <br>Time trial uses the DIFFICULTY selected in race setup. Your personal best, ghost and medal are saved per difficulty. Match the reference pole time for gold, or finish within 3% for silver or 7% for bronze. The daily challenge uses NORMAL difficulty. The leaderboard shows laps with matching setup and conditions. COPY LINK, COPY CODE or DOWNLOAD shares your ghost lap; a friend who opens the link races it in a time trial as a RIVAL GHOST. COPY DAILY RESULT shares a daily challenge.</dd>
         <dt id="htp-friends">RACE A FRIEND</dt>
         <dd>Race 2&ndash;4 players. The host creates an invite, sends it and pastes the reply to connect. In the same room, you can scan QR codes instead. Or use a short room code: the host taps NEW CODE and everyone else ENTER CODE. Private relays use a longer token: copy or share it, then paste it to join. Everyone needs the same game version.
           <br>On a phone, USE AS CONTROLLER on the title menu steers a game on another screen: type the room code it shows.</dd>
@@ -3508,7 +3692,7 @@
     <div id="fb-rows" class="pane" role="tabpanel"></div>
     <textarea id="fb-json" readonly hidden aria-label="Exported flyby shot list"></textarea>
     <div class="sheet-foot balanced-row">
-      <button id="fb-reset" title="Throw away every edit, here and saved, and go back to the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
+      <button id="fb-reset" title="Throw away every edit, here and saved, and go back to the shipped DEFAULT shot list.">RESET</button>
       <button id="fb-copy">COPY VALUES</button>
       <button id="fb-close" class="bigbtn" title="Close the editor. Every edit is already saved — the next race flies these shots.">DONE</button>
     </div>
@@ -3529,9 +3713,12 @@
 <div id="garrival" role="region" aria-label="Garage enter and leave tuner" data-esc-close="ga-close" hidden>
   <button id="ga-preview-stop" class="bigbtn" type="button" data-i18n="garage.preview.stop" hidden>STOP PREVIEW</button>
   <div id="garrival-inner" class="sheet">
-    <div id="ga-head"><h2>GARAGE ENTER &amp; LEAVE</h2></div>
+    <h2 id="ga-head">GARAGE ENTER &amp; LEAVE</h2>
     <div id="ga-rows" class="pane">
-      <p class="adv-help">Saved for WORK ON CAR pit visits (IN) and the drive-out every RACE! opens on (OUT). Reduced motion skips entry and removes camera sway. PREVIEW plays either sequence here, even with animations off; Escape stops it.</p>
+      <p class="adv-help">Four moments: RACE START (the drive-out every RACE! opens on), PIT IN (WORK ON CAR brings the car in), PIT OUT (DONE sends it back out) and RACE END (your next garage visit brings the car home, flavoured by how the race ended), each with its own switch under PLAY ANIMATIONS. Reduced motion skips the arrivals and removes camera sway. PREVIEW plays any of them here, even with animations off: pause, scrub or step it frame by frame (Space, arrow keys), LOOP it, or EDIT to hold the frame, JUMP TO a phase (the ticks under the scrub) and change a setting on it; Escape stops it.</p>
+      <div class="set-row"><label class="tune-label" for="ga-edit-moment">EDIT ANIMATION</label><div><select id="ga-edit-moment">
+        <option value="raceStart">Race start</option><option value="pitIn">Pit entry</option><option value="pitOut">Pit exit</option><option value="afterRace">Race end</option>
+      </select></div></div>
       <div class="set-row"><label class="tune-label" for="ga-enabled">PLAY ANIMATIONS</label><div><input id="ga-enabled" type="checkbox" checked></div></div>
       <div class="set-row"><label class="tune-label" for="ga-speed">PLAYBACK SPEED</label><div>
         <select id="ga-speed"><option value="0.5">SLOW · 0.5×</option><option value="1" selected>NORMAL · 1×</option><option value="2">FAST · 2×</option></select>
@@ -3551,9 +3738,11 @@
       </div></div>
     </div>
     <div class="sheet-foot balanced-row">
-      <button id="ga-preview-in" type="button">PREVIEW IN</button>
-      <button id="ga-preview-out" type="button">PREVIEW OUT</button>
-      <button id="ga-reset" type="button">RESET</button>
+      <button id="ga-preview-out" type="button">PREVIEW RACE START</button>
+      <button id="ga-preview-in" type="button">PREVIEW PIT ENTRY</button>
+      <button id="ga-preview-pit-exit" type="button">PREVIEW PIT EXIT</button>
+      <button id="ga-preview-home" type="button">PREVIEW RACE END</button>
+      <button id="ga-reset" type="button">RESET SELECTED ANIMATION</button>
       <button id="ga-close" class="bigbtn" type="button">DONE</button>
     </div>
   </div>
@@ -3565,7 +3754,7 @@
      bar (piece, SIZE, WIDTH, RESET PIECE) is built by js/ui/title-layout.js,
      which adopts tl-done into it. -->
 <div id="tl-editor" role="region" aria-label="Title layout editor" data-esc-close="tl-done" hidden>
-  <button id="tl-done" type="button">DONE</button>
+  <button id="tl-done" type="button">Apply</button>
 </div>
 
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
@@ -3627,19 +3816,19 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<!-- Import map for the vendored ES-module islands (multiplayer's Trystero).
-     The three.js specifiers left with the WGX/TLX spike-out on 2026-09-03
-     (spike/backends/README.md says how to re-attach them). Inline (no src) so
+<!-- Import map for the vendored ES-module islands: three.js r187 (TLX, the
+     default renderer: tlx.js imports "three/webgpu" and "three/tsl") and
+     multiplayer's Trystero. Inline (no src) so
      the load-order test and the service worker's tag parser both ignore it;
      the vendor URLs carry no ?v= — immutability comes from the versioned
      directory name (upgrade = new dir). -->
 <script type="importmap">
 {
   "imports": {
-    "three": "./vendor/three-0.186.1/three.webgpu.min.js",
-    "three/webgpu": "./vendor/three-0.186.1/three.webgpu.min.js",
-    "three/tsl": "./vendor/three-0.186.1/three.tsl.min.js",
-    "three/addons/": "./vendor/three-0.186.1/addons/",
+    "three": "./vendor/three-0.187.0/three.webgpu.min.js",
+    "three/webgpu": "./vendor/three-0.187.0/three.webgpu.min.js",
+    "three/tsl": "./vendor/three-0.187.0/three.tsl.min.js",
+    "three/addons/": "./vendor/three-0.187.0/addons/",
     "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
     "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js",
     "@noble/secp256k1": "./vendor/trystero-0.25.4/noble-secp256k1.js"
@@ -3682,7 +3871,6 @@
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/render/shared/puddles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
@@ -3696,7 +3884,6 @@
 <script defer crossorigin="anonymous" src="js/core/i18n.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/dom-apply.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
@@ -3713,6 +3900,7 @@
 <script defer crossorigin="anonymous" src="js/track/circuit-meta.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-entry.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-phys.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/build-client.js?v=dev"></script>
@@ -3733,12 +3921,12 @@
 <script defer crossorigin="anonymous" src="js/input/bindings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pad-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/haptics.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/hold-buttons.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/controller-profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/data/flyby-overrides.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/custom-liveries.js?v=dev"></script>
@@ -3752,7 +3940,7 @@
 <script defer crossorigin="anonymous" src="js/car/ghost-share.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/input-ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-insights.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/driving-coach-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/consts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/knobs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/track-lights.js?v=dev"></script>
@@ -3760,12 +3948,14 @@
 <script defer crossorigin="anonymous" src="js/lighting/lamp-bake.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/lighting.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/profiles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/cockpit-rig.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-mesh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-prims.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-dress.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/crew-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-motion.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-service.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-choreo.js?v=dev"></script>
@@ -3794,12 +3984,14 @@
 <script defer crossorigin="anonymous" src="js/physics/wheel-state.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/vehicle.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/ai-strategy.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-band.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/extra-rigs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-sight.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-clear.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-avoid.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
@@ -3815,8 +4007,8 @@
 <script defer crossorigin="anonymous" src="js/career/career-ui-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/save-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/loading-card.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
@@ -3841,6 +4033,7 @@
 <script defer crossorigin="anonymous" src="js/race/wind.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/energy-plan.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/drive-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/lap-record.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/storm-flash.js?v=dev"></script>
@@ -3850,22 +4043,21 @@
 <script defer crossorigin="anonymous" src="js/race/pace-math.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/sporting-regs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/overlay/feed.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/tv-graphics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/overlay/render.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/overlay/bridge.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/overlay/publisher.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/real-race-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/rain-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/forecast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/photo-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/replay-buf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/results-cam.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/lighting/tuner-panel.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/lighting/tuner-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-tuner-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/brake-cue.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/steer-tuning.js?v=dev"></script>
@@ -3881,16 +4073,12 @@
 <script defer crossorigin="anonymous" src="js/perf/quality-preset.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/compatibility-recovery.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/three-inspector.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-finishes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-preview.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-chase.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-broadcast.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-onboard.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/fov-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/cvd-palette.js?v=dev"></script>
@@ -3904,49 +4092,39 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/hud-inputs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-groups.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-layout.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/hud-arrange.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/pause-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/screen-looks.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/post-fx-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/soak-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/gpu-test-run.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/phone-recorder.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-capture.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/perf/bench-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/vantage-ride.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/cam-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-minimap.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-radio-lane.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-story.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/results-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-model.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/share/share-card-data.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/share/share-card-layout.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/share/share-card.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/photo-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/share-code.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/learn-door.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/deep-link.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-flow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-net.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/ui/quali-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>

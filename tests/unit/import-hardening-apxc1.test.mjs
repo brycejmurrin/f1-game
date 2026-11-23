@@ -79,14 +79,13 @@ test("decodeShare refuses an oversized APXC1 paste before base64 work (#3560 F1)
   assert.equal(r.reason, "too-large");
 });
 
-test("decodeShare refuses JSON whose body exceeds MAX_DECODED_BYTES (#3560 F1)", () => {
+test("decodeShare refuses a bare JSON paste longer than MAX_SHARE_CHARS as too-large (#3560 F1)", () => {
   const C = loadCamTune();
-  // Keep the paste under MAX_SHARE_CHARS but make the JSON body alone longer
-  // than MAX_DECODED_BYTES by using equal caps and a CameraEdits wrapper that
-  // the extractor peels — actually with equal caps the paste gate fires first
-  // on a body that large. Lower effective path: build JSON of length
-  // MAX_DECODED_BYTES + 1; when that also exceeds MAX_SHARE_CHARS the paste
-  // gate wins, which is still the hardening we want.
+  // This is the paste-length gate, not a decoded-size gate. With MAX_DECODED_BYTES == MAX_SHARE_CHARS, decodeShare's two
+  // MAX_DECODED_BYTES checks cannot fire: a bare/CameraEdits body is a slice of a paste already capped at MAX_SHARE_CHARS,
+  // and a base64 token capped at MAX_SHARE_CHARS decodes to at most 3/4 of that. The caps are pinned so a change to
+  // either one revisits this test.
+  assert.equal(C.MAX_DECODED_BYTES, C.MAX_SHARE_CHARS);
   const json = '{"k":"' + "z".repeat(C.MAX_DECODED_BYTES) + '"}';
   assert.ok(json.length > C.MAX_DECODED_BYTES);
   const r = C.decodeShare(json);

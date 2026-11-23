@@ -62,7 +62,10 @@ test("MONACO has no zone at all — 2026 switches active aero off there", async 
   deepEq(g.apex.aeroZones(), []);
 });
 
-for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+// Counts from the sourced FIA 2026 fixture, not hard-coded here (monza was pinned
+// at 2 while the FIA 2026 map lists 4).
+const FIA = require("../data/aero-zones-fia-2026.json").circuits;
+for (const [id, want] of ["monza", "baku", "qatar", "albert_park"].map((id) => [id, FIA[id].count])) {
   test(`${id} gets the real number of zones, not a derived guess`, async () => {
     await loadTrack(id);
     const zones = g.apex.aeroZones();

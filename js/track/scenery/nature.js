@@ -59,6 +59,20 @@ const SceneryNature = (function () {
             terrainYAt, onTrack, hash, upOf, norm, vadd, bankOffsetAt } = ctx;
     Log.info("scenery", "scenery-nature dress " + (def && def.id));
     const { CROWD_DAY } = TrackSceneryData;
+    // Desktop EXTREME extras (js/track/scenery/detail.js); every flag is false at detail 0.
+    const DF = ctx.detailFeatures || {};
+    // treesHi's baked LOD0 (assets/pack/models/<species>_lod0): placed 1:1 in the procedural tree's spot, near the
+    // road only; beyond TREE_HI_NEAR (and wherever the pack is absent or the guard refuses) the procedural tree
+    // stands. Each LOD0 is under its species' procedural mean (docs/notes/TREE-BUDGET-2026-10-19.md: pine 36 <= 45,
+    // tree 40 <= 51, palm 80 <= 156 triangles), so near trees get the baked silhouette at no triangle cost.
+    const TREE_HI_NEAR = 40;
+    const bakedTree = (id, k, side, dist, h) => {
+      if (!DF.treesHi || dist > TREE_HI_NEAR || !ctx.bakedModel) return false;
+      out._mat = MAT.FOLIAGE;   // the model carries its own WOOD/FOLIAGE + sway; this is the soft-prop identity
+      const landed = ctx.bakedModel(id, k, side, dist, { height: h, rotY: hash(k * 4.9 + side * 2.3 + dist + 1.1) * 6.2832 });
+      out._mat = 0;
+      return landed;
+    };
 
     const _guCand = new Array(n);
     const groundUnder = (x, z) => {
@@ -199,7 +213,12 @@ const SceneryNature = (function () {
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (spotTaken(a.c[0], a.c[2])) return;
+      // CHECK the spot here; RESERVE it (and the coplanar facets) only once the
+      // pine has landed (#5699 row 18; scenery audit W21). A pine the guards
+      // drop whole (the graph's whole-tree dry run, a pit-rejected trunk) must
+      // not hold its TREE_GAP spot, facets or note, or it blocks neighbours
+      // that would have stood and leaves a phantom record in the registry.
+      if (spotOccupied(a.c[0], a.c[2], false)) return;
       // The CROWN's radius from the pit complex, not the trunk's: crown tiers
       // may overhang the complex (js/track/tracks.js onRoadHit), so a pine a
       // def plants just behind the garages — Monza's poplars at the row —
@@ -210,7 +229,20 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("pine", `pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
+      // Noted BEFORE the primitives (note() owns what follows it); taken back
+      // with unnote() if nothing lands.
+      const pineRec = ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
+      // Both explicit pines and deferred forestEdge calls pass the SAME spot
+      // registry above. A missing pack keeps the procedural tree at that site.
+      if (def.furniture && def.furniture.bakedPines && ctx.bakedModel) {
+        // The model contains only WOOD/FOLIAGE; retain that soft-prop identity
+        // for whole-tree audits without overriding its per-vertex sway/materials.
+        out._mat = MAT.FOLIAGE;
+        const landed = ctx.bakedModel("pine_lod0", k, side, dist, { height: h });
+        out._mat = 0;
+        if (landed) { spotTaken(a.c[0], a.c[2]); return; }
+      }
+      if (bakedTree("pine_lod0", k, side, dist, h)) { spotTaken(a.c[0], a.c[2]); return; }
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);
@@ -283,8 +315,7 @@ const SceneryNature = (function () {
         for (let i = 0; clash(dz) && i < 12; i++) dz = TrackGeom.SEP_SLOTS[i % 4] + Math.floor(i / 4) * 0.2;
       }
       if (dz) { o[1] -= dz; for (const F of facets) F[3] -= dz * F[1]; }
-      pineFacetsAdd(a.c[0], a.c[2], reach, facets);
-      ctx.instance(
+      const landed = ctx.instance(
         `pine|${sparse ? 1 : 0}|${tiers}|${leanQ}|${jQ}`,
         { o, r, u: a.u, t: a.t, s: [s, s, s], col },
         (rec) => {
@@ -302,6 +333,9 @@ const SceneryNature = (function () {
         },
         { kind: "pine", k, side, h });
       out._mat = 0;
+      if (!landed) { if (ctx.unnote) ctx.unnote(pineRec); return; }
+      pineFacetsAdd(a.c[0], a.c[2], reach, facets);
+      spotTaken(a.c[0], a.c[2]);
     };
     // WIND SWAY: FOLIAGE emitted while out._matAt is set carries a per-vertex
     // weight in its material fraction (TrackGeom.swayMatAt): 0 at height y0 along
@@ -322,6 +356,9 @@ const SceneryNature = (function () {
       if (_crownV0 >= 0) TrackGeom.roundNormals(out, _crownV0, _crownBase, _crownUp);
       _crownV0 = -1; _crownBase = null; _crownUp = null;
     };
+    // A refused footing: nothing of the tree ships, so take its record back
+    // (tree()'s refuseTree, H26b) and leave the registers clean.
+    const refuseNote = (rec) => { out._mat = 0; if (ctx.unnote) ctx.unnote(rec); };
     // Authored woodland may interlock. Relocations claim complete tree parts
     // so a later row cannot move its matching facet planes into that tree.
     const TREE_CELL = 24, placedTrees = new Map();
@@ -524,10 +561,13 @@ const SceneryNature = (function () {
         out._mat = 0;
         return;
       }
+      if ((crown === "round" || crown === "vase") && bakedTree("tree_lod0", k, side, dist, h)) { reserve(); return; }
       // per-instance jitter so adjacent broadleaves vary in size/shape
       const c2 = [col[0] * 0.88, col[1] * 0.9, col[2] * 0.84];   // sunlit upper foliage
+      // treesHi (EXTREME, near the road): twice the radial sections and a rounding band; the same envelope.
+      const HI = DF.treesHi && initialDist <= 40 ? 2 : 1;
       out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6, b) === false) { refuseTree(); return; }   // no trunk, no crown (the pit complex keeps footings out)
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.4, h * 0.55 + 0.5, [0.32, 0.23, 0.13], 6 * HI, b) === false) { refuseTree(); return; }   // no trunk, no crown (the pit complex keeps footings out)
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.22, h * 1.0);
       {
@@ -556,8 +596,9 @@ const SceneryNature = (function () {
           }
           return under(sx / m, sy / m, sz / m) && seen > 0;
         };
-        for (let i = 0; i < 9; i++) {
-          const a0 = i / 9 * 6.2832, a1 = (i + 1) / 9 * 6.2832;
+        const wedges = 9 * HI;
+        for (let i = 0; i < wedges; i++) {
+          const a0 = i / wedges * 6.2832, a1 = (i + 1) / wedges * 6.2832;
           const tri = [ring(a0), ring(a1), apex];
           if (hidden(tri)) continue;
           emit(out, tri, usCol, uref);
@@ -565,24 +606,26 @@ const SceneryNature = (function () {
       }
       if (crown === "vase") {
         // Eucalyptus / elm: narrow at the fork, spreading upward and outward.
-        addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8, b);
-        addCone(out, vadd(a.c, a.u, h * 0.56), (3.4 + h * 0.15) * j * sp, h * 0.28, col, 9, b);
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.78), a.r, lean), (4.0 + h * 0.17) * j * sp, h * 0.24, c2, 9, b);
+        addCone(out, vadd(a.c, a.u, h * 0.34), (2.1 + h * 0.07) * j * sp, h * 0.28, col, 8 * HI, b);
+        addCone(out, vadd(a.c, a.u, h * 0.56), (3.4 + h * 0.15) * j * sp, h * 0.28, col, 9 * HI, b);
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.78), a.r, lean), (4.0 + h * 0.17) * j * sp, h * 0.24, c2, 9 * HI, b);
       } else if (crown === "weeping") {
         // Willow: a high dome with the mass hanging BELOW it.
-        addCone(out, vadd(a.c, a.u, h * 0.62), (3.6 + h * 0.15) * j * sp, h * 0.30, col, 9, b);
+        addCone(out, vadd(a.c, a.u, h * 0.62), (3.6 + h * 0.15) * j * sp, h * 0.30, col, 9 * HI, b);
         addFrustum(out, vadd(a.c, a.u, h * 0.24), (1.4 + h * 0.05) * j * sp,
-          (3.9 + h * 0.16) * j * sp, h * 0.40, c2, 9, b);
+          (3.9 + h * 0.16) * j * sp, h * 0.40, c2, 9 * HI, b);
       } else if (crown === "columnar") {
         // Poplar / lombardy: a tall narrow spire, almost no spread.
-        addCone(out, vadd(a.c, a.u, h * 0.30), (1.5 + h * 0.05) * j * sp, h * 0.36, col, 7, b);
-        addCone(out, vadd(a.c, a.u, h * 0.56), (1.2 + h * 0.04) * j * sp, h * 0.34, col, 7, b);
-        addCone(out, vadd(a.c, a.u, h * 0.80), (0.8 + h * 0.03) * j * sp, h * 0.26, c2, 6, b);
+        addCone(out, vadd(a.c, a.u, h * 0.30), (1.5 + h * 0.05) * j * sp, h * 0.36, col, 7 * HI, b);
+        addCone(out, vadd(a.c, a.u, h * 0.56), (1.2 + h * 0.04) * j * sp, h * 0.34, col, 7 * HI, b);
+        addCone(out, vadd(a.c, a.u, h * 0.80), (0.8 + h * 0.03) * j * sp, h * 0.26, c2, 6 * HI, b);
       } else {
-        addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j * sp, h * 0.30, col, 9, b);   // wide skirt
-        addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j * sp, h * 0.26, col, 9, b);   // widest bulge
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8, b);    // shoulder
-        addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7, b);    // rounded cap
+        addCone(out, vadd(a.c, a.u, h * 0.28), (3.3 + h * 0.13) * j * sp, h * 0.30, col, 9 * HI, b);   // wide skirt
+        addCone(out, vadd(a.c, a.u, h * 0.46), (3.7 + h * 0.14) * j * sp, h * 0.26, col, 9 * HI, b);   // widest bulge
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.66), a.r, lean), (2.9 + h * 0.10) * j * sp, h * 0.26, c2, 8 * HI, b);    // shoulder
+        addCone(out, vadd(vadd(a.c, a.u, h * 0.82), a.r, lean * 1.6), (1.7 + h * 0.06) * j * sp, h * 0.22, c2, 7 * HI, b);    // rounded cap
+        // HI: a band filling the step between the bulge and the shoulder, inside both cones' radii.
+        if (HI > 1) addFrustum(out, vadd(a.c, a.u, h * 0.42), (3.5 + h * 0.13) * j * sp, (2.8 + h * 0.10) * j * sp, h * 0.22, col, 18, b);
       }
       reserve();
       out._mat = 0; swayOff();
@@ -661,17 +704,21 @@ const SceneryNature = (function () {
           return;
         }
       }
-      ctx.note("palm", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.6, h, h * 0.6], { k, side, dist, initialDist });
+      const palmRec = ctx.note("palm", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.6, h, h * 0.6], { k, side, dist, initialDist });
       const base = assembly.base;
       const hb = (base[0] - a.c[0]) * a.u[0] + (base[1] - a.c[1]) * a.u[1] + (base[2] - a.c[2]) * a.u[2];
-      assembly.parts.forEach((part, i) => {
+      const baked = bakedTree("palm_lod0", k, side, dist, h);
+      for (let i = 0; !baked && i < assembly.parts.length; i++) {
+        const part = assembly.parts[i];
         if (i === 3) swayOn(a.c, a.u, hb - 1.2, hb + 0.8);
         if (i === 13) swayOff();
         out._mat = i >= 3 && i < 13 ? MAT.FOLIAGE : MAT.WOOD;
-        if (part.type === "cyl") addCyl(out, part.c, part.size[0] / 2, part.size[1], part.col, 6, part.b);
-        else if (part.type === "prism") addPrism(out, part.c, part.size, part.col, part.b);
+        if (part.type === "cyl") {
+          // The foot segment is the footing: refused (pit complex), nothing stands.
+          if (addCyl(out, part.c, part.size[0] / 2, part.size[1], part.col, 6, part.b) === false && i === 0) { refuseNote(palmRec); return; }
+        } else if (part.type === "prism") addPrism(out, part.c, part.size, part.col, part.b);
         else addBox(out, part.c, part.size, part.col, part.b);
-      });
+      }
       const footprints = assembly.parts.map(palmFootprint);
       const minX = Math.min(...footprints.map((f) => f.c[0] - f.ex)), maxX = Math.max(...footprints.map((f) => f.c[0] + f.ex));
       const minZ = Math.min(...footprints.map((f) => f.c[2] - f.ez)), maxZ = Math.max(...footprints.map((f) => f.c[2] + f.ez));
@@ -705,12 +752,13 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("cypress", `cypress SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("cypress", [a.c[0], a.c[1] + h / 2, a.c[2]], [3 * slim, h, 3 * slim], { k, side });
+      const rec = ctx.note("cypress", [a.c[0], a.c[1] + h / 2, a.c[2]], [3 * slim, h, 3 * slim], { k, side });
       // Per-instance tone shift: an avenue of one flat green reads as a fence.
       const dark = hash(k * 7.3 + side * 2.1 + dist) < 0.5;
       const c = dark ? [col[0] * 0.78, col[1] * 0.82, col[2] * 0.80] : col;
       out._mat = MAT.WOOD;
-      addCyl(out, vadd(a.c, a.u, -0.4), 0.22, h * 0.18 + 0.4, opts.trunkCol || [0.30, 0.22, 0.14], 5, b);
+      // No trunk, no crown, no record (tree()'s order, H26b): the pit complex keeps footings out.
+      if (addCyl(out, vadd(a.c, a.u, -0.4), 0.22, h * 0.18 + 0.4, opts.trunkCol || [0.30, 0.22, 0.14], 5, b) === false) { refuseNote(rec); return; }
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.15, h * 1.0);
       addCone(out, vadd(a.c, a.u, h * 0.10), 1.45 * slim, h * 0.58, c, 6, b);
@@ -727,14 +775,14 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("stonePine", `stonePine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("stonePine", [a.c[0], a.c[1] + h * 0.7, a.c[2]],
+      const rec = ctx.note("stonePine", [a.c[0], a.c[1] + h * 0.7, a.c[2]],
                [h * 0.9 * spread, h, h * 0.9 * spread], { k, side });
       const amt = opts.lean != null ? Math.max(0, Math.min(1.5, opts.lean)) : 1;
       const lean = (hash(k * 13.1 + side * 3.7 + dist) - 0.5) * 0.9 * amt;
       const foot = vadd(a.c, a.r, lean * 0.6);
       out._mat = MAT.WOOD;
-      addCyl(out, vadd(foot, a.u, -0.5), 0.20 + h * 0.014, h * 0.66 + 0.5,
-             opts.trunkCol || [0.40, 0.31, 0.23], 5, b);
+      if (addCyl(out, vadd(foot, a.u, -0.5), 0.20 + h * 0.014, h * 0.66 + 0.5,
+             opts.trunkCol || [0.40, 0.31, 0.23], 5, b) === false) { refuseNote(rec); return; }   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
       swayOn(foot, a.u, h * 0.58, h * 1.0);
       const crown = vadd(vadd(foot, a.u, h * 0.60), a.r, lean);
@@ -751,12 +799,12 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("broadleafFall", `broadleafFall SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("broadleafFall", [a.c[0], a.c[1] + h * 0.6, a.c[2]],
+      const rec = ctx.note("broadleafFall", [a.c[0], a.c[1] + h * 0.6, a.c[2]],
                [h * 1.0 * spread, h, h * 1.0 * spread], { k, side });
       const lobes = Math.max(2, Math.min(5, Math.round(opts.lobes || 3)));
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.22 + h * 0.012, h * 0.42 + 0.5,
-             opts.barkCol || [0.36, 0.30, 0.24], 5, b) === false) { out._mat = 0; return; }   // no trunk, no crown
+             opts.barkCol || [0.36, 0.30, 0.24], 5, b) === false) { refuseNote(rec); return; }   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.40, h * 1.05);
       // Shade the lower lobes: a single flat autumn colour flattens into a blob.
@@ -780,7 +828,7 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("acacia", `acacia SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("acacia", [a.c[0], a.c[1] + h * 0.8, a.c[2]], [spread, h, spread], { k, side });
+      const rec = ctx.note("acacia", [a.c[0], a.c[1] + h * 0.8, a.c[2]], [spread, h, spread], { k, side });
       const bark = opts.barkCol || [0.34, 0.26, 0.18];
       const layers = Math.max(1, Math.min(3, Math.round(opts.layers || 2)));
       const c2 = [col[0] * 0.82, col[1] * 0.86, col[2] * 0.80];
@@ -808,7 +856,7 @@ const SceneryNature = (function () {
       const forkY = close(h * 0.68 + 0.35, layerY(0) - thick(0) / 2) - 0.35;   // fork top meets slab 0
       const trunkTop = close(h * 0.62, forkY - 0.35);                         // trunk meets the fork
       out._mat = MAT.WOOD;
-      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, trunkTop + 0.5, bark, 5, b) === false) { out._mat = 0; return; }   // no trunk, no crown (the pit complex keeps footings out)
+      if (addCyl(out, vadd(a.c, a.u, -0.5), 0.28, trunkTop + 0.5, bark, 5, b) === false) { refuseNote(rec); return; }   // no trunk, no crown (the pit complex keeps footings out)
       for (const dr of [-1, 1])                                    // the low fork
         addBox(out, vadd(vadd(a.c, a.u, forkY), a.r, dr * spread * 0.22),
                [spread * 0.44, 0.7, 0.22], bark, b);
@@ -835,12 +883,12 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("plane", `plane SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
-      ctx.note("plane", [a.c[0], a.c[1] + h * 0.6, a.c[2]], [rad * 2, h, rad * 2], { k, side });
+      const rec = ctx.note("plane", [a.c[0], a.c[1] + h * 0.6, a.c[2]], [rad * 2, h, rad * 2], { k, side });
       const stages = Math.max(1, Math.min(3, Math.round(opts.stages || 2)));
       const c2 = [col[0] * 0.80, col[1] * 0.84, col[2] * 0.80];
       out._mat = MAT.WOOD;
       if (addCyl(out, vadd(a.c, a.u, -0.5), 0.42, h * 0.48 + 0.5,
-             opts.trunkCol || [0.72, 0.70, 0.62], 6, b) === false) { out._mat = 0; return; }   // no trunk, no crown
+             opts.trunkCol || [0.72, 0.70, 0.62], 6, b) === false) { refuseNote(rec); return; }   // no trunk, no crown
       out._mat = MAT.FOLIAGE;
       swayOn(a.c, a.u, h * 0.46, h * 1.1);
       // Each stage starts just inside the one below. A fixed 0.28 h step left
@@ -857,96 +905,8 @@ const SceneryNature = (function () {
       out._mat = 0; swayOff();
     };
 
-    // Distant mountain peak (world coords), pyramid so it reads as a summit, with
-    // a lower foot skirt so it doesn't look like a floating spike. Simple/clean —
-    // use mountain() for organic, colour-zoned, snow-capped summits.
-    // onTrack() measures against the TARMAC half-width. The road mesh is wider
-    // than that: a gravel runoff apron runs 2.2 m beyond the edge and the kerb
-    // ribbons are props at ~1.35 m out. A landform only has to clear the tarmac
-    // to pass the guard, so it can still bury the kerb and the runoff — which on
-    // screen reads as the hillside covering the track. Landforms must clear the
-    // road's whole built width, not just the racing surface.
-    const ROAD_SKIRT = 2.6;
-    const peak = (x, z, baseY, w, h, col) => {
-      // The foot pyramid's base is a SQUARE of side w*1.5, so its CORNERS reach
-      // w*0.75*sqrt(2) ~= w*1.061. A w*0.75 guard measures to an edge
-      // midpoint and lets the four corners overhang it by 41 %.
-      if (onTrack(x, z, w * 1.061 + ROAD_SKIRT)) {
-        ctx.noteSuppressed("peak", `peak SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
-        return;
-      }
-      ctx.note("peak", [x, baseY + h / 2, z], [w, h, w]);
-      out._mat = MAT.ROCK;
-      addPyramid(out, [x, baseY, z], [w, h, w], col, null);
-      addPyramid(out, [x, baseY - 2, z], [w * 1.5, h * 0.45, w * 1.5], [col[0] * 0.9, col[1] * 0.92, col[2] * 0.9], null);
-      const pj = hash(x * 0.17 + z * 0.19), pa = pj * 6.2832, so = w * (0.25 + pj * 0.13);
-      addPyramid(out, [x + Math.cos(pa) * so, baseY - 0.6, z + Math.sin(pa) * so],
-        [w * 0.6, h * (0.5 + pj * 0.25), w * 0.72], [col[0] * 0.94, col[1] * 0.95, col[2] * 0.96], null);
-      out._mat = 0;
-    };
-    const mountain = (x, z, baseY, w, h, opts) => {
-      opts = opts || {};
-      const rough = opts.rough != null ? opts.rough : 0.34;
-      const reach = (ww) =>
-        ROAD_SKIRT +
-        Math.max(ww * 0.62, ww * 0.5 * (1 + 0.7 * rough) * (1 + 0.35 * rough));
-      let fit = w;
-      for (let i = 0; i < 6 && onTrack(x, z, reach(fit)); i++) fit *= 0.88;
-      if (onTrack(x, z, reach(fit))) {
-        ctx.noteSuppressed("mountain", `mountain SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: w=${w}`);
-        return;
-      }
-      if (fit < w) h *= Math.sqrt(fit / w);   // narrower dune, plausible slope
-      w = fit;
-      ctx.note("mountain", [x, baseY + h / 2, z], [w, h, w]);
-      addFrustum(out, [x, baseY - 2, z], w * 0.62, w * 0.42, h * 0.18,
-                 opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
-      addMountain(out, [x, baseY, z], w * 0.5, h, opts);
-    };
-    // ridge(x, z, baseY, ang, len, w, h, col, opts?) — opts.profile ("massif") swaps the default flat-topped
-    // prism pair (reads as gabled blocks) for an elongated, noise-roughened rounded hill (addMountain with
-    // stretch = len/w); opts.rough (default 0.22) / opts.crest (default 0.35) shape it. Omitted = unchanged.
-    const ridge = (x, z, baseY, ang, len, w, h, col, opts) => {
-      const hill = opts && opts.profile;
-      // Skip if footprint half-extent reaches tarmac (a rounded hill's noisy foot reaches ~1.3x further).
-      if (onTrack(x, z, Math.max(len, w) * 0.5 * (hill ? 1.3 : 1) + ROAD_SKIRT)) {
-        ctx.noteSuppressed("ridge", `ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
-        return;
-      }
-      ctx.note("ridge", [x, baseY + h / 2, z], [w, h, len]);
-      const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
-      // BURY the base. addPrism anchors at the BASE (Trap A in
-      // docs/SCENERY-GROUNDING.md), so a prism placed at baseY has its underside
-      // exactly there — and every one of the 28 ridge() calls across 24 circuits
-      // passes `pyMin`, the lap's LOWEST NODE. The ground these backdrop ridges
-      // actually stand on out there is the floor slab, and that sits at
-      // `floorY = pyMin - 1` (js/track/core/surface.js) — so the ridge line perched
-      // above its own ground by construction, fleet-wide. 206 of monza's 214
-      // flagged clusters were this one helper.
-      //
-      // Sink the origin and add the SAME amount back to the height, so the
-      // silhouette above ground is unchanged — dropping the origin alone would
-      // shave SINK metres off every hill on 24 circuits. mountain() already does
-      // the equivalent for its skirt (`baseY - 2`); ridge() was the sibling that
-      // never got it.
-      const SINK = 2;
-      if (hill) {
-        addMountain(out, [x, baseY - SINK, z], w * 0.5, h + SINK, {
-          profile: opts.profile, stretch: len / w, right: r, fwd: f, seed: Math.round(x * 0.37 + z * 0.29),
-          rough: opts.rough != null ? opts.rough : 0.22, crest: opts.crest != null ? opts.crest : 0.35,
-          forest: col, rock: col, snow: col, snowline: 9 });
-        return;
-      }
-      addPrism(out, [x, baseY - SINK, z], [w, h + SINK, len], col, [r, [0, 1, 0], f]);
-      const jr = hash(x * 0.13 + z * 0.11 + ang);
-      const a2 = ang + (jr - 0.5) * 0.6;
-      const f2 = [Math.cos(a2), 0, Math.sin(a2)], r2 = [-f2[2], 0, f2[0]];
-      const off = (0.06 + jr * 0.06) * len, dY = 1.0;
-      addPrism(out,
-        [x + f[0] * off, baseY - SINK - dY, z + f[2] * off],
-        [w * 0.7, h * (0.42 + jr * 0.22) + SINK + dY, len * 0.4],
-        col, [r2, [0, 1, 0], f2]);
-    };
+    // Distant peak / mountain / ridge: js/track/scenery/landforms.js.
+    const { peak, mountain, ridge } = SceneryLandforms.create(ctx);
     // Returns the number of riser slabs that cleared rejBox. Callers that need
     // a whole stand (grandstandEx) use this to refuse a hollow shell: when every
     // riser lands on the fold of a neighbouring leg, seating is gone and the
@@ -976,6 +936,10 @@ const SceneryNature = (function () {
           (rec) => { rec.mat(MAT.CONCRETE); rec.box([0, 0, 0], [1.3, 1.5, 1], riser); },
           { kind: "crowdRiser", k, side }, { unguarded: true });
         out._mat = MAT.FABRIC;
+        // The seated crowd reaches ~0.35 m over the riser rejBox passed as
+        // "below the road": shanghai's 0.095 straight had 8 bodies 0.2-0.3 m
+        // under its asphalt (#5086). Guard their envelope too.
+        if (rejBox(vadd(vadd(a.c, a.u, up + 0.55), a.r, side * back), [1.3, 1.1, len], b)) continue;
         for (let s2 = 0; s2 < perRow; s2++) {
           if (s2 % 10 === 9) continue;                       // aisle / vomitory gap
           const h1 = hash(k * 2.7 + r * 5.3 + s2 * 1.9 + side * 3.1);
@@ -991,8 +955,17 @@ const SceneryNature = (function () {
           } else {
             col = CROWD_DAY[Math.floor(h1 * CROWD_DAY.length) % CROWD_DAY.length];
           }
-          ctx.instance("crowd-body",
-            { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col },
+          const place = { o: c, r: a.r, u: a.u, t: a.t, s: [1, 0.72 + h2 * 0.2, 1], col };
+          // crowd3d: a seated figure (pose and skin from the seat hash, facing the track) inside the same envelope.
+          if (DF.crowd3d && gap + back <= TrackDetail.CROWD_NEAR_M) {
+            const pose = Math.floor(hash(k * 3.7 + r * 2.9 + s2 * 6.1 + side) * TrackDetail.POSES) % TrackDetail.POSES;
+            const skin = Math.floor(hash(k * 5.1 + r * 1.3 + s2 * 2.3 + side * 7.9) * 3) % 3;
+            ctx.instance(`crowd-fig|${pose}|${skin}|${side}|${NIGHT ? 1 : 0}`, place,
+              (rec) => TrackDetail.crowdFigure(rec, MAT.FABRIC, pose, skin, -side, NIGHT, TrackGraph.NODE_COLOR),
+              { kind: "crowd", k, side }, { unguarded: true });
+            continue;
+          }
+          ctx.instance("crowd-body", place,
             (rec) => { rec.mat(MAT.FABRIC); rec.box([0, 0, 0], [0.55, 1, 0.5], TrackGraph.NODE_COLOR); },
             { kind: "crowd", k, side }, { unguarded: true });
         }
@@ -1024,8 +997,12 @@ const SceneryNature = (function () {
 
       const k = ((Math.round(s * n) % n) + n) % n;
       const halfFrac = (len / 2) / track.total;
-      recordBarrier(s - halfFrac, s + halfFrac, side, gap);
-      ctx.indexSolid(s - halfFrac, s + halfFrac, side, gap, 12.5);
+      // The barrier and solid index are recorded only once the stand is known
+      // to ship (after both suppression exits below): recorded first, a
+      // suppressed stand left an invisible wall the car stopped at and a solid
+      // that kept trees off empty ground (bahrain T1). They keep the AUTHORED
+      // gap, not the MIN_SEP-nudged geometry gap.
+      const gap0 = gap;
       const r = [track.rx[k], track.ry[k], track.rz[k]];
       const t = [track.tx[k], track.ty[k], track.tz[k]];
       const u = upOf(track, k);
@@ -1035,12 +1012,12 @@ const SceneryNature = (function () {
         ctx.noteSuppressed("grandstand", `grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (inner face on track)`);
         return;
       }
-      ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
+      const standRec = ctx.note("grandstand", [px[k] + r[0] * oInner, groundYAt(k, gap) + 6, pz[k] + r[2] * oInner],
                [10, 12, len], { k, side });
       // Per-call MIN_SEP slot, as spectatorHill's hillSeq: circuits lay stands
       // end to end (fuji's run() of 150 m walls) and over each other, and on a
       // curve two shells' faces landed 1.3 mm apart. Geometry only, and only
-      // OUTWARD — the barrier, solid index and on-track test above keep `gap`.
+      // OUTWARD — the barrier, solid index (gap0) and on-track test keep `gap`.
       // Alternate 0 / MIN_SEP: consecutive stands differ by MIN_SEP and every
       // other stand is where it was. Measured 2026-09-24 against the 4-slot
       // TrackGeom.SEP_SLOTS nudge: fleet coplanar spots 259 vs 263 (a 3.5-16.5
@@ -1100,8 +1077,11 @@ const SceneryNature = (function () {
       if (bankPlaced === 0) {
         ctx.noteSuppressed("grandstand",
           `grandstand SUPPRESSED at s=${s} side=${side}: gap=${gap} (no seating rows cleared rejBox)`);
+        if (ctx.unnote) ctx.unnote(standRec);
         return;
       }
+      recordBarrier(s - halfFrac, s + halfFrac, side, gap0);
+      ctx.indexSolid(s - halfFrac, s + halfFrac, side, gap0, 12.5);
       const tierLift = [];
       let prevBack = rakeBack(0), shellFront = SHELL_IN;
       for (let ti = 1; ti < tiers; ti++) {
@@ -1405,7 +1385,13 @@ const SceneryNature = (function () {
           // jitter, stays on its tread rather than hanging past the ends.
           const bodyW = 0.5, bodyD = 0.46, edge = 0.03;
           const originalCount = Math.max(2, Math.round(spacing / 1.8));
-          const perRow = treadSpan >= bodyD + 2 * edge && depth >= bodyW + 2 * edge
+          // The crowd stands ~1.1 m above a tread rejBox passed as "below the
+          // road" — under ANOTHER section (estoril's Parabolica bank reaches
+          // the 0.48 straight) its heads came to 0.1-0.3 m under the asphalt,
+          // where they poke through (#5086). Guard the crowd's own envelope.
+          const crowdC = vadd(vadd(ac, a.u, up + rise + 0.55), a.r, side * back);
+          const crowdOK = !rejBox(crowdC, [depth, 1.1, treadSpan], b);
+          const perRow = crowdOK && treadSpan >= bodyD + 2 * edge && depth >= bodyW + 2 * edge
             ? Math.min(originalCount, Math.max(1, Math.floor(treadSpan / 0.6))) : 0;
           const slotSpan = perRow ? treadSpan / perRow : 0;
           const alongJitter = Math.min(0.25, Math.max(0, slotSpan / 2 - bodyD / 2 - edge));
@@ -1562,6 +1548,11 @@ const SceneryNature = (function () {
         const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
         const d = clearTreeDist(k, side, dist + back, canopy);
         if (d == null) return;
+        // density (EXTREME): a deeper third row behind the edge, broadleaf only, through the same guards.
+        if (DF.density && !isPalm && hash(k * 3.3 + side * 9.1) < 0.6) {
+          const d3 = clearTreeDist(k, side, dist + canopy * 2.8, canopy);
+          if (d3 != null) tree(k, side, d3, h * (0.9 + hash(k * 1.9 + side) * 0.25), treeCol);
+        }
         if (isPalm) palm(k, side, d, h, palmCol);
         else if (isPine) pine(k, side, d, h, pineCol);
         else if (detailed && Number.isInteger(limit) && limit > 0 && limit <= 60 && accepted < limit) {
@@ -1586,6 +1577,7 @@ const SceneryNature = (function () {
       const c2 = [bc[0] * 0.90, bc[1] * 0.94, bc[2] * 0.88];
       const jh = hash(k * 4.3 + side * 2.1 + dist);
       let lobes = (opts && opts.lobes) || (jh < 0.4 ? 2 : 3);   // most clumps 2-3 lobes
+      if (DF.density) lobes++;   // EXTREME: one more lobe, rounder sections (below)
       // Understorey is foliage too: inheriting FLAT from the caller makes
       // clumps shade as solid props and misclassifies natural crown overlap.
       const previousMat = out._mat;
@@ -1609,7 +1601,7 @@ const SceneryNature = (function () {
         const lx = Math.cos(ang) * off, lz = Math.sin(ang) * off;
         const lc = vadd(vadd(p.c, p.r, lx), p.t, lz);
         const rad = (1.1 + lh * 0.9) * (lobes > 1 ? 0.82 : 1.15);
-        addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, 6, b);
+        addCone(out, vadd(lc, p.u, -0.3 + lh * 0.1), rad, 2.2 + lh * 1.0, i === 0 ? bc : c2, DF.density ? 9 : 6, b);
       }
       out._mat = previousMat;
     };

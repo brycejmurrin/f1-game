@@ -8,7 +8,7 @@ const SaveHealth = (function () {
     if (/^apex26\.career/.test(key)) return "Career saves";
     if (/^apex26\.season/.test(key)) return "Season saves";
     if (/^apex26\.(customTeam|customLogo|parts\.|setup\.|setupPresets\.|livery\.)/.test(key)) return "Garage work";
-    if (/^apex26\.(ghost|ttlb\.)/.test(key)) return "Laps and ghosts";
+    if (/^apex26\.(ghost|inputGhost|ttlb\.)/.test(key)) return "Laps and ghosts";
     if (/^apex26\.(customTracks|customTrackDraft(?:Prev)?|trackDesigner|tracks\.)/.test(key)) return "Authored circuits";
     return "Other settings and data";
   }
@@ -71,11 +71,13 @@ const SaveHealth = (function () {
   const size = (n) => (n / 1024).toFixed(1) + " KiB";
   function node(doc, tag, text) { const el = doc.createElement(tag); if (text !== undefined) el.textContent = text; return el; }
   function mount(host, opts) {
-    if (!host || mounted.has(host)) return mounted.get(host) || null;
+    if (!host) return null;
+    if (mounted.has(host)) { const h = mounted.get(host); if (h.root.parentNode === host && host.lastElementChild !== h.root) host.appendChild(h.root); return h; }
     opts = opts || {};
-    const doc = host.ownerDocument || document, root = node(doc, "section"); root.className = "save-health";
-    const toggle = node(doc, "button", "STORAGE HEALTH & RESTORE POINTS"); toggle.type = "button"; toggle.className = "sel-chip";
-    const panel = node(doc, "div"); panel.hidden = true; panel.className = "save-health-panel";
+    const doc = host.ownerDocument || document, root = node(doc, "details"); root.className = "save-health";
+    const toggle = node(doc, "summary", "STORAGE HEALTH & RESTORE POINTS"); toggle.className = "sel-chip";
+    if (host.id === "pm-panel-files") toggle.id = "pm-files-health";
+    const panel = node(doc, "div"); panel.className = "save-health-panel";
     const status = node(doc, "p"); status.setAttribute("role", "status");
     const measurements = node(doc, "div"), refresh = node(doc, "button", "REFRESH STORAGE REPORT"), clear = node(doc, "button", "CLEAR DOWNLOADED RESPONSE CACHES");
     for (const b of [refresh, clear]) { b.type = "button"; b.className = "sel-chip"; }
@@ -107,8 +109,7 @@ const SaveHealth = (function () {
         if (revision === reportRevision) refresh.disabled = false;
       }
     }
-    toggle.onclick = () => { panel.hidden = !panel.hidden; toggle.setAttribute("aria-expanded", String(!panel.hidden)); if (!panel.hidden) update(); };
-    toggle.setAttribute("aria-expanded", "false");
+    root.addEventListener("toggle", () => { if (root.open) update(); });
     refresh.onclick = update;
     clear.onclick = async () => {
       clear.disabled = true;
@@ -136,18 +137,21 @@ const SaveHealth = (function () {
       for (const item of result.items) {
         const b = node(doc, "button", new Date(item.at).toLocaleString() + " · " + item.reason + " · " + item.summary.year + " round " + (item.summary.round + 1)); b.type = "button"; b.className = "sel-chip";
         b.onclick = async () => {
-          const token = await api.preview(f, i, item.id); if (revision !== historyRevision) return;
+          const token = await api.preview(f, i, item.id); if (revision !== historyRevision || !list.contains(b)) return;
           if (!token.ok) { status.textContent = "Cannot preview restore: " + token.reason + "."; return; }
+          const points = Array.from(list.children);
           const confirmation = node(doc, "div");
           confirmation.appendChild(node(doc, "p", "Replace this slot's current progress (" + (token.current ? token.current.year + ", round " + (token.current.round + 1) : "empty") + ") with " + token.point.year + ", round " + (token.point.round + 1) + "?"));
           const accept = node(doc, "button", "RESTORE THIS POINT"), cancel = node(doc, "button", "CANCEL"); accept.type = cancel.type = "button"; accept.className = cancel.className = "sel-chip";
           accept.onclick = async () => {
-            if (revision !== historyRevision || accept.disabled) return; accept.disabled = true;
+            if (revision !== historyRevision || accept.disabled) return;
+            accept.disabled = cancel.disabled = true;
             const r = await api.restore(token); if (revision !== historyRevision) return;
             confirmation.replaceChildren(node(doc, "p", r.ok && r.durable ? "Restore saved. Reload to use it." : "Restore did not finish durably: " + (r.reason || "storage unavailable") + ". Keep this page open."));
             if (r.ok && r.durable) { const reload = node(doc, "button", "RELOAD SAVED CAREER"); reload.type = "button"; reload.className = "sel-chip"; reload.onclick = () => location.reload(); confirmation.appendChild(reload); }
           };
-          cancel.onclick = () => confirmation.remove(); confirmation.append(accept, cancel); list.replaceChildren(confirmation);
+          cancel.onclick = () => { list.replaceChildren(...points); b.focus(); };
+          confirmation.append(accept, cancel); list.replaceChildren(confirmation); cancel.focus();
         };
         list.appendChild(b);
       }
@@ -155,13 +159,7 @@ const SaveHealth = (function () {
     history.append(choice, show, list); panel.append(status, measurements, refresh, clear, history); root.append(toggle, panel); host.appendChild(root);
     const handle = { root, refresh: update }; mounted.set(host, handle); return handle;
   }
-  function boot() {
-    if (typeof document === "undefined") return;
-    const host = document.getElementById("pm-panel-files"); if (host) mount(host);
-  }
-  if (typeof document !== "undefined" && document.addEventListener) {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot();
-  }
-  return { inspect, cleanup, mount, category };
+  // category stays module-local (inspect grouping).
+  return { inspect, cleanup, mount };
 })();
 Object.freeze(SaveHealth);

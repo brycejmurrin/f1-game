@@ -76,12 +76,7 @@ const SceneryThemes = (function () {
   function variant(trackId, modelId, index, choices) {
     if (!Array.isArray(choices) || !choices.length) return null;
     const text = `${trackId}|${modelId}|${Number(index) || 0}`;
-    let hash = 2166136261;
-    for (let i = 0; i < text.length; i++) {
-      hash ^= text.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return choices[(hash >>> 0) % choices.length];
+    return choices[Hash32.fnv1a(text) % choices.length];
   }
 
   return { resolve, variant };

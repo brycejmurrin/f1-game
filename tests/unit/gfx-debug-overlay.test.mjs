@@ -18,7 +18,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -106,6 +108,49 @@ test("gfx-debug asks the backend whether it soft-presents before saying native (
   assert.match(unreadable, /frame\(soft\) unreadable/, "never steal or invent: a non-2D #game reads as unreadable");
 });
 
+test("gfx-debug soft luma downscales into SAMPLE_MAX² — never getImageData of the full soft canvas (perf hunt)", () => {
+  assert.equal(/SAMPLE_MAX\s*=\s*64/.test(SRC) && /sampleSoftLuma/.test(SRC) && /drawImage\(soft/.test(SRC), true);
+  const calls = [];
+  const soft = {
+    id: "game-soft", width: 200, height: 100,
+    getContext: () => ({
+      getImageData: (x, y, w, h) => { calls.push({ w, h, via: "soft" }); return { data: new Uint8ClampedArray(w * h * 4) }; },
+    }),
+  };
+  const sampleGets = [];
+  const sampleCanvas = {
+    width: 0, height: 0,
+    getContext: () => ({
+      drawImage: () => { calls.push({ drawImage: 1 }); },
+      getImageData: (x, y, w, h) => {
+        sampleGets.push({ w, h });
+        const data = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < data.length; i += 4) data[i] = data[i + 1] = data[i + 2] = 40, data[i + 3] = 255;
+        return { data };
+      },
+    }),
+  };
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: {
+      getElementById: (id) => (id === "game-soft" ? soft : id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null),
+      querySelector: () => null,
+      createElement: () => sampleCanvas,
+    },
+    location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+    GLX: { gpuErrors: () => 0, softPresent: () => true },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: absSrc("js/perf/gfx-debug-overlay.js") });
+  const text = vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-sample" });
+  assert.equal(calls.some((c) => c.drawImage), true);
+  assert.equal(sampleGets.length, 1);
+  assert.equal(sampleGets[0].w <= 64 && sampleGets[0].h <= 64, true);
+  assert.equal(calls.some((c) => c.via === "soft" && c.w === 200 && c.h === 100), false);
+  assert.equal(/frame\(soft\) mean=40\.0 max=40/.test(text), true);
+});
+
 test("gfx-debug prints the memory line a crash report can paste (#1648)", () => {
   assert.match(SRC, /usedJSHeapSize/, "heap comes from performance.memory");
   assert.match(SRC, /memState\(\)/, "geometries and textures come from the TLX counter");
@@ -129,6 +174,24 @@ test("gfx-debug prints the memory line a crash report can paste (#1648)", () => 
   assert.match(text, /mem heap=80\.0MB rObj=56 geo=12 tex=34 tier=2 crashStrikes=1/);
 });
 
+test("gfx-debug pastes the desktop detail level, the upper-ladder shed count and the GPU ms (§gov-42)", () => {
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null, querySelector: () => null },
+    location: { search: "" }, localStorage: store, sessionStorage: store, performance: { now: () => 0 },
+    GLX: { gpuErrors: () => 0 },
+    GfxQuality: { detail: () => 2, shed: () => 3, cinema: () => true, SHED_ORDER: [1, 2, 3, 4, 5, 6, 7] },
+    PerfGov: { gpuMs: () => 11.256 },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: absSrc("js/perf/gfx-debug-overlay.js") });
+  const line =vm.runInContext("GfxDebug.text()", ctx).split("\n").filter((l) => l.startsWith("detail="));
+  assert.deepEqual(line, ["detail=2 shed=3/7 cinema=1 gpuMs=11.26"]);
+  delete sandbox.GfxQuality;
+  assert.equal(vm.runInContext("GfxDebug.text()", ctx).split("\n").some((l) => l.startsWith("detail=")), false, "no quality module: no line, no throw");
+});
+
 test("gpu-game-check reports heap, three memory and an opt-in A-B-A switch (#1648)", () => {
   const ggc = read("tools/gfx/gpu-game-check.mjs");
   assert.match(ggc, /usedJSHeapSize/);
@@ -138,6 +201,26 @@ test("gpu-game-check reports heap, three memory and an opt-in A-B-A switch (#164
   assert.match(ggc, /--mem-switch/);
   assert.match(ggc, /memSwitch/);
   assert.match(ggc, /\[game-check\] mem heap=/);
+});
+
+test("gfx-debug pastes the stall watchdog, which a throw-only loop line hides", () => {
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null, querySelector: () => null },
+    location: { search: "" }, localStorage: store, sessionStorage: store,
+    performance: { now: () => 5000 },
+    GLX: { gpuErrors: () => 0 },
+    LoopHealth: { state: () => ({
+      frames: 4, faults: 0, run: 0, cap: 8, totalCap: 240, stopped: false, lastFault: "", staleMs: 40,
+      stall: { watching: true, slowRun: 4, slowFrames: 4, worstMs: 1800, sheds: 1, reloads: 0, act: "shed" },
+    }) },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: path.join(ROOT, "js/perf/gfx-debug-overlay.js") });
+  const text = vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-stall" });
+  assert.match(text, /faults=0\/240/, "a slow present is not a throw");
+  assert.match(text, /stall: watch=on slow=4 worst=1800ms act=shed sheds=1 reloads=0/);
 });
 
 test("gfx-debug can hand the reporter the text", () => {
@@ -156,7 +239,80 @@ test("gfx-debug obeys the file conventions", () => {
   const manifest = read("tools/manifest.cjs");
   assert.ok(manifest.includes('"js/perf/gfx-debug-overlay.js"'),
     "new-file lockstep: the module roster must list it");
-  const html = read("index.html");
-  assert.match(html, /src="js\/perf\/gfx-debug-overlay\.js\?v=[A-Za-z0-9._-]+"/,
-    "new-file lockstep: a script tag in the shell (gen-shell writes it from the manifest)");
+  // #4978: LAZY_DEV, not the boot wall — LazyBundles.bootDevPanels injects it when the gfxdebug flag is set.
+  const { LAZY_DEV } = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  assert.ok(LAZY_DEV.includes("js/perf/gfx-debug-overlay.js"), "the overlay rides LAZY_DEV");
+  assert.doesNotMatch(read("index.html"), /src="js\/perf\/gfx-debug-overlay\.js/, "and has no boot <script> tag");
+  assert.match(read("js/core/lazy-bundles.js"), /DevFlags\.get\("gfxdebug"\)[\s\S]*ApexRoster\.LAZY_DEV|ApexRoster\.LAZY_DEV[\s\S]*DevFlags\.get\("gfxdebug"\)/,
+    "the injector gates on the same gfxdebug flag the overlay's wanted() reads");
+});
+
+test("on GLX the overlay prints the post chain's verdict, so a dark-frame report says whether tonemapping ran (iPhone GLX report)", async () => {
+  const { bootGlx } = await import("../helpers/glx-mock.mjs");
+  const lineFor = (extensions) => {
+    const h = bootGlx({ extensions });
+    h.GLX.begin(h.frame());
+    const store = { getItem: () => null };
+    const sandbox = {
+      document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "webgl2", getContext: () => null } : null, querySelector: () => null },
+      location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+      GLX: { gpuErrors: () => 0, hdrMode: () => h.GLX.hdrMode(), msaa: () => h.GLX.msaa() },   // the real GLX readouts, no __tlx
+    };
+    sandbox.window = sandbox;
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: path.join(ROOT, "js/perf/gfx-debug-overlay.js") });
+    return vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-glx-post" });
+  };
+  const post = (ext) => {
+    const line = lineFor(ext).split("\n").find((l) => l.startsWith("post "));
+    return line ? Object.fromEntries(line.slice(5).split(" ").map((kv) => kv.split("="))) : null;
+  };
+  const half = post(["EXT_color_buffer_half_float"]);
+  assert.equal(half && half.hdr, "true", "half-float-only keeps the HDR chain (it lost it to an R11F bloom target before)");
+  assert.ok(half && Number.isFinite(+half.msaa), "the msaa count is a number");
+  assert.equal(post(["EXT_color_buffer_float"]).hdr, "true");
+  assert.equal(post([]).hdr, "false", "an 8-bit device says the tonemapped chain is off instead of saying nothing");
+});
+
+test("on TLX the overlay names the ?lab=tlxLite tier when the backend reports it (perf hunt 9, B8)", () => {
+  const lineFor = (liteLab) => {
+    const store = { getItem: () => null };
+    const sandbox = {
+      document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "webgl2", getContext: () => null } : null, querySelector: () => null },
+      location: { search: "" }, localStorage: store, sessionStorage: store, performance,
+      GLX: { gpuErrors: () => 0, __tlx: { backendState: () => ({ api: "webgl2", isMobile: true, mobileTier: true, liteGpu: false, liteLab }) } },
+    };
+    sandbox.window = sandbox;
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: path.join(ROOT, "js/perf/gfx-debug-overlay.js") });
+    return vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-tlx-lite" }).split("\n").find((l) => l.startsWith("mobile="));
+  };
+  assert.equal(lineFor(true), "mobile=true tier=true lite=false LAB:tlxLite");
+  assert.equal(lineFor(false), "mobile=true tier=true lite=false", "no lab: the line is unchanged");
+});
+
+// #4978 row 4: the overlay left the boot wall for LAZY_DEV; LazyBundles injects it only when the flag asks.
+test("LazyBundles injects LAZY_DEV only under the gfxdebug flag", async () => {
+  const bundles = read("js/core/lazy-bundles.js");
+  async function boot(flag) {
+    const asked = [];
+    const ctx = vm.createContext({
+      console, Promise, setTimeout, clearTimeout, queueMicrotask, URLSearchParams,
+      ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
+        LAZY_DEV: ["js/perf/gfx-debug-overlay.js"], SCENERY_DIR: "js/circuits/scenery" },
+      DevFlags: { get: (k) => k === "gfxdebug" && flag },
+      localStorage: { getItem() { return null; } },
+      navigator: { userAgent: "apex-game-vm" },
+      location: { search: "", hostname: "example.com" },
+      Log: { warn() {}, info() {}, error() {}, debug() {} },
+      addEventListener() {}, removeEventListener() {},
+    });
+    ctx.window = ctx;
+    vm.runInContext(bundles + "\nthis.LazyBundles = LazyBundles;", ctx, { filename: path.join(ROOT, "js/core/lazy-bundles.js") });
+    ctx.LazyBundles.create({ els: {}, loadBackendScripts: async (files) => { asked.push(...files); return true; } });
+    await new Promise((r) => setTimeout(r, 0));
+    return asked.filter((f) => f === "js/perf/gfx-debug-overlay.js");
+  }
+  assert.deepEqual(await boot(false), [], "no flag: the player never fetches the overlay");
+  assert.deepEqual(await boot(true), ["js/perf/gfx-debug-overlay.js"], "?gfxdebug=1: injected once at boot");
 });

@@ -146,7 +146,7 @@ var Spotter = (() => {
             if (!valid) rollback();
             validated = !!valid;
             return validated; } });
-        if (spokeOk && typeof Captions !== "undefined" && Captions.onSpotter) Captions.onSpotter(KEYS[key], key);
+        if (spokeOk && typeof Captions !== "undefined" && Captions.onSpotter) Captions.onSpotter(KEYS[key], key, true);
         return spokeOk;
       };
       const key = step(st, occupied, dt, speak);
@@ -157,5 +157,5 @@ var Spotter = (() => {
     return { update, occupied: () => occupied !== 0 || st.cur !== 0, side: () => occupied };
   }
 
-  return Object.freeze({ create, step, occupancy, fresh, KEYS, OVERLAP_ARC, SIDE_MIN, SIDE_MAX, DEBOUNCE_S, CLEAR_S, STILL_S, GAP_S });
+  return Object.freeze({ create, step, occupancy, fresh, KEYS, GAP_S });
 })();

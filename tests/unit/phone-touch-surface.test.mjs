@@ -110,39 +110,45 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   const ov = css("css/touch-controls.css");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "width"), "var(--tap)");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
-  // CAM and PAUSE share effective BUTTON SIZE independently of HUD bands;
-  // the minimum zoom of 1 protects the top controls' --tap rung. The restore
-  // eye stays on --tap itself.
-  // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
-  // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
-  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn grows DOWN past 150 %, floored at the band");
-  assert.equal(decl(ov, "#pausebtn", "width"), "var(--tap-hud)", "#pausebtn never widens: the top row keeps its width (640x360 BEST × CAM)");
-  assert.equal(decl(ov, "#btn-cam", "height"), "var(--tap-hud)", "#btn-cam keeps the --tap-hud band height");
-  assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--tap-hud) + 4px + var(--sar))", "CAM stays where it was: PAUSE does not widen");
+  // #5179: CAM and PAUSE are top-band chrome, not driving controls. Both paint ONE constant height,
+  // --hud-chrome-h = 44 px. Neither BUTTON SIZE (Bryce's 245 % painted a 97x52 CAM + 52 PAUSE beside a 43 px
+  // strip) nor HUD SIZE (Bryce 2026-10-17: it must not move or resize a control) may feed it.
+  const chrome = ruleFor(ov, /^:is\(#btn-cam, #pausebtn, #campicker\)$/, "--hud-chrome-h");
+  assert.ok(chrome, "the CAM/PAUSE chrome size rule exists");
+  assert.equal(chrome.decls.get("--hud-chrome-h"), "44px", "a fixed 44 px tap target");
+  assert.equal(chrome.decls.get("--hud-chrome-t"), "calc(8px + var(--sat))", "top-aligned at the safe edge");
+  for (const k of ["--hud-chrome-h", "--hud-chrome-t", "--hud-chrome-gap"])
+    assert.doesNotMatch(chrome.decls.get(k), /--hud-btn-scale|--tap-hud|--hud-btn-z|--hud-z-|--hud-scale|--hud-top-h/, `${k} follows neither BUTTON SIZE nor HUD SIZE`);
+  assert.equal(decl(ov, "#pausebtn", "height"), "var(--hud-chrome-h)");
+  assert.equal(decl(ov, "#pausebtn", "width"), "var(--hud-chrome-h)", "PAUSE is square: a true circle on touch");
+  assert.equal(decl(ov, "#btn-cam", "height"), "var(--hud-chrome-h)", "CAM matches PAUSE's height");
+  assert.equal(decl(ov, "#btn-cam", "top"), "var(--hud-chrome-t)");
+  assert.equal(decl(ov, "#pausebtn", "top"), "var(--hud-chrome-t)");
+  assert.equal(decl(ov, "#btn-cam", "right"), "calc(10px + var(--hud-chrome-h) + var(--hud-chrome-gap) + var(--sar))", "CAM sits one even gap left of PAUSE");
+  assert.doesNotMatch(decl(ov, "#btn-cam", "min-width") + decl(ov, "#btn-cam", "font-size"), /--hud-btn-z/, "CAM's width and label ignore BUTTON SIZE");
+  assert.ok(!ov.some((r) => r.decls.has("--tap-btn")), "the BUTTON SIZE > 150 % PAUSE growth is gone");
+  // …and fitHud's side cap still budgets the OLD --tap-hud footprint (PAUSE 44 x btn-z, CAM >= 76 x btn-z beside
+  // it): a freed band grew the tower into the lifted sector plate at HUD 155 / BUTTON 245 (hud-layout, #5179).
+  assert.match(fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8"), /pauseL = pR && pR\.width \? pR\.right - 44 \* bz : Infinity;[\s\S]{0,400}Math\.max\(76, r\.width\) \* bz/);
   // LEFT-HANDED: #dock-right paints on the left, so it is the dock TYRES hangs from; the fit picks docks by side.
   const hc = css("css/hud.css");
   assert.ok(hc.some((r) => /body\.mirror-controls:not\(\.desktop\) #dock-right/.test(r.selector) && r.decls.get("anchor-name") === "--apex-dock-left"), "mirror re-points the TYRES anchor");
   assert.match(fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8"), /function pickDocks\(\)[^\n]*mirror-controls/, "hud.js picks the docks by painted side");
   // A TOUCH steer that starts on the radio card or start lights reaches the canvas; ARRANGE HUD still grabs the card.
   assert.equal(decl(hc, "body:not([data-hud-arrange]) :is(#lights, #announce)", "pointer-events"), "none");
-  const tb = decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--tap-btn");
-  assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
-  assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
-  assert.equal(decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--hud-btn-zt"),
-    "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
   const topZoom = decl(hudCss, ":root", "--hud-btn-z");
-  assert.equal(topZoom, "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5)",
-    "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
+  assert.equal(topZoom, "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5)",
+    "the --tap-hud band (what readouts below CAM/PAUSE hang from) shares the effective dock cap");
   assert.doesNotMatch(topZoom, /--hud-(?:scale|z-top|z-bot)\b/,
-    "top controls must not depend on a HUD readout scale or fitted band");
+    "the band must not depend on a HUD readout scale or fitted band");
   // --tap-hud is defined on :root, so test its actual base rung rather than
   // assuming it inherits the larger touch-body --tap. The outer clamp's
   // minimum of 1 above protects this rung even when dock fitting goes below 1.
   const chromeTap = rung(decl(css("css/tokens.css"), ":root", "--tap"), "root chrome --tap");
-  assert.ok(chromeTap >= 44, `CAM/PAUSE retain a ${chromeTap}px base target, never under 44px`);
+  assert.ok(chromeTap >= 44, `the --tap-hud band keeps a ${chromeTap}px base, never under 44px`);
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
@@ -209,7 +215,7 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+  assert.equal(dock.decls.get("zoom"), "min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
     "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at --hud-btn-floor (the zoom at which a tap paints 44px) so a setting never shrinks a target under the HIG minimum");
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
@@ -256,32 +262,34 @@ test("every anchor inside a --hud-z zoom divides its safe-area inset by --hud-z"
 /* ── touch policy across css/ ────────────────────────────────────────────── */
 
 test("every :hover rule in css/ is gated on (hover: hover) — a tap sticks :hover on iOS", () => {
-  const FOLLOW_UP = new Set(["css/race-setup.css", "css/dialogs.css"]);
   const ungated = [];
   const coarseHover = [];
   // Physical files only: readCssSource concatenates race-setup into select/menus.
-  for (const file of CSS_FILES) {
-    const rules = cssRules(read(file));
-    for (const r of rules) {
+  for (const file of [...CSS_FILES, "bench.html", "controller.html"]) {
+    const source = read(file);
+    const styles = file.endsWith(".html")
+      ? Array.from(source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi), match => match[1]).join("\n")
+      : source;
+    for (const r of cssRules(styles)) {
       if (!/:hover/.test(r.selector)) continue;
       if (!r.context.some((c) => /hover\s*:\s*hover/.test(c))) ungated.push(`${file} ${r.selector}`);
-      else if (!FOLLOW_UP.has(file) && !r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
+      else if (!r.context.some((c) => /pointer\s*:\s*fine/.test(c))) {
         coarseHover.push(`${file} ${r.selector}`);
       }
     }
   }
   assert.deepEqual(ungated, [], "wrap it in @media (hover: hover) and (pointer: fine); touch uses :active (css/tokens.css policy)");
-  assert.deepEqual(coarseHover, [], "non-follow-up :hover must also sit in (pointer: fine); skip css/race-setup.css + css/dialogs.css");
+  assert.deepEqual(coarseHover, [], "hover styles require a fine pointer");
 });
 
 test("JS hover-only UI skips touch / (hover: none) so a tap does not latch a tooltip", () => {
   const sheet = read("js/garage/setup-sheet.js");
   assert.match(sheet, /pointerenter[\s\S]{0,220}pointerType === ["']touch["']/,
     "garage part comparison must ignore touch pointerenter");
-  assert.match(sheet, /matchMedia\(["']\(hover: none\)["']\)/,
+  assert.match(sheet, /matchMedia\(["']\(hover: hover\) and \(pointer: fine\)["']\)/,
     "garage part comparison must skip when the device cannot hover");
   const sched = read("js/data/schedule.js");
-  assert.match(sched, /mouseenter[\s\S]{0,280}matchMedia\(["']\(hover: none\)["']\)/,
+  assert.match(sched, /pointerenter[\s\S]{0,280}matchMedia\(["']\(hover: hover\) and \(pointer: fine\)["']\)/,
     "schedule overflow title must not attach on (hover: none)");
 });
 
@@ -384,7 +392,9 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   assert.ok(bar, "#hud-dock is positioned in landscape");
   assert.match(bar.decls.get("left"), /var\(--sal\)/); assert.match(bar.decls.get("right"), /var\(--sar\)/); assert.match(bar.decls.get("bottom"), /var\(--sab\)/);
   for (const id of ["#pausebtn", "#btn-cam", "#hud-restore"]) {
-    assert.match(decl(ov, id, "top"), /var\(--sat\)/, `${id} top clears the notch`);
+    // CAM/PAUSE read their top through --hud-chrome-t (#5179), whose every arm carries --sat.
+    const top = decl(ov, id, "top") === "var(--hud-chrome-t)" ? ruleFor(ov, /^:is\(#btn-cam, #pausebtn, #campicker\)$/, "--hud-chrome-t").decls.get("--hud-chrome-t") : decl(ov, id, "top");
+    for (const arm of top.startsWith("min(") ? top.split("), calc(") : [top]) assert.match(arm, /var\(--sat\)/, `${id} top clears the notch`);
     assert.match(decl(ov, id, "right"), /var\(--sar\)/, `${id} right clears the notch`);
   }
   // The portrait ladder (RACE IN PORTRAIT) anchors on the same insets.
@@ -406,6 +416,42 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
     /body\[data-shape="wide"\]\[data-density="compact"\]\) #ios-install \{[^}]*right:\s*auto/,
     "compact-wide title parks #ios-install under the brand column, not over the doors",
   );
+});
+
+test("pedals are squircles, portrait left-hand swaps columns, the race hides the install tip", () => {
+  const ov = css("css/touch-controls.css");
+  const tokSrc = read("css/tokens.css");
+  assert.equal(decl(ov, ".touchbtn.pedal", "border-radius"), "var(--touch-pedal-radius)");
+  assert.match(tokSrc, /--touch-pedal-radius:\s*28%/);
+  assert.match(tokSrc, /--touch-tablet-btn:\s*96px/);
+  assert.match(tokSrc, /--touch-tablet-steer:\s*108px/);
+  assert.equal(decl(ov, "body.in-race #ios-install", "display"), "none",
+    "the Home Screen tip must not cover GAS or the steer arrows during a race");
+  // Position only. A fill on a body-class pedal rule outranks :active.
+  const pedals = ruleFor(ov, /body\.mirror-controls\.steer-buttons #btn-throttle/, "left",
+    { context: /orientation:\s*portrait/ });
+  assert.ok(pedals, "portrait left-hand moves the buttons-mode pedal column");
+  assert.equal(pedals.decls.get("left"), "calc(16px + var(--sal))");
+  assert.equal(pedals.decls.get("right"), "auto");
+  assert.equal(pedals.decls.has("background"), false);
+  const steer = ruleFor(ov, /body\.mirror-controls #btn-steer-right/, "right",
+    { context: /orientation:\s*portrait/ });
+  assert.ok(steer, "the steer pair's right arrow sits on the right edge");
+  assert.match(steer.decls.get("right"), /var\(--sar\)/);
+  assert.doesNotMatch(steer.decls.get("right"), /var\(--steer\)/,
+    "the right arrow is the outer one; the left arrow keeps the inboard slot");
+  const tablet = rulesFor(ov, ":root").find((r) => r.decls.get("--btn") === "var(--touch-tablet-btn)"
+    && r.context.some((c) => /min-width:\s*744px/.test(c)));
+  assert.ok(tablet, "a portrait tablet grows the fixed ladder; phones stay on 76px");
+  const clear = ruleFor(ov, "body.steer-buttons .hud-bottom", "bottom",
+    { context: /min-width:\s*744px/ });
+  assert.ok(clear, "the cluster clearance grows with the tablet pedals");
+  assert.match(clear.decls.get("bottom"), /var\(--btn\)/);
+  assert.match(clear.decls.get("bottom"), /\/ var\(--hud-z\)/);
+  const plate = rulesFor(ov, /#grp-steer/).find((r) => r.decls.has("background")
+    && r.context.some((c) => /orientation:\s*landscape/.test(c)));
+  assert.ok(plate, "landscape groups the steer arrows with a plate");
+  assert.equal(plate.decls.has("padding"), false, "the plate must not widen the dock");
 });
 
 test("non-HUD menu hosts pad with the safe-area tokens", () => {
@@ -458,7 +504,7 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug
   if (DeviceOrientationEvent) sb.DeviceOrientationEvent = DeviceOrientationEvent;
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init({ addEventListener() {} }, {});
   const count = (type) => (listeners.get(type) || []).length;
@@ -703,30 +749,32 @@ test("a spare pad disconnect preserves held action edge baselines", () => {
  * fitHud writes --hud-z-dock (js/ui/hud.js, not touched here). The dock then
  * `zoom`s, so an authored --fs-micro (14px) paints at 9.7px on a 390px-tall
  * landscape phone at HUD 150% (css/touch-controls.css, 2026-10-14). The floor
- * is a font-size max() that divides 10 CSS px by that zoom — width/height stay
- * on --tap/--hold, so hit areas do not grow. */
-const LABEL_FLOOR_PX = 10;
+ * is a font-size max() that divides 11 CSS px (Apple's 11 pt text minimum,
+ * #4258; was 10) by that zoom — width/height stay on --tap/--hold, so hit
+ * areas do not grow. */
+const LABEL_FLOOR_PX = 11;
 
 function paintedLabelPx(authoredPx, dockZoom) {
   const z = Math.max(0.4, +dockZoom || 1);
   return Math.max(authoredPx, LABEL_FLOOR_PX / z) * z;
 }
 
-test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
+test("dock touch labels keep an 11 CSS-px painted floor under --hud-z-dock", () => {
   const ov = css("css/touch-controls.css");
+  const tk = css("css/tokens.css");
   const land = { context: /orientation:\s*landscape/ };
-  assert.equal(decl(ov, ":root", "--touch-label-floor"), "10px",
-    "--touch-label-floor is the 10 CSS-px painted minimum");
+  assert.equal(decl(tk, ":root", "--touch-label-floor"), "11px",
+    "--touch-label-floor is the 11 CSS-px painted minimum");
 
   const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
   assert.ok(dock, "landscape dock publishes zoom");
   assert.equal(dock.decls.get("--touch-label-z"),
-    "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
     "the label-z token tracks the dock's own zoom (capped or slider)");
 
   const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);
   assert.match(String(tapFont), /max\(/, "tap labels clamp with max()");
-  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the 10px floor");
+  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the label floor");
   assert.match(String(tapFont), /var\(--touch-label-z/, "tap labels divide the floor by dock zoom");
   assert.doesNotMatch(String(tapFont), /\bwidth\b|\bheight\b/, "the font rule does not restyle hit boxes");
 
@@ -740,15 +788,16 @@ test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () =
   assert.match(String(shiftFont), /var\(--touch-label-floor\)/);
 
   const pauseFont = decl(ov, "#pausebtn", "font-size");
-  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same 10px floor");
+  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same label floor");
   const camFont = decl(ov, "#btn-cam", "font-size");
-  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same 10px floor");
+  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same label floor");
 
   // The 9.7px case: authored 14px × dock zoom 0.69. Without the floor that
-  // paints 9.66; with it, 10. Width/height stay on --tap/--hold (not asserted
+  // paints 9.66; with it, 11. Width/height stay on --tap/--hold (not asserted
   // as a computed box here — the selectors above never mention them).
-  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ 10");
-  assert.ok(paintedLabelPx(14, 0.69) < 14 * 0.69 + 1, "the floor does not enlarge labels that already clear 10px by much");
+  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ the floor");
+  assert.ok(paintedLabelPx(14, 0.69) <= LABEL_FLOOR_PX + 1e-9, "the floor lifts a sub-floor label exactly to the floor, no further");
+  assert.ok(paintedLabelPx(18, 1) === 18, "a label that already clears the floor keeps its authored size");
   for (const z of [0.4, 0.5, 0.69, 0.82, 1, 1.25, 1.5]) {
     for (const authored of [11, 14, 15, 18]) {
       assert.ok(paintedLabelPx(authored, z) + 1e-9 >= LABEL_FLOOR_PX,
@@ -763,4 +812,217 @@ test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () =
   assert.match(String(hold), /^max\(72px/);
   assert.doesNotMatch(String(tap), /touch-label-floor/);
   assert.doesNotMatch(String(hold), /touch-label-floor/);
+});
+
+/* ---- batch #5410 (phone sizes: HUD controls and sheet text): the rules a node VM can see. Live geometry is the
+   hud-layout / ui-scale / profile-survey shards and tools/ui/bryce-paint.mjs. ---- */
+const PAINTED_16 = "max(16px, calc(16px / var(--sheet-scale, var(--ui-scale, 1))))";
+
+test("#5236: every typeable field's iOS focus floor is 16 PAINTED px, and no bare 16px floor is left at the eight sites", () => {
+  const sites = [
+    ["css/editor.css", ".td-input"],
+    ["css/race-setup.css", null], ["css/overlays.css", "#vsfriend .vs-code:not([readonly])"],
+    ["css/appearance-studio.css", null], ["css/carsetup.css", ".cs-liv-ed-name"], ["css/garage-experience.css", null],
+    ["css/tuner.css", "#as-sp-id, #sp-search, #sp-playlist2, #sp-device2"], ["css/select.css", null],
+  ];
+  for (const [file, sel] of sites) {
+    const css = read(file);
+    assert.ok(css.includes("font-size: " + PAINTED_16), `${file}: the painted floor`);
+    if (sel) assert.equal(decl(cssRules(css), sel, "font-size"), PAINTED_16, `${file} ${sel}`);
+  }
+  // Painted px at the UI SIZE rungs a phone reaches (70 today, 61 and 50 once #5452 lowers the floor) and above.
+  for (const ui of [0.5, 0.61, 0.7, 1, 1.09, 1.5]) {
+    const own = Math.max(16, 16 / ui);
+    assert.ok(own * ui >= 16 - 1e-9, `UI ${ui}: ${own * ui} painted`);
+  }
+});
+
+test("#5215: sheet titles and foot buttons floor on the TEXT SIZE ladder, never a fixed px", () => {
+  const rules = cssRules(read("css/components.css"));
+  // A menu region can scale the fluid size and cap. Its floor still comes
+  // from the player's text ladder. An unset region keeps all three defaults.
+  for (const [selector, floor, preferred, cap] of [
+    [".sheet-head h2", "--fs-2", 3.6, 24],
+    ['.sheet[data-density="compact"] .sheet-head h2', "--fs-micro", 3, 18],
+    [".sheet-foot .bigbtn", "--fs-micro", 3.6, 20],
+  ]) {
+    const font = decl(rules, selector, "font-size");
+    assert.equal(font, `clamp(var(${floor}), calc(${preferred} * var(--vhz) * var(--arrange-text-size, 1)), calc(${cap}px * var(--arrange-text-size, 1)))`);
+  }
+  // The default rung keeps today's 15 / 14 px floors (no change for a player on TEXT SIZE default).
+  const tokens = read("css/tokens.css");
+  assert.match(tokens, /--fs-micro: 14px;/); assert.match(tokens, /--fs-2: 15px;/);
+});
+
+test("#5215: on a short landscape window a lone foot button takes the head's row and the body gets the foot's row", () => {
+  const css = read("css/components.css");
+  const at = css.indexOf("@media (orientation: landscape) and (max-height: 500px) {\n  .sheet:has(> .sheet-foot > :is(button, a):only-child)");
+  assert.ok(at > 0, "the short-window block exists");
+  const block = css.slice(at, css.indexOf("/* ---------- pane: a scroll region", at));
+  assert.match(block, /grid-template-columns: minmax\(0, 1fr\) auto; grid-template-rows: auto minmax\(0, 1fr\);/);
+  assert.match(block, /> \.sheet-head \{ grid-column: 1; grid-row: 1; \}/);
+  assert.match(block, /> \.sheet-body \{ grid-column: 1 \/ -1; grid-row: 2; \}/);
+  assert.match(block, /> \.sheet-foot \{\s*grid-column: 2; grid-row: 1;/);
+  assert.match(block, /:not\(:has\(> :nth-child\(4\)\)\)/, "only a plain head / body / foot sheet");
+});
+
+test("#5215: a short editor workspace drops the auto-save note so the slider rows keep two rows", () => {
+  assert.equal(decl(cssRules(read("css/tuner.css")), '.editor-workspace[data-density="compact"] .ew-note', "display"), "none");
+});
+
+test("#5256: UI SIZE writes the number on `input` and applies the zoom on `change` (release)", () => {
+  const src = read("js/ui/scale.js");
+  const at = src.indexOf('const uiEl = $("pm-uiscale");');
+  const body = src.slice(at, src.indexOf('const hudEl = $("pm-hudscale");', at));
+  assert.match(body, /uiEl\.onchange = \(e\) => \{ store\.set\("uiScale"/);
+  assert.doesNotMatch(body.match(/uiEl\.oninput = [^\n]*/)[0], /store\.set|applyUiScale/, "input never stores or zooms");
+});
+
+test("#5256: the HUD SIZE help says the MIRROR keeps its own size (ARRANGE HUD)", () => {
+  const html = read("index.html");
+  const at = html.indexOf('id="pm-hudscale"');
+  assert.match(html.slice(at, at + 600), /MIRROR keeps its own size: set it in ARRANGE HUD\./);
+});
+
+test("#5237: a rotation resets the fit's retry budget, at the flip and after the settle window", () => {
+  const src = read("js/ui/hud.js");
+  const at = src.indexOf("const _rotMq");
+  assert.ok(at > 0);
+  const block = src.slice(at, src.indexOf("});", at) + 3).replace(/^const /, "var ").replace(", refitRot =", "; var refitRot =");
+  // Run the listener against a fake matchMedia and timer; it must zero the retry count and drop the fit key twice.
+  let fire = null; const timers = [];
+  const ctx = { window: { matchMedia: () => ({ addEventListener: (t, fn) => { if (t === "change") fire = fn; } }) },
+    setTimeout: (fn, ms) => timers.push([fn, ms]), VP_SETTLE_MS: 2000,
+    _fitRetry: 31, _fitKey: "k", _fitWait: 20, _fitPending: false, G: { paused: false, state: "race" }, fits: 0 };
+  ctx.updateHud = (force) => { assert.equal(force, true, "a forced refresh"); if (++ctx.fits >= 2) ctx._fitPending = false; };
+  vm.createContext(ctx);
+  vm.runInContext(block, ctx, { filename: absSrc("js/ui/hud.js") });
+  assert.equal(typeof fire, "function", "listens for the orientation flip");
+  fire();
+  assert.deepEqual([ctx._fitRetry, ctx._fitKey, ctx._fitWait, ctx._fitPending], [0, "", 0, true], "refits at the flip");
+  assert.equal(timers.length, 1); assert.equal(timers[0][1], 2000);
+  ctx._fitRetry = 31; ctx._fitKey = "k2"; timers[0][0]();
+  assert.deepEqual([ctx._fitRetry, ctx._fitKey], [0, ""], "and again once the viewport settles");
+  assert.equal(ctx.fits, 0, "a running race leaves the fit to its own HUD tick");
+});
+
+test("#5237: a PAUSED race fits at the rotation itself: game.js parks the loop before updateHud", () => {
+  // js/game.js's paused branch returns before its updateHud call (measured in the page: no cap for 6 s while paused).
+  const src = read("js/ui/hud.js"), at = src.indexOf("const _rotMq");
+  const block = src.slice(at, src.indexOf("});", at) + 3).replace(/^const /, "var ").replace(", refitRot =", "; var refitRot =");
+  let fire = null; const timers = [];
+  const ctx = { window: { matchMedia: () => ({ addEventListener: (t, fn) => { if (t === "change") fire = fn; } }) },
+    setTimeout: (fn, ms) => timers.push([fn, ms]), VP_SETTLE_MS: 2000, _fitRetry: 31, _fitKey: "k", _fitWait: 20,
+    _fitPending: false, G: { paused: false, state: "race" }, fits: 0 };
+  // Each forced refresh is one fit; the paint pass asks for one more pass, then settles.
+  ctx.updateHud = () => { ctx.fits++; ctx._fitPending = ctx.fits % 2 === 1; };
+  vm.createContext(ctx);
+  vm.runInContext(block, ctx, { filename: absSrc("js/ui/hud.js") });
+  fire();   // the flip lands before the rotation pause opens
+  assert.equal(ctx.fits, 0);
+  ctx.G.paused = true; timers[0][0]();   // the settle, with the pause card up
+  assert.equal(ctx.fits, 2, "the settle runs the fit until it stops asking, before RESUME");
+  assert.equal(ctx._fitPending, false);
+  ctx.updateHud = () => { ctx.fits++; ctx._fitPending = true; };   // a fit that never settles is bounded
+  ctx.fits = 0; fire(); assert.equal(ctx.fits, 4);
+  ctx.G.state = "results"; ctx.fits = 0; fire(); assert.equal(ctx.fits, 0, "only a race or countdown fits the race HUD");
+});
+
+test("#5256 (Bryce 2026-11-11, option A): in landscape touch the top band's anchor is pinned at 1.5, not BUTTON SIZE", () => {
+  const css = read("css/hud.css");
+  assert.equal(decl(cssRules(css), ":root", "--tap-root"), "var(--tap)", ":root's own 44 px rung, resolved on :root");
+  const landscape = { context: /^@media \(orientation: landscape\)$/ };
+  const rules = cssRules(css);
+  assert.deepEqual([decl(rules, "body:not(.desktop)", "--hud-btn-z", landscape), decl(rules, "body:not(.desktop)", "--tap-hud", landscape)],
+    ["1.5", "calc(var(--tap-root) * 1.5)"], "the landscape touch pin: the band is 66 px whatever BUTTON SIZE says");
+  // fitHud's side cap reserves the REAL 44 px pair there (bz 1): the pinned plate is capRow's to clear, and reserving the
+  // 1.5 footprint shrank the band to 0.81 at BUTTON 237 (hud-layout "moved sector plate", run 43004647712). Independent
+  // of BUTTON SIZE either way: measured 1.12 at 100 / 175 / 237 % on 852x393, HUD 122. In the page, ui-scale.spec.js's
+  // BUTTON SIZE row holds #hud-box-pos still (tests/data/control-registry.json, #5256 D).
+});
+
+test("#5256 (Bryce 2026-11-11, option A): in landscape touch the top band's anchor is pinned at 1.5, not BUTTON SIZE", () => {
+  const css = read("css/hud.css");
+  assert.equal(decl(cssRules(css), ":root", "--tap-root"), "var(--tap)", ":root's own 44 px rung, resolved on :root");
+  const landscape = { context: /^@media \(orientation: landscape\)$/ };
+  const rules = cssRules(css);
+  assert.deepEqual([decl(rules, "body:not(.desktop)", "--hud-btn-z", landscape), decl(rules, "body:not(.desktop)", "--tap-hud", landscape)],
+    ["1.5", "calc(var(--tap-root) * 1.5)"], "the landscape touch pin: the band is 66 px whatever BUTTON SIZE says");
+  // fitHud's side cap reserves the REAL 44 px pair there (bz 1): the pinned plate is capRow's to clear, and reserving the
+  // 1.5 footprint shrank the band to 0.81 at BUTTON 237 (hud-layout "moved sector plate", run 43004647712). Independent
+  // of BUTTON SIZE either way: measured 1.12 at 100 / 175 / 237 % on 852x393, HUD 122. In the page, ui-scale.spec.js's
+  // BUTTON SIZE row holds #hud-box-pos still (tests/data/control-registry.json, #5256 D).
+});
+
+/* ── mutation pins (read-only hunt tip 46c86e30c1): UI_PHONE_MIN via sizeRow; THUMB popups.btn ── */
+
+function loadUiScale() {
+  const sb = { window: {}, document: {} };
+  vm.runInNewContext(read("js/ui/scale.js") + "\nthis.UiScale = UiScale;", sb, { filename: absSrc("js/ui/scale.js") });
+  return sb.UiScale;
+}
+
+test("phone UI SIZE floor via sizeRow is 50 (#5452 / UI_PHONE_MIN)", () => {
+  // Observable through UiScale.sizeRow(..., phone=true), not a source-text pin.
+  // Mutating UI_PHONE_MIN 50 → 70 survived phone-touch before this assertion.
+  const { sizeRow } = loadUiScale();
+  const lim = { min: 40, max: 200, step: 0.25 };
+  const ph = sizeRow("uiScale", 40, lim, null, 0, true);
+  assert.deepEqual([ph.min, ph.value, ph.label], [50, 50, "50%"],
+    "a wish under the phone floor paints 50 %");
+  assert.equal(sizeRow("uiScale", 61, lim, null, 0, true).value, 61, "a stored 61 % is kept");
+  assert.equal(sizeRow("uiScale", 40, lim, null, 0, false).min, 40, "desktop keeps the 40 % lim");
+});
+
+function loadLayoutPresets() {
+  // Minimal owners so LayoutPresets.PRESETS / apply() resolve against the real registries.
+  const dom = makeDom();
+  const mk = (tag, id, parent) => { const e = dom.makeElement(tag, id); (parent || dom.body).appendChild(e); return e; };
+  for (const id of ["pausemenu", "datahub", "race-settings", "standings", "trackdesigner"]) mk("dialog", id).hidden = true;
+  for (const id of ["select", "career", "carsetup", "overlay"]) mk("div", id).hidden = true;
+  const settings = mk("dialog", "pmsettings");
+  const panel = mk("section", "pm-panel-appearance", settings);
+  mk("p", "pm-appearance-help", panel).className = "adv-help";
+  mk("div", "appearance-studio", panel);
+  const pause = mk("details", "pm-pausemenu", panel);
+  mk("summary", "pm-pausemenu-sum", pause); mk("div", "pm-pausemenu-body", pause);
+  const ts = mk("details", "pm-titlescreen", panel);
+  mk("summary", "pm-titlescreen-sum", ts);
+  const tsBody = mk("div", "pm-titlescreen-body", ts); mk("button", "pm-replay-intro", tsBody);
+  dom.body.setAttribute("data-shape", "wide");
+  const get = dom.document.getElementById;
+  dom.document.getElementById = (id) => (dom.has(id) ? get(id) : null);
+  const data = {}, subs = [];
+  const store = {
+    get: (k, d) => (k in data ? data[k] : d),
+    set: (k, v) => { if (v === null) delete data[k]; else data[k] = v; for (const fn of subs) fn({ key: k, local: true }); },
+    subscribe: (fn) => { subs.push(fn); return () => {}; },
+  };
+  const sb = {
+    document: dom.document, GameStore: { store },
+    MutationObserver: class { observe() {} },
+    Log: { info() {}, warn() {} },
+    setTimeout: () => 1, clearTimeout() {},
+    SheetShape: { reclassify() {} }, innerWidth: 844, innerHeight: 390,
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  const run = (f) => vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  for (const f of ["js/ui/setting-row.js", "js/ui/pause-opts.js", "js/ui/title-layout.js", "js/ui/screen-looks.js", "js/ui/layout-presets.js"]) run(f);
+  return {
+    M: vm.runInContext("LayoutPresets", ctx),
+    S: vm.runInContext("ScreenLooks", ctx),
+  };
+}
+
+test("THUMB layout preset pins popups button scale at 150", () => {
+  // layout-presets.test asserts select.btn and popups.vpos for THUMB, but not
+  // popups.btn — and popups.btn=80 is also a VISIBLE value, so 150 → 80 survived.
+  const { M, S } = loadLayoutPresets();
+  const thumb = M.PRESETS.find((p) => p.id === "thumb");
+  assert.ok(thumb, "THUMB is a named preset");
+  assert.ok(thumb.set.some(([screen, k, v]) => screen === "popups" && k === "btn" && v === 150),
+    "THUMB's table sets popups.btn = 150");
+  M.apply("thumb");
+  assert.equal(S.read("popups").btn, 150, "apply() writes the taller popup buttons");
 });

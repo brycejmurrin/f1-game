@@ -1,5 +1,7 @@
 # Hunt 4 lane B-VERIFY — B-F1 and B-F5 measured in Chrome (2026-10-14)
 
+Summary: Hunt 4 §B checked in Chrome 141 (Maglev): car-field warmShape cuts race "wrong map" deopts 397 → 29 and dependent-code invalidations 1,012 → 102, with no burst at the first lap line or pit window; five constness changes remain (`_recross`, `fuelLap`, `incidentInvalidLap`, `pitState`, `pitStops`); F5 heap growth is tier-up code plus capped perf-timeline buffers, not a leak.
+
 Read-only follow-up to `docs/notes/PERF-HUNT-4-2026-10-14.md` §B. Hunter B measured F1 (car-field representation
 deopt storms) in Node 22 with TurboFan only, and left F5 (heap growth over a race) unattributed. This note repeats
 both in Chromium, which tiers through Maglev. The tree under test is PR #1505's head `f8f510fb3`

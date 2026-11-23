@@ -14,7 +14,7 @@ Bleached. Earth is pale ochre, vegetation olive-grey, and the light is hard and 
 
 ## 3. Elevation
 
-Gentle, with a noticeable climb to the Dry Sack hairpin (Curva Dani Pedrosa since 2019) and a fall through the final sector.
+The Spanish national mapping agency’s 5 m terrain grid places Michelin (Turn 2) about 7 m above Turn 4. The road rises again to Sito Pons (Turn 5) before descending toward Dani Pedrosa (Turn 6). The built lap spans about 19 m. [IGN elevation service](https://servicios.idee.es/wcs-inspire/mdt?service=WCS&version=2.0.1&request=DescribeCoverage&coverageId=Elevacion4258_5)
 
 ## 4. Landmarks & surroundings by lap position
 
@@ -51,11 +51,19 @@ Gentle, with a noticeable climb to the Dry Sack hairpin (Curva Dani Pedrosa sinc
 - Vegetation is sparse: olive, low scrub, the occasional palm. Never a tree line.
 - Pale concrete terracing is the built landmark alongside El Ovni and the control tower.
 - Keep the outfield open and empty — the horizon should be visible almost everywhere.
-- Frame debt: `startFrac` 0.122 with `sceneryStartFrac` 0 — pit/finish props key through `sl()`; do not move frame keys. Probe before touching authored `K()` on non-sl blocks.
+- Start line (2026-11-10, #5078): `startFrac` 0.2169 with `sceneryStartFrac` 0. The line is on the real start/finish straight, the 600 m run from the final left hairpin (Curva Lorenzo) to Turn 1 (Expo '92, a right, first apex 364 m after the line); pit/finish props key through `sl()` and follow it. The §4 fracs are authored against v0, which is two corners early: the block NAMES are labels, not surveyed corners. Probe before touching authored `K()` on non-sl blocks.
 
 ## 7. UNCERTAIN (do not build as fact)
 
 - Exact Tío Pepe bottle/face art and copyrighted brand detailing.
 - Exact corner-board graphics for Pedrosa / Lorenzo markers.
 - Mayor-podium incident (1997) — history only; do not model.
-- Residual `_sceneryShift` ≈ 0.87 — frame debt; leave `startFrac` / `sceneryStartFrac` alone.
+- Residual `_sceneryShift` ≈ 0.78: the non-sl blocks still carry v0-era corner names (see §6). Re-naming them against the OSM corner order is open work.
+
+## Turn numbers and kits (2026-11-11, #5316 leftovers)
+
+13 turns, 8 right / 5 left ([Wikipedia "Circuito de Jerez"](https://en.wikipedia.org/wiki/Circuito_de_Jerez), racingcircuits.info). Names: T1 Expo '92 and T2 Michelin straight after the main straight (Visordown, quoting Dani Pedrosa), T5 Sito Pons, T6 Pedrosa (ex-Dry Sack, renamed 2019), T7 Ezpeleta (GPone, 2024-04-11), T8 Aspar (2019), T9 Ángel Nieto, T10 Peluqui, T13 Lorenzo (final corner, 2013). The built centreline has exactly 13 corner segments, signs R R L L R R L L R R R R L. The old `turns` took the 13 strongest peaks, which doubled Sito Pons, the T8 left and Lorenzo and missed T4, T7 and T11; now one apex per corner (0-4 m from its peak).
+
+"T1 and T2 read as lefts" was a measuring artefact: the built lap sums to -2π (net clockwise with +k = left) and T1/T2 have k < 0, rights. The raw projected trace winds CCW because the projection negates x.
+
+The scenery's block names ran one to three corners off; each block was relabelled to the corner it actually dresses, and block 5's tyre wall moved to the outside of T12. Open: tyre walls still on an inside (now labelled so) at T2, T3, the T7-T8 bowl and the Lorenzo hairpin; moving them means relaying stands.

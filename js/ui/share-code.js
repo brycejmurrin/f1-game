@@ -1,16 +1,15 @@
-/* ShareCode: pasteable APX envelopes for setup / livery / daily (+ #share=).
+/* ShareCode: pasteable APX envelopes for setup / livery / daily / card lap (+ #share=).
    Ghosts stay on GhostShare (APXG1 / #ghost=). Deep links stage sheets only —
    never startRace / gridUp. A setup/livery code DOES write the team's stored
    sheet / livery pick, so apply() first saves what it replaces (UNDO_KEY) and
    the toast names the door back: paste UNDO in SETTINGS › FILES (6-F2).
-   Plan slice 4: docs/plans/2026-09-30-player-a11y.md. */
+   Plan slice 4: docs/archive/plans/2026-09-30-player-a11y.md. */
 "use strict";
 
 const ShareCode = (function () {
   const LAST_KEY = "lastSession";
   const UNDO_KEY = "shareUndo";
-  // The settings GARAGE FILE door's per-team cap (settings-export.js GARAGE_LIVERIES_MAX).
-  // A link never trims the player's own list to fit it: at the cap it refuses (6-F1).
+  // Per-team cap (settings-export.js GARAGE_LIVERIES_MAX); at the cap a link refuses (6-F1).
   const LIVERY_CAP = 32;
   const MAX_CODE_CHARS = 32 * 1024;
   const MAX_DECODED_BYTES = 64 * 1024;
@@ -19,6 +18,8 @@ const ShareCode = (function () {
     setup: { magic: "APXS1", kind: "setup" },
     livery: { magic: "APXL1", kind: "livery" },
     daily: { magic: "APXD1", kind: "daily" },
+    // Share-card QR `APXC1.l.<track>~<yyyymmdd|->~<ms|->`: links stay under 120 chars.
+    lap: { magic: "APXC1", kind: "lap" },
   });
   const MAGIC_OF = Object.freeze(Object.fromEntries(
     Object.values(KINDS).map((k) => [k.magic, k.kind]),
@@ -56,6 +57,14 @@ const ShareCode = (function () {
       Tracks.LIST.some((t) => t && t.id === id);
   }
 
+  function trackLabel(id) {
+    const t = typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST) ? Tracks.LIST.find((x) => x && x.id === id) : null;
+    return String((t && t.name) || id).toUpperCase();
+  }
+  function clock(sec) {
+    const ms = Math.round(sec * 1000), m = Math.floor(ms / 60000);
+    return m + ":" + ((ms % 60000) / 1000).toFixed(3).padStart(6, "0");
+  }
   function rgb3(a) {
     return Array.isArray(a) && a.length >= 3 &&
       a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
@@ -121,7 +130,25 @@ const ShareCode = (function () {
       if (typeof payload.class === "string") body.class = payload.class.slice(0, 32);
       return body;
     }
+    if (kind === "lap") {
+      if (!payload || !knownTrack(payload.track)) return null;
+      const body = { v: 1, kind: "lap", track: payload.track };
+      if (typeof payload.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.day)) body.day = payload.day;
+      if (typeof payload.time === "number" && isFinite(payload.time) && payload.time > 0 && payload.time < 3600) body.time = Math.round(payload.time * 1000) / 1000;
+      return body;
+    }
     return null;
+  }
+  function lapCode(body) {
+    return [body.track, body.day ? body.day.replace(/-/g, "") : "-", body.time ? Math.round(body.time * 1000) : "-"].join("~");
+  }
+  function lapBody(text) {
+    const m = /^([a-z0-9_-]{1,40})~(\d{8}|-)~(\d{1,7}|-)$/.exec(text);
+    if (!m) return null;
+    const body = { v: 1, kind: "lap", track: m[1] };
+    if (m[2] !== "-") body.day = m[2].slice(0, 4) + "-" + m[2].slice(4, 6) + "-" + m[2].slice(6);
+    if (m[3] !== "-") body.time = Number(m[3]) / 1000;
+    return body;
   }
 
   function shareUrl(code) {
@@ -137,17 +164,19 @@ const ShareCode = (function () {
     const text = JSON.stringify(body);
     const plain = enc().encode(text);
     if (plain.byteLength > MAX_DECODED_BYTES) return { ok: false, reason: "too-large" };
-    const code = meta.magic + ".p." + bytesToB64url(plain);
+    const code = kind === "lap" ? meta.magic + ".l." + lapCode(body) : meta.magic + ".p." + bytesToB64url(plain);
     if (code.length > MAX_CODE_CHARS) return { ok: false, reason: "too-large" };
     return { ok: true, code, url: shareUrl(code), kind, envelope: body };
   }
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLD]1\./.test(input)) return input.replace(/\s+/g, "");
-    const match = input.match(/(?:^|[#&])share=([^&]+)/);
-    if (!match) return null;
-    try { input = decodeURIComponent(match[1]); }
+    if (!/^APX[SLDC]1\./.test(input)) {
+      const match = input.match(/(?:^|[#&])share=([^&]+)/);
+      if (!match) return null;
+      input = match[1];
+    }
+    try { input = decodeURIComponent(input); }
     catch (_) { return null; }
     return input.replace(/\s+/g, "");
   }
@@ -165,9 +194,9 @@ const ShareCode = (function () {
       if (!env) return CORRUPT;
       return { ok: true, kind: "livery", team: env.team, id: env.id, livery: env.livery || null };
     }
-    if (body.kind === "daily") {
+    if (body.kind === "daily" || body.kind === "lap") {
       if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
-      const env = envelope("daily", body);
+      const env = envelope(body.kind, body);
       if (!env) return CORRUPT;
       return Object.assign({ ok: true }, env);
     }
@@ -184,7 +213,9 @@ const ShareCode = (function () {
     const code = codeFrom(value);
     if (!code || code.length > MAX_CODE_CHARS) return CORRUPT;
     const parts = code.split(".");
-    if (parts.length !== 3 || !MAGIC_OF[parts[0]] || parts[1] !== "p") return CORRUPT;
+    if (parts.length !== 3 || !MAGIC_OF[parts[0]]) return CORRUPT;
+    if (parts[1] === "l") return MAGIC_OF[parts[0]] === "lap" ? fromBody(lapBody(parts[2])) : CORRUPT;
+    if (parts[1] !== "p") return CORRUPT;
     try {
       const packed = b64urlToBytes(parts[2]);
       if (packed.byteLength > MAX_DECODED_BYTES) return CORRUPT;
@@ -200,7 +231,9 @@ const ShareCode = (function () {
       if (result.kind === "setup") return "Setup loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
+      if (result.kind === "daily" && result.expired) return "That daily challenge has ended — here is today's.";
       if (result.kind === "daily") return "Daily challenge — " + (result.trackName || result.track).toUpperCase() + ".";
+      if (result.kind === "lap") return "Lap challenge — " + trackLabel(result.track) + (result.time ? " · BEAT " + clock(result.time) : "") + ".";
     }
     if (result && result.reason === "unknown-team") return "That share code names a team this version does not know.";
     if (result && result.reason === "unknown-track") return "That share code names a circuit this version does not know.";
@@ -223,7 +256,9 @@ const ShareCode = (function () {
     if (typeof h.startRace === "function") { /* intentionally unused */ }
     if (decoded.kind === "undo") return undo(store);
     if (decoded.kind === "setup") {
-      const failed = importValues(store, decoded, { ["setup." + decoded.team]: decoded.tune });
+      const failed = importValues(store, decoded, typeof SetupTune !== "undefined"
+        ? { [SetupTune.keyFor(decoded.team)]: SetupTune.stamp(decoded.team, decoded.tune) }
+        : { ["setup." + decoded.team]: decoded.tune });
       if (failed) return failed;
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");
@@ -236,10 +271,7 @@ const ShareCode = (function () {
       if (decoded.livery) {
         const stored = store.get(customKey, []);
         const arr = Array.isArray(stored) ? stored : [];
-        // A generated suffix is not provenance: another player may already own
-        // `default_imported`. A catalog collision replaces an earlier import
-        // only when the paint itself is identical; otherwise it receives the
-        // next free id and every unrelated row survives.
+        // A catalog id collision replaces an earlier import only for identical paint; else a fresh id.
         const incoming = CustomLiveries.normalizeImported(decoded.team, [decoded.livery], decoded.livery.id);
         const catalogCollision = incoming.repaired > 0;
         let replaceId = catalogCollision ? null : decoded.livery.id;
@@ -250,8 +282,7 @@ const ShareCode = (function () {
           if (same) { replaceId = same.id; selectedId = same.id; }
         }
         const kept = replaceId == null ? arr.slice() : arr.filter((l) => !l || l.id !== replaceId);
-        // Re-sharing a livery the player already has replaces it in place; a NEW one
-        // at the cap is refused before anything is written — never trim their list.
+        // A re-share replaces in place; a NEW livery at the cap is refused, never trimming the list.
         if (kept.length === arr.length && arr.length >= LIVERY_CAP) {
           return { ok: false, kind: "livery", reason: "livery-full", team: decoded.team };
         }
@@ -267,7 +298,7 @@ const ShareCode = (function () {
       }
       selectedId = CustomLiveries.coherentImportedSelection(
         decoded.team, next || store.get(customKey, []), selectedId);
-      // Select the livery that was actually stored (a crafted code could name another id).
+      // Select the stored livery (a crafted code could name another id).
       values["livery." + decoded.team] = selectedId;
       const failed = importValues(store, decoded, values);
       if (failed) return failed;
@@ -275,15 +306,22 @@ const ShareCode = (function () {
       if (typeof h.openGarage === "function") h.openGarage("share");
       return { ok: true, kind: "livery", team: decoded.team };
     }
+    if (decoded.kind === "lap") {
+      // Stage only: today's Daily, else free play; never a past day (record() resets the streak).
+      if (decoded.day && decoded.day === h.today) { if (typeof h.openDaily === "function") h.openDaily(decoded, { kind: "daily", day: h.today, mode: "standard" }); }
+      else if (typeof h.openTrack === "function") h.openTrack(decoded);
+      return { ok: true, kind: "lap", track: decoded.track, day: decoded.day || null, time: decoded.time || null };
+    }
     if (decoded.kind === "daily") {
-      if (typeof h.openDaily === "function") h.openDaily(decoded);
-      return { ok: true, kind: "daily", day: decoded.day, track: decoded.track };
+      const expired = !!(h.today && decoded.day !== h.today);
+      const mode = !expired && decoded.class === "open" ? "open" : "standard";
+      if (typeof h.openDaily === "function") h.openDaily(decoded, { kind: "daily", day: h.today || decoded.day, mode });
+      return { ...decoded, expired };
     }
     return CORRUPT;
   }
 
-  // One-deep undo for the last setup/livery code: the keys it is about to overwrite,
-  // with their previous values (null = absent: undo removes it via store.set(k, undefined)).
+  // Undo of setup/livery codes: keys, the values before the first link (null = absent), next = what links wrote (#5896).
   function durableSet(store, key, value) {
     try { return store.set(key, value) === true; }
     catch (_) { return false; }
@@ -291,45 +329,59 @@ const ShareCode = (function () {
   function restoreValues(store, rec) {
     let complete = true;
     for (const k of rec.keys) {
-      if (!/^(setup|livery|livery\.custom)\.[a-z0-9_-]+$/.test(String(k))) continue;
+      if (!/^(?:(?:setup|livery(?:\.custom)?)\.|careerSetup\.[a-z0-9_-]+\.\d+\.)[a-z0-9_-]+$/.test(String(k))) continue;
       const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
-      // Try every key even after a failure; the recovery record stays for a retry.
+      // Try every key; on a failure the record stays for a retry.
       if (!durableSet(store, k, v == null ? undefined : v)) complete = false;
     }
     return complete;
   }
+  // What the player STORED, not get()'s default fallback: undo must not pin a default (#2191).
+  function storedOf(store, k) {
+    const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
+    return v === undefined ? null : v;
+  }
+  const same = (a, b) => JSON.stringify(a == null ? null : a) === JSON.stringify(b == null ? null : b);
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   function importValues(store, decoded, values) {
     const keys = Object.keys(values);
-    const prev = {};
-    // What the player STORED, not get()'s shipped GarageDefaults fallback: undoing
-    // over a default must leave the key absent, not pin the default (#2191).
-    for (const k of keys) {
-      const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
-      prev[k] = v === undefined ? null : v;
-    }
+    const current = {};
+    for (const k of keys) current[k] = storedOf(store, k);
+    // #5896: a no-op link keeps the undo record; a key still at the last link's value keeps its original.
+    if (keys.every((k) => same(current[k], values[k]))) return null;
     const oldUndo = store.get(UNDO_KEY, undefined);
-    const rec = { keys, prev, at: Date.now(), pending: true };
     const failed = (reason) => ({ ok: false, kind: decoded.kind, team: decoded.team, reason });
     if (oldUndo && oldUndo.pending === true) return failed("recovery-pending");
+    const prev = {}, next = {}, recKeys = [];
+    const old = oldUndo && Array.isArray(oldUndo.keys) && oldUndo.prev && oldUndo.next
+      && typeof oldUndo.prev === "object" && typeof oldUndo.next === "object" ? oldUndo : null;
+    for (const k of old ? old.keys : []) {
+      if (!own(old.prev, k) || !own(old.next, k) || recKeys.includes(k)) continue;
+      if (!same(own(current, k) ? current[k] : storedOf(store, k), old.next[k])) continue;
+      prev[k] = old.prev[k]; next[k] = old.next[k]; recKeys.push(k);
+    }
+    for (const k of keys) {
+      if (!own(prev, k)) { prev[k] = current[k]; recKeys.push(k); }
+      next[k] = values[k];
+    }
+    const rec = { keys: recKeys, prev, next, at: Date.now(), pending: true };
+    const rollback = { keys, prev: current };
     if (!durableSet(store, UNDO_KEY, rec)) {
-      // GameStore caches refused writes (and SAVE RETRY can replay them). Put
-      // the existing recovery record back before returning without an import.
+      // GameStore caches refused writes (SAVE RETRY replays them): put the old record back.
       durableSet(store, UNDO_KEY, oldUndo);
       return failed("undo-save-failed");
     }
     for (const k of keys) {
       if (!durableSet(store, k, values[k])) {
-        // Restore session values too: a quota failure must not look loaded.
-        // If rollback is also refused, the durable backup survives reload.
-        restoreValues(store, rec);
+        // A quota failure must not look loaded; a refused rollback keeps the durable backup.
+        restoreValues(store, rollback);
         return failed("import-save-failed");
       }
     }
     if (!durableSet(store, UNDO_KEY, Object.assign({}, rec, { pending: false }))) {
-      // The durable record is still pending. Restore its cached value as well,
-      // so a new import cannot replace the only copy of the original values.
+      // Still pending: restore the cached record so no import replaces the only originals.
       durableSet(store, UNDO_KEY, rec);
-      restoreValues(store, rec);
+      restoreValues(store, rollback);
       return failed("import-save-failed");
     }
     return null;
@@ -346,8 +398,7 @@ const ShareCode = (function () {
     }
     if (!restoreValues(store, pending)) return { ok: false, kind: "undo", reason: "undo-restore-failed" };
     if (!durableSet(store, UNDO_KEY, undefined)) {
-      // Failed removal also evicts GameStore's cached record: reinstate it so
-      // UNDO can retry in this session as well as after a reload.
+      // A failed removal evicts the cached record: reinstate it so UNDO can retry.
       durableSet(store, UNDO_KEY, pending);
       return { ok: false, kind: "undo", reason: "undo-cleanup-failed" };
     }
@@ -386,14 +437,13 @@ const ShareCode = (function () {
       }
     } catch (_) { /* guest apply still works */ }
     const notify = opts && opts.notify;
-    // A refused apply (livery cap) reports the refusal, not "loaded".
-    const shown = applied && applied.ok === false && applied.reason ? applied : result;
+    // Applying adds outcomes such as expiry or a refused write to the decoded payload.
+    const shown = applied || result;
     if (typeof notify === "function") notify(messageFor(shown), shown, applied);
     return result;
   }
 
-  // CONTINUE re-opens the FREE circuit picker, so only free play's flow is kept or
-  // restored: a season round has SEASON's door and a career round CAREER's (6-F3).
+  // CONTINUE re-opens the FREE picker: only free play's flow is kept (season/career have own doors, 6-F3).
   const FREE_FLOW = "gp";
   function recordSession(store, snap) {
     if (!store || !snap || typeof snap.trackId !== "string" || !snap.trackId) return false;
@@ -460,9 +510,10 @@ const ShareCode = (function () {
     return null;
   }
 
+  // KINDS / LAST_KEY / UNDO_KEY stay module-local (codec + undo bag).
   return {
-    KINDS, encode, decode, apply, undo, consumeHash, withoutShare, messageFor,
-    recordSession, lastSession, continueHint, LAST_KEY, UNDO_KEY,
+    encode, decode, apply, undo, consumeHash, withoutShare, messageFor,
+    recordSession, lastSession, continueHint,
   };
 })();
 Object.freeze(ShareCode);

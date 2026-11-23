@@ -416,10 +416,12 @@ function makeGpuHarness(opts = {}) {
                 Object.defineProperty(o, "device", { value: "", enumerable: false });
                 return o;
               })()
+            // Chrome 140+: the fallback flag lives on GPUAdapterInfo only (GPUAdapter.isFallbackAdapter removed).
             : (opts.softAdapter
-              ? {}
+              ? { isFallbackAdapter: true }
               : { vendor: "test", architecture: "test", device: "mock-gpu" }),
-          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
+          // Pre-140 Chrome kept it on the adapter; opts.legacyFallback keeps that shape covered.
+          ...(opts.legacyFallback ? { isFallbackAdapter: true } : {}),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -536,6 +538,27 @@ test("WGX builds SSR only on the full tier and keeps the phone post chain", asyn
     assert.equal(h.writes.slice(start).some((w) => w.values.length === post.SSR_UNIFORM_BYTES / 4), c.ssr,
       c.name + " must only upload SSR uniforms when the pass is available");
   }
+});
+
+test("WGX phone uploads the raster and inverse depth transforms to the lit, SSAO and godray passes", async () => {
+  const h = makeGpuHarness({ ua: "iPhone AppleWebKit/605.1.15 Version/26.0 Safari/604.1" });
+  const gfx = await h.create();
+  const post = h.vm.window.WGSLPost;
+  gfx.resize();
+  const viewProj = Float32Array.from({ length: 16 }, (_, i) => i - 7.5);
+  const invProj = Float32Array.from({ length: 16 }, (_, i) => i * 0.25 + 1);
+  const invViewProj = Float32Array.from({ length: 16 }, (_, i) => 4 - i * 0.125);
+  const start = h.writes.length;
+  assert.equal(gfx.begin({ viewProj, invProj, invViewProj }), true);
+  gfx.present({ ssao: 1, lampVol: 1, mist: 1 });
+  const writes = h.writes.slice(start);
+  const raster = Array.from(viewProj, (v, i) => i % 4 === 2 ? (v + viewProj[i + 1]) / 2 : v);
+  const inverse = (m) => [...m.slice(0, 8), ...m.slice(8, 12).map(v => 2 * v),
+    ...m.slice(12).map((v, i) => v - m[i + 8])];
+  const matrixUploaded = (length) => writes.find(w => w.values.length === length)?.values.slice(0, 16);
+  assert.deepEqual(matrixUploaded(168), raster);
+  assert.deepEqual(matrixUploaded(post.SSAO_UNIFORM_BYTES / 4), inverse(invProj));
+  assert.deepEqual(matrixUploaded(post.GODRAY_UNIFORM_BYTES / 4), inverse(invViewProj));
 });
 
 test("WGX post construction omits the unused lite SSR uniform buffer", () => {
@@ -870,6 +893,34 @@ test("flicker re-uploads the baked track set at most 30 times a second; a new se
   assert.equal(uploads(), held + 10, "a frozen clock (renderClock hold) is never paced — a slider move must land");
 });
 
+test("a static refill of the shared track light buffer immediately updates the WebGPU records", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const sbo = h.buffers.find((buffer) => buffer.desc.size === 1024 * 64);
+  const lights = new Array(15).fill(0);
+  let gen = 0;
+  function submit(staticGen, time, perChunkLights = 1) {
+    gfx.begin({ perChunkLights, allLights: lights, allLightsGen: ++gen, allLightsStaticGen: staticGen, time });
+    return h.writes.filter((write) => write.buffer === sbo);
+  }
+  lights[0] = 15;
+  assert.equal(submit(1, 1).at(-1).values[0], 15);
+  lights[0] = 42;
+  lights[6] = 88;
+  const replaced = submit(2, 1.001);
+  assert.equal(replaced.length, 2, "static changes bypass flicker pacing");
+  assert.deepEqual(replaced.at(-1).values.slice(0, 4), [42, 0, 0, 88]);
+  lights.length = 0;
+  assert.equal(submit(3, 1.002).length, 2);
+  lights.push(...new Array(30).fill(0));
+  lights[15] = 123;
+  assert.equal(submit(4, 1.003, 0).length, 2);
+  const grown = submit(4, 1.004);
+  assert.equal(grown.at(-1).values.length, 32);
+  assert.equal(grown.at(-1).values[16], 123, "the added lamp is packed when per-chunk lights resume");
+});
+
 test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads", async () => {
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*wetDark/);
   assert.match(CHUNKS_SOURCE, /shadowCtr\s*:\s*vec4<f32>.*off 352/);
@@ -1149,6 +1200,31 @@ test("WGX timer ignores late readbacks and waits for a timed pass after enabling
   assert.equal(buffer.mapState, "unmapped");
 });
 
+test("frame UBO PCF texel (float 74) is 1 / the size of the depth map the sun pass rasterised", async () => {
+  // Behaviour, not a source line: wgx-shadow-size-source used to includes() the
+  // `d[74] = 1 / SHD.SHADOW_SIZE` statement, which stays true when a later
+  // assignment overrides it. Read the shadow pass's own attachment instead.
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const id = new Float32Array(16); id[0] = id[5] = id[10] = id[15] = 1;
+  const mark = h.passCalls.length;
+  gfx.shadowBegin(id);
+  const open = h.passCalls.slice(mark).find(([n]) => n === "beginRenderPass");
+  assert.ok(open, "shadowBegin opens a render pass");
+  const tex = open[1][0].depthStencilAttachment.view.texture;
+  const [w, hgt] = tex.desc.size;
+  assert.equal(w, hgt, "the sun depth map is square");
+  assert.ok(w >= 1024, `sun depth map is a real map, not a 1x1 stand-in (${w})`);
+  gfx.shadowEnd();
+  assert.equal(gfx.begin({}), true);
+  const frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
+  assert.equal(frame[72], 1, "shadows armed after a rendered sun map (params2.x)");
+  assert.equal(frame[74], Math.fround(1 / w), `params2.z must be the texel of the ${w}px map that was rendered`);
+  gfx.present({});
+});
+
 test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
@@ -1196,6 +1272,41 @@ test("the WGX mirror pass runs with the lamp shadow off; the main pass after it 
   assert.equal(d[134], 2);
   assert.equal(d[140], 2, "the caster's absolute index in the baked set (x 20)");
   gfx.present({});
+});
+
+// #4219 (perf hunt 7): quit-to-menu frees the mirror's colour + depth textures, and no bind group the next
+// frame builds may name them (WebKit holds a destroyed texture while one does). mirrorBegin re-allocates.
+test("WGX releaseMirror destroys the mirror textures, drops their bind groups, is idempotent, and re-allocates lazily", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const groups = [], createBindGroup = h.device.createBindGroup;
+  h.device.createBindGroup = (desc) => { groups.push(desc); return createBindGroup(desc); };
+  const t0 = h.textures.length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true);
+  const mir = h.textures.slice(t0);
+  assert.equal(mir.length, 2, "colour + depth");
+  assert.equal(gfx.releaseMirror(), false, "never while the mirror pass records");
+  gfx.mirrorEnd();
+  gfx.mirrorRect([0.1, 0.1, 0.3, 0.1]);
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  const names = (g) => g.entries.some((e) => e.resource && mir.includes(e.resource.texture));
+  assert.ok(groups.some(names), "the composite's group names the mirror view");
+  assert.equal(gfx.releaseMirror(), true);
+  assert.ok(mir.every((t) => t.destroyed), "both textures destroyed");
+  const st = gfx.mirrorState();
+  assert.deepEqual([st.ready, st.w, st.h, st.dead], [false, 0, 0, false]);
+  assert.equal(gfx.releaseMirror(), true, "a second release is safe");
+  groups.length = 0;
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  assert.ok(!groups.some(names), "no bind group built after the release names a freed texture");
+  const t1 = h.textures.length;
+  assert.equal(gfx.mirrorBegin({}, 64, 16), true, "the next mirror pass re-allocates");
+  gfx.mirrorEnd();
+  assert.equal(h.textures.length - t1, 2);
+  assert.equal(gfx.mirrorState().w, 64);
+  gfx.begin({}); gfx.present({});
+  assert.ok(groups.some((g) => g.entries.some((e) => e.resource && e.resource.texture === h.textures[t1])), "a fresh composite group on the new view");
 });
 
 // 1b-F4 (hunt 3): frame.allLights is ONE buffer refilled in place (frame-lights.js), so a rebuild:true
@@ -1268,6 +1379,36 @@ test("the WGX shadow-lamp absolute index follows an in-place refill of the baked
   allLights.push(...lampRecs([0, 5, 0], [20, 5, 0]));
   frame.allLightsGen = 4;
   assert.equal(frameOn()[140], 1, "the refill that brings it in is seen");
+});
+
+test("a shadow caster missing from the track set stays cached across RGB updates and mirror passes", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  gfx.resize();
+  const fb = h.buffers.find((buffer) => buffer.desc.size === 672);
+  const records = lampRecs(...Array.from({ length: 64 }, (_, i) => [i, 5, 0]));
+  let reads = 0;
+  const allLights = new Proxy(records, { get(target, key) {
+    if (typeof key === "string" && /^\d+$/.test(key)) reads++;
+    return target[key];
+  } });
+  const frame = { lights: lampRecs([100, 5, 0]), allLights, allLightsGen: 1, allLightsStaticGen: 1 };
+  const render = () => {
+    gfx.lampShadowBegin(IDENT16, 0); gfx.lampShadowEnd();
+    assert.equal(gfx.mirrorBegin(frame, 64, 16), true); gfx.mirrorEnd();
+    assert.equal(gfx.begin(frame), true);
+    const index = h.writes.filter((w) => w.buffer === fb).at(-1).values[140];
+    gfx.present({});
+    return index;
+  };
+  assert.equal(render(), -1);
+  assert.ok(reads >= 64);
+  reads = 0;
+  for (let i = 0; i < 8; i++) { frame.allLightsGen++; assert.equal(render(), -1); }
+  assert.equal(reads, 0, "unchanged lamp positions never rescan the track");
+  records[15] = 100;
+  frame.allLightsStaticGen++; frame.allLightsGen++;
+  assert.equal(render(), 1, "a static refill retries the missing caster");
 });
 
 test("god-ray uploads nearest lamps and remaps the shadowed index", async () => {
@@ -1694,8 +1835,8 @@ test("WGSL closes the documented GLX look gaps", () => {
     "the non-indexed merge is gated on vertex_index being provably dead");
   assert.match(WGX_SOURCE, /&& contig && vidDead && nightOK\) \{/,
     "and on contiguity, and on the night stand-down");
-  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL;/,
-    "the night stand-down is ROAD-only — indexed meshes keep merging as today");
+  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL \|\| \(run\.m0 === _lm0 && run\.m1 === _lm1\);/,
+    "an equal night mask still merges; a wider road mask does not; indexed meshes keep merging");
   assert.match(WGX_SOURCE, /hasTrk roads are (?:core\.)?createMesh pieces/,
     "hasTrk roads stay on createMesh pieces (chunks=null)");
   assert.match(WGX_SOURCE, /g2Layout/);
@@ -1866,7 +2007,13 @@ test("software / empty-info adapter boots WGX (soft-present, MSAA 1)", async () 
   const gfx = await h.create();
   assert.ok(gfx, "SETTINGS ▸ WEBGPU must stay on WGX on software adapters");
   assert.equal(gfx.msaa(), 1, "software path forces MSAA 1");
+  assert.equal(gfx.softPresent(), true, "adapter.info.isFallbackAdapter (Chrome 140 shape) marks it software");
   assert.equal(h.WGX.lastFailure(), null);
+  const legacy = makeGpuHarness({ legacyFallback: true });
+  const g2 = await legacy.create();
+  assert.equal(g2.softPresent(), true, "the pre-140 GPUAdapter.isFallbackAdapter still counts");
+  const hw = makeGpuHarness({});
+  assert.equal((await hw.create()).softPresent(), false, "a hardware adapter is not soft");
 });
 
 test("non-enumerable GPUAdapterInfo (Lavapipe Xvfb) still counts as software", async () => {
@@ -2242,7 +2389,12 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // helpers took fwidth behind material-id branches and early returns, and a
   // callee that returns early non-uniformly poisons its CALLER too, so the fix
   // is structural: derivatives at the fs_main entry, footprint passed down.
-  const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/g;
+  // No g flag: a global regex reused with .test() keeps lastIndex, so the body
+  // after a matching one was searched from that offset (a dpdx at the top of
+  // SHADOW's vs_main, right after LIT's long fs_main, slipped through).
+  // matchAll below takes a fresh global copy.
+  const DERIV = /\b(dpdx|dpdy|fwidth)\s*\(/;
+  const DERIV_ALL = new RegExp(DERIV.source, "g");
   // Structural, not an allow-list of spellings: two sessions fixed this in
   // parallel and picked different names, and a list of exact lines would have
   // called the other one's correct code a regression. The invariant is about
@@ -2268,7 +2420,6 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   const offenders = fns
     .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
     .map((f) => f.name);
-  DERIV.lastIndex = 0;
   assert.deepEqual(offenders, [],
     "a derivative (or a wrapper around one) lives outside a fragment entry point");
 
@@ -2287,7 +2438,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
     postFns.push({ name: m[1], body: postStripped.slice(i, end + 1) });
   }
   const postOff = postFns
-    .filter((f) => { DERIV.lastIndex = 0; return DERIV.test(f.body) && !/^fs_main/.test(f.name); })
+    .filter((f) => DERIV.test(f.body) && !/^fs_main/.test(f.name))
     .map((f) => f.name);
   assert.deepEqual(postOff, [],
     "wgsl-post.js: a derivative lives outside a fragment entry point: " + postOff.join(","));
@@ -2295,14 +2446,12 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   // Uniform means before the FIRST branch, not merely inside fs_main: an early
   // `return` or an `if` above the derivative poisons everything after it.
   for (const f of fns.filter((f) => /^fs_main/.test(f.name) && DERIV.test(f.body))) {
-    DERIV.lastIndex = 0;
     const firstBranch = f.body.search(/\b(if|for|while|loop|switch|return|discard)\b/);
-    for (const d of f.body.matchAll(DERIV)) {
+    for (const d of f.body.matchAll(DERIV_ALL)) {
       assert.ok(firstBranch === -1 || d.index < firstBranch,
         `${f.name}: ${d[1]} at ${d.index} sits after the first branch at ${firstBranch}`);
     }
   }
-  DERIV.lastIndex = 0;
 
   // …and the footprint must reach every consumer as a parameter.
   // World-position derivatives also drive the hammered cotangent frame.
@@ -2486,6 +2635,21 @@ test("WGX.gpuErrors and WGX.isSupported report clean error diagnostics", async (
   assert.equal(h.WGX.gpuErrors(), initialErrors + 1, "WGX.gpuErrors() must increment on uncaptured error");
 });
 
+// #5699 row 23: _gpuErrors/_gpuFirstMsg are module-scope (a failed create's post-mortem), and a second create kept the
+// first device's count: past GPU_ERR_LOG_CAP its errors never logged, and gpuFirstError named the old device's.
+test("a second WGX.create starts its GPU-error account clean (#5699 row 23)", async () => {
+  const h = makeGpuHarness();
+  const g1 = await h.create();
+  for (let i = 0; i < 9; i++) h.device.onuncapturederror({ error: { message: "first device " + i } });
+  assert.equal(h.WGX.gpuErrors(), 9);
+  try { g1.destroy && g1.destroy(); } catch (_) { /* harness */ }
+  const g2 = await h.create();
+  assert.equal(h.WGX.gpuErrors(), 0, "the new device starts at 0");
+  h.device.onuncapturederror({ error: { message: "second device" } });
+  assert.equal(h.WGX.gpuErrors(), 1);
+  assert.equal(g2.gpuFirstError(), "second device", "the first error named is the new device's");
+});
+
 test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () => {
   // Same ladder as device.lost: a default-rung boot climbs slim/minimal first.
   // Start on the minimal rung so the cap's destination is GLX, not a reload.
@@ -2656,6 +2820,29 @@ test("WGX post parity: SSAO normal, haze plume space, bloom order, mirror tone c
   assert.deepEqual(mir.values.slice(4, 10), [3, 0.25, 3.5, 0.75, 0.5, 1.25], "aces a..e + whitePoint from the tune");
   assert.equal(mir.values[3], 1, "the graded frame grades its mirror inset too");
   assert.ok(mir.values[12] > 0 && mir.values[14] > 0, "contrast / saturation knobs reach the inset (TUNE_DEFS defaults)");
+});
+
+test("WGX resolves MSAA depth for the flare only when the composite samples it", async () => {
+  const h = makeGpuHarness({ recordPass: true });
+  const gfx = await h.create();
+  gfx.resize();
+  assert.equal(gfx.msaa(), 4);
+  const identity = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const vp = identity.slice();
+  vp[11] = 1; // Sun direction's clip w equals its z.
+  function depthPasses(sunDir, opts) {
+    assert.equal(gfx.begin({ viewProj: vp, invProj: identity, sunDir }), true);
+    const start = h.passCalls.length;
+    gfx.present({ reflect: 0, carReflect: 0, ...opts });
+    return h.passCalls.slice(start).filter(([name, [desc]]) =>
+      name === "beginRenderPass" && !desc.colorAttachments.length && desc.depthStencilAttachment).length;
+  }
+  assert.equal(depthPasses([0, 0.5, 1]), 1, "bright on-screen sun");
+  assert.equal(depthPasses([0, 0.5, -1]), 0, "behind the camera");
+  assert.equal(depthPasses([3, 0.5, 1]), 0, "off the screen");
+  assert.equal(depthPasses([0, 0.5, 1], { flareMul: 0 }), 0, "disabled flare");
+  assert.equal(depthPasses([1 + 2 ** -25, 0.5, 1]), 1, "the uploaded f32 x rounds onto the edge");
+  assert.equal(depthPasses([3, 0.5, 1], { ssao: 0.5 }), 1, "SSAO still samples depth");
 });
 
 test("shadow model UBO flushes once per pass (not per cast)", () => {
@@ -2989,7 +3176,112 @@ test("WGX mirror frame records its mip ladder into the mirror's own submit", asy
   gfx.mirrorEnd();
   const passes = h.passCalls.filter(([n]) => n === "beginRenderPass").length - passes0;
   assert.equal(h.submitCount - submits0, 1, "one submit for the mirror pass AND its mips");
-  assert.ok(passes >= 1 + 6, `the mirror pass plus the 6-level mip ladder still record (${passes} passes)`);
+  assert.equal(passes, gfx.mirrorState().mips, `the mirror pass plus its (mips - 1)-pass ladder (${passes} passes)`);
+});
+
+test("perf hunt 6: WGX sizes the mirror chain to the levels its taps read (inset lod, bounded glass, full when unbounded)", async () => {
+  // Hunt 5 F1's TLX rule on WGX: the inset's textureSampleLevel at lod reads floor(lod)..floor(lod)+1, the glass's
+  // implicit LOD (PostCommon.mipFootprintLod, session max) up to ceil(lod + 0.25) + 1; two unbounded frames in a
+  // row latch the full chain. The old code built all 9 levels of a 256x64 target (8 ladder passes) every frame.
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const opens = () => h.passCalls.filter(([n]) => n === "beginRenderPass").length;
+  const mirrorFrame = () => {
+    const p0 = opens();
+    assert.equal(gfx.mirrorBegin({}, 256, 64), true);
+    gfx.mirrorEnd();
+    return opens() - p0 - 1;   // ladder passes: all but the mirror's own
+  };
+  const mesh = gfx.createTexMesh({ pos: [-1, -1, -1, 1, -1, 1, 1, 1, 1, -1, 1, -1], nrm: Array(12).fill(0),
+    uv: [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78], idx: [0, 1, 2, 0, 2, 3] });
+  const model = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  const glassFrame = (viewProj) => {
+    assert.equal(gfx.begin({ viewProj }), true);
+    assert.equal(gfx.drawMirrorGlass(mesh, model, null), true);
+    gfx.present({});
+  };
+  gfx.mirrorRect([0.4, 0.1, 0.2, 0.06]);
+  assert.equal(gfx.mirrorState().mips || 0, 0, "nothing allocated yet");
+  const first = mirrorFrame();
+  const lod = Math.max(256 / Math.round(0.2 * 320), 64 / Math.round(0.06 * 180));
+  const inset = Math.floor(Math.log2(lod)) + 2;
+  assert.ok(inset < 9, `the bounded inset count (${inset})`);
+  assert.equal(first, inset - 1, "the ladder is the bounded count, sized from the rect on the first frame");
+  assert.equal(gfx.mirrorState().mips, inset, `inset only: levels 0..floor(lod)+1 (lod ${Math.log2(lod).toFixed(2)})`);
+  assert.equal(mirrorFrame(), inset - 1, "and stays there");
+  // A small, distant glass (x/y scaled 0.05, flat w = 1): a bounded LOD above the inset's.
+  const far = new Float32Array([0.05, 0, 0, 0, 0, 0.05, 0, 0, 0, 0, 0.1, 0, 0, 0, 0, 1]);
+  glassFrame(far);
+  const gl = gfx.mirrorState().glassLod;
+  assert.ok(Number.isFinite(gl), `a bounded glass LOD (${gl})`);
+  const glass = Math.min(9, Math.ceil(gl + 0.25) + 1);
+  assert.ok(glass > inset && glass < 9, `the glass needs more than the inset and less than the full chain (${glass})`);
+  assert.equal(mirrorFrame(), glass - 1, "grown to the glass's count on the next mirrorBegin");
+  assert.equal(gfx.mirrorState().mips, glass);
+  // A zero viewProj (no frame camera yet) is no bound: nothing changes.
+  glassFrame(new Float32Array(16));
+  assert.equal(gfx.mirrorState().glassLod, gl, "a zero viewProj is skipped");
+  // w = z: the quad straddles the eye plane, so the bound is unbounded. One frame does not latch; two in a row do.
+  const straddle = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0]);
+  glassFrame(straddle);
+  assert.equal(mirrorFrame(), glass - 1, "one unbounded frame does not latch");
+  glassFrame(far);
+  glassFrame(straddle);
+  glassFrame(straddle);
+  assert.equal(gfx.mirrorState().glassLod, Infinity, "two unbounded frames in a row latch");
+  assert.equal(mirrorFrame(), 8, "the full 9-level chain (8 ladder passes) from then on");
+});
+
+test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 36) inside the face-5 submit", async () => {
+  // Every envCube tap is textureSampleLevel(.., rough * 2.5) with rough <= 1, so level 3 is the highest a trilinear
+  // tap reads; the census's 64x64/rgba16float wide-frame rows were the 7-level ladder (6 faces x 6 levels).
+  const h = makeGpuHarness({ recordPass: true, reflectTextures: true });
+  const gfx = await h.create();
+  gfx.resize();
+  const opens = () => h.passCalls.filter(([k]) => k === "beginRenderPass").map(([, a]) => a[0]);
+  const sampled = [];
+  const makeGroup = h.device.createBindGroup;
+  h.device.createBindGroup = desc => {
+    const view = desc.entries.find(e => e.binding === 0)?.resource;
+    if (view?.viewDesc?.mipLevelCount === 1) sampled.push(view);
+    return makeGroup(desc);
+  };
+  const perFace = [];
+  for (let f = 0; f < 6; f++) {
+    const s0 = h.submitCount, p0 = opens().length;
+    assert.ok(gfx.envFaceBegin(f, [0, 0, 0], {}), `face ${f} opens`);
+    gfx.envFaceEnd(f);
+    perFace.push({ submits: h.submitCount - s0, passes: opens().length - p0 });
+  }
+  const cube = h.textures.find((t) => t.desc.size && t.desc.size[2] === 6 && t.desc.dimension === "2d" && t.desc.size[0] === 64);
+  assert.ok(cube, "the env cube texture");
+  assert.equal(cube.desc.mipLevelCount, 4, "64 px cube: levels 0-3, the ones an LOD <= 2.5 tap reads");
+  assert.deepEqual(perFace.slice(0, 5).map((r) => r.passes), [1, 1, 1, 1, 1], "faces 0-4: the face pass alone");
+  assert.equal(perFace[5].passes, 1 + 6 * 3, "face 5: its pass plus 6 layers x 3 levels");
+  assert.deepEqual(perFace.map((r) => r.submits), [1, 1, 1, 1, 1, 1], "the ladder rides face 5's own submit");
+  const stages = () => opens().filter(pass => {
+    const view = pass.colorAttachments[0]?.view;
+    return view?.texture === cube && view.viewDesc?.baseMipLevel > 0;
+  });
+  const first = stages();
+  const inputs = sampled.filter(view => view.texture === cube);
+  assert.equal(inputs.length, 18);
+  for (let i = 0; i < first.length; i++) {
+    const src = inputs[i], dst = first[i].colorAttachments[0].view;
+    assert.equal(src.viewDesc.baseArrayLayer, Math.floor(i / 3));
+    assert.equal(dst.viewDesc.baseArrayLayer, src.viewDesc.baseArrayLayer);
+    assert.equal(dst.viewDesc.baseMipLevel, src.viewDesc.baseMipLevel + 1);
+  }
+  assert.equal(new Set([...inputs, ...first.map(s => s.colorAttachments[0].view)]).size, 24,
+    "one GPU view per face and mip level");
+  for (let f = 0; f < 6; f++) {
+    gfx.envFaceBegin(f, [0, 0, 0], {});
+    gfx.envFaceEnd(f);
+  }
+  const second = stages().slice(first.length);
+  assert.equal(second.length, first.length);
+  for (let i = 0; i < first.length; i++) assert.equal(second[i], first[i], "reuse that subresource's pass descriptor");
 });
 
 test("WGX mirror-pass cull gets its own pack, buffer and cell-set key: main and mirror no longer evict each other", async () => {
@@ -3198,6 +3490,49 @@ test("the lamp bake light map is freed after ~2 s of bake-off frames (GLX _bakeO
   gfx.present({});
   assert.equal(h.textures.filter(isBake).length, 2, "the same bake re-uploads once it returns");
 });
+
+
+// A failed replacement must preserve the published bake and retire only candidates.
+for (const failure of ["texture-1", "texture-2", "upload-1", "upload-2", "view-1", "view-2", "group-1", "group-2"]) {
+  test(`lamp bake replacement rolls back ${failure} and can retry`, async () => {
+    const h = makeGpuHarness(), gfx = await h.create();
+    const bake = () => ({ x0: 0, z0: 0, cell: 1, T: 32, tilesX: 2, tilesY: 1, atlasW: 34, atlasH: 34,
+      data: new Uint16Array(34 * 34 * 8), indir: new Uint16Array(8) });
+    const old = bake(), next = bake();
+    const frame = lb => ({ lampBake: lb, lampBakeScale: [1, 1, 1] });
+    assert.equal(gfx.begin(frame(old)), true); gfx.present({});
+    const published = h.textures.filter(t => t.desc.format === "rgba16float" &&
+      Array.isArray(t.desc.size) && ((t.desc.size[0] === 34 && t.desc.size[1] === 68) ||
+      (t.desc.size[0] === 2 && t.desc.size[1] === 1)));
+    assert.equal(published.length, 2, "a complete old atlas/indirection pair is live");
+    const before = h.textures.length, [kind, count] = failure.split("-");
+    const offset = Number(count), write = h.device.queue.writeTexture;
+    if (kind === "texture") h.failNextTexture(offset);
+    if (kind === "view") h.failNextView(offset);
+    if (kind === "group") h.failNextBindGroup(offset);
+    if (kind === "upload") {
+      let calls = 0;
+      h.device.queue.writeTexture = (...args) => {
+        if (++calls === offset) throw new Error("injected lamp upload failure");
+        return write(...args);
+      };
+    }
+    assert.equal(gfx.begin(frame(next)), false, "failure follows the existing begin recovery path");
+    const candidates = h.textures.slice(before);
+    assert.equal(candidates.length, kind === "texture" ? offset - 1 : kind === "upload" ? offset : 2);
+    assert.ok(candidates.every(t => t.destroyed), "every uncommitted texture is destroyed");
+    assert.ok(published.every(t => !t.destroyed), "the previous bake survives failure");
+    h.clearFailures(); h.device.queue.writeTexture = write;
+    const afterFailure = h.textures.length;
+    assert.equal(gfx.begin(frame(old)), true); gfx.present({});
+    assert.equal(h.textures.length, afterFailure, "previous source identity and views remain usable without upload");
+    assert.equal(gfx.begin(frame(next)), true, "the same failed source can retry");
+    assert.ok(published.every(t => !t.destroyed), "old textures wait for the replacement frame's submission");
+    gfx.present({});
+    assert.ok(published.every(t => t.destroyed), "successful replacement retires old textures after submit");
+    assert.ok(h.textures.slice(afterFailure).every(t => !t.destroyed), "the committed replacement stays live");
+  });
+}
 
 // createMesh road pieces (hasTrk, > 4095 pulled verts): an allocation failure
 // on piece k used to leak pieces 0..k-1 — `pieces` was scoped inside the
@@ -3559,7 +3894,7 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
   // 1. The async path: token at once, nothing written, bind held back, then layers in order + mips + bound.
   {
     const assets = makeAssets();
-    const h = makeGpuHarness({ assets, reflectTextures: true });
+    const h = makeGpuHarness({ assets, reflectTextures: true, recordPass: true });
     const gfx = await h.create();
     const w0 = h.textureWrites.length;
     const albedo = gfx.createTextureArray(size, images, n);
@@ -3583,7 +3918,11 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     st = gfx.materialMapState();
     assert.equal(st.albedo, true, "bound once ready"); assert.equal(st.layers, 3); assert.equal(st.pending, 0);
     assert.equal(h.textures.filter((t) => t.destroyed).length, submitsBefore, "nothing destroyed");
-    assert.ok(albedo.texture.__wgxMipLadder, "the mips were built after the last layer");
+    const mipPasses = h.passCalls.filter(([name, args]) => name === "beginRenderPass" &&
+      args[0].colorAttachments[0]?.view.texture === albedo.texture);
+    assert.deepEqual(mipPasses.map(([, [pass]]) => pass.colorAttachments[0].view.viewDesc.baseArrayLayer),
+      Array.from({ length: n }, (_, i) => i), "all array layers received their mip pass");
+    assert.equal(albedo.texture.__wgxMipLadder, undefined, "one-shot uploads release their mip ladder");
   }
   // Re-adopting a pending token transfers the wait, not ownership of its destruction.
   for (const replacement of ["same", "partial", "different", "unload"]) {
@@ -3753,6 +4092,17 @@ for (const info of [{ reason: "unknown" }, { reason: "out-of-memory" }]) {
   });
 }
 
+test("a stale timeout preserves the next queued capture", async () => {
+  const h = makeGpuHarness(); const gfx = await h.create();
+  const owner = {}, stale = {};
+  const pending = gfx.capturePixels(owner);
+  const rejection = assert.rejects(pending, /current timeout/);
+  gfx.cancelCapture("old timeout", stale);
+  await assert.rejects(gfx.capturePixels(), /already pending/);
+  gfx.cancelCapture("current timeout", owner);
+  await rejection;
+});
+
 test("queued capture settles at the JS-error strike cap", async () => {
   const h = makeGpuHarness(); const gfx = await h.create();
   const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
@@ -3792,6 +4142,33 @@ test("optional post publishes the complete successful buffer set", () => {
   const h = isolatedPost(); h.post.buildPost();
   assert.equal(h.owned.length, 6); assert.ok(h.owned.every((b) => b.destroys === 0));
   assert.ok(h.core.pComposite); assert.equal(h.core.ssrUBO, h.owned[5]);
+});
+
+test("SSAO and god-ray blur pipelines share one shader module", () => {
+  const h = isolatedPost();
+  h.core.SSAO_FORMAT = "r8unorm";
+  h.core.POST_HDR_FORMAT = "rgba16float";
+  const byCode = new Map();
+  const pipelines = [];
+  const origMod = h.core.device.createShaderModule;
+  const origPipe = h.core.device.createRenderPipeline;
+  h.core.device.createShaderModule = (desc) => {
+    const mod = origMod(desc);
+    const list = byCode.get(desc && desc.code) || [];
+    list.push(mod);
+    byCode.set(desc && desc.code, list);
+    return mod;
+  };
+  h.core.device.createRenderPipeline = (desc) => { pipelines.push(desc); return origPipe(desc); };
+  h.post.buildPost();
+  const blurMods = byCode.get("blur") || [];
+  assert.equal(blurMods.length, 1, "BLUR is compiled once");
+  const blur = blurMods[0];
+  const blurPipes = pipelines.filter((p) => p.fragment && p.fragment.module === blur);
+  assert.equal(blurPipes.length, 2, "r8 and hdr blur stay two pipelines");
+  assert.equal(blurPipes[0].vertex.module, blur);
+  assert.equal(blurPipes[1].vertex.module, blur);
+  assert.notEqual(blurPipes[0].fragment.targets[0].format, blurPipes[1].fragment.targets[0].format);
 });
 
 for (const scoped of [false, true]) test(`exhausted spatial variants retire the UBO (scoped=${scoped})`, async () => {
@@ -3862,7 +4239,7 @@ for (const fullPost of [false, true]) test(`capture submission releases readback
     assert.ok(a >= 0 && b > a, start);
     return source.slice(a, b);
   };
-  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels() {", "    // Destroy buffers AND textures") +
+  const helpers = between(WGX_MAIN_SOURCE, "    function capturePixels(owner) {", "    // Destroy buffers AND textures") +
     between(WGX_MAIN_SOURCE, "    // Before submission the encoded readback", "    //    (SSAO -> godray");
   const shadow = between(WGX_SHADOW_SOURCE, "    function _frameSubmitList(mainEnc) {", "    // Same-model dedupe.");
   const declaration = fullPost ? "      const _cap = _capEncode();" : "        const cap = _capEncode();";

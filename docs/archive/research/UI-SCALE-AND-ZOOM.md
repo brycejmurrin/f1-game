@@ -88,7 +88,7 @@ scaled values.
 
 **Nothing in this repo's test suite can see this** — every spec runs Chromium.
 
-Registered as **A13** in `docs/ARCHITECTURE-REVIEW.md`. Two call sites mix a
+Registered as **A13** in `docs/notes/ARCHITECTURE-REVIEW.md`. Two call sites mix a
 rect from inside a zoomed subtree with a coordinate from outside one, and are
 therefore wrong on pre-26.4 iOS **by default**, because `--ui-scale` ships at
 1.15 on a coarse pointer:

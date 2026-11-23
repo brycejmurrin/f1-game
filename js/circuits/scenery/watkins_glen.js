@@ -6,11 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["watkins_glen"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat,
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, waterBand, terrainYAt, foundation,
         indexSolid, fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum, forestEdge } = api;
+        addBox, addCyl, addFrustum, forestEdge, bakedModel } = api;
 
       // Sample the rendered ribbon under a footprint and lift the anchor so no
       // prim top sits under terrain (ground-audit bury). Same pattern as Vegas lots.
@@ -377,7 +377,9 @@
         [0.63, 0.88,  1, SINGLE],
       ]) guardrail(s0, s1, side, 5.5, GLEN_BLUE, st);
       guardrail(0.94, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
-      fence(0.95, 0.06, -1, 9, 4, [0.74, 0.76, 0.80]);
+      // 10.3, not 9: no wall in front, so a car's side reached 10.1 m (the 9 m run-off + its
+      // half-width) and drove 1.1 m into the fence. Run-off unchanged (#5998).
+      fence(0.95, 0.06, -1, 10.3, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.16, 0.36, 0.45, 0.55, 0.68, 0.82]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
@@ -487,7 +489,12 @@
         });
       }
       {
-        const a = anchor(K(0.28), 1, 92), b = [a.r, a.u, a.t];
+        // Seated on the pasture, not at road height: since the Esses climb
+        // (2026-11-18) the road here is ~12 m up a hill the pasture 92 m out
+        // does not share, and a road-height anchor hung the silo 16 m up.
+        const a0 = anchor(K(0.28), 1, 92), b = [a0.r, a0.u, a0.t];
+        const gyF = terrainYAt(a0.c[0], a0.c[2]);
+        const a = gyF == null ? a0 : Object.assign({}, a0, { c: [a0.c[0], gyF, a0.c[2]] });
         modelGroup("glen-dairy-farm", {
           center: vadd(a.c, a.u, 8), size: [28, 22, 48], basis: b,
         }, (stage) => {
@@ -499,7 +506,8 @@
           stage._mat = MAT.WOOD;
           seat.box(stage, vadd(vadd(a.c, a.t, -15.2), a.u, 6.5), [4.0, 1.4, 0.4], [0.36, 0.32, 0.28], b);
           stage._mat = MAT.CONCRETE;
-          const silo = vadd(a.c, a.r, 10);
+          const silo0 = vadd(a.c, a.r, 10), gyS = terrainYAt(silo0[0], silo0[2]);
+          const silo = gyS == null ? silo0 : [silo0[0], gyS, silo0[2]];
           // Footing sunk 1 m: the pasture falls away under the silo, so a flush base hung 0.7 m off the grass.
           seat.cyl(stage, vadd(silo, a.u, -1), 2.6, 16, [0.30, 0.40, 0.34], 10, b);   // glazed tile
           stage._mat = MAT.METAL;
@@ -654,6 +662,7 @@
           seat.box(stage, vadd(a.c, a.u, 4.55), [0.55, 0.3, 13.4], WEATHERED, b);
           // The toll / ticket booth off to one side: a small gabled clapboard hut.
           const booth = vadd(a.c, a.t, 11);
+          booth[1] = terrainYAt(booth[0], booth[2]) ?? booth[1];
           seat.box(stage, booth, [3.2, 2.8, 3.2], [0.58, 0.56, 0.50], b);
           seat.box(stage, vadd(vadd(booth, a.r, -1.7), a.u, 1.4), [0.2, 1.1, 1.2], SIGN, b);  // service window
           stage._mat = MAT.ROOF;
@@ -661,4 +670,12 @@
           stage._mat = 0;
         });
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      // The Boot camera sits on the open verge inside the forest edge.
+      bakedModel("k_camera_exclusive", K(0.5255), 1, 6, { scale: 3 });
+      for (const s of [0.0645, 0.7335, 0.9255]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

@@ -16,7 +16,8 @@ Interactive twin of Playwright — not a CI gate. Skills:
 1. **UI work:** `__apex.headless(true)` then hide `#game` before snapshots /
    screenshots. A live WebGL canvas blacks out MCP captures and burns ~20% CPU.
 2. **File writes:** advertise MCP `roots` capability and answer `roots/list`
-   with `file:///workspace` (and/or write under `/tmp`). Without that,
+   with the repo root (`tools/mcp/cdmcp-cli.py` sends `file://<repo>`) and write
+   under `artifacts/` or `scratch/`. Without that,
    `take_heapsnapshot` / `performance_*` / `lighthouse_audit` fail with
    `Access denied: … not within any of the configured workspace roots`.
 3. **Snapshot uids** look like `1_12`, never bare `1`. Prefer
@@ -98,7 +99,7 @@ Full schemas: run `tools/mcp/cdmcp-cli.py list-tools` or initialise the MCP and 
 ### Cold-boot performance
 
 ```
-performance_start_trace({ reload:false, autoStop:false, filePath:"/tmp/…/boot.json.gz" })
+performance_start_trace({ reload:false, autoStop:false, filePath:"<repo>/artifacts/tmp/cdmcp-trace/boot.json.gz" })
 navigate_page → http://127.0.0.1:<port>/?v=N
 # wait __apex, headless+hide canvas
 performance_stop_trace
@@ -214,4 +215,4 @@ any Playwright run. Details in `.claude/skills/mcp-probe`.
 Local agents can also drive chrome-devtools via `tools/mcp/chrome-devtools-mcp.sh run`
 over stdio (`tools/mcp/cdmcp-cli.py`, `tools/mcp/mcp-cli.mjs`)
 (UI matrix → `tools/ui/layout-audit.mjs`; `ui-readable-survey-mcp.py` archived). When writing a custom client, handle **server→client**
-`roots/list` or restrict artifact paths to `/tmp`.
+`roots/list` (answer with the repo root) and keep artifact paths under `artifacts/` or `scratch/`.

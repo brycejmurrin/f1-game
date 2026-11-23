@@ -43,21 +43,22 @@ function floodColor(theme, id) {
 }
 // Per-KIND light parameters. The kind itself is decided ONCE in tracks.js
 // (buildProps mast block) and carried on track.lampPosts, so the painted lens
-// albedo always matches the light emitted here. CCT-authentic palette (HPS
-// sodium 2100K → broadcast flood 5700K). Cones are a tight HOT CORE (the bright
+// albedo always matches the light emitted here. Each kind's colour is its own
+// authored tint (warm amber sodium to cool broadcast white), not a measured
+// colour temperature. Cones are a tight HOT CORE (the bright
 // pool under the fixture) + a wide soft skirt reaching the far edge; bleed is
 // LOW so the valleys between lamps stay visibly darker than the pools — that
 // pool/valley contrast is what makes the light read as CAST by the fixture
 // instead of an ambient wash.
 const LAMP_KINDS = {
-  flood_bank: { col: [1.02, 1.06, 1.18], eMul: 1.00, cIn: 0.80, cOut: 0.50, blB: 0.08, blV: 0.06, volW: 1.0,  glareW: 1.2, tintMix: 0.12 }, // 5700K broadcast bank (eMul 1.35 stacked too hot on the pit straight)
-  halide:     { col: [0.96, 1.03, 1.05], eMul: 1.05, cIn: 0.80, cOut: 0.46, blB: 0.06, blV: 0.06, volW: 0.8,  glareW: 1.0, tintMix: 0.30 }, // 4300K metal halide
-  sodium:     { col: [1.42, 0.72, 0.24], eMul: 0.85, cIn: 0.82, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.9, tintMix: 0.25 }, // 2100K HPS deep amber
-  halogen:    { col: [1.22, 0.98, 0.55], eMul: 0.95, cIn: 0.80, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.55, glareW: 1.0, tintMix: 0.30 }, // 3000K warm white
-  led:        { col: [0.92, 1.00, 1.15], eMul: 1.05, cIn: 0.84, cOut: 0.48, blB: 0.10, blV: 0.08, volW: 0.45, glareW: 0.7, tintMix: 0.30 }, // 5000K crisp LED
-  globe:      { col: [1.30, 0.92, 0.52], eMul: 0.60, cIn: 0.30, cOut: 0.02, blB: 0.16, blV: 0.10, volW: 0.30, glareW: 1.6, tintMix: 0.25 }, // 2700K heritage globe (near-omni)
+  flood_bank: { col: [1.02, 1.06, 1.18], eMul: 1.00, cIn: 0.80, cOut: 0.50, blB: 0.08, blV: 0.06, volW: 1.0,  glareW: 1.2, tintMix: 0.12 }, // broadcast bank (eMul 1.35 stacked too hot on the pit straight)
+  halide:     { col: [0.96, 1.03, 1.05], eMul: 1.05, cIn: 0.80, cOut: 0.46, blB: 0.06, blV: 0.06, volW: 0.8,  glareW: 1.0, tintMix: 0.30 }, // metal halide
+  sodium:     { col: [1.42, 0.72, 0.24], eMul: 0.85, cIn: 0.82, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.9, tintMix: 0.25 }, // HPS sodium, deep amber
+  halogen:    { col: [1.22, 0.98, 0.55], eMul: 0.95, cIn: 0.80, cOut: 0.44, blB: 0.10, blV: 0.08, volW: 0.55, glareW: 1.0, tintMix: 0.30 }, // warm white
+  led:        { col: [0.92, 1.00, 1.15], eMul: 1.05, cIn: 0.84, cOut: 0.48, blB: 0.10, blV: 0.08, volW: 0.45, glareW: 0.7, tintMix: 0.30 }, // crisp LED
+  globe:      { col: [1.30, 0.92, 0.52], eMul: 0.60, cIn: 0.30, cOut: 0.02, blB: 0.16, blV: 0.10, volW: 0.30, glareW: 1.6, tintMix: 0.25 }, // heritage globe (near-omni)
   work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
-  fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
+  fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // greenish fluorescent
   // A SIGNAL, not a road light: the pit entrance's red aspects. Every other
   // kind here is sized to throw a pool onto tarmac, and one aimed from 8 m off
   // the verge washed the racing line white (a 24 m `led` pool overran the
@@ -153,12 +154,11 @@ function lampStrideNodes(ds) {
 // track rebuild. dens<1 drops posts below the target spacing; dens>1 inserts
 // synthetic roadside lights (no lens halo) between fixtures — poles catch up
 // on the next Tracks.build (which reads the same LT.lampDensity).
-function applyLampDensity(posts, track, height, onlyAlways) {
+function applyLampDensity(posts, track, height, onlyAlways, targetGap) {
   if (!posts || !posts.length || onlyAlways) return posts;
   const dens = lampDensityFactor();
   if (Math.abs(dens - 1) < 0.01) return posts;
-  const n = track.n, ds = track.total / n;
-  const targetGap = lampStrideNodes(ds);
+  const n = track.n;
   const sorted = posts.slice().sort((a, b) => a.k - b.k);
   if (dens < 1) {
     const out = [];
@@ -203,7 +203,7 @@ function applyLampDensity(posts, track, height, onlyAlways) {
 // `onlyAlways` builds ONLY the fixtures a circuit marked always-on (see
 // lampPost() in js/track/tracks.js) — the set game.js uploads in a BRIGHT
 // session, where the ordinary lamps stay off.
-function buildTrackLights(track, onlyAlways) {
+function buildTrackLights(track, onlyAlways, poolEnergy = LT.poolEnergy) {
   const lights = [];
   const n = track.n, total = track.total;
   // Guard against a not-yet-complete track (centreline arrays missing): return
@@ -214,7 +214,7 @@ function buildTrackLights(track, onlyAlways) {
   // alone was flooding the ring buffer.
   if (Log.enabled("game", Log.DEBUG))
     Log.debug("game", "LightTune.buildTrackLights track=" + ((track.def && track.def.id) || "?"));
-  const ds = total / n;
+  const ds = track.sceneryStepM || total / n;
   const stride = lampStrideNodes(ds);   // matches buildProps mast stride (+ LAMP DENSITY)
   const { tint, intensity, radius, street } = floodColor(track.def.theme, track.def.id);
   const height = street ? 9 : 13;   // at the mast-top lens (buildProps masts)
@@ -239,7 +239,7 @@ function buildTrackLights(track, onlyAlways) {
     posts = posts ? posts.filter((p) => p && p.always) : null;
     if (!posts || !posts.length) return lights;
   }
-  posts = applyLampDensity(posts, track, height, onlyAlways);
+  posts = applyLampDensity(posts, track, height, onlyAlways, stride);
   // ── DARK-GAP FILL ─────────────────────────────────────────────────────────
   // Circuits suppress the generic mast pass over a stretch (dressingExclusions
   // kind "lamps" / "floodlights" / "lighting") so bespoke fixtures own that ground.
@@ -301,7 +301,7 @@ function buildTrackLights(track, onlyAlways) {
       const wz0 = track.pz[k] + track.rz[k] * (track.hw[k] + 2.5) * side;
       let wdx = track.rx[k] * side * 0.55, wdy = -0.83, wdz = track.rz[k] * side * 0.55;
       const wdl = Math.hypot(wdx, wdy, wdz) || 1; wdx /= wdl; wdy /= wdl; wdz /= wdl;
-      const we = intensity * 0.30 * (4.5 * 4.5) * LT.poolEnergy;
+      const we = intensity * 0.30 * (4.5 * 4.5) * poolEnergy;
       // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
       // to these washer lights too (their help text promises "each/every lamp")
       // — same maths as the mast lamps below. (The energy factor was a 0.55
@@ -401,7 +401,7 @@ function buildTrackLights(track, onlyAlways) {
     // The incidence divisor is CLAMPED so a mast beside banked/elevated road
     // (lens barely above the aim point) can't blow the energy up.
     const hAim = Math.max(ly - (aimAt ? aimAt[1] : track.py[k]), 1);
-    const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35)
+    const ePhys = intensity * bri * eMul * (al * al) * poolEnergy / Math.max(hAim / al, 0.35)
                 * (post && post.energy != null ? post.energy : 1);
     lights.push(
       lx, ly, lz,
@@ -423,7 +423,7 @@ function buildTrackLights(track, onlyAlways) {
     // top of the flood_bank pit-straight lamps — the start line was the hottest
     // spot on every night circuit, blowing the road out exactly where every race
     // (and the player's first impression of the night lighting) begins.
-    const ge = intensity * 0.55 * (8 * 8) * LT.poolEnergy;
+    const ge = intensity * 0.55 * (8 * 8) * poolEnergy;
     // POOL ENERGY / POOL RADIUS / BEAM CONE / VALLEY BLEED tuner knobs apply
     // here too, as the help text promises ("every floodlight").
     // volW 0 / glareW 0: this bar is NOT parented to the scenery gantry (see the

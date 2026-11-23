@@ -4,7 +4,17 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "qatar",
-    pit: { side: -1 },   // the pit complex (TrackPit): this circuit's own garages stand on the left of the main straight
+    revision: 2,
+    // The pit complex (TrackPit) on the driver's RIGHT of the main straight: the
+    // FIA 2025 Qatar GP pit-lane drawing (doc 4, 27 Nov 2025, p.3) branches the
+    // lane off the inside of T16 with the F1 garages beyond it — the infield of
+    // this clockwise lap. It was -1 (left), the grandstand side.
+    pit: { side: 1 },
+    // The authored qatar-main-stand-* own the stand side of the pit straight;
+    // with the pits flipped to +1 the engine's generic S/F stand landed on -1
+    // at ~25 m, in front of them (and in the S/F orbit corridor). Zolder,
+    // Monza, Sepang and Portimao precedent.
+    ownPitStraight: true,
     reverse: false, // real-world CW/CCW direction
     // Start/finish line. Snapped to the real one: coord 0.3 m off centreline; = trace vertex 0.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
@@ -29,7 +39,7 @@
     ],
     lengthKm: 5.4,
     tyreSeverity: 1.60,  // Pirelli hardest C1–C3; 'one of the toughest' on tyres — near Austria outlier
-    sunAzimBias: -0.30,   // Losail's late-afternoon sun hangs low to the NE-facing main straight
+    sunAzimBias: -0.30,   // art-directed day-sun yaw offset (rad, atmosphere.js); the real GP runs at night
     baseHW: 8,
     // Warm pal.runoff = tan sand beyond the green verge (brief / COL.desertSand)
     pal: { horizon: [0.08, 0.10, 0.14], zenith: [0.03, 0.04, 0.09], ambientSky: [0.15, 0.16, 0.20], ambientGround: [0.12, 0.12, 0.14], fogColor: [0.10, 0.12, 0.16], fogDensity: 0.0015, runoff: [0.72, 0.58, 0.38], grass: [0.48, 0.36, 0.22] },
@@ -42,18 +52,28 @@
       { frac: 0.7404, angleDeg: 4.0, widthM: 180 },
       { frac: 0.8487, angleDeg: 3.5, widthM: 150 },
     ],
+    // OpenF1 2024 qualifying, session 9646: Verstappen lap 21, checked
+    // against Russell lap 23. Additive cosine coefficients in metres.
+    // Offset converts racing-lap stations to this circuit's authoring origin.
     elevations: [
-      { s: 0.05, halfM: 550, rise: 3.5 },
-      { s: 0.42, halfM: 700, rise: 5.5 },
-      { s: 0.68, halfM: 350, rise: -1.0 },
-    ],
+      0.86, -0.42, 0.56, -0.92, 1.12, -1.58, 1.49, -1.2,
+      0.57, -1.28, 0.61, 0.04, 0.37, 0.94, 0.64, 0.55,
+      0.08, 0.48, -0.01, 1.28, 0.43, 1.59, -0.51, 1.95,
+      0.87, 2.1, -0.02, 1.56, 0.53, 2.73, 0.7, 0.45,
+    ].map((rise, i) => ({ s: (i / 32 + 0.104663) % 1, halfM: 336.88, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // sectors/turns as RACING-LAP fractions (post startFrac/reverse), never
+    // fmap'd — tools/track/rotate-markings.cjs re-seats turns when the start
+    // line moves. turns: one apex (built-centreline curvature peak) per corner
+    // of the FIA event-map numbering, turns[0] = T1. Source: FIA 2025 Qatar GP
+    // Race Director doc 4 "Event Notes - Circuit Map. Pit Lane Drawing, ..."
+    // (27 Nov 2025, 16 corners); the 2026 document is not out yet. T1 R, T2 L,
+    // T3 R, T4 R, T5 R, T6 L, T7 R, T8 L, T9 R, T10 L, T11 L, T12 R, T13 R,
+    // T14 R, T15 L, T16 R. sectors are NOT re-derived from that map (FIA: S1
+    // 80 m before T6, S2 75 m before T12).
     sectors: [0.3, 0.65],
-    turns: [0.1013, 0.1158, 0.1588, 0.2778, 0.3103, 0.3168, 0.3663, 0.3738, 0.4333, 0.5068, 0.5443, 0.6983, 0.7368, 0.7963, 0.8778, 0.8888],
+    turns: [0.1157, 0.1588, 0.2077, 0.2782, 0.3168, 0.3665, 0.4332, 0.4659, 0.5067, 0.5445, 0.6046, 0.6610, 0.6981, 0.7374, 0.7967, 0.8887],
     furniture: { tree: "palm",  fol: [0.28, 0.40, 0.18], lamp: "arm",   lc: [0.90, 0.95, 1.0], sparse: true },
     kit: { marshal: "container", rail: "wArmco",      fence: "panelled",  tyre: "airfence", board: "monopole", gantry: "portal",     camera: "monopole",  hoarding: "led" },
     standSet: ["sandstone", "steel", "concrete"],

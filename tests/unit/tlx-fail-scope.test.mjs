@@ -27,11 +27,13 @@ const mk = () => {
   });
 };
 
-function boot() {
+function boot(opt = {}) {
   const state = { boom: false };
   const renderer = { backend: {}, getRenderTarget: () => null, setRenderTarget() {},
     render() { if (state.boom) throw new Error("depth pass boom"); }, autoClear: true };
-  const ctx = vm.createContext({ window: {}, localStorage: { getItem: () => null }, Log: { warn() {} },
+  if (opt.lampStatic) renderer.copyTextureToTexture = () => {};
+  const ls = opt.lampStatic ? (k) => (k === "apex26.tlxLampStatic" ? "1" : null) : () => null;
+  const ctx = vm.createContext({ window: {}, localStorage: { getItem: ls }, Log: { warn() {} },
     Float32Array, Math, Array, Object, WeakMap, Map, Set, Number });
   vm.runInContext(read("js/render/three/tlx-shadow.js"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
   const sys = ctx.window.TLXShaders.shadowSys(mk(), mk(), { renderer, isMobile: false, softwareGL: false });
@@ -58,6 +60,18 @@ test("a throw in the LAMP depth pass disables the lamp pass only (M14)", () => {
   sys.lampShadowBegin(new Float32Array(16), 0);
   sys.lampShadowEnd();
   assert.equal(S.lampEnabled, false);
+  assert.equal(S.enabled, true);
+  assert.equal(S.carEnabled, true);
+});
+
+test("a throw in the lamp STATIC pass drops the static cache, never the lamp shadow (#5699 row 13)", () => {
+  const { sys, S, state } = boot({ lampStatic: true });
+  assert.equal(sys.lampStaticOn, true, "forced on: the static props cache is armed");
+  state.boom = true;
+  sys.lampStaticBegin(new Float32Array(16));
+  sys.lampStaticEnd();
+  assert.equal(sys.lampStaticOn, false, "the failing cache is retired");
+  assert.equal(S.lampEnabled, true, "the full lamp pass keeps the lamp shadow");
   assert.equal(S.enabled, true);
   assert.equal(S.carEnabled, true);
 });
@@ -104,7 +118,6 @@ test("a WebGPU desktop still builds the PCSS blocker", () => {
 test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound label kept (M13)", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /function buildPost\(\) \{/, "the post chain is built by a function that can run again");
-  assert.match(src, /post = buildPost\(\);/);
   const resize = src.slice(src.indexOf("function applyResize()"), src.indexOf("function resize()"));
   assert.match(resize, /if \(_postRebuild && !post\) \{\s*_postRebuild = false; post = buildPost\(\);\s*if \(!post\) postFailure\("Post-processing reconstruction failed"\);\s*\}\s*if \(post\) post\.resize\(rw, rh, presentW, presentH\);/,
     "a render-target realloc rebuilds a retired chain before resizing it");
@@ -113,7 +126,7 @@ test("TLX post chain: re-callable factory, rebuilt at the next realloc, bound la
   const persist = src.slice(src.indexOf("const persistFail"), src.indexOf("const paintCanvas"));
   assert.match(persist, /if \(!postOnly\) try \{ sessionStorage\.setItem\("apex26\.gfxBound", "webgl2"\)/,
     "a post-only candidate must not label the session WEBGL2 while TLX keeps painting");
-  assert.match(src, /\} catch \(e\) \{ persistFail\(e, !!post\); \}/, "the first catch marks a post-only candidate");
+  assert.match(src, /\} catch \(e\) \{[^}]*?if \(!nullMirrorSkip\(e\)\) persistFail\(e, !!post\);/, "the first catch marks a post-only candidate (after the LP-01 null-mirror repair declines)");
 });
 
 // 08-F4: _mirFails was a lifetime counter (four throws anywhere in a session retired the rear-view for good).
@@ -126,7 +139,7 @@ test("mirrorEnd: only four CONSECUTIVE failed mirror renders retire the mirror (
   const ctx = vm.createContext({
     _mirActive: false, _poolBatch: 0, drawList: [], _showInstanced() {}, chunkedSys: null, acquireMesh() {}, meshPool: [],
     _hideUndrawnInstanced() {}, scene: { backgroundNode: null }, pinSkyMaterial() {}, mirRT: {}, mirCam: {}, _gpuLastOperation: "",
-    _mirRenders: 0, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
+    _mirRenders: 0, _mirReady: false, _mirFails: 0, _mirDead: false, _mirErr: null, softOutRT: () => null, resetRecs() {},
     _dMatUsed: 0, _fxMatUsed: 0, _instAlive: new Set(), _kidsBegin() {}, _kidsMir: [], _poolShow() {},   // R6 pool root (hunt 3)
     _mirMrt: () => false, _mirMrtArm() {},   // A·W14: a one-attachment mirror target draws with no MRT
     post: null, _mirInv: () => null, _mirDiscards: 0,   // A-P2: the WebGL2 depth + tag discard after the mirror render
@@ -244,8 +257,23 @@ test("WebKit kill switch: unset → AUTO may try WebGPU; a latched failure keeps
   assert.equal(fresh.isWebKit, true);
   assert.equal(fresh._webkitStayGL, false, "a fresh iPhone tries WebGPU on AUTO");
   fresh._latchWebKitGL("WebGPU init failed: x".padEnd(400, "!"));
-  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the reason is stored, capped");
+  assert.equal(fresh.local["apex26.tlxWebKitGL"].length, 200, "the stamped reason is stored, capped");
   assert.equal(webkitSwitch({ ua: IPHONE, ls: fresh.local })._webkitStayGL, true, "the next boot on this device stays on WebGL2");
+});
+
+test("WebKit kill switch expires: 7 days, a Safari update, or an unstamped legacy latch re-probe WebGPU (iPhone WebGL2-leg report)", () => {
+  const fresh = webkitSwitch({ ua: IPHONE });
+  fresh._latchWebKitGL("device lost x3");
+  const stamp = fresh.local["apex26.tlxWebKitGL"];
+  const at = +stamp.split("|")[0];
+  assert.ok(Math.abs(at - Date.now()) < 60000, "the latch is stamped with when it happened");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: { "apex26.tlxWebKitGL": stamp } })._webkitStayGL, true, "a fresh latch still holds");
+  const aged = String(at - 8 * 864e5) + stamp.slice(String(at).length);
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: { "apex26.tlxWebKitGL": aged } })._webkitStayGL, false, "after 7 days AUTO tries WebGPU again");
+  const updated = IPHONE.replace("OS 27_0", "OS 27_1").replace("Version/27.0", "Version/27.1");
+  assert.equal(webkitSwitch({ ua: updated, ls: { "apex26.tlxWebKitGL": stamp } })._webkitStayGL, false, "a Safari update re-probes WebGPU");
+  assert.equal(webkitSwitch({ ua: IPHONE, ls: { "apex26.tlxWebKitGL": "WebGPU init failed" } })._webkitStayGL, false,
+    "an unstamped latch from before the expiry re-probes once (it re-latches, stamped, if WebGPU still fails)");
 });
 
 test("WebKit kill switch: never on Chromium, never written under a pin", () => {

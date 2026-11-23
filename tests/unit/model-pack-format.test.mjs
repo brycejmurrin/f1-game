@@ -32,7 +32,7 @@ import { writeAX26 } from "../../tools/gen/assets.mjs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { writeAX26v3 } = require("../../tools/lib/pack-assets.cjs");
+const { writeAX26v3, SWAY_FRAC } = require("../../tools/lib/pack-assets.cjs");
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PACK = path.join(ROOT, "assets", "pack");
@@ -66,13 +66,13 @@ async function roundTrip(mesh, matName) {
   }
 }
 
-test("every shipped model is written in the packed v2 layout",
+test("every shipped model is written in the packed v2 layout (v3 = v2 + sway)",
   { skip: !hasPack && "no pack installed" }, () => {
     assert.ok(modelIds.length > 0, "the manifest lists no models");
     const v1 = [];
     for (const id of modelIds) {
       const h = ax26Version(path.join(PACK, manifest.models[id].file));
-      if (h.version !== 2) v1.push(`${id} (v${h.version}, ${h.verts} verts)`);
+      if (h.version !== 2 && h.version !== 3) v1.push(`${id} (v${h.version}, ${h.verts} verts)`);
     }
     // A fall back is legitimate for a mesh v2 cannot hold — but no model in the
     // procedural catalogue is one, so a v1 file here means the writer regressed.
@@ -102,8 +102,12 @@ test("positions, indices and material ids survive the pack bit-exactly",
       const h = ax26Version(file);
       assert.equal(geo.pos.length, h.verts * 3, `${id}: vertex count`);
       assert.equal(geo.idx.length, h.indices, `${id}: index count`);
+      // v3 (baked trees) carries the wind weight as the id's fraction, id + w·SWAY_FRAC
+      // (tools/lib/pack-assets.cjs); the base id stays whole either way.
+      const swayFrac = h.version === 3 ? SWAY_FRAC : 0;
       for (let i = 0; i < geo.mat.length; i++) {
-        assert.equal(geo.mat[i], Math.floor(geo.mat[i]),
+        const frac = geo.mat[i] - Math.floor(geo.mat[i]);
+        assert.ok(frac <= swayFrac + 1e-6,
           `${id}: material id ${geo.mat[i]} is not whole after the round trip`);
       }
       for (let i = 0; i < geo.idx.length; i++) {

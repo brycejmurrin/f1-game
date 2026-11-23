@@ -11,10 +11,11 @@ Loaded from the new-track SKILL.md index: the full def shape for `js/circuits/<i
     gp: "Grand Prix Name",
     country: "Country",
     night: false,             // default lighting (true = night-default circuit)
-    classic: false,           // true = retired/off-calendar; appended after the 24 season rounds
+    classic: false,           // true = retired/off-calendar; appended after the season rounds
     theme: "green",           // green | desert | street_day | street_night | modern
     lengthKm: 5.5,            // approx lap length (display + scenery density)
     baseHW: 7.5,              // default half-width in metres
+    tyreSeverity: 1.0,        // REQUIRED; tyre-wear scale, clamp + anchors in tests/unit/tyre-model.test.mjs
 
     // optional:
     reverse: false,           // flip lap direction (when the bundled OSM trace runs the wrong way)

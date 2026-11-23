@@ -7,7 +7,16 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
-    // The exit wall otherwise clips Tarzan's widened road envelope at 3.5% lap.
+    revision: 2,
+    // PIT SIDE IS WRONG HERE AND KNOWN (W12, 2026-11-10): the FIA 2026 Dutch
+    // GP "Circuit Map, Pit Lane Drawing and Emergency Exits Map" puts the
+    // garages on the driver's RIGHT (pit-lane drawing p.3: entry off T14, exit
+    // into T1; map p.2: lane on the infield T2/T3 side). The flip to +1 was
+    // built and reverted: on the +1 dune the engine pit complex's apron strips
+    // sit under the terrain (ground-audit buried 2 -> 6) at every verge that
+    // keeps the coplanar baseline. Needs pit-apron terrain flattening (engine)
+    // with the mirrored scenery. verge 4: the exit wall otherwise clips
+    // Tarzan's widened road envelope at 3.5% lap.
     pit: { side: -1, bands: { verge: 4 } },
     classic: true,
     reverse: false, // real-world CW/CCW direction
@@ -16,7 +25,7 @@
     // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
     startFrac: 0.0000,
     // Scenery / exclusions / boards are racing-from-THIS line (pits at 0,
-    // Tarzan runoff ~0.04, Hugenholtz stand 0.135, Luyendyk 0.915 — T14
+    // Tarzan runoff ~0.04, Hugenholtz stand 0.205, Luyendyk 0.915 — T14
     // apex is 0.9105). Do not add sceneryStartFrac: 0.3275 there adds
     // _sceneryShift and parks the pit complex on the Hunserug/Scheivlak
     // stretch (the same shift once put 19° of bank on those sweeps).
@@ -41,19 +50,16 @@
     // the wrong corners — 19° on Scheivlak and 18° on Hunserug, both fast
     // sweeps, while Hugenholtz (28 m left hairpin) and Luyendyk (the final
     // corner) ran dead flat. Turn indices re-resolve through any future remap.
-    // Real angles per circuitzandvoort.nl: Hugenholtz is T3 ("after two turns
-    // that go right, the third corner goes left"), max 18°; Arie Luyendyk is
-    // T14, the last corner, 15-18° / 32% max gradient. T14 ships 18°: the
-    // circuit page and NOS 2021-09-03
-    // (https://nos.nl/collectie/13874/artikel/2396275) both give 18°; the 19°
-    // figures were rounded 2020 previews.
+    // Dromo's T3 section increases from 4.5° inside to 19° outside.
+    // https://studiodromo.it/portfolio/zandvoort/
+    // The circuit operator gives 18° for the final Arie Luyendyk corner.
     banked: true,
     bankZones: [
-      { turn: 3,  angleDeg: 18, widthM: 140 },  // Hugenholtz banked LEFT hairpin
+      { turn: 3,  insideAngleDeg: 4.5, angleDeg: 19, widthM: 140 },  // Hugenholtz banked LEFT hairpin
       { turn: 14, angleDeg: 18, widthM: 140 },  // Arie Luyendyk banked final RIGHT
       { turn: 1,  angleDeg: 4.0, widthM: 200 },  // Tarzan
-      { turn: 7,  angleDeg: 3.0, widthM: 110 },  // Hunserug-side sweep
-      { turn: 11, angleDeg: 3.5, widthM: 140 },  // Hans Ernst chicane
+      { turn: 8,  angleDeg: 3.0, widthM: 110 },  // T8 right after the Scheivlak descent (was turn 7 before the FIA renumber)
+      { turn: 12, angleDeg: 3.5, widthM: 140 },  // T12 left of the T11-T12 chicane (was turn 11 before the FIA renumber)
     ],
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
       { s0: 0.7310, s1: 0.8081, hw: 6.0, ease: 0.012 },  // racing arc 0.726-0.756 infield esses
@@ -61,29 +67,31 @@
       { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // racing arc 0.195-0.212 Hugenholtz (T3 apex 0.2084)
     ],
     pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
-    // Elevation, re-seated on this def's own turn fracs (startFrac 0, no
-    // _sceneryShift: s is the racing frac). Shape per Verstappen.com
-    // 2021-09-02 (https://news.verstappen.com/en/article/4487): T3 exit climbs
-    // to T4 Hunserug, T4->T5 dips, T5->T6 climbs, T7 Scheivlak runs downhill,
-    // T8-T11 nearly flat; Hunserug is one of the highest points
-    // (https://circuitzandvoort.nl/en/corners). Real relief is ~8 m, but T4
-    // (world ≈ −59,20) sits only ~40 m from the 0.667 stretch (≈ −71,−18), so
-    // an 8 m cosine bump makes survey() groundCliffs along that corridor
-    // (CLIFF_SLOPE 0.55). Rises are capped so relief ≈ 4.3 m and cliffs = 0;
-    // the old single hump at 0.56 put the crest between T8 and T9 (flat).
-    crossover: true,   // road crosses itself: terrain-over-road scans the other deck by mesh provenance
+    // Relative heights from Norris's 2023/2024 qualifying laps, OpenF1 sessions
+    // 9145 and 9578. Align horizontal distance at the 14 MultiViewer corner XYs.
+    // T4 crests, T5 dips and the highest point follows T6. Where banking is
+    // strongest (T3/T14), constrain an approach-to-exit interpolation to measured
+    // car height minus the possible lane lifts, avoiding a second high-line crest.
+    // Fit overlapping cosine knots to the two laps' mean, relative to the line.
+    crossover: true,
     elevations: [
-      { s: 0.2957, halfM: 360, rise: 4.2 },  // T4 Hunserug crest (climb from T3 exit, fall to T5)
-      { s: 0.4260, halfM: 150, rise: 3.94 }, // T5 -> T6 climb, crest just past T6
-      { s: 0.4520, halfM: 140, rise: 1.05 }, // eases the fall through T7 Scheivlak
-    ],
+      0.19, -0.12, 0.13, -0.19, 0.57, 0.69, 0.47, 0.24, -0.47, 0.05, -0.46, 0.02, 1.51, -1.14, 0.33, 3.49,
+      3.07, 1.26, -1.06, -0.48, -0.65, -0.05, 2.41, 3.7, 2.69, -0.73, -0.7, 0.87, 1.05, 0.51, -0.22, -0.5,
+      -0.95, -0.43, -0.78, -0.76, -0.7, -0.48, -0.36, -0.27, -0.21, -0.03, 0.11, 0.14, 1.34, 0.38, -0.59, -0.8,
+      -1.7, -1.1, -1.13, -1.3, -1.16, -1.39, -0.97, -0.58, -0.72, 1.2, 0.26, 1.64, 1.64, -0.29, 0.36, -0.26
+    ].map((rise, j) => ({ s: j / 64, halfM: 131.75, rise })),
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
-    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
-    // re-seats turns when the start line moves.
+    // turns: one apex per corner of the FIA 2026 event-map numbering (FIA
+    // "2026 Dutch Grand Prix - Circuit Map, Pit Lane Drawing and Emergency
+    // Exits Map", p.2), T1..T14 in order, each at its built curvature peak, as
+    // RACING-LAP fractions (post startFrac/reverse), never fmap'd —
+    // tools/track/rotate-markings.cjs re-seats turns when the start line moves.
+    // T1 Tarzan R, T2 Gerlach R, T3 Hugenholtz L, T4 Hunserug crest R, T5 L,
+    // T6 R, T7 Scheivlak R, T8 R, T9 R, T10 L hairpin, T11 R, T12 L,
+    // T13 R, T14 Arie Luyendyk R. sectors: approximate splits, not FIA-sourced.
     sectors: [0.32, 0.68],
-    turns: [0.0860, 0.1667, 0.2084, 0.2957, 0.3953, 0.4219, 0.4845, 0.5338, 0.5889, 0.7312, 0.7558, 0.8327, 0.8744, 0.9105],
+    turns: [0.0860, 0.1667, 0.2084, 0.2505, 0.2957, 0.3368, 0.3953, 0.4845, 0.5338, 0.5889, 0.7312, 0.7558, 0.8327, 0.9105],
     furniture: { tree: "fir",   fol: [0.40, 0.45, 0.29], lamp: "none", sparse: true },  // coastal dune scrub — thin + pale
     kit: { marshal: "cabin",     rail: "armco",       fence: "palisade",  tyre: "stack",   board: "banner",    gantry: "box",        camera: "scaffold",  hoarding: "banner" },
     standSet: ["orange", "alu", "scaffold"],  // Oranje army; two-thirds of capacity is trucked in

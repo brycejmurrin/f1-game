@@ -22,7 +22,7 @@ const CustomTeam = (function () {
       invalidateDecalTextures, invalidateCustomMeshCaches, spMeshBust,
       getLivDraftOverride, setLivDraftOverride, getSoundOn, GameAudio,
       getEls, getTeamIdx, setTeamIdx, getDriverIdx, setDriverIdx, buildSelect, buildSetup,
-      isCarsetupVisible,
+      isCarsetupVisible, announce,
     } = hooks;
 
     let logoGeneration = 0;
@@ -44,7 +44,14 @@ const CustomTeam = (function () {
     function identityGet(key, fallback) { return typeof Career !== "undefined" && Career.identityValue ? Career.identityValue(key, fallback) : fallback; }
     function identitySet(key, value) {
       if (typeof Career !== "undefined" && Career.inCareer() && Career.data().flavour === "myteam" && Career.setIdentityValue) return Career.setIdentityValue(key, value);
-      return store.set(key, value);
+      store.set(key, value);
+      return true;
+    }
+    function keptIdentity(key, value) {   // a career refusal keeps the dialog (#5657)
+      let kept = false;
+      try { kept = identitySet(key, value) !== false; } catch (_) {}
+      if (!kept && announce) announce("TEAM NOT SAVED", 3, "info");
+      return kept;
     }
     function loadCustomTeam() {
       return Teams.sanitizeCustom(identityGet("customTeam", store.get("customTeam", DEFAULT_CUSTOM)));
@@ -312,23 +319,30 @@ const CustomTeam = (function () {
       }
       $("cz-cancel").onclick = () => { czClearPreview(); getEls().customize.hidden = true; };
       $("cz-save").onclick = () => {
-        const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
+        // Uppercase BEFORE the cut ("ß" grows to "SS") and cut by code point, so a
+        // CODE stays 3 wide and an emoji is never halved into a lone surrogate (#5046).
+        const clean = (v, fb, n, upper) => {
+          v = (v || "").trim(); if (upper) v = v.toUpperCase();
+          return Array.from(v).slice(0, n).join("").trim() || fb;
+        };
+        // SAVE edits the dialog's fields only: an imported team keeps its tier,
+        // engine and second driver (#5046).
         const prev = loadCustomTeam();
         const ct = {
-          id: "custom", engine: "Custom", tier: 2, custom: true,
+          ...prev, id: "custom", custom: true,
           name: clean($("cz-name").value, "My Team", 22),
-          short: clean($("cz-short").value, "YOU", 4).toUpperCase(),
+          short: clean($("cz-short").value, "YOU", 4, true),
           color: hexToRgb($("cz-color").value),
           color2: hexToRgb($("cz-color2").value),
           stats: prev.stats || DEFAULT_CUSTOM.stats,
           drivers: [{
             name: clean($("cz-driver").value, "Your Name", 22),
-            code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
+            code: clean($("cz-code").value, "YOU", 3, true),
             num: clamp(Number.isFinite(parseInt($("cz-num").value, 10)) ? parseInt($("cz-num").value, 10) : 99, 0, 99),   // #0 is a number, not "blank"
-          }],
+          }, ...(Array.isArray(prev.drivers) ? prev.drivers.slice(1) : [])],
         };
         ct.livery = czLivFromDialog();
-        identitySet("customTeam", ct);
+        if (!keptIdentity("customTeam", ct)) return;
         syncCustomTeam();
         // Inside a career the CONTRACT picks the car: saving the design must
         // not swap a driver career's seat for MY TEAM (the contracted car
@@ -356,7 +370,7 @@ const CustomTeam = (function () {
         const current = () => generation === logoGeneration;
         readLogoFile(f, (dataUrl) => {
           if (!current() || !dataUrl) return;
-          try { identitySet(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
+          if (!keptIdentity(CUSTOM_LOGO_KEY, dataUrl)) return;
           applyCustomLogo(dataUrl);
           refreshCustomLogoUi(dataUrl);
           invalidateDecalTextures("custom");
@@ -367,7 +381,7 @@ const CustomTeam = (function () {
       });
       $("cz-logo-clear").onclick = () => {
         ++logoGeneration;
-        try { identitySet(CUSTOM_LOGO_KEY, null); } catch (_) {}
+        if (!keptIdentity(CUSTOM_LOGO_KEY, null)) return;
         applyCustomLogo(null);
         refreshCustomLogoUi(null);
         invalidateDecalTextures("custom");

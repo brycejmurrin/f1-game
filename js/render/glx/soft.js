@@ -17,6 +17,7 @@ const GLXSoft = (function () {
     let _softPresentWaiters = [];
     let _softLastMaxPx = 0;
     let _softCaptureDue = false;
+    let _softCaptureAsked = false;   // the armed capture is an EXPLICIT one (invalidateSoftPresent({ capture: true }))
     const _frameWaiters = [];
 
     function isEnabled() { return enabled; }
@@ -76,12 +77,23 @@ const GLXSoft = (function () {
       // Software GL + menu/race-entry sheets: skip full-frame readback (post.js
       // readPixels) while PerfGov.softwareGlUiReadbackDefer() — garage, race
       // settings flyby, loading cover (#3589; live race-entry on SwiftShader).
-      // Tests and __apex.awaitPresent() still need a generation bump: satisfy
-      // waiters without touching the GPU (same contract as a successful blit).
+      // ONLY THE PASSIVE ARM IS DEFERRED. invalidateSoftPresent() on garage entry
+      // arms a blit nobody is waiting for; that one is dropped. A waiter is a
+      // caller that reads #game-soft next (garage PHOTO, SAVE SCREENSHOT,
+      // garage-angles), so it gets real pixels: a generation bump with nothing
+      // drawn hands it a blank 300x150 canvas. That fake shipped dead (the gate
+      // threw on an unbound getElementById) until 7d21d6700 bound it, and the
+      // scheduled garage-before capture went red the next day (#5380).
+      // An explicit capture (invalidateSoftPresent({ capture: true }): a spec that owns the camera, which cannot
+      // register a waiter) reads #game-soft next too, so it is asked. Without it, the software-GL race-intro defer
+      // (#5965 made RaceEntryProfile.stallHandoffCover's race branch live) answered it with a blank generation:
+      // image-grade-visual's black baselines on llvmpipe (Bryce's decision: A2 on #5986).
+      const asked = _softPresentWaiters.length > 0 || (_softCaptureDue && _softCaptureAsked);
       try {
-        if (typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
-          if (_softPresentWaiters.length || _softCaptureDue) {
+        if (!asked && typeof PerfGov !== "undefined" && PerfGov.softwareGlUiReadbackDefer && PerfGov.softwareGlUiReadbackDefer()) {
+          if (_softCaptureDue) {
             _softCaptureDue = false;
+            _softCaptureAsked = false;
             softBlitNotify();
           }
           return;
@@ -101,7 +113,7 @@ const GLXSoft = (function () {
       const n = w * h * 4;
       if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
       try {
-        if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h))) return;
+        if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h, asked))) return;
       } catch (_) { return; }
       if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
         _softImg = _displayCtx.createImageData(w, h);
@@ -128,6 +140,7 @@ const GLXSoft = (function () {
         // opaque black, and showing that hid the live canvas underneath.
         if (_displayCanvas.style.opacity !== "1") _displayCanvas.style.opacity = "1";
         _softCaptureDue = false;
+        _softCaptureAsked = false;
         softBlitNotify();
       } catch (_) { /* 2D blit failed */ }
     }
@@ -145,8 +158,11 @@ const GLXSoft = (function () {
 
     // snapCam() / park() call gfx.invalidateSoftPresent. GLX captures only on
     // demand, and awaitSoftPresent() already requires a newer generation.
-    function invalidateSoftPresent() {
+    // `{ capture: true }`: the caller reads #game-soft next, so the software-GL UI defer does not drop it; a bare
+    // call stays the passive arm that the defer drops (garage entry, #3589).
+    function invalidateSoftPresent(opts) {
       _softCaptureDue = true;
+      if (opts && opts.capture) _softCaptureAsked = true;
       const PST = deps.getPST();
       try { if (PST && PST.invalidateUniformCache) PST.invalidateUniformCache(); } catch (_) { /* harness */ }
     }
@@ -158,7 +174,13 @@ const GLXSoft = (function () {
     function _awaitFrame(ms) {
       return new Promise(function (resolve) {
         const w = function () { clearTimeout(t); resolve("frame"); };
-        const t = setTimeout(function () { _frameWaiters.splice(_frameWaiters.indexOf(w), 1); resolve("stale"); }, ms);
+        // Guard indexOf === -1: splice(-1, 1) would drop the last unrelated waiter
+        // (same footgun TLX already guards at awaitSoftPresent timeout).
+        const t = setTimeout(function () {
+          const i = _frameWaiters.indexOf(w);
+          if (i >= 0) _frameWaiters.splice(i, 1);
+          resolve("stale");
+        }, ms);
         _frameWaiters.push(w);
       });
     }
@@ -202,12 +224,12 @@ const GLXSoft = (function () {
       if (_frameWaiters.length) _frameWaiters.splice(0).forEach(function (w) { w(); });
     }
 
+    // softBlit / softBlitNotify stay local: blitIfDue and softBlit call them;
+    // nothing outside this create() reads Soft.softBlit|softBlitNotify.
+    // hasWaiters / captureDue were never wired — present() uses blitIfDue().
     return {
-      isEnabled, setEnabled, gen, ensureSoftDisplay, softBlit, softBlitNotify,
+      isEnabled, setEnabled, gen, ensureSoftDisplay,
       softPresentState, invalidateSoftPresent, awaitSoftPresent, blitIfDue, drainFrameWaiters,
-      // present() gates the blit on these without exposing the arrays.
-      hasWaiters: () => !!_softPresentWaiters.length,
-      captureDue: () => _softCaptureDue,
     };
   }
 

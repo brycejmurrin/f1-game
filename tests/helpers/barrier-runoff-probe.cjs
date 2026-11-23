@@ -3,6 +3,23 @@
 
 const { maxAdjOver } = require("../../tools/track/barrier-jumps.cjs");
 
+// The widest Tracks.wallAt pocket on `arr`: a run of 1-5 segments (wallAt is
+// the min of the two bracketing nodes) whose every segment stands above BOTH
+// segments just outside the run. #5079: 4-7.7 m at the pit taper.
+function maxWallPocket(arr, n) {
+  const seg = (i) => Math.min(arr[((i % n) + n) % n], arr[(((i + 1) % n) + n) % n]);
+  let worst = 0;
+  for (let k = 0; k < n; k++) {
+    let inner = Infinity;
+    for (let len = 1; len <= 5; len++) {
+      inner = Math.min(inner, seg(k + len - 1));
+      const pocket = inner - Math.max(seg(k - 1), seg(k + len));
+      if (pocket > worst) worst = pocket;
+    }
+  }
+  return worst;
+}
+
 function measureTrack(def, track) {
   const pit = track.pit;
   const oppositePitBar = pit && !pit.painted
@@ -28,6 +45,8 @@ function measureTrack(def, track) {
       maxAdjOver(track.barR, track.hw),
     ),
     nonPitWindowMax,
+    pitPocketMax: oppositePitBar
+      ? maxWallPocket(pit.side > 0 ? track.barR : track.barL, track.n) : 0,
     hasPitComplex: !!oppositePitBar,
   };
 }

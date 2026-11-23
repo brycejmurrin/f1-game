@@ -1,26 +1,22 @@
 "use strict";
-/* Apex 26 — PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent
-   player settings (GRAPHICS). Both ship ON, so nothing changes until a player
-   turns one off. OFF zeroes the strengths game.js hands present() — ssao +
-   contact for the AO pass, godray + lampVol for the god-ray march — and every
-   backend (GLX glx/post.js, TLX tlx-post.js, WGX wgx.js) already skips a pass
-   whose strengths are all 0: the GPU work goes, not just the picture (the
-   autoTier 4 shed uses the same gate).
-
-   Keys: `apex26.gfxSsao`, `apex26.gfxGodrays` — raw lane, "1"/"0", unset = ON.
-   Read per frame, so the answer is held in a variable, not re-read from storage. */
+/* Post-processing settings. iPhone starts with ambient occlusion off.
+   The renderer skips AO or god-rays when all strengths for that pass are zero.
+   Read raw preferences once and cache them for the render loop.
+   The debris switch also controls the next boot's optional Rapier import. */
 const PostFxOpts = (function () {
   "use strict";
 
   const KEYS = { ssao: "gfxSsao", godrays: "gfxGodrays" };
   const store = GameStore.store;
-  const state = { ssao: true, godrays: true };
+  const defaultSsao = () => !(typeof GfxQuality !== "undefined" && GfxQuality.isIPhone());
 
-  function read(which) {
-    try { return store.raw(`apex26.${KEYS[which]}`) !== "0"; } catch (_) { return true; }
+  function read(which, fallback) {
+    try {
+      const stored = store.raw(`apex26.${KEYS[which]}`);
+      return stored == null ? fallback : stored !== "0";
+    } catch (_) { return fallback; }
   }
-  state.ssao = read("ssao");
-  state.godrays = read("godrays");
+  const state = { ssao: read("ssao", defaultSsao()), godrays: read("godrays", true) };
 
   function set(which, want) {
     if (!(which in KEYS)) return false;
@@ -40,6 +36,28 @@ const PostFxOpts = (function () {
     if (!state.godrays) { po.godray = 0; po.lampVol = 0; }
     return po;
   }
+  const DEBRIS_KEY = "debris";   // apex26.debris — raw lane, "1"/"0", default OFF
+  // The stored value, else SettingsDefaults' shipped default — deliberately NOT
+  // DebrisWorld.status().enabled: `_enabled` is false until game.js calls
+  // create(), and this row wires on DOMContentLoaded, which can come first.
+  // Matched to create() exactly: only the raw string "1" enables the side-world.
+  function debrisOn() {
+    return store.raw(`apex26.${DEBRIS_KEY}`) === "1";
+  }
+  function setDebris(want) {
+    const v = !!want;
+    // rawSet swallows a blocked write itself (and records store.broken), so a
+    // failure here costs the next boot, never this session's live half.
+    store.rawSet(`apex26.${DEBRIS_KEY}`, v ? "1" : "0");
+    // Live half: setEnabled(false) destroys the world; setEnabled(true) starts
+    // the lazy Rapier load if this boot never did.
+    try {
+      if (typeof DebrisWorld !== "undefined" && DebrisWorld.setEnabled) DebrisWorld.setEnabled(v);
+    } catch (_) { /* the stored half still reaches the next boot */ }
+    return v;
+  }
+  const debris = Object.freeze({ KEY: DEBRIS_KEY, on: debrisOn, set: setDebris });
+
   // lookPostShed (GRAPHICS: LOW or measured/crash tier 4): zero look-defining strengths
   // before present(). autoTier alone left LOW with full bloom/SSAO/god-rays on tile GPUs.
   function lookPostOff() {
@@ -60,7 +78,14 @@ const PostFxOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
-    // Silent writes for the same reason as DebrisOpts: no G here to gate the UI blip.
+    // Silent writes: uiSelect() blips unconditionally and every call site supplies
+    // its own `if (G.soundOn)` gate; this module has no G (DrivingLineOpts is the same).
+    // DEBRIS OFF is a frame budget the player gets back; the race is otherwise unchanged.
+    SettingRow.wire("pm-debris", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (debrisOn() ? "on" : "off"),
+      write: (v) => setDebris(v === "on"),
+    });
     SettingRow.wire("pm-ssao", {
       values: SettingRow.labels(["off", "on"]),
       read: () => (state.ssao ? "on" : "off"),
@@ -74,10 +99,13 @@ const PostFxOpts = (function () {
   }
 
   if (typeof document !== "undefined") {
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+    if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => {
+      // #4798: wired at the first Settings enter / tap / idle, not in the DCL task.
+      if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+    }, { once: true });
     else initUI();
   }
 
-  return { KEYS, set, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI };
+  return { KEYS, set, defaultSsao, ssaoOn, godraysOn, gate, lookPostOff, applyLookShed, initUI, debris };
 })();
 Object.freeze(PostFxOpts);

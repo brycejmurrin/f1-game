@@ -66,6 +66,7 @@ function boot(opts = {}) {
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
 
@@ -160,8 +161,8 @@ function boot(opts = {}) {
 }
 
 test("source: lane memo buckets gaps empty/non-empty; caches rects; invalidateFit clears", () => {
-  const js = read("js/ui/hud.js");
-  assert.match(js, /function invalidateLaneRects\b/, "invalidateLaneRects exists");
+  const hud = read("js/ui/hud.js");
+  const js = read("js/ui/hud-radio-lane.js");   // the lane left hud.js whole (#3261)
   assert.match(js, /function laneRect\b/, "laneRect caches getBoundingClientRect");
   assert.match(js, /gapBit/, "gap empty/non-empty bit is in the layout key");
   assert.doesNotMatch(
@@ -169,7 +170,7 @@ test("source: lane memo buckets gaps empty/non-empty; caches rects; invalidateFi
     /els\.gapA\s*\?\s*\(els\.gapA\.textContent[^)]*\)\.length/,
     "gap textContent.length is no longer in the lane memo key",
   );
-  assert.match(js, /invalidateFit\([\s\S]*?invalidateLaneRects/, "invalidateFit drops the lane rect cache");
+  assert.match(hud, /invalidateFit\([\s\S]*?invalidateLaneRects/, "invalidateFit drops the lane rect cache");
 });
 
 test("PERF: steady ticks + gap digit rolloff → 0 announceLane getBoundingClientRect", () => {
@@ -296,4 +297,29 @@ test("PERF: settled backoff skips fitHud layout reads; a dirty observer still pr
   h.resetGbr();
   h.nat();
   assert.ok(h.gbrCalls() > 0, "dirty observer: the backoff probe reads layout again");
+});
+
+test("placed radio skips auto-lane inputs and remeasures immediately when restored", () => {
+  const h = boot({ phone: true });
+  const { document } = h.sb, root = document.documentElement;
+  const tower = document.querySelector(".hud-top");
+  let keyReads = 0;
+  const lane = h.sb.HudRadioLane.create({ els: h.els }, {
+    vpW: () => 844, vpH: () => 390, fitKey: () => { keyReads++; return "same"; },
+    top: () => tower, docks: () => [], hStyle() {}, hUnstyle() {}, hToggle() {},
+  });
+  lane.announceLaneTick(root, false);
+  assert.equal(keyReads, 1);
+  document.body.setAttribute("data-radio-placed", "");
+  h.els.announce.setAttribute("data-lane-collapsed", "");
+  h.resetGbr();
+  for (let i = 0; i < 32; i++) lane.announceLaneTick(root, false);
+  lane.radioTopSlot(root, false);
+  assert.equal(h.els.announce.hasAttribute("data-lane-collapsed"), false);
+  assert.equal(keyReads, 1, "automatic placement inputs were not read");
+  assert.equal(tower._gbr, 0, "placed card does not need the tower rectangle");
+  document.body.removeAttribute("data-radio-placed");
+  lane.announceLaneTick(root, false);
+  assert.equal(keyReads, 2);
+  assert.ok(tower._gbr > 0, "the first automatic tick drops the stale geometry");
 });

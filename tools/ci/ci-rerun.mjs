@@ -21,6 +21,7 @@
  *   - the run is not completed (GitHub answers 403 "This workflow is already running")
  *   - the run concluded success (nothing to re-run)
  *   - the run is a pull_request run whose head_sha is no longer its PR's head (superseded)
+ *   - a newer run of this workflow exists for the same PR and head (#6081)
  *   - run_attempt ≥ 2 without --again (the one-re-run rule)
  * Exit: 0 posted (or --dry-run ok), 1 refused, 2 bad args, 3 no token / API error.
  *
@@ -39,7 +40,7 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 
 /** Pure verdict. `run` is a GET-a-workflow-run body; `prHead` the PR's current
  *  head sha (null when the run is not a PR run or the PR could not be read). */
-export function decide(run, prHead, { again = false } = {}) {
+export function decide(run, prHead, { again = false, latestRunId } = {}) {
   if (!run || typeof run !== "object") return { ok: false, reason: "no run" };
   if (run.status !== "completed") return { ok: false, reason: `run is ${run.status || "not completed"} — GitHub refuses a re-run until every job ends` };
   if (run.conclusion === "success") return { ok: false, reason: "run already succeeded — nothing to re-run" };
@@ -48,6 +49,8 @@ export function decide(run, prHead, { again = false } = {}) {
     if (prHead !== run.head_sha) {
       return { ok: false, reason: `superseded: run head ${String(run.head_sha).slice(0, 9)} ≠ PR head ${prHead.slice(0, 9)} — re-running it would join ci-<head.ref> and cancel the live run; watch the new head instead` };
     }
+    if (!latestRunId) return { ok: false, reason: "could not establish the latest workflow run for this PR head" };
+    if (latestRunId !== run.id) return { ok: false, reason: `superseded by run ${latestRunId} on the same PR head` };
   }
   if ((run.run_attempt || 1) >= 2 && !again) return { ok: false, reason: `already re-run (attempt ${run.run_attempt}) — the one-re-run rule; pass --again only with a reason in the PR` };
   return { ok: true, reason: `run ${run.id} on ${String(run.head_sha).slice(0, 9)} (attempt ${run.run_attempt || 1}, ${run.conclusion})` };
@@ -57,6 +60,30 @@ export function decide(run, prHead, { again = false } = {}) {
 export function prNumberOf(run) {
   const prs = Array.isArray(run?.pull_requests) ? run.pull_requests : [];
   return prs.length ? prs[0].number : null;
+}
+
+/** The workflow's run_number increases on new events and stays fixed across attempts. */
+export function latestPrRunId(run, pr, get = api) {
+  const query = new URLSearchParams({ event: run.event, head_sha: run.head_sha, branch: run.head_branch, created: `>=${run.created_at}`, per_page: "100" });
+  let latest = run;
+  let found = false;
+  for (let page = 1; page <= 10; page++) { // GitHub caps a filtered search at 1000 results.
+    const { json } = get(`actions/workflows/${run.workflow_id}/runs?${query}&page=${page}`);
+    if (!Array.isArray(json?.workflow_runs) || !Number.isInteger(json.total_count) || json.total_count > 1000) return null;
+    for (const other of json.workflow_runs) {
+      if (other.id === run.id) found = true;
+      if (other.run_number <= run.run_number) continue;
+      if (other.pull_requests?.some(link => link.number === pr)) {
+        if (other.run_number > latest.run_number) latest = other;
+      } else if (!other.pull_requests?.length && (!other.head_repository?.id || !run.head_repository?.id || other.head_repository.id === run.head_repository.id)) {
+        // An unassociated run on this repo/branch/head may also own the PR group.
+        return null;
+      }
+    }
+    if ((page - 1) * 100 + json.workflow_runs.length >= json.total_count) return found ? latest.id : null;
+    if (json.workflow_runs.length !== 100) return null;
+  }
+  return null;
 }
 
 function post(pathQs, { run = spawnSync, env = process.env } = {}) {
@@ -74,7 +101,7 @@ function post(pathQs, { run = spawnSync, env = process.env } = {}) {
 async function main(argv) {
   exitIfHelp(argv, `usage: node tools/ci/ci-rerun.mjs <run_id> [--all] [--dry-run] [--again]
   Re-runs a CI run's failed jobs (--all: the whole run) only when it is completed, not green,
-  not superseded (a PR run's head_sha must still be its PR head) and not already re-run.
+  the latest applicable run on the current PR head, and not already re-run.
   Exit: 0 posted / dry-run ok, 1 refused, 2 bad args, 3 no token or API error.`);
   const id = argv.find((a) => /^\d+$/.test(a));
   const unknown = argv.find((a) => a.startsWith("-") && !["--all", "--dry-run", "--again"].includes(a));
@@ -85,7 +112,8 @@ async function main(argv) {
   let prHead = null;
   const n = prNumberOf(run);
   if (n) { const p = api(`pulls/${n}`); if (!p.error) prHead = p.json?.head?.sha || null; }
-  const v = decide(run, prHead, { again: argv.includes("--again") });
+  const latestRunId = n && prHead === run.head_sha ? latestPrRunId(run, n) : null;
+  const v = decide(run, prHead, { again: argv.includes("--again"), latestRunId });
   if (!v.ok) { console.log(`= rerun refused — ${v.reason}`); return 1; }
   if (argv.includes("--dry-run")) { console.log(`= rerun ok (dry run) — ${v.reason}`); return 0; }
   const res = post(`actions/runs/${id}/${argv.includes("--all") ? "rerun" : "rerun-failed-jobs"}`);

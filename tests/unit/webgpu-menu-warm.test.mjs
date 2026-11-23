@@ -100,18 +100,37 @@ test("warmPlusOn is on for WebGPU only when where===menu (source behaviour)", ()
   assert.ok(warmApi.includes("_resolveWarmWhere(opts)"), "warm(opts) stamps where");
 });
 
+/** Lift the REAL warm-gate block out of tlx.js — from `let _warmPlus = null;`
+ *  through the end of `const warmPlusOn = () => {...};` — and evaluate it with
+ *  the free names it closes over (renderer, localStorage, RaceEntryProfile)
+ *  injected. A local copy of the gate would test the copy, not the gate. */
+const WARM_BLOCK = (() => {
+  const a = TLX.indexOf("let _warmPlus = null;");
+  const w = TLX.indexOf("const warmPlusOn = () => {", a);
+  const b = TLX.indexOf("\n      };", w);
+  assert.ok(a > 0 && w > a && b > w, "the _warmPlus / _resolveWarmWhere / warmPlusOn block moved — update this test");
+  const block = TLX.slice(a, b + "\n      };".length);
+  assert.ok(block.includes("function _resolveWarmWhere(opts)"), "_resolveWarmWhere is inside the lifted block");
+  return block;
+})();
+
+function liftWarm({ backend = null, stored = null, profile } = {}) {
+  const renderer = backend ? { backend: { isWebGLBackend: backend === "webgl" } } : null;
+  const localStorage = { getItem: (k) => (k === "apex26.tlxWarmPlus" ? stored : null) };
+  // eslint-disable-next-line no-new-func
+  return new Function("renderer", "localStorage", "RaceEntryProfile",
+    `"use strict";${WARM_BLOCK}\nreturn { warmPlusOn, _resolveWarmWhere, setWhere: (w) => { _warmWhere = w; } };`,
+  )(renderer, localStorage, profile);
+}
+
 test("warmPlusOn evaluates: WebGL always; WebGPU menu yes / race no", () => {
-  // Behaviour sandbox of the gate alone (no renderer boot).
+  // The real gate, evaluated (no renderer boot). `forced` is the stored
+  // apex26.tlxWarmPlus override: true -> "1", false -> "0", null -> unset.
   const mk = (backend, where, forced) => {
-    const renderer = backend ? { backend: { isWebGLBackend: backend === "webgl" } } : null;
-    let _warmPlus = forced;
-    let _warmWhere = where;
-    const warmPlusOn = () => {
-      if (_warmPlus !== null) return _warmPlus;
-      if (renderer && renderer.backend && renderer.backend.isWebGLBackend) return true;
-      return _warmWhere === "menu";
-    };
-    return warmPlusOn();
+    const stored = forced === true ? "1" : forced === false ? "0" : null;
+    const g = liftWarm({ backend, stored });
+    g.setWhere(where);
+    return g.warmPlusOn();
   };
   assert.equal(mk("webgl", "race", null), true);
   assert.equal(mk("webgl", "menu", null), true);
@@ -124,18 +143,11 @@ test("warmPlusOn evaluates: WebGL always; WebGPU menu yes / race no", () => {
 
 test("_resolveWarmWhere: explicit opts, RaceEntryProfile armed, else menu", () => {
   const P = loadProfile();
-  // Mirror tlx.js helper against a live profile.
-  function resolve(opts, profile) {
-    if (opts && typeof opts.where === "string" && (opts.where === "menu" || opts.where === "loading" || opts.where === "race")) return opts.where;
-    try {
-      if (profile && profile.armed && profile.armed()) {
-        if (profile.menuEntrySession && profile.menuEntrySession()) return "loading";
-        return "race";
-      }
-    } catch (_) { /* */ }
-    return "menu";
-  }
+  // The real tlx.js helper, against a live profile.
+  const resolve = (opts, profile) => liftWarm({ profile: profile || undefined })._resolveWarmWhere(opts);
   assert.equal(resolve({ where: "menu" }, null), "menu");
+  assert.equal(resolve({ where: "race" }, null), "race");
+  assert.equal(resolve({ where: "bogus" }, null), "menu");
   assert.equal(resolve(undefined, null), "menu");
   P.begin("startRace");
   assert.equal(resolve(undefined, P), "race");

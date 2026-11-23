@@ -240,8 +240,8 @@ test("harvest clip cue fires once on a full pack at straight-line pace", () => {
   G.vTop = () => 90;
   on.tick(1 / 60);
   assert.equal(said.length, 1);
-  assert.match(said[0][0], /ENERGY FULL — LIFT OR DEPLOY ON STRAIGHTS/);
-  assert.match(said[0][0], /full battery can clip the engine on straights/);
+  assert.match(said[0][0], /ENERGY FULL — DEPLOY ON STRAIGHTS/);
+  assert.match(said[0][0], /a full battery stops harvesting, so spend some/);
   step(on, 30);
   assert.equal(said.length, 1, "once only");
 });
@@ -270,6 +270,28 @@ test("the race budget survives a reload: two races in one session, a third start
   assert.equal(next.stored.get("onboardRaces"), 0, "reset() gives the marks their two races back");
 });
 
+// REPEAT CONTROL REMINDERS (js/ui/key-binds.js, Onboard.resetControlsRefresher) re-arms the
+// three CONTROL marks only. It ran the whole reset(): the harvest mark re-armed and the stored
+// race count was wiped — and a veteran past the two-race cap would otherwise see nothing at all.
+test("REPEAT CONTROL REMINDERS re-arms brake, overtake and aero only, keeps the harvest mark and the race count", () => {
+  const vet = load({ urgency: 0.9, stored: { onboarded: 15, onboardRaces: 3 } });
+  assert.equal(vet.on.state().done, true, "a veteran: every mark seen, past the race cap");
+  assert.equal(vet.O.resetControlsRefresher(), true);
+  assert.equal(vet.on.state().shown, 8, "shown &= ~7: the harvest bit stays");
+  assert.equal(vet.stored.get("onboarded"), 8, "persisted");
+  assert.equal(vet.stored.get("onboardRaces"), 3, "the race count is left alone");
+  assert.equal(vet.on.state().races, 3);
+  assert.equal(vet.on.state().done, false, "the re-armed reminders get their own window");
+  const run = () => { vet.G.state = "count"; vet.on.tick(1 / 60); vet.G.state = "race"; vet.on.tick(1 / 60); };
+  run();
+  step(vet.on, 30);
+  assert.equal(vet.said.length, 1, "the brake reminder shows again");
+  assert.equal(vet.said[0][0].split(" — ")[0], "BRAKE", "…the brake one");
+  run(); run();
+  assert.equal(vet.on.state().done, true, "two more races and the window closes again");
+  assert.equal(vet.stored.get("onboardRaces") > 3, true, "the count kept counting from where it was");
+});
+
 // UI-04 (hunt2): announce() drops "coach" lines on the TV cameras and on a
 // full queue (returns false). The mark was saved as seen BEFORE that answer,
 // so a first race on a TV camera spent BRAKE / OVERTAKE / ACTIVE AERO unseen.
@@ -285,4 +307,15 @@ test("a mark the banner refuses stays unseen and fires once the banner accepts i
   assert.equal(a.said.length, 1, "the retry lands once the banner takes coach lines again");
   assert.match(a.said[0][0], /^BRAKE/);
   assert.equal(a.stored.get("onboarded") & 1, 1, "saved only now");
+});
+
+// Clean-room audit fix 59: G.state stays "race" on the cool-down lap
+// (game.js soloPlayerDone), so a tip could land after the chequered flag.
+test("no first-race tip once the player has finished or retired", () => {
+  for (const flag of ["finished", "retired"]) {
+    const a = load({ urgency: 0.9 });
+    a.G.player[flag] = true;
+    step(a.on, 30);
+    assert.deepEqual(a.said, [], "no tip after the player's race is over (" + flag + ")");
+  }
 });

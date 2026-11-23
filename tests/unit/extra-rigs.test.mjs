@@ -120,6 +120,23 @@ test("ExtraRigs.solve returns finite eye/tgt/fov for rival, pitwall, drone", () 
   }
 });
 
+// Rival mode used to allocate a fresh {s,x,p,t,r,hw} bag per frame via carSample.
+// With a rival subject the solve must stay finite across many frames (pooled bag).
+test("ExtraRigs.solve rival with a subject stays finite across many frames (carSample pooled)", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  const track = { total: 1000, pit: { side: 1 }, def: {} };
+  const eye = [0, 0, 0], tgt = [0, 0, 0];
+  const rival = { s: 140, x: 1.5, speed: 50 };
+  for (let i = 0; i < 120; i++) {
+    rival.s = 140 + i * 2;
+    const fov = ExtraRigs.solve("rival", track, 100 + i, 0, 50, 0, {
+      bankDy: 0, rival, carPos: [100 + i, 0], carHead: 0, dt: 1 / 60,
+    }, eye, tgt);
+    assert.ok(Number.isFinite(fov), `fov at frame ${i}`);
+    assert.ok(eye.every(Number.isFinite) && tgt.every(Number.isFinite), `pose at frame ${i}`);
+  }
+});
+
 test("ExtraRigs.tickPitAuto cuts to pitwall on entry and restores on exit", () => {
   const { ExtraRigs } = loadExtraRigs();
   let mode = 0;
@@ -187,4 +204,156 @@ test("ExtraRigs.pickRival reuses its running-car rows and array across calls", (
   assert.ok(seen[1].rows.every((r) => seen[0].rows.includes(r)), "the same row objects are reused");
   assert.equal(seen[1].arr.length, 2);
   assert.equal(seen[1].arr[0].key, a, "rows are re-filled and re-sorted (a leads on prog)");
+});
+
+// localBattles is the no-Broadcast fallback on every RIVAL frame — pool fight bags like Broadcast.battles.
+test("ExtraRigs.localBattles reuses its fight bags across calls", () => {
+  const { ExtraRigs } = loadExtraRigs();
+  const a = { key: { id: "a" }, prog: 100, speed: 50 };
+  const b = { key: { id: "b" }, prog: 80, speed: 50 };   // 0.4 s gap → a battle
+  const c = { key: { id: "c" }, prog: 60, speed: 50 };
+  const first = ExtraRigs.localBattles([a, b, c], 1);
+  assert.ok(first.length >= 1);
+  const bag0 = first[0];
+  const second = ExtraRigs.localBattles([a, b, c], 1);
+  assert.equal(second, first, "the same fights array is reused");
+  assert.equal(second[0], bag0, "the same fight bag object is reused");
+  assert.equal(second[0].key, b.key);
+  assert.equal(second[0].ahead, a.key);
+});
+
+// #4745 D — the pit-entry shot: a short, drivable tracking cut on the entry road of a called stop.
+function pitEntryRig({ motion = null, now = { t: 0 }, initialMode = 0 } = {}) {
+  const { ExtraRigs, ctx } = loadExtraRigs();
+  ctx.performance = { now: () => now.t };
+  ctx.PitGeom = { inSpan: (a, b, s) => s >= a && s <= b };
+  const calls = [];
+  let mode = initialMode;
+  const G = {
+    state: "race", paused: false,
+    track: { total: 1000, pit: { sA: 100, sIn: 300, side: 1 } },
+    player: { s: 50, pitArmed: true, brakeDemand: 0, steerCommand: 0, pitState: "none" },
+    get camMode() { return mode; },
+    setCamMode(i, o) { calls.push(o); mode = o && o.release ? 0 : i; },
+    store: { get: (k, d) => (k === "motion" ? motion : d), set() {} },
+  };
+  return { ExtraRigs, G, calls, now, mode: () => mode };
+}
+const PITWALL = CAM_MODE_IDS.indexOf("pitwall");
+
+test("helmet stays selected throughout a called pit entry", () => {
+  const helmet = CAM_MODE_IDS.indexOf("helmet");
+  const r = pitEntryRig({ initialMode: helmet });
+  for (const s of [50, 110, 160, 280, 310]) {
+    r.G.player.s = s;
+    r.ExtraRigs.tickPitAuto(r.G);
+    assert.equal(r.mode(), helmet);
+  }
+  assert.deepEqual(r.calls, []);
+});
+
+test("pit-entry shot: cuts on the entry road of a called stop, frames the car from a fixed eye, hands back after 2.2 s", () => {
+  const r = pitEntryRig();
+  r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), 0, "before the peel: no shot");
+  r.G.player.s = 110; r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), PITWALL, "on the entry road: the shot is on air");
+  assert.equal(r.calls[0].owner, "pit-entry"); assert.equal(r.calls[0].persist, false, "never saved as the player's camera");
+  assert.ok(r.ExtraRigs.pitEntryShot());
+  const eye = [0, 0, 0], tgt = [0, 0, 0];
+  r.ExtraRigs.solve("pitwall", r.G.track, 110, 0, 40, 0, { carPos: [110, 0] }, eye, tgt);
+  const e1 = eye.slice();
+  r.ExtraRigs.solve("pitwall", r.G.track, 150, 0, 40, 0, { carPos: [150, 0] }, eye, tgt);
+  assert.deepEqual(eye, e1, "the eye stands still");
+  assert.equal(tgt[0], 150, "and turns to follow the car");
+  r.now.t = 2300; r.G.player.s = 160; r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), 0, "released after PE_S"); assert.equal(r.calls.at(-1).release, true);
+  r.now.t = 2400; r.ExtraRigs.tickPitAuto(r.G);
+  assert.equal(r.mode(), 0, "once per entry");
+});
+
+test("pit-entry shot: a hard brake or a steer ends it early (the lane is driven)", () => {
+  for (const poke of [(p) => { p.brakeDemand = 0.9; }, (p) => { p.steerCommand = 0.6; }]) {
+    const r = pitEntryRig();
+    r.G.player.s = 110; r.ExtraRigs.tickPitAuto(r.G);
+    assert.equal(r.mode(), PITWALL);
+    poke(r.G.player); r.now.t = 100; r.ExtraRigs.tickPitAuto(r.G);
+    assert.equal(r.mode(), 0);
+  }
+});
+
+// #5585 — the shot is temporary: nothing the player does during it may write the shot's camera as their saved choice.
+// The REAL switch (js/camera/mode-switch.js) under the REAL shot, driven the way game.js and the CAM button drive them.
+function pitEntryWithRealSwitch() {
+  const r = pitEntryRig();
+  const saved = new Map([["camMode", 0]]);
+  const ctx = vm.createContext({ console, Math, Map, Number, document: { body: { classList: { toggle() {} }, toggleAttribute() {} }, getElementById: () => null } });
+  ctx.window = ctx;
+  ctx.Log = { info() {}, debug() {}, warn() {} };
+  ctx.CamTunerPanel = { refresh() {} };
+  ctx.ExtraRigs = r.ExtraRigs;
+  const load = (f) => vm.runInContext(fs.readFileSync(path.join(root, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
+  load("js/camera/cam-picker.js"); load("js/camera/mode-switch.js");
+  const G = {
+    $: () => null, camMode: 0, camCutT: 0, state: "race", paused: false,
+    track: r.G.track, player: r.G.player,
+    store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set(k, v) { saved.set(k, v); } },
+  };
+  const cams = ctx.CamModes.create(G);
+  G.setCamMode = cams.setCamMode;
+  const tick = (t) => { r.now.t = t; r.ExtraRigs.tickPitAuto(G); };
+  G.player.s = 110; tick(0);
+  assert.equal(G.camMode, PITWALL, "the shot is on air");
+  assert.equal(saved.get("camMode"), 0, "and was never saved");
+  return { G, cams, saved, tick, ExtraRigs: r.ExtraRigs };
+}
+const DRONE = CAM_MODE_IDS.indexOf("drone");
+
+test("pit-entry shot: a CAM press dismisses it and is spent — the saved camera and the camera after the shot are the player's own (#5585)", () => {
+  const r = pitEntryWithRealSwitch();
+  r.cams.cycleCam();                       // the CAM button / C key
+  assert.equal(r.G.camMode, 0, "back on CHASE at once, not PIT WALL + 1");
+  assert.equal(r.saved.get("camMode"), 0, "the saved choice is untouched");
+  r.tick(100);                             // the shot notices it lost the picture and ends
+  assert.ok(!r.ExtraRigs.pitEntryShot(), "the shot is over");
+  assert.equal(r.G.camMode, 0); assert.equal(r.saved.get("camMode"), 0);
+  r.tick(2400);                            // past PE_S: a late release changes nothing
+  assert.equal(r.G.camMode, 0); assert.equal(r.saved.get("camMode"), 0);
+  r.cams.cycleCam();                       // the next press is an ordinary cycle from the player's camera
+  assert.equal(r.G.camMode, 1); assert.equal(r.saved.get("camMode"), 1, "CHASE -> FAR, saved");
+});
+
+test("pit-entry shot: left alone it hands back the player's camera, and the saved choice never moved (#5585)", () => {
+  const r = pitEntryWithRealSwitch();
+  r.G.player.s = 160; r.tick(2300);
+  assert.equal(r.G.camMode, 0, "released to CHASE after PE_S"); assert.equal(r.saved.get("camMode"), 0);
+});
+
+test("pit-entry shot: an explicit pick (the picker grid) during it ends the shot and IS the player's choice (#5585)", () => {
+  const r = pitEntryWithRealSwitch();
+  r.cams.setCamMode(DRONE);
+  assert.equal(r.G.camMode, DRONE); assert.equal(r.saved.get("camMode"), DRONE, "the camera they picked, saved");
+  r.tick(100); r.tick(2400);
+  assert.equal(r.G.camMode, DRONE, "the shot's release does not pull the camera back");
+  assert.equal(r.saved.get("camMode"), DRONE);
+});
+
+test("pit-entry shot: reduced motion, an uncalled stop, a paused race and the PIT WALL opt-in skip it", () => {
+  const quiet = pitEntryRig({ motion: "reduce" });
+  quiet.G.player.s = 110; quiet.ExtraRigs.tickPitAuto(quiet.G);
+  assert.equal(quiet.mode(), 0, "MOTION reduce");
+  const uncalled = pitEntryRig();
+  uncalled.G.player.pitArmed = false; uncalled.G.player.s = 110; uncalled.ExtraRigs.tickPitAuto(uncalled.G);
+  assert.equal(uncalled.mode(), 0, "a car only passing the peel");
+  const paused = pitEntryRig();
+  paused.G.paused = true; paused.G.player.s = 110; paused.ExtraRigs.tickPitAuto(paused.G);
+  assert.equal(paused.mode(), 0, "paused");
+  const off = pitEntryRig();
+  off.G.store = { get: (k, d) => (k === "pitEntryShot" ? false : d), set() {} };
+  off.G.player.s = 110; off.ExtraRigs.tickPitAuto(off.G);
+  assert.equal(off.mode(), 0, "PIT ENTRY SHOT off");
+  const optIn = pitEntryRig();
+  optIn.G.store = { get: (k, d) => (k === "pitCamAuto" ? true : d), set() {} };
+  optIn.G.player.s = 110; optIn.ExtraRigs.tickPitAuto(optIn.G);
+  assert.ok(!optIn.ExtraRigs.pitEntryShot(), "PIT WALL auto-cut owns the lane");
 });

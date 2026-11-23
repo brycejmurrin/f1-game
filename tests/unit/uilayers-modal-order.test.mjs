@@ -152,6 +152,41 @@ test("topmodal does not preventDefault a non-cancelable focusin (F9)", () => {
   assert.match(src, /No preventDefault: `focusin` is NOT cancelable/);
 });
 
+test("topmodal onFocusIn pulls stray focus back into the top layer without calling preventDefault (F9)", () => {
+  // The REAL handler, on both of its pull-back branches: a stray focusin
+  // outside a hidden-toggled pane (#select) and one on <body> under a <dialog>.
+  // The regex above only reads a window after a `focusin` comment, so a
+  // preventDefault added earlier in the handler passed it.
+  const body = { id: "body" };
+  const stray = { id: "stray" };
+  const run = (tagName) => {
+    const focused = [];
+    const btn = { id: "btn", disabled: false, getAttribute: () => null, hidden: false,
+      focus(o) { focused.push(o); } };
+    const layer = { id: tagName === "DIALOG" ? "pausemenu" : "select", tagName,
+      contains: (el) => el === btn || el === layer, querySelectorAll: () => [btn], focus() {} };
+    const context = {
+      window: { UiLayers: { top: () => layer } },
+      document: { readyState: "loading", body, addEventListener() {}, getElementById: () => null, querySelectorAll: () => [] },
+      WeakSet, WeakMap,
+      Log: { info() {}, warn() {} },
+    };
+    context.globalThis = context;
+    vm.createContext(context);
+    vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
+    let prevented = 0;
+    const e = { type: "focusin", cancelable: false, target: tagName === "DIALOG" ? body : stray, relatedTarget: null,
+      preventDefault() { prevented++; } };
+    context.window.TopModal.onFocusIn(e);
+    return { focused, prevented };
+  };
+  for (const tag of ["DIV", "DIALOG"]) {
+    const r = run(tag);
+    assert.equal(r.focused.length, 1, `${tag}: focus is pulled back onto the layer's first control`);
+    assert.equal(r.prevented, 0, `${tag}: focusin is not cancelable — preventDefault there is a no-op that reads as a guard`);
+  }
+});
+
 test("menunav releases its per-press measurement cache (F11)", () => {
   const src = read("js/ui/menu-nav.js");
   assert.match(src, /try \{ navKey\(e\); \} finally \{ _boxes = null; \}/,
@@ -203,6 +238,13 @@ test("Escape over the telemetry popup leaves the Data Hub open (the popup's canc
   const e = h.ev();
   assert.equal(h.clicks(), 0, "the hub's close door was not pressed");
   assert.equal(e.defaultPrevented, false, "native cancel must still reach the popup");
+  assert.equal(e.stopped, false);
+});
+
+test("Escape reaches the focused exact-value field to cancel its edit", () => {
+  const h = escHarness(["datahub"]);
+  const e = h.ev({ target: { dataset: { editEscape: "cancel" } } });
+  assert.equal(h.clicks(), 0);
   assert.equal(e.stopped, false);
 });
 
@@ -408,4 +450,57 @@ test("an unsupported :modal selector retains ordinary layer ranking", () => {
   const query = U._doc.querySelectorAll;
   U._doc.querySelectorAll = (selector) => { if (selector === ":modal") throw new SyntaxError("unsupported"); return query(selector); };
   assert.equal(U.top().id, "datahub");
+});
+
+// ── onFocusIn stands aside for LAYER_SKIP layers ────────────────────────────
+// scanLayers already skips rotate-device / photo-controls (no focus memory).
+// onFocusIn used to ignore that list and pull Tab into the fly-cam's buttons,
+// turning Space into a click — the same failure LAYER_SKIP documents.
+test("TopModal.onFocusIn does not trap Tab into a LAYER_SKIP layer", () => {
+  const doc = { activeElement: null };
+  const flyBtn = {
+    id: "pc-exit", hidden: false, disabled: false, tagName: "BUTTON",
+    getAttribute: () => null,
+    focus() { doc.activeElement = flyBtn; },
+  };
+  const stray = {
+    id: "behind", hidden: false, disabled: false, tagName: "BUTTON",
+    getAttribute: () => null,
+    focus() { doc.activeElement = stray; },
+  };
+  const photo = {
+    id: "photo-controls", hidden: false, tagName: "DIV",
+    contains: (el) => el === flyBtn,
+    querySelectorAll: () => [flyBtn],
+    querySelector: () => null,
+    getBoundingClientRect: () => ({ width: 800, height: 200 }),
+  };
+  const document = {
+    readyState: "loading", addEventListener() {},
+    get activeElement() { return doc.activeElement; },
+    body: { contains: () => true },
+    getElementById: (id) => ({ "photo-controls": photo }[id] || null),
+    querySelectorAll: () => [], querySelector: () => null,
+  };
+  const shown = (el) => !!el && !el.hidden;
+  const context = {
+    window: {
+      UiLayers: {
+        LAYER_IDS: ["photo-controls"],
+        top: () => photo,
+        shown,
+      },
+    },
+    WeakSet, WeakMap, queueMicrotask: () => {},
+    MutationObserver: class { observe() {} },
+    document, Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
+  stray.focus();
+  assert.equal(doc.activeElement, stray);
+  context.window.TopModal.onFocusIn({ target: stray });
+  assert.equal(doc.activeElement, stray,
+    "focus stays on the stray control — photo-controls is LAYER_SKIP, not a menu trap");
 });

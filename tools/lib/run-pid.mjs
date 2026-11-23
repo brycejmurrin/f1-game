@@ -16,7 +16,7 @@ const safe = (n) => String(n).replace(/[^\w.-]/g, "-");
 export const runFile = (name, dir = RUN_DIR) => path.join(dir, `${safe(name)}.json`);
 
 const realDeps = {
-  alive: (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } },
+  alive: (pid) => { try { if (/^\d+ \(.*\) Z/.test(fs.readFileSync(`/proc/${pid}/stat`, "utf8"))) return false; } catch { /* no /proc */ } try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } },
   cmdline: (pid) => { try { return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " "); } catch { return ""; } },
   table: () => {
     const r = spawnSync("ps", ["-eo", "pid=,ppid="], { encoding: "utf8" });

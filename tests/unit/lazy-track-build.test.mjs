@@ -14,18 +14,25 @@ const M = require(join(ROOT, "tools/manifest.cjs"));
 const src = (f) => readFileSync(join(ROOT, f), "utf8");
 
 const TRACK_BUILD = [
+  "js/render/shared/mesh-detail.js",
   "js/track/scenery/models.js",
   "js/track/scenery/themes.js",
   "js/track/scenery/landmark-kit.js",
   "js/track/scenery/circuit-kit.js",
   "js/track/core/hidden-faces.js",
+  "js/track/scenery/landforms.js",
   "js/track/scenery/nature.js",
+  "js/track/scenery/stands.js",
   "js/track/scenery/structures.js",
+  "js/track/scenery/facade.js",
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
   "js/track/scenery/guards.js",
+  "js/track/scenery/api-wrap.js",
+  "js/track/scenery/region.js",
+  "js/track/scenery/detail.js",
   "js/track/scenery/build-props.js",
 ];
 

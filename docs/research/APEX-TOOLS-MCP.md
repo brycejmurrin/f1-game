@@ -347,7 +347,7 @@ Same-commit updates:
   `tests/unit/tinyfish-mcp.test.mjs` include
   `playwright-official` and `chrome-devtools-official`
 - `.cursor/mcp.json` locksteps those seven names + apex-tools argv (`type: stdio`)
-- `apex-tools-mcp.sh` / `playwright-mcp.sh` help in `tests/unit/tools-runnable.test.mjs`
+- `apex-tools-mcp.sh` / `playwright-mcp.sh` help in `tests/unit/tools-runnable-cli.test.mjs`
 - AGENTS Cloud path lists `./tools/mcp/apex-tools-mcp.sh` and
   `./tools/mcp/playwright-mcp.sh` next to `tinyfish-mcp.sh` / `probe-mcp.py`
 

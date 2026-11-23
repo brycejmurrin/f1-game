@@ -42,12 +42,8 @@
         brick kilns, a transmission-pylon line, bunded and burnt-off fields,
         field-boundary tree ranks and a village cluster
 
-   Three API substitutions, all forced and all verified with verify-track:
-   `groundPatch`, `motorhome` and `backdrop` emit INVALID geometry on this def
-   under every argument shape tried (1, 8 and 1 invalid items respectively, and
-   zero verts, so they ship nothing). Flat coloured ground is therefore drawn
-   with `runoffApron`, which is the same flat ground quad and takes a colour,
-   and coaches, kilns and village boxes are `place` boxes. Long earthworks are
+   Ground surfaces use runoffApron or, where a level slab intersects the terrain,
+   a terrain-fitted groundPatch. Coaches, kilns and village boxes use place. Long earthworks are
    CHAINS of short `ridge` slabs: a single slab big enough to span one of these
    features trips the overlap guard and is dropped whole.
 
@@ -59,10 +55,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["buddh"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out, MAT, vadd,
+      const { hash, every, anchor, onTrack, out, MAT, vadd,
         tree, bush, place, ridge, addBox, addCyl, addCone, addFrustum, modelGroup,
         guardrail, tyreWall, marshalPost, cameraTower, broadcastCompound,
-        billboard, sponsorHoarding, runoffApron, terrainYAt,
+        billboard, sponsorHoarding, runoffApron, groundPatch, terrainYAt,
         grandstandEx, scaffoldStand, spectatorHill } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
@@ -315,11 +311,17 @@
             stage._mat = MAT.METAL;
             for (let i = 0; i < bays - 1; i++) {
               const tOff = -half + i * pitch + pitch * 0.5;
-              const wave = Math.sin(((i + 0.5) / (bays - 1)) * Math.PI * 2) * 3.2;
-              const roofY = 17.8 + wave;
+              const w0 = 3.2 * Math.sin(i * 2 * Math.PI / (bays - 1));
+              const w1 = 3.2 * Math.sin((i + 1) * 2 * Math.PI / (bays - 1));
+              const roofY = 17.8 + (w0 + w1) / 2;
+              // Seat the aluminium panel on both trusses at their respective heights.
+              const span = Math.hypot(pitch, w1 - w0);
+              const c = pitch / span, s = (w1 - w0) / span;
+              const panelT = a.t.map((v, j) => c * v + s * a.u[j]);
+              const panelU = a.u.map((v, j) => c * v - s * a.t[j]);
               const p = vadd(a.c, a.t, tOff);
               addBox(stage, vadd(vadd(p, a.r, -2.5), a.u, roofY),
-                [17.5, 0.28, pitch * 0.92], i & 1 ? ALU : ALU_D, b);
+                [17.5, 0.28, span], i & 1 ? ALU : ALU_D, [a.r, panelU, panelT]);
             }
             // Trackside fascia under the cantilever nose.
             addBox(stage, vadd(vadd(a.c, a.r, 6.8), a.u, 16.2),
@@ -359,7 +361,7 @@
       // place strip coplanars with the paddock apron (flatCoplanar 331×338).
       place(K(sl(0.046)), 1, 100, [18, 6.5, 34], COACH);
       place(K(sl(0.060)), 1, 100, [17, 6.0, 30], COACH);
-      broadcastCompound(K(sl(0.068)), 1, 76);
+      broadcastCompound(K(sl(0.058)), 1, 76);
       //    Paddock service yard: generators, freight and the fuel bowser rank
       //    tucked behind the coaches. Low, white, and in straight lines.
       for (let i = 0; i < 5; i++)
@@ -371,7 +373,7 @@
       //    apron strip pushes the pale tarmac out past the tyre wall line,
       //    which is what the reference photographs actually show.
       runoffApron(K(0.100), -1, 8, 72, PALE);
-      runoffApron(K(0.116), -1, 8, 72, PALE);
+      groundPatch(K(0.116), -1, 8, [72, 0.35, 24], PALE);
       runoffApron(K(0.108), -1, 22, 72, PALE);
       tyreWall(0.094, 0.136, -1, 30, TYRECAP);
       billboard(K(0.103), -1, 40, 13, 4.8, BOARD);
@@ -398,7 +400,7 @@
       for (let i = 0; i < 6; i++)
         runoffApron(K(0.156 + i * 0.016), -1, 95 + i * 22, 80, i % 2 ? FIELD_A : FIELD_B);
       for (let i = 0; i < 5; i++)
-        runoffApron(K(0.150 + i * 0.019), -1, 232 + i * 17, 86,
+        groundPatch(K(0.150 + i * 0.019), -1, 232 + i * 17, [86, 0.35, 24],
           i === 2 ? CROP : (i % 2 ? STUBBLE : FIELD_A));
       for (let i = 0; i < 6; i++) bund(0.149 + i * 0.016, 118 + i * 29, 48);
       for (let i = 0; i < 9; i++) {
@@ -436,7 +438,7 @@
       //    step 7 (default 6): at 6 m two inner-curve deck planks shared a top face
       //    (flatCoplanar) once the hairpin chord point moved the node phase.
       scaffoldStand(0.288, 0.316, -1, 38, { step: 7 });
-      runoffApron(K(0.302), -1, 58, [28, 0.42, 52], DUST);
+      groundPatch(K(0.302), -1, 58, [28, 0.42, 52], DUST);
       for (let i = 0; i < 4; i++)
         runoffApron(K(0.286 + i * 0.016), -1, 96 + i * 26, 64, i % 2 ? FIELD_B : STUBBLE);
 
@@ -530,7 +532,7 @@
       // while the shared grandstandEx default stays with #1056.
       grandstandEx(0.776, -1, 34, 92, null, null,
         { livery: "concrete", roof: "flat", endWalls: true });
-      grandstandEx(0.806, -1, 34, 92, null, null,
+      grandstandEx(0.803, -1, 34, 92, null, null,
         { livery: "concrete", roof: "flat", endWalls: true });
       //     Behind the two blocks: the dust concourse the crowd walks in on,
       //     an overflow parking scrape, and two corrugated compound sheds.
@@ -664,7 +666,7 @@
       for (let i = 0; i < 6; i++) pylon(0.700 + i * 0.043, 300 - i * 14, 24 + hash(i * 59) * 5);
       for (let i = 0; i < 14; i++) {
         const h = hash(i * 43);
-        runoffApron(K(0.24 + i * 0.043), -1, 270 + h * 230, 96,
+        groundPatch(K(0.24 + i * 0.043), -1, 270 + h * 230, [96, 0.35, 24],
           h < 0.18 ? CROP : (i % 2 ? FIELD_B : STUBBLE));
       }
       for (let i = 0; i < 12; i++) bund(0.252 + i * 0.051, 296 + hash(i * 61) * 210, 62);

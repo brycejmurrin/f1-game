@@ -1,0 +1,20 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": 3,
+      "lines": 4
+    },
+    "js/render/glx/glx.js": {
+      "lines": 7
+    },
+    "js/ui/hud.js": {
+      "codeLines": -1,
+      "lines": -1
+    }
+  },
+  "tree": {
+    "assertPins": -1,
+    "assertPinsAll": -1,
+    "eagerCodeBytes": 1546
+  }
+}

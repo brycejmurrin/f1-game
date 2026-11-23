@@ -55,6 +55,8 @@ const UNIT = path.join(ROOT, "tests/unit");
    is exactly the condition under which a prop can move. Conditional on the
    diffs that can cause the defect beats unconditional on none of them. */
 const SWEEPS_ONLY = new Map([
+  ["props-hi-detail.test.mjs", "test:sweeps — per-circuit geometry (EXTREME propsHi: detail-0 hashes and detail-2 builds, #5951)"],
+  ["track-detail.test.mjs", "test:sweeps — per-circuit geometry (detail tiers: builds monza, monaco, spa three times each, #5951)"],
   ["coplanar-faces.test.mjs", "test:sweeps — per-circuit geometry"],
   ["kerb-berm-surface.test.mjs", "test:sweeps — per-circuit geometry (designer kerb styles + berms on banked corners)"],
   ["kerb-stripes.test.mjs", "test:sweeps — per-circuit geometry (kerb stripe edges, the line-following rubber band)"],
@@ -66,6 +68,7 @@ const SWEEPS_ONLY = new Map([
   ["pit-complex.test.mjs", "test:sweeps — per-circuit geometry"],
   ["pit-signs.test.mjs", "test:sweeps — per-circuit geometry"],
   ["prop-clipping.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["scenery-seats.test.mjs", "test:sweeps — per-circuit geometry (qatar verges, crowd under road, seats on terrain)"],
   ["props-tri-ratchet.test.mjs", "test:sweeps — per-circuit geometry"],
   ["build-steps.test.mjs", "test:sweeps — per-circuit geometry (stepped build is byte-identical)"],
   ["build-worker.test.mjs", "test:sweeps — per-circuit geometry (worker build + replay is byte-identical)"],
@@ -73,6 +76,8 @@ const SWEEPS_ONLY = new Map([
   ["road-under-floor.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-grounding.test.mjs", "test:sweeps — per-circuit geometry"],
   ["scenery-ground-audit.test.mjs", "test:sweeps — per-circuit geometry"],
+  ["footprint-rejected-baseline.test.mjs", "test:sweeps — per-circuit geometry (never-landing modelGroup ratchet)"],
+  ["stand-curve-gap-fleet.test.mjs", "test:sweeps — per-circuit geometry (#2204 curved-stand joints, every stand circuit)"],
   ["shared-track-foundation-characterization.test.cjs", "test:sweeps — per-circuit geometry"],
   ["track-validate-fleet.test.mjs", "test:sweeps — per-circuit geometry (the designer's validator judged on all 52 centrelines)"],
   ["track-themes-build.test.mjs", "test:sweeps — per-circuit geometry (eight theme presets × two seeds, full custom-circuit builds)"],

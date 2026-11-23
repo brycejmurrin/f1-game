@@ -122,7 +122,7 @@ test("the --steel alias holds, and the ink behind it measures what the note says
   const bg = hex(token("--bg"));
   const grounds = { "--bg": bg, "--surf-1": mixOklab(hex("#ffffff"), 4, bg, 96),
                     "--surf-3": mixOklab(hex("#ffffff"), 11, bg, 89) };
-  const want = { "--bg": 48.0, "--surf-1": 47.6, "--surf-3": 45.9 };
+  const want = { "--bg": 67.2, "--surf-1": 66.7, "--surf-3": 65.1 };   // --dim #bdbdca (#4258; was 48.0 / 47.6 / 45.9 at #9a9aa8)
   for (const [name, ground] of Object.entries(grounds)) {
     const got = Math.abs(apca(ink, ground));
     assert.ok(Math.abs(got - want[name]) < 0.5,

@@ -1,0 +1,4 @@
+# Opus hunt: js/track, js/circuits, js/editor (2026-10-27)
+F1 MED bug js/editor/designer.js:262 remapZones (trigger js/editor/stamps.js:157-159 via designer.js:972 shift-click applyStamp(sel,i) with sel>i, and deletePoint(0)) — a stamp over a span wrapping the start line makes old pts[j] the new start; remapZones only remaps heights, so bank/hw/elevation zones, bridges and props slide ~190 m round the lap (a bridge can become a RED at-grade crossing). Fix: rotate old loop to new start (like setStart) before the anchor walk. Test: stamp wrapped span with bankZone+bridge, assert within ~10 m. CONFIRMED start move (VM probe), zone slide CODE-TRACED.
+Notes: build-worker preview lacks sceneryShift (latent); validate.js bridge check ignores _sceneryShift (latent); validate.js:87 Math.max(3,min(n,3)) always 3 (cosmetic).
+Not covered: track/core mesh/line/pit/geom..., all track/scenery, most editor panels.

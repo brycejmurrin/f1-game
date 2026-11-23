@@ -7,9 +7,9 @@
 // physics block, so load order matters (a HARD_EDGES entry in
 // tools/manifest.cjs).
 window.PhysicsConsts = {
-  REVISION: "2026-09-ai-mistakes-1", // increment when comparable lap physics changes
+  REVISION: "2026-11-signed-road-gravity-1", // increment when comparable lap physics changes
   VMAX: 72,            // m/s base (~259 km/h) — F1 race pace; scales all speeds
-                       //   (PACE and the vTop()/vStd() normalisers live in game.js)
+                       //   (PACE and the vTop()/vStd() normalisers live in js/race/pace-math.js)
   ACCEL: 7,            // m/s^2 at low speed
   BRAKE: 22,
   BB_REF: 0.56,        // brake bias (% front / 100) at which the friction-ellipse split is 1/1 — see SetupTune
@@ -64,12 +64,10 @@ window.PhysicsConsts = {
   // factor is 1 at each axle's static load).
   LOAD_SENS: 0.10,
 
-  // AERODYNAMIC DOWNFORCE. Aero load rises with v², so a real F1 car pulls
-  // roughly 2 g in a slow corner and 5 g in a fast one; a grip taper that FALLS
-  // with speed (an arcade understeer model) makes quick corners vague and slow
-  // ones sharp. Lateral grip is 1 + DOWNFORCE·(v/VMAX)², so high-speed
-  // cornering firms up the way it should.
+  // AERODYNAMIC DOWNFORCE rises with v² (~2 g slow, ~5 g fast corners). Lateral
+  // grip is 1 + DOWNFORCE·aeroDf·min(1,(v/vTop())²) (js/physics/player-forces.js).
   DOWNFORCE: 0.65,     // extra grip fraction at VMAX (0 = no wings)
+  AI_WING_GRIP: 0.055,  // AI only: the wing's share of corner grip (docs/PHYSICS.md, #5791)
 
   X_VMAX_GAIN_LO: 0.055,  // top-speed gain at full X-mode, smallest wing
   X_VMAX_GAIN_HI: 0.155,  // ...and the biggest (more drag to shed)
@@ -124,15 +122,10 @@ window.PhysicsConsts = {
   THR_CAP: 0.62,
   THR_VK: 14,          // m/s (a vStd() scale) — charge = THR_VK / vStd above the cap
 
-  // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
-  // indexed by the fitted compound's `wetTread` in the Parts catalog. Read by
-  // gripMult(c) in game.js: a car with tread == null — every AI car except the
-  // MY TEAM teammate, WHEN TYRE WEAR IS OFF (no pit plan, so no way to change
-  // tyres) — takes the FULL-WET column, "the field fitted the right tyre".
-  // With wear on an AI carries its fitted set's tread (TyreModel.applyCompound)
-  // and pits for the weather. gripMult() with no car is the slick column. Dry, overcast and
-  // fog have no row,
-  // so the lookup misses and grip stays 1 as it always did.
+  // Wet road grip by TREAD CLASS [slick, inter, full wet], indexed by the compound's
+  // `wetTread`. gripMult(c) in game.js: tread == null → treadFor(weather, lap-mean
+  // wetness) (TyreModel.treadOf); wxFollow cars and, with wear on, AI use their fitted
+  // set (TyreModel.applyCompound). No car = slick column. Dry, overcast, fog: no row, grip 1.
   //
   // THE SLICK COLUMN IS THE OLD WEATHER-ONLY gripMult() VERBATIM. That is the
   // point: before this table the model read the weather and never the tyre, so
@@ -149,12 +142,12 @@ window.PhysicsConsts = {
   // damp or drizzly track; the full wet wins only in standing water). A full
   // wet on a merely wet road (0.88) runs hot and squirms below the inter (0.94),
   // and only passes it toward heavy rain. Through weatherGrip's lerp the
-  // inter/full crossover is wetness ~0.68 on grip alone and ~0.79 once the
-  // catalog's dry stat cost (cornering 0.94 vs 0.90) is counted — bracketing
-  // TyreModel.treadFor's 0.72 switch, so "the right tyre" is the faster one.
-  // The slick/inter crossover with that stat cost is ~0.24 (treadFor: 0.25).
-  // tests/unit/wet-grip-ladder.test.mjs pins the ordering.
+  // inter/full crossover is wetness ~0.68, just under TyreModel.treadFor's 0.72
+  // switch; the slick/inter crossover is ~0.20 (treadFor: 0.25), set by the
+  // dry row below. tests/unit/wet-grip-ladder.test.mjs pins the ordering.
+  // dry: a grooved tyre's dry-road cost, paid by player and AI (#5289; docs/PHYSICS.md).
   WET_GRIP: {
+    dry:  [1.00, 0.92, 0.90],
     wet:  [0.82, 0.94, 0.88],
     rain: [0.72, 0.86, 0.97],
   },
@@ -184,7 +177,9 @@ window.PhysicsConsts = {
 
   TAPER_FLOOR: 0.35,   // deploy never tapers below this — see deployTaper() in game.js
 
-  DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy
+  DRAIN_LO: 0.14, DRAIN_HI: 0.26,    // energy/s while boosting: best -> worst deploy. Real seconds, no PACE
+                                     //   term (game.js: c.energy -= drainFor(c)·dt), so a full battery lasts
+                                     //   1/0.26 ≈ 3.8 s to 1/0.14 ≈ 7.1 s of deploy (5.0 s at ersDeploy 0.5).
   REGEN_LO: 0.085, REGEN_HI: 0.155,  // energy/s recovered: worst -> best regen
   REGEN_FULL_V: 20,   // m/s (standard pace): recovery reaches its full rate here, fading to 0 at a stop
   OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // seconds of push a full Overtake allowance buys: worst -> best deploy
@@ -237,14 +232,15 @@ window.PhysicsConsts = {
   // further from the limit instead of just being slower down the straight.
   // At or below 1.0 by policy: the AI never corners faster than its own grip
   // model says it can.
-  // `err` scales AiDrive.mistakeChance: the base rate is under one mistake for
-  // the WHOLE FIELD over a default 3-lap race
-  // (docs/notes/AI-FIELD-RESEARCH.md), which reads as "the AI never messes
-  // up" — true at every level including hard, where that low rate is
+  // `err` scales AiDrive.mistakeChance. The base rate was measured (2026-09-22,
+  // docs/notes/AI-FIELD-RESEARCH.md) at under one mistake for the WHOLE FIELD
+  // over a default 3-lap race; re-measured 2026-11-18 it is about 8x that at
+  // hard (0.159 per car per 100 s, tools/check/ai-field.mjs; docs/PHYSICS.md,
+  // #5783 JD1), each costing 0-0.12 s a lap, so it still reads as "the AI never
+  // messes up" at every level including hard, where a low rate is
   // deliberate (docs/PHYSICS.md "F1 22's two or three lock-ups a race was
-  // what players called too many"). TARGET: normal ~2-3 field mistakes per
-  // 3-lap race, easy ~3-4, hard unchanged (~1) — measured before/after in
-  // docs/PHYSICS.md. The rubber band (`band`, above) must NOT touch `err`:
+  // what players called too many"). Since W26 the rate is linear in `err`
+  // (hard:normal:easy = 1 : 1.8 : 3.5; it was ~err²). The rubber band (`band`, above) must NOT touch `err`:
   // mistakes are a difficulty-ladder axis on their own, not a banded one, so
   // this stays monotonic (easy >= normal >= hard = 1) independent of band.
   // EASY needed more than a straight ratio of its rank to NORMAL: a slower,

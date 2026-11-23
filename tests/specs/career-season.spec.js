@@ -140,8 +140,9 @@ test.describe.parallel("Career — reputation", () => {
     await boot(page);
     await startCareer(page);
     await goRacing(page);
-    const reps = await page.evaluate(() => window.__apex.careerSim(24).map((r) => r.rep));
-    expect(reps.length).toBe(24);
+    const n = await page.evaluate(() => window.__apex.careerState().rounds);   // the save's calendar (2026 REAL: 23)
+    const reps = await page.evaluate((k) => window.__apex.careerSim(k).map((r) => r.rep), n);
+    expect(reps.length).toBe(n);
     for (const r of reps) { expect(r).toBeGreaterThanOrEqual(0); expect(r).toBeLessThanOrEqual(100); }
   });
 });
@@ -156,20 +157,21 @@ test.describe.parallel("Career — the rollover", () => {
     await page.evaluate(() => window.__apex.careerSim(24));
   }
 
-  test("careerSim fills the season: 24 rounds, points on the board, money earned", async ({ page }) => {
+  test("careerSim fills the season: every round, points on the board, money earned", async ({ page }) => {
     await boot(page);
     await startCareer(page);
     const money0 = await page.evaluate(() => window.__apex.careerState().money);
+    const n = await page.evaluate(() => window.__apex.careerState().rounds);   // the save's calendar (2026 REAL: 23)
     await goRacing(page);
-    const rounds = await page.evaluate(() => window.__apex.careerSim(24));
-    expect(rounds.length).toBe(24);
-    expect(rounds[23].round).toBe(24);
+    const rounds = await page.evaluate(() => window.__apex.careerSim(99));   // stops itself at the calendar's end
+    expect(rounds.length).toBe(n);
+    expect(rounds[n - 1].round).toBe(n);
     const st = await page.evaluate(() => window.__apex.careerState());
-    expect(st.round).toBe(24);
+    expect(st.round).toBe(n);
     expect(st.money).toBeGreaterThan(money0);
     const c = await page.evaluate(() => window.__apex.career());
     expect(Object.keys(c.season.pts).length).toBeGreaterThan(10);   // a real championship
-    expect(c.results.length).toBe(24);
+    expect(c.results.length).toBe(n);
     // A settled round is a settled round: the calendar is finished, which is what
     // unlocks the rollover.
     expect(await page.evaluate(() => window.__apex.career().season.round))
@@ -291,14 +293,14 @@ test.describe.parallel("Career — the rollover", () => {
 test.describe.parallel("Career — contracts", () => {
   test.use({ viewport: LANDSCAPE });
 
-  // A full season driven the way a player reaches the end of one: 23 rounds fast-
+  // A full season driven the way a player reaches the end of one: all but the last round fast-
   // forwarded, the last one actually finished so the flow goes through #results
   // and NEXT, then END OF SEASON off the hub. That is the path the offers sheet
   // is really reached by, and it leaves the game on a menu rather than mid-race.
   async function toOffers(page, opts) {
     await startCareer(page, opts);
     await goRacing(page);
-    await page.evaluate(() => window.__apex.careerSim(23));
+    await page.evaluate(() => window.__apex.careerSim(window.__apex.careerState().rounds - 1));   // all but the finale
     await page.evaluate(() => window.__apex.park(0.9));
     await page.evaluate(() => window.__apex.finishRace());
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
@@ -431,11 +433,12 @@ test.describe.parallel("Career — determinism", () => {
     await page.locator("#q-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     return page.evaluate(() => {
-      const rounds = window.__apex.careerSim(24);
+      const n = window.__apex.careerState().rounds;
+      const rounds = window.__apex.careerSim(n);
       const roll = window.__apex.careerRollover();
       const c = window.__apex.career();
       return {
-        briefs: rounds.map((r) => r.obj.type + ":" + r.obj.value + ":" + r.obj.done),
+        n, briefs: rounds.map((r) => r.obj.type + ":" + r.obj.value + ":" + r.obj.done),
         results: rounds.map((r) => r.pos + "/" + r.pts),
         money: c.money, rep: c.rep, champion: roll.champion,
         offers: roll.offers.map((o) => o.teamId + ":" + o.years + ":" + o.salary),
@@ -448,7 +451,7 @@ test.describe.parallel("Career — determinism", () => {
   test("the same seed produces the same season, rollover and offers", async ({ page }) => {
     const a = await seasonRun(page, 4242);
     const b = await seasonRun(page, 4242);
-    expect(a.briefs.length).toBe(24);
+    expect(a.briefs.length).toBe(a.n);
     expect(b).toEqual(a);
   });
 

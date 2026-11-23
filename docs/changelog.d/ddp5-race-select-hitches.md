@@ -1,1 +1,0 @@
-Fixed: Race-select on phones no longer builds the track outline on the open's main-thread long task — captions paint first, the centreline runs on the build worker (or idle) and is cached, and sheet shape classification batches layout reads before writes.

@@ -20,7 +20,7 @@ const LANDSCAPE = { width: 1180, height: 720 };
 
 test.describe("Touch designer workspace", () => {
   test.use({ hasTouch: true, isMobile: true });
-  const cells = [[734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
+  const cells = [[852, 283, 70], [734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
     [393, 659, 150], [734, 343, 150], [852, 344, 150], [844, 390, 150],
     [393, 659, 200], [852, 344, 200], [844, 390, 200], [1194, 834, 200], [390, 844, 100], [844, 390, 100]];
   for (const [width, height, scale] of cells) test(`short and scaled phones keep both views and every workspace reachable at ${width}x${height}@${scale}`, async ({ page }, testInfo) => {
@@ -42,6 +42,9 @@ test.describe("Touch designer workspace", () => {
       expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
         .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), `${width}x${height}@${scale}: both drawing surfaces retain usable dimensions`).toBeGreaterThanOrEqual(44);
       // The toolbar chips (UI Fit r6): every label fits its own chip (no clipped text) and every chip is a --tap-paint (painted-px) target.
+      // Wait for the mode's toolbar to paint first: a one-shot read right after the tap raced it (#5296 run 42918645081, 1194x834@200
+      // elevation read 0 chips, passed on retry). The wait still fails if no chip ever shows.
+      await expect(root.locator('.td-stage > [data-role="toolbar"] .sel-chip:visible').first(), `${width}x${height}@${scale} ${mode}: toolbar chips appear`).toBeVisible();
       const chips = await root.evaluate((e) => {
         const probe = e.appendChild(document.createElement("div")); probe.style.cssText = "position:absolute;visibility:hidden;height:var(--tap-paint)";
         const tap = probe.getBoundingClientRect().height; probe.remove();
@@ -56,7 +59,7 @@ test.describe("Touch designer workspace", () => {
       if (chips.chips.some((c) => c.clipX > 1 || c.clipY > 1)) await page.screenshot({ path: testInfo.outputPath(`chips-clipped-${width}x${height}-${scale}-${mode}.png`) });
       for (const c of chips.chips) {
         expect(c.clipX <= 1 && c.clipY <= 1, `${width}x${height}@${scale} ${mode}: "${c.label}" is clipped inside its chip (${c.clipX}x${c.clipY} px)`).toBe(true);
-        expect(Math.min(c.w, c.h), `${width}x${height}@${scale} ${mode}: "${c.label}" is under the ${chips.tap} px painted tap floor (--tap-paint)`).toBeGreaterThanOrEqual(chips.tap - 2);
+        expect(Math.min(c.w, c.h), `${width}x${height}@${scale} ${mode}: "${c.label}" is under the ${chips.tap} px painted tap floor (--tap-paint)`).toBeGreaterThanOrEqual(Math.max(44, chips.tap) - 2);
       }
       await expect.poll(() => root.evaluate((e) => {
         const stage = e.querySelector(".td-stage").getBoundingClientRect();
@@ -233,8 +236,144 @@ async function randomiseGreen(page, seed) {
   return page.evaluate(() => TrackDesigner.state());
 }
 
+for (const viewport of [{ width: 844, height: 390 }, { width: 390, height: 844 }]) {
+  test(`library deletion keeps keyboard focus and cancels stale confirmation at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
+    for (const seed of [7, 11, 23]) {
+      await randomiseGreen(page, seed);
+      expect((await page.evaluate((s) => { TrackDesigner.setName("Focus circuit " + s); return TrackDesigner.save(); }, seed)).ok).toBe(true);
+    }
+    const root = page.locator("#trackdesigner"), library = root.getByRole("tab", { name: "MY CIRCUITS", exact: true });
+    const cards = root.locator('#td-pane-library .td-card');
+    await library.press("Enter");
+    await expect(library).toBeFocused(); // A rebuild must not steal focus from outside the card grid.
+    await expect(cards).toHaveCount(3);
+    const middleName = await cards.nth(1).locator("strong").innerText();
+    const middle = cards.filter({ has: page.locator("strong", { hasText: middleName }) });
+    await middle.getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    // Leaving the pane withdraws destructive intent; returning needs two presses again.
+    await root.getByRole("tab", { name: "DESIGN", exact: true }).press("Enter");
+    await library.press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE", exact: true })).toBeVisible();
+    await middle.getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+    await expect(middle.getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.nth(1).getByRole("button", { name: "EDIT", exact: true })).toBeFocused();
+    // Delete the final row, then the only row: previous EDIT, then the library tab.
+    for (const remaining of [1, 0]) {
+      await cards.last().getByRole("button", { name: "DELETE", exact: true }).press("Enter");
+      await expect(cards.last().getByRole("button", { name: "DELETE?", exact: true })).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(cards).toHaveCount(remaining);
+      if (remaining) await expect(cards.last().getByRole("button", { name: "EDIT", exact: true })).toBeFocused();
+      else await expect(library).toBeFocused();
+    }
+    await expect(root.locator(".td-empty")).toContainText("No saved circuits yet");
+  });
+
+  test(`invalid native file import keeps its status readable and focus in place at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await bootClean(page); await openDesigner(page); await page.setViewportSize(viewport);
+    const root = page.locator("#trackdesigner"), trigger = root.locator('[data-role="file-menu"] > summary');
+    await trigger.press("Enter");
+    const chooser = page.waitForEvent("filechooser");
+    await root.getByRole("button", { name: "IMPORT", exact: true }).press("Enter");
+    await (await chooser).setFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{ malformed circuit") });
+    const status = root.locator('[data-role="workspace-status"] .td-msg');
+    await expect(status).toHaveText("Not an Apex 26 circuit file");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("aria-live", "polite");
+    await expect(status).toBeVisible();
+    await expect(trigger).toBeFocused();
+    const bounds = await status.evaluate((e) => {
+      const range = document.createRange(); range.selectNodeContents(e);
+      const text = [...range.getClientRects()];
+      const vv = visualViewport, view = { left: vv ? vv.offsetLeft : 0, top: vv ? vv.offsetTop : 0,
+        right: (vv ? vv.offsetLeft + vv.width : document.documentElement.clientWidth),
+        bottom: (vv ? vv.offsetTop + vv.height : document.documentElement.clientHeight) };
+      const clips = text.map((r) => Math.max(view.left - r.left, r.right - view.right, view.top - r.top, r.bottom - view.bottom, 0));
+      for (let node = e; node; node = node.parentElement) {
+        const cs = getComputedStyle(node), r = node.getBoundingClientRect();
+        const sx = node.offsetWidth ? r.width / node.offsetWidth : 1, sy = node.offsetHeight ? r.height / node.offsetHeight : 1;
+        const left = r.left + node.clientLeft * sx, top = r.top + node.clientTop * sy;
+        for (const t of text) clips.push(Math.max(
+          /hidden|clip|auto|scroll/.test(cs.overflowX) ? Math.max(left - t.left, t.right - left - node.clientWidth * sx) : 0,
+          /hidden|clip|auto|scroll/.test(cs.overflowY) ? Math.max(top - t.top, t.bottom - top - node.clientHeight * sy) : 0, 0));
+      }
+      return { lines: text.length, clipped: Math.max(0, ...clips), overflow: Math.max(e.scrollHeight - e.clientHeight, 0) };
+    });
+    expect(bounds.lines).toBeGreaterThan(0);
+    expect(bounds.clipped, JSON.stringify(bounds)).toBeLessThanOrEqual(1);
+    expect(bounds.overflow, JSON.stringify(bounds)).toBeLessThanOrEqual(1);
+  });
+}
+
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
+
+  test("pending START FROM preserves a real map drag before pointer release", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+    await page.evaluate(() => { TrackDesigner.setMode("edit"); TrackDesigner.setSelectionMode("point"); });
+    const before = await page.evaluate(() => TrackDesigner.state());
+    expect(await page.evaluate(() => !!Tracks.LIST.find(d => d.id === "monza")._metaOnly)).toBe(true);
+    let release, requested;
+    const gate = new Promise(resolve => { release = resolve; }), request = new Promise(resolve => { requested = resolve; });
+    await page.route("**/js/circuits/monza.js*", async route => { requested(); await gate; await route.continue(); });
+    await page.evaluate(() => {
+      window.__tdPendingResult = null;
+      TrackDesigner.startFrom("monza").then(result => { window.__tdPendingResult = result; });
+    });
+    await request;
+    // Aim with the map canvas's OWN view, once its size has settled: "Loading…" shows in .td-msg
+    // (`:empty` hides it) and the foot reflows. holdFit (#6031) keeps that view through a later
+    // resize so a stale aim cannot miss into a pan (no onBegin → pending resolved true; #5937).
+    await expect.poll(() => page.evaluate(() => {
+      const v = TrackDesigner.state().view, r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
+      return !!v && v.w === Math.max(1, Math.round(r.width)) && v.h === Math.max(1, Math.round(r.height));
+    })).toBe(true);
+    const at = await page.evaluate(() => {
+      const s = TrackDesigner.state(), v = s.view, p = s.design.pts[4], r = document.querySelector("#trackdesigner .td-stage > canvas").getBoundingClientRect();
+      return { x: r.x + (p[0] - v.cx) * v.scale + v.w / 2, y: r.y + (p[1] - v.cz) * v.scale + v.h / 2 };
+    });
+    await page.mouse.move(at.x, at.y); await page.mouse.down();
+    await page.mouse.move(at.x + 30, at.y - 15, { steps: 4 });
+    release();
+    await expect.poll(() => page.evaluate(() => window.__tdPendingResult)).toBe(false);
+    const live = await page.evaluate(() => TrackDesigner.state());
+    expect(live.design).toEqual(before.design); expect(live.undo).toBe(before.undo);
+    await page.mouse.up();
+    const after = await page.evaluate(() => TrackDesigner.state());
+    expect(after.design.name).toBe(before.design.name); expect(after.design.pts).not.toEqual(before.design.pts);
+    expect(after.undo).toBe(before.undo + 1);
+    await page.screenshot({ path: testInfo.outputPath("pending-hydration-map-drag.png") });
+    expect(await page.evaluate(() => { TrackDesigner.undo(); return TrackDesigner.state().design.pts; })).toEqual(before.design.pts);
+    await page.unroute("**/js/circuits/monza.js*");
+  });
+
+  test("START FROM hydrates an unvisited circuit and saves a reloadable remix", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page);
+    const before = await page.evaluate(() => ({ ids: Tracks.LIST.map((d) => d.id), stub: !!Tracks.LIST.find((d) => d.id === "monza")._metaOnly }));
+    expect(before.stub, "Monza has not been selected or raced").toBe(true);
+    expect(await page.evaluate(() => TrackDesigner.startFrom("monza"))).toBe(true);
+    const saved = await page.evaluate(() => {
+      const verdict = TrackDesigner.preview(), result = TrackDesigner.save();
+      return { ok: verdict.ok, result, ids: Tracks.LIST.filter((d) => !d.custom).map((d) => d.id), design: TrackDesigner.state().design };
+    });
+    expect(saved.ok).toBe(true); expect(saved.result.ok).toBe(true);
+    expect(saved.ids).toEqual(before.ids);
+    expect(saved.design.name).toBe("MONZA REMIX");
+    await page.screenshot({ path: testInfo.outputPath("hydrated-monza-remix.png") });
+    await page.reload();
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
+    await openDesigner(page);
+    expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(saved.result.id);
+    const reloaded = await page.evaluate(() => { TrackDesigner.preview(); return TrackDesigner.state(); });
+    expect(reloaded.ok).toBe(true); expect(reloaded.design.pts).toEqual(saved.design.pts);
+  });
 
   for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
     test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {

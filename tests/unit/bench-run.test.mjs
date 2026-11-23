@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -189,4 +190,147 @@ test("bench-run: no wake lock API is silent; a refused request is logged and doe
   await refuse.B.wake.acquire(); refuse.B.wake.release();
   assert.equal(asked, 1);
   assert.ok(refuse.logs.some((m) => /wake lock refused NotAllowedError/.test(m)));
+});
+
+// A quota-limited origin: GameStore.rawSet returns false past the quota (store.js catches and never throws).
+function quotaRun(quota, keys = {}) {
+  const ls = new Map(Object.entries(keys)), reloads = [], logs = [];
+  const used = () => [...ls].reduce((n, [k, v]) => n + k.length + v.length, 0);
+  const localStorage = { get length() { return ls.size; }, key: (i) => [...ls.keys()][i] ?? null,
+    getItem: (k) => (ls.has(k) ? ls.get(k) : null), removeItem: (k) => { ls.delete(k); },
+    setItem: (k, v) => { const was = ls.get(k); ls.set(k, String(v)); if (used() > quota) { if (was == null) ls.delete(k); else ls.set(k, was); throw new Error("QuotaExceededError"); } } };
+  const full = (k) => (k.indexOf("apex26.") === 0 ? k : "apex26." + k);
+  const store = { raw: (k) => localStorage.getItem(full(k)), rawDel: (k) => { localStorage.removeItem(full(k)); return true; },
+    rawSet: (k, v) => { try { localStorage.setItem(full(k), v); return true; } catch (_) { return false; } } };
+  const ctx = { performance: { now: () => 0 }, setTimeout: () => 0, localStorage, GameStore: { store }, Log: { info: (_c, m) => logs.push(m) },
+    location: { reload() { reloads.push(1); } } };
+  const B = vm.runInNewContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+  return { B, ls, reloads, logs };
+}
+
+test("bench-run: a refused plan write reloads nothing, pins no renderer and leaves no plan (#5006)", () => {
+  const career = "x".repeat(3000);
+  const r = quotaRun(4000, { "apex26.career.slot1": career, "apex26.gfxBackend": "glx" });
+  assert.equal(r.B.run("quick"), false, "refused");
+  assert.equal(r.reloads.length, 0, "no reload");
+  assert.equal(r.ls.get("apex26.gfxBackend"), "glx", "the player's renderer is untouched");
+  assert.equal(r.ls.has("apex26.tlxForceGL"), false);
+  assert.equal(r.ls.has("apex26.benchRun"), false, "no half-written plan");
+  assert.equal(r.ls.get("apex26.career.slot1"), career, "the save is untouched");
+  assert.equal(r.logs.filter((m) => /refused/.test(m)).length, 1);
+});
+
+test("bench-run: with room the plan is saved before the leg pins its renderer, and skips the disposable caches", () => {
+  const r = quotaRun(1e6, { "apex26.gfxBackend": "glx", "apex26.api.feed": "{}", "apex26.realrace.x": "{}", "apex26.hudLayout": "null" });
+  assert.equal(r.B.run("quick"), true);
+  assert.equal(r.reloads.length, 1);
+  const plan = JSON.parse(r.ls.get("apex26.benchRun"));
+  assert.deepEqual(Object.keys(plan.restore).sort(), ["apex26.gfxBackend", "apex26.hudLayout"]);
+  assert.equal(plan.legs[0].state, "booting");
+  assert.equal(r.ls.get("apex26.gfxBackend"), "three");
+  assert.equal(r.ls.get("apex26.tlxForceGL"), "0", "first QUICK PATHS leg is WebGPU");
+});
+
+test("graphics check compares one setting at a time, bracketed by current settings in both scenes", () => {
+  const B = load(), plan = B.newPlan("graphics", {});
+  assert.deepEqual(J(plan.legs.map(l => l.variant)), ["base", "resolution", "mirror", "base", "base", "mirror", "resolution", "base"]);
+  assert.ok(plan.legs.slice(0, 4).every(l => l.weather === "dry" && l.tod === "day"));
+  assert.ok(plan.legs.slice(4).every(l => l.weather === "rain" && l.tod === "night"));
+  const results = plan.legs.map(l => ({ ...l, state: "done", api: "webgpu", steps: [{
+    frames: 900, p95: { base: 30, mirror: 20, resolution: 26 }[l.variant], tier: 2,
+    scale: l.variant === "resolution" ? 0.75 : 1, mirror: l.variant !== "mirror",
+  }] }));
+  assert.match(B.graphicsAdvice(results), /rear-view mirror off.*10 ms.*10 ms/);
+  results[4].steps[0].p95 = 45;
+  assert.equal(B.graphicsAdvice(results), "Keep your current settings. Neither change showed a repeatable frame-time improvement across both scenes.");
+  assert.equal(B.graphicsAdvice(results.filter(l => l.variant !== "base")), "Insufficient comparable samples. Try again with the game in the foreground.");
+});
+
+test("a graphics check survives the reload it initiated, and backgrounding a new leg cancels it", async () => {
+  const data = new Map(), ls = { get length() { return data.size; }, key: i => [...data.keys()][i],
+    getItem: k => data.get(k) ?? null, setItem: (k,v) => data.set(k,v), removeItem: k => data.delete(k) };
+  const page = () => {
+    const visibility = [];
+    const document = { hidden: false, getElementById: () => null, addEventListener: (type, fn) => { if (type === "visibilitychange") visibility.push(fn); } };
+    const hide = () => { document.hidden = true; visibility.forEach(fn => fn()); };
+    const ctx = { localStorage: ls, document, location: { reload: hide }, setTimeout: () => 0 };
+    const B = vm.runInNewContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    B.create({ state: "menu" });
+    return { B, hide };
+  };
+  assert.equal(page().B.run("graphics"), true);
+  await new Promise(resolve => setImmediate(resolve));
+  const plan = () => JSON.parse(ls.getItem("apex26.benchRun"));
+  assert.equal(plan().state, "running");
+  ls.setItem("apex26.phoneRec", "temporary");
+  page().hide();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(plan().state, "stopped");
+  assert.equal(ls.getItem("apex26.phoneRec"), null);
+});
+
+test("graphics check times 30 FPS draws on a 120 Hz display while the advanced race measures callbacks", async () => {
+  async function measureLeg(id) {
+    const game = { state: "menu" }, timers = new Map(), data = new Map();
+    let raf, now = 0;
+    const ctx = vm.createContext({
+      performance: { now: () => now }, setTimeout: (cb, ms) => timers.set(ms, cb),
+      requestAnimationFrame: cb => { raf = cb; },
+      localStorage: { getItem: k => data.get(k), setItem: (k, v) => data.set(k, v) },
+      SoakRun: { start() { game.state = "race"; return true; }, active: () => true, stop() {} },
+      GLX: { getRenderScale: () => 1, setRenderScale() {} },
+      PerfGov: { autoRes: () => true, tierHold: () => false, setTierHold() {}, setAutoRes() {}, tier: () => 0 },
+      RendererPicker: { liveThreeApi: () => "webgpu" },
+    });
+    for (const module of ["render-rate", "gpu-test-run"]) {
+      const source = "js/perf/" + module + ".js";
+      vm.runInContext(readFileSync(absSrc(source), "utf8"), ctx, { filename: absSrc(source) });
+    }
+    const rate = vm.runInContext("RenderRate", ctx);
+    rate.setMode("30");
+    const B = vm.runInContext(SRC + "\n;BenchRun", ctx, { filename: absSrc("js/perf/bench-run.js") });
+    const plan = B.newPlan(id, {});
+    plan.legs = plan.legs.slice(0, 1);
+    plan.legs[0].state = "booting";
+    data.set(B.KEY, JSON.stringify(plan));
+    B.create(game);
+    timers.get(0)();
+    await new Promise(resolve => setImmediate(resolve));
+    for (let i = 0; i < 600; i++) {
+      now += 1000 / 120;
+      rate.gate(1 / 120, 1000 / 120, false, true);
+    }
+    timers.get(5000)();
+    await new Promise(resolve => setImmediate(resolve));
+    for (let i = 0; i < 2400; i++) {
+      now += 1000 / 120;
+      rate.gate(1 / 120, 1000 / 120, false, true);
+      raf(now);
+    }
+    timers.get(20000)();
+    await new Promise(resolve => setImmediate(resolve));
+    return JSON.parse(data.get(B.KEY)).legs[0].steps[0];
+  }
+  const graphics = await measureLeg("graphics"), advanced = await measureLeg("races");
+  assert.equal(graphics.p95, 33.33);
+  assert.equal(graphics.fps, 30);
+  assert.equal(advanced.p95, 8.33);
+  assert.equal(advanced.fps, 120);
+});
+
+test("Graphics opens the real Benchmark dialog for arrangement without running a test", () => {
+  const dom = makeDom(), doc = dom.document, timers = new Map(), writes = [];
+  const panel = dom.byId("pm-panel-graphics"), dialog = dom.byId("bench");
+  const header = doc.createElement("header");
+  header.className = "sheet-head"; dialog.appendChild(header); dialog.ownerDocument = doc;
+  dialog.appendChild(dom.byId("bench-body")); dialog.appendChild(dom.byId("bench-back"));
+  doc.getElementById = id => doc.querySelector("#" + id);
+  const ctx = vm.createContext({document:doc, setTimeout(fn, ms){timers.set(ms,fn);},
+    GameStore:{store:{raw(){return null;}, rawSet(...args){writes.push(args);}}}});
+  vm.runInContext(SRC + "\nBenchRun.create({});",ctx, { filename: absSrc("js/perf/bench-run.js") });
+  timers.get(400)();
+  panel.querySelector("#pm-bench-open").click();
+  assert.equal(dialog.hidden,false);
+  assert.ok(dialog.querySelector('[aria-label="Test"]'));
+  assert.deepEqual(writes,[]);
 });

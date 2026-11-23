@@ -2,7 +2,7 @@
  * player-forces.js. Planar bicycle ˙u = Fx/m − Fyf·sin(δ) + v·r; drive/brake/
  * drag already integrate in game.js, so this pin adds the missing terms and
  * asserts:
- *   - straight (δ=0, vLat=0): speed trace bit-identical to coast-drag-only
+ *   - straight (δ=0, vLat=0): speed trace follows coast drag and measured road grade
  *   - held-steer coast: each tick matches coast + (v·r − Fyf·sin δ) within tol
  *   - COUPLE_V_MIN guard present; yaw/damp path untouched
  *
@@ -43,7 +43,7 @@ function pinStraight() {
     P.vLat = 0; P.yawRateCur = 0; P.head = head0; P.axEstSm = 0; P.vertLoad = 0; pin();
   };
   const step = (inp) => { g.apex.setInput(inp); g.step(1, DT); pin(); };
-  return { P, reset, step };
+  return { P, reset, step, slopeAccel: -S.PhysicsConsts.GRAVITY_SLOPE * smp.t[1] };
 }
 
 test("COUPLE_V_MIN lives in player-forces; yaw damp / consts untouched", () => {
@@ -57,8 +57,8 @@ test("COUPLE_V_MIN lives in player-forces; yaw damp / consts untouched", () => {
   assert.ok(!/COUPLE_V_MIN/.test(consts), "no COUPLE_V_MIN in consts.js");
 });
 
-test("straight coast (delta=0, vLat=0): couple is 0 so speed path is tip-identical", () => {
-  const { P, reset, step } = pinStraight();
+test("straight coast (delta=0, vLat=0) follows drag and the local grade", () => {
+  const { P, reset, step, slopeAccel } = pinStraight();
   reset(45);
   for (let i = 0; i < 30; i++) step({ steer: 0, throttle: P.speed < 44.8 });
   assert.equal(P.steerAngle || 0, 0, "delta=0");
@@ -79,6 +79,16 @@ test("straight coast (delta=0, vLat=0): couple is 0 so speed path is tip-identic
     assert.ok(Math.abs(P.vLat || 0) < 1e-6, `vLat drifts ${P.vLat}`);
     trace.push(P.speed);
     assert.ok(P.speed <= u0 + 1e-9, "straight coast must not gain speed");
+  }
+  // At zero steer and lane offset, gravity acts along the sampled centreline.
+  const expectedAccel = -COAST + slopeAccel;
+  const accel = [];
+  for (let i = 1; i < trace.length; i++) accel.push((trace[i] - trace[i - 1]) / DT);
+  for (let i = 0; i < accel.length; i++) {
+    assert.ok(Math.abs(accel[i] - expectedAccel) < 0.02,
+      `tick ${i + 1}: straight-coast accel ${accel[i]} must match drag and grade (${expectedAccel})`);
+    assert.ok(Math.abs(accel[i] - accel[0]) < 1e-6,
+      `tick ${i + 1}: straight-coast accel ${accel[i]} drifts from ${accel[0]} — a speed-dependent term crept in`);
   }
   // Tip reference (seed 42, Monza pin, same settle): first/last coast samples.
   assert.ok(trace[0] > 40 && trace[0] < 46, `start ${trace[0]}`);

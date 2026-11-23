@@ -55,8 +55,18 @@ const shellMean = (m) => {
   return [r / n, g / n, b / n];
 };
 
+test("GaragePrims keeps BOX_F / WALL_KEYED / sideOnly module-local", () => {
+  const { GaragePrims } = harness();
+  assert.equal(GaragePrims.BOX_F, undefined);
+  assert.equal(GaragePrims.WALL_KEYED, undefined);
+  assert.equal(GaragePrims.sideOnly, undefined);
+  assert.equal(typeof GaragePrims.block, "function");
+  assert.equal(typeof GaragePrims.panelGrid, "function");
+});
+
 test("every look builds valid bay meshes", () => {
   const { GaragePrims } = harness();
+  assert.equal(GaragePrims.lookId(), "flood");
   assert.ok(GaragePrims.LOOK_IDS.length >= 5, "stock plus at least four looks");
   assert.equal(GaragePrims.setLook("no-such-look"), false);
   for (const id of GaragePrims.LOOK_IDS) {
@@ -87,10 +97,10 @@ test("each look changes the room (no silent fallback to stock)", () => {
 
 test("trackside bays (buildStatic) ignore the look", () => {
   const a = harness(), b = harness();
+  a.GaragePrims.setLook("stock");
   b.GaragePrims.setLook("flood");
-  const sa = a.GarageScene.buildStatic ? a.GarageScene.buildStatic(LIV) : null;
-  const sb = b.GarageScene.buildStatic ? b.GarageScene.buildStatic(LIV) : null;
-  if (!sa) return;   // buildStatic not exported in this tree
+  assert.equal(typeof a.GarageScene.buildStatic, "function", "GarageScene exports buildStatic");
+  const sa = a.GarageScene.buildStatic(LIV), sb = b.GarageScene.buildStatic(LIV);
   assert.deepEqual(Array.from(sb.col), Array.from(sa.col), "pit rows keep the shipped room");
 });
 
@@ -103,8 +113,9 @@ test("new room looks rebuild a live bay and restore its stock shell", () => {
     assert.ok(shell, "a changed room builds a new shell");
     return shell;
   };
+  GaragePrims.setLook("stock");
   const stock = shellAfterDraw();
-  for (const id of ["porcelain", "heritage", "endurance"]) {
+  for (const id of ["porcelain", "heritage", "endurance", "rainready", "qualify"]) {
     assert.equal(GaragePrims.setLook(id), true, `${id} is selectable`);
     const shell = shellAfterDraw();
     assert.notDeepEqual(shell.col, stock.col, `${id} changes the current room`);
@@ -114,6 +125,17 @@ test("new room looks rebuild a live bay and restore its stock shell", () => {
     GaragePrims.setLook("stock");
     assert.deepEqual(shellAfterDraw().col, stock.col, `${id} leaves no colour override behind`);
   }
+});
+
+test("rainready and qualify are distinct player-selectable room looks", () => {
+  const { GaragePrims } = harness();
+  assert.deepEqual(
+    ["rainready", "qualify", "heritage"].map((id) => [id, !!GaragePrims.LOOKS[id], GaragePrims.LOOKS[id]?.label]),
+    [["rainready", true, "Rain ready"], ["qualify", true, "Qualifying night"], ["heritage", true, "Heritage works"]],
+  );
+  const means = Object.fromEntries(["rainready", "qualify", "heritage"].map((id) => [id, shellMean(build(id).plain[0])]));
+  const pair = (a, b) => Math.hypot(...means[a].map((v, i) => v - means[b][i]));
+  assert.ok(Math.min(pair("rainready", "qualify"), pair("rainready", "heritage"), pair("qualify", "heritage")) > 0.02);
 });
 
 test("a look's upper wall takes its panel colour, not the accent stripe", () => {
@@ -245,8 +267,8 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
                    "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const crew = vm.runInContext("GarageCrew", ctx), scene = vm.runInContext("GarageScene", ctx);
-  assert.equal(crew.setLook("pitstop"), "pitstop");
-  assert.equal(saved.get("apex26.crewLook"), "pitstop");
+  assert.equal(crew.setLook("classic"), "classic");
+  assert.equal(saved.get("apex26.crewLook"), "classic");
   assert.equal(scene.setMood("night"), "night");
   assert.equal(scene.mood(), "night");
   assert.equal(saved.get("apex26.garageMood"), "night");
@@ -256,6 +278,7 @@ test("pickers: the crew and mood picks are saved by their scene modules", () => 
 test("new working-light moods preserve fixtures and restore the standard rig", () => {
   const { GarageScene: scene } = harness();
   const rig = () => Array.from(scene.live(LIV, 0, scene.moodCtx({ night: false, ambient: true })));
+  scene.setMood("shipped");
   const base = rig();
   const signatures = new Set();
   for (const id of ["inspection", "goldenhour", "endurance"]) {
@@ -270,4 +293,22 @@ test("new working-light moods preserve fixtures and restore the standard rig", (
     assert.deepEqual(rig(), base, `${id}: no tint or gain leaks into standard lighting`);
   }
   assert.equal(signatures.size, 3, "each new mood changes the emitted light rig");
+});
+
+test("#4965: a moment mood that flips the hour relights the bay without rebuilding its geometry", () => {
+  const { GarageScene: scene, meshes } = harness();
+  const ctx = { night: false, bayNight: false, ambient: false, weather: "dry" };
+  const draw = () => scene.draw(TEAM, LIV, [0, 1.6, 0], null, 0, scene.moodCtx(ctx));
+  draw();
+  const built = meshes.length;
+  assert.ok(built > 0, "the first frame builds the bay");
+  assert.equal(scene.mood("night"), "night");
+  assert.equal(scene.moodDef().night, true, "the night mood forces the hour, or this test proves nothing");
+  draw();
+  assert.equal(ctx.night, true, "the mood still lights the bay as night");
+  assert.equal(meshes.filter((m) => !m.uv).length, meshes.slice(0, built).filter((m) => !m.uv).length, "no bay geometry rebuilt at the shutter");
+  scene.mood("shipped");
+  draw();
+  assert.equal(ctx.night, false, "the return restores the garage's own hour");
+  assert.equal(meshes.filter((m) => !m.uv).length, meshes.slice(0, built).filter((m) => !m.uv).length, "no bay geometry rebuilt at the return");
 });

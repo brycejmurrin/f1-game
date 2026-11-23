@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // prune-branches.mjs — delete remote branches that are already merged into the deploy branch.
 // @doc Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first.
-// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also (archived first to refs/archive/<branch>), that has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
+// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also (archived first to refs/archive/<branch>), that has no open pull request and has been quiet for --min-age-days, plus legacy claude/claims/* markers (the claims board, retired 2026-10-27) quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
 // @skill check-changes
 //
 // WHY A WORKFLOW AND NOT AN AGENT. The remote containers' git proxy refuses
 // ref deletion over both git and the REST API (403, measured 2026-09-22 and
-// again 2026-10-01; see who-is-on-it.mjs), and 475 branches had piled up. The
+// again 2026-10-01; recorded in the retired who-is-on-it.mjs), and 475 branches had piled up. The
 // Actions token can delete a ref with `contents: write`
 // (https://docs.github.com/en/rest/git/refs#delete-a-reference), so the
 // deletion runs there and an agent dispatches it.
 //
 // WHAT IS PRUNABLE — all of these, or the branch is kept with a reason:
 //   * it is MERGED: its tip is an ancestor of the deploy branch, OR its tip is
-//     exactly the head commit of a MERGED pull request (--prs; covers a PR
+//     exactly the head commit of a pull request MERGED INTO THE BASE (--prs; covers a PR
 //     whose commits reached the deploy branch by squash or a rewritten
 //     history), OR branch-audit.mjs calls it ABSORBED (a dry merge into the
 //     deploy branch changes nothing). Nothing on any of them is lost;
@@ -36,8 +36,9 @@
 //   * its last commit is at least --min-age-days old (a just-merged branch
 //     someone is still about to push a follow-up to is left alone);
 //   * it is not the deploy branch, the default branch, gh-pages or a --keep match.
-// CLAIMS BRANCHES (claude/claims/*, who-is-on-it.mjs) are never merged — they
-// are empty-tree markers — and are pruned on age alone: who-is-on-it calls a
+// CLAIMS BRANCHES (claude/claims/*, left by who-is-on-it.mjs, retired 2026-10-27 with
+// the claims board; claims are now an issue comment + the `claimed` label) are never
+// merged — they are empty-tree markers — and are pruned on age alone: who-is-on-it called a
 // claim stale after STALE_MIN (2 h), so one quiet for a day (or --min-age-days,
 // if longer) is either released or abandoned. 182 had piled up by 2026-10-01.
 // Dry run by default: the list is the output, and --apply is the only path
@@ -48,7 +49,7 @@
 //        [--keep <regex>] [--prs <json>] [--runs <json>] [--also <verdicts>]
 //        [--report <md>] [--json <file>] [--default <branch>] [--apply]
 // --prs: `gh pr list --state all --json number,state,headRefName,headRefOid,
-// title,mergedAt,closedAt,createdAt` — open heads are kept, merged heads are
+// baseRefName,title,mergedAt,closedAt,createdAt` — open heads are kept, merged heads are
 // merged. --runs: `gh run list --json headSha,conclusion,status,workflowName,
 // createdAt`, the report's CI column. (--open-heads / --merged-heads, plain
 // line files, still work.) Without a PR list the tool refuses --apply: an
@@ -106,9 +107,10 @@ export function archiveRefs(prune, reasons, shaOf) {
 }
 
 export const DEPLOY = "claude/f1-game-project-26h3ng";
-// gh-pages, and the claims board (who-is-on-it.mjs): coordination state that
-// is never merged and must never be audited away.
-const ALWAYS_KEEP = [/^gh-pages$/, /^claude\/claims-board$/];
+// gh-pages, the claims board branch (retired 2026-10-27, kept as history) and phone-shots (the orphan branch
+// .github/workflows/phone-shots.yml fills with issue screenshots, #5246): state that is never merged and must never
+// be audited away.
+export const ALWAYS_KEEP = [/^gh-pages$/, /^claude\/claims-board$/, /^phone-shots$/];
 export const CLAIMS = /^claude\/claims\//;
 const CLAIM_MIN_DAYS = 1;
 
@@ -177,7 +179,7 @@ export function main(argv = process.argv.slice(2)) {
   const mergedHeads = new Map();
   for (const [name, p] of prs) {
     if (p.state === "open") openHeads.add(name);
-    if (p.state === "merged" && p.headSha) mergedHeads.set(name, new Set([p.headSha]));
+    if (p.state === "merged" && p.base === base && p.headSha) mergedHeads.set(name, new Set([p.headSha]));
   }
   const mergedFile = arg(argv, "--merged-heads", null);
   for (const [n, set] of parseHeads(mergedFile ? fs.readFileSync(mergedFile, "utf8") : "")) mergedHeads.set(n, new Set([...(mergedHeads.get(n) || []), ...set]));
@@ -218,11 +220,19 @@ export function main(argv = process.argv.slice(2)) {
   // or update workflow ... without `workflows` permission"), so 71 of 81 moves
   // to refs/archive/* were refused while tags at the same commits are not.
   // Such a branch is archived as a tag instead (archiveFallback).
-  const pushRefs = (specs) => {
+  const pushRefs = (specs, expected = new Map()) => {
     const landed = new Set();
     for (let i = 0; i < specs.length; i += 50) {
-      const r = spawnSync("git", ["push", "--porcelain", "origin", ...specs.slice(i, i + 50)], { encoding: "utf8", maxBuffer: 16 << 20 });
+      const batch = specs.slice(i, i + 50);
+      const leases = batch.filter((s) => s.startsWith(":")).map((s) => {
+        const ref = s.slice(1);
+        return `--force-with-lease=${ref}:${expected.get(ref)}`;
+      });
+      const r = spawnSync("git", ["push", "--porcelain", ...leases, "origin", ...batch], { encoding: "utf8", maxBuffer: 16 << 20 });
       for (const ref of landedRefs(r.stdout)) landed.add(ref);
+      if (leases.length) {
+        for (const line of (r.stdout || "").split("\n")) if (line.startsWith("!\t")) console.error(line);
+      }
       if (r.status !== 0) process.stderr.write((r.stderr || "").split("\n").filter((l) => /rejected|error/.test(l)).slice(0, 5).join("\n") + "\n");
     }
     return landed;
@@ -233,9 +243,10 @@ export function main(argv = process.argv.slice(2)) {
   const old = migrateTagRefs(git("for-each-ref", "--format=%(objectname) %(refname)", OLD_ARCHIVE_TAGS));
   if (old.push.length) {
     const moved = pushRefs(old.push);
+    const expectedTags = new Map(old.tags.map((t, i) => [t, old.push[i].split(":")[0]]));
     const drop = old.tags.filter((t) => moved.has(ARCHIVE_PREFIX + t.slice(OLD_ARCHIVE_TAGS.length)));
-    if (drop.length) pushRefs(drop.map((t) => ":" + t));
-    console.log(`moved ${drop.length} of ${old.tags.length} archive tags to ${ARCHIVE_PREFIX}; ${old.tags.length - drop.length} stay tags (refused)`);
+    const removed = pushRefs(drop.map((t) => ":" + t), expectedTags);
+    console.log(`moved ${removed.size} of ${old.tags.length} archive tags to ${ARCHIVE_PREFIX}; ${old.tags.length - removed.size} stay tags (refused)`);
   }
   // ARCHIVE FIRST: a lossy prune is deleted only after its archive landed —
   // refs/archive/<b>, or the tag archive/<b> when GitHub refused that.
@@ -249,14 +260,10 @@ export function main(argv = process.argv.slice(2)) {
   if (unarchived.size) console.error(`prune-branches: ${unarchived.size} could not be archived — those branches are kept`);
   if (refs.length) console.log(`archived ${refs.length - unarchived.size} (${first.size} as ${ARCHIVE_PREFIX}<branch>, ${second.size} as tags)`);
   const doomed = prune.filter((n) => !unarchived.has(n));
-  // Batches of 50 refs per push: one push per branch is ~475 round trips.
-  let failed = unarchived.size;
-  for (let i = 0; i < doomed.length; i += 50) {
-    const batch = doomed.slice(i, i + 50);
-    try { execFileSync("git", ["push", "origin", "--delete", ...batch], { stdio: "inherit" }); }
-    catch (_) { failed += batch.length; console.error(`prune-branches: a batch of ${batch.length} failed (a protected branch?) — re-run lists what is left`); }
-  }
-  console.log(`= prune deleted ${prune.length - failed} failed ${failed}`);
+  const expected = new Map(doomed.map((n) => ["refs/heads/" + n, shaOf.get(n)]));
+  const deleted = pushRefs([...expected.keys()].map((ref) => ":" + ref), expected);
+  const failed = prune.length - deleted.size;
+  console.log(`= prune deleted ${deleted.size} failed ${failed}`);
   return failed ? 1 : 0;
 }
 

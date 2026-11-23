@@ -31,6 +31,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { glxSoftHarness } from "../helpers/glx-soft-harness.mjs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -382,7 +383,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
   assert.match(src, /infoBlob\s*=\s*\[[^\]]*\bdev\b[^\]]*\]/, "the adapter sniff joins the info fields into one blob");
-  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
+  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*probeDirection\(Rg\)\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
 test("GLX upscale toggles preserve scene targets at unchanged render resolution", () => {
@@ -761,6 +762,10 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
   const old = { __tlxFrame: 7, dispose() { disposed++; } };
   const decalCache = new Map([["current", current], ["old", old]]);
   const _evicted = [], _fxMats = [current, old], _decalFrame = 8, DECAL_CACHE_CAP = 2;
+  // _decalDrop keeps the texture -> glow index in step (#4556); lifted, not re-implemented.
+  const decalByTex = new Map();
+  const dropAt = fx.indexOf("    function _decalDrop(k, v) {");
+  const _decalDrop = eval("(" + fx.slice(dropAt, fx.indexOf("\n    }\n", dropAt) + 6).trim() + ")");
   eval(evict);
   assert.deepEqual([...decalCache.keys()], ["current"], "eviction skips materials used in this frame");
   assert.deepEqual(_evicted, [old], "disposal is deferred until after presentation");
@@ -788,7 +793,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const game = code("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);
   assert.match(game, /armed\s*&&\s*!skipClaim\b/);
-  assert.match(game, /const p = backendPreference\(\);\s*backendTried = p === "webgpu" \|\| p === "three"/,
+  assert.match(game, /const p = backendPreference\(\);\s*if \(\(p === "webgpu" \|\| p === "three"\) && reloadOnceIntoGlx\(true\)\)/,
     "claim-fail recovery must include the unset default THREE attempt");
   // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
   // blocked, removing the probe + reloading replays the claim-and-die boot
@@ -848,8 +853,11 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // through core.allocFail so a failed upload stays inert, not a throw.
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
   // allocDrawSlot() returns -1 when the draw ring is full: a chunk must drop
-  // its draw, not index the ring at -1 (RangeError mid-frame).
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(slot < 0\) return;/);
+  // its draw, not index the ring at -1 (RangeError mid-frame). The night
+  // flush drops the open run; per-chunk breaks out of the chunk loop.
+  // One assertPinsAll site covers both full-ring exits (ratchet at tip ceiling).
+  assert.match(code("js/render/webgpu/wgx-chunked.js"),
+    /if \(s < 0\) return -1;[\s\S]*if \(s2 < 0\) \{ run\.active = false; return; \}/);
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(cslot < 0\) break;/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
@@ -906,7 +914,7 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
 test("TLX composite skips ACES and HDR grade on an 8-bit scene target", () => {
   const tsl = read("js/render/three/tsl-post.js");
   assert.match(tsl, /sceneHdr: uniform\(1\)/);
-  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?acesTonemap/);
+  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?toneMap\(/);
   assert.match(tsl, /C\.hdrGradeOn\.greaterThan\(0\.5\)\.and\(C\.sceneHdr\.greaterThan\(0\.5\)\)/);
   const post = read("js/render/three/tlx-post.js");
   assert.match(post, /P\.composite\.U\.sceneHdr\.value = _sceneHdr/);
@@ -1003,6 +1011,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
     "apex26.tlxWebKitGL": "WebGPU init failed",
+    "apex26.packIndex": "{\"models\":{}}",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -1029,6 +1038,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
+    "apex26.tlxAgx",   // the EXTREME AgX tone-map opt-in: a RESET returns the picture to ACES (#6003)
+    "apex26.tlxCsmCars", "apex26.tlxCsmDither",   // the EXTREME cascade A/B switches (#6003)
     // The boot canary's latch. gfxProbeStrikes counts loads that died before
     // presenting a frame — one is a memory kill, two retires the pick. A RESET
     // that left a strike behind would hand the next boot a strike it did not
@@ -1037,11 +1048,16 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // and in renderer-picker.js long after its only writer left game.js, which
     // is what the WRITER check below now catches.)
     "apex26.gfxProbeStrikes",
+    // The canary's retirement record (#4995): RESET returns to the default renderer, so its notice goes too.
+    "apex26.gfxRetired",
     // The last boot's BOUND backend (renderer-boot.js start()): steers only the next
     // boot's early backend preload (guessBackend). A RESET that kept it would preload
     // the old path's group once; dropping it costs nothing.
     "apex26.gfxBootBound",
-    "apex26.envProbeOff", "apex26.perChunkOff",
+    // assets.js remembers the last pack's model file+md5 (a js/render write, so
+    // RESET must clear it). The next visit relearns the hint from the manifest.
+    "apex26.packIndex",
+    "apex26.envProbeOff", "apex26.perChunkOff", "apex26.stallLatch",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
     "apex26.tlxWebKitGL",
@@ -1055,6 +1071,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
     // RESET must not leave diag() quoting a reason from before it.
     "apex26.gfxFallbackWhy",
+    // What the unset default's own boot probe saw when it bound GLX (renderer-boot.js, #5304).
+    "apex26.gfxAdapterWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -1074,6 +1092,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // not crash state — RESET RENDERER must not wipe the player's SGSR choice.
     // spatialUpscaleGather is an A/B escape pin (tools/bench only writes "0").
     "apex26.spatialUpscale", "apex26.spatialUpscaleGather",
+    // Hand-set race-scale override (backend.swRaceShed). "0" keeps full res,
+    // "1" forces the software-GL cut. RESET RENDERER must not wipe it.
+    "apex26.swRaceShed",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -1141,6 +1162,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
+  assert.equal(ls.getItem("apex26.packIndex"), null, "RESET drops the remembered pack index");
   assert.equal(ls.getItem("apex26.gfxBackendProbe"), null);
   assert.equal(ls.getItem("apex26.gfxWgxLevel"), null);
   assert.equal(ls.getItem("apex26.gfxTlxFail"), null);
@@ -1166,7 +1188,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   const latchSeed = Object.fromEntries([
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
-    "apex26.gfxFallbackWhy",
+    "apex26.gfxFallbackWhy", "apex26.gfxAdapterWhy",
   ].map((k) => [k, "1"]));
   const a = bootPicker({
     ls: { "apex26.gfxBackend": "webgl2" },
@@ -1185,7 +1207,7 @@ test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () =
   const latchSeed = Object.fromEntries([
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.stallReloads", "apex26.ctxLostNotice",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
-    "apex26.gfxFallbackWhy",
+    "apex26.gfxFallbackWhy", "apex26.gfxAdapterWhy",
   ].map((k) => [k, "1"]));
   const three = bootPicker({
     ls: { "apex26.gfxBackend": "three" },
@@ -2773,7 +2795,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /queue\.writeBuffer\(\s*buf\s*,\s*0\s*,\s*staging\s*\)/);
   assert.match(tlx, /function\s+_instColorAttr\b/);
   assert.match(tlx, /\bisInstancedBufferAttribute\b/);
-  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
+  // hdrOut: a half-float LDR is copied to RGBA8 first (cap8 is the identity on an 8-bit target).
+  assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*cap8\(ldrRT\)/);
 });
 
 test("TLX coalesces window resize to one target realloc per frame", () => {
@@ -2788,8 +2811,22 @@ test("TLX coalesces window resize to one target realloc per frame", () => {
 test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL invProj", () => {
   const tlx = code("js/render/three/tlx.js");
   // Rasterisation: three's WebGPU backend wants z in [0,1], same as WGX.
-  assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
-  assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
+  const remap = new Function("out", "projection", fnBody(tlx, "remapClipDepth"));
+  const z01 = [1,0,0,0, 0,1,0,0, 0,0,.5,0, 0,0,.5,1];
+  for (const projection of [
+    [1.7,0,0,0, 0,2,0,0, .03125,.125,-1.001,-1, 0,0,-.3002,0],
+    Float32Array.from({ length: 16 }, (_, i) => Math.sin(i * 57) * (i + 1)),
+  ]) {
+    const expected = new Float32Array(16), actual = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      let value = 0;
+      for (let k = 0; k < 4; k++) value += z01[k * 4 + r] * projection[c * 4 + k];
+      expected[c * 4 + r] = value;
+    }
+    remap(actual, projection);
+    assert.deepEqual(actual, expected);
+  }
+  assert.match(tlx, /remapClipDepth\(_projGpu, frame\.proj\)/);
   assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
 
   // Post is the OTHER convention, and the split is real, not an oversight.
@@ -2817,7 +2854,7 @@ test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => 
   assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
   assert.match(body, /f\.view\s*&&\s*f\.view\.length\s*>=\s*16/);
   assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
-  assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+  assert.match(body, /_mul4\(frameVPGpu,\s*_projZ01,\s*_viewScratch\)/);
 });
 
 test("setup preview passes explicit view for garage off-axis backends", () => {
@@ -2869,9 +2906,12 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
 const TLX = read("js/render/three/tlx.js");
 const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.186.1/three.webgpu.min.js");
+// r187 moved the node classes (TextureNode, the builders' node graph) into three.tsl.min.js, which
+// three.webgpu.min.js imports; the pins below read both chunks.
+const THREE_WEBGPU = read("vendor/three-0.187.0/three.webgpu.min.js");
+const THREE_BUNDLE = THREE_WEBGPU + "\n" + read("vendor/three-0.187.0/three.tsl.min.js");
 
-// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.186.1/
+// ── The LOCAL PATCHES carried on the vendored bundle (vendor/three-0.187.0/
 // PATCHES.md, applied to the readable build by tools/gen/vendor-three.mjs and
 // minified with the pinned terser). A vendor re-drop that silently reverts one
 // must fail HERE, not in production. The needles below are property names and
@@ -2892,7 +2932,7 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
   assert.ok(testAt >= 0 && armAt > testAt, "the re-test must precede the arm");
   const endFn = fnBody(glx, "envFaceEnd");
   const clearAt = endFn.indexOf("_envActive = false");
-  const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
+  const bailAt = endFn.indexOf("if (!gl || !envTex) return false;");
   assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
     "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
 });
@@ -2928,11 +2968,11 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   // first race frame, TLX refuses the tab and reloads. The patch omits the
   // member (identity swizzle carries no information). Re-apply per PATCHES.md.
   assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
-    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.186.1/PATCHES.md §1)");
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.187.0/PATCHES.md §1)");
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
-test("getDynamicCacheKey fills a scratch array instead of minting one per draw (PATCHES.md §6)", () => {
+test("getDynamicCacheKey fills a scratch array instead of minting one per draw (patch 6 retired in r187, PR #34553)", () => {
   // three.js r186 ships `hash$1 = ( ...params ) => cyrb53( params )`, and
   // RenderObject.getDynamicCacheKey() calls it up to three times. `get
   // needsUpdate()` calls getDynamicCacheKey() for EVERY render object on EVERY
@@ -2947,24 +2987,23 @@ test("getDynamicCacheKey fills a scratch array instead of minting one per draw (
   // would make this test fail on a re-vendor that changed nothing.
   assert.match(THREE_BUNDLE,
     /getDynamicCacheKey\(\)\{[^}]*?(\w+)\[0\]=\w+,\1\[1\]=this\.camera\.isArrayCamera\?this\.camera\.cameras\.length:0,\1\[2\]=this\.object\.receiveShadow\?1:0,\1\[3\]=this\.renderer\.contextNode\.id,\1\[4\]=this\.renderer\.contextNode\.version,\w+\(\1\)/,
-    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.186.1/PATCHES.md §6)");
+    "getDynamicCacheKey no longer fills a scratch array (vendor/three-0.187.0/PATCHES.md §6)");
   // And the form it replaced must be GONE, or a half-applied patch would pass
   // the check above while still allocating on the shadow-receiving path.
   assert.doesNotMatch(THREE_BUNDLE, /getDynamicCacheKey\(\)\{[^}]*?this\.object\.receiveShadow&&/,
     "the nested per-call hash survives in getDynamicCacheKey (PATCHES.md §6)");
 });
 
-test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (PATCHES.md §10)", () => {
+test("TextureNode clones share the BASE node's flipY / uv-matrix uniforms (patches 9 and 10 retired in r187, PR #34552)", () => {
   // r186 minted a flipY uniform per texture node (three's WebGL2 backend always
-  // flips) and marked every node OBJECT-update; the lit shader's 20 PCF taps
-  // were 20 per-object updates per draw. The uniforms now live on getBase() and
-  // update themselves; the node no longer needs an OBJECT update.
-  assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);null===\1\._flipYUniform&&\(\1\._flipYUniform=\w+\(!1\)\.onObjectUpdate\(/,
-    "the flipY uniform is per-clone again (vendor/three-0.186.1/PATCHES.md §10)");
-  assert.match(THREE_BUNDLE, /(\w+)=this\.getBase\(\);return null===\1\._matrixUniform&&\(\1\._matrixUniform=\w+\(\1\.value\.matrix\)\.onObjectUpdate\(/,
-    "the uv-matrix uniform is per-clone again (PATCHES.md §10)");
-  assert.doesNotMatch(THREE_BUNDLE, /this\.updateType=null!==this\._matrixUniform\|\|null!==this\._flipYUniform/,
-    "TextureNode still marks itself OBJECT-update (PATCHES.md §10)");
+  // flips), marked every node OBJECT-update and rebuilt the uv matrix with no
+  // reader; the lit shader's 20 PCF taps were 20 per-object updates per draw.
+  // Upstream r187 keeps both uniforms on getBase() as onObjectUpdate uniforms,
+  // and the matrix is rebuilt only inside the matrix uniform's own callback.
+  assert.match(THREE_BUNDLE, /\._flipYUniform=\w+\(!1\)\.onObjectUpdate\(/,
+    "the flipY uniform is no longer a base-node onObjectUpdate uniform (vendor/three-0.187.0/PATCHES.md §10)");
+  assert.match(THREE_BUNDLE, /(\w+)\._matrixUniform=\w+\(\1\.value\.matrix\)\.onObjectUpdate\(\(\)=>\{const (\w+)=\1\.value;return!0===\2\.matrixAutoUpdate&&\2\.updateMatrix\(\)/,
+    "the uv-matrix uniform is no longer the base node's own updater (PATCHES.md §9/§10)");
   // And the lit shader samples each shadow map through ONE base node.
   const lit = code("js/render/three/tsl-lit.js");
   assert.doesNotMatch(lit, /texture\(SHD\.(sunTex|carTex|lampTex|blockerTex), /, "a PCF tap mints its own texture node again");
@@ -3006,16 +3045,6 @@ test("lit material scalars ride two packed per-object vec4s, not seven materialR
   assert.match(lit, /const \{ draw, pA, pB \} = perDrawUniforms\(\);/);
   assert.match(lit, /pA\.value = \(mud && mud\.tlxPackA\) \|\| _PACK_A_DEF;/);
   assert.doesNotMatch(lit, /const perObject = /, "the per-key OBJECT uniforms are back (five callbacks per lit draw)");
-});
-
-test("TextureNode.update rebuilds the UV matrix only for a node that samples through it (PATCHES.md §9)", () => {
-  // r186 called texture.updateMatrix() (setUvTransform) from every per-object
-  // TextureNode.update() whenever matrixAutoUpdate was on, even with no matrix
-  // uniform to read it; three's WebGL2 backend gives every texture node a flipY
-  // uniform, so every shadow compare / material / bake sample paid it per draw
-  // (census 289: 293 ms of setUvTransform in a 21.9 s WebGL2 leg).
-  assert.match(THREE_BUNDLE, /update\(\)\{const (\w+)=this\.value,(\w+)=this\._matrixUniform;null!==\2&&\(\2\.value=\1\.matrix\),null!==\2&&!0===\1\.matrixAutoUpdate&&\1\.updateMatrix\(\)/,
-    "TextureNode.update rebuilds the uv matrix without a matrix uniform again (vendor/three-0.186.1/PATCHES.md §9)");
 });
 
 test("the vendored three emits render-stage node variables at FUNCTION scope (WebKit 8 KB private cap, PATCHES.md §4)", () => {
@@ -3060,7 +3089,7 @@ test("the vendored three has upstream's #33954 bind-group fix (patch 2 retired i
   // this as a local backport; r186 ships it. A re-drop of an older release
   // fails here.
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(/,
-    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.186.1/PATCHES.md §2)");
+    "the #33954 fix is missing from the vendor bundle — evicted-material dispose() now leaks (vendor/three-0.187.0/PATCHES.md §2)");
 });
 test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired in r186, PR #34406)", () => {
   // TLX's bias-only material variants (tsl-fx road decals −4/−8, tsl-lit
@@ -3068,7 +3097,7 @@ test("the vendored three keys WebGPU pipelines on polygonOffset (patch 3 retired
   // with the other's bias. Upstream carries the three fields in the cache key
   // and in needsRenderUpdate's compare chain since r186.
   assert.match(THREE_BUNDLE, /\.stencilWriteMask,(\w+)\.polygonOffset,\1\.polygonOffsetFactor,\1\.polygonOffsetUnits,\1\.side/,
-    "cache key lacks polygonOffset* (vendor/three-0.186.1/PATCHES.md §3)");
+    "cache key lacks polygonOffset* (vendor/three-0.187.0/PATCHES.md §3)");
   assert.match(THREE_BUNDLE, /\.polygonOffset===(\w+)\.polygonOffset&&\w+\.polygonOffsetFactor===\1\.polygonOffsetFactor&&\w+\.polygonOffsetUnits===\1\.polygonOffsetUnits/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
 });
@@ -3080,22 +3109,41 @@ test("WebGPU beginRender honours the single-sample discard hint, storeOp only (P
   // One ordered pin over the three edits (hint read → colour storeOp → depth storeOp), so the
   // tree-wide source-pin ratchet pays one site, not three.
   assert.match(THREE_BUNDLE, /\w+=\w+\?0\|\w+\.apexDiscardColor:0,\w+=!!\w+&&!0===\w+\.apexDiscardDepth[^]*?\.storeOp=\w+\|\|1==\(\w+>>\w+&1\)\?\w+:\w+[^]*?\.depthStoreOp=\w+\|\|\w+\?\w+:\w+/,
-    "beginRender no longer reads the apexDiscard* hint into the colour / depth storeOp (vendor/three-0.186.1/PATCHES.md §17)");
+    "beginRender no longer reads the apexDiscard* hint into the colour / depth storeOp (vendor/three-0.187.0/PATCHES.md §17)");
   // Never the loadOp: a discarded attachment must still load/clear exactly as before.
   assert.doesNotMatch(THREE_BUNDLE, /apexDiscard\w*\?\w+:\w+\)?,?\w*\.?loadOp/,
     "the hint leaked into a loadOp (PATCHES.md §17)");
+});
+test("submit() parks a command buffer on device.apexSubmitHold instead of submitting it (PATCHES.md §21)", () => {
+  // tlx-post.js holds its chain's command buffers and submits them in one call. A re-drop without the patch
+  // leaves the member unread: the hold array stays empty and every pass submits on its own again, silently.
+  // Behaviour, not a source pin: run the bundle's own submit helper in a VM against a fake device.
+  const m = /function (\w+)\((\w+),\w+\)\{const \w+=\2\.apexSubmitHold;[^{}]*\}/.exec(THREE_BUNDLE);
+  assert.notEqual(m, null, "the submit helper no longer reads device.apexSubmitHold (vendor/three-0.187.0/PATCHES.md §21)");
+  const scratch = (/\((\w+)\[0\]=\w+,/.exec(m[0]) || [])[1];
+  const submitted = [];
+  const ctx = vm.createContext({});
+  if (scratch) ctx[scratch] = [null];
+  const submit = vm.runInContext(`(${m[0]})`, ctx, { filename: absSrc("vendor/three-0.187.0/three.webgpu.min.js") });
+  const device = { queue: { submit: (bufs) => submitted.push([...bufs]) }, apexSubmitHold: null };
+  submit(device, "cb1");
+  assert.deepEqual(submitted, [["cb1"]], "no hold: the buffer submits at once");
+  device.apexSubmitHold = [];
+  submit(device, "cb2"); submit(device, "cb3");
+  assert.deepEqual(device.apexSubmitHold, ["cb2", "cb3"], "a hold parks the buffers in order");
+  assert.equal(submitted.length, 1, "a held buffer is never submitted by the helper");
 });
 test("the WGSL builder gives a 3-component colour target a vec4 output (PATCHES.md §18)", async () => {
   // rg11b10ufloat (RGBFormat) would otherwise get a vec3 @location, and WebGPU refuses every
   // source-alpha blend factor against it: every blended material's pipeline fails (#3690).
   // Behaviour, not a source pin: the real builders, answering for a real RGB render target.
-  const T = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const T = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const rt = new T.RenderTarget(4, 4, { format: T.RGBFormat, type: T.UnsignedInt101111Type });
   const renderer = { getRenderTarget: () => rt };
   const wgsl = Object.assign(Object.create(T.WGSLNodeBuilder.prototype), { renderer });
   const glsl = Object.assign(Object.create(T.GLSLNodeBuilder.prototype), { renderer });
   assert.equal(T.NodeBuilder.prototype.getOutputType.call(wgsl), "vec3", "the base rule still sizes an RGB target to 3");
-  assert.equal(wgsl.getOutputType(), "vec4", "WGSLNodeBuilder.getOutputType no longer widens vec3 (vendor/three-0.186.1/PATCHES.md §18)");
+  assert.equal(wgsl.getOutputType(), "vec4", "WGSLNodeBuilder.getOutputType no longer widens vec3 (vendor/three-0.187.0/PATCHES.md §18)");
   assert.equal(glsl.getOutputType(), "vec3", "GLSL is untouched (WebGL2 has no blend-vs-arity rule)");
   rt.texture.format = T.RGBAFormat;
   assert.equal(wgsl.getOutputType(), "vec4", "an RGBA target is unchanged");
@@ -3107,10 +3155,10 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   // edit or a re-drop that skipped the generator changes a hash. The pinned
   // terser in package.json is the one the manifest names, so a regeneration on
   // another box reproduces the same bytes.
-  const dir = "vendor/three-0.186.1";
+  const dir = "vendor/three-0.187.0";
   const m = JSON.parse(read(`${dir}/MANIFEST.json`));
-  assert.equal(m.three, "0.186.1");
-  assert.deepEqual(m.patches, [1, 4, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20], "patch ids applied (2 and 3 retired in r186; 17 is the single-sample storeOp discard hint (#3681); 18 widens a vec3 WGSL colour output to vec4 (#3690); 19 skips repeated shared binding-group checks and 20 keeps opted-in Uint16 indices (#3692); 15 frees the WebGL fallback's GL programs, shaders and VAOs (#2651); 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14; 14 handles rejected pipeline scopes/diagnostics)");
+  assert.equal(m.three, "0.187.0");
+  assert.deepEqual(m.patches, [1, 4, 5, 11, 12, 13, 14, 17, 18, 19, 21], "patch ids applied (21 is the submit hold; 2 and 3 retired in r186; 6, 9, 10, 15, 16 and 20 retired in r187 — upstream #34553, #34552, #34601/#34610, #34707, #34734; 17 is the single-sample storeOp discard hint (#3681); 18 widens a vec3 WGSL colour output to vec4 (#3690); 19 skips repeated shared binding-group checks and 20 keeps opted-in Uint16 indices (#3692); 15 frees the WebGL fallback's GL programs, shaders and VAOs (#2651); 7 and 8 were #228's reverted skip-draw pair; 11 and 12 are the TLX-PERF-HUNT D3 / A2 pair; 13 is PERF-HUNT-3 B14; 14 handles rejected pipeline scopes/diagnostics)");
   // §13: a shared group's cache key names texture bindings (node id + binding name), and texture clones keep their group.
   assert.match(THREE_BUNDLE, /\?"s":"t"\)\+\(\w+\.textureNode\?\w+\.textureNode\.id:""\)\+":"\+\w+\.name\+","/, "shared-group key for texture / sampler bindings (PATCHES.md §13)");
   assert.match(THREE_BUNDLE, /\.groupNode=this\.groupNode/, "TextureNode.clone() keeps the group (PATCHES.md §13)");
@@ -3119,31 +3167,22 @@ test("the vendored three matches its MANIFEST.json — generated by tools/gen/ve
   // §12: an unchanged uniform-array upload is skipped (bitwise compare with the last upload).
   assert.match(THREE_BUNDLE, /\.uboLast=null/, "uniform-array last-upload cache (PATCHES.md §12)");
   assert.match(THREE_BUNDLE, /isNodeUniformBuffer\|\|!\w+\|\|4!==\w+\.BYTES_PER_ELEMENT/, "the skip applies only to 4-byte typed uniform arrays (PATCHES.md §12)");
-  // §15 (#2651): the WebGL fallback deletes what it creates. Property names and string literals only, never terser's locals.
-  assert.match(THREE_BUNDLE, /_releasePipeline\(\w+\)\{this\.backend\.destroyPipeline\(\w+\),this\.caches\.delete\(/, "Pipelines._releasePipeline reaches the backend (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /this\.backend\.destroyProgram\(\w+\),this\.info\.destroyProgram\(\w+\)/, "Pipelines._releaseProgram reaches the backend (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /destroyProgram\((\w+)\)\{const (\w+)=this\.get\(\1\);void 0!==\2\.shaderGPU&&this\.gl\.deleteShader\(\2\.shaderGPU\)/, "WebGLBackend.destroyProgram deletes the GL shader (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /destroyPipeline\((\w+)\)\{const (\w+)=this\.get\(\1\);void 0!==\2\.programGPU&&this\.gl\.deleteProgram\(\2\.programGPU\)/, "WebGLBackend.destroyPipeline deletes the GL program (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /--this\.vaoUsed\[\w+\]>0\)return;[^}]*delete this\.vaoCache\[\w+\][^}]*this\.gl\.deleteVertexArray\(/, "a VAO is deleted only when its LAST holder releases it (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /deleteVertexState\(this\),this\.attributes=null/, "RenderObject geometry dispose releases the VAO before dropping its attributes (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /deleteVertexState\(this\),this\.geometry=\w+,this\.attributes=null/, "RenderObject.setGeometry releases the VAO of the geometry it drops (PATCHES.md §15)");
-  assert.match(THREE_BUNDLE, /deleteVertexState\(\w+\),this\.pipelines\.delete\(/, "RenderObjects.onDispose releases the VAO (PATCHES.md §15)");
-  assert.equal((THREE_BUNDLE.match(/vaoUsed\[\w+\]=\(this\.vaoUsed\[\w+\]\|\|0\)\+1/g) || []).length, 2, "one counted acquire for a render object, one pin for a compute VAO (PATCHES.md §15)");
+  // §15 (#2651) retired in r187: upstream deletes GL programs on pipeline release (#34601) and counts VAOs (#34610).
+  assert.match(THREE_BUNDLE, /destroyPipeline\((\w+)\)\{const (\w+)=this\.gl,\w+=this\.get\(\1\);[^}]*\2\.deleteProgram\(/, "WebGLBackend.destroyPipeline deletes the GL program (upstream #34601)");
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.devDependencies.terser, m.terser, "package.json must pin the terser the manifest was generated with");
   for (const [file, rec] of Object.entries(m.files)) {
     const h = createHash("sha256").update(fs.readFileSync(path.join(ROOT, dir, file))).digest("hex");
-    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.186.1`);
+    assert.equal(h, rec.sha256, `${dir}/${file} differs from MANIFEST.json — regenerate with node tools/gen/vendor-three.mjs 0.187.0`);
   }
   for (const name of [
     "three.webgpu.min.js", "three.core.min.js", "three.tsl.min.js", "LICENSE.txt",
-    "addons/tsl/display/BloomNode.js",
-    "addons/webxr/XRButton.js", "addons/webxr/VRButton.js", "addons/webxr/WebGLXRFallback.js",
+    "addons/inspector/Inspector.js",
   ]) {
     assert.ok(m.files[name], `${name} must be a manifest file`);
   }
-  assert.match(THREE_BUNDLE, /from"\.\/three\.core\.min\.js"/, "the internal core import must point at the minified chunk, as upstream's min build did");
-  assert.match(THREE_BUNDLE.slice(0, 300), /@license/, "the MIT banner survives minification");
+  assert.match(THREE_WEBGPU, /from"\.\/three\.core\.min\.js"[^]*from"\.\/three\.tsl\.min\.js"/, "the internal chunk imports (core, and r187's tsl) must point at the minified chunks");
+  assert.match(THREE_WEBGPU.slice(0, 300), /@license/, "the MIT banner survives minification");
 });
 
 /** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched
@@ -3645,9 +3684,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   }
   assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
     "env / post restore must rebind the blit RT, not the native swapchain");
-  const envEnd = src.indexOf("envFaceEnd(face)");
-  assert.notEqual(envEnd, -1, "envFaceEnd moved");
-  const envBody = src.slice(envEnd, envEnd + 4200);
+  const envBody = fnBody(src, "envFaceEnd");
   assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
     "envFaceEnd must not restore the swapchain on the software-WebGPU path");
   // A probe face that throws must NOT be counted: six swallowed throws used to
@@ -3681,8 +3718,11 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "and compare that flag at the latch — a silent rejection has no other tell");
   assert.match(envBody, /_envGaveUp\s*=\s*true\s*;\s*envReady\s*=\s*false\b/,
     "a probe that keeps erroring must stand down instead of binding the cube");
-  assert.match(fnBody(src, "envProbeReady"), /return\s+envReady\s*\|\|\s*_envGaveUp\b/,
-    "standing down must read as ready so the caller stops re-probing forever");
+  const ready = new Function("garageProbeRoom", "envReady", "_envGaveUp", fnBody(src, "envProbeReady"));
+  assert.equal(ready(null, false, true), true, "a failed race probe stops retrying");
+  assert.equal(ready(null, true, false), true, "a complete race cube stays ready");
+  assert.equal(ready(null, false, false), false, "an incomplete race cube keeps capturing");
+  assert.equal(ready({}, true, false), false, "a complete garage cube cannot satisfy the race producer");
   // three's node builder reads attribute.array.constructor to type an attribute
   // whenever it compiles a program for a pass it has not seen before, so a
   // chunk freed before the env probe's first face makes EVERY face throw.
@@ -4104,8 +4144,7 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
 // RendererBoot.start() itself, booted in a VM: the canary's strike ledger
 // across cold boots that share one localStorage. `bindPick` = the deferred
 // backend's create() succeeds; GLX always attaches.
-function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [] } = {}) {
-  const ss = new Map();
+function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, calls = [], ss = new Map(), build = undefined } = {}) {
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: { three: ["tlx.js"], webgpu: ["wgx.js"], webgl2: ["glx.js"] } },
     localStorage: {
@@ -4127,6 +4166,7 @@ function rendererBootRun(ls, { bindPick = true, xrPick = null, realGfx = false, 
   });
   ctx.window = ctx;
   ctx.dispatchEvent = () => true;
+  if (build !== undefined) ctx.__APEX_BUILD = build;
   seedLog(ctx);
   if (realGfx) vm.runInContext(readFile("js/render/gfx.js"), ctx, { filename: absSrc("js/render/gfx.js") });
   vm.runInContext(readFile("js/render/renderer-boot.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/renderer-boot.js") });
@@ -4215,6 +4255,71 @@ test("a GLX fallback boot that proves itself does not erase the pick's crash str
   assert.equal(ls.has("apex26.gfxProbeStrikes"), false, "retiring resets the ledger");
 });
 
+test("a retired pick leaves a record every later boot can read, and only while WEBGL2 is still the pick (#4995)", async () => {
+  // Two app kills inside the first race load retire TLX/WebGPU. The reason used
+  // to live in sessionStorage on the retiring boot only, so the next cold launch
+  // showed WEBGL2 as the player's own choice with nothing to say otherwise.
+  const ls = new Map([["apex26.gfxBackend", "three"], ["apex26.gfxBackendProbe", "three"], ["apex26.gfxProbeStrikes", "three:1"]]);
+  let ss = new Map();
+  let boot = await rendererBootRun(ls, { ss, build: 4321 }).start();
+  assert.equal(boot.bound, false);
+  assert.equal(ls.get("apex26.gfxBackend"), "webgl2", "second strike: the pick is retired");
+  assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "the record names the backend and the build that retired it");
+  // A cold launch of the SAME build: new sessionStorage, no probe, a plain webgl2 pick.
+  ss = new Map();
+  boot = await rendererBootRun(ls, { ss, build: 4321 }).start();
+  assert.equal(boot.bound, false);
+  assert.match(ss.get("apex26.gfxFallbackWhy") || "", /^retired: three .*build 4321/,
+    "diag().env.backendFallback still says why WebGL2 is drawing on the next launch");
+  assert.equal(ls.get("apex26.gfxRetired"), "three:4321", "reading the record does not spend it");
+  // #5942: a NEW build expires the record and tries the pick again, one strike already on the ledger.
+  const expiring = new Map(ls);
+  boot = await rendererBootRun(expiring, { ss: new Map(), build: 4400 }).start();
+  assert.equal(boot.bound, true, "a new build tries three again");
+  assert.equal(expiring.get("apex26.gfxBackend"), "three");
+  assert.equal(expiring.has("apex26.gfxRetired"), false);
+  assert.equal(expiring.get("apex26.gfxProbeStrikes"), "three:1");
+  // Any other stored pick (a hand pick clears the record itself; an import or the bridge does not) makes it stale.
+  ls.set("apex26.gfxBackend", "three");
+  ss = new Map();
+  boot = await rendererBootRun(ls, { ss }).start();
+  assert.equal(boot.bound, true);
+  assert.equal(ls.has("apex26.gfxRetired"), false, "a record that no longer matches the pick is dropped");
+  // A webgl2 pick made by hand, with no record, owes no reason.
+  const plain = new Map([["apex26.gfxBackend", "webgl2"]]);
+  ss = new Map();
+  await rendererBootRun(plain, { ss }).start();
+  assert.equal(ss.has("apex26.gfxFallbackWhy"), false);
+  assert.equal(plain.has("apex26.gfxRetired"), false);
+});
+
+test("SETTINGS names a retirement and offers the way back; a hand pick or RESET clears it (#4995)", () => {
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "three:4321" }, gpu: {} });
+  const note = a.byId["pm-renderer-retired"], btn = a.byId["pm-renderer-retry"];
+  assert.ok(note && !note.hidden, "the notice is shown");
+  assert.match(note.textContent, /Switched to WEBGL2 automatically: THREE\.JS .*build 4321/);
+  assert.equal(btn.textContent, "TRY THREE.JS AGAIN");
+  assert.equal(btn.tagName, "BUTTON");
+  btn.onclick();
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "three", "TRY AGAIN restores the retired pick");
+  assert.equal(a.ls.getItem("apex26.gfxRetired"), null, "and answers the notice");
+  assert.equal(a.timers.length > 0, true, "through the same reload path as a hand pick");
+
+  const b = bootPicker({ ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "three:4321" }, gpu: {} });
+  assert.equal(b.G.applyBackend("webgpu", b.byId["pm-renderer"]), true);
+  assert.equal(b.ls.getItem("apex26.gfxRetired"), null, "any hand pick clears the record");
+
+  const c = bootPicker({ ls: { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "three:4321" }, gpu: {} });
+  assert.ok(c.G.clearRendererStorage().includes("apex26.gfxRetired"), "RESET RENDERER clears it too");
+
+  for (const ls of [{ "apex26.gfxBackend": "webgl2" }, { "apex26.gfxBackend": "three", "apex26.gfxRetired": "three:4321" },
+    { "apex26.gfxBackend": "webgl2", "apex26.gfxRetired": "garbage" }]) {
+    const d = bootPicker({ ls, gpu: {} });
+    const n = d.byId["pm-renderer-retired"];
+    assert.ok(!n || n.hidden, "no notice without a record that matches a webgl2 pick: " + JSON.stringify(ls));
+  }
+});
+
 test("the strike ledger is per backend: one death each on two backends retires neither (#3514)", async () => {
   // TLX banked one strike; the player hand-picks WEBGPU, which dies once. The old global
   // ledger read that as strike two and rewrote the pick to webgl2.
@@ -4248,11 +4353,27 @@ test("GLX backendState and race entry defer pack retry on software GL (#3584)", 
   assert.ok(game.includes("requestIdleCallback(run, { timeout: 120000 })"));
 });
 
-test("software GL garage path gates readback and stall reload (#3589)", () => {
+test("software GL garage path gates readback and stall reload (#3589)", async () => {
   const loop = readFile("js/perf/loop-health.js");
   assert.ok(loop.includes("slowPathCover") && loop.includes('"carsetup"') && loop.includes('"race-settings"'));
   const soft = readFile("js/render/glx/soft.js");
   assert.ok(soft.includes("PerfGov.softwareGlUiReadbackDefer"));
+  // …and the gate is APPLIED: the real soft.js, run. Under the defer the PASSIVE
+  // arm (invalidateSoftPresent on garage entry) is consumed with NO readback;
+  // without it the same arm costs one. A capture WAITER reads #game-soft next
+  // (garage PHOTO, garage-angles), so it gets its one readback either way: a
+  // generation bump with nothing drawn was #5380 (blank 300x150 captures).
+  for (const [deferOn, wantArmReads] of [[true, 0], [false, 1]]) {
+    const arm = glxSoftHarness({ defer: () => deferOn });
+    arm.soft.invalidateSoftPresent();
+    arm.soft.blitIfDue();
+    assert.equal(arm.reads(), wantArmReads, `softwareGlUiReadbackDefer() ${deferOn}: passive arm costs ${wantArmReads} readback(s)`);
+    const h = glxSoftHarness({ defer: () => deferOn });
+    const waiter = h.soft.awaitSoftPresent(1000);
+    h.soft.blitIfDue();
+    assert.equal(h.reads(), 1, `softwareGlUiReadbackDefer() ${deferOn}: a capture waiter gets its readback`);
+    await waiter;   // resolves either way: __apex.awaitPresent() must not hang under the defer
+  }
   const assets = readFile("js/render/shared/assets.js");
   assert.ok(assets.includes("deferScratchReadback") && assets.includes("softwareGlUiReadbackDefer"));
   const game = gameSource();
@@ -4269,8 +4390,11 @@ test("software GL quit-to-menu and garage-close use MenuTeardown readback cover"
   assert.ok(!readFile("js/render/glx/soft.js").includes("MenuTeardown"));
   assert.ok(!readFile("js/render/shared/assets.js").includes("MenuTeardown"));
   const game = gameSource();
-  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0"));
+  assert.ok(game.includes("MenuTeardown.beginQuit()") && game.includes("_menuGate.warm = 0")
+    && game.includes("_menuGate.track = null") && game.includes("MenuTeardown.quitRenderHold()") && game.includes("PerfGov.softwareRaster()"));
   assert.ok(readFile("js/perf/menu-quit-tail.js").includes("afterOverlay") && game.includes("deferQuitTail"));
+  const tlx = readFile("js/render/three/tlx.js");
+  assert.ok(tlx.includes("softwareGlSoftPresentDefer") && tlx.includes("_queueSoftBlit"));
   const garageOracle = readFile("tools/gfx/readback-garage-oracle.mjs");
   const quitOracle = readFile("tools/gfx/readback-quit-menu-oracle.mjs");
   assert.ok(garageOracle.includes("garageClose") && garageOracle.includes("#sel-go"));
@@ -4505,10 +4629,10 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
 });
 
 test("GLX readbackLdrPixels skips software GL readPixels while menu/race-entry sheets are up", () => {
-  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h) {", "function ", "readbackLdrPixels");
+  const body = span(read("js/render/glx/post.js"), "function readbackLdrPixels(buf, w, h, asked) {", "function ", "readbackLdrPixels");
   assert.ok(body.includes("PerfGov.softwareGlUiReadbackDefer") && body.includes("softwareGlUiReadbackDefer()"));
   const gov = read("js/perf/governor.js");
-  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"'));
+  assert.ok(gov.includes("softwareGlUiReadbackDefer") && gov.includes('"race-settings"') && gov.includes('"loading"') && gov.includes("quitReadbackDefer"), "quit MenuTeardown defer must not leak garage mask into readback");
 });
 
 test("GLX present() reins in bloom on software GL when the scene target is LDR", () => {
@@ -4547,6 +4671,24 @@ test("softwareGlowScale tier-4 knee follows lookPostShed on software GL (watchdo
   assert.equal(softwareGlowScale(1), 0.55, "healthy look post keeps the softer ×0.55 knee");
 });
 
+test("softwareRaceShed is half-res on a real software GL player and full-res under automation", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/render/shared/post-common.js"), ctx, { filename: absSrc("js/render/shared/post-common.js") });
+  const { softwareRaceShed } = vm.runInContext("PostCommon", ctx);
+  const player = { webdriver: false, userAgent: "Mozilla/5.0" };
+  assert.equal(softwareRaceShed(false, player, null), false, "hardware stays full-res");
+  assert.equal(softwareRaceShed(true, player, null), true, "a software-GL player sheds");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, null), false, "webdriver pixel specs stay full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: false, userAgent: "apex-game-vm" }, null), false, "the node game VM stays full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, "1"), true, "apex26.swRaceShed=1 forces the cut");
+  assert.equal(softwareRaceShed(true, player, "0"), false, "apex26.swRaceShed=0 keeps full-res");
+  const tlx = read("js/render/three/tlx.js");
+  assert.ok(tlx.includes("PostCommon.softwareRaceShed") && tlx.includes("_swRaceShedPinned") && tlx.includes("PerfGov.setAutoRes") && tlx.includes("PerfGov.setUserTier"));
+  assert.ok(tlx.includes("renderScale = 0.5"), "the pin uses the renderer's existing 0.5 floor");
+  assert.ok(tlx.includes("opts.bloom = 0") && tlx.includes("opts.godray = 0") && tlx.includes("opts.reflect = 0"));
+  assert.ok(tlx.includes('typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu"') && tlx.includes("pinSoftwareRaceShed(opts)"), "a race-entry program warm pins before compile; a menu warm stays full-res");
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
@@ -4562,6 +4704,8 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
     "a raw (unencoded) 'ultra' — a probe's --ls or an older writer — still reads as ULTRA");
   assert.equal(msaaFor({}), 2,
     "unset = the desktop default HIGH = capped");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("extreme") }), 4,
+    "EXTREME is capped at ULTRA on GLX, never below it");
   assert.equal(msaaFor({ "apex26.gfxHigh": "1" }), 4,
     "the legacy phone key is honoured only when the preset was never stored");
   assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
@@ -4569,7 +4713,7 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
   // WGX makes the same decision at module scope; pin that it decodes too.
   const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
-  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
+  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| _p === "extreme" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
     "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
 });
 
@@ -4623,28 +4767,34 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // dropped without the event pinned every chunk of every freed track (~17 MB
   // of JS heap per picker pick, measured). Both drop paths go through one helper.
   const drop = fnBody(tlxSrc, "dropWrapper");
-  assert.match(drop, /if \(_warmPending\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry \}\)[^]*?return;/,
+  assert.match(drop, /if \(_warmPending && !_ownershipFreeDepth\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry, freedGeo: ownedGeometry \|\| m\.geometry \}\)/,
     "warm retains both object and owned geometry in one retirement record");
-  assert.match(drop, /m\.dispatchEvent\(\{ type: "dispose" \}\);[^]*?m\.geometry = null; m\.material = null;[^]*?ownedGeometry\.dispose\(\)/,
-    "object disposal precedes reference clearing and owned geometry disposal");
-  assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
-  assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 1, "prunePool drops idle shared wrappers through the helper");
-  assert.equal((tlxSrc.match(/dropWrapper\(m, null, true\);/g) || []).length, 1, "releaseGeometry too, held until the next scene render (pipeline keep-alive)");
-  assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
+  assert.match(tlxSrc, /flushChunkedOwnership\(\) \{[\s\S]*?flushOwnershipRelease\(_ownershipFreeBatch\)/,
+    "Tracks.free ends one ownership flush after every chunked mesh of the old track");
+  assert.match(tlxSrc, /freeChunkedMesh\(m\) \{[\s\S]*?_ownershipFreeBatch[\s\S]*?chunkedSys\.free\(m, _ownershipFreeBatch\)/,
+    "chunked free accumulates released geos across props/road/terrain before the flush");
+  assert.doesNotMatch(fnBody(tlxSrc, "flushOwnershipRelease"), /flushDropLater\(true\)/,
+    "ownership flush must not drain every deferred drop — that stripped the next circuit's ribbons on CI");
+  assert.match(fnBody(tlxSrc, "flushOwnershipRelease"), /purgeOwnershipRenderObjects\(freedGeos\)/,
+    "ownership flush must evict straggler RenderObjects for freed geos (Metal WebGPU geometry cache)");
+  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /g\.dispatchEvent\(\{ type: "dispose" \}\)/,
+    "straggler RenderObjects drop when geometry dispatches dispose (WebGL2 warm probes and WebGPU cache)");
+  assert.match(sh, /flushOwnershipDropped,\n/, "shadow pool exports the warm-bypass drain for chunked free");
   assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
-  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
-    "warm probes dispose before clearing references, after pending compilation settles");
+  const ownershipFlush = fnBody(tlxSrc, "flushOwnershipRelease");
+  const ownershipDrop = fnBody(tlxSrc, "ownershipDropQueued");
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispatchEvent\(\{ type: "dispose" \}\);[\s\S]*?m\.geometry = null; m\.material = null;/,
+    "warm probes drop render objects before clearing references, after pending compilation settles");
   assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
     "a retired probe releases when its last compiler settles");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(ownershipFlush, "").replace(ownershipDrop, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
-  // one array per skid mark per frame.
-  const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  // one array per skid mark per frame. F5 blob batch is GLXShadow.attachBlobBatch.
+  const glx = (read("js/render/glx/glx.js") + "\n" + read("js/render/glx/shadow.js")).replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
-  // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
+  // Four since 2026-09-08: blob shadow, mark, skid batch, and the DRIVING LINE ribbon.
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
   // TLX: three honours any depthBias a material carries. The fx decals must sit
   // nearer than the road (they were -4/-8 over a [-8,-16] road and vanished,
@@ -4664,16 +4814,34 @@ test("all three backends carry the driving line's colour-blind palette", () => {
   // colour-blind-safe triple instead. A backend that forgot it would signal a
   // DIFFERENT thing to the same player depending on which renderer they got —
   // the exact class of drift the parity snapshot exists for (2026-09-08).
-  // Pinned by the safe triple's blue, which no other fx colour uses.
-  for (const [what, file] of [["GLX", "js/render/glx/shaders/glsl-fx.js"],
-                              ["WGX", "js/render/webgpu/wgsl-fx.js"],
-                              ["TLX", "js/render/three/tsl-fx.js"]]) {
-    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
-    assert.match(src, /0\.392,\s*0\.561,\s*1\.0/,
-      `${what} (${file}) must carry the colour-blind-safe ON-PACE blue`);
-    assert.match(src, /0\.863,\s*0\.149,\s*0\.498/,
-      `${what} (${file}) must carry the colour-blind-safe BRAKE magenta`);
+  // Since 2026-10-30 the palette is DATA: the triples live once in
+  // DrivingLine.PALETTES and every backend shades with the three colours it is
+  // handed (opts.cols), so no backend can carry a private copy that drifts.
+  const dl = read("js/render/shared/driving-line.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(dl, /0\.392,\s*0\.561,\s*1\.0/, "the palette table carries the colour-blind-safe ON-PACE blue");
+  assert.match(dl, /0\.863,\s*0\.149,\s*0\.498/, "the palette table carries the colour-blind-safe BRAKE magenta");
+  // Each backend's shader names the three colours, its draw sets them from
+  // opts.cols, and neither keeps the old 0/1 flag or a private triple.
+  for (const [what, file, host, names, flag] of [
+    ["GLX", "js/render/glx/shaders/glsl-fx.js", "js/render/glx/glx.js", ["uOnPace", "uLift", "uBrake"], "uPalette"],
+    ["WGX", "js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js", ["colOnPace", "colLift", "colBrake"], "opts.palette"],
+    ["TLX", "js/render/three/tsl-fx.js", "js/render/three/tlx.js", ["lineOnPace", "lineLift", "lineBrake"], "linePalette"]]) {
+    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, ""), drawer = read(host).replace(/^[ \t]*\/\/.*$/gm, "");
+    // One list of everything wrong with this backend, so a drift names all of it at once.
+    const problems = [
+      ...names.filter((n) => !src.includes(n)).map((n) => `${file} lacks ${n}`),
+      ...(drawer.includes("opts && opts.cols") ? [] : [`${host} does not upload opts.cols`]),
+      ...((src + drawer).includes(flag) ? [`still carries the 0/1 flag ${flag}`] : []),
+      ...(/0\.392,\s*0\.561/.exec(src) ? [`${file} keeps a private colour-blind triple`] : []),
+    ];
+    assert.deepEqual(problems, [], `${what} must shade with the palette it is handed`);
   }
+  // WGX LineU grew three vec4 colours: the writer's Float32Array and the
+  // buffer size are one number, or the colours land past the end of the UBO.
+  const bytes = +read("js/render/webgpu/wgsl-fx.js").match(/LINE_UNIFORM_BYTES:\s*(\d+)/)[1];
+  const floats = +read("js/render/webgpu/wgx.js").match(/_lineU = new Float32Array\((\d+)\)/)[1];
+  assert.equal(bytes, 144, "LineU = mat4 + params + params2 + 3 colour vec4");
+  assert.equal(floats * 4, bytes, "_lineU is sized to LINE_UNIFORM_BYTES");
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
@@ -4729,13 +4897,13 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
   assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c, true\);/, "same mesh cache keys the draw uses — the CAR, plus the covered-warm hint");
-  assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
+  assert.match(wa, /getCarDecalTexture\(paintTeam\(c\), carDecalNum\(paintTeam\(c\), c\), !!c\.isPlayer\)/, "same atlas key the draw queues (the car's own paint, #5037)");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
   // …and each FULL key (prefix + seat [+ ":P"]) is memoised on that entry, so a hit concatenates nothing.
   assert.match(cd, /const key = decalKeyFor\(team, num, isPlayer\);/, "getCarDecalTexture builds its key from the memoised prefix");
   assert.match(cd, /k = e\.val \+ \(num == null \? "_" : num\) \+ \(isPlayer \? ":P" : ""\)/, "the full key is the prefix + seat (+ :P), as before");
   // A live paint draft swaps the livery id for its own tag (B·H13 hunter finding 3), memoised the same way.
-  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| G\.getLiveryId\(team\.id\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev && c\.tag === tag\) return c;[\s\S]{0,200}team\.id \+ ":" \+ \(tag \|\| livTag\(team\)\) \+ ":"/, "decalKeyEntry invalidates on store.rev and on the draft tag");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -4783,6 +4951,10 @@ test("GLX still diagnoses and releases a failed shader after linking", () => {
     assert.ok(calls.some(([name]) => name === "getShaderInfoLog"));
     const deleted = calls.filter(([name, args]) => name === "deleteProgram" && args[0].shaders.some((sh) => sh.id === 1));
     assert.equal(deleted.length, 1, "the failed program is released exactly once");
+    const linked = calls.filter(([name]) => name === "linkProgram").map(([, [program]]) => program);
+    const released = calls.filter(([name]) => name === "deleteProgram").map(([, [program]]) => program);
+    assert.equal(released.length, linked.length, "every link has exactly one release");
+    assert.deepEqual(new Set(released), new Set(linked), "failed boot frees successful sibling programs");
   }
 });
 
@@ -4844,12 +5016,12 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
   // so the settings rows are read against black rather than a moving world.
   // The gate runs before every early return, and a freshly built world still
   // gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/);
+  assert.match(game, /const menuBlank = \(state === "menu" && !setupPreviewOn && !homeTrack && \(!track \|\| !loadingScreen\.active\(\) \|\| !menuWorld\(\) \|\| \(typeof MenuTeardown !== "undefined" && MenuTeardown\.cover && MenuTeardown\.cover\(\)\)\)\)\s*\|\| \(\(loadingScreen\.phase\(\) === "build" \|\| loadingScreen\.phase\(\) === "busy"\) && !setupPreviewOn\);/);
   assert.match(raceSettings, /else if \(raceIntro\) \{[\s\S]{0,200}?try \{ raceIntro\(startRace, sheet, \$\("rs-go"\)\); \} catch \(e\) \{[^}]*startRace\(\); \}/,
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
-  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
+  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
   assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
     "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
   // endRace's OWN call: over all of game.js the match began at startRaceBody's
@@ -4874,12 +5046,14 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "loadTrack's memo still makes a repeat build free");
 });
 
-test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
+test("driving feel: the player tows with the AI's window and gain, the fronts lock, every car pops on lift", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
   assert.match(human, /c\.wake = wakeOf\(tg, tc\._snapX - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
-  assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
+  // "The gate is driver state, never the arc" is executed, not string-banned:
+  // tests/unit/physics-rows-vm.test.mjs runs the same tow pose on a straight and
+  // in a corner and requires the same c.towing.
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
   const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
@@ -4887,11 +5061,12 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   // multi-view/traction-isolation checks live in mirror-pass-carbuild.test.mjs.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const phases = fnSource(cd, "function advanceWheelPhases(dt)");
-  assert.match(phases, /const spin = \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt;[\s\S]*phase\.front = \(\(phase\.front \|\| 0\) \+ spin \* \(1 - \(c\.wheelLock \|\| 0\)\)\) % \(Math\.PI \* 2\)/, "locked fronts stop turning in the private visual phase");
+  assert.match(phases, /CarWheels\.phaseStep\(c\.speed, dt, R, c\.wheelLock \|\| 0\)[\s\S]*phase\.front = CarWheels\.wrapPhase/,
+    "frame step uses CarWheels.phaseStep (v/R·dt); fronts freeze via (1−lock)");
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
   // The flame moved into the car-draw seam (drawExhaustFx); rivals past 60 m drop it (FieldLod).
   assert.match(cd, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05 && flameOk\) \{/, "the flame draws for every car, not only the player");
-  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2\)\)/, "for every drawn car");
+  assert.match(game, /carDraw\.drawExhaustFx\(c, tmpMat, c\.isPlayer && isErsDeploying\(c\), FieldLod\.flame\(_lodD2, fovY\)\)/, "for every drawn car");
   const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
 });
@@ -5193,6 +5368,58 @@ test("WGX SAA widens roughness before wet like GLX", () => {
     "wet must recompute a after polishing, like GLX lit.js");
 });
 
+test("WGX LIT vs_main applies FLAG wave and FOLIAGE sway from normal.w like GLX", () => {
+  // #5777 row 5: material fraction lives in normal.w (wgx.js pack); vs_main must
+  // displace like GLX LIT_VS. Deploy tip 0d6e65b783 measured wp = model * aPos
+  // with no mid==15 / mid==6 branch (scratch/prove-wgx-sway-gap.mjs). Uses
+  // assert.equal (not assert.match) so the pin ratchet stays flat.
+  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const vs = chunks.match(/@vertex\s+fn vs_main\([\s\S]*?\) -> VSOut \{([\s\S]*?)\n  return o;\n\}/);
+  assert.equal(!!vs, true, "LIT vs_main must be present");
+  const body = vs[1];
+  const checks = [
+    ["body", body, /let mid = i32\(motionMat \+ 0\.5\)/],
+    ["body", body, /if \(mid == 15\)/],
+    ["body", body, /sin\(ph\) \* 0\.085 \+ sin\(ph \* 2\.17 \+ 1\.3\) \* 0\.045/],
+    ["body", body, /if \(mid == 6 && mfr > 0\.002\)/],
+    ["body", body, /F\.params10\.z/],
+    ["body", body, /F\.pitBox\.z/],
+    ["body", body, /bend \* amp/],
+    ["body", body, /var pos = aPos/],
+    ["body", body, /var wp = model \* vec4<f32>\(pos, 1\.0\)/],
+    ["glx", glx, /mid == 15/],
+    ["glx", glx, /mid == 6 && mfr > 0\.002/],
+    ["wgx", wgx, /T\.windDir/],
+    ["wgx", wgx, /T\.windSpeed/],
+  ];
+  const absent = checks.filter(([, src, re]) => !re.test(src)).map(([where, , re]) => `${where}:${re}`);
+  assert.equal(absent.length, 0, `WGX motion parity missing: ${absent.join("; ")}`);
+  // Behaviour: FLAG free edge and FOLIAGE tip must leave the static position
+  // under the same constants GLX / WGX share.
+  const aPos = [1, 2, 3], aNrm = [0, 1, 0], time = 1.25, wind = [0.8, 0.6, 1.5];
+  const roundMid = (m) => (m + 0.5) | 0;
+  const frac = (m) => Math.min(1, Math.max(0, m - roundMid(m)));
+  const flagMat = 15.4, foliageMat = 6.45;
+  const fw = frac(flagMat) * 2.5;
+  const ph = time * 5.5 + aPos[0] * 1.9 + aPos[2] * 1.9;
+  const wave = (Math.sin(ph) * 0.085 + Math.sin(ph * 2.17 + 1.3) * 0.045) * fw;
+  const flagDelta = Math.hypot(aNrm[0] * wave, aNrm[1] * wave, aNrm[2] * wave);
+  const w = Math.min(1, Math.max(0, frac(foliageMat) / 0.45));
+  const spd = wind[2], along = aPos[0] * wind[0] + aPos[2] * wind[1];
+  const gust = time * (spd * 1.1 + 0.6) - along * 0.07;
+  const bend = Math.sin(gust) * 0.55 + Math.sin(gust * 2.31 + along * 0.19 + 1.7) * 0.25 + 0.45;
+  const amp = spd * 0.32 * w * w;
+  const flPh = time * (spd * 3.2 + 1.5) + aPos[0] * 1.3 + aPos[2] * 1.1 + aPos[1] * 0.7;
+  const flutter = Math.sin(flPh) * spd * 0.05 * w;
+  const foliageDelta = Math.hypot(wind[0] * bend * amp + aNrm[0] * flutter, aNrm[1] * flutter, wind[1] * bend * amp + aNrm[2] * flutter);
+  assert.equal(roundMid(flagMat), 15);
+  assert.equal(roundMid(foliageMat), 6);
+  assert.equal(flagDelta > 1e-6, true, "FLAG free edge must leave aPos");
+  assert.equal(foliageDelta > 1e-6, true, "FOLIAGE tip must leave static wp");
+});
+
 test("TLX FS mat stays a smooth attribute (flat varying blanks the garage car)", () => {
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tsl, /const matA = float\(attribute\("mat", "float"\)\)\.toVar\(\)/,
@@ -5245,9 +5472,9 @@ test("SSAO tap setup is skipped when strength is 0 on all three backends", () =>
 });
 
 test("Gfx seam lists instancing on all three backends", () => {
-  const gfx = read("js/render/gfx.js");
+  const gfx = read("docs/GFX-CONTRACT.md");   // the seam's contract (moved out of the gfx.js header)
   assert.match(gfx, /GLX \+ WGX \+ TLX implement the family/,
-    "gfx.js must not still say TLX exports instancing as undefined");
+    "the Gfx contract must not still say TLX exports instancing as undefined");
 });
 
 test("TLX garage (noEnv) paints the canvas, not the HDR scene target", () => {
@@ -5383,9 +5610,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
   // Software faces still latch envReady for M9, but a black cube must not
   // raise uEnvStr (clearcoat absorb toward black).
   const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  const beginAt = src.indexOf("envFaceBegin(face, eye, frame)");
-  assert.notEqual(beginAt, -1, "envFaceBegin moved");
-  const beginBody = src.slice(beginAt, beginAt + 1800);
+  const beginBody = fnBody(src, "envFaceBegin");
   assert.match(beginBody, /frame\.viewProj\s*=\s*_envVPArr/,
     "probe must publish the face VP so propBatches cull against the cube face");
   assert.match(beginBody, /frame\.eye\s*=\s*eye/,
@@ -5394,9 +5619,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
     "probe must cap draw distance like GLX (150 m when envCull is on)");
   assert.match(beginBody, /lit\.updateFrame\(frame\)/,
     "probe runs before gfx.begin — updateFrame must push this frame's lighting");
-  const endAt = src.indexOf("envFaceEnd(face)");
-  assert.notEqual(endAt, -1, "envFaceEnd moved");
-  const endBody = src.slice(endAt, endAt + 3600);
+  const endBody = fnBody(src, "envFaceEnd");
   assert.match(endBody, /_restoreEnvFrame\(\)/,
     "envFaceEnd must restore the main-camera VP/eye/cullDist");
   assert.match(endBody, /_envBlank\s*=\s*true/,
@@ -5419,7 +5642,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // Re-pointed by perf hunt 3 R3: the attachment is dropped only where tlx.js's _wantTag() says nothing
   // can read it (eligible phone LOW); tests/unit/tlx-hunt3.test.mjs builds both shapes.
-  assert.match(post, /count:\s*tagOn \? 2 : 1/,
+  assert.match(post, /count:\s*tagOn \? \(velOn \? 3 : 2\) : 1/,   // +velocity (EXTREME motion vectors, #6003): a third attachment only with the tag
     "HDR scene target must allocate the ssrTag colour attachment whenever the tag can be read");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
     "MRTNode.setup matches attachments by texture.name");
@@ -5438,8 +5661,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "main HDR render must arm the ssrTag MRT");
   assert.match(window, /renderer\.setMRT\(/,
     "renderer.getMRT() is what NodeMaterial.setup merges into");
-  const envEnd = tlx.indexOf("envFaceEnd(face)");
-  const envBody = tlx.slice(envEnd, envEnd + 3600);
+  const envBody = fnBody(tlx, "envFaceEnd");
   assert.doesNotMatch(envBody, /setSsrMrt\(true\)/,
     "env cube must not arm the 2-attachment program");
   assert.doesNotMatch(envBody, /setMRT\(/,
@@ -5592,7 +5814,7 @@ test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with 
 // work — asserted against the VENDORED bundle so a version bump re-checks them
 // rather than letting the comment go stale.
 test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
-  const three = read("vendor/three-0.186.1/three.webgpu.min.js");
+  const three = read("vendor/three-0.187.0/three.webgpu.min.js");
 
   // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
   assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
@@ -5681,7 +5903,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "tlx.js buildGeometry must pass fmt24 to every _pk call — the non-chunked meshes refused on Metal too");
   assert.match(tlxSrc, /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/,
     "buildGeometry's fmt24 must read the live backend");
-  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,\s*\}\)/,
+  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,(?:\s*\w+,)*\s*\}\)/,
     "tlx.js must hand the chunked factory its format rule and geometry-owner release callback");
 });
 
@@ -5892,7 +6114,7 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   const wgsl = read("js/render/webgpu/wgsl-post.js");
   for (const [file, re, why] of [
     ["index.html", /id="pm-upscale"/, "shell must ship the UPSCALE set-row"],
-    ["index.html", /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE"],
+    ["index.html", /id="pm-upscale-label"[^>]*>UPSCALE</, "label must be UPSCALE"],
     ["js/ui/scale.js", /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row"],
     ["js/ui/scale.js", /setSpatialUpscale/, "row must call the backend API"],
     ["js/render/three/tlx.js", /setSpatialUpscale/, "TLX must export setSpatialUpscale"],
@@ -5939,7 +6161,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 
 // Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
-  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
   let _gpuSampleAt = -1, _gpuSamples = 0;
@@ -5953,8 +6175,41 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   assert.equal(_gpuMs, -1);
 });
 
+test("TLX updates only the sampled cube face and preserves its world projection", async () => {
+  const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
+  const envRT = new THREE.CubeRenderTarget(1);
+  const raceProbeOff = false, leaveGarageProbe = () => {};
+  const _envOptOut = false, _envGaveUp = false, lit = {}, ensureEnvCam = () => {}, ENV_CULL_M = 300;
+  const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
+  const _envVPArr = new Float32Array(16), _envInvArr = new Float32Array(16);
+  let _envActive, _envFrame, _envSvVP, _envSvEye, _envSvCull, _envBegins = 0, envCubeCam;
+  const begin = eval("(function(face, eye, frame){" + fnBody(code("js/render/three/tlx.js"), "envFaceBegin") + "})");
+  for (const system of [THREE.WebGLCoordinateSystem, THREE.WebGPUCoordinateSystem]) {
+    envCubeCam = new THREE.CubeCamera(0.4, 900, envRT);
+    const reference = new THREE.CubeCamera(0.4, 900, envRT);
+    for (const cube of [envCubeCam, reference]) {
+      cube.coordinateSystem = system;
+      cube.updateCoordinateSystem();
+    }
+    for (const face of [0, 5, 3, 1, 4, 2]) {
+      const eye = [face + 12.5, face - 4, face * 0.75];
+      reference.position.fromArray(eye);
+      reference.updateMatrixWorld(true);
+      const camera = reference.children[face];
+      const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      const before = envCubeCam.children.map(child => child.matrixWorld.clone());
+      const frame = { viewProj: new Float32Array(16) };
+      const inv = begin(face, eye, frame);
+      assert.deepEqual(frame.viewProj, Float32Array.from(vp.elements));
+      assert.deepEqual(inv, Float32Array.from(vp.invert().elements));
+      for (let i = 0; i < 6; i++) if (i !== face) assert.deepEqual(envCubeCam.children[i].matrixWorld, before[i]);
+    }
+  }
+  envRT.dispose();
+});
+
 test("TLX cube readback selects all six faces of attachment zero", async () => {
-  const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
+  const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
   const envRT = new THREE.CubeRenderTarget(1), ENV_SIZE = 1;
   let _envCubeRead = false, _envCube = null;
@@ -6111,6 +6366,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
 });
 
 test("TLX post warm compiles serially and holds each target across awaits", async () => {
+  const disposed = false;
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
@@ -6118,6 +6374,7 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
   // than a snapshot per job, so the sandbox owns one — the pairing assertion below
   // (target === q.material) is unchanged and now checks the live object.
   const quad = new THREE.QuadMesh(null);
+  const setQuadMat = (m) => { quad.material = m; };   // tlx-post's vertex-node pin, inert here
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
@@ -6176,7 +6433,8 @@ test("TLX defers resize during compilation and applies the latest requested size
       return { width: cssW, height: cssH };
     },
   };
-  const wantSpatialUpscale = () => false, calls = [];
+  let spatialUpscale = false;
+  const wantSpatialUpscale = () => spatialUpscale, calls = [];
   const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
   } };
@@ -6198,6 +6456,30 @@ test("TLX defers resize during compilation and applies the latest requested size
   assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
   assert.equal(_softReadPending, false, "the voided old-size read must not hold the gate");
   resize(); assert.equal(calls.length, 2, "deferred changes apply once");
+
+  // With spatial upscaling the post chain owns render-scale steps and the
+  // canvas stays at presentation size on both Three backends.
+  spatialUpscale = true;
+  for (const backend of [
+    { isWebGPUBackend: true, device: { limits: { maxTextureDimension2D: 8192 } } },
+    { isWebGPUBackend: false, gl: { getParameter: () => 8192 } },
+  ]) {
+    renderer.backend = backend;
+    _layoutCanvas.clientWidth = 1100; _layoutCanvas.clientHeight = 500;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1650, 750], ["post", 1238, 563]]);
+    calls.length = 0;
+    for (const scale of [0.6, 0.7, 0.8, 0.7, 0.6, 0.5]) {
+      renderScale = scale; resize();
+    }
+    assert.deepEqual(calls, [0.6, 0.7, 0.8, 0.7, 0.6, 0.5].map(scale =>
+      ["post", Math.round(1650 * scale), Math.round(750 * scale)]));
+    _layoutCanvas.clientWidth = 1000; renderScale = 0.75;
+    cssSizeCache.markDirty();
+    calls.length = 0; resize();
+    assert.deepEqual(calls, [["canvas", 1500, 750], ["post", 1125, 563]]);
+  }
 });
 
 function tlxTimerFixture(webgl = false) {
@@ -6245,6 +6527,19 @@ test("TLX timer publishes one serial per fresh resolution, including identical d
     assert.equal(h.timer().samples, 2, "equal-valued newly resolved timing still advances");
     assert.equal(h.timer().sampleAt, 140);
   }
+});
+
+test("TLX WebGL timestamp snapshots release unavailable queries before the next batch", async () => {
+  const h = tlxTimerFixture(true);
+  h.timer(true); h.queue();
+  h.pool.queries[0].ready = false;
+  h.resolve();
+  h.queue(); // Three can reuse the index while its previous query object is still resolving.
+  await h.finish(4);
+  assert.equal(h.timer().samples, 0);
+  h.queue(); h.resolve(); await h.finish(5);
+  assert.equal(h.timer().samples, 1);
+  assert.equal(h.ms(), 5);
 });
 
 test("TLX ignores old epochs, inspector/lost-device completions and disjoint results", async () => {
@@ -6318,7 +6613,7 @@ test("all track loaders release selector ownership before building, even on fail
 });
 
 test("three warm-up fallback yields tasks without waiting for display frames", async () => {
-  const core = read("vendor/three-0.186.1/three.core.min.js");
+  const core = read("vendor/three-0.187.0/three.core.min.js");
   const alias = core.match(/\b(\w+) as yieldToMain\b/);
   assert.ok(alias, "three.core.min.js must export yieldToMain under a minified alias");
   const body = fnBody(core, alias[1]);
@@ -6367,9 +6662,10 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
+  const carDetail = () => ({ player: 0, rival: 0, hero: false, key: "" });   // desktop detail: HIGH (CarGeometry.detailFor 0)
   const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
   // cockpitBodyMesh memoises its key on the last inputs and builds through a hoisted factory.
-  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
+  let _cbFinish = -1, _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbBs = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
   const buildPendingCockpitBody = eval("(function(){" + fnBody(read("js/car/car-draw.js"), "buildPendingCockpitBody") + "})");
   const cockpitKey = eval("(function(team, car, visualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitKey") + "})");
   const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
@@ -6416,6 +6712,7 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
     const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
     const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    const paintTeam = (c) => c.team;   // CarDraw's car's-own-paint seam (#5037): no friend or repainted AI here
     // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
     let casters = false;
     const shadowCastersWanted = () => casters;
@@ -6549,6 +6846,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
   const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
+  const kicks = [], kickRaceBundles = (audio) => kicks.push(audio);   // perf hunt 7: the race bundles start while the picker is up
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6559,6 +6857,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   trackIdx = 1; schedule(true); trackIdx = 0; schedule(true); const latest = fire();
   requests.shift().resolve(); await old; assert.deepEqual(builds, [], "A-B-A cannot revive old work");
   requests.shift().resolve(); await latest; assert.deepEqual(builds, [0]);
+  assert.ok(kicks.length > 0 && kicks.every((a) => a === false), "the open picker starts the race bundles, never LAZY_AUDIO (#1135)");
   schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
   assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
   assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
@@ -6603,6 +6902,7 @@ test("selector retains a different circuit during compilation, then releases it 
   const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
+  const kickRaceBundles = () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
   let flybyBuildTimer = 0, timerId = 0;
   const timers = new Map(), setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout = id => timers.delete(id);
@@ -6698,9 +6998,11 @@ test("TLX FX: double-sided FX draw in ONE pass and their programs warm on the st
   // The ds variant must stay the cockpit rig's key: drift in either table re-opens the first-BOOST stall.
   assert.match(code("js/car/car-draw.js"), /_rigFxA = \{ doubleSided: true, emissive: 1\.0, roughness: 0\.9, specular: 0, noAlphaWrite: true, alpha: 1 \}/,
     "car-draw's _rigFxA (dash ERS bar, OT lamp) matches the double-sided _LATE_LIT variant");
-  // Its cw twin compiled a whole lit pipeline no race draws (the rig is never mirrored): one winding for it only.
-  assert.ok(fnBody(tlx, "warmLateLit").includes("for (const sx of (o.doubleSided ? [1] : [1, -1]))"),
-    "warmLateLit compiles the double-sided (cockpit rig) variant in one winding, the brake ring in both");
+  // Both windings for every late variant, the double-sided rig included: the rig draws _rigFxA through the
+  // wheel's MIRRORED matrix and three draws a transparent double-sided material as a BackSide pass then a
+  // FrontSide one, so the first deploy's back pass keyed a cw pipeline a one-winding warm never built (#4514).
+  assert.ok(fnBody(tlx, "warmLateLit").includes("for (const g of geos.values()) for (const sx of [1, -1])"),
+    "warmLateLit compiles every late variant, the double-sided cockpit rig included, in BOTH windings (#4514)");
 });
 
 test("lamp shadow: the player takes the AI cars' lamp-radius bound in BOTH the key and the cast (TLX-PERF-PLAN L0)", () => {
@@ -6778,7 +7080,8 @@ const begin = game.indexOf("\nif (!gfx) {");
 const end = game.indexOf("\nreturn { gfx, bound:", begin);
 assert.ok(begin > 0 && end > begin, "boot's GLX fallback must remain identifiable");
 const timeoutHelpers = span(game, "const BOOT_STEP_MS", "function showGraphicsUnavailable", "boot timeout helpers");
-const fallback = `(async function () { ${timeoutHelpers} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
+const reloadHelper = span(game, "function reloadOnceIntoGlx", "\nlet gfx = null;", "claim-fail reload helper");
+const fallback = `(async function () { ${timeoutHelpers} ${reloadHelper} let gfx = null; ${game.slice(begin, end).replace(/return null;/g, "return;")} return gfx; })()`;
 
 test("the eager GLX handle preserves eval-time mobile tier and live backend getters", () => {
   const storage = new Map([["apex26.forceMobileTier", "1"]]);
@@ -6972,7 +7275,7 @@ test("the mirror composite's flip reaches every backend: default flipped (the mi
   assert.match(read("js/render/three/tlx-post.js"), /_mirFlip = flip !== false;[\s\S]{0,1200}M\.U\.flip\.value = _mirFlip \? 1 : 0/);
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
-  assert.match(tlx, /HalfFloatType, _mirFlip\);/, "TLX hands the flag to the post chain");
+  assert.match(tlx, /UnsignedByteType, _mirFlip\);/, "TLX hands the flag to the post chain");
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /_mirData\[1\] = _mirFlip \? 1 : 0/, "WGX: the shader already branches on params.y");
   assert.match(wgx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
@@ -7003,6 +7306,7 @@ test("TLX mirror composite warm holds its destination and real texture across aw
   let target = "mirrorWorld", active = 0;
   const realTex = {}, previousTex = {}, P = { mirror: { mat: {}, tex: { value: previousTex } } }, viz = null;
   const quad = { material: null, camera: {} }, ctx = { softDest: () => "present" };
+  const setQuadMat = (m) => { quad.material = m; };
   const renderer = {
     getRenderTarget: () => target, setRenderTarget: v => { target = v; },
     compileAsync: async q => {
@@ -7148,6 +7452,11 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   G.mirrorRect(rect);
   assert.equal(G.drawMirrorGlass(glass, id, null), true);
   assert.equal(G.mirrorState().glass, 2);
+  // opts: the shared (mesh, model, opts) slot TLX and WGX take too; GLX forwards it and draws the same glass.
+  h.reset();
+  assert.equal(G.drawMirrorGlass(glass, id, { lod: 2 }), true, "an opts object is accepted, not a refusal");
+  assert.equal(h.count("drawElements"), 1, "one glass draw, as with null opts");
+  assert.equal(G.mirrorState().glass, 3);
 
   // A dead target (an incomplete framebuffer at a new size): refused for good.
   h.answers.checkFramebufferStatus = () => 0;
@@ -7155,7 +7464,7 @@ test("GLX live mirror glass: mips in mirrorEnd, a spare texture unit, unit 0 res
   assert.equal(G.mirrorState().dead, true);
   G.begin(h.frame());
   assert.equal(G.drawMirrorGlass(glass, id, null), false, "a dead target");
-  assert.equal(G.mirrorState().glass, 2);
+  assert.equal(G.mirrorState().glass, 3);
 });
 
 // The TLX half of the live glass (three cannot load in Node): drawMirrorGlass's
@@ -7167,7 +7476,9 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   const run = (st) => {
     const recs = [];
     const make = new Function("st", "recs", `
-      let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let { _mirActive, _mirDead, mirRT, _mirReady, _mirFlip, fx } = st, _mirGlass = 0;
+      let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
+      const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
       const draw = function (mesh, model, opts) {${body}};
       return { draw, glass: () => _mirGlass };`);
@@ -7176,13 +7487,13 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     return { ok, recs, glass: t.glass() };
   };
   const tex = { rt: true }, mat = { glassMat: true };
-  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirRenders: 3, _mirFlip: true,
+  const live = { _mirActive: false, _mirDead: false, mirRT: { texture: tex }, _mirReady: true, _mirFlip: true,
     fx: { mirrorGlassMaterial: (t) => (t === tex ? mat : null) } };
   const r = run(live);
   assert.equal(r.ok, true);
   assert.equal(r.glass, 1);
   assert.deepEqual(r.recs, [["glassGeo", "model", mat, undefined, undefined, 0, null, null]], "one opaque, un-lit record on mirRT's texture");
-  for (const [why, over] of [["no image yet", { _mirRenders: 0 }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
+  for (const [why, over] of [["no image yet", { _mirReady: false }], ["no target", { mirRT: null }], ["dead", { _mirDead: true }],
     ["the PiP", { _mirFlip: false }], ["an open mirror pass", { _mirActive: true }], ["no fx", { fx: null }]]) {
     const x = run(Object.assign({}, live, over));
     assert.equal(x.ok, false, why);
@@ -7190,7 +7501,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   }
   const tlx = code("js/render/three/tlx.js");
   assert.match(tlx, /composites: [^,]+, glass: _mirGlass,/, "mirrorState counts the glass");
-  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
+  const warm = span(tlx, "if (fx && fx.mirrorGlassMaterial) {", "if (post && post.warmMirror) await post.warmMirror", "TLX mirror glass warm");
   // useTag (perf hunt 3 R3) = usePost on a chain that has the ssrTag attachment.
   const mrt = spanBack(tlx, "renderer.setMRT(useTag ? _ssrMrtNode() : null);", "if (fx && fx.mirrorGlassMaterial) {", "TLX mirror warm MRT");
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
@@ -7312,6 +7623,24 @@ test("GLX decals: premultiplied upload, premultiplied blend restored after, shad
   h.reset();
   h.GLX.drawDecal(mesh, model, tex, {});
   assert.equal(named("uniform4fv", "uShadowP").length, 0, "frame-constant: once per frame token");
+  assert.equal(h.count("uniform1i"), 0, "another decal uses the same sampler units");
+  assert.deepEqual(named("uniform1f", "uGlow"), [], "unchanged glow stays on the decal program");
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, { glow: 0.35 });
+  assert.equal(h.count("uniform1i"), 0, "sampler assignments survive a pass and program switch");
+  assert.deepEqual(named("uniform1f", "uGlow"), [[0.35]]);
+  assert.equal(named("uniform4fv", "uShadowP").length, 1, "new frame still refreshes its lighting");
+
+  assert.ok(h.GLX.init(h.canvas));
+  h.GLX.begin(h.frame());
+  h.reset();
+  h.GLX.drawDecal(mesh, model, tex, { glow: 0.35 });
+  assert.deepEqual(named("uniform1i", "uTex"), [[5]], "a fresh decal program receives the atlas unit");
+  assert.deepEqual(named("uniform1i", "uShadowMap"), [[0]]);
+  assert.deepEqual(named("uniform1i", "uLampBake"), [[12]]);
+  assert.deepEqual(named("uniform1i", "uLampBakeIdx"), [[13]]);
+  assert.deepEqual(named("uniform1f", "uGlow"), [[0.35]], "the fresh program needs its glow too");
 });
 
 test("decal shaders: sun-map PCF + lamp pools in GLSL, TSL and WGSL; TLX premultiplied", () => {
@@ -7591,7 +7920,7 @@ async function exerciseVendorPipelineScopes(vendorURL, scenario) {
       createComputePipelineAsync: () => scenario === "pipeline-rejection" ? Promise.reject(new Error("pipeline rejected")) : Promise.resolve({}),
     };
     backend.utils = { getCurrentColorFormat: () => "rgba8unorm", getCurrentDepthStencilFormat: () => "depth24plus" };
-    backend.attributeUtils = { createShaderVertexBuffers: () => [] };
+    backend.attributeUtils = { createShaderVertexBuffers: () => [], getVertexBufferLayout: () => [] }; // r186 / r187 names
     const utils = backend.pipelineUtils;
     utils._getColorWriteMask = () => 15;
     utils._getPrimitiveState = () => ({ topology: "triangle-list" });
@@ -7623,7 +7952,7 @@ async function exerciseVendorPipelineScopes(vendorURL, scenario) {
 
 for (const scenario of ["scope-rejection", "diagnostics-rejection", "validation", "pipeline-rejection", "clean"]) {
   test(`actual three render/compute pipelines handle ${scenario} in sync and async modes`, () => {
-    const vendorURL = new URL("../../vendor/three-0.186.1/three.webgpu.min.js", import.meta.url).href;
+    const vendorURL = new URL("../../vendor/three-0.187.0/three.webgpu.min.js", import.meta.url).href;
     const script = `(${exerciseVendorPipelineScopes.toString()})(${JSON.stringify(vendorURL)},${JSON.stringify(scenario)}).then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(e);process.exitCode=1;});`;
     const child = spawnSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8", timeout: 10000 });
     assert.equal(child.status, 0, child.stderr || child.error?.message);

@@ -51,6 +51,7 @@ test("no argument keeps the MY TEAM meaning: only custom: entries go", () => {
 test("a livery change misses; the saved livery's mesh is still a hit after it", () => {
   const v = carDrawVm();
   const t = v.teams[1], car = { team: t, num: t.drivers[0].num };
+  v.G.teamIdx = 1;   // my own team: another team's AI races in factory paint whatever I fitted (#5037)
   let liv = "default";
   v.G.getLiveryId = () => liv;
   const m0 = v.carDraw.teamBodyMesh(t, car);

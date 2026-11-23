@@ -128,37 +128,19 @@ const NetPlay = (function () {
     return Number.isFinite(n) && n >= 1 ? Math.min(top, Math.floor(n)) : top;
   }
   let G_lapsTarget = () => 0;   // bound to the façade in create()
+  // Host ingress caps per guest connection, per EVENT_WINDOW_MS (bindSession).
+  const LAP_RATE = 4, STRATEGY_RATE = 8;
   function lapTimeOk(t, total) {
     return Number.isFinite(t) && t > (total > 0 ? total / SPEED_LIMIT : 0) && t < QUALI_MAX_S;
   }
 
-  // ONE VALIDATION SITE for a peer's qualifying time. Both receivers — the
-  // lobby's (qualifying runs while the LOBBY still holds the connection) and
-  // this file's bindSession — share it: a bare `d.t > 0` passes "70" and
-  // `true`, and quali-model.js throws on `.toFixed` of the stored value.
-  // Coerced here, bounded to a lap a human can drive
-  // (20 s .. 1 h), and handed on as a NUMBER.
-  const QUALI_MIN_S = 20, QUALI_MAX_S = 3600;
-  // NO TIME (every lap deleted for track limits) crosses as {noTime: true}
-  // and arrives as t = Infinity — quali-model's own "drove, no valid lap"
-  // value — never as the synthetic back-of-grid time the local sheet made.
-  function validQuali(d) {
-    if (!d || typeof d !== "object" || d.driverId == null) return null;
-    if (d.noTime === true) return Object.assign({}, d, { t: Infinity, noTime: true });
-    const t = Number(d.t);
-    if (!(Number.isFinite(t) && t > QUALI_MIN_S && t < QUALI_MAX_S)) return null;
-    return Object.assign({}, d, { t });
-  }
-  // QLIVE never reaches the classification — it is a clock on somebody
-  // else's screen — so it is bounded rather than refused.
-  function validQualiLive(d) {
-    if (!d || typeof d !== "object" || d.driverId == null) return null;
-    const t = Number(d.t), frac = Number(d.frac);
-    return Object.assign({}, d, {
-      t: Number.isFinite(t) && t >= 0 ? Math.min(t, QUALI_MAX_S) : 0,
-      frac: Number.isFinite(frac) ? Math.min(Math.max(frac, 0), 1) : 0,
-    });
-  }
+  // ONE VALIDATION SITE lives in QualiWire. create(EV) runs while this file
+  // evaluates, so the manifest edge loads it first. The names stay here: the
+  // lobby calls NetPlay.bindQuali / qualiReporters, and lapTimeOk reads QUALI_MAX_S.
+  const {
+    validQuali, validQualiLive, rateGate, bindQuali, qualiReporters,
+    QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS,
+  } = QualiWire.create(EV);
   function validClassification(rows, cars) {
     if (!Array.isArray(rows) || !Array.isArray(cars) || rows.length !== cars.length) return false;
     const ids = new Set(cars.map((c) => c.driverId));
@@ -174,130 +156,11 @@ const NetPlay = (function () {
     }
     return true;
   }
-  // QUALI + QLIVE flood cap, shared by the lobby and the in-race relay: per
-  // connection, rolling window. A real client sends ~2.5 QLIVE/s plus one QUALI.
-  const QUALI_RATE = 12, EVENT_WINDOW_MS = 1000;
-  function rateGate(limit, windowMs = EVENT_WINDOW_MS) {
-    const times = [];
-    return () => {
-      const now = performance.now();
-      while (times.length && now - times[0] > windowMs) times.shift();
-      if (times.length >= limit) return false;
-      times.push(now);
-      return true;
-    };
-  }
-  // Register the QUALI/QLIVE receivers on a session. `ownsDriver(d)` is the
-  // caller's sender binding — the lobby keys it on the HELLO profile filed
-  // under the connection, NetPlay on the remote car it seated — because the
-  // two phases hold different truths about who a connection speaks for.
-  // Rate limiting lives in the caller (lobby / bindSession) via rateGate so
-  // QUALI and QLIVE share one window per connection (#1414).
-  function bindQuali(s, ownsDriver, G, onAccepted) {
-    s.onEvent(EV.QUALI, (d) => {
-      const q = validQuali(d);
-      if (q && ownsDriver(q)) {
-        if (G.onPeerQuali) G.onPeerQuali(q);
-        if (onAccepted) onAccepted(EV.QUALI, q);
-      }
-    });
-    s.onEvent(EV.QLIVE, (d) => {
-      const q = validQualiLive(d);
-      if (q && ownsDriver(q)) {
-        if (G.onPeerQualiLive) G.onPeerQualiLive(q);
-        if (onAccepted) onAccepted(EV.QLIVE, q);
-      }
-    });
-  }
-  // The senders, one shape for both phases. A driven lap rides the reliable
-  // channel: a lost qualifying time is a wrong grid for the whole race, not
-  // one stuttered frame. The lap IN PROGRESS is allowed to be wrong, late or
-  // lost, so it is fire-and-forget and never gated on anything.
-  function qualiReporters(broadcast, live) {
-    return {
-      reportQuali(driverId, t) {
-        if (!live() || !(t > 0)) return false;
-        if (t === Infinity) return broadcast(EV.QUALI, { driverId, t: null, noTime: true });
-        return broadcast(EV.QUALI, { driverId, t: +Number(t).toFixed(3) });
-      },
-      reportQualiLive(driverId, t, frac) {
-        if (!live() || !(t >= 0)) return false;
-        return broadcast(EV.QLIVE, { driverId, t: +Number(t).toFixed(2), frac: +(Number(frac) || 0).toFixed(3) });
-      },
-    };
-  }
-
-  const STRATEGY_VERSION = 1;
+  // The tyre/pit codec is StrategyWire. modelRevision is read at call time
+  // (PhysicsConsts may load later). epochSerial stays here: it numbers this
+  // peer's race epochs, not the payload.
   let epochSerial = 0;
-  const modelRevision = () => typeof PhysicsConsts !== "undefined" ? PhysicsConsts.REVISION : "2026-09-coherence-1";
-  const STRATEGY_FIELDS = { tyreWear: [0, 3], tyreWearF: [0, 3], tyreWearR: [0, 3], tyreTs: [0, 250], tyreTb: [0, 250],
-    tyreGrain: [0, 1], tyreBlister: [0, 1], tyreLap0: [0, 1000], tyreStints: [0, 1000], pitStops: [0, 1000], pitT: [0, 30],
-    tyreLapAdj: [0, 1], pitWorked: [0, 30], pitOutT: [0, 30] };
-  const STINT_MAX = 256, COMPOUND_CODES = ["S", "M", "H", "I", "W"];
-  const colourFor = (r) => Array.isArray(r.colour) && r.colour.length === 3
-    ? r.colour.map(v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5) : [0.5, 0.5, 0.5];
-  function strategyTyre(r) {
-    if (!r || typeof r.id !== "string" || !Number.isInteger(r.tread) || r.tread < 0 || r.tread > 2
-        || !Number.isFinite(r.life) || r.life < 0.3 || r.life > 1.2) return null;
-    const mods = {};
-    for (const k of ["speed", "accel", "cornering", "braking"]) if (r.mods && Number.isFinite(r.mods[k])) mods[k] = Math.max(0.5, Math.min(1.5, r.mods[k]));
-    return { id: r.id.slice(0, 64), code: String(r.code || "?").slice(0, 4), life: r.life, tread: r.tread,
-      off: Number.isFinite(r.off) ? Math.max(-0.2, Math.min(0.2, r.off)) : 0, colour: colourFor(r), mods };
-  }
-  function strategyLog(log) {
-    if (!Array.isArray(log)) return null;
-    const rows = [];
-    for (const e of log) {
-      if (!e || !COMPOUND_CODES.includes(e.code) || typeof e.id !== "string" || !Number.isFinite(e.lap0)
-          || e.lap0 < 0 || e.lap0 > 1000 || (e.lap1 !== null && (!Number.isFinite(e.lap1) || e.lap1 < 0 || e.lap1 > 1000))) return null;
-      rows.push({ code: e.code, id: e.id.slice(0, 64), colour: colourFor(e), lap0: e.lap0, lap1: e.lap1 });
-    }
-    return rows;
-  }
-  function boundedLog(log) {
-    if (!Array.isArray(log)) return [];
-    if (log.length <= STINT_MAX) return strategyLog(log) || [];
-    // Keep each compound's first evidence as well as the recent strip. Simply
-    // taking the tail could erase a wet exemption or the second dry compound.
-    const first = new Set(COMPOUND_CODES.map(code => log.findIndex(e => e && e.code === code)));
-    return strategyLog(log.filter((e, i) => first.has(i) || i >= log.length - (STINT_MAX - COMPOUND_CODES.length))) || [];
-  }
-  function strategyState(c, wire, track) {
-    const fields = {};
-    for (const k of Object.keys(STRATEGY_FIELDS)) if (Number.isFinite(c[k])) fields[k] = c[k];
-    return { version: STRATEGY_VERSION, physics: modelRevision(), wire, track, fields,
-      tyre: strategyTyre(c.tyre), tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed,
-      pitFitted: !!c.pitFitted, pitNext: strategyTyre(c.pitNext), tyreClass: ["soft", "medium", "hard", "inter", "wet"].includes(c.tyreClass) ? c.tyreClass : null,
-      tyreLog: boundedLog(c.tyreLog), compoundShortAtFinish: typeof c.compoundShortAtFinish === "boolean" ? c.compoundShortAtFinish : null,
-      tyrePhysicalOffset: Number.isFinite(c.tyrePhysicalOffset) ? Math.max(-1000, Math.min(1000, c.tyrePhysicalOffset)) : null };
-  }
-  function applyStrategy(c, d) {
-    if (!c || !d || d.version !== STRATEGY_VERSION || d.physics !== modelRevision() || !d.fields) return false;
-    const tyre = strategyTyre(d.tyre), next = strategyTyre(d.pitNext);
-    const log = d.tyreLog === undefined ? null : Array.isArray(d.tyreLog) && d.tyreLog.length <= STINT_MAX ? strategyLog(d.tyreLog) : null;
-    // Extensions are optional for older v1 senders, and validate BEFORE any
-    // mutation. Never merge stale pending sets/history into a newer full state.
-    if ((d.pitFitted !== undefined && typeof d.pitFitted !== "boolean") || (d.pitNext !== undefined && d.pitNext !== null && !next)
-        || (d.tyreLog !== undefined && !log) || (d.tyreClass !== undefined && d.tyreClass !== null && !["soft", "medium", "hard", "inter", "wet"].includes(d.tyreClass))
-        || (d.compoundShortAtFinish !== undefined && d.compoundShortAtFinish !== null && typeof d.compoundShortAtFinish !== "boolean")
-        || (d.tyrePhysicalOffset !== undefined && d.tyrePhysicalOffset !== null && (!Number.isFinite(d.tyrePhysicalOffset) || Math.abs(d.tyrePhysicalOffset) > 1000))) return false;
-    if (tyre) {
-      c.tyre = tyre;
-      c.tread = c.tyre.tread;
-    } else if (Number.isInteger(d.tread) && d.tread >= 0 && d.tread <= 2) c.tread = d.tread;
-    for (const [k, range] of Object.entries(STRATEGY_FIELDS)) {
-      if (Number.isFinite(d.fields[k])) c[k] = Math.max(range[0], Math.min(range[1], d.fields[k]));
-    }
-    if (["none", "lane", "box", "out"].includes(d.pitState)) c.pitState = d.pitState;
-    c.pitArmed = d.pitArmed === true;
-    if (d.pitFitted !== undefined) c.pitFitted = d.pitFitted;
-    if (d.pitNext !== undefined) c.pitNext = next;
-    if (d.tyreClass != null) c.tyreClass = d.tyreClass;
-    if (log) c.tyreLog = log;
-    if (d.compoundShortAtFinish !== undefined) c.compoundShortAtFinish = d.compoundShortAtFinish;
-    if (d.tyrePhysicalOffset !== undefined) c.tyrePhysicalOffset = d.tyrePhysicalOffset;
-    return true;
-  }
+  const { strategyState, applyStrategy, STRATEGY_VERSION, modelRevision } = StrategyWire.create();
 
   function create(G) {
     G_lapsTarget = () => G.lapsTarget;
@@ -306,18 +169,38 @@ const NetPlay = (function () {
     const peerKind = (peer) => SpectatePolicy.kind(peer);
     let epoch = null;
     function broadcastStrategy(data) {
+      // Serialised ONCE: each receiver's copy differs only by its epoch, spliced on the end.
+      let head = null;
       for (const [id, s] of sessions) {
         const to = peerEpochs.get(id);
-        if (to) { try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }); } catch (e) { /* peer closed */ } }
+        if (!to?.value) continue;
+        if (head === null) head = JSON.stringify(data).slice(0, -1) + ',"epoch":';
+        try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to.value }, head + to.json + "}"); } catch (e) { /* peer closed */ }
       }
     }
-    const sessionList = () => [...sessions.values()];
-    const _pumpBuf = [];               // tick()'s per-frame snapshot, refilled in place
+    // Scratch snapshots — tick already used _pumpBuf; broadcast/status used to
+    // allocate a fresh array via spread on every call (hot while racing).
+    const _pumpBuf = [];
+    const _sessBuf = [];
+    const _remoteBuf = [];
+    const sessionList = () => {
+      _sessBuf.length = 0;
+      for (const s of sessions.values()) _sessBuf.push(s);
+      return _sessBuf;
+    };
+    const remoteList = () => {
+      _remoteBuf.length = 0;
+      for (const r of remotes.values()) _remoteBuf.push(r);
+      return _remoteBuf;
+    };
     const PEER_ONE = "peer";
     let session = null;
     function broadcast(type, data) {
-      let ok = false;
-      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
+      let ok = false, dj;
+      // Serialised ONCE for every session (sendEvent's dataJson path writes the same bytes); a payload
+      // JSON.stringify cannot write (a cycle, undefined) takes each session's own path, as before.
+      try { dj = data === undefined ? "null" : JSON.stringify(data); } catch (e) { dj = undefined; }
+      for (const s of sessionList()) { try { ok = s.sendEvent(type, data, dj) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
       return ok;
     }
     const peerCar = new Map();            // peerId -> wireId
@@ -325,9 +208,7 @@ const NetPlay = (function () {
     let role = null;                      // "host" | "guest" | "spectator"
     let active = false;
     let localCar = null;
-    let raceOpts = null;
     const remotes = new Map();
-    const remoteList = () => [...remotes.values()];
     // GUEST ONLY: wireId -> remote for an AI car the HOST simulates. Kept apart
     // from `remotes` (the human rivals), which seats, arming and status read.
     const aiRemotes = new Map();
@@ -353,7 +234,7 @@ const NetPlay = (function () {
       car.dnfAt = null; car.dnfWhy = null;
       car.incidentInvalidLap = true; car.lapTime = 0; car._secT0 = null;
     }
-    // A silent rival goes to the local AI; its packets bring it back.
+    // A silent rival goes to the local AI; a newer pose brings it back.
     // Keep owner lap evidence apart from speculative motion: fallback crossings
     // cannot finish a connected human, validate a LAP event, or seed gateLap.
     function goLocal(r) {
@@ -500,7 +381,8 @@ const NetPlay = (function () {
       c.onKerb = !!st.onKerb;
       c.braking = !!st.braking;
 
-      const w = G.worldFromTrack(c.s, c.x);
+      // One spline sample: the world position fills _smp, and the yaw below reads its tangent (it sampled c.s twice).
+      const w = G.worldFromTrack(c.s, c.x, _smp);
       c.px = w.x;
       c.pz = w.z;
 
@@ -542,7 +424,6 @@ const NetPlay = (function () {
       }
 
       if (G.track) {
-        Tracks.sample(G.track, c.s, _smp);
         let psi = Math.atan2(_smp.t[0], _smp.t[2]) - c.head;
         while (psi > Math.PI) psi -= Math.PI * 2;
         while (psi < -Math.PI) psi += Math.PI * 2;
@@ -603,7 +484,12 @@ const NetPlay = (function () {
         if (ownOnly != null && entry.id !== ownOnly) continue;
         // A guest also takes the host's AI (aiRemotes); a host never has any.
         const r = remotes.get(entry.id) || aiRemotes.get(entry.id);
-        if (r && r.interp.push(t - (entry.age || 0), entry, arrival)) {   // an aged (relayed) entry keeps its own stamp
+        // adopt, not push: decodeSnapshot built `entry` for this packet alone
+        // and nothing reads it after this loop, so the buffer keeps it uncopied.
+        // Reordering may fill an interpolation gap, but only a newer pose
+        // renews ownership. Old backlog must not keep an exhausted pose frozen
+        // on the wire, or reclaim a car already handed to the local AI.
+        if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival) && r.interp.newest() === entry) {
           r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
           r.everHeard = true;
         }
@@ -611,7 +497,14 @@ const NetPlay = (function () {
     }
 
     function bindSession(id, s) {
-      const qualiGate = rateGate(QUALI_RATE);
+      const hostGate = rateGate(QUALI_RATE), guestGate = rateGate(QUALI_GUEST_RATE);
+      const qualiGate = () => (role === "host" ? hostGate : guestGate)();
+      // The host relays a guest's LAP and STRATEGY to every other guest, and a
+      // receiver closes its link at EVENT_INBOX_CAP queued events (transport.js):
+      // ungated, one guest's burst got the others disconnected. Per connection,
+      // like QUALI; a real client sends one LAP a lap and STRATEGY at ~1 Hz plus
+      // a few phase changes in a pit stop.
+      const lapGate = rateGate(LAP_RATE), strategyGate = rateGate(STRATEGY_RATE);
       function sendersOwnDriver(d, legacyLap = false) {
         if (sessionKinds.get(id) === SpectatePolicy.SPECTATOR) return false;
         if (role !== "host") return true;
@@ -684,6 +577,7 @@ const NetPlay = (function () {
           // A spectator may negotiate protocol compatibility, but never owns a
           // car, race control or a result. Ignore every gameplay declaration.
           if (role === "host" && sessionKinds.get(id) === SpectatePolicy.SPECTATOR && name !== EV.MODEL) return;
+          if (role === "host" && ((name === EV.LAP && !lapGate()) || (name === EV.STRATEGY && !strategyGate()))) return;
           if (name === EV.MODEL) {
             if (!d || d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
               // ONE INCOMPATIBLE PEER IS ONE RIVAL, NOT THE SESSION — the rule
@@ -704,7 +598,7 @@ const NetPlay = (function () {
               return;
             }
             if (typeof d.epoch === "string" && d.epoch.length <= 64) {
-              peerEpochs.set(id, d.epoch); lastStrategy = -Infinity;
+              peerEpochs.set(id, { value: d.epoch, json: JSON.stringify(d.epoch) }); lastStrategy = -Infinity;
               if (!d.ack) s.sendEvent(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch, ack: true });
             }
           }
@@ -716,7 +610,10 @@ const NetPlay = (function () {
             const fromHost = (role === "guest" || role === SpectatePolicy.SPECTATOR) && s === session;
             const r = remotes.get(d.wire) || (fromHost ? aiRemotes.get(d.wire) : null);
             const authorized = fromHost || (role === "host" && remoteFor(id) === d.wire);
-            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track));
+            if (r && authorized && applyStrategy(r.car, d) && role === "host") {
+              r.stratHeard = true;   // the host now holds this human's full state for a late receiver (tick's peerArrived)
+              broadcastStrategy(strategyState(r.car, d.wire, d.track, d.tyreLog === undefined));
+            }
           }
           if (name === EV.BYE) {
             lastReason = "bye";
@@ -858,7 +755,11 @@ const NetPlay = (function () {
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
-      bindQuali(s, (d) => (role !== "host" || qualiGate()) && sendersOwnDriver(d), G);
+      // A guest trusts the host to speak for the field, but only for a driver
+      // in it: an unknown id would grow qualiLive / qualiPeers forever (#5012).
+      const seated = (d) => role === "host"
+        || remoteList().some((r) => r.car && r.car.driverId === d.driverId);
+      bindQuali(s, (d) => qualiGate() && sendersOwnDriver(d) && seated(d), G);
     }
 
     function handBackToAI(reason, id) {
@@ -908,7 +809,6 @@ const NetPlay = (function () {
 
       role = opts.role === "host" ? "host"
         : opts.role === SpectatePolicy.SPECTATOR ? SpectatePolicy.SPECTATOR : "guest";
-      raceOpts = opts;
       onStop = typeof opts.onStop === "function" ? opts.onStop : null;
       peerProfile = opts.peerProfile || null;
       sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
@@ -919,33 +819,23 @@ const NetPlay = (function () {
       localCar = role === SpectatePolicy.SPECTATOR ? null
         : (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
-      // One profile today, an array when the room grows; Phase C only changes
-      // where the list comes from.
-      //
-      // `opts.peers` is built from the lobby's _peers map (filled from HELLO),
-      // so it starts empty until a HELLO arrives — a guest that walks straight
-      // into the garage, or whose HELLO is simply late, has a wide-open session
-      // and an empty peers list. `[] || fallback` kept that empty array instead
-      // of falling back, so joining was empty, remotes stayed empty, and
-      // start() bailed no_slot: measured on the guest-in-the-garage path
-      // (bahrain, 22 cars), race built then a full teardown on "Could not find
-      // a grid slot for both drivers".
-      //
-      // A profile only decides WHICH slot, and
-      // pickRemoteSlot(null) has always had the any-free-car arm for that — so
-      // an empty or profile-less join must still fall through to it rather
-      // than being read as "no peers".
-      const joining = ((opts.peers && opts.peers.length) ? opts.peers
-        : (opts.sessions && opts.sessions.length)
-          ? opts.sessions.map((e) => ({ profile: null, mods: null, kind: peerKind(e), id: e.id != null ? e.id : PEER_ONE }))
-          : [{ profile: peerProfile, mods: opts.peerMods, id: PEER_ONE }])
-        .filter((peer) => !SpectatePolicy.isSpectator(peer));
+      // Reserve named seats first, including guests whose HELLO was relayed by
+      // the host. A connected driver whose HELLO is late gets a remaining seat.
+      const joining = (opts.peers || []).slice();
+      for (const entry of opts.sessions || []) {
+        const id = entry.id != null ? entry.id : PEER_ONE;
+        if (!joining.some((peer) => (peer.id ?? PEER_ONE) === id)) {
+          joining.push({ id, kind: peerKind(entry) });
+        }
+      }
+      if (!joining.length) joining.push({ id: PEER_ONE, profile: peerProfile, mods: opts.peerMods });
       const hasSpectator = incoming.some((entry) => {
         const id = entry.id != null ? entry.id : PEER_ONE;
         return SpectatePolicy.isSpectator((opts.peers || []).find((peer) => peer.id === id) || entry);
       });
       peerCar.clear();
       for (const j of role === SpectatePolicy.SPECTATOR ? [] : joining) {
+        if (SpectatePolicy.isSpectator(j)) continue;
         const car = pickRemoteSlot(j.profile);
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
@@ -955,6 +845,9 @@ const NetPlay = (function () {
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
       }
+      // Each friend's paint for this race (#5037), stamped on its car as car.netPaint
+      // for the car draw (CarDraw.paintTeam): what they sent, never this phone's store.
+      if (remotes.size && typeof LobbyRoster !== "undefined") LobbyRoster.paintField(G.cars || [], remoteList());
       if ((role !== SpectatePolicy.SPECTATOR && (!localCar || (!remotes.size && !(role === "host" && hasSpectator))))
           || (role === SpectatePolicy.SPECTATOR && !(G.cars || []).length)) {
         // start() adopts the lobby's sessions, but a failed adoption must not
@@ -1151,7 +1044,7 @@ const NetPlay = (function () {
         let sent = false;
         for (const [id, s] of sessions) {
           const to = peerEpochs.get(id);
-          try { sent = s.sendEvent(EV.LAP, { ...data, epoch: to }) || sent; } catch (e) { /* peer closed */ }
+          try { sent = s.sendEvent(EV.LAP, { ...data, epoch: to?.value }) || sent; } catch (e) { /* peer closed */ }
         }
         return sent;
       }
@@ -1196,7 +1089,10 @@ const NetPlay = (function () {
       handBackToAI(reason && reason !== "local" ? reason : null);
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.
-      for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
+      // Closing a session synchronously runs onClose, which refills sessionList().
+      // A private snapshot keeps that callback from skipping the next transport.
+      for (const s of Array.from(sessions.values())) { try { s.close(); } catch (e) { /* already gone */ } }
+      _pumpBuf.length = 0; _sessBuf.length = 0;
       sessions.clear(); peerEpochs.clear(); sessionKinds.clear(); peerInfo.clear();
       aiStrategyPhases.clear();
       peerCar.clear();
@@ -1218,7 +1114,12 @@ const NetPlay = (function () {
     }
 
     const _pubOwn = { id: -1, car: null }, _pubOne = [_pubOwn];   // publish scratch: one entry per packet
-    const _relay = [];                                             // host relay scratch: {id, car, at}
+    const _relay = [], _relayPool = [], _forGuest = [];            // host relay scratch: pooled {id, car, at}
+    const _hostEnt = { id: -1, car: null, at: 0 };                 // the host's own car, folded into each aged packet
+    function relayPush(id, car, at) {
+      const e = _relayPool[_relay.length] || (_relayPool[_relay.length] = { id: -1, car: null, at: 0 });
+      e.id = id; e.car = car; e.at = at; _relay.push(e);
+    }
     const _poseMaps = [remotes, aiRemotes];
     // `poseAt` (optional): when the local car's pose is, on the same clock as
     // `now` — the game loop publishes last frame's physics, which is older
@@ -1287,7 +1188,7 @@ const NetPlay = (function () {
       // spawn) while this tick's interp sample sits unused.
       for (const map of _poseMaps) for (const r of map.values()) {
         // SILENCE: past STALE_MS the local AI drives the car (owns() is false
-        // for it) instead of it standing on the line; a packet brings it back.
+        // for it) instead of it standing on the line; a newer pose brings it back.
         // A human rival that has never spoken stays posed where it is (it is
         // still building its circuit); a host AI car the host never names (a
         // grid the two screens disagree on) is the local AI's after STALE_MS.
@@ -1298,6 +1199,10 @@ const NetPlay = (function () {
         const quiet = now - r.heardAt > (r.hostAi || r.everHeard ? STALE_MS : HOLD_MAX_MS);
         if (quiet !== r.stale) { if (quiet) goLocal(r); else goWire(r); }
         if (r.stale) continue;
+        // A retired car stays where retireCar / the LAP event parked it. Posing
+        // from a leftover aged packet (or a host that still relays — #4270) would
+        // only move a DNF the game already excludes from ranked/contact.
+        if (r.car.retired) continue;
         // Per-remote scratch (the ._smp precedent): poseRemote copies fields
         // out and pred is consumed below, so neither object escapes the tick.
         const st = r.interp.sample(now, r._smpSt || (r._smpSt = {}));
@@ -1331,9 +1236,15 @@ const NetPlay = (function () {
         // retired car per guest for the rest of the race, filling a frozen guest's EVENT_INBOX_CAP.
         lastStrategy = now; lastPhaseA = phaseA; lastPhaseB = phaseB; lastPhaseC = phaseC;
         lastFitted = fitted; lastNext = next; lastCompound = compound;
-        broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
+        broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id, !phaseChanged && !peerArrived));
         // Resend the host's terminal AI state with the existing reliable sync.
         // A guest may bind its race handlers after the original retirement.
+        // The relay echo forwards a guest's scalar refresh as scalars, so a receiver whose epoch
+        // arrived after that guest's last phase would never see its tyre or stint log: resend each
+        // relayed human's full state with the new epoch.
+        if (role === "host" && peerArrived) for (const [wire, r] of remotes) {
+          if (r.stratHeard) broadcastStrategy(strategyState(r.car, wire, G.track.def.id));
+        }
         if (role === "host" && peerArrived) for (const c of G.cars || []) {
           if (!c.local && !c.human && c.retired) reportLap({ lap: c.lap, code: c.code,
             driverId: c.driverId, retired: c.dnf || "mechanical", invalid: true });
@@ -1344,14 +1255,20 @@ const NetPlay = (function () {
       // immediately on a pit/tyre phase change, and for each arriving epoch.
       if (role === "host" && G.track && G.track.def) for (const c of G.cars || []) {
         const wire = G.wireId(c);
-        if (c === localCar || wire < 0 || remotes.has(wire)) continue;
+        // Retired AI: the LAP retirement event is the last word (and peerArrived
+        // re-sends it above). A 1 Hz strategy refresh of a parked car is noise.
+        if (c === localCar || c.retired || wire < 0 || remotes.has(wire)) continue;
         let last = aiStrategyPhases.get(wire);
-        if (!last || peerArrived || now - last.at >= 1000 || c.tyreStints !== last.stints
+        const phase = !last || peerArrived || c.tyreStints !== last.stints
             || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
-            || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound) {
-          broadcastStrategy(strategyState(c, wire, G.track.def.id));
-          if (!last) { last = {}; aiStrategyPhases.set(wire, last); }
-          last.at = now; last.stints = c.tyreStints; last.pit = c.pitState; last.armed = c.pitArmed;
+            || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound;
+        if (phase || now - last.at >= 1000) {
+          broadcastStrategy(strategyState(c, wire, G.track.def.id, !phase));
+          // Stagger the 1 Hz refresh: each AI car's phase is pushed LATER by its wire id, so the field's
+          // ~21 payloads spread over the second instead of bursting in one frame, and no interval is
+          // ever shorter than 1 s (perf hunt 4).
+          if (!last) { last = {}; aiStrategyPhases.set(wire, last); last.at = now + (wire % 24) * (1000 / 24); }
+          else last.at = now; last.stints = c.tyreStints; last.pit = c.pitState; last.armed = c.pitArmed;
           last.fitted = c.pitFitted; last.next = c.pitNext && c.pitNext.id; last.compound = c.compoundShortAtFinish;
         }
       }
@@ -1372,10 +1289,6 @@ const NetPlay = (function () {
         // Bounded: a pose from the future, or one older than a stall's worth,
         // is a clock we cannot trust — stamp the frame instead.
         const at = Number.isFinite(poseAt) && poseAt <= now && now - poseAt <= POSE_AGE_MAX_MS ? poseAt : now;
-        const bytes = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne);
-        // Live map is safe here: sendState delivers nothing (Map iterators
-        // tolerate a removal, and only pump() can run onClose).
-        for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) { /* a dead session must not stop the others' publish */ } }
         // THE RELAY: ONE DATAGRAM PER GUEST, every other player's car in it.
         // It was one per car per guest — 3 own + 3 × 2 relays = 9 sends a tick
         // in a four-player room, ~75 % of each SCTP/DTLS/UDP datagram overhead.
@@ -1385,28 +1298,46 @@ const NetPlay = (function () {
         // human's fallback pose is speculative: relaying it as fresh owner
         // evidence could finish that human on another guest.
         const withAi = role === "host" && (++publishN % AI_EVERY) === 0;
+        _relay.length = 0;
         if (role === "host" && (sessions.size > 1 || withAi)) {
-          _relay.length = 0;
           if (sessions.size > 1) for (const r of remotes.values()) {
-            const id = G.wireId(r.car), at = r.interp.presentedAt ? r.interp.presentedAt() : now;
-            if (r.stale || id < 0 || !Number.isFinite(at)) continue;   // nothing posed yet: nothing to relay
+            const id = G.wireId(r.car), rat = r.interp.presentedAt ? r.interp.presentedAt() : now;
+            if (r.stale || id < 0 || !Number.isFinite(rat)) continue;   // nothing posed yet: nothing to relay
             if (r.heardAt != null && now - r.heardAt > RELAY_FRESH_MS) continue;   // silent: not a frozen pose with a fresh stamp
-            _relay.push({ id, car: r.car, at });
+            relayPush(id, r.car, rat);
           }
           if (withAi) for (const c of G.cars || []) {
             if (c === localCar) continue;
+            // A retired/DNF AI is already parked on every peer via the LAP event
+            // (retireCar → reportLap). Relaying its frozen pose at 10 Hz wastes
+            // the aged datagram and kept posing a car updateCar will never drive
+            // again (#4270). Live AI and human remotes are unchanged.
+            if (c.retired) continue;
             const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
             if (id < 0 || r) continue;   // human owner poses are relayed above; never fallback motion
-            _relay.push({ id, car: c, at });
+            relayPush(id, c, at);
           }
+        }
+        // The host's own car rides INSIDE that aged packet at its own stamp (age 0: it is the newest), so a
+        // guest gets one datagram per publish, not the own snapshot plus the relay (perf hunt 9: 30 → 20/s
+        // per guest with the AI field, 40 → 20 in a four-player room). A session with nothing relayed to it
+        // gets the plain own-car snapshot, encoded once for all of them.
+        let bytes = null;
+        // Live map is safe here: sendState delivers nothing (Map iterators
+        // tolerate a removal, and only pump() can run onClose).
+        for (const [sid, s] of sessions) {
+          let pkt = null;
           if (_relay.length) {
-            for (const [sid, s] of sessions) {
-              const own = remoteFor(sid);
-              const forGuest = _relay.filter((e) => e.id !== own);   // never back to the car's own driver
-              if (!forGuest.length) continue;
-              try { s.sendState(NetSnapshot.encodeAged(forGuest)); } catch (e) { /* as above */ }
+            const own = remoteFor(sid);
+            _forGuest.length = 0;
+            for (let i = 0; i < _relay.length; i++) if (_relay[i].id !== own) _forGuest.push(_relay[i]);   // never back to the car's own driver
+            if (_forGuest.length && _pubOwn.id >= 0) {
+              _hostEnt.id = _pubOwn.id; _hostEnt.car = localCar; _hostEnt.at = at; _forGuest.push(_hostEnt);
+              pkt = NetSnapshot.encodeAged(_forGuest);
             }
           }
+          if (!pkt) pkt = bytes || (bytes = NetSnapshot.encodeSnapshot(Math.round(at), _pubOne));
+          try { s.sendState(pkt); } catch (e) { /* a dead session must not stop the others' publish */ }
         }
       }
     }
@@ -1477,8 +1408,10 @@ const NetPlay = (function () {
     };
   }
 
-  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS, strategyState, applyStrategy, STRATEGY_VERSION,
-    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S,
-    QUALI_RATE, EVENT_WINDOW_MS, rateGate };
+  // PUBLISH_HZ / INTERP_DELAY_MS / STRATEGY_VERSION / validQualiLive / QUALI_MIN_S /
+  // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
+  return { create, EV, strategyState, applyStrategy,
+    clampWire, validQuali, bindQuali, qualiReporters,
+    QUALI_RATE, QUALI_GUEST_RATE, EVENT_WINDOW_MS, LAP_RATE, STRATEGY_RATE };
 })();
 Object.freeze(NetPlay);

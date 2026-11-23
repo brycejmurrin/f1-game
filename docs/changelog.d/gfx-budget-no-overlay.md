@@ -1,1 +1,0 @@
-Fixed: when the graphics reload budget is exhausted, GLX and TLX now record the failure on the diagnostic error ring without opening the full-screen error overlay, so the Graphics unavailable panel stays usable on the first tap.

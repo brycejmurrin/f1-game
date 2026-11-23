@@ -7,13 +7,13 @@
 (window.TrackScenery = window.TrackScenery || {})["baku"] =
   function (api) {
       const {
-        K, out, MAT, n, ds, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
+        K, out, MAT, ds, backdrop, groundPatch, waterBand, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
         gantry, marshalPost, billboard,
-        palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
+        palm, anchor, along, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
         circuitKit, plane, cypress, terrace, terrainYAt,
-      } = api;
+        bakedModel } = api;
 
       const SAND        = [0.62, 0.50, 0.34];        // Old-City sandstone
       const SAND_LIT    = [0.85, 0.62, 0.30];        // uplit sandstone
@@ -122,7 +122,8 @@
       for (let i = 0; i < 8; i++) {
         const kC = K(i / 8 * 0.22);
         backdrop(kC, 1,  140 + hash(i * 5)  * 60,  [28 + hash(i * 7)  * 18, 32 + hash(i * 11) * 44, 22], DARK2);
-        backdrop(kC, -1, 140 + hash(i * 9)  * 60,  [24 + hash(i * 3)  * 16, 28 + hash(i * 13) * 40, 20], DARK2);
+        // Keep the inner skyline row clear of the façades across the first two turns.
+        backdrop(kC, -1, 100 + hash(i * 9)  * 60,  [24 + hash(i * 3)  * 16, 28 + hash(i * 13) * 40, 20], DARK2);
         backdrop(kC, 1,  280 + hash(i * 15) * 120, [32 + hash(i * 17) * 24, 46 + hash(i * 19) * 80, 22], DARK);
         backdrop(kC, -1, 260 + hash(i * 21) * 110, [30 + hash(i * 23) * 22, 42 + hash(i * 25) * 72, 22], DARK);
       }
@@ -163,7 +164,7 @@
         building(k, 1, 42, 52, 22, 30, { kind: "dome", wall: SAND, window: WIN_WARM, floor: 4.5, lit: true });
         // Decorative base plinth (uplit, slightly wider than body, very low)
         const aBase = anchor(k, 1, 68);
-        addBox(out, vadd(aBase.c, aBase.u, 1.5), [58, 3, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);
+        addBox(out, vadd(aBase.c, aBase.u, 1.1), [58, 3.0, 32], SAND_LIT, [aBase.r, aBase.u, aBase.t]);   // sunk 0.4 m (top 2.6 m): its faces shared the palace body's planes (ground-audit flatCoplanar)
 
         for (const tOff of [-20, 20]) {
           const aTow = anchor(k, 1, 75);
@@ -182,9 +183,6 @@
         addBox(out, vadd(aGate.c, aGate.u, 2.9), [40, 6.2, 3], [0.78, 0.68, 0.50], [aGate.r, aGate.u, aGate.t]);
         addBox(out, vadd(aGate.c, aGate.u, 7), [42, 2, 3], WIN_WARM, [aGate.r, aGate.u, aGate.t]);
 
-        // Uplit wash at Government House base (warm stone courtyard glow)
-        const aGov = anchor(k, 1, 64);
-        addBox(out, vadd(aGov.c, aGov.u, 0.35), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
       // (The five pit halls and the 1 m pit wall at .94-.02 are the engine's
@@ -396,10 +394,7 @@
         minH: 6, maxH: 14, depth: 12, step: 16,
         palette: SAND_PAL, lit: true, windowCol: WIN_WARM, floor: 3,
       });
-      cityFront(0.553, 0.56, 1, 26, {
-        minH: 6, maxH: 16, depth: 12, step: 16,
-        palette: SAND_PAL, lit: false, windowCol: WIN_WARM, floor: 3,
-      });
+      // The rampart and terrace occupy the descending slope beyond the palace.
 
       for (let i = 0; i < 4; i++) {
         const dist = 38 + hash(i * 13) * 12;  // well behind the 10m wall gap
@@ -559,7 +554,7 @@
         const a = anchor(k, 1, 32);
         // Highest terrain under the footprint — single-point seat buried the plinth 7.6 m.
         let baseY = a.c[1];
-        for (const [to, ro] of [[0, 0], [22, 0], [-22, 0], [0, 10], [0, -8], [18, 8], [-18, 8], [18, -6], [-18, -6], [30, 4], [-30, 4]]) {
+        for (const [to, ro] of [[0, 0], [22, 0], [-22, 0], [0, 10], [0, -8], [0, -11], [18, 8], [-18, 8], [18, -6], [-18, -6], [30, 4], [-30, 4]]) {
           const q = vadd(vadd(a.c, a.t, to), a.r, ro);
           const g = terrainYAt(q[0], q[2]);
           if (g != null && g > baseY) baseY = g;
@@ -598,7 +593,7 @@
         const STONE = [0.58, 0.52, 0.42];
         const oldCityData = [
           [0.51, 1, 36, 10, 10, 14],
-          [0.54, 1, 38, 12, 12, 12],
+          [0.54, 1, 48, 12, 12, 12], // The castle terrace at gap 28 extends to ~40 m behind the road edge.
           [0.56, 1, 30, 14,  8, 16],
         ];
         for (const [i, [s, side, dist, w, h, d]] of oldCityData.entries()) {
@@ -609,7 +604,7 @@
         }
       }
 
-      // Icheri Sheher grandstand — castle exit (T11–12 range; guides vary).
+      // Icheri Sheher grandstand — past the castle exit at T13 (FIA 2026 numbering; guides vary).
       // Gap 18 clears the rampart pillars at 19.4; positive rake via crowdBank.
       if (grandstandEx) {
         grandstandEx(0.532, 1, 18, 58, null, null, {
@@ -666,7 +661,8 @@
       // lit:false — with theme city dress excluded on +1 (#3340), cityFront's
       // night neon band vs drawFace detail was unmasked as coplanar growth.
       // Towers / billboards still light the boulevard; façades stay readable.
-      cityFront(0.63, 0.738, 1, 14, {
+      // The flat seafront starts at T16.
+      cityFront(0.663, 0.738, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: false, windowCol: WIN_COOL, floor: 4,
       });
@@ -681,7 +677,7 @@
 
       {
         const k  = K(0.70);
-        const aH = anchor(k, 1, 62);
+        const aH = anchor(k, 1, 78);   // Set the podium back from the boulevard façades.
         const b  = [aH.r, aH.u, aH.t];
         // Podium base
         addBox(out, vadd(aH.c, aH.u, 1.8), [48, 3.6, 36], [0.28, 0.28, 0.32], b);
@@ -799,7 +795,8 @@
         addBox(out, vadd(a.c, a.u, 0.5 * sc), [W * 1.02, 0.9 * sc, L * 0.88], [0.06, 0.08, 0.14], b);
         const sup = vadd(a.c, a.t, L * 0.02);
         addBox(out, vadd(sup, a.u, 4.2 * sc), [W * 0.82, 2.4 * sc, L * 0.5], [0.30, 0.34, 0.42], b);
-        addBox(out, vadd(sup, a.u, 6.6 * sc), [W * 0.66, 2.0 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
+        // The upper cabin spans the lower roof at 5.4 sc to the mast at 7.6 sc.
+        addBox(out, vadd(sup, a.u, 6.5 * sc), [W * 0.66, 2.2 * sc, L * 0.32], [0.28, 0.32, 0.40], b);
         out._mat = 0;
         addBox(out, vadd(sup, a.u, 4.6 * sc), [W * 0.84, 0.7 * sc, L * 0.52], WIN_WARM, b);
         addBox(out, vadd(sup, a.u, 6.9 * sc), [W * 0.68, 0.6 * sc, L * 0.34], WIN_COOL, b);
@@ -867,4 +864,10 @@
                  s % 2 ? [0.90, 0.55, 0.20] : WIN_WARM, b);
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.088, 0.2705, 0.434, 0.663]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

@@ -1,8 +1,8 @@
 /* Apex 26 — RESULTS CAM (ResultsCam.create(G)): chequered-flag finish cut,
  * slow orbit behind the results sheet, and a short highlights montage from the
  * solo ReplayBuf tags. Solo presentation only — never touches netplay authority
- * or career settlement. Off on mobile / PerfGov.tier() >= 2. Cap orbit/highlight
- * redraws at 30 fps. Curvature only via G.camVantage (broadcast-only). */
+ * or career settlement. Off on mobile / PerfGov.tier() >= 2. Flag/orbit
+ * poses cap at 30 fps; highlights re-pose every frame. Curvature only via G.camVantage (broadcast-only). */
 "use strict";
 const ResultsCam = (function () {
   const CHEQ_S = 2.2;
@@ -136,7 +136,7 @@ const ResultsCam = (function () {
       if (!p || !G.camVantage) return null;
       const pose = G.camPoseOf ? G.camPoseOf(p) : null;
       const extra = chequeredExtra(p);
-      if (pose) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
+      if (pose && pose.carPos) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
       const s = pose ? pose.s : (p.s || 0), x = pose ? pose.x : (p.x || 0);
       // Match the side rig's smooth bank lift, including replayed highlight poses.
       const bank = G.track && typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
@@ -208,7 +208,8 @@ const ResultsCam = (function () {
       if (!live()) return false;
       if (!allowed()) { reset(); return false; }
       frameAcc += dt;
-      if (frameAcc < FRAME_DT) return true;   // still live, but skip work
+      // Highlights re-pose every rendered frame: a 30 Hz pose under a 60/120 Hz render stepped the cars (#5030).
+      if (phase !== "highlights" && frameAcc < FRAME_DT) return true;   // still live, but skip work
       const step = frameAcc; frameAcc = 0;
       age += step;
       if (phase === "chequered") {
@@ -272,10 +273,11 @@ const ResultsCam = (function () {
     };
   }
 
+  // ORBIT_RADIUS / ORBIT_HEIGHT / HIGHLIGHT_* / FRAME_DT / enabled /
+  // chequeredExtra stay module-local — no external readers (tests pin
+  // create / orbitPose / highlightsReel / CHEQ_S / ORBIT_PERIOD_S).
   return {
-    create, CHEQ_S, ORBIT_PERIOD_S, ORBIT_RADIUS, ORBIT_HEIGHT,
-    HIGHLIGHT_CLIP_S, HIGHLIGHT_MAX_S, FRAME_DT,
-    enabled, chequeredExtra, orbitPose, highlightsReel,
+    create, CHEQ_S, ORBIT_PERIOD_S, orbitPose, highlightsReel,
   };
 })();
 Object.freeze(ResultsCam);

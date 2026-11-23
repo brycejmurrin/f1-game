@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { makeDom } from '../helpers/mini-dom.mjs';
+import { seedStore } from '../helpers/seed-store.mjs';
 import { absSrc } from "../helpers/abs-src.mjs";
 import { GAME_REL } from "../helpers/game-source.mjs";
 const read = p => readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
@@ -57,7 +58,7 @@ function dirtyExitFixture(from) {
   run('js/garage/setup-sheet.js'); context.G = G;
   const ui = vm.runInContext('SetupUI.create(G)', context);
   const routes = [];
-  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {} }, garageReturn: from, soundOn: false,
+  Object.assign(context, { $: G.$, setupCam: { cancelArrival() {}, skipPitOut: () => false, startPitOut: (done) => done() }, garageReturn: from, soundOn: false,
     loadingScreen: { phase: () => '', busy() {}, stop() {} }, setupPreviewOn: true, recomputePlayerMods() {},
     buildSelect() {}, els: G.els, netLobby: { roomChanged: () => routes.push('vsfriend') },
     careerUi: { openHub: () => routes.push('career') }, raceSettings: { openRaceSettings: () => routes.push('select') },
@@ -113,10 +114,11 @@ test('an unedited garage draft exits in one tap and an old confirmation cannot a
 });
 
 function tuneFixture() {
-  const dom = makeDom(), saved = new Map();
+  const dom = makeDom(), saved = new Map(), timers = new Map(), writes = { n: 0 };
+  let timerId = 0;
   const context = vm.createContext({ document: dom.document, GameStore: { store: {
-    get: (k, d) => saved.get(k) ?? d, set: (k, v) => v === undefined ? saved.delete(k) : saved.set(k, v),
-  } }, PhysicsConsts: { BB_REF: .56, LAT_MAX: 20 }, csVisitTunes: new Map(), csTuneExperiments: new Map(),
+    get: (k, d) => saved.get(k) ?? d, set: (k, v) => { writes.n++; return v === undefined ? saved.delete(k) : saved.set(k, v); },
+  } }, setTimeout: (fn) => { timers.set(++timerId, fn); return timerId; }, clearTimeout: (id) => { timers.delete(id); }, PhysicsConsts: { BB_REF: .56, LAT_MAX: 20 }, csVisitTunes: new Map(), csTuneExperiments: new Map(),
     $: id => dom.byId(id), csLabel: text => { const n = dom.document.createElement('h3'); n.textContent = text; return n; },
     renderStatBars() {}, csTabId: x => x, getTeamParts: () => ({}), GameAudio: {},
     Parts: { RH_GAIN: .06, aeroLoad: (_p, _t, tune) => Math.min(1, Math.max(0, 1 + .06 * (tune?.rake || 0))) }, G: { soundOn: false, $: id => dom.byId(id), getTeamParts: () => ({}) },
@@ -127,8 +129,21 @@ function tuneFixture() {
   const build = () => { container.replaceChildren(); context.experiments.build(container, team); };
   const button = text => container.querySelectorAll('button').find(b => b.textContent === text);
   const input = k => container.querySelectorAll('input').find(n => n.dataset.csTune === k);
-  return { context, S: context.S, team, build, button, input, container };
+  const runTimers = () => { const due = [...timers.values()]; timers.clear(); for (const fn of due) fn(); };
+  return { context, S: context.S, team, build, button, input, container, writes, timers, runTimers };
 }
+test('a tune slider drag writes the store once: inputs debounce, change commits the final value (perf hunt 9)', () => {
+  const f = tuneFixture(), { S, team } = f; f.build();
+  const inp = f.input('rideR'), w0 = f.writes.n;
+  for (let i = 0; i < 30; i++) { inp.value = 50 + i; inp.oninput(); }
+  assert.equal(f.writes.n - w0, 0, 'no store write while the thumb moves');
+  inp.onchange();
+  assert.ok(f.writes.n - w0 <= 1, `30 inputs + 1 change wrote ${f.writes.n - w0} times`);
+  assert.equal(S.get(team.id).rideR, 79, 'the stored value is the final slider value');
+  f.runTimers(); assert.equal(f.writes.n - w0, 1, 'no late write after the change');
+  inp.value = 62; inp.oninput(); f.runTimers();
+  assert.equal(S.get(team.id).rideR, 62, 'a drag with no change event still commits after the debounce');
+});
 test('visit restore survives tune rebuilds, restores all fields and remains team scoped', () => {
   const f = tuneFixture(), { S, team } = f;
   S.set(team.id, { arbF: 9, arbR: 8, rideF: 30, rideR: 70, brakeBias: 59 });
@@ -161,6 +176,15 @@ test('coach applies a bounded atomic pair, undoes exact snapshot, and invalidate
   assert.equal(S.experiment('wide', { ...before, arbF: 1 }), null);
   const front = S.experiment('wide', before); S.set(team.id, front); assert.ok(S.balance(team.id) < 0);
 });
+
+test('ARB split balance scales ~0.025 per click', () => {
+  const f = tuneFixture(), { S, team } = f;
+  const d = S.defaults(team.id);
+  S.set(team.id, { arbF: d.arbF + 1, arbR: d.arbR });
+  assert.equal(+S.balance(team.id).toFixed(3), 0.025, 'one front ARB click is +0.025 balance');
+  S.set(team.id, { arbF: d.arbF + 2, arbR: d.arbR - 1 });
+  assert.equal(+S.balance(team.id).toFixed(3), 0.075, 'three clicks of split land at 0.075');
+});
 test('aero bench reports saturation and no Corner Mode standing gain', () => {
   const f = tuneFixture(); f.S.set(f.team.id, { rideR: 80 }); f.build();
   const text = () => f.container.querySelectorAll('p').map(n => n.textContent).join(' ');
@@ -174,7 +198,7 @@ test('live atlas retries same-key failures with bounded backoff and skips unsupp
   const source = read('js/garage/scene.js'), start = source.indexOf('function reuploadTex('), end = source.indexOf('// Squeegeed resin:', start);
   let attempts = 0, now = 0;
   const c = vm.createContext({ roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', key: 'k' }), performance: { now: () => now },
-    cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} },
+    cacheKey: 'k', shellMesh: {}, geomKey: 'g', liveKey: 'l', liveTex: null, liveCanvas: {}, liveMesh: { mid: {} }, liveMeshesReady: true,
     liveFail: 0, liveRetryAt: 0, dressTex: {}, dressFail: 0, dressRetryAt: 0, dressIdKey: 'd', dressFullKey: 'd|b',
     boardKey: () => 'b', paintLive() {}, paintTrace() {}, traceFail: 0, lastTrace: -1e9, GarageExperience: { paintCareer() {} }, LiveryTex: {},
     _gfx: { createTexMesh() {}, createTexture() { attempts++; if (attempts === 1) throw Error('injected'); return {}; } },
@@ -191,6 +215,34 @@ test('live atlas retries same-key failures with bounded backoff and skips unsupp
   delete c._gfx.createTexture; c.liveFail = 0;
   c.rebuild({}, {}, {}, {}); assert.equal(attempts, 5);
 });
+test('garage dress retries missing mesh uploads and retires the old texture if repaint throws', () => {
+  const source = read('js/garage/scene.js');
+  const sides = ['nx', 'px', 'back', 'door', 'mid'], calls = [], freed = [];
+  let now = 0, failDoor = true, failPaint = false, board = 'first';
+  const c = vm.createContext({
+    roomKeys: () => ({ geom: 'g', live: 'l', dressId: 'd', board, key: board }),
+    performance: { now: () => now }, cacheKey: '', geomKey: 'g', shellMesh: {}, liveKey: 'l', liveTex: {},
+    liveFail: 0, liveRetryAt: 0, dressIdKey: 'd', dressFullKey: '', dressCanvas: {}, dressTex: null,
+    dressMesh: {}, dressMeshesReady: false, dressFail: 0, dressRetryAt: 0, SIDES: sides, LiveryTex: {},
+    paintDress: () => ({ canvas: {} }), paintBoards() { if (failPaint) throw Error('paint'); },
+    buildDress: () => Object.fromEntries(sides.map(side => [side, { side, idx: [0] }])),
+    _gfx: { createTexture: () => ({}), freeTexture(t) { freed.push(t); }, createTexMesh({ side }) {
+      calls.push(side);
+      if (side === 'door' && failDoor) { failDoor = false; return null; }
+      return { side };
+    } }, Log: { warn() {} },
+  });
+  vm.runInContext(source.slice(source.indexOf('function reuploadTex('), source.indexOf('// Squeegeed resin:')), c, { filename: absSrc('js/garage/scene.js') });
+  c.rebuild({}, {}, {}, {});
+  assert.equal(c.dressTex, null);
+  now = 1000; c.rebuild({}, {}, {}, {});
+  assert.deepEqual(Object.keys(c.dressMesh), sides);
+  assert.deepEqual(calls, ['nx', 'px', 'back', 'door', 'door', 'mid']);
+  const old = c.dressTex;
+  board = 'changed'; failPaint = true; c.rebuild({}, {}, {}, {});
+  assert.equal(c.dressTex, null);
+  assert.equal(freed.filter(t => t === old).length, 1);
+});
 test('coverage cache remeasures same-sized dock changes and panel identity, but not stable frames', () => {
   const source = read('js/garage/setup-camera.js');
   const start = source.indexOf('  const canvasEl = $("game"), panelEl ='), end = source.indexOf('  // FIT THE VISIBLE REGION', start);
@@ -198,20 +250,22 @@ test('coverage cache remeasures same-sized dock changes and panel identity, but 
   const canvas = { clientWidth: 1000, clientHeight: 700, getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 700 }) };
   let panel = { clientWidth: 400, clientHeight: 700, getBoundingClientRect: () => { reads++; return { left: side === 'right' ? 600 : 0, top: 0, width: 400, height: 700 }; } };
   const c = vm.createContext({ $: id => id === 'game' ? canvas : id === 'cs-inner' ? panel : null, home: { active: false }, setupPreviewSpin: false,
-    arriving: null, window: {}, document: { documentElement: { getAttribute: () => side } }, _covKey: '', _covPanel: null, _covCanvas: null, _covCam: null,
+    arriving: null, window: {}, document: { documentElement: { getAttribute: () => side } }, _covNow: [], _covWas: [], _covPanel: null, _covCanvas: null, _covCam: null,
     _covX: 0, _covY: 0, _covPr: {}, _covCr: {}, _stampRect: (out, v) => Object.assign(out, v), panelCover: pr => ({ x: pr.left ? .4 : -.4, y: 0 }),
   });
   vm.runInContext('function frame(){' + source.slice(start, end) + ' return panelFrac; }', c);
   assert.equal(c.frame(), .4); assert.equal(c.frame(), .4); assert.equal(reads, 1);
   side = 'left'; assert.equal(c.frame(), -.4); assert.equal(reads, 2);
   panel = { ...panel }; c.frame(); assert.equal(reads, 3);
+  // #4974: the per-frame stamp is scalars in reused arrays, never a joined key string.
+  assert.ok(!/\+ "x" \+|\+ "\|" \+/.test(source.slice(start, end)), 'the turntable coverage stamp must not build a string every frame');
 });
 test('deferred garage builds cannot run after hide or clear a newer visit busy state', () => {
   const dom = makeDom(), queue = []; let builds = 0;
   const c = vm.createContext({ document: dom.document, $: id => dom.byId(id), Log: { info() {} },
     els: { select: dom.byId('select'), overlay: dom.byId('overlay') }, G: { teamIdx: 0 }, Teams: { LIST: [{ id: 'haas' }] },
     tuneExperiments: { visit() {} }, SetupTune: { get: () => ({ arbF: 5 }) }, csVisitGeneration: 0, csVisitTunes: new Map(), csTuneExperiments: new Map(),
-    requestAnimationFrame: cb => queue.push(cb), buildSetup: () => builds++,
+    requestAnimationFrame: cb => queue.push(cb), buildSetup: () => builds++, syncGarageExitChrome() {},
   });
   vm.runInContext(sheet.slice(sheet.indexOf('function openSetup()'), sheet.indexOf('// THE PAINT EDITOR DOES NOT OUTLIVE')), c);
   c.openSetup(); queue.shift()(); const old = queue.shift();
@@ -413,4 +467,277 @@ test('pause comparison controls cannot quit a later ordinary session with no run
  const h=measuredFixture(),pause=h.dom.makeElement('div'),body=h.dom.makeElement('div');body.className='sheet-body';pause.appendChild(body);h.dom.body.appendChild(pause);let owns=true,quits=0;
  const ui=h.T.mountPause({$:()=>pause,setupTrialContext:()=>owns?h.context():null,quitToMenu:()=>quits++,openGarageFrom(){}});h.begin();await h.T.attempt('baseline');assert.equal(ui.section.hidden,false);owns=false;ui.refresh();assert.equal(ui.section.hidden,true);
  for(const b of ui.section.querySelectorAll('button'))b.onclick();assert.equal(quits,0);h.T.cancel();ui.dispose();
+});
+
+// ── Batch #5094 (garage bay): the zoom takes the distance off the turntable (#5034), a camera
+// restore drives the AERO button and one Escape closes one layer (#5045), and the decal
+// stations ink against every paint the mesh puts under them (#5039). ──
+const CAM = "js/garage/setup-camera.js", SHEET = "js/garage/setup-sheet.js", cam = read(CAM);
+const at = (f) => ({ filename: absSrc(f) });
+function slice(src, from, to) {
+  const a = src.indexOf(from), b = src.indexOf(to, a + from.length);
+  assert.ok(a >= 0 && b > a, "found " + from);
+  return src.slice(a, b);
+}
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const button = () => {
+  const attrs = {}, val = { textContent: "" };
+  return { attrs, val, classList: { toggle() {} }, setAttribute: (k, v) => { attrs[k] = v; }, querySelector: () => val };
+};
+
+// ── #5034 ──
+function zoomRig(state) {
+  const c = vm.createContext({ clamp, SP_DIST_MAX: 15, spDistMin: () => 4.6, home: { active: false },
+    setSetupSpin(on) { c.setupPreviewSpin = !!on; }, ...state });
+  vm.runInContext(slice(cam, "function setupZoom(mul) {", "// Move the rig sideways"), c, at(CAM));
+  return c;
+}
+test("a zoom on the spinning turntable moves the DRAWN distance and stops the spin (#5034)", () => {
+  // Measured at 844x390 (#5034): stored 8.35, drawn 7.12 with the sheet docked.
+  for (const [mul, dir] of [[1 / 1.1, -1], [1.1, 1]]) {
+    const c = zoomRig({ setupPreviewSpin: true, setupPreviewDist: 6.0, _spEffDist: 7.12 });
+    c.setupZoom(mul);
+    assert.equal(c.setupPreviewSpin, false, "the zoom stops the turntable");
+    assert.ok((c.setupPreviewDist - 7.12) * dir >= 7.12 * 0.05, "one press moves the drawn distance by 5 % or more: " + c.setupPreviewDist);
+  }
+});
+test("a zoom with the turntable off, or on the Home camera, keeps its own distance (#5034)", () => {
+  const off = zoomRig({ setupPreviewSpin: false, setupPreviewDist: 8, _spEffDist: 5 });
+  off.setupZoom(1.1);
+  assert.equal(off.setupPreviewDist, 8 * 1.1);
+  const home = zoomRig({ setupPreviewSpin: true, setupPreviewDist: 8, _spEffDist: 5, home: { active: true } });
+  home.setupZoom(1.1);
+  assert.equal(home.setupPreviewDist, 8 * 1.1);
+  assert.equal(home.setupPreviewSpin, true, "the Home turntable is not the garage's to stop");
+  const max = zoomRig({ setupPreviewSpin: false, setupPreviewDist: 14.9, _spEffDist: 14.9 });
+  max.setupZoom(1.1);
+  assert.equal(max.setupPreviewDist, 15);
+});
+
+// ── #5045 ──
+test("restoring the camera after INSPECT puts the AERO button back with the flaps (#5045)", () => {
+  const aero = button(), spots = [];
+  const c = vm.createContext({ $: (id) => (id === "cs-aero" ? aero : null), GarageScene: { spot: (n) => spots.push(n) },
+    setSetupSpin() {}, setupPreviewXOn: false, setupPreviewAeroX: 0 });
+  vm.runInContext(slice(cam, "function setSetupAero(on, opts) {", "function setupZoom(")
+    + slice(cam, "function restoreCamera(s) {", "function setHomeView("), c, at(CAM));
+  const saved = { az: 1, el: 0.2, dist: 8, spin: false, orbit: [0, 0, 0], target: [0, 0, 0], pan: [0, 0, 0],
+    minDist: 0, free: false, xOn: false, aeroX: 0, view: "side" };
+  c.setSetupAero(true);   // AERO pressed during the inspection
+  assert.equal(aero.attrs["aria-pressed"], "true");
+  c.restoreCamera(saved);
+  assert.equal(c.setupPreviewXOn, false);
+  assert.equal(aero.attrs["aria-pressed"], "false", "aria-pressed follows the restored flaps");
+  assert.equal(aero.val.textContent, "CORNER MODE", "and so does the label");
+  assert.deepEqual(spots, ["side"]);
+});
+
+test("the Garage camera disclosure survives pointerdown on preparation and arrangement tools", () => {
+  const dom = makeDom();
+  let open = true, pointerdown;
+  const c = vm.createContext({
+    G: { setupPreviewOn: true }, setupCamPanelOpen: () => open, setSetupCamPanel: value => { open = value; },
+    document: { addEventListener(type, fn, capture) {
+      assert.equal(type, "pointerdown"); assert.equal(capture, true); pointerdown = fn;
+    } },
+  });
+  const source = slice(cam, 'document.addEventListener("pointerdown", (e) => {', "}, true);") + "}, true);";
+  vm.runInContext(source, c, at(CAM));
+  const preparation = dom.makeElement("div");
+  preparation.id = "arrange-prepare";
+  for (const owner of [preparation, dom.byId("screen-arranger"), dom.byId("cs-stack")]) {
+    const button = dom.makeElement("button"); owner.appendChild(button);
+    pointerdown({ target: button });
+    assert.equal(open, true);
+  }
+  pointerdown({ target: dom.byId("game") });
+  assert.equal(open, false, "starting an orbit still dismisses the panel");
+});
+
+test("one Escape with the CAMERA panel open over the paint editor closes the panel only (#5045)", () => {
+  const game = read(GAME_REL);
+  const sheetFirst = game.indexOf("SetupUI.create(G, customLiv)") < game.indexOf("SetupCamera.create(G");
+  assert.ok(game.includes("SetupUI.create(G, customLiv)") && game.includes("SetupCamera.create(G"), "both modules are created by the entry file");
+  const panel = { hidden: false }, cancel = { clicks: 0, click() { this.clicks++; } }, listeners = [];
+  const c = vm.createContext({
+    $: (id) => (id === "cs-cam-panel" ? panel : null), G: { setupPreviewOn: true }, csLivCreating: true,
+    setupCamPanelOpen: () => !panel.hidden, setSetupCamPanel: (open) => { panel.hidden = !open; },
+    document: { querySelector: (sel) => (sel.includes(".cs-liv-ed-cancel") ? cancel : null) },
+    window: { addEventListener: (type, fn) => listeners.push(fn) },
+  });
+  const sheetEsc = slice(sheet, 'window.addEventListener("keydown", (e) => {\n  if (e.key !== "Escape" || !csLivCreating', "}, true);") + "}, true);";
+  const camEsc = slice(cam, 'window.addEventListener("keydown", (e) => {\n  // …but only when the GARAGE is the top layer', "}, true);") + "}, true);";
+  for (const [src, f] of sheetFirst ? [[sheetEsc, SHEET], [camEsc, CAM]] : [[camEsc, CAM], [sheetEsc, SHEET]]) vm.runInContext(src, c, at(f));
+  assert.equal(listeners.length, 2);
+  const press = () => {
+    const e = { key: "Escape", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    for (const fn of listeners) fn(e);
+    return e;
+  };
+  assert.equal(press().defaultPrevented, true, "the key is claimed");
+  assert.equal(panel.hidden, true, "the panel closes");
+  assert.equal(cancel.clicks, 0, "CANCEL is not pressed by the same key");
+  press();
+  assert.equal(cancel.clicks, 1, "the next Escape is the editor's");
+});
+
+// ── #5039 ──
+function loadLivery() {
+  const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN, Map, Set, WeakMap };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/livery-design.js",
+                   "js/car/livery-graphics.js", "js/car/livery-stations.js", "js/car/crest-draw.js", "js/car/liverytex.js"])
+    vm.runInContext(read(f), ctx, at(f));
+  return { S: vm.runInContext("LiveryStations", ctx), T: vm.runInContext("LiveryTex", ctx), Teams: vm.runInContext("Teams", ctx) };
+}
+const L = loadLivery(), INK_TARGET = 6.5;
+const REG = { noseTip: { id: "noseTip" }, cockpitSide: { id: "cockpitSide" }, podTop: { id: "podTop" }, haloTop: { id: "haloTop" } };
+function paintStations(colors) {
+  const marks = {}, fills = {};
+  L.S.paint({}, REG, { teamId: "cadillac", colors, c1: colors.c1, accent: [0.9, 0.1, 0.1], names: ["TITLE", "B", "C", "D", "E", "F"], num: 1,
+    fillRegion: (ctx, R, colour) => { fills[R.id] = colour; },
+    drawWordmark: (ctx, text, R, ink, opts) => { marks[R.id] = { ink, halo: opts.halo }; },
+    inkOn: L.T.inkOn, haloIf: (i) => (i.worst < INK_TARGET ? [1, 1, 1] : null) });
+  return { marks, fills };
+}
+const reads = (mark, bgs, label) => {
+  const worst = Math.min(...bgs.map((b) => L.T.contrast(mark.ink, b)));
+  assert.ok(worst >= INK_TARGET || mark.halo, label + ": ink clears " + INK_TARGET + " on every paint under it, or carries a halo (worst " + worst.toFixed(2) + ")");
+};
+test("cockpit code and pod-top sponsor read on both flanks of a left/right split (#5039)", () => {
+  const cad = L.Teams.LIST.find((t) => t.id === "cadillac");
+  const white = [0.95, 0.95, 0.96], black = [0.04, 0.04, 0.05];
+  assert.ok(JSON.stringify(cad).includes('"bodySplit":"lr"'), "Cadillac ships the lr split this guards");
+  const { marks } = paintStations({ c1: white, c2: black, bodySplit: "lr" });
+  reads(marks.cockpitSide, [white, black], "cockpit code");
+  reads(marks.podTop, [white, black], "pod-top sponsor");
+});
+test("cockpit code and pod-top sponsor read on an upper / lower zone (#5039)", () => {
+  const black = [0.04, 0.04, 0.05], silver = [0.76, 0.78, 0.82], white = [0.95, 0.95, 0.96];
+  const up = paintStations({ c1: black, upper: silver }).marks;
+  reads(up.cockpitSide, [black, silver], "cockpit code, upper");
+  reads(up.podTop, [black, silver], "pod-top sponsor, upper");
+  reads(paintStations({ c1: white, lower: black }).marks.cockpitSide, [white, black], "cockpit code, lower");
+  // A one-paint car keeps its plain ink: no halo it did not need.
+  const plain = paintStations({ c1: black }).marks;
+  assert.equal(plain.cockpitSide.halo, null);
+  assert.equal(plain.podTop.halo, null);
+});
+test("NOSE TIP wears the NOSE CAP colour when the livery sets one, else the accent (#5039)", () => {
+  const nose = [1, 1, 1], c1 = [0.04, 0.04, 0.05];
+  assert.deepEqual(paintStations({ c1, nose }).fills.noseTip, nose);
+  assert.deepEqual(paintStations({ c1 }).fills.noseTip, [0.9, 0.1, 0.1]);
+  assert.equal(paintStations({ c1, nose, decalNoseTip: "off" }).fills.noseTip, undefined);
+});
+
+// #5879: attempt() writes the trial tune into the saved setup; a reload mid-comparison used to keep it for good.
+function reloadable(saved, opts = {}) {
+  const dom = makeDom(), timers = [];
+  const localStorage = {
+    get length() { return saved.size; }, key: i => [...saved.keys()][i],
+    getItem: k => saved.get(k) ?? null,
+    setItem(k, v) {
+      const other = [...saved].filter(([key]) => key !== k).reduce((n, [key, val]) => n + key.length + val.length, 0);
+      if (opts.refuse === k || other + k.length + v.length > opts.quota) {
+        throw Object.assign(new Error("Storage full"), { name: "QuotaExceededError" });
+      }
+      saved.set(k, v);
+      if (opts.committed) opts.committed(k);
+    },
+    removeItem: k => saved.delete(k),
+  };
+  const ctx = vm.createContext({ document: dom.document, localStorage, Career: opts.career, PhysicsConsts:{BB_REF:.56}, setTimeout: fn => timers.push(fn) });
+  seedStore(ctx);
+  for (const file of ['setup-tune','setup-presets','setup-trials']) vm.runInContext(read('js/garage/'+file+'.js'),ctx,{filename:absSrc('js/garage/'+file+'.js')});
+  timers.splice(0).forEach(fn => fn());
+  return { dom, store: ctx.GameStore.store, S: vm.runInContext('SetupTune',ctx), T: vm.runInContext('SetupTrials',ctx) };
+}
+test('a reload mid-comparison restores the tuned setup, keeps a later hand edit, and cancel clears the record',()=>{
+  for (const edited of [false, true]) {
+    const saved = new Map(); let h = reloadable(saved); const works = plain(h.S.get('haas'));
+    h.S.set('haas', {...works, arbF: works.arbF + 2}); const tuned = plain(h.S.get('haas'));
+    h.T.create({teamId:'haas',store:h.store,baseline:works,candidate:tuned,launch:()=>new Promise(()=>{})});
+    h.T.attempt('baseline'); assert.deepEqual(plain(h.S.get('haas')), works, 'the trial wrote the baseline');
+    if (edited) h.S.set('haas', {...works, arbF: works.arbF + 4});
+    const want = plain(h.S.get('haas'));
+    h = reloadable(saved);
+    assert.deepEqual(plain(h.S.get('haas')), edited ? want : tuned, edited ? 'a later hand edit is left alone' : 'reload restores the tuned setup');
+    assert.equal(h.store.get('setupTrialRecover', null) ?? null, null, 'the recovery record is consumed');
+  }
+  const saved = new Map(), h = reloadable(saved);
+  h.T.create({teamId:'haas',store:h.store,baseline:h.S.get('haas'),candidate:h.S.get('haas'),launch:()=>new Promise(()=>{})});
+  h.T.attempt('candidate'); assert.notEqual(h.store.get('setupTrialRecover', null), null); h.T.cancel();
+  assert.equal(h.store.get('setupTrialRecover', null) ?? null, null, 'cancel clears the record');
+});
+
+test('setup comparison persists recovery before changing the sheet or launching from Garage', async () => {
+  const saved = new Map(), opts = { quota: 125 }, h = reloadable(saved, opts);
+  const baseline = h.S.get('haas'), candidate = h.S.set('haas', { arbF: 8 });
+  const host = h.dom.makeElement('div');
+  let starts = 0, between;
+  h.T.mount(host, { teamId: 'haas', store: h.store, baseline, candidateNow: () => candidate,
+    launch: async () => { starts++; return { ok: true, context: {} }; } });
+  const button = label => host.querySelectorAll('button').find(b => b.textContent === label);
+  button('BEGIN COMPARISON').onclick();
+  await button('RUN BASELINE').onclick();
+  assert.match(h.T.summary().reason, /storage/i);
+  assert.equal(starts, 0);
+  assert.equal(reloadable(saved).S.get('haas').arbF, 8);
+  opts.quota = 4096;
+  opts.committed = k => { if (k === 'apex26.setupTrialRecover') between = new Map(saved); };
+  opts.refuse = 'apex26.setup.haas';
+  await button('RUN BASELINE').onclick();
+  assert.equal(starts, 0, 'a refused sheet write cannot start the drill');
+  assert.equal(reloadable(between).S.get('haas').arbF, 8, 'interrupted after the journal, the sheet still belongs to the player');
+  opts.refuse = null;
+  button('RUN BASELINE').onclick();
+  assert.equal(starts, 1);
+  assert.equal(h.S.get('haas').arbF, baseline.arbF);
+  assert.equal(reloadable(saved).S.get('haas').arbF, 8, 'the committed trial sheet can now be recovered');
+});
+
+test('refused cancellation and boot restore keep the prior setup recoverable, including older journals', () => {
+  const saved = new Map(), opts = {}, h = reloadable(saved, opts);
+  const baseline = h.S.get('haas'), before = h.S.set('haas', { arbF: 8 });
+  h.T.create({ teamId: 'haas', store: h.store, baseline, candidate: before, launch: () => new Promise(() => {}) });
+  h.T.attempt('baseline');
+  const stamped = new Map(saved);
+  opts.refuse = 'apex26.setup.haas';
+  assert.equal(h.T.cancel(), false);
+  for (const legacy of [false, true]) {
+    const disk = new Map(saved);
+    if (legacy) {
+      disk.set('apex26.setup.haas', JSON.stringify(baseline));
+      disk.set('apex26.setupTrialRecover', JSON.stringify({ teamId: 'haas', key: 'setup.haas', before, owned: baseline }));
+    }
+    const blocked = reloadable(disk, opts);
+    assert.equal(blocked.S.get('haas').arbF, baseline.arbF);
+    assert.ok(disk.has('apex26.setupTrialRecover'));
+    assert.equal(blocked.T.create({ teamId: 'haas', store: blocked.store, baseline, candidate: before, launch() {} }), false);
+    assert.equal(reloadable(disk).S.get('haas').arbF, 8);
+    assert.equal(disk.has('apex26.setupTrialRecover'), false);
+  }
+  // An explicit same-value hand edit creates an ordinary sheet again.
+  stamped.set('apex26.setup.haas', JSON.stringify(baseline));
+  assert.equal(reloadable(stamped).S.get('haas').arbF, baseline.arbF);
+});
+
+test('a free-play, career slot or career seed switch keeps recovery with the trial that wrote the sheet', async () => {
+  for (const change of ['free-play to career', 'career slot', 'career seed']) {
+    let active = change !== 'free-play to career', slot = 1, seed = 101;
+    const opts = { career: { inCareer: () => active, slot: () => ({ flavour: 'gp', i: slot }), data: () => ({ team: 'haas', seed }) } };
+    const saved = new Map(), h = reloadable(saved, opts);
+    const baseline = h.S.get('haas'), before = h.S.set('haas', { arbF: 8 });
+    const start = () => h.T.create({ teamId: 'haas', store: h.store, baseline, candidate: before, launch: () => new Promise(() => {}) });
+    start();
+    h.T.attempt('baseline');
+    if (change === 'career seed') seed++; else if (change === 'career slot') slot++; else active = true;
+    h.T.cancel();
+    assert.ok(saved.has('apex26.setupTrialRecover'), change);
+    assert.equal(start(), false, 'another garage cannot replace the outstanding journal');
+    assert.equal(h.S.get('haas').arbF, baseline.arbF, 'another scoped setup is untouched');
+    active = change !== 'free-play to career'; slot = 1; seed = 101;
+    assert.equal(reloadable(saved, opts).S.get('haas').arbF, 8);
+  }
 });

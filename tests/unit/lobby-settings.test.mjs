@@ -105,6 +105,16 @@ test("circuitPayload + installCircuit builds the same custom circuit on both pee
   assert.ok(Math.abs(hLine.total - gLine.total) < 1, "same lap length on both peers");
 });
 
+test("installCircuit reuses one slot for a host that varies the seed (no unbounded Tracks.LIST)", () => {
+  const { host, guest } = peers({});
+  const before = guest.Tracks.LIST.length;
+  for (let seed = 1; seed <= 20; seed++) {
+    const it = host.C.sanitize(design({ seed }));
+    assert.ok(guest.S.installCircuit(it) >= 0);
+  }
+  assert.equal(guest.Tracks.LIST.length, before + 1);
+});
+
 test("normaliseSettings refuses an oversized or hostile circuit body", () => {
   const { host } = peers({});
   const S = host.S;

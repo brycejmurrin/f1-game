@@ -44,8 +44,11 @@ test("preview open, angle changes and close preserve race state and custom saved
   s.api.open(); const frame=s.host.querySelector("iframe"); frame.onload();
   assert.equal(frame.src,"cockpit-view.html?cockpitpreview=1");
   assert.equal(s.delivered.at(-1).wheel,"yoke"); assert.equal(s.delivered.at(-1).units,"mph");
-  for (const button of s.host.querySelector("#ckpreview-angles").querySelectorAll("button")) button.onclick();
+  for (const button of s.host.querySelector("#ckpreview-angles").querySelectorAll("button").filter(b => b.dataset.angle)) button.onclick();
   assert.equal(s.delivered.at(-1).angle,"above");
+  const editor=s.dom.document.body.appendChild(s.dom.makeElement("dialog","screen-arranger"));
+  s.dom.document._listeners.get("keydown")[0]({key:"Escape",target:editor});
+  assert.equal(s.host.querySelector("iframe"),frame,"closing the arranger retains the player’s live cockpit preview");
   s.api.close(true);
   assert.equal(s.disposed.length,1); assert.equal(s.host.querySelector("iframe"),null);
   assert.deepEqual([...s.disk],beforeDisk); assert.deepEqual(s.race,beforeRace);

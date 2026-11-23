@@ -402,3 +402,82 @@ test("migrateCareer coerces hostile numeric leaves when the version marker is va
   assert.equal(out.budgetLvl, 0);
   assert.equal(out.facility, 0);
 });
+
+test("deal bonus / term and budgetLvl are clamped to what career.js can award", () => {
+  const SM = load();
+  const mk = (deal, budgetLvl) => SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas", money: 1, deal, budgetLvl });
+  const hi = mk({ team: "haas", bonusPt: 1e308, left: 1e9, years: 99 }, 7);
+  assert.deepEqual([hi.deal.bonusPt, hi.deal.left, hi.deal.years, hi.budgetLvl], [24, 3, 3, 3]);
+  const lo = mk({ team: "haas", bonusPt: -5, left: -2, years: -1 }, -4);
+  assert.deepEqual([lo.deal.bonusPt, lo.deal.left, lo.deal.years, lo.budgetLvl], [0, 0, 0, 0]);
+  const once = JSON.stringify(hi);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
+
+test("BONUS_MAX / BUDGET_LVL_MAX mirror career.js bonusPtFor(tier 0) / BUDGET_UPGRADE.length", () => {
+  const careerSrc = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
+  const L = load().LIMITS;
+  const m = /function bonusPtFor\(team\) \{ return (\d+) \+ \((\d+) - team\.tier\) \* (\d+); \}/.exec(careerSrc);
+  assert.ok(m, "bonusPtFor keeps its shape");
+  assert.equal(Number(m[1]) + Number(m[2]) * Number(m[3]), L.BONUS_MAX);
+  const b = /const BUDGET_UPGRADE = \[([^\]]*)\]/.exec(careerSrc);
+  assert.equal(b[1].split(",").length, L.BUDGET_LVL_MAX);
+});
+
+test("season.round is moved past every stamped result row", () => {
+  const SM = load();
+  const mk = (round, results) => SM.migrateCareer({ v: SM.CAREER_V, flavour: "driver", team: "haas", money: 1,
+    season: { round, pts: {}, teamPts: {}, driverCodes: {} }, results });
+  for (const round of ["1", 1.5, -2, 0]) assert.equal(mk(round, [{ r: 0, p: 5, pts: 10 }]).season.round, 1, JSON.stringify(round));
+  assert.equal(mk(3, [{ r: 0 }, { r: 1 }]).season.round, 3, "a legit round is kept");
+  const once = JSON.stringify(mk(0, [{ r: 2 }]));
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
+
+test("offers and team off Teams.LIST are dropped / defaulted", () => {
+  const SM = load();
+  const base = { v: SM.CAREER_V, flavour: "driver", team: "haas", money: 1 };
+  const c = SM.migrateCareer({ ...base, offers: [{ teamId: "sauber" }, { teamId: "haas" }, { team: "haas" }] });
+  assert.deepEqual(c.offers.map((o) => o.teamId), ["haas"]);
+  assert.equal(SM.migrateCareer({ ...base, team: "sauber" }).team, "haas", "driver");
+  assert.equal(SM.migrateCareer({ ...base, flavour: "myteam", team: "sauber" }).team, "custom", "myteam");
+  const once = JSON.stringify(c);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+});
+
+// Hostile paidSponsors: settleSponsor treats any matching idx as already paid
+// (career.js), so junk like {idx:0} permanently blocks MY TEAM sponsor pay.
+// Bound = career.js CAL_MAX / min SPONSOR_KINDS.window (≤16 windows/season).
+// Bryce: poisoned ledgers load with junk DROPPED, not refused.
+test("paidSponsors keeps only small non-negative integer window ids", () => {
+  const SM = load();
+  const careerSrc = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
+  const calMax = Number(/const CAL_MAX = (\d+);/.exec(careerSrc)?.[1]);
+  const kinds = /const SPONSOR_KINDS = \[([\s\S]*?)\n\];/.exec(careerSrc)?.[1] || "";
+  const minW = Math.min(...[...kinds.matchAll(/window:\s*(\d+)/g)].map((m) => Number(m[1])));
+  const max = Math.ceil(calMax / minW);
+  const base = { v: SM.CAREER_V, flavour: "myteam", team: "custom", money: 100 };
+  const junk = ["x", null, { idx: 0 }, 1.5, -1, 1e9];
+  const poisoned = SM.migrateCareer(Object.assign({}, base, {
+    paidSponsors: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, ...junk, 0, 3],
+  }));
+  // Behavior first: old migrate kept the array wrapper and left junk in place.
+  const ledger = JSON.parse(JSON.stringify(poisoned.paidSponsors));
+  const junkLeft = junk.filter((bad) => ledger.some((id) => Object.is(id, bad)
+    || JSON.stringify(id) === JSON.stringify(bad)));
+  assert.deepEqual(junkLeft, [], 'junk must not survive migrate (poisoned ledger drops, not refused)');
+  assert.deepEqual(ledger, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    "duplicates collapsed; honest ids kept; settleSponsor can pay unpaid windows");
+  assert.equal(SM.migrateCareer(Object.assign({}, base, { paidSponsors: "nope" })).paidSponsors.length, 0);
+  const honest = [0, 2, 5];
+  const kept = SM.migrateCareer(Object.assign({}, base, { paidSponsors: honest.slice() }));
+  assert.deepEqual(JSON.parse(JSON.stringify(kept.paidSponsors)), honest,
+    "honest ledger round-trips unchanged");
+  const once = JSON.stringify(kept);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(once))), once, "idempotent");
+  const flooded = SM.migrateCareer(Object.assign({}, base, {
+    paidSponsors: Array.from({ length: max + 8 }, (_, i) => i),
+  }));
+  assert.equal(flooded.paidSponsors.length, max, "length capped at max windows/season");
+  assert.equal(SM.LIMITS.PAID_SPONSORS_MAX, max, "LIMITS.PAID_SPONSORS_MAX = CAL_MAX/min window");
+});

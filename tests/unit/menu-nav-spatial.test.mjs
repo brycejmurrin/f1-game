@@ -318,6 +318,21 @@ test("step(): ArrowDown off the last control of a scroll pane lands on the foot 
   assert.equal(step(last, 0, 1, [top, last, back]).id, "back");
 });
 
+// #5584: MUSIC & SOUND's TEST RACE MIX sits 480 px under the last Spotify button. With that button low in the pane the
+// fixed BACK under the pane was the nearer box in its band, so Down went to BACK and nothing ever went Down to the test.
+test("step(): Down inside a scroll pane prefers the pane's own control, however far, over a nearer foot in the band", () => {
+  const { step } = loadMenuNav();
+  const remote = el("remote", 153, 650, 484, 44);
+  const mix = el("mix", 153, 1133, 484, 44);
+  const back = el("back", 582, 718, 116, 61);
+  const pane = { contains: (n) => n === remote || n === mix };
+  remote.closest = mix.closest = () => pane;
+  assert.equal(step(remote, 0, 1, [remote, mix, back]).id, "mix", "the scrolled-away control of the same pane, not BACK");
+  const up = el("remote", 153, 49, 484, 44), shown = el("mix", 153, 532, 484, 44);   // the same pane, scrolled to its end
+  up.closest = shown.closest = () => ({ contains: (n) => n === up || n === shown });
+  assert.equal(step(shown, 0, 1, [up, shown, back]).id, "back", "the pane's last control still lands on the foot");
+});
+
 test("step(): the pane's foot never beats an in-band successor, and Down from the foot does not enter the pane", () => {
   const { step } = loadMenuNav();
   const top = el("first", 153, 40, 320, 40);
@@ -328,4 +343,97 @@ test("step(): the pane's foot never beats an in-band successor, and Down from th
   top.closest = mid.closest = last.closest = () => pane;
   assert.equal(step(mid, 0, 1, [top, mid, last, back]).id, "last", "in-band successor wins");
   assert.equal(step(back, 0, 1, [top, mid, last, back]).id, "first", "BACK (no pane) wraps as before");
+});
+
+// UI hunt 2026-10-29 #10: the Data Hub's roving tab rail is one stop (the
+// selected tab, far left); the head's ✕ sits top-right in no tab's band.
+test("step(): Up from a tab rail reaches the sheet head's close, not the wrap to the bottom", () => {
+  const { step } = loadMenuNav();
+  const tab = (id, x) => el(id, x, 60, 110, 44, { getAttribute: (k) => (k === "role" ? "tab" : null) });
+  const close = el("dh-close-btn", 780, 8, 44, 44);
+  const schedule = tab("dh-tab-schedule", 14, 0), standings = tab("dh-tab-standings", 300, 0);
+  const row = el("row", 14, 130, 400, 40), foot = el("foot", 14, 340, 400, 40);
+  assert.equal(step(schedule, 0, -1, [close, schedule, row, foot]).id, "dh-close-btn");
+  assert.equal(step(standings, 0, -1, [close, standings, row, foot]).id, "dh-close-btn");
+  assert.equal(step(row, 0, -1, [close, schedule, row, foot]).id, "dh-tab-schedule", "content Up still lands on the rail");
+  const plain = el("plain", 14, 60, 110, 44);
+  assert.equal(step(plain, 0, -1, [close, plain, row, foot]).id, "foot", "a non-tab keeps the in-band wrap (Zandvoort trap)");
+});
+
+test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => {
+  const overlay = { id: "overlay" };
+  assert.equal(loadMenuNav({ layer: overlay }).activeLayer(), overlay);
+  const toolbar = { id: "tl-editor" };
+  assert.equal(loadMenuNav({ layer: toolbar }).activeLayer(), toolbar);
+  for (const id of ["photo-controls", "freecam"]) {
+    assert.equal(loadMenuNav({ layer: { id } }).activeLayer(), null, id);
+  }
+});
+
+// uihunt4-flows-1030 #1: at 1280x800 the STANDINGS and LIVE panels can hold no
+// control (offline, loading), so Up/Down off the tab found nothing in band and
+// the DOM wrap focused the NEXT tab without selecting it.
+test("step(): Up/Down off a tab over an empty panel leaves the rail instead of focusing a sibling tab", () => {
+  const { step } = loadMenuNav();
+  const rail = { contains: (n) => n && n._rail === true };
+  const tab = (id, x) => el(id, x, 25, 100, 44, {
+    _rail: true, getAttribute: (k) => (k === "role" ? "tab" : null),
+    closest: (s) => (s === "[role='tablist']" ? rail : null),
+  });
+  const schedule = tab("dh-tab-schedule", 353), standings = tab("dh-tab-standings", 453), results = tab("dh-tab-results", 561);
+  const more = el("more", 1003, 35, 24, 24), close = el("dh-close-btn", 1033, 25, 44, 44);
+  const list = [schedule, standings, results, more, close];
+  assert.equal(step(standings, 0, 1, list).id, "more", "Down skips the rail's next tab");
+  assert.equal(step(standings, 0, -1, list).id, "dh-close-btn", "Up wraps past the rail to the head's last control");
+  assert.equal(step(standings, 1, 0, list).id, "dh-tab-results", "sideways still walks the rail");
+  const row = el("row", 199, 285, 210, 48);
+  assert.equal(step(schedule, 0, 1, [schedule, standings, more, close, row]).id, "row", "a panel control in band still wins");
+});
+
+test("MenuNav: a focused range keeps physical PageUp/PageDown, synthetic pad paging still pages the pane", () => {
+  const { ownsArrows } = loadMenuNav();
+  const range = { tagName: "INPUT", type: "range", dataset: {}, getAttribute: () => null };
+  for (const key of ["PageUp", "PageDown"]) {
+    assert.equal(ownsArrows(range, key, { isTrusted: true }), true, key + " steps the range natively");
+    assert.equal(ownsArrows(range, key, { isTrusted: false }), false, key + " from the pad pages the pane");
+  }
+});
+
+// #5150: the landscape title cluster never scrolls (js/ui/title-layout.js fit()),
+// so a page key over it has nothing to page. The pane is then one page: PageDown
+// lands on its LAST destination, PageUp on its FIRST, the key is consumed, and a
+// button outside the pane (the brand's sound toggle) is never the target.
+test("page keys over a pane that does not scroll reach its ends and stay inside it", () => {
+  const dom = makeDom({ readyState: "loading" });
+  const layer = dom.byId("overlay"), pane = dom.makeElement("div");
+  pane.className = "pane";
+  layer.appendChild(pane);
+  Object.defineProperty(pane, "clientWidth", { value: 400 });
+  Object.defineProperty(pane, "clientHeight", { value: 300 });
+  pane.scrollWidth = 400; pane.scrollHeight = 300; pane.scrollTop = 0;
+  const box = (top, height = 40) => ({ left: 20, top, right: 320, bottom: top + height, width: 300, height });
+  pane.getBoundingClientRect = () => box(0, 300);
+  const doors = Array.from({ length: 5 }, (_, i) => {
+    const b = dom.makeElement("button"); b.id = `door-${i}`; pane.appendChild(b);
+    b.getBoundingClientRect = () => box(10 + i * 55);
+    return b;
+  });
+  const sound = dom.makeElement("button"); sound.id = "soundbtn"; layer.appendChild(sound);
+  sound.getBoundingClientRect = () => ({ left: 500, top: 10, right: 540, bottom: 50, width: 40, height: 40 });
+  const nav = loadMenuNav({ document: dom.document, layer });
+  const key = (name) => {
+    const event = { key: name, preventDefault() { this.defaultPrevented = true; } };
+    nav.onKeyDown(event);
+    return event.defaultPrevented === true;
+  };
+  doors[1].focus({ preventScroll: true });
+  assert.equal(key("PageDown"), true, "PageDown is consumed over a pane that does not scroll");
+  assert.equal(dom.document.activeElement, doors[4], "PageDown lands on the pane's last destination");
+  assert.equal(pane.scrollTop, 0, "nothing scrolled");
+  assert.equal(key("PageUp"), true, "PageUp is consumed too");
+  assert.equal(dom.document.activeElement, doors[0], "PageUp returns to the pane's first destination");
+  // Focus outside every pane (the brand button): the layer is the page.
+  sound.focus({ preventScroll: true });
+  assert.equal(key("PageUp"), true);
+  assert.equal(dom.document.activeElement, doors[0], "from the layer, PageUp reaches the layer's first item");
 });

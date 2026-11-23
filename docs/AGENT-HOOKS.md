@@ -11,7 +11,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | Hook | Signature | Summary |
 |---|---|---|
 | `atmosphere` | `atmosphere()` | WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, fog visibility, wet road. Raw values kept for measurement |
-| `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome |
+| `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolves once a real frame is on screen; screenshot after it (before: stale or black canvas) |
 | `field` | `field({detail})` | THE GRID — race order, gap-to-leader and interval. world().rivals is the egocentric nearest-few |
 | `render` | `render({what,cols,ss,...})` | SHOW IT — the one optional raster, APPROXIMATE. what: 'view'\|'map'\|'circuit'\|'car'. For intuition, not measurement |
 | `scene` | `scene({radius,kinds,limit} \| {visible:true})` | WHAT IS AROUND ME — named scenery by distance and bearing; {visible:true} switches to the camera's on-screen list |
@@ -35,7 +35,8 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once |
+| `ersPlan` | `ersPlan(plan?)` | sector ERS plan, 3× manual\|deploy\|save; get/set |
+| `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once |
 | `rollout` | `rollout({seconds,dt,input,policy,policyHz,samples})` | drive an interval, return a digest instead of every frame |
 | `terminal` | `terminal()` | {done, reason} — retired\|finished\|wrong_way\|rescued\|null |
 ## fields
@@ -62,14 +63,16 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `camState` | `camState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `carAt` | `carAt(i)` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `cars` | `cars()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
+| `classification` | `classification()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `corners` | `corners()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
-| `fieldState` | `fieldState()` | timing() sectorState() lapHistory() fieldState() |
+| `fieldLaps` | `fieldLaps()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
+| `fieldState` | `fieldState()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `gpuTimer` | `gpuTimer()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `groundY` | `groundY(f,l)` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `info` | `info()` | tracks() teams() info() |
 | `inputState` | `inputState()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `inspector` | `inspector(on)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
-| `lapHistory` | `lapHistory()` | timing() sectorState() lapHistory() fieldState() |
+| `lapHistory` | `lapHistory()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `lifecycle` | `lifecycle(o)` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `lightState` | `lightState()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
 | `lightTune` | `lightTune()` | camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o) |
@@ -79,9 +82,9 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | `pitSigns` | `pitSigns()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `probe` | `probe()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
 | `scan` | `scan()` | probe() physState() obs() scan() inputState() cars() carAt(i) |
-| `sectorState` | `sectorState()` | timing() sectorState() lapHistory() fieldState() |
+| `sectorState` | `sectorState()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `teams` | `teams()` | tracks() teams() info() |
-| `timing` | `timing()` | timing() sectorState() lapHistory() fieldState() |
+| `timing` | `timing()` | timing() sectorState() lapHistory() fieldState() fieldLaps() classification() |
 | `trackProfile` | `trackProfile()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `trackShape` | `trackShape()` | corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns() |
 | `tracks` | `tracks()` | tracks() teams() info() |
@@ -91,29 +94,31 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `act` | `act({steer,throttle,brake},dt,n)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
+| `act` | `act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
 | `aiPlace` | `aiPlace(i,frac,v,x)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
-| `clearInput` | `clearInput()` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
-| `finishRace` | `finishRace()` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `go` | `go()` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
+| `caution` | `caution(o)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `ceremony` | `ceremony(phase\|skip)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `clearInput` | `clearInput()` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
+| `flagHold` | `flagHold(on)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `go` | `go()` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
 | `headless` | `headless(bool)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `jump` | `jump(frac,speed,x)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `park` | `park(f)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `race` | `race(id)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `seed` | `seed(n)` | seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise |
+| `jump` | `jump(f,v,x,{keepLap})` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `park` | `park(f)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `race` | `race(id)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(f,v,x,{keepLap}) park(f) reset(f,v,x,seed) ceremony(phase\|skip) flagHold(on) caution(o) |
+| `seed` | `seed(n)` | seed(n): same seed + inputs => same result; pin it before any A/B |
 | `setEnergy` | `setEnergy(v)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
-| `setInput` | `setInput(o)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
+| `setInput` | `setInput(o)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
 | `setLap` | `setLap(n)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
 | `setPhysics` | `setPhysics(o)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
 | `setTimeOfDay` | `setTimeOfDay('night')` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `step` | `step(dt,n)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
+| `step` | `step(dt,n)` | act({steer,throttle,brake,throttleLevel,brakeLevel},dt,n) setInput(o) step(dt,n) clearInput() |
 | `weather` | `weather('wet')` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
 ## model
 
 | Hook | Signature | Summary |
 |---|---|---|
 | `decide vs show` | `decide vs show` | read world()/scene()/trackInfo()/the read hooks to DECIDE; call render() only to SEE — its glyphs are approximate |
-| `lean default, pull detail` | `lean default, pull detail` | the world is stored in FULL but never dumped — a flat serialisation is huge and reads worse. Keep the default lean and pull with describe(id)/query() where a decision needs it |
+| `lean default, pull detail` | `lean default, pull detail` | the world is stored in FULL but never dumped; pull with describe(id)/query() where a decision needs it |
 | `per tick` | `per tick` | world({detail:"brief", since:<seq>}) — ~355 bytes/step, 34x cheaper than full. detail is the big lever |
 | `static vs dynamic` | `static vs dynamic` | trackInfo()+carView() are constant — fetch once. world()+field()+scene() are the live frame — read per decision |

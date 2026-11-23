@@ -2,6 +2,7 @@
 // fixtures' test (not @playwright/test) so apex26.gfxBackend=webgl2 is pinned
 // — shared CI coverage is native GLX; TLX product coverage lives in tlx-probes.
 import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 // BUDGETS, FROM A MEASUREMENT. Every wait below was under the worst case this
 // class of box actually posts: measured idle (loadavg 0.00, three cold boots,
 // scratch/perf/boot-budget.mjs) the page needs up to 24.6 s to publish __apex
@@ -93,14 +94,12 @@ const walkToImageTuner = async (page) => {
     document.getElementById("pm-settings").click();
     document.getElementById("pm-open-visual").click();
     document.getElementById("pm-lighting").click();
-    // pm-lighting's handler builds the tab strip synchronously, so the tab
-    // exists by the next statement — the same assumption ui-redesign makes.
-    document.getElementById("lt-tab-image-colour").click();
   });
   // Same reason as the pausebtn wait: `expect(locator).toBeVisible()` polls
   // visibility on the held thread. This is the form ui-redesign uses.
   await page.waitForFunction(() => !document.getElementById("lighting").hidden,
     null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => document.getElementById("lt-tab-image-colour").click());
 };
 
 // HEADLESS before race(): every test in this file reads the tuner's DOM and
@@ -324,4 +323,65 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
     return { shadows: p.shadows ?? 0, gammaG: p.gammaG ?? 1, gainB: p.gainB ?? 1 };
   });
   expect(reset).toEqual(shipped);
+});
+
+// #5562, 844x390 landscape touch regression. The docked sheet is 380 own px wide, under the 640 the rail
+// tier needs, so the compact rail-off tier IS the phone. At UI SIZE 70 (his) it hid the TIME / WEATHER chips and
+// the profile label; at 55 the sheet is NOT compact (390 / 0.55 = 709 own px > 620), so the tools disclosure has
+// no summary, and a window-height query closed it anyway: no tabs, scope, RESET or COPY in any tuner.
+const PHONE_TUNER_TIERS = [{ ui: 70, density: "compact" }, { ui: 55, density: "normal" }];
+for (const tier of PHONE_TUNER_TIERS) test.describe("tuners on a landscape phone at UI SIZE " + tier.ui, () => {
+  test.use({ ...uiTestOptions({ touch: true, viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 }) });
+  const boot = async (page) => {
+    await page.addInitScript((ui) => { try { localStorage.setItem("apex26.uiScale", String(ui)); } catch (_) { /* fresh boot */ } }, tier.ui);
+    await page.goto("/");
+    await bootHeadless(page, "monza");
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
+  };
+  // In-page: the sheet's tier, its tools door, and what a player can reach once the door is used.
+  const readTools = (page, ids) => page.evaluate(({ sheetId, count, one }) => {
+    const sheet = document.getElementById(sheetId), tools = sheet.querySelector(".ew-tools"), summary = tools.querySelector("summary");
+    const shown = (el) => !!el && el.checkVisibility({ visibilityProperty: true }) && el.getClientRects().length > 0;
+    const before = { density: sheet.dataset.density, rail: sheet.dataset.rail, open: tools.open, summary: shown(summary) };
+    if (!tools.open && before.summary) summary.click();
+    return { ...before, door: tools.open, shown: [...sheet.querySelectorAll(count)].filter(shown).length, one: shown(document.getElementById(one)) };
+  }, ids);
+
+  test("the lighting tuner shows the TIME / WEATHER chips and the profile it is writing to", async ({ page }) => {
+    await boot(page);
+    await walkToImageTuner(page);
+    await page.waitForFunction(() => !!document.getElementById("lighting-inner").dataset.density, null, { polling: 100, timeout: BOOT_MS });
+    const got = await readTools(page, { sheetId: "lighting-inner", count: "#lt-preview .opt-btn", one: "lt-profile" });
+    expect({ density: got.density, rail: got.rail }, "the tier this cell is about").toEqual({ density: tier.density, rail: "off" });
+    expect(got.open || got.summary, "the tools are open, or their summary is there to open them").toBe(true);
+    expect(got.door, "the tools open").toBe(true);
+    expect(got.shown, "all ten TIME / WEATHER chips").toBe(10);
+    expect(got.one, "the profile label").toBe(true);
+    const label = await page.evaluate(() => {
+      document.getElementById("lt-tod-night").click();
+      return document.getElementById("lt-profile").textContent;
+    });
+    expect(label.startsWith("MONZA \u00b7 NIGHT \u00b7 "), "NIGHT retargets the profile: " + label).toBe(true);
+  });
+
+  test("the camera tuner keeps a way to its mode tabs and RESET", async ({ page }) => {
+    await boot(page);
+    await page.evaluate(() => { window.__apex.go(); window.__apex.park(0.1); });
+    await page.waitForFunction(() => { const b = document.getElementById("pausebtn"); return !!b && !b.hidden; }, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      document.getElementById("pausebtn").click();
+      document.getElementById("pm-settings").click();
+      document.getElementById("pm-open-visual").click();
+      document.getElementById("pm-camtune").click();
+    });
+    // The camera tuner is a lazy bundle: the click resolves after its load.
+    await page.waitForFunction(() => !document.getElementById("camtune").hidden && !!document.getElementById("camtune-inner").dataset.density,
+      null, { polling: 100, timeout: BOOT_MS });
+    const got = await readTools(page, { sheetId: "camtune-inner", count: "#ct-modes .lt-tab", one: "ct-reset" });
+    expect(got.density, "the tier this cell is about").toBe(tier.density);
+    expect(got.open || got.summary, "the tools are open, or their summary is there to open them").toBe(true);
+    expect(got.door, "the tools open").toBe(true);
+    expect(got.shown, "every camera-mode tab").toBe(20);
+    expect(got.one, "RESET").toBe(true);
+  });
 });

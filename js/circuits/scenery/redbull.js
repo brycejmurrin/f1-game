@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["redbull"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
+      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, addBox, vadd, mountain, hedge, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, onTrack, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (295 per build here
@@ -74,8 +74,11 @@
       // Sector 2 (T3 Remus descent + back straight): dense Alpine pine on both sides.
       forestEdge(0.20, 0.48, -1, 9, { density: 0.65, hMin: 10, hMax: 18,
         col: [0.09, 0.23, 0.11], col2: [0.16, 0.34, 0.16], pineFrac: 0.75 });
-      forestEdge(0.20, 0.48, 1, 10, { density: 0.50, hMin: 9, hMax: 15,
-        col: [0.11, 0.25, 0.12], col2: [0.18, 0.36, 0.17], pineFrac: 0.68 });
+      const remusForest = { density: 0.50, hMin: 9, hMax: 15,
+        col: [0.11, 0.25, 0.12], col2: [0.18, 0.36, 0.17], pineFrac: 0.68 };
+      // Leave a small opening in the near treeline for the quarter-lap scenery orbit.
+      forestEdge(0.20, 0.253, 1, 10, remusForest);
+      forestEdge(0.258, 0.48, 1, 10, remusForest);
 
       // Sector 3 (long back straight + stadium): lighter mixed forest, let grandstands show.
       forestEdge(0.50, 0.70, -1, 10, { density: 0.45, hMin: 8, hMax: 14,
@@ -95,7 +98,7 @@
       fence(0.0, 1.0, -1, 4.2, 4.5, [0.74, 0.76, 0.80]);
       fence(0.0, 1.0, 1, 4.2, 4.5, [0.74, 0.76, 0.80]);
 
-      // Big braking-zone tyre walls on the outside of the heavy stops (T1, T3, T4).
+      // Big braking-zone tyre walls on the outside of the corners (FIA 2026 numbering).
       const rbRed = [0.82, 0.10, 0.16], rbNavy = [0.10, 0.14, 0.40], rbYel = [0.95, 0.80, 0.10];
       const RB_HILL_CROWD = [
         [1.00, 0.58, 0.05], [0.98, 0.62, 0.10], [0.94, 0.66, 0.22],
@@ -107,7 +110,7 @@
       tyreWall(0.08, 0.13, 1, 6.5, rbRed);    // outside Turn 1 (Niki Lauda)
       tyreWall(0.2785, 0.3285, -1, 6.5, rbYel); // outside Turn 3 (Remus) hairpin
       tyreWall(0.467, 0.517, -1, 6.5, rbRed);   // outside Turn 4 (Schlossgold)
-      tyreWall(0.72, 0.77, -1, 6.0, rbNavy);
+      tyreWall(0.72, 0.77, -1, 6.0, rbNavy);    // outside Turn 8 (right-hander, apex 0.7323)
 
       // Green runoff aprons at the heavy stops — alpine meadow pans, not grey gravel.
       const GRN_APRON = (pal && pal.runoff) || [0.32, 0.52, 0.24];
@@ -396,7 +399,10 @@
           const d = 28 + hash(k * 127 + side) * 14;
           const p = anchor(k, side, d);
           if (onTrack(p.c[0], p.c[2], 10)) continue;   // per-side reject, not per-node (see above)
-          hedge(k / n, k / n + 0.0025, side, d, 0.85 + hash(k * 131 + side) * 0.25, [0.20, 0.44, 0.18]);
+          // Inside the T6 exit the offset line compresses four metres of road
+          // into 2.4 m of hedge. A single shrub fits the tightest part.
+          const end = side < 0 && frac > 0.685 && frac < 0.696 ? frac : frac + 0.0025;
+          hedge(frac, end, side, d, 0.85 + hash(k * 131 + side) * 0.25, [0.20, 0.44, 0.18]);
         }
       });
 
@@ -415,7 +421,7 @@
         ]) {
           backdrop(K(sfrac), side, 52 + distOff, [szW, szH, 68], col);
         }
-        // T4 outside (L): amphitheatre bank on the descent
+        // T3 Remus outside (L): amphitheatre bank on the descent to Schlossgold
         backdrop(K(0.33), -1, 34, [85, 20, 55], GN);
         backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
         backdrop(K(0.37), -1, 68, [120, 34, 78], GF);
@@ -438,20 +444,23 @@
         spectatorHill(0.495, 0.545, 1, 24, { rows: 3, rise: 1.1, depth: 1.9, step: 8,
           density: 0.34, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
         // Sparse pines crowning the hilltop behind the bank.
-        forestEdge(0.49, 0.56, 1, 78, { density: 0.35, hMin: 10, hMax: 16,
-          col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 });
+        const hillPines = { density: 0.35, hMin: 10, hMax: 16,
+          col: [0.10, 0.24, 0.12], col2: [0.16, 0.32, 0.14], pineFrac: 0.78 };
+        // Follow the shoulder through the hairpin before the hillside widens.
+        forestEdge(0.49, 0.497, 1, 38, hillPines);
+        forestEdge(0.498, 0.56, 1, 78, hillPines);
       }
 
       billboard(Math.round(n * 0.87) % n, -1, 12, 8, 4, [1.0, 0.65, 0.0]);
 
       // Farther out on the meadow: at gap 18 the slab sat 0.5 m into the SRTM
       // bowl (ground-audit buried @ :394).
-      building(Math.round(n * 0.55) % n, -1, 28, 12, 6, 15,
+      building(Math.round(n * 0.55) % n, -1, 30, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
       // Alpine farmhouse roof (A-frame prism above the building).
       {
         const kFarm = Math.round(n * 0.55) % n;
-        const aFarm = anchor(kFarm, -1, 34);
+        const aFarm = anchor(kFarm, -1, 36);
         addPrism(out, vadd(aFarm.c, aFarm.u, 6), [14, 4, 16], [0.36, 0.20, 0.14], [aFarm.r, aFarm.u, aFarm.t]);
       }
 
@@ -633,7 +642,7 @@
         { wall: [0.78, 0.80, 0.84], window: [0.16, 0.24, 0.34] });
       motorhome(K(0.02), -1, 46, 18, 8, 20,
         { wall: [0.90, 0.90, 0.92], window: [0.18, 0.28, 0.40] });
-      motorhome(K(0.055), -1, 42, 14, 7, 17,
+      motorhome(K(0.055), -1, 44, 14, 7, 17,
         { wall: [0.74, 0.76, 0.80], window: [0.20, 0.28, 0.38] });
 
       {

@@ -128,6 +128,17 @@ export function sweepAll(A, { teams, regions = ["crest", "spineSide", "spineSide
   return rows;
 }
 
+/** The teams `--team=a,b` names. An unknown id used to filter to ZERO teams,
+ *  sweep nothing, find no failure and exit 0; it throws, naming the bad id(s). */
+export function pickTeams(A, only) {
+  if (only == null) return A.Teams.LIST;
+  const ids = String(only).split(",").map((s) => s.trim()).filter(Boolean);
+  const known = A.Teams.LIST.map((t) => t.id);
+  const bad = ids.filter((id) => !known.includes(id));
+  if (!ids.length || bad.length) throw new Error(`unknown --team ${bad.join(", ") || JSON.stringify(only)} (known: ${known.join(", ")})`);
+  return A.Teams.LIST.filter((t) => ids.includes(t.id));
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     console.log("usage: node tools/car/livery-contrast.mjs [--team=<id>] [--json]\n  Scores every paint panel with >= 15 % area share for contrast (no browser, ~2 min for the grid; a glyph is crest-marks.test.mjs).");
@@ -136,7 +147,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const h = process.argv.find((a) => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
   const A = loadAtlas();
   const only = arg("team", null);
-  const teams = only ? A.Teams.LIST.filter((t) => t.id === only) : A.Teams.LIST;
+  let teams;
+  try { teams = pickTeams(A, only); } catch (e) { console.error("livery-contrast: " + e.message); process.exit(2); }
   const rows = sweepAll(A, { teams });
   if (process.argv.includes("--json")) console.log(JSON.stringify(rows, null, 1));
   else {

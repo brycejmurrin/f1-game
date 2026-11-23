@@ -16,27 +16,29 @@ import fs from "node:fs";
 import path from "node:path";
 import { extractGlsl, extractWgsl, validateGlsl, validateTree, validateWgsl, WGSL_FRAGMENTS } from "../../tools/check/shader-validate.mjs";
 import { ROOT, requireBins, resolveBin } from "../../tools/lib/lint-bins.mjs";
+import { requireTool } from "../helpers/require-tool.mjs";
 
 const FIX = path.join(ROOT, "tests/fixtures/shader-validate");
 const fx = (n) => fs.readFileSync(path.join(FIX, n), "utf8");
+// Absent: skip loudly and count it (`# skipped N: <tool> missing` at exit); a FAILURE under
+// APEX_REQUIRE_LINT_BINS=1 (the CI `lints` job) or APEX_REQUIRE_TOOLS naming the tool.
 const need = (tool) => {
   const bin = resolveBin(tool);
-  if (bin) return { skip: false, bin };
-  const msg = `${tool} not installed - NOT CHECKED (bash tools/env/install-lint-bins.sh ${tool === "glslangValidator" ? "glslang" : tool})`;
-  if (requireBins([])) assert.fail(msg);
-  console.error(`SKIP shader-validate.test: ${msg}`);
-  return { skip: msg, bin: null };
+  const gate = requireTool(tool, !!bin, { strict: requireBins([]),
+    hint: `bash tools/env/install-lint-bins.sh ${tool === "glslangValidator" ? "glslang" : tool}` });
+  if (gate.missing) console.error(`SKIP shader-validate.test: ${gate.reason}`);
+  return { skip: gate.skip, missing: gate.missing, bin };
 };
 const glslang = need("glslangValidator");
 const naga = need("naga");
 
 test("lint binaries: a local green is only shader evidence when both are installed", (t) => {
   for (const [name, r] of [["glslangValidator", glslang], ["naga", naga]]) {
-    t.diagnostic(r.skip ? `SKIPPED ${name}: GLX/WGX shader compiles NOT CHECKED here, local green is no shader evidence` : `${name}: ${r.bin}`);
+    t.diagnostic(r.missing ? `SKIPPED ${name}: GLX/WGX shader compiles NOT CHECKED here, local green is no shader evidence` : `${name}: ${r.bin}`);
   }
   // The skip flag and the resolver must agree, so a silent skip cannot hide an installed bin.
-  assert.equal(glslang.skip === false, !!resolveBin("glslangValidator"));
-  assert.equal(naga.skip === false, !!resolveBin("naga"));
+  assert.equal(glslang.missing === false, !!resolveBin("glslangValidator"));
+  assert.equal(naga.missing === false, !!resolveBin("naga"));
 });
 
 test("extraction finds the GLX programs, both stages and the inline occlusion pair", () => {
@@ -60,13 +62,13 @@ test("extraction finds the WGX modules and names the one fragment it skips", () 
   assert.ok(!ids.has("WGSLPost.POST_VS"));
 });
 
-test("glslang accepts every GLX shader in the tree", { skip: glslang.skip }, () => {
+test("glslang accepts every GLX shader in the tree", { skip: glslang.skip() }, () => {
   const rows = validateTree().rows.filter((r) => r.kind === "glsl");
   assert.ok(rows.length >= 33);
   assert.deepEqual(rows.filter((r) => r.status !== "ok").map((r) => `${r.id}: ${r.output}`), []);
 });
 
-test("glslang FAILS the planted bad shader and passes the good one", { skip: glslang.skip }, () => {
+test("glslang FAILS the planted bad shader and passes the good one", { skip: glslang.skip() }, () => {
   const good = validateGlsl(glslang.bin, { id: "fixture-good", stage: "frag", source: fx("good.frag") });
   assert.equal(good.ok, true, good.output);
   const bad = validateGlsl(glslang.bin, { id: "fixture-bad", stage: "frag", source: fx("bad.frag") });
@@ -74,7 +76,7 @@ test("glslang FAILS the planted bad shader and passes the good one", { skip: gls
   assert.match(bad.output, /cannot convert from .*2-component vector.*3-component vector/);
 });
 
-test("glslang FAILS a defect injected into the real SKY_FS", { skip: glslang.skip }, () => {
+test("glslang FAILS a defect injected into the real SKY_FS", { skip: glslang.skip() }, () => {
   const sky = extractGlsl().find((s) => s.id === "SKY_FS");
   assert.ok(sky.source.includes("outColor = vec4(c, 1.0);"));
   const broken = { ...sky, id: "SKY_FS-planted", source: sky.source.replace("outColor = vec4(c, 1.0);", "outColor = vec4(c, plantedUndefined);") };
@@ -83,7 +85,7 @@ test("glslang FAILS a defect injected into the real SKY_FS", { skip: glslang.ski
   assert.match(r.output, /plantedUndefined/);
 });
 
-test("naga FAILS the planted bad WGSL and passes the good one (advisory on the tree)", { skip: naga.skip }, () => {
+test("naga FAILS the planted bad WGSL and passes the good one (advisory on the tree)", { skip: naga.skip() }, () => {
   const good = validateWgsl(naga.bin, { id: "fixture-good", source: fx("good.wgsl") });
   assert.equal(good.ok, true, good.output);
   const bad = validateWgsl(naga.bin, { id: "fixture-bad", source: fx("bad.wgsl") });

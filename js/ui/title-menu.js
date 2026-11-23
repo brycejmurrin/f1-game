@@ -8,15 +8,22 @@ const TitleMenu = (function () {
     ["menu-garage", "Garage", ["mb-garage"]],
     ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data", "mb-learn"]],
     ["menu-create", "Create", ["mb-photo", "mb-designer"]],
-    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]],
+    ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-steerphone", "mb-help"]],
   ];
   const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-learn"];
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
+  // The shell ships the organized end state (index.html, data-destinations):
+  // then this only wires the two settings shortcuts. The build path is for
+  // repairDestinations() and an older shell.
   function organize(doc) {
     const menu = doc && doc.getElementById("menu-buttons");
-    if (!menu || menu.dataset.destinations) return;
+    if (!menu) return;
+    if (menu.dataset.destinations) {
+      wireShortcuts(doc, doc.getElementById("menu-create"), doc.getElementById("menu-secondary"));
+      return;
+    }
     menu.dataset.destinations = "true";
     const group = (id, label, buttons) => {
       let row = doc.getElementById(id);
@@ -40,16 +47,23 @@ const TitleMenu = (function () {
     group(...DESTINATION_GROUPS[2]);
     const create = group(...DESTINATION_GROUPS[3]);
     const utilities = group(...DESTINATION_GROUPS[4]);
+    wireShortcuts(doc, create, utilities);
+  }
+
+  function wireShortcuts(doc, create, utilities) {
     const shortcut = (row, id, label, page) => {
-      if (doc.getElementById(id)) return;
-      const button = doc.createElement("button"); button.id = id; button.type = "button";
-      button.className = "bigbtn alt minibtn"; button.textContent = label;
+      let button = doc.getElementById(id);
+      if (!button) {
+        if (!row) return;
+        button = doc.createElement("button"); button.id = id; button.type = "button";
+        button.className = "bigbtn alt minibtn"; button.textContent = label;
+        row.appendChild(button);
+      }
       button.onclick = () => {
         const settings = doc.getElementById("mb-settings");
         if (settings) settings.click();
         if (typeof SettingsNav !== "undefined") (SettingsNav.showDirect || SettingsNav.show)(page, true);
       };
-      row.appendChild(button);
     };
     shortcut(create, "mb-visual", "VISUAL STUDIO", "visual");
     shortcut(utilities, "mb-saves", "SAVES & DATA", "files");
@@ -132,13 +146,95 @@ const TitleMenu = (function () {
     return n;
   }
 
+  // Historical medals are not stored; keep each record class separate instead.
+  // m:ss.mmm like every other lap (#5897).
+  function lapStr(t) { return typeof Dom !== "undefined" && Dom.fmtLap ? Dom.fmtLap(t, "") : t.toFixed(3) + "s"; }
+  function dailyHistory(daily) {
+    const data = daily && daily.data ? daily.data() : null, days = data && data.days;
+    if (!days || typeof days !== "object" || Array.isArray(days)) return [];
+    const positive = n => typeof n === "number" && Number.isFinite(n) && n > 0;
+    return Object.keys(days).filter(day => /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day))
+      && new Date(day).toISOString().slice(0, 10) === day).sort().reverse().slice(0, 7).flatMap(day => {
+      const entry = days[day];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+      const classes = entry.classes && typeof entry.classes === "object" && !Array.isArray(entry.classes)
+        ? Object.entries(entry.classes).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).filter(([, value]) => value && positive(value.best)) : [];
+      const results = classes.length ? classes.slice(0, 4).map(([, value], i) => "Saved class " + (i + 1) + ": " + lapStr(value.best))
+        : positive(entry.best) ? ["Day best (legacy / mixed classes): " + lapStr(entry.best)] : [];
+      return results.length ? [{ day, text: results.join(" · ") }] : [];
+    });
+  }
+
+  // BOOT TAP (index.html, #5995): the door tapped before boot is clicked once
+  // game.js has wired it (the rest of this task), if the bare title is still
+  // on top; a consent sheet or first-run layer over it drops the tap.
+  function replayBootTap($, doc) {
+    const btn = doc && doc.querySelector ? doc.querySelector("#menu-buttons [aria-busy]") : null;
+    if (!btn) return;
+    btn.removeAttribute("aria-busy");
+    setTimeout(() => {
+      const overlay = $("overlay"), top = UiLayers.top();
+      const live = overlay && !overlay.hidden && !UiLayers.inRace() && (!top || top.id === "overlay");
+      if (live && !btn.hidden && !btn.disabled) btn.click();
+      else Log.info("game", "boot tap dropped (" + btn.id + ")");
+    }, 0);
+  }
+
+  function wireLearn(G) {
+    const menu = G.$("menu-buttons");
+    if (!menu) return;
+    const door = document.createElement("button");
+    door.className = "bigbtn alt minibtn";
+    door.textContent = "LEARN";
+    door.id = "mb-learn";
+    door.type = "button";
+    door.setAttribute("aria-haspopup", "dialog");
+    (G.$("menu-explore") || menu).appendChild(door);
+    let loading = false;
+    const titleReady = () => G.state === "menu" && UiLayers.top()?.id === "overlay";
+    door.addEventListener("click", async () => {
+      if (loading || !titleReady()) return;
+      if (G.soundOn) GameAudio.uiSelect();
+      if (typeof LearnDoor === "undefined") {
+        loading = true;
+        door.setAttribute("aria-busy", "true");
+        const ok = await ScriptLoader.create().load(ApexRoster.LAZY_LEARN, [], { strict: true }).catch(() => false);
+        loading = false;
+        door.removeAttribute("aria-busy");
+        if (!titleReady()) return;
+        if (!ok || typeof LearnDoor === "undefined") {
+          G.announce("COULD NOT LOAD LEARN — CHECK YOUR CONNECTION OR RELOAD", 4, "warning");
+          return;
+        }
+      }
+      LearnDoor.open(door);
+    });
+  }
+
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
-    LearnDoor.create(G);
+    wireLearn(G);
     organize(typeof document !== "undefined" ? document : null);
+    // The doors paint from the shell seconds before game.js wires them (Slow 4G:
+    // ~2.5 s vs ~15 s). html[data-booted] is css/title.css's cue that a tap now
+    // does something; game.js wires the handlers in this same task.
+    if (typeof document !== "undefined") document.documentElement.dataset.booted = "";
+    replayBootTap($, typeof document !== "undefined" ? document : null);
+
+    const history = $("daily-history"), historyList = $("daily-history-list");
+    const doc = typeof document !== "undefined" ? document : null;
+    if (history && history.addEventListener) history.addEventListener("toggle", () => { if (history.open) paintHistory(); });
+    function paintHistory() {
+      if (!historyList || !doc) return;
+      while (historyList.firstChild) historyList.removeChild(historyList.firstChild);
+      const rows = dailyHistory(G.daily);
+      for (const row of rows) { const li = doc.createElement("li"); li.textContent = row.day + " · " + row.text; historyList.appendChild(li); }
+      if (!rows.length) { const li = doc.createElement("li"); li.textContent = "No saved Daily laps yet. Complete a valid Daily lap to start your history."; historyList.appendChild(li); }
+    }
 
     function refresh() {
+      if (history && history.open) paintHistory();
       const btn = $("mb-career");
       // Paint must not Career.load(): that migrates and may write the slot
       // pointer. Boot and the career store subscriber already load first.
@@ -185,7 +281,7 @@ const TitleMenu = (function () {
       const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
       if (dailyBtn && dailySub) {
         const p = G.daily.plan(), streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;   // a broken streak is not shown
-        setText(dailySub, p.trackName + " · " + p.weather.toUpperCase()
+        setText(dailySub, p.trackName + " · " + (typeof LoadingCard !== "undefined" ? LoadingCard.wxWord(p.weather) : p.weather.toUpperCase())
           + (streak > 0 ? " · STREAK " + streak : ""));
         // WCAG 2.5.3 (label in name): the name must contain the visible label, "DAILY TIME TRIAL".
         setAttr(dailyBtn, "aria-label", "Daily time trial — " + dailySub.textContent);
@@ -222,7 +318,7 @@ const TitleMenu = (function () {
     if (continueBtn) continueBtn.onclick = () => {
       const hint = continueBtn._apexContinue;
       if (!hint || hint.kind === "career") { G.openCareer(); return; }
-      if (hint.kind === "daily") { G.openDailyPicker(); return; }
+      if (hint.kind === "daily") { G.openTimeTrialPicker({ kind: "daily" }); return; }
       if (hint.kind === "session" && hint.session) {
         // Stage the circuit picker only — never startRace (share-code / lastSession contract).
         if (G.daily && G.daily.stop) G.daily.stop();
@@ -241,11 +337,28 @@ const TitleMenu = (function () {
       }
     };
     const dailyBtn = $("mb-daily");
-    if (dailyBtn) dailyBtn.onclick = () => G.openDailyPicker();
+    if (dailyBtn) dailyBtn.onclick = () => G.openTimeTrialPicker({ kind: "daily" });
+    // Keep the visible challenge and Continue card on the local date they launch,
+    // both across a foreground midnight and after a suspended phone wakes.
+    if (doc && G.daily?.dayKey) {
+      let paintedDay = G.daily.dayKey(), rolloverTimer;
+      const clock = doc.defaultView;
+      function syncDay() {
+        clock?.clearTimeout(rolloverTimer);
+        if (doc.visibilityState !== "visible") return;
+        const day = G.daily.dayKey();
+        if (day !== paintedDay) { paintedDay = day; refresh(); }
+        const now = new Date(), midnight = new Date(now.getTime());
+        midnight.setHours(24, 0, 0, 0);
+        rolloverTimer = clock?.setTimeout(syncDay, midnight.getTime() - now.getTime());
+      }
+      doc.addEventListener("visibilitychange", syncDay);
+      syncDay();
+    }
 
     return { refresh };
   }
 
-  return { create, organize, repairDestinations, CORE_PLAY_DOORS };
+  return { create, organize, repairDestinations, replayBootTap, CORE_PLAY_DOORS };
 })();
 Object.freeze(TitleMenu);

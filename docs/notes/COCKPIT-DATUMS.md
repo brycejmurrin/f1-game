@@ -1,5 +1,7 @@
 # Cockpit datums — the FIA numbers the first-person view is built on
 
+Summary: The FIA 2026 Technical Regulations numbers the first-person view is built on, with the three spec violations the table found — and the one number the regs do NOT give: driver eye height.
+
 The cockpit view had been tuned by eye across many sessions, each change
 answering the last screenshot. This file replaces taste with the regulations
 where the regulations have an answer, so the next change argues with a number.

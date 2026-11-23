@@ -46,7 +46,11 @@ var StartLights = (function () {
      backlog (`droppedS`) took — capped, so a resumed tab steps one lamp. */
   function countCredit(wallS, dtS, droppedS) {
     const wall = Math.min(CATCHUP_S, wallS > 0 ? wallS : 0);
-    return Math.max(0, wall - (dtS > 0 ? dtS : 0)) + (droppedS > 0 ? droppedS : 0);
+    const drop = droppedS > 0 ? droppedS : 0;
+    // Cap the SUM: a resumed tab that also hits the 5-step frame cap used to
+    // add an uncapped `dropped` on top of the wall catch-up and skip several
+    // lamps in one frame (the comment said "one lamp"; only wallS was capped).
+    return Math.min(CATCHUP_S, Math.max(0, wall - (dtS > 0 ? dtS : 0)) + drop);
   }
 
   function create(G, deps) {
@@ -137,7 +141,8 @@ var StartLights = (function () {
       }
     }
 
-    return { update, lampsFor, countCredit, countdownCamera };
+    // countdownCamera stays create-local: update() owns the grid-shot handoff.
+    return { update, lampsFor, countCredit };
   }
 
   return { create, countCredit };

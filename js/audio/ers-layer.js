@@ -106,6 +106,20 @@ var ErsLayer = (function () {
     ctx = dest = null;
     wasBoost = false;
     lastCueT = -1e9;
+    idled = false;
+  }
+
+  // Audio idle, on by default (#5053; engine.js owns the switch and the timing: LAB_AUDIO_IDLE).
+  // idle(true) unplugs the four output gains from the bus once silence() has
+  // faded them; idle(false) plugs them back. Same nodes, same ctx.
+  let idled = false;
+  function idle(on) {
+    if (!ctx || !dest || !deployG || !!on === idled) return;
+    const outs = [deployG, harvestG, sustainG, cueG];
+    for (let i = 0; i < outs.length; i++) {
+      try { if (outs[i]) { if (on) outs[i].disconnect(); else outs[i].connect(dest); } } catch (e) { /* torn down */ }
+    }
+    idled = !!on;
   }
 
   function attach(ac, bus) {
@@ -205,7 +219,7 @@ var ErsLayer = (function () {
     wasBoost = boostActive;
     const sGain = sustainGain(boostActive, energy, s);
     if (moving(deployG, on, t, 0.10) && deployOsc) aim(deployOsc.frequency, deployHz(deploy, energy), t, 0.06, 1e-4);
-    if (moving(harvestG, on, t, 0.08)) {
+    if (moving(harvestG, on && hGain > 0, t, 0.08)) {   // audible, not just switched on (#5052)
       if (harvestOsc) aim(harvestOsc.frequency, harvestHz(brake), t, 0.08, 1e-4);
       if (harvestBp) aim(harvestBp.frequency, harvestHz(brake), t, 0.08, 1e-4);
     }
@@ -238,9 +252,9 @@ var ErsLayer = (function () {
   }
 
   return {
-    attach, detach, silence, update, cueBoost, inspect, attached,
+    attach, detach, silence, update, cueBoost, inspect, attached, idle,
     deployLevel, harvestLevel, sustainLevel, cueCount, builds,
-    deployHz, harvestHz, deployGain, harvestGain, sustainGain, isLive,
+    deployHz, harvestHz, isLive,
   };
 })();
 Object.freeze(ErsLayer);

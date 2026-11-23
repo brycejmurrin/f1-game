@@ -1,5 +1,7 @@
 # GLX output target
 
+Summary: GLX's final pass writes an explicit output FBO + viewport (`GLX.setOutputTarget`, Quest VR plan task 30), not a wrapped `bindFramebuffer`; default is still the canvas backbuffer.
+
 Task 30 of the Quest VR plan. GLX's final pass is an explicit output FBO +
 viewport (`GLX.setOutputTarget` / `core.outputFBO()`), not a runtime wrap of
 `bindFramebuffer` / `viewport`. Default (no override) is still the canvas

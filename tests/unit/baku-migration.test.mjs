@@ -58,14 +58,22 @@ test("Baku owns its coordinate space and protected scenery sectors", () => {
     [
       // Curated zones only (eb0b6b3 narrowed the old full-lap city exclusion):
       // Old City / castle section, then the open Caspian side of Neftchilar Ave.
+      // A back-row tower at the T6 exit otherwise occupies a Neftchilar façade
+      // on the nearby return leg. The authored street frontage fills this block.
+      { kinds: ["city"], s0: 0.354, s1: 0.36, side: -1 },
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56, side: undefined },
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
       // #3340: Neftchilar +1 — theme-dress neonTowers buried night_pass orbit;
       // authored cityFront/towers in scenery/baku.js own that skyline.
       { kinds: ["city"], s0: 0.58, s1: 0.97, side: 1 },
+      // Day theme (2026-11-10): street_day's generic city boxes landed inside
+      // the authored S/F neon towers (clip-audit 6 m); the S/F straight is the
+      // authored skyline's, both sides, across the line.
+      { kinds: ["city"], s0: 0.97, s1: 1, side: undefined },
+      { kinds: ["city"], s0: 0, s1: 0.07, side: undefined },
     ],
   );
-  // The 14 m castle rise is asserted by what it BUILDS (crest height and
+  // The old-town rise is asserted by what it BUILDS (crest height and
   // fraction in the build test below), not by echoing def.elevations back.
 });
 
@@ -112,42 +120,14 @@ test("Baku builds finite grounded landmarks, water, and full street boundaries",
         crestFrac = i / track.n;
       }
     }
-    assert.ok(crest >= 13.5);
-    assert.ok(crestFrac >= 0.44 && crestFrac <= 0.48);
+    assert.ok(Math.abs(crest - Math.min(...track.py) - 26.8) < 0.05);
+    assert.ok(Math.abs(crestFrac - def.turns[12]) < 0.002);
 
-    // The seafront must stay FLAT — the 14 m castle rise at s=0.46 must not
-    // bleed into it. It cannot be asserted as "range < 0.05", though: every
-    // circuit carries a deterministic micro-undulation unless it sets
-    // `undulate: false` (js/track/tracks.js), three long swells of combined
-    // amplitude amp = min(0.42, 0.14 + relief * 0.0028). No circuit opts out, so
-    // a "flat" run is flat to ±amp, not to zero — Baku's relief gives amp ≈ 0.18
-    // and a peak-to-peak of ≈ 0.36. The old bound was written against a
-    // pre-undulation world and could never pass.
-    //
-    // So assert the two things that actually distinguish undulation from a
-    // leaking ramp:
-    //   1. no NET TREND across the run — the undulation is zero-mean over a
-    //      span this long, a ramp is not. This is the real check.
-    //   2. the range stays inside the undulation's own envelope, derived from
-    //      the formula rather than hardcoded. `relief` here is measured AFTER
-    //      undulation, so the bound is marginally generous — still far tighter
-    //      than any real elevation feature.
+    // The authored castle climb ends before the harbour straight.
     const seafront = [];
-    for (let i = Math.ceil(track.n * 0.58); i < Math.floor(track.n * 0.99); i++)
+    for (let i = Math.ceil(track.n * def.turns[15]); i < Math.floor(track.n * 0.99); i++)
       seafront.push(track.py[i]);
-    const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-    const third = Math.floor(seafront.length / 3);
-    const trend = Math.abs(mean(seafront.slice(0, third)) - mean(seafront.slice(-third)));
-    assert.ok(trend < 0.05, `seafront trends ${trend.toFixed(3)} m across its length`);
-
-    let lo = Infinity, hi = -Infinity;
-    for (let i = 0; i < track.n; i++) {
-      if (track.py[i] < lo) lo = track.py[i];
-      if (track.py[i] > hi) hi = track.py[i];
-    }
-    const envelope = 2 * Math.min(0.42, 0.14 + (hi - lo) * 0.0028);
     const range = Math.max(...seafront) - Math.min(...seafront);
-    assert.ok(range <= envelope,
-      `seafront range ${range.toFixed(3)} m exceeds the undulation envelope ${envelope.toFixed(3)} m`);
+    assert.ok(range < 0.05, `Baku seafront elevation varies by ${range.toFixed(3)} m`);
   }
 });

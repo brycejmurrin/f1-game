@@ -1,10 +1,11 @@
 /* Comparable time-trial classes and lap configuration continuity. */
 "use strict";
 var SessionRecords = (function () {
-  const PHYS = ["PACE", "DRIFT", "FRONT_GRIP", "PLAYER_GRIP", "ROAD_FOLLOW", "STEER_EXPO", "STEER_MAX_SLIP", "STEER_SPEED_REF", "WHEELBASE", "YAW_DAMP", "YAW_INERTIA", "raceLineAssist"];
+  const PHYS = SessionPhys.PHYS;
   function create(G) {
-    let key = null, revision = -1, spoiled = false, dailyRestore = null;
+    let key = null, revision = -1, spoiled = false, dailyRestore = null, assistRestore = null;
     let comparedGuest = null, comparedKey = null;
+    // Keep the daily rules fixed so earlier daily records stay comparable.
     const STANDARD = { PACE: 0.84, DRIFT: 0, FRONT_GRIP: 0.94, PLAYER_GRIP: 1.15, ROAD_FOLLOW: 0,
       STEER_EXPO: 2.4, STEER_MAX_SLIP: 0.29, STEER_SPEED_REF: 41.7, WHEELBASE: 3.6, YAW_DAMP: 1, YAW_INERTIA: 0.58, raceLineAssist: 0 };
     function prepareDaily() {
@@ -12,8 +13,17 @@ var SessionRecords = (function () {
       for (const [k, v] of Object.entries(STANDARD)) G[k] = v;
       G.teamIdx = Math.max(0, Teams.LIST.findIndex(t => t.id === "mclaren")); G.driverIdx = 0; G.difficulty = "normal";
       Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+      // GRIP STEER and WheelState are OFF in a standard daily too (#5024); session-only, never persisted.
+      if (!assistRestore) assistRestore = { grip: typeof GripSteer !== "undefined" ? GripSteer.level() : 1, wheel: typeof WheelState !== "undefined" && WheelState.enabled() };
+      if (typeof GripSteer !== "undefined") GripSteer.setLevel(1);
+      if (typeof WheelState !== "undefined") WheelState.setEnabled(false, false);
     }
     function restoreDaily() {
+      if (assistRestore) {
+        if (typeof GripSteer !== "undefined") GripSteer.setLevel(assistRestore.grip);
+        if (typeof WheelState !== "undefined") WheelState.setEnabled(assistRestore.wheel, false);
+        assistRestore = null;
+      }
       if (!dailyRestore) return;
       for (const [k, v] of Object.entries(dailyRestore)) G[k] = v;
       dailyRestore = null;
@@ -25,7 +35,9 @@ var SessionRecords = (function () {
         car: c && [c.team.id, c.tierV, c.mods, c.aeroLoad, c.ersDeploy, c.ersRegen, c.tread, c.brakeBias, c.rollBalance],
         tune: PHYS.map(k => G[k]), controls: G.recordControls(), weather: G.weatherArc ? G.weatherArc.from : G.raceWeather,
         weatherPlan: G.weatherArc ? [G.weatherArc.from, G.weatherArc.to, G.weatherArc.dur] : null,
-        tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay };
+        tyreWear: G.session === "tt" ? "off" : G.raceTyreWear, difficulty: G.difficulty, tod: G.raceTimeOfDay,
+        // #5895: WIND OFF is its own class; the default REAL adds no field, so every older key stays valid.
+        wind: typeof Wind !== "undefined" && Wind.level() === "off" ? "off" : undefined };
     }
     function current() { return Ghost.contextKey(config()); }
     // Only the hidden GP wear preference differed in these historical TT keys.
@@ -93,7 +105,7 @@ var SessionRecords = (function () {
     }
     function accept() {
       const daily = G.daily.current();
-      if (daily && daily.class === "standard" && PHYS.some(k => G[k] !== STANDARD[k])) {
+      if (daily && daily.class === "standard" && (PHYS.some(k => G[k] !== STANDARD[k]) || Object.keys(SessionPhys.assists()).length)) {
         spoiled = true;
         G.announce("STANDARD DAILY SETTINGS CHANGED — RESTART DAILY", 3, "info");
         return false;
@@ -109,9 +121,12 @@ var SessionRecords = (function () {
       laps.push(lapTime);
       const c = G.player;
       GameStore.ttBoardAdd(G.track.def.id, { t: lapTime, teamId: c.team.id, code: c.code, name: c.name, ts: Date.now(), context: key });
-      const medal = Quali.medalFor(lapTime, pole), held = Ghost.medal();
+      // #5588 B: a ghost is only replaced by a FASTER lap, so it keeps the better of the held and the new medal.
+      const fresh = Quali.medalFor(lapTime, pole), held = Ghost.medal(), R = Quali.MEDAL_RANK, prev = Ghost.bestTime();
+      const medal = (R[held] || 0) > (R[fresh] || 0) ? held : fresh;
+      // prevBest: the PB this lap replaced, so YOUR PB can show the gain (it read +0.000 on every record, #5672).
       const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
-        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
+        pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather, prevBest: isFinite(prev) ? prev : null });
       if (typeof InputGhost !== "undefined") {
         InputGhost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
           pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
@@ -135,6 +150,7 @@ var SessionRecords = (function () {
     function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
     return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
   }
-  return { create, PHYS };
+  // PHYS stays on SessionPhys (boot) and is module-local here via SessionPhys.PHYS.
+  return { create };
 })();
 Object.freeze(SessionRecords);

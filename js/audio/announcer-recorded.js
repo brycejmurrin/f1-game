@@ -12,7 +12,9 @@ var RecordedAnnouncer = (() => {
         // generic session cue still gives the introduction its finish.
         spoken = text.replace(/^the sprint\.\s+\d+ laps,\s*/i, "the sprint, ")
           .replace(/^a duel with [^.]+\.\s*(?=just the two of you)/i, "a duel. ")
-          .replace(/^\d+ laps\.\s*(?=let's go racing)/i, "");
+          .replace(/^\d+ laps\.\s*(?=let's go racing)/i, "")
+          // The packs record the length alone; the corner count stays on the card.
+          .replace(/^(\d+\.\d{3} kilometres), \d+ corners\.$/i, "$1.");
         if (spoken !== text) plan = p.plan(id, spoken);
       }
       return { text: spoken, original: text, plan };
@@ -36,7 +38,7 @@ var RecordedAnnouncer = (() => {
         if (gen !== generation) return false;
         // Explicit editor/settings auditions may run over a paused race.
         // Automatic introductions and results reads still end on pause.
-        if (G.soundOn && (!G.paused || (options && options.allowPaused === true)) && !(typeof document !== "undefined" && document.hidden)) return true;
+        if (G.soundOn && G.radio.volume() > 0 && (!G.paused || (options && options.allowPaused === true)) && !(typeof document !== "undefined" && document.hidden)) return true;
         stop(); return false;
       };
       const ready = p.load ? p.load(id) : Promise.resolve(p.ready(id));
@@ -58,8 +60,16 @@ var RecordedAnnouncer = (() => {
           timer = setTimeout(() => {
             timer = null;
             if (!valid()) return;
-            const ok = p.speak(id, row.text, { channel: "intro", fx: "announcer", volume: G.radio.volume(),
+            const volume = G.radio.volume();
+            if (!(volume > 0)) { stop(); return; }
+            let captioned = false;
+            const ok = p.speak(id, row.text, { channel: "intro", fx: "announcer", volume,
               budgetS: (end - Date.now()) / 1000, valid,
+              onStart: () => {
+                if (!valid() || captioned) return;
+                captioned = true;
+                if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(row.text, true);
+              },
               onEnd: () => { if (valid()) timer = setTimeout(next, 250); } });
             if (!ok) next();
           }, wait);

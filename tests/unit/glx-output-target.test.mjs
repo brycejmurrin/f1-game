@@ -130,3 +130,162 @@ test("setRenderSizeOverride changes getSize via resize", () => {
   assert.equal(h.GLX.height, 256);
   h.GLX.setRenderSizeOverride(null);
 });
+
+test("a half-float-only device keeps bloom/godray targets on RGBA16F; R11F_G11F_B10F waits for EXT_color_buffer_float (iPhone GLX report)", () => {
+  // EXT_color_buffer_half_float makes RGBA16F renderable but not R11F_G11F_B10F. Allocating
+  // the slim format there left bloom level 0 incomplete, so post switched off untonemapped.
+  const run = (extensions) => {
+    const h = bootGlx({ extensions });
+    h.GLX.begin(h.frame());
+    return { h, r11: h.count("texImage2D", (a) => a[2] === h.gl.R11F_G11F_B10F), f16: h.count("texImage2D", (a) => a[2] === h.gl.RGBA16F) };
+  };
+  const half = run(["EXT_color_buffer_half_float"]);
+  assert.equal(half.r11, 0, "no R11F_G11F_B10F target without EXT_color_buffer_float");
+  assert.ok(half.f16 > 1, "bloom/godray fall back to RGBA16F");
+  assert.equal(half.h.GLX.hdrMode(), true, "post stays on, HDR, on half-float-only");
+  const full = run(["EXT_color_buffer_float"]);
+  assert.ok(full.r11 > 0, "with the float extension the slim format is still used");
+});
+
+test("WebKit never invalidates the DEFAULT framebuffer; FBO targets keep theirs (iPhone GLX black-screen lead)", () => {
+  // WebKit 280799 (Safari 18: one frame, then a black canvas) is triggered by invalidating the
+  // default framebuffer, the one GLX path TLX never takes. Count, per UA, the invalidations
+  // whose attachments are the default framebuffer's gl.COLOR / gl.DEPTH.
+  const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+  const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+  const count = (userAgent) => {
+    const h = bootGlx({ userAgent, extensions: ["EXT_color_buffer_float"] });
+    h.GLX.begin(h.frame()); h.GLX.present({}); h.reset();
+    h.GLX.begin(h.frame()); h.GLX.present({});
+    const inv = h.calls.filter((c) => c[0] === "invalidateFramebuffer");
+    return { all: inv.length, def: inv.filter((c) => c[1][1].some((a) => a === h.gl.COLOR || a === h.gl.DEPTH)).length };
+  };
+  const safari = count(IPHONE), chrome = count(CHROME);
+  assert.equal(safari.def, 0, "Safari/WebKit: no default-framebuffer invalidation");
+  // The iPhone is on the cover path, where post colour targets CLEAR instead (next test);
+  // the scene-depth DontCare hint is still issued.
+  assert.ok(safari.all > 0, "Safari keeps an FBO DontCare hint (scene depth)");
+  assert.ok(chrome.def > 0, "Chromium keeps the default-framebuffer hints");
+});
+
+// ---- Perf hunt 9: phone cover targets (iPhone GLX black canvas, candidate 1 + 2) ----
+const IPHONE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const CHROME_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+for (const [w, hgt] of [[640, 360], [360, 640]]) for (const flip of [true, false]) {
+  test(`phone ${w}x${hgt} mirror samples its full exact-size target, flip=${flip}`, () => {
+    const h = bootGlx({ userAgent: IPHONE_UA, extensions: ["EXT_color_buffer_float"] });
+    h.GLX.setRenderSizeOverride({ width: w, height: hgt }); h.GLX.resize();
+    assert.equal(h.GLX.width > h.GLX.height, w > hgt, "exercise the requested phone orientation");
+    assert.equal(h.GLX.mirrorBegin(h.frame(), 160, 48), true);
+    h.GLX.mirrorEnd(); h.GLX.mirrorRect([0.1, 0.1, 0.3, 0.15], flip);
+    h.GLX.begin(h.frame()); h.reset(); h.GLX.present({ ssao: 0.5, bloom: 0.5 });
+    let program = null; const scales = [], flips = [];
+    for (const [name, args] of h.calls) {
+      if (name === "useProgram") program = args[0];
+      const isMirror = program?.shaders?.some(s => s.source?.includes("mix(vUV.x, 1.0 - vUV.x, uFlip)"));
+      if (isMirror && name === "uniform2f" && args[0]?.name === "uUVScale") scales.push(args.slice(1));
+      if (isMirror && name === "uniform1f" && args[0]?.name === "uFlip") flips.push(args[1]);
+    }
+    assert.deepEqual(scales, [[1, 1]], "main square-cover UV scale must not crop the mirror");
+    assert.deepEqual(flips, [flip ? 1 : 0]);
+  });
+}
+
+function presentCalls(userAgent) {
+  const h = bootGlx({ userAgent, extensions: ["EXT_color_buffer_float"] });
+  h.GLX.begin(h.frame()); h.reset();
+  h.GLX.present({ ssao: 0.5, bloom: 0.5 });
+  return h;
+}
+/** Every draw present() issues on an FBO, with what happened to its colour since the bind. */
+function fboDraws(h) {
+  const g = h.gl;
+  let fb = null, inv = false, clr = false;
+  const out = [];
+  for (const [name, a] of h.calls) {
+    if (name === "bindFramebuffer" && (a[0] === g.FRAMEBUFFER || a[0] === g.DRAW_FRAMEBUFFER)) { fb = a[1]; inv = false; clr = false; }
+    else if (name === "invalidateFramebuffer" && a[0] === g.FRAMEBUFFER && a[1].includes(g.COLOR_ATTACHMENT0)) inv = true;
+    else if (name === "clear" && (a[0] & g.COLOR_BUFFER_BIT)) clr = true;
+    else if (/^draw(Arrays|Elements)/.test(name) && fb) out.push({ fb, inv, clr });
+  }
+  return out;
+}
+const steps = (h, name) => h.calls.filter((c) => c[0] === "uniform2f" && c[1][0] && c[1][0].name === name).map((c) => [c[1][1], c[1][2]]);
+
+test("phone cover targets are cleared, never DontCare'd, so the area outside the w×h rect is defined", () => {
+  // A square max(w,h)² cover is drawn only inside its viewport, while the next pass's taps cross the
+  // edge. Whole-attachment invalidation left that area undefined per frame on ANGLE-Metal (NaN in RGBA16F).
+  const h = presentCalls(IPHONE_UA);
+  const draws = fboDraws(h);
+  assert.ok(draws.length >= 8, "present() drew the SSAO + bloom passes on FBOs; got " + draws.length);
+  assert.equal(draws.filter((d) => d.inv).length, 0, "no post pass draws into a colour attachment it invalidated");
+  assert.ok(draws.filter((d) => d.clr).length >= 8, "the overwrite passes start from a full clear");
+  assert.ok(h.count("clearColor", (c) => c.every((x) => x === 1)) > 0, "the SSAO targets clear to 1 (no occlusion bleeds in)");
+  assert.ok(h.count("clearColor", (c) => c.every((x) => x === 0)) > 0, "colour targets clear to 0");
+});
+
+test("desktop post passes keep the DontCare hint and issue no clear (call stream unchanged off the cover path)", () => {
+  const h = presentCalls(CHROME_UA);
+  const draws = fboDraws(h);
+  assert.equal(h.count("clear"), 0, "present() issues no clear on desktop");
+  assert.equal(h.count("clearColor"), 0, "present() sets no clear colour on desktop");
+  assert.ok(draws.filter((d) => d.inv).length >= 8, "desktop overwrite passes still invalidate first");
+});
+
+test("tap texels are one PHYSICAL texel: square on a phone cover, logical on desktop", () => {
+  // vUV is physical UV (p * uUVScale), so a step of 1/logical overshoots by alloc/logical on a cover.
+  const phone = presentCalls(IPHONE_UA);
+  const W = phone.GLX.width, H = phone.GLX.height;
+  assert.notEqual(W, H, "need a non-square logical size");
+  const pDir = steps(phone, "uDir"), pAO = steps(phone, "uAOTexel"), pTex = steps(phone, "uTexel").slice(1);   // [0] is SSAO's (unused)
+  assert.ok(pDir.length >= 2 && pTex.length >= 8, "blur + bloom + FXAA steps recorded");
+  assert.equal(pDir[0][0], pDir[1][1], "SSAO blur: H step == V step on the square half-res cover");
+  assert.equal(pAO[0][0], pAO[0][1], "AO grid texel is square on the cover");
+  assert.deepEqual(pTex.filter((t) => t[0] !== t[1]), [], "bloom + FXAA texels are square on the cover");
+  const desk = presentCalls(CHROME_UA);
+  const dW = desk.GLX.width, dH = desk.GLX.height;
+  const half = (a) => Math.max(1, Math.floor(a / 2));
+  const dDir = steps(desk, "uDir"), dTex = steps(desk, "uTexel");
+  assert.deepEqual([dDir[0][0], dDir[1][1]], [1 / half(dW), 1 / half(dH)], "desktop SSAO blur: logical half-res texel");
+  assert.deepEqual(steps(desk, "uAOTexel")[0], [1 / half(dW), 1 / half(dH)], "desktop AO grid: logical half-res texel");
+  assert.deepEqual(dTex[1], [1 / half(dW), 1 / half(dH)], "desktop first bloom downsample: 1/level-0 size");
+  assert.deepEqual(dTex[dTex.length - 1], [1 / dW, 1 / dH], "desktop FXAA: 1/render size");
+});
+
+// F3 (#3115): GLX SSR must march at half-res (WGX already does), not inside the
+// full-res composite. Cost model: march fragment work ∝ pixels; half-res is 1/4.
+test("GLX SSR is a half-res pass, not a full-res composite march (F3 #3115)", () => {
+  const postSrc = fs.readFileSync(path.join(GLX_DIR, "shaders/glsl-post.js"), "utf8");
+  const compStart = postSrc.indexOf("const COMPOSITE_FS = `");
+  const compEnd = postSrc.indexOf("`;", postSrc.indexOf("outColor = vec4(", compStart));
+  assert.ok(compStart > 0 && compEnd > compStart, "COMPOSITE_FS located");
+  const composite = postSrc.slice(compStart, compEnd);
+  // Index lookups (not source-pin asserts) — Cursor ratchets may only lower.
+  const marchInComposite = composite.indexOf("for (int i = 0; i < 24");
+  assert.ok(marchInComposite < 0,
+    "SSR march must leave COMPOSITE_FS (full-res) for a half-res SSR_FS pass");
+  const ssrFsAt = postSrc.indexOf("const SSR_FS = `");
+  assert.ok(ssrFsAt > 0, "SSR_FS half-res pass shader exists");
+
+  const h = bootGlx({ userAgent: CHROME_UA, extensions: ["EXT_color_buffer_float"] });
+  const ident = new Float32Array(16);
+  ident[0] = ident[5] = ident[10] = ident[15] = 1;
+  const frame = h.frame({
+    proj: ident, invProj: ident, upViewDir: [0, 1, 0], viewProj: ident, invViewProj: ident,
+  });
+  h.GLX.begin(frame);
+  h.reset();
+  h.GLX.present({
+    reflect: 0.5, carReflect: 0.05, ssao: 0, bloom: 0, godray: 0, mist: 0,
+  });
+  const W = h.GLX.width, H = h.GLX.height;
+  const halfW = Math.max(1, Math.floor(W / 2)), halfH = Math.max(1, Math.floor(H / 2));
+  const halfViewports = h.calls.filter((c) =>
+    c[0] === "viewport" && c[1][0] === 0 && c[1][1] === 0 && c[1][2] === halfW && c[1][3] === halfH);
+  assert.ok(halfViewports.length >= 1,
+    `SSR must draw at half-res ${halfW}x${halfH}; full-res composite alone paid ${W * H} march pixels`);
+  // Cost proof: half-res pixels are ≤ 1/4 of the composite's full-res coverage.
+  assert.ok(halfW * halfH * 4 <= W * H + 3,
+    `half-res SSR pixels ${halfW * halfH} must be ≤ 1/4 of full-res ${W * H}`);
+});

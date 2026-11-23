@@ -20,31 +20,72 @@ const SetupTrials = (() => {
     }
     return issues;
   }
+  // RK: the setup to restore when a reload lands mid-trial (#5879).
+  const RK = "setupTrialRecover";
+  const durable = (st, k, value) => st.write(k, value, { requireDurable: true }).durable;
+  const forget = st => st.get(RK, null) == null || durable(st, RK, undefined);
+  function restore(st, team, before) {
+    const sheet = SetupTune.get(team);
+    for (const k of SetupTune.FIELDS) sheet[k] = SetupTune.clampField(k, before[k]) ?? sheet[k];
+    return durable(st, SetupTune.keyFor(team), SetupTune.stamp(team, sheet));
+  }
+  function recover(st) {
+    const rec = !run && st.get(RK, null);
+    if (!rec) return false;
+    if (typeof rec.teamId !== "string" || !rec.before || (!rec.token && !rec.owned)) { forget(st); return false; }
+    if (SetupTune.keyFor(rec.teamId) !== rec.key) return false;
+    const raw = st.get(rec.key, null);
+    if (raw && (!rec.token || raw.setupTrial === rec.token) && raw.seed !== SetupTune.stamp(rec.teamId, {}).seed) return false;
+    // Old journals identified an attempt by its tune. A new journal spans all arms:
+    // only a committed trial write carries its token, and an ordinary edit removes it.
+    const owned = rec.token ? raw && raw.setupTrial === rec.token
+      : same(SetupTune.get(rec.teamId), rec.owned);
+    if (owned && !restore(st, rec.teamId, rec.before)) return false;
+    forget(st);
+    return !!owned;
+  }
   function create(o) {
     cancel();
     if (!o || typeof o.launch !== "function") return false;
-    run = { id: ++sequence, teamId: o.teamId, store: o.store, launch: o.launch, refresh: o.refresh, cancelRuntime: o.cancelRuntime,
-      before: SetupTune.get(o.teamId), baseline: copy(o.baseline), candidate: copy(o.candidateNow ? o.candidateNow() : o.candidate), receipts: [], pending: null,
+    recover(o.store);
+    if (o.store.get(RK, null) != null) return false; // recovery still owns the previous setup
+    const candidate = copy(o.candidateNow ? o.candidateNow() : o.candidate);
+    const token = globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + "-" + (++sequence).toString(36);
+    run = { key: SetupTune.keyFor(o.teamId), seed: SetupTune.stamp(o.teamId, {}).seed, token,
+      teamId: o.teamId, store: o.store, launch: o.launch, refresh: o.refresh, cancelRuntime: o.cancelRuntime,
+      before: SetupTune.get(o.teamId), baseline: copy(o.baseline), candidate, receipts: [], pending: null,
       owned: null, revision: null, context: null, busy: false };
     notify(); return true;
   }
-  function owns(r) { return r.owned && same(SetupTune.get(r.teamId), r.owned) && (!r.store.keyRevision || r.revision === r.store.keyRevision("setup." + r.teamId)); }
+  function sameScope(r) { return SetupTune.keyFor(r.teamId) === r.key && SetupTune.stamp(r.teamId, {}).seed === r.seed; }
+  function owns(r) { return r.owned && sameScope(r) && r.store.get(r.key, null)?.setupTrial === r.token
+    && same(SetupTune.get(r.teamId), r.owned) && (!r.store.keyRevision || r.revision === r.store.keyRevision(r.key)); }
   function cancel() {
     const r = run;
     if (!r) return false;
-    // Cancel the owned session before restoring the mechanical sheet. The callback
-    // must refuse a newer session; it runs while the launch lease is still current.
+    // Cancel the owned session (lease still current; it refuses a newer one) before restoring.
     if (r.cancelRuntime) r.cancelRuntime();
     run = null;
-    if (owns(r)) { SetupTune.set(r.teamId, r.before); if (r.refresh) r.refresh(); }
-    notify(); return true;
+    const owned = owns(r), restored = !owned || restore(r.store, r.teamId, r.before);
+    if (restored) {
+      if (sameScope(r) && r.store.get(RK, null)?.token === r.token) forget(r.store);
+      if (owned && r.refresh) r.refresh();
+    }
+    notify(); return restored;
   }
   async function attempt(arm) {
     const r = run;
     if (!r || r.busy || r.pending || !["baseline", "control", "candidate"].includes(arm) || r.receipts.filter(x => x.arm === arm).length >= 6) return false;
-    if (r.owned && !owns(r)) { r.reason = "Mechanical setup changed outside this comparison. Cancel and start again."; notify(); return false; }
-    r.busy = true; const tune = arm === "candidate" ? r.candidate : r.baseline;
-    r.owned = SetupTune.set(r.teamId, tune); r.revision = r.store.keyRevision ? r.store.keyRevision("setup." + r.teamId) : null;
+    if (!sameScope(r) || (r.owned && !owns(r))) { r.reason = "Mechanical setup changed outside this comparison. Cancel and start again."; notify(); return false; }
+    const tune = arm === "candidate" ? r.candidate : r.baseline, key = r.key;
+    const journal = { teamId: r.teamId, key, before: r.before, token: r.token };
+    const existing = r.store.get(RK, null);
+    if ((existing ? existing.token !== r.token : !durable(r.store, RK, journal)) ||
+        !durable(r.store, key, { ...SetupTune.stamp(r.teamId, tune), setupTrial: r.token })) {
+      r.reason = "Could not save the setup comparison. Free storage and retry.";
+      notify(); return false;
+    }
+    r.busy = true; r.owned = SetupTune.get(r.teamId); r.revision = r.store.keyRevision ? r.store.keyRevision(key) : null;
     notify();
     let result;
     try { result = await r.launch({ teamId: r.teamId, tune: copy(tune), mode: "launch", isCurrent: () => run === r && owns(r) }); }
@@ -122,6 +163,7 @@ const SetupTrials = (() => {
     const ui = { section: box, refresh: paint, dispose() { if (observer) observer.disconnect(); listeners.delete(paint); box.remove(); pauseMounts.delete(G); } }; pauseMounts.set(G, ui); return ui;
   }
   function mount(host, o) {
+    if (o && recover(o.store) && o.refresh) o.refresh();
     const box = document.createElement("section"); box.className = "player-tool-panel";
     const title = document.createElement("h3"); title.className = "sel-label"; title.textContent = "MEASURE A SETUP · UNSCORED LAUNCH";
     const status = document.createElement("p"); status.className = "adv-help"; status.setAttribute("role", "status");
@@ -134,12 +176,13 @@ const SetupTrials = (() => {
       for (let i = 1; i < 4; i++) buttons[i].disabled = !mine || s.busy || s.pending || s.receipts.filter(x => x.arm === ["baseline", "control", "candidate"][i - 1]).length >= 6;
       buttons[0].disabled = !!mine; buttons[4].disabled = !mine; buttons[5].disabled = !mine || !s.pending;
     };
-    button("BEGIN COMPARISON", () => { create(o); paint(); });
+    button("BEGIN COMPARISON", () => { if (create(o)) paint(); else status.textContent = "A saved setup comparison still needs recovery. Reopen its garage and retry."; });
     for (const arm of ["baseline", "control", "candidate"]) button(arm === "control" ? "RUN A/A CONTROL" : "RUN " + arm.toUpperCase(), () => attempt(arm));
-    button("CANCEL / RESTORE OWNED SETUP", cancel);
+    button("CANCEL / RESTORE OWNED SETUP", () => { if (!cancel()) status.textContent = "Could not restore the setup. Free storage and reopen the garage to retry."; });
     button("EXCLUDE CURRENT ATTEMPT", () => invalidate("Stopped before drill completion"));
     box.append(title, status, rows); host.appendChild(box); listeners.add(paint); paint();
     return { dispose() { listeners.delete(paint); box.remove(); } };
   }
-  return Object.freeze({ create, cancel, attempt, observe, record, invalidate, summary, contextIssues, mount, mountPause, active: () => !!run });
+  if (typeof GameStore === "object" && typeof setTimeout === "function") setTimeout(() => recover(GameStore.store));
+  return Object.freeze({ create, cancel, attempt, observe, record, invalidate, summary, contextIssues, mount, mountPause, recover, active: () => !!run });
 })();

@@ -1,5 +1,7 @@
 # Rulebook size and rule compliance: the evidence — 2026-10-26
 
+Summary: Sources on instruction count vs compliance; size targets for AGENTS.md, the (retired 2026-10-27) fleet-core rule file and the memory index
+
 Lane R5 of the system-audit implementation (PR #3785), for the rulebook lane. Question: how long can the
 always-loaded rulebook (CLAUDE.md → AGENTS.md, unscoped `.claude/rules/`, the memory index) be before rules
 stop being followed, and what does the published evidence say about where rules should sit?

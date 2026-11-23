@@ -830,7 +830,7 @@ var Announcer = (function () {
           next();
         };
         speaking = u;
-        if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(parts[i - 1]);
+        if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(parts[i - 1], true);
         try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); speaking = null; return; }
         // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
         // straight after a cancel() is silently dropped, and resume() is the fix.
@@ -886,6 +886,8 @@ var Announcer = (function () {
     };
   }
 
-  return { create, inert, script, rows, fit, seconds, pickVoice, storyRows, wrapRows, CHANNEL, PREFERRED };
+  // fit / PREFERRED stay module-local: script() and pickVoice() use them; no
+  // outside caller reaches for Announcer.fit or Announcer.PREFERRED.
+  return { create, inert, script, rows, seconds, pickVoice, storyRows, wrapRows, CHANNEL };
 })();
 Object.freeze(Announcer);

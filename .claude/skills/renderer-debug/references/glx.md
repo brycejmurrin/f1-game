@@ -2,7 +2,7 @@
 
 Load from SKILL.md when `env.backend` reads `webgl2`. Failure modes (shadow
 acne, bloom blow-out), the Playwright probe pattern and apex-eval one-liners
-are in [glx-failures.md](glx-failures.md).
+are in glx-failures.md (linked from SKILL.md).
 
 ## Contents
 - 1. Check HDR availability
@@ -14,8 +14,8 @@ The renderer lives in `js/render/glx/glx.js` (the `GLX` IIFE). It is NOT the
 default backend (TLX is): it runs only when `apex26.gfxBackend` is `"webgl2"` or
 TLX/WGX failed to init — confirm with `__apex.diag()` (`backendState`) before
 debugging it. It uses WebGL2 with
-interleaved point lights, a 2048² sun shadow map (1024² on mobile; its PCSS blocker pass is a
-desktop-only 512² R32F blocker target; 512² is also the separate LAMP spot map),
+interleaved point lights, a sun shadow map (sizes: the `*_SIZE` constants in `glx/shadow.js`;
+desktop adds car, PCSS-blocker and LAMP spot maps),
 ACES tone-map, bloom, and lens flare. Most rendering bugs fall into a small set
 of root causes — start with the probes below before reading shader source.
 
@@ -79,8 +79,8 @@ SwiftShader is especially verbose.
 
 **Bisect a `GL_INVALID_OPERATION` to its call** (parent browser, GLX bound):
 1. Count first: `GLX.gpuErrors()` / `GLX.gpuFirstError()` (also
-   `__apex.diag().env.gpuErrors`). GLX drains `getError()` only for the first 30
-   presents (`drainGlErrors` in `js/render/glx/glx.js`); set
+   `__apex.diag().env.gpuErrors`). GLX drains `getError()` only for the first few
+   presents (`DRAIN_PRESENTS`) (`drainGlErrors` in `js/render/glx/glx.js`); set
    `localStorage["apex26.glErrDrain"]="1"` and reload to drain every present.
 2. The tag is only `present` / `drain` / `pre-materialArray`, so localise by
    wrapping the draw calls once in the console and logging the first stack:

@@ -69,7 +69,7 @@ passing diagnostic. Keep skipped work and actual browser/GPU proof explicit.
 | Entry point | Evidence and bounds |
 |---|---|
 | `node tools/check/doctor.mjs --tree --json` or `apex_doctor` | YAML, references, mirrors, browser/cache paths and dependency availability; no installs, network or browser launch. Add `--catalog FILE` to diagnose a supplied hosted capability snapshot. |
-| `node tools/check/skill-smoke.mjs --all --plan` | One bounded recipe per canonical skill. `--check` executes offline fixtures serially and requires positive passing test counts. Browser and hardware work has separate unverified status. |
+| `node check/skill-smoke.mjs (deleted 2026-11-03) --all --plan` | One bounded recipe per canonical skill. `--check` executes offline fixtures serially and requires positive passing test counts. Browser and hardware work has separate unverified status. |
 | `node tools/check/lifecycle-census.mjs --track monza --seed 42 --out artifacts/census` | Actual held-flag/debris resets, obsolete WATCH completion and owned-resource cleanup, including failed boot. VM evidence does not prove GPU resource lifetime. |
 | `node tools/shot/replay-camera-probe.mjs --fixture default --track baku --backend three --viewport 640x360 --frames 1 --seed 42 --timeout-ms 900000 --out artifacts/replay` | Offline replay entry, seek, follow, exit and reentry. Actual rendered camera anchors and independent clocks are recorded without a corrective camera reset. |
 | `node tools/ci/pick-tests.mjs --json docs/TESTING.md unknown-config.json` | Per-path receipts retain the unclaimed path and return partial coverage even when other paths select valid groups. |

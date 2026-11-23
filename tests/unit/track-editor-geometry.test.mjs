@@ -37,6 +37,30 @@ test("Dubins: every closed-form word integrates to its goal pose; the planner al
   assert.ok(Math.abs(a.len - b.len) < 0.5, `symmetric lengths ${a.len} vs ${b.len}`);
 });
 
+test("resample: a spacing of 0 (or NaN, negative) returns the minimum count instead of hanging (#4357)", () => {
+  const { S } = bootEditor();
+  const sq = [[0, 0], [1000, 0], [1000, 600], [0, 600]];
+  for (const sp of [0, -5, NaN]) {
+    assert.equal(S.resample(sq, sp, true).length, 8, `closed, spacing ${sp}`);
+    assert.equal(S.resample(sq, sp, false).length, 2, `open, spacing ${sp}`);
+  }
+});
+
+test("enforceSpacing: a protected tangent crowding index 0 at the seam survives; index 0 yields (#4355)", () => {
+  const { S } = bootEditor();
+  // A 200 m square loop whose last point (a stamp tangent) sits 5 m from index 0.
+  const pts = [[0, 0], [100, 0], [200, 0], [200, 100], [200, 200], [100, 200], [0, 200], [0, 100], [0, 5]];
+  const tangent = pts[8];
+  const out = S.enforceSpacing(pts, 8, new Set([8]));
+  assert.notEqual(out.indexOf(tangent), -1, "the protected tangent is kept");
+  for (let i = 0; i < out.length; i++) { const p = out[i], q = out[(i + 1) % out.length]; assert.ok(Math.hypot(q[0] - p[0], q[1] - p[1]) >= 8, `spacing holds at ${i}`); }
+  // Unprotected, or with index 0 itself protected, the old rule stands: the last point goes.
+  assert.equal(S.enforceSpacing(pts, 8).indexOf(tangent), -1, "unprotected last point is merged into index 0");
+  const both = S.enforceSpacing(pts, 8, new Set([0, 8]));
+  assert.equal(both[0], pts[0], "a protected index 0 is kept");
+  assert.equal(both.indexOf(tangent), -1);
+});
+
 test("polyline tools: RDP, resample, Catmull, Menger, rotate, project, hull", () => {
   const { S } = bootEditor();
   const noisy = []; for (let i = 0; i <= 100; i++) noisy.push([i * 10, Math.sin(i) * 0.4]);
@@ -153,6 +177,26 @@ test("validate: the rules read the engine's centreline (length, radius, start st
   const bridged = V.check(design({ pts: eight, bridges: [{ s: cross.s / x.stats.lengthM, halfM: 160, rise: 8 }] }));
   assert.ok(!bridged.issues.some((i) => i.code === "crossing"), "bridged: " + JSON.stringify(bridged.issues.map((i) => i.code + ":" + i.level)));
   assert.ok(bridged.issues.some((i) => i.code === "bridge" && i.level === "info"));
+  // "Both roads rise" uses def._sceneryShift like buildCenterline: a forged dress
+  // moves the authored window, so the RED's reported `s` lands on the dressed metre.
+  {
+    const built = V.build(design({ pts: eight }));
+    const tr = built.tr, L = tr.total, shift = 0.22;
+    built.def._sceneryShift = shift;
+    // Place a wide bridge so both crossing nodes sit inside its window after dress.
+    const xs = S.crossings(tr.px, tr.pz, tr.n, 3);
+    assert.ok(xs.length, "figure-eight still crosses");
+    const c0 = xs[0], mid = ((c0.i + c0.j) / 2 / tr.n);
+    const span = Math.min(Math.abs(c0.i - c0.j), tr.n - Math.abs(c0.i - c0.j)) * (L / tr.n);
+    const halfM = Math.max(200, span / 2 + 40);
+    const authored = ((mid - shift) % 1 + 1) % 1;
+    const reds = V.judge(tr, { bridges: [{ s: authored, halfM, rise: 8 }] }, built.def)
+      .issues.filter((i) => i.code === "bridge" && i.level === "red");
+    assert.ok(reds.length >= 1, "dressed window covers both roads: " + JSON.stringify(reds.map((i) => i.msg)));
+    const expect = (((authored + shift) % 1 + 1) % 1) * L;
+    assert.ok(Math.abs(reds[0].s - expect) < 1 || Math.abs(Math.abs(reds[0].s - expect) - L) < 1,
+      "issue.s is the dressed centre (" + reds[0].s + " vs " + expect + ")");
+  }
   // A steep bump reds the grade; the sanitiser's cap keeps a stored one legal.
   const steep = V.check(design({ elevations: [{ s: 0.5, halfM: 60, rise: 8 }] }));
   assert.ok(steep.issues.some((i) => i.code === "grade" && i.level === "red") || C.sanitize(design({ elevations: [{ s: 0.5, halfM: 60, rise: 8 }] })).elevations[0].rise < 8,
@@ -283,6 +327,48 @@ test("clearance: a return straight inside the pit opening is not a green save", 
   assert.ok(j.issues.some((i) => i.level === "red" && i.code === "clearance"));
 });
 
+/** A synthetic built road along a closed polyline at 4 m nodes, flat, half-width hwAt(x, z). */
+function polyTrack(corners, hwAt) {
+  const xs = [], zs = [], hs = [];
+  for (let c = 0; c < corners.length; c++) {
+    const a = corners[c], b = corners[(c + 1) % corners.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.round(len / 4));
+    for (let k = 0; k < m; k++) { const t = k / m, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t; xs.push(x); zs.push(z); hs.push(hwAt(x, z)); }
+  }
+  const n = xs.length;
+  let total = 0; for (let k = 0; k < n; k++) total += Math.hypot(xs[(k + 1) % n] - xs[k], zs[(k + 1) % n] - zs[k]);
+  return { n, total, px: Float64Array.from(xs), pz: Float64Array.from(zs), py: new Float64Array(n), curv: new Float64Array(n), hw: Float64Array.from(hs) };
+}
+
+test("clearance: the pit-opening red applies only inside the pit window round the start, not to a hairpin's straights mid-lap (WP-G1)", () => {
+  const { V } = bootEditor();
+  // A 700 m pocket mid-lap: C→D at z = 400 and E→F at z = 422, 22 m apart
+  // (hw 7: amber, inside the pit opening's reach), ~1400 m from the line.
+  const pocket = [[0, 0], [1000, 0], [1000, 400], [300, 400], [300, 422], [1000, 422], [1000, 800], [-200, 800], [-200, 0]];
+  const tr = polyTrack(pocket, () => 7);
+  const d = { pts: [[0, 0], [1, 0]], pit: { mode: "full", side: 1 } };
+  const j = V.judge(tr, d, d);
+  const cl = j.issues.filter((i) => i.code === "clearance");
+  assert.equal(cl.length, 1, JSON.stringify(cl));
+  assert.equal(cl[0].level, "amber", "a close pair far from the pit window is advice, not a pit RED: " + cl[0].msg);
+  assert.ok(cl[0].s > 1000 && cl[0].s < tr.total - 1000, `the flagged pair is the mid-lap pocket (s ${cl[0].s})`);
+});
+
+test("clearance: the most severe pair is reported — a closer narrow amber pair does not mask a farther wide red one (WP-G1)", () => {
+  const { V } = bootEditor();
+  // Two mid-lap pockets: A (hw 5, centres 15 m apart: edge gap 5 m → amber) and
+  // B (hw 8, centres 17 m apart: edge gap 1 m → overlap RED). A is the closer by centreline.
+  const shape = [[0, 0], [3000, 0], [3000, 300], [2400, 300], [2400, 317], [3000, 317], [3000, 1200],
+    [1700, 1200], [1700, 300], [1000, 300], [1000, 315], [1600, 315], [1600, 1400], [-300, 1400], [-300, 0]];
+  const hwAt = (x, z) => (z > 250 && z < 350 && x >= 2300 ? 8 : 5);
+  const tr = polyTrack(shape, hwAt);
+  const j = V.judge(tr, {}, {});
+  const cl = j.issues.filter((i) => i.code === "clearance");
+  assert.equal(cl.length, 1, JSON.stringify(cl));
+  assert.equal(cl[0].level, "red", "the overlap RED wins over the closer amber pair: " + cl[0].msg);
+  const k = Math.round(cl[0].s / (tr.total / tr.n)) % tr.n;
+  assert.ok(tr.px[k] >= 2300 && hwAt(tr.px[k], tr.pz[k]) === 8, `the flagged pair is the wide pocket B (node ${k} at ${tr.px[k]}, ${tr.pz[k]})`);
+});
+
 // ── SPIRAL: clothoid entry / exit on the curved stamps (TrackStamps.spiralSweep) ──
 // https://en.wikipedia.org/wiki/Euler_spiral — curvature linear in arc length.
 const CURVED = { corner: { R: 60, deg: 90 }, hairpin: { R: 18 }, chicane: { R: 40, deg: 35 }, sbend: { R: 60, deg: 45 } };
@@ -405,4 +491,24 @@ test("validate: 201 control points read 'Too many points', not the ±10 km 'boun
   assert.ok(!v.issues.some((i) => i.code === "bounds"), "…and the loop is not blamed on the map bounds: " + codes);
   assert.equal(v.ok, false);
   assert.ok(V.check(design({ pts: [[0, 0], [20000, 0], [0, 20000], [-9000, 0], [0, -9000], [900, 900], [-900, 900], [900, -900]] })).issues.some((i) => i.code === "bounds"), "a real off-map point still says bounds");
+});
+
+test("inserting a SHAPE stamp into a green RANDOMISE loop does not tie a knot in it (clean-room 63)", () => {
+  const { ST, TR, V } = bootEditor();
+  const tangled = {};
+  for (const kind of ["straight", "corner", "chicane", "sbend"]) {
+    let n = 0, bad = 0;
+    for (let seed = 1; n < 8 && seed < 60; seed++) {
+      const g = TR.generateValid(seed), pts = g && g.pts;
+      if (!pts || V.check(design({ seed, pts })).red) continue;
+      n++;
+      const i = Math.floor(pts.length / 3), r = ST.splice(pts, i, i, kind, {});
+      assert.ok(r.ok, kind + " inserts on seed " + seed);
+      if (V.check(design({ seed, pts: r.pts })).issues.some((x) => x.level === "red" && (x.code === "crossing" || x.code === "clearance"))) bad++;
+    }
+    assert.equal(n, 8, kind + ": eight green loops");
+    tangled[kind] = bad;
+  }
+  // Before the fix every insert rejoined behind the stamp's end: 8/8 knotted for every kind.
+  assert.ok(Object.values(tangled).every((v) => v <= 1), "inserts left crossing/clearance red: " + JSON.stringify(tangled));
 });

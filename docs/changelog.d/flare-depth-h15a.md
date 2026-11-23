@@ -1,1 +1,0 @@
-Improved: on TLX the lens flare's sun check now keeps the scene depth only while the sun is actually on screen, not whenever it is merely in front of the camera, so iPhones skip a full-screen depth write on many golden-hour frames. The picture is the same.

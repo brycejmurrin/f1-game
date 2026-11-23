@@ -4,8 +4,8 @@ export const meta = {
   whenToUse: 'Periodic dead-code / bug / perf sweep over all of js/, tools/, tests/, css/ and the shell. Complements total-audit (which owns drift + docs). Optional args: {known: ["file:line — claim"], knownKeys: [], maxGap: 8, rounds: 3, focus: "dead-code"|"bug"|"perf"|null}.',
   phases: [
     { title: 'Prior art', detail: 'prior-art-scout — seeds the do-not-re-report list when args.known is empty (one call)', model: 'haiku' },
-    { title: 'Recon', detail: 'haiku — run the static checkers, tabulate the real reference graph', model: 'haiku' },
-    { title: 'Find 1', detail: '29 code-hunter slices — haiku+low effort on 4 data-shaped slices, sonnet+medium on domains, opus+high on engine, renderers, net, audio' },
+    { title: 'Recon', detail: 'haiku — list the tree (the slice plan), run the static checkers, tabulate the real reference graph', model: 'haiku' },
+    { title: 'Find 1', detail: 'code-hunter slices: R1 plus the run-time slice plan (every circuit, every js/ dir no static slice owns) — haiku+low on data-shaped slices, sonnet+medium on domains, opus+high on engine, renderers, net, audio; the run logs how many agents it spawned' },
     { title: 'Verify 1', detail: 'finding-verifier reachability + intent lenses per ≤15-claim chunk, finding-verifier tiebreak (opus, effort high) on high-severity splits' },
     { title: 'Critic', detail: 'opus — names the cross-cutting lenses no scope slice covered', model: 'opus' },
     { title: 'Find 2', detail: 'critic-driven code-hunter gap finders (effort high for engine-adjacent gaps)' },
@@ -22,6 +22,9 @@ export const meta = {
 const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const MAX_ROUNDS = A.rounds || 3
 const MAX_GAP = A.maxGap || 8
+// Every spawn goes through spawn() so the run can state how many agents it started.
+let spawned = 0
+const spawn = (prompt, opts) => { spawned++; return agent(prompt, opts) }
 const FOCUS = A.focus ? `\nRUN FOCUS: this run cares most about **${A.focus}** findings. Still report the other kinds, but spend your reading budget on ${A.focus}.` : ''
 
 // ──────────────────────────── shared prompt parts ────────────────────────────
@@ -76,7 +79,8 @@ const VERDICTS_SCHEMA = {
       items: {
         type: 'object',
         required: ['index', 'refuted', 'reason'],
-        properties: { index: { type: 'number' }, refuted: { type: 'boolean' }, reason: { type: 'string' } },
+        // needsBrowser: only a rendered or driven run can settle it; reported under its own heading, never counted as refuted.
+        properties: { index: { type: 'number' }, refuted: { type: 'boolean' }, needsBrowser: { type: 'boolean' }, reason: { type: 'string' } },
       },
     },
   },
@@ -86,11 +90,11 @@ const VERDICTS_SCHEMA = {
 // prior-art-scout seeds the do-not-re-report list when the caller passed none
 // (one call, started first, awaited after recon so the two overlap). Recon is
 // cheap, mechanical, model-light; its output is injected into every round-1
-// finder so 29 agents do not each re-derive the same reference graph.
+// finder so the finders do not each re-derive the same reference graph.
 
 phase('Prior art')
 const scoutRun = (A.known && A.known.length) ? null
-  : agent(`slice: the whole tree — js/, tools/, tests/, css/, index.html, sw.js.
+  : spawn(`slice: the whole tree — js/, tools/, tests/, css/, index.html, sw.js.
 topic: dead code, runtime bugs and performance (frame budget).${A.focus ? ` Rows about ${A.focus} first.` : ''}
 Return each KNOWN row as one string of \`known\`.`,
     { label: 'prior-art', phase: 'Prior art', agentType: 'prior-art-scout', effort: 'low', schema: KNOWN_SCHEMA })
@@ -128,7 +132,7 @@ Report tables only. No opinions, no edits.`,
 ]
 
 const recon = await parallel(RECON_TASKS.map((t) => () =>
-  agent(`${COMMON_BASE}\n\nYou are a RECON agent — mechanical evidence gathering, no judgement calls. ${t.prompt}`,
+  spawn(`${COMMON_BASE}\n\nYou are a RECON agent — mechanical evidence gathering, no judgement calls. ${t.prompt}`,
     { label: `recon:${t.k}`, phase: 'Recon', model: 'haiku', effort: 'low' })))
 
 const RECON = recon.filter(Boolean).length
@@ -147,9 +151,9 @@ const COMMON = `${COMMON_BASE}
 KNOWN FINDINGS — already recorded, queued, or deliberately deferred. Do NOT re-report these or trivial variants:
 ${KNOWN}${FOCUS}`
 
-// The agent definitions pin one model (code-hunter: opus); a slice's tier still
-// picks it, so data-shaped slices stay cheap: low → haiku, medium → sonnet,
-// high → opus (the pre-agentType tiers, kept for cost).
+// code-hunter's card pins sonnet; a slice's tier still picks the model at spawn,
+// so data-shaped slices stay cheap and the engine gets depth: low → haiku,
+// medium → sonnet, high → opus (total-audit.js carries the same table).
 const TIER_MODEL = { low: 'haiku', medium: 'sonnet', high: 'opus' }
 
 // ───────────────────────── round-1 slices, effort-tiered ─────────────────────
@@ -160,36 +164,70 @@ const TIER_MODEL = { low: 'haiku', medium: 'sonnet', high: 'opus' }
 //   high   — dense stateful engine code, hot paths, security-facing protocol code
 
 const R1 = [
-  { k: 'game-loop',      e: 'high',   s: 'js/game.js, first half — read them ALL, in chunks. `wc -l js/game.js` first and split at the midpoint; the file grows every week, and a hard-coded split left its last ~800 lines unassigned to any agent. This is the entry point: the frame loop, physics integration, race flow. Highest-value scope in the tree. Emphases: per-frame allocation inside the loop, dead branches left by module extractions, G-façade properties nothing consumes, stale closures over race state, work done every frame that only changes per lap.' },
-  { k: 'game-flow',      e: 'high',   s: 'js/game.js, second half through the LAST line — read them ALL, in chunks. Same emphases as the first half. Also: the AI and race-flow sections, and every `Module.create(G)` handoff — does each module actually receive what its file reads off G?' },
-  { k: 'physics',        e: 'high',   s: 'every file in js/physics/ (aero-zones, ai-drive, body-attitude, brake-cue, collide, consts, debris-world, incident-sim). Emphases: sign and unit errors (+Y up, metres, radians, arc s, lateral x +right, +k = LEFT turn), per-frame allocation in collide/debris, constants duplicated between consts.js and game.js, and the AGENTS.md rule that nothing derived from track curvature may reach the player with assists off.' },
-  { k: 'render-glx',     e: 'high',   s: 'js/render/gfx.js and every file in js/render/glx/ (glx.js, post.js, shadow.js, chunked.js) — NOT the shaders/ subdir. Emphases: per-frame GL state changes and uniform uploads that could be hoisted, buffers/textures created but never deleted, draw-call batching left on the table, dead uniforms, the Gfx seam contract.' },
-  { k: 'render-wgx',     e: 'high',   s: 'every file in js/render/webgpu/ (wgx.js 6220 lines, wgsl-chunks, wgsl-post, wgsl-fx) — read wgx.js in full, in chunks. This backend has NO script tag by design (injected from ApexRoster.DEFERRED) — that is NOT dead code. Emphases: per-frame bind-group and pipeline churn, buffers written every frame that could be persistent-mapped, WGSL that diverges from the GLSL it mirrors, resources never destroyed.' },
-  { k: 'render-tlx',     e: 'high',   s: 'every file in js/render/three/ (tlx.js, tlx-post, tlx-shadow, tlx-chunked, tsl-lit, tsl-post, tsl-sky, tsl-fx, tsl-chunks). The three.js library itself is vendored at vendor/three-0.185.1/ — NEVER audit that. Same DEFERRED caveat as WGX. Emphases: per-frame object/material allocation, node-material rebuilds, parity claims against GLX that are not true, disposal of geometries and render targets.' },
-  { k: 'net',            e: 'high',   s: 'every file in js/net/ (lobby 1752, transport, netplay, nostr, handshake, rendezvous, sdp, session, snapshot, qr, scan, bytes). Emphases: data arriving from a peer or a relay that is used without validation (this is the security-facing surface); handshake/state-machine holes; reconnect paths that leak listeners or timers; snapshot encode/decode asymmetry; determinism leaks.' },
-  { k: 'audio',          e: 'high',   s: 'every file in js/audio/ (engine.js 2451, spotify, panel, music-lib, rivals). Emphases: WebAudio nodes created per event and never disconnected (the classic leak), per-frame parameter writes that could be ramps, oscillators/buffers left running after a race ends, and dead layers in the engine mix.' },
-  { k: 'track-core',     e: 'medium', s: 'every file in js/track/core/ (geom, line, mesh, space, spline, surface) plus js/track/tracks.js. This is the ENGINE half. Emphases: geometry built per frame that could be cached, allocation in centerline/curvature sampling, dead table entries, and frac-keyed reads that ignore `def._sceneryShift` (AGENTS.md says a raw frac read lands 2/3 of a lap away).' },
-  { k: 'track-scenery',  e: 'medium', s: 'every file in js/track/scenery/ (city, nature, structures, identity, models, graph, data, circuit-kit, landmark-kit, themes). The 114-member scenery(api) contract is test-frozen — a member used by no circuit is still contract, report it as low severity only. Emphases: per-prop allocation during build, duplicated placement maths, unreachable emitter branches.' },
-  { k: 'circuits-a',     e: 'low',    s: 'the FIRST 20 files of `ls js/circuits/*.js | sort`. These are DATA files following a shared template. Read each one. Look for: copy-paste residue from a sibling circuit (a key that names another track), keys the engine never reads, duplicate keys in one object literal, values outside plausible range (s beyond track.total, negative widths), and a curvature sign that contradicts the neighbouring comment.' },
-  { k: 'circuits-b',     e: 'low',    s: 'the LAST 20 files of `ls js/circuits/*.js | sort`. Same instructions as circuits-a.' },
-  { k: 'circuit-scen-a', e: 'medium', s: 'the FIRST 20 files of `ls js/circuits/scenery/*.js | sort` — the per-circuit scenery(api) callbacks. Emphases: props placed outside the track bounds or at an s past track.total, grounding calls omitted (floating/sunken props), side/sign convention errors, loops that allocate per prop, and whole blocks whose emitter is never reached.' },
-  { k: 'circuit-scen-b', e: 'medium', s: 'the LAST 20 files of `ls js/circuits/scenery/*.js | sort`. Same instructions as circuit-scen-a.' },
-  { k: 'glx-shaders',    e: 'medium', s: 'every file in js/render/glx/shaders/ (glsl-lit 1586, glsl-post 1460, glsl-sky, glsl-fx, glsl-chunks). Emphases: uniforms declared and never set from JS (and set-but-never-declared), branches on a constant, expensive per-fragment work that is loop-invariant or could be per-vertex, dead #ifdef paths, precision hazards.' },
-  { k: 'render-shared',  e: 'medium', s: 'every file in js/render/shared/ (assets, driving-line, frustum, gltf, lamp-chunks, light-budget, post-common, shadow-pass). This is the backend-agnostic half — emphasis on helpers only one backend actually calls, and on per-frame work in frustum/shadow-pass.' },
-  { k: 'car',            e: 'medium', s: 'every file in js/car/ (car3d 4136, liverytex 3129, car-mesh, car-draw, parts, liveries, helmets, ghost, crest-paths). Emphases: canvas/texture regeneration that could be cached, meshes rebuilt per frame or per car when one would do, catalog entries nothing references, and duplicated geometry maths across car3d/car-mesh/car-draw.' },
-  { k: 'agent-api',      e: 'medium', s: 'every file in js/agent/ (apex.js 2841, agentview.js 2453, agentview-raster.js). This is the __apex dev API and the agent view. A hook used only from tests or a console is NOT dead code. Emphases: hooks that throw on a documented-valid call, hooks that silently no-op, raster work that allocates per call, and drift between a hook name and what it returns.' },
-  { k: 'data',           e: 'medium', s: 'every file in js/data/ (telemetry 1532, api 834, hub, live, results, export, standings, teams, schedule, driver-ratings). Emphases: telemetry buffers that grow without bound, fetch paths with no error branch, cache TTL logic that never expires or always expires, response fields parsed and discarded, and per-frame telemetry sampling that could be throttled.' },
-  { k: 'ui-a',           e: 'medium', s: 'these js/ui/ files: hud.js, select-screen.js, sheet-shape.js, menu-nav.js, track-maps.js, settings-export.js, results-sheet.js, modal.js. Emphases: DOM reads interleaved with writes (layout thrash) in anything that runs per frame or per pointer-move, listeners added on every screen entry and never removed, innerHTML rebuilt wholesale when one node changed, and handlers wired to ids that no longer exist in index.html.' },
-  { k: 'ui-b',           e: 'medium', s: 'the REMAINING js/ui/ files: aria-state, css-zoom, debris-opts, dom, driving-line-opts, flags, key-binds, layers, onboard, quali-sheet, scale, scroll-fade, setting-row, settings-tabs. Same emphases as ui-a, plus: settings whose value is written to localStorage but never read back into the game.' },
-  { k: 'input-perf-cam', e: 'medium', s: 'every file in js/input/ (input.js 1698, steer-tuning), js/perf/ (governor 719, renderer-picker 759, metrics-overlay 1146, quality-preset, gfx-debug-overlay, loop-health), js/camera/ (vantage, photo-cam, tuner-panel, offsets, mode-switch, cockpit-opts) and js/fx/ (particles, skidmarks). Emphases: per-frame allocation in particles and camera update, the governor acting on a metric it never actually samples, overlay DOM updated every frame instead of throttled, and input handlers doing work on every pointermove.' },
-  { k: 'career-garage',  e: 'medium', s: 'every file in js/career/ (career-ui 1238, career 1070, custom-team, save-migrate, season-cal, season-ui) and js/garage/ (scene 1606, setup-sheet 1195, scene-live, scene-prims, scene-equipment, setup-tune). Emphases: save-schema fields written but never read (and vice versa) across save-migrate, migration branches for versions that can no longer exist, garage scene objects rebuilt on every slider move, and career economy maths with a wrong-direction sign.' },
-  { k: 'lighting',       e: 'medium', s: 'every file in js/lighting/ EXCEPT presets.js (atmosphere, frame-lights, knobs, lighting, profiles, track-lights, tuner-panel). Emphases: per-frame light-array rebuilds, knobs declared in one file and consumed nowhere, the light budget being recomputed when nothing changed, and preset keys read with a name the preset table does not use.' },
-  { k: 'lighting-data',  e: 'low',    s: 'js/lighting/presets.js ONLY — 17317 lines of pure data (window.LightPresets). Do NOT try to reason about rendering. Purely structural: duplicate keys inside one object literal, preset keys for circuits that do not exist in js/circuits/, circuits that have no preset entry, knob names in a preset that js/lighting/knobs.js does not define, and numeric values wildly outside their siblings\' range. Use grep and node to compare key sets rather than reading all 17k lines by eye.' },
-  { k: 'race-core',      e: 'medium', s: 'every file in js/race/ (race-control, quali-model, quali-net, race-settings, reliability, daily-challenge), every file in js/core/ (log, store, mat4, hash32) and js/roster.js. NOTE js/roster.js is GENERATED — report drift against its source but never a style nit. Emphases: shared clamps in mat4 duplicated elsewhere, store.js subscribers never unsubscribed, race-control flags set but never read.' },
-  { k: 'shell-css',      e: 'low',    s: 'index.html in full, every file in css/, sw.js, manifest.json. NOTE: index.html @gen-shell blocks and the ?v=dev tags are GENERATED and deliberate (AGENTS.md) — never report them. Emphases: dead CSS selectors and dead shell ids (cross-check the STATIC RECON tables at the end of this prompt), duplicated rule blocks, a sw.js precache list that does not match the shell, and script tags whose file does not exist.' },
-  { k: 'tools',          e: 'medium', s: 'the tools/ tree (~40k lines across car, check, ci, env, gen, gfx, lib, lighting, mcp, moves, net, shot, track, ui and manifest.cjs). You cannot read all of it — read every file under tools/ci/ and tools/check/ in full, then skim the rest for the emphases. Emphases: a tool that would crash against the CURRENT layout (a path or symbol it references no longer exists), helpers in tools/lib/ that nothing imports, whole tools referenced by no skill/doc/script, and duplicated logic across tools that tools/lib/ already provides.' },
-  { k: 'tests',          e: 'medium', s: 'tests/specs/ (118 spec files as of 2026-09-18 — `ls tests/specs/*.spec.js | wc -l`) and tests/helpers/. You cannot read them all in full — read every helper in full, then read specs selectively, prioritising the largest. Emphases ONLY: (a) dead code — helpers nothing imports, specs excluded from every group in tests/groups.json so they never run, skipped/commented-out tests; (b) bugs in the tests themselves — an assertion that cannot fail (expect(true), a tautology, an await-less expect), a spec that passes when the feature is broken; (c) perf — a fixture or page rebuilt per test that could be per-file. Do NOT audit what the tests assert about game semantics; that is another audit\'s job.' },
+  { k: 'game-loop',      dirs: [], e: 'high',   s: 'js/game.js, first half — read them ALL, in chunks. `wc -l js/game.js` first and split at the midpoint; the file grows every week, and a hard-coded split left its last ~800 lines unassigned to any agent. This is the entry point: the frame loop, physics integration, race flow. Highest-value scope in the tree. Emphases: per-frame allocation inside the loop, dead branches left by module extractions, G-façade properties nothing consumes, stale closures over race state, work done every frame that only changes per lap.' },
+  { k: 'game-flow',      dirs: [], e: 'high',   s: 'js/game.js, second half through the LAST line — read them ALL, in chunks. Same emphases as the first half. Also: the AI and race-flow sections, and every `Module.create(G)` handoff — does each module actually receive what its file reads off G?' },
+  { k: 'physics',        dirs: ['js/physics/'], e: 'high',   s: 'every file in js/physics/ (aero-zones, ai-drive, body-attitude, brake-cue, collide, consts, debris-world, incident-sim). Emphases: sign and unit errors (+Y up, metres, radians, arc s, lateral x +right, +k = LEFT turn), per-frame allocation in collide/debris, constants duplicated between consts.js and game.js, and the AGENTS.md rule that nothing derived from track curvature may reach the player with assists off.' },
+  { k: 'render-glx',     dirs: ['js/render/'], e: 'high',   s: 'js/render/gfx.js and every file in js/render/glx/ (glx.js, post.js, shadow.js, chunked.js) — NOT the shaders/ subdir. Emphases: per-frame GL state changes and uniform uploads that could be hoisted, buffers/textures created but never deleted, draw-call batching left on the table, dead uniforms, the Gfx seam contract.' },
+  { k: 'render-wgx',     dirs: ['js/render/'], e: 'high',   s: 'every file in js/render/webgpu/ (wgx.js is the big one — `wc -l` it first; wgsl-chunks, wgsl-post, wgsl-fx) — read wgx.js in full, in chunks. This backend has NO script tag by design (injected from ApexRoster.DEFERRED) — that is NOT dead code. Emphases: per-frame bind-group and pipeline churn, buffers written every frame that could be persistent-mapped, WGSL that diverges from the GLSL it mirrors, resources never destroyed.' },
+  { k: 'render-tlx',     dirs: ['js/render/'], e: 'high',   s: 'every file in js/render/three/ (tlx.js, tlx-post, tlx-shadow, tlx-chunked, tsl-lit, tsl-post, tsl-sky, tsl-fx, tsl-chunks). The three.js library itself is vendored under vendor/ — NEVER audit that. Same DEFERRED caveat as WGX. Emphases: per-frame object/material allocation, node-material rebuilds, parity claims against GLX that are not true, disposal of geometries and render targets.' },
+  { k: 'net',            dirs: ['js/net/'], e: 'high',   s: 'every file in js/net/ (lobby, transport, netplay, nostr, handshake, rendezvous, sdp, session, snapshot, qr, scan, bytes). Emphases: data arriving from a peer or a relay that is used without validation (this is the security-facing surface); handshake/state-machine holes; reconnect paths that leak listeners or timers; snapshot encode/decode asymmetry; determinism leaks.' },
+  { k: 'audio',          dirs: ['js/audio/'], e: 'high',   s: 'every file in js/audio/ (engine.js, spotify, panel, music-lib, rivals). Emphases: WebAudio nodes created per event and never disconnected (the classic leak), per-frame parameter writes that could be ramps, oscillators/buffers left running after a race ends, and dead layers in the engine mix.' },
+  { k: 'track-core',     dirs: ['js/track/'], e: 'medium', s: 'every file in js/track/core/ (geom, line, mesh, space, spline, surface) plus js/track/tracks.js. This is the ENGINE half. Emphases: geometry built per frame that could be cached, allocation in centerline/curvature sampling, dead table entries, and frac-keyed reads that ignore `def._sceneryShift` (AGENTS.md says a raw frac read lands 2/3 of a lap away).' },
+  { k: 'track-scenery',  dirs: ['js/track/'], e: 'medium', s: 'every file in js/track/scenery/ (city, nature, structures, identity, models, graph, data, circuit-kit, landmark-kit, themes). The-member scenery(api) contract is test-frozen — a member used by no circuit is still contract, report it as low severity only. Emphases: per-prop allocation during build, duplicated placement maths, unreachable emitter branches.' },
+  { k: 'glx-shaders',    dirs: ['js/render/'], e: 'medium', s: 'every file in js/render/glx/shaders/ (glsl-lit, glsl-post, glsl-sky, glsl-fx, glsl-chunks). Emphases: uniforms declared and never set from JS (and set-but-never-declared), branches on a constant, expensive per-fragment work that is loop-invariant or could be per-vertex, dead #ifdef paths, precision hazards.' },
+  { k: 'render-shared',  dirs: ['js/render/'], e: 'medium', s: 'every file in js/render/shared/ (assets, driving-line, frustum, gltf, lamp-chunks, light-budget, post-common, shadow-pass). This is the backend-agnostic half — emphasis on helpers only one backend actually calls, and on per-frame work in frustum/shadow-pass.' },
+  { k: 'car',            dirs: ['js/car/'], e: 'medium', s: 'every file in js/car/ (car3d, liverytex, car-mesh, car-draw, parts, liveries, helmets, ghost, crest-paths). Emphases: canvas/texture regeneration that could be cached, meshes rebuilt per frame or per car when one would do, catalog entries nothing references, and duplicated geometry maths across car3d/car-mesh/car-draw.' },
+  { k: 'agent-api',      dirs: ['js/agent/'], e: 'medium', s: 'every file in js/agent/ (apex.js, agentview.js, agentview-raster.js). This is the __apex dev API and the agent view. A hook used only from tests or a console is NOT dead code. Emphases: hooks that throw on a documented-valid call, hooks that silently no-op, raster work that allocates per call, and drift between a hook name and what it returns.' },
+  { k: 'data',           dirs: ['js/data/'], e: 'medium', s: 'every file in js/data/ (telemetry, api, hub, live, results, export, standings, teams, schedule, driver-ratings). Emphases: telemetry buffers that grow without bound, fetch paths with no error branch, cache TTL logic that never expires or always expires, response fields parsed and discarded, and per-frame telemetry sampling that could be throttled.' },
+  { k: 'ui-a',           dirs: ['js/ui/'], e: 'medium', s: 'these js/ui/ files: hud.js, select-screen.js, sheet-shape.js, menu-nav.js, track-maps.js, settings-export.js, results-sheet.js, modal.js. Emphases: DOM reads interleaved with writes (layout thrash) in anything that runs per frame or per pointer-move, listeners added on every screen entry and never removed, innerHTML rebuilt wholesale when one node changed, and handlers wired to ids that no longer exist in index.html.' },
+  { k: 'ui-b',           dirs: ['js/ui/'], e: 'medium', s: 'every js/ui/ file NOT named in ui-a (`ls js/ui/` to enumerate). Same emphases as ui-a, plus: settings whose value is written to localStorage but never read back into the game.' },
+  { k: 'input-perf-cam', dirs: ['js/input/', 'js/perf/', 'js/camera/', 'js/fx/'], e: 'medium', s: 'every file in js/input/ (input.js, steer-tuning), js/perf/ (governor, renderer-picker, metrics-overlay, quality-preset, gfx-debug-overlay, loop-health), js/camera/ (vantage, photo-cam, tuner-panel, offsets, mode-switch, cockpit-opts) and js/fx/ (particles, skidmarks). Emphases: per-frame allocation in particles and camera update, the governor acting on a metric it never actually samples, overlay DOM updated every frame instead of throttled, and input handlers doing work on every pointermove.' },
+  { k: 'career-garage',  dirs: ['js/career/', 'js/garage/'], e: 'medium', s: 'every file in js/career/ (career-ui, career, custom-team, save-migrate, season-cal, season-ui) and js/garage/ (scene, setup-sheet, scene-live, scene-prims, scene-equipment, setup-tune). Emphases: save-schema fields written but never read (and vice versa) across save-migrate, migration branches for versions that can no longer exist, garage scene objects rebuilt on every slider move, and career economy maths with a wrong-direction sign.' },
+  { k: 'lighting',       dirs: ['js/lighting/'], e: 'medium', s: 'every file in js/lighting/ EXCEPT presets.js (atmosphere, frame-lights, knobs, lighting, profiles, track-lights, tuner-panel). Emphases: per-frame light-array rebuilds, knobs declared in one file and consumed nowhere, the light budget being recomputed when nothing changed, and preset keys read with a name the preset table does not use.' },
+  { k: 'lighting-data',  dirs: ['js/lighting/'], e: 'low',    s: 'js/lighting/presets.js ONLY — a very large pure-data file (window.LightPresets; `wc -l` it). Do NOT try to reason about rendering. Purely structural: duplicate keys inside one object literal, preset keys for circuits that do not exist in js/circuits/, circuits that have no preset entry, knob names in a preset that js/lighting/knobs.js does not define, and numeric values wildly outside their siblings\' range. Use grep and node to compare key sets rather than reading it by eye.' },
+  { k: 'race-core',      dirs: ['js/race/', 'js/core/'], e: 'medium', s: 'every file in js/race/ (race-control, quali-model, quali-net, race-settings, reliability, daily-challenge), every file in js/core/ (log, store, mat4, hash32) and js/roster.js. NOTE js/roster.js is GENERATED — report drift against its source but never a style nit. Emphases: shared clamps in mat4 duplicated elsewhere, store.js subscribers never unsubscribed, race-control flags set but never read.' },
+  { k: 'shell-css',      dirs: [], e: 'low',    s: 'index.html in full, every file in css/, sw.js, manifest.json. NOTE: index.html @gen-shell blocks and the ?v=dev tags are GENERATED and deliberate (AGENTS.md) — never report them. Emphases: dead CSS selectors and dead shell ids (cross-check the STATIC RECON tables at the end of this prompt), duplicated rule blocks, a sw.js precache list that does not match the shell, and script tags whose file does not exist.' },
+  { k: 'tools',          dirs: [], e: 'medium', s: 'the tools/ tree (`ls tools/` to enumerate; far too large to read in full). You cannot read all of it — read every file under tools/ci/ and tools/check/ in full, then skim the rest for the emphases. Emphases: a tool that would crash against the CURRENT layout (a path or symbol it references no longer exists), helpers in tools/lib/ that nothing imports, whole tools referenced by no skill/doc/script, and duplicated logic across tools that tools/lib/ already provides.' },
+  { k: 'js-misc',        dirs: ['js/assets/', 'js/editor/', 'js/overlay/', 'js/share/', 'js/workers/', 'js/xr/'], e: 'medium', s: 'every file under js/assets/, js/editor/, js/overlay/, js/share/, js/workers/ and js/xr/ (ls each to enumerate). Emphases: listeners, workers and XR sessions started and never torn down, editor state written but never read back, share/overlay paths that trust URL or clipboard input, and whole modules nothing loads (check tools/manifest.cjs).' },
+  { k: 'tests',          dirs: ['tests/unit/'], e: 'medium', s: 'tests/specs/, tests/helpers/ and tests/unit/ (`ls` each for the live set). You cannot read them all in full — read every helper in full, then read specs selectively, prioritising the largest. Emphases ONLY: (a) dead code — helpers nothing imports, specs excluded from every group in tests/groups.json so they never run, skipped/commented-out tests; (b) bugs in the tests themselves — an assertion that cannot fail (expect(true), a tautology, an await-less expect), a spec that passes when the feature is broken; (c) perf — a fixture or page rebuilt per test that could be per-file. Do NOT audit what the tests assert about game semantics; that is another audit\'s job.' },
 ]
+
+// ─────────────────────── run-time slice plan (never a static list) ─────────────
+// The circuit list and the js/ directory set change every week, so they are LISTED
+// at run time (args.plan, or one haiku step), never hard-coded: a static first/last-N
+// split left a dozen circuits unread. Each static R1 slice declares the
+// js/ dirs it owns (`dirs:`; tests/unit/agent-surface.test.mjs checks they cover
+// every js/ dir); a dir the plan finds that no slice owns gets a slice of its own.
+const PLAN_SCHEMA = {
+  type: 'object', required: ['jsDirs', 'circuits', 'circuitScenery'],
+  properties: {
+    jsDirs: { type: 'array', items: { type: 'string' }, description: 'each `ls -d js/*/` line, e.g. "js/net/"' },
+    circuits: { type: 'array', items: { type: 'string' }, description: 'each `ls js/circuits/*.js` path' },
+    circuitScenery: { type: 'array', items: { type: 'string' }, description: 'each `ls js/circuits/scenery/*.js` path' },
+  },
+}
+const CIRCUIT_CHUNK = 18
+const chunk = (xs, n) => { const out = []; for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n)); return out }
+async function slicePlan(phaseName) {
+  const plan = A.plan || await spawn(`Mechanical listing, no judgement, read no file. Run exactly these three commands and return their lines verbatim: \`ls -d js/*/\`, \`ls js/circuits/*.js\`, \`ls js/circuits/scenery/*.js\`.`,
+    { label: 'slice-plan', phase: phaseName, model: 'haiku', effort: 'low', schema: PLAN_SCHEMA })
+  return plan && plan.circuits && plan.circuits.length ? plan : null
+}
+
+const PLAN = await slicePlan('Recon')
+const PLANNED = []
+if (PLAN) {
+  chunk(PLAN.circuits, CIRCUIT_CHUNK).forEach((files, i) => PLANNED.push({ k: `circuits-${i + 1}`, e: 'low', s: `these circuit DATA files, each read in full: ${files.join(', ')}. They follow a shared template. Look for: copy-paste residue from a sibling circuit (a key that names another track), keys the engine never reads, duplicate keys in one object literal, values outside plausible range (s beyond track.total, negative widths), and a curvature sign that contradicts the neighbouring comment.` }))
+  chunk(PLAN.circuitScenery, CIRCUIT_CHUNK).forEach((files, i) => PLANNED.push({ k: `circuit-scen-${i + 1}`, e: 'medium', s: `these per-circuit scenery(api) callbacks, each read in full: ${files.join(', ')}. Emphases: props placed outside the track bounds or at an s past track.total, grounding calls omitted (floating/sunken props), side/sign convention errors, loops that allocate per prop, and whole blocks whose emitter is never reached.` }))
+  const owned = new Set(R1.flatMap((r) => r.dirs || []).concat(['js/circuits/']))
+  for (const d of (PLAN.jsDirs || []).map((x) => x.replace(/\/?$/, '/'))) {
+    if (!owned.has(d)) PLANNED.push({ k: `dir:${d}`, e: 'medium', s: `every file under ${d} (ls it to enumerate) — a directory no static slice owns yet. Emphases: per-frame work and allocation, listeners/timers never removed, dead exports, and whether anything loads the module at all (tools/manifest.cjs).` })
+  }
+  log(`slice plan: ${PLAN.circuits.length} circuits + ${PLAN.circuitScenery.length} scenery files in ${PLANNED.filter((s) => s.k.startsWith('circuit')).length} slices; ${PLANNED.filter((s) => s.k.startsWith('dir:')).length} unowned js/ dirs added`)
+} else {
+  log('slice plan FAILED — circuits and any js/ dir no static slice owns are NOT surveyed this run (see notCovered)')
+}
+const SLICES = R1.concat(PLANNED)
 
 // ───────────────────────── the adversarial verify panel ──────────────────────
 // Agent finding-verifier, twice per claim with DIFFERENT lenses (redundancy
@@ -219,7 +257,7 @@ const refutePrompt = (rows, sk) => `lens: ${sk.lens}
 ${DELIBERATE}
 Also REFUTED: a claim that duplicates one of these KNOWN items —
 ${KNOWN}
-Schema mapping: index = the number the claim carries below; refuted=true for REFUTED, STALE, NEEDS-BROWSER or whenever you are unsure (start the reason with your verdict word); refuted=false only for CONFIRMED. One verdict per claim.
+Schema mapping: index = the number the claim carries below; refuted=true for REFUTED, STALE or whenever you are unsure (start the reason with your verdict word); refuted=false only for CONFIRMED; needsBrowser=true (refuted=false) for NEEDS-BROWSER — a claim only a rendered or driven run can settle is reported under its own heading, never refuted. One verdict per claim.
 claims:
 ${claimRows(rows)}`
 
@@ -233,7 +271,7 @@ async function verifyBatch(fresh, round) {
   const calls = SKEPTICS.flatMap((sk) => chunks.map((rows, ci) => ({ sk, rows, ci })))
 
   const votes = await parallel(calls.map((c) => () =>
-    agent(refutePrompt(c.rows, c.sk), { label: `v${round}:${c.sk.who.toLowerCase()}:${tag}${chunks.length > 1 ? `#${c.ci + 1}` : ''}`, phase: ph, agentType: 'finding-verifier', effort: 'medium', schema: VERDICTS_SCHEMA })))
+    spawn(refutePrompt(c.rows, c.sk), { label: `v${round}:${c.sk.who.toLowerCase()}:${tag}${chunks.length > 1 ? `#${c.ci + 1}` : ''}`, phase: ph, agentType: 'finding-verifier', effort: 'medium', schema: VERDICTS_SCHEMA })))
 
   if (!votes.some(Boolean)) { log(`verify ${round}: every skeptic call failed on ${tag} — ${fresh.length} findings dropped unjudged`); return [] }
 
@@ -243,7 +281,7 @@ async function verifyBatch(fresh, round) {
     const inChunk = new Set(calls[n].rows.map((r) => r.index))
     for (const verdict of (v.verdicts || [])) {
       const i = verdict.index
-      if (inChunk.has(i)) { heard[i]++; if (verdict.refuted) { refutes[i]++; why[i].push(verdict.reason) } }
+      if (inChunk.has(i)) { heard[i]++; if (verdict.needsBrowser) why[i].push('NEEDS-BROWSER: ' + verdict.reason); else if (verdict.refuted) { refutes[i]++; why[i].push(verdict.reason) } }
     }
   })
 
@@ -253,14 +291,18 @@ async function verifyBatch(fresh, round) {
     if (heard[i] === 0) continue                       // nobody judged it — do not assert it
     // A high-severity finding the two lenses SPLIT on gets a high-effort decider.
     if (f.severity === 'high' && heard[i] === 2 && refutes[i] === 1) {
-      const tie = await agent(`${refutePrompt([compact[i]], { lens: 'TIEBREAK — two skeptics split on this claim, one refuted it, one did not. You are the decider. Apply BOTH lenses: is the code genuinely reachable/hot as claimed, AND is it a defect rather than a deliberate design choice (AGENTS.md, the relevant docs/ page)? Decide on the merits, not by splitting the difference.' })}\n\nThe refuting skeptic said: ${JSON.stringify(why[i])}`,
+      const tie = await spawn(`${refutePrompt([compact[i]], { lens: 'TIEBREAK — two skeptics split on this claim, one refuted it, one did not. You are the decider. Apply BOTH lenses: is the code genuinely reachable/hot as claimed, AND is it a defect rather than a deliberate design choice (AGENTS.md, the relevant docs/ page)? Decide on the merits, not by splitting the difference.' })}\n\nThe refuting skeptic said: ${JSON.stringify(why[i])}`,
         { label: `tiebreak${round}:${f.file.split('/').pop()}:${f.line}`, phase: ph, agentType: 'finding-verifier', model: 'opus', effort: 'high', schema: VERDICTS_SCHEMA })
       const t = tie && tie.verdicts && tie.verdicts[0]
       if (t) { heard[i]++; if (t.refuted) { refutes[i]++; why[i].push(`[tiebreak] ${t.reason}`) } }
     }
-    // high severity must be refuted twice to die; medium/low dies on one refute.
-    const kill = f.severity === 'high' ? refutes[i] >= 2 : refutes[i] >= 1
-    if (!kill) out.push({ ...f, round, skepticsHeard: heard[i], refutes: refutes[i] })
+    // high severity dies on two refutes, or when every skeptic that answered refuted it (a lone answering
+    // verifier that refuted it kills it); medium/low dies on one refute.
+    const kill = f.severity === 'high' ? (refutes[i] >= 2 || refutes[i] === heard[i]) : refutes[i] >= 1
+    if (kill) continue
+    const row = { ...f, round, skepticsHeard: heard[i], refutes: refutes[i] }
+    if (why[i].some((w) => w.startsWith('NEEDS-BROWSER'))) needsBrowser.push({ ...row, why: why[i] })
+    else out.push(row)
   }
   return out
 }
@@ -268,7 +310,9 @@ async function verifyBatch(fresh, round) {
 // ───────────────────── find → verify, looped until dry ───────────────────────
 
 const confirmed = []
-const coverage = R1.map((r) => `round1:${r.k}`)
+const coverage = []           // the finders that actually returned, never the slice list
+const notCovered = PLAN ? [] : ['js/circuits/ (slice plan failed)', 'js/ dirs no static slice owns (slice plan failed)']
+const needsBrowser = []
 const coverageNotes = []
 let gapPrompts = null
 let roundsRun = 0
@@ -288,7 +332,7 @@ Schema mapping: your FINDING row's mechanism → claim; the trace (for dead-code
 
 for (let round = 1; round <= MAX_ROUNDS; round++) {
   const prompts = round === 1
-    ? R1.map((r) => ({ label: `find:${r.k}`, effort: r.e, text: finderPrompt(r.s, round) }))
+    ? SLICES.map((r) => ({ label: `find:${r.k}`, effort: r.e, text: finderPrompt(r.s, round) }))
     : (gapPrompts || []).map((g, i) => ({ label: `find${round}:gap${i + 1}`, effort: g.hard ? 'high' : 'medium', text: finderPrompt(g.scope, round) }))
 
   if (!prompts.length) { log(`round ${round}: no prompts left — audit is dry, stopping`); break }
@@ -300,9 +344,10 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
   // skeptics while the other finders are still reading.
   const roundOut = await pipeline(
     prompts,
-    (p) => agent(p.text, { label: p.label, phase: `Find ${round}`, agentType: 'code-hunter', model: TIER_MODEL[p.effort], effort: p.effort, schema: FINDINGS_SCHEMA }),
+    (p) => spawn(p.text, { label: p.label, phase: `Find ${round}`, agentType: 'code-hunter', model: TIER_MODEL[p.effort], effort: p.effort, schema: FINDINGS_SCHEMA }),
     (res, p) => {
-      if (!res) { log(`${p.label}: finder returned nothing`); return [] }
+      if (!res) { log(`${p.label}: finder returned nothing — its slice is NOT covered`); notCovered.push(p.label); return [] }
+      coverage.push(p.label)
       if (res.coverageNote) coverageNotes.push(`${p.label}: ${res.coverageNote}`)
       const fresh = []
       for (const f of (res.findings || [])) {
@@ -320,8 +365,8 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
   if (round === MAX_ROUNDS) break
   if (!survived.length) { log(`round ${round} yielded nothing new — stopping early`); break }
 
-  // ── completeness critic: what lens did 29 scope-shaped finders miss? ──
-  const critic = await agent(`${COMMON}
+  // ── completeness critic: what lens did the scope-shaped finders miss? ──
+  const critic = await spawn(`${COMMON}
 
 You are the COMPLETENESS CRITIC. A dead-code, bug and performance survey has run ${round} round(s). Scopes covered so far:
 ${JSON.stringify(coverage, null, 1)}
@@ -361,7 +406,7 @@ Return up to ${MAX_GAP} gap prompts. Each becomes the \`slice:\` of one code-hun
   if (critic && critic.gapPrompts && critic.gapPrompts.length > MAX_GAP) {
     log(`critic proposed ${critic.gapPrompts.length} gaps; capped to ${MAX_GAP} — the rest were NOT run`)
   }
-  coverage.push(...gapPrompts.map((g, i) => `round${round + 1}:gap${i + 1}: ${g.scope.slice(0, 90)}`))
+  gapPrompts.forEach((g, i) => coverageNotes.push(`round${round + 1}:gap${i + 1} planned: ${g.scope.slice(0, 90)}`))
 }
 
 // ───────────────── perf triage: a different question, a different pass ───────
@@ -372,7 +417,7 @@ const perfFindings = confirmed.filter((f) => f.kind === 'perf')
 let perfTriage = null
 if (perfFindings.length) {
   phase('Perf triage')
-  perfTriage = await agent(`${COMMON}
+  perfTriage = await spawn(`${COMMON}
 
 You are the PERFORMANCE TRIAGE. Below are ${perfFindings.length} performance findings that already survived adversarial verification. Your job is not to re-litigate whether they are true — it is to rank them by REAL IMPACT on this game.
 
@@ -396,7 +441,7 @@ phase('Synthesize')
 
 const counts = confirmed.reduce((a, f) => { a[f.kind] = (a[f.kind] || 0) + 1; return a }, {})
 
-const report = await agent(`${COMMON}
+const report = await spawn(`${COMMON}
 
 You are the SYNTHESIZER. ${confirmed.length} findings survived adversarial verification in a whole-tree survey for dead code, bugs and performance (${JSON.stringify(counts)}). Write ONE markdown report:
 
@@ -409,6 +454,11 @@ You are the SYNTHESIZER. ${confirmed.length} findings survived adversarial verif
 
 Rules: every one of the ${confirmed.length} confirmed findings lands in exactly one of sections 2, 3, 4 or 5 — none may be dropped. Invent nothing that is not in the list. Where a finding needs verification before anyone acts on it, say which command proves it (per AGENTS.md: \`npm run test:tooling-fast\`, \`node tools/track/verify-track.cjs <id>\`, a single spec, or \`node tools/ci/pick-tests.mjs\`).
 
+NEEDS A BROWSER (a verifier said only a rendered or driven run can settle these; list each in section 6 with the probe that would settle it — neither confirmed nor refuted):
+${JSON.stringify(needsBrowser, null, 1)}
+
+NOT COVERED THIS RUN (say so in section 6): ${JSON.stringify(notCovered)}
+
 PERF TRIAGE (already ranked by a dedicated pass — reference it in section 4, do not redo it):
 ${perfTriage || '(no perf findings)'}
 
@@ -419,8 +469,12 @@ COVERAGE NOTES FROM FINDERS:
 ${coverageNotes.join('\n') || '(none)'}`,
   { label: 'synthesize', phase: 'Synthesize', model: 'opus', effort: 'high' })
 
+log(`agents spawned this run: ${spawned}`)
 return {
   report,
+  needsBrowser,
+  notCovered,
+  agentsSpawned: spawned,
   perfTriage,
   confirmed,
   counts,

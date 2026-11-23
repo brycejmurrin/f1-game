@@ -16,6 +16,7 @@
  * Run: node --test tests/unit/real-race-script.test.mjs   (npm run test:tooling-fast)
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,6 +24,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -54,7 +56,7 @@ function load(extra = {}) {
   const ctx = vm.createContext(sb);
   seedLog(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: absSrc("js/data/teams.js") });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx);
   const Teams = vm.runInContext("Teams", ctx);
   // js/data/hub.js's team matcher, reduced to what the fixture's names need.
   const KEYS = [["racing bulls", "RB"], ["red bull", "RBR"], ["mercedes", "MER"], ["ferrari", "FER"], ["mclaren", "MCL"], ["alpine", "ALP"],
@@ -97,6 +99,8 @@ test("WATCH downloads cannot launch a replaced view and keep the seat selected w
 test("WATCH can start after the followed driver's retirement while JUMP IN still protects its seat", () => {
   const { ctx, Teams } = load({ Tracks: { LIST: TRACKS }, RealReplay: { create: () => ({ stop() {} }) } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-boot.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-boot.js") });   // the FULL stub the body reads
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const R = vm.runInContext("RealRace", ctx);
   const seated = Teams.LIST.find((t) => !t.custom && !t.legends && t.drivers && t.drivers.length);
@@ -209,6 +213,8 @@ test("the circuit resolves by name before country, and the weather and hour read
 test("a lapped finisher stays on the final lap board as '+N LAP'; a retirement stays OUT; fmtLap never prints :60", () => {
   const { D, ctx } = load();
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-boot.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-boot.js") });   // the FULL stub the body reads
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const lap = (n, t) => Array.from({ length: n }, () => t);
   const script = { laps: 5, drivers: [
@@ -241,6 +247,15 @@ test("rain by lap aligns the weather samples to the leader's lap windows; an unf
   const wx = [{ date: "2026-01-01T09:50:00Z", rainfall: 1 }, { date: "2026-01-01T10:02:30Z", rainfall: 1 }, { date: "2026-01-01T10:05:00Z", rainfall: 0 }, { date: "bad", rainfall: 1 }];
   assert.deepEqual(host(D.rainByLap(laps, wx, 4)), [false, false, true, false, false], "only lap 2's window saw rain (the pre-race sample is before lap 1)");
   assert.equal(D.rainByLap([{ driver_number: 1, lap_number: 1 }], wx, 4), null, "no lap timestamps: no alignment");
+  // An untimed lap in the middle: rain inside lap 2's window stays on lap 2 (it must not slide onto untimed lap 3).
+  const gap = [
+    { driver_number: 1, lap_number: 1, date_start: "2026-01-01T10:00:00Z" }, { driver_number: 1, lap_number: 2, date_start: "2026-01-01T10:02:00Z" },
+    { driver_number: 1, lap_number: 4, date_start: "2026-01-01T10:06:00Z" },
+  ];
+  assert.deepEqual(host(D.rainByLap(gap, [{ date: "2026-01-01T10:03:00Z", rainfall: 1 }], 4)), [false, false, true, false, false], "rain in lap 2's window is lap 2's, not the untimed lap 3's");
+  // An untimed lap 1: rain before lap 2 starts is lap 1's.
+  const first = [{ driver_number: 1, lap_number: 2, date_start: "2026-01-01T10:02:00Z" }];
+  assert.deepEqual(host(D.rainByLap(first, [{ date: "2026-01-01T10:01:00Z", rainfall: 1 }], 2)), [false, true, false], "an untimed lap 1 can be wet");
   // A race still running: laps partial, no classification -> plays as far as it goes, never cached.
   const raw = rawBaku();
   raw.result = [];
@@ -267,6 +282,26 @@ test("the script cache round-trips through localStorage and rejects a stale shap
   assert.equal(D.cached(11377), null, "an older script version is refetched");
   store.set(D.CACHE_KEY + "11377", "{not json");
   assert.equal(D.cached(11377), null);
+});
+
+// Hunt #5694 B3: a complete script assembled right after the flag never
+// expired, so post-race penalties and DSQs never reached HIGHLIGHTS.
+test("a complete script fetched within a day of the race is provisional; one fetched later is final", () => {
+  const store = new Map();
+  const localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v) };
+  const { D, findTeam } = load({ localStorage });
+  const s = host(D.build(rawBaku(), findTeam, TRACKS));
+  const H = 3600 * 1000, now = Date.now();
+  const put = (fetchedAt, dateStart) => store.set(D.CACHE_KEY + "11377",
+    JSON.stringify({ ...s, fetchedAt: new Date(fetchedAt).toISOString(), dateStart: new Date(dateStart).toISOString() }));
+  put(now - 2 * H, now - 3 * H);   // fetched 1 h after the start, 2 h ago
+  assert.equal(D.cached(11377), null, "a provisional script past its 30 min is refetched");
+  put(now - 10 * 60 * 1000, now - 3 * H);   // fetched 10 min ago, still provisional
+  assert.equal(host(D.cached(11377)).laps, 51, "a provisional script is reused for 30 min");
+  put(now - 30 * 24 * H, now - 32 * 24 * H);   // fetched two days after the race
+  assert.equal(host(D.cached(11377)).laps, 51, "a script fetched a day or more after the start is final");
+  store.set(D.CACHE_KEY + "11377", JSON.stringify({ ...s, fetchedAt: undefined }));
+  assert.equal(host(D.cached(11377)).laps, 51, "an older cache without dates is final, not refetched forever");
 });
 
 // One script per watched session (~45 KB) with no eviction filled the 5 MB origin
@@ -300,7 +335,7 @@ test("the script cache keeps only the newest CACHE_MAX sessions, LRU by use", ()
 function makeDom() {
   function el(tag, cls, text) {
     const node = {
-      tag, cls: cls || null, text: text == null ? null : String(text), children: [], type: null, value: "", listeners: {},
+      tag, cls: cls || null, text: text == null ? null : String(text), children: [], dataset: {}, type: null, value: "", listeners: {},
       appendChild(c) { node.children.push(c); c.parent = node; return c; },
       insertBefore(c, ref) { const i = node.children.indexOf(ref); node.children.splice(i < 0 ? node.children.length : i, 0, c); c.parent = node; return c; },
       get nextSibling() { const p = node.parent; if (!p) return null; const i = p.children.indexOf(node); return i >= 0 ? p.children[i + 1] || null : null; },
@@ -332,16 +367,17 @@ function pendingWatchHarness() {
   return { tab, requests, launches, script, flush, reopen: () => { opened = true; } };
 }
 
-async function launchRecoveryHarness(failPositions = false) {
+async function launchRecoveryHarness(failPositions = false, pendingPositions = false) {
   const store = new Map(), launches = [], order = [];
-  let opened = true, result = false, requests = 0;
+  let opened = true, result = false, requests = 0, cancels = 0;
   const { D, findTeam } = load({ Tracks: { LIST: TRACKS },
     localStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
     F1API: { locationData: () => {
       requests++;
       if (failPositions) return Promise.reject(new Error("offline"));
+      if (pendingPositions) return new Promise(() => {});
       return Promise.resolve(positionRows(script));
-    }, cancelAll() {} },
+    }, cancelAll() { cancels++; } },
     RealRace: { replay: () => null, launch: (script, opts) => {
       order.push("launch"); launches.push({ script, opts, opened });
       if (result instanceof Error) throw result;
@@ -362,8 +398,31 @@ async function launchRecoveryHarness(failPositions = false) {
   const status = nodes(tree).find((n) => n.role === "status");
   assert.ok(status, "the real replay status is rendered");
   return { tab, script, launches, order, status, flush, nodes: nodes(tree),
-    opened: () => opened, requests: () => requests, result: (v) => { result = v; } };
+    opened: () => opened, requests: () => requests, cancels: () => cancels, result: (v) => { result = v; } };
 }
+
+test("hunt #5694 B6: a refused WATCH launch leaves JUMP IN's picked lap alone", async () => {
+  const h = await launchRecoveryHarness();
+  h.tab.loadTraces(h.script, null, null); await h.flush();
+  assert.equal(h.tab.setStartLap(7), 7);
+  h.result(null);
+  assert.equal(h.tab.watch(h.script, null, 1, true), false, "the reel launch is refused");
+  h.result({ seat: h.script.drivers[0].code });
+  assert.equal(h.tab.jumpIn(h.script, h.script.drivers[0].code), true);
+  assert.equal(h.launches.at(-1).opts.startLap, 7, "JUMP IN still starts from the lap the player picked");
+});
+
+test("hunt #5694 B7: REFRESH THIS SESSION drops a positions download in flight", async () => {
+  const h = await launchRecoveryHarness(false, true);
+  h.tab.loadTraces(h.script, null, null); await h.flush();
+  assert.equal(h.requests(), 1, "a download is in flight");
+  const before = h.cancels();
+  const refresh = h.nodes.find((n) => n.text === "REFRESH THIS SESSION");
+  assert.ok(refresh, "the refresh control is rendered");
+  try { refresh.onclick(); } catch (e) { /* the fixture has no raw timing endpoints */ }
+  assert.equal(h.cancels(), before + 1, "the queued /location requests are cancelled");
+  assert.equal(h.nodes.find((n) => n.text === "CANCEL DOWNLOAD").hidden, true, "the download no longer reads as running");
+});
 
 test("WATCH launch failures keep cached and downloaded positions retryable in the open Hub", async (t) => {
   for (const cached of [false, true]) for (const throws of [false, true]) {
@@ -448,7 +507,7 @@ test("cancel/reopen and session replacement discard stale WATCH completions", as
 test("the hub cancels pending WATCH immediately when year or Grand Prix changes", () => {
   const dom = makeDom();
   let deps, cancellations = 0, repaints = 0;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
     F1API: { meetings: () => new Promise(() => {}), sessionsForMeeting: () => new Promise(() => {}) },
     DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) },
@@ -479,7 +538,7 @@ function hubWatchHarness() {
   function el(...args) {
     const node = dom.el(...args);
     node.classList = { add() {}, toggle() {} };
-    node.style = {}; node.dataset = {};
+    node.style = {};
     node.focus = () => {}; node.scrollIntoView = () => {};
     node.querySelector = () => null;
     Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
@@ -492,7 +551,7 @@ function hubWatchHarness() {
     return node;
   }
   const schedule = el("div", "schedule-result"), root = el("div");
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el }, navigator: { onLine: true }, queueMicrotask,
     document: { activeElement: null, getElementById: () => null, addEventListener() {} },
     DataSchedule: { create: () => ({ loadSchedule: () => { scheduleLoads++; return Promise.resolve(schedule); } }) },
@@ -583,7 +642,8 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   const { D, findTeam, ctx } = load({ localStorage, F1API, RealRace, Teams, Tracks });
   // The lap board needs the director's cumulative table: the real module, in the same realm.
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8").replace("const RealRace = (function", "const RealRaceReal = (function").replace("Object.freeze(RealRace);", "RealRace.cumTable = RealRaceReal.cumTable;"), ctx, { filename: absSrc("js/race/real-race.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
+  vm.runInContext("RealRace.cumTable = RealRacePace.cumTable;", ctx);   // the stub forwards RealRacePace's table
   const dom = makeDom();
   let closed = 0;
   const deps = {
@@ -666,6 +726,16 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   const watchButton = find(lapRows[30], (n) => n.tag === "button" && n.text === "WATCH")[0];
   for (const key of ["Enter", " "]) lapRows[30].fire("keydown", { key, target: watchButton, preventDefault() { assert.fail("descendant keyboard defaults must remain available"); } });
   assert.equal(lapRows[30]["aria-expanded"], "true");
+  const lap31 = board.parent.parent;
+  assert.equal(lap31.dataset.hubPart, "selected-lap");
+  lapRows[1].fire("click");
+  const lap2 = nested().map(table => table.parent.parent).find(row => row !== lap31);
+  assert.equal(lap31.dataset.hubPart, undefined);
+  assert.equal(lap2.dataset.hubPart, "selected-lap");
+  lapRows[1].fire("click");
+  assert.equal(lap2.hidden, true);
+  assert.equal(lap2.dataset.hubPart, undefined);
+  assert.equal(lap31.dataset.hubPart, "selected-lap");
   const boardRows = find(board, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
   assert.equal(boardRows.length, 22);
   assert.equal(boardRows[0].children[0].text, "P1"); assert.equal(boardRows[0].children[1].text, "RUS"); assert.equal(boardRows[0].children[2].text, "");
@@ -697,6 +767,8 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
 test("the passes, the lap board and the race book read straight off the real timing", () => {
   const { D, findTeam, ctx } = load();
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-boot.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-boot.js") });   // the FULL stub the body reads
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const s = D.build(rawBaku(), findTeam, TRACKS);
   assert.equal(s.passes.length, 128, "OpenF1's 160 overtakes dated onto laps, minus the 32 on either side of a car retiring that lap");
@@ -898,7 +970,7 @@ test("reading an old trace cache refreshes recency before capacity eviction", as
 
 test("session picker cancels owned WATCH requests before selecting and repainting", async () => {
   const dom = makeDom(), order = []; let deps;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
     F1API: { meetings: async () => [{ meetingKey: 42 }], sessionsForMeeting: async () => [{ sessionKey: 1, type: "race" }, { sessionKey: 2, type: "practice" }] },
     DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) }, DataResults: { create: () => ({}) },
@@ -1012,4 +1084,36 @@ test("SC ending notice keeps its inclusive lap but releases only at TRACK CLEAR"
   assert.equal(w.tTo - w.tEnding, 119);
   assert.equal(D.cautionsFor(rows.slice(0, 2), secs)[0].tTo, null, "notice alone has no exact release");
   assert.equal(D.cautionsFor([rows[0], rows[2]])[0].to, 36, "release without notice retains the last caution lap");
+});
+
+// W23 #8: the venue aliases were written against names OpenF1 never sends.
+// Every circuit_short_name of https://api.openf1.org/v1/meetings?year=2026
+// (2026-11-10) resolves WITHOUT the date window — the calendar only knows 2026,
+// so 2023–2025 sessions rely on names alone. Ids/names as js/circuits/ ships them.
+test("every 2026 OpenF1 circuit_short_name resolves to its game circuit by name alone", () => {
+  const { D } = load();
+  const roster = [
+    ["catalunya", "CATALUNYA", "Spain"], ["madrid", "MADRID", "Spain"], ["abudhabi", "ABU DHABI", "UAE"],
+    ["bahrain", "BAHRAIN", "Bahrain"], ["albert_park", "ALBERT PARK", "Australia"], ["shanghai", "SHANGHAI", "China"],
+    ["suzuka", "SUZUKA", "Japan"], ["jeddah", "JEDDAH", "Saudi Arabia"], ["miami", "MIAMI", "USA"],
+    ["montreal", "MONTREAL", "Canada"], ["monaco", "MONACO", "Monaco"], ["redbull", "RED BULL RING", "Austria"],
+    ["silverstone", "SILVERSTONE", "UK"], ["spa", "SPA", "Belgium"], ["hungaroring", "HUNGARORING", "Hungary"],
+    ["zandvoort", "ZANDVOORT", "Netherlands"], ["monza", "MONZA", "Italy"], ["baku", "BAKU", "Azerbaijan"],
+    ["sepang", "SEPANG", "Malaysia", true], ["singapore", "SINGAPORE", "Singapore"], ["cota", "COTA", "USA"],
+    ["mexico", "MEXICO CITY", "Mexico"], ["interlagos", "INTERLAGOS", "Brazil"], ["vegas", "LAS VEGAS", "USA"],
+    ["qatar", "QATAR", "Qatar"],
+  ].map(([id, name, country, classic]) => ({ id, name, country, classic: !!classic }));
+  const openf1 = {
+    "Sakhir": "bahrain", "Melbourne": "albert_park", "Shanghai": "shanghai", "Suzuka": "suzuka", "Jeddah": "jeddah",
+    "Miami": "miami", "Montreal": "montreal", "Monte Carlo": "monaco", "Catalunya": "catalunya", "Spielberg": "redbull",
+    "Silverstone": "silverstone", "Spa-Francorchamps": "spa", "Hungaroring": "hungaroring", "Zandvoort": "zandvoort",
+    "Monza": "monza", "Madring": "madrid", "Baku": "baku", "Kuala Lumpur": "sepang", "Singapore": "singapore",
+    "Austin": "cota", "Mexico City": "mexico", "Interlagos": "interlagos", "Las Vegas": "vegas", "Lusail": "qatar",
+    "Yas Marina Circuit": "abudhabi",
+  };
+  for (const [name, id] of Object.entries(openf1)) {
+    assert.equal(D.trackIdFor({ circuit_short_name: name, country_name: "Nowhere" }, roster), id, name);
+  }
+  assert.equal(D.trackIdFor({ circuit_short_name: "Madring", country_name: "Spain" }, roster), "madrid",
+    "Madrid's Spanish GP is not Spain's first circuit");
 });

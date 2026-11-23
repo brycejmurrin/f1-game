@@ -16,20 +16,28 @@
     "cars": 22,
     "trackBuilt": "monza"
   },
+  "env": {
+    "renderer": "webgl2",
+    "api": "webgl2",
+    "adapter": "ANGLE (Mesa, llvmpipe (LLVM 21.1.8 256 bits), OpenGL 4.5)",
+    "browser": "chromium 153",
+    "viewport": "844x390@1",
+    "cpu": "Intel(R) Xeon(R) 6975P-C x4"
+  },
   "metrics": {
-    "p50": 5783.1,
-    "p95": 16366.1,
-    "p99": 16366.1,
-    "max": 16366.1,
-    "frames": 6,
-    "longTasks": 20,
-    "heapUsedMB": 69.96,
-    "heapTotalMB": 72.19
+    "p50": 533.3,
+    "p95": 3766.4,
+    "p99": 4716.4,
+    "max": 4716.4,
+    "frames": 33,
+    "longTasks": 22,
+    "heapUsedMB": 72.27,
+    "heapTotalMB": 75.64
   },
   "_blessed": {
-    "sha": "73ee2c9e4bf394c42a399a532c774fd723586163",
-    "reason": "initial SwiftShader frametime lane on Monza night seed 4242",
-    "at": "2026-10-14T23:22:24.708Z",
-    "hash": "f3ac5096de716a228ce8863dff516130d8b14cd4b635a672f7f2a9a351cc23f3"
+    "sha": "f2eed836b283d9f02fd134d46c664c1e3e922ecf",
+    "reason": "re-bless with runner cpu in env (#5903): same sha read 1.84x on one runner VM and green on another",
+    "at": "2026-11-19T18:00:23.894Z",
+    "hash": "075e021a43c11dea1d8863e70ad4aa431558475c8abfb6268587a874a9b29a7e"
   }
 }

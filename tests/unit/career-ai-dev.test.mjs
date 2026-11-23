@@ -227,7 +227,8 @@ function makeCarsBoot() {
   seedLog(ctx);
   ctx.window = ctx;
   for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/physics/consts.js",
-    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js"]) {
+    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js",
+    "js/physics/ai-drive.js"]) {   // makeCars bounds the AI's ERS map through AiDrive.aiErs (#5330)
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   }
   vm.runInContext(`
@@ -236,10 +237,12 @@ function makeCarsBoot() {
       aiSetup:t=>CareerAiDev.fittedOf(career,t),driverOverride:()=>null,
       teamStats:t=>t.stats,paceMult:()=>active?tdev:1};
     var cars=[],player=null,teamIdx=Teams.LIST.findIndex(t=>t.id==='haas'),driverIdx=0;
+    var clampDriverIdx=()=>{};   // makeCars clamps the seat first (game.js); the seat is valid here
     var TIER_V=Teams.TIER_V,IDLE_RPM=PhysicsConsts.IDLE_RPM;
     var gridTeams=()=>Teams.LIST, seatsFor=t=>t.custom?[t.drivers[0],t.drivers[0]]:t.drivers;
     var simRnd=()=>{draws++;return .5},clamp=M4.clamp;
     var seasonDriverId=(t,i)=>t+':'+i;
+    var flow='career';   // makeCars' season seat move (#5877) runs in flow 'season' only
     var daily={isActive:()=>false},SetupTune={mods:()=>null,balance:()=>0,aero:()=>undefined};
     var getTeamParts=id=>saved||Parts.getFactorySetup(Teams.LIST.find(t=>t.id===id));
     var modsFor=(t,s)=>Parts.getMods(s,t),tyreBaseModsFor=modsFor;
@@ -259,15 +262,18 @@ test("makeCars credits natural suspension development once and leaves controls u
     var before=JSON.stringify(career);
     var works=Parts.resolveSetup(Parts.getFactorySetup(rb),rb);
     var developed=Parts.resolveSetup(career.aiParts.racingbulls.fitted,rb);
-    var gain=buildPace(developed,works);makeCars();
+    var gain=buildPace(developed,works),lp=DriverRatings.ladderPace(gain,rb.tier,TIER_V);makeCars();
     var after=cars.find(c=>c.driverId==='racingbulls:0');`);
   assert.equal(run(`Object.keys(developed.setup).filter(k=>developed.setup[k]!==works.setup[k]).join(',')`),"suspension");
   assert.ok(run("gain>1"));
-  assert.equal(run("after.tierV"),run("base.tierV*gain"));
+  // #5760: the build's +6.64 % is past the tier ladder's headroom (TIER_V[0]/TIER_V[tier]), so the
+  // credit is exactly the ladder ceiling, not the unclamped gain (was base.tierV*gain).
+  assert.ok(run("gain>lp&&lp>1"),"the clamp binds and still credits the step");
+  assert.equal(run("after.tierV"),run("base.tierV*lp"));
   assert.equal(run("JSON.stringify(career)"),run("before"));
   assert.equal(run("draws"),run("oldDraws*2"),"no extra RNG draws");
   run("tdev=1.025;makeCars()");
-  assert.equal(run("cars.find(c=>c.driverId==='racingbulls:0').tierV"),run("base.tierV*tdev*gain"));
+  assert.equal(run("cars.find(c=>c.driverId==='racingbulls:0').tierV"),run("base.tierV*tdev*lp"));
   run("active=false;makeCars()");
   assert.equal(run("cars.find(c=>c.driverId==='racingbulls:0').tierV"),run("base.tierV"));
   run("active=true;tdev=1;career.aiParts={};makeCars()");
@@ -294,12 +300,70 @@ test("makeCars keeps aero and ERS on dedicated channels and respects era resolut
   assert.equal(run("cars.find(c=>c.driverId==='ferrari:0').tierV"),run("TIER_V[team.tier]"));
 });
 
-test("makeCars preserves MY TEAM saved-build hire ratio and player tier", () => {
+test("makeCars: the MY TEAM hire's build pace stays on the tier ladder, aero/ERS not counted twice (#5035)", () => {
   const run=makeCarsBoot();
   run(`Teams.LIST.push({...Teams.DEFAULT_CUSTOM});teamIdx=Teams.LIST.findIndex(t=>t.custom);var team=Teams.LIST[teamIdx];
-    var works=Parts.resolveSetup(Parts.getFactorySetup(team),team);
-    saved=Parts.getFactorySetup(Teams.LIST.find(t=>t.id==='ferrari'));
-    var expected=buildPace(Parts.resolveSetup(saved,team),works);tdev=1.02;makeCars()`);
+    var stock=Parts.getFactorySetup(team);saved=stock;tdev=1.02;makeCars();
+    var mate=()=>cars.find(c=>c.team.custom&&!c.isPlayer);var stockV=mate().tierV;
+    saved=Parts.getFactorySetup(Teams.LIST.find(t=>t.id==='ferrari'));makeCars();var ferrariV=mate().tierV;`);
   assert.equal(run("player.tierV"),run("TIER_V[team.tier]*tdev"));
-  assert.equal(run("cars.find(c=>c.team.custom&&!c.isPlayer).tierV"),run("TIER_V[team.tier]*tdev*expected"));
+  assert.equal(run("stockV"),run("TIER_V[team.tier]*tdev"),"a stock build is the team's own tier");
+  // Was 0.9648*1.02*1.747 = 1.72: the hire ran away on every straight.
+  assert.ok(run("ferrariV")<=run("TIER_V[0]*tdev")*(1+1e-12),"a Ferrari works build is at most the fastest tier");
+  assert.ok(run("ferrariV")>run("stockV"),"and still faster than stock");
+  for (const cat of ["aero","ers"]) {
+    const changed=run(`(function(){var o=Parts.CATALOG.find(c=>c.id==='${cat}').options.find(o=>o.id!==stock['${cat}']&&Parts.isOptionAvailable(o,team));
+      if(!o)return null;saved={...stock,['${cat}']:o.id};makeCars();return mate().tierV;})()`);
+    assert.notEqual(changed,null,cat+": a legal alternative part exists");
+    assert.equal(changed,run("stockV"),cat+" alone leaves the hire's tierV unchanged (it rides aeroLoad/ersDeploy)");
+  }
+});
+
+test("pickStep never buys tyres: an AI winter never fits Hyper Soft (#5760)", () => {
+  const { CareerAiDev, Teams, Parts } = boot();
+  for (const team of Teams.LIST.filter((t) => Teams.isReal(t))) {
+    let fitted = { ...CareerAiDev.worksSetup(team) };
+    for (let i = 0; i < 40; i++) {
+      const step = CareerAiDev.pickStep(team, fitted, 1e9);
+      if (!step) break;
+      assert.notEqual(step.cat, "tyres", `${team.id} step ${i} bought ${step.id}`);
+      fitted = step.trial;
+    }
+    assert.equal(fitted.tyres, Parts.getFactorySetup(team).tyres, `${team.id} keeps its works tyre`);
+  }
+});
+
+test("ATR sliding scale: the constructors' leader develops slowest, last place fastest (#5760)", () => {
+  const { CareerAiDev, Teams } = boot();
+  const real = Teams.LIST.filter((t) => Teams.isReal(t));
+  const n = real.length;
+  assert.equal(CareerAiDev.atrScale(1, n), CareerAiDev.ATR_LEAD);
+  assert.equal(CareerAiDev.atrScale(n, n), CareerAiDev.ATR_LAST);
+  assert.equal(CareerAiDev.atrScale(99, n), CareerAiDev.ATR_LAST, "an unplaced team counts as last");
+  for (let p = 2; p <= n; p++) assert.ok(CareerAiDev.atrScale(p, n) > CareerAiDev.atrScale(p - 1, n));
+  // Every team on its expected place: base chance 0.30, so the leader rolls under 0.225 and
+  // last place under 0.345. A roll of 0.30 develops only the back half of the table.
+  const tStand = real.map((t, i) => ({ id: t.id, pos: i + 1 }));
+  const expect = new Map(tStand.map((r) => [r.id, r.pos]));
+  const career = { year: 2027, aiParts: {} };
+  CareerAiDev.developWinter(career, tStand, expect, () => 0.30);
+  const developed = tStand.filter((r) => career.aiParts[r.id]).map((r) => r.pos);
+  const cut = tStand.filter((r) => 0.30 * CareerAiDev.atrScale(r.pos, n) >= 0.30).map((r) => r.pos);
+  assert.deepEqual(developed, cut);
+  assert.ok(developed.length && developed[0] > 1 && developed[developed.length - 1] === n,
+    "the leader is held back and last place develops");
+});
+
+test("makeCars: AI catalog pace stays on the tier ladder after any number of winters (#5760)", () => {
+  const run=makeCarsBoot();
+  run(`for(var y=0;y<12;y++)CareerAiDev.developWinter(career,Teams.LIST.map((t,i)=>({id:t.id,pos:i+1})),new Map(),()=>0,2027+y);
+    makeCars();var ai=cars.filter(c=>c!==player&&Teams.isReal(c.team));`);
+  assert.ok(run("ai.length")>10);
+  assert.equal(run("ai.filter(c=>c.tierV>TIER_V[0]*(1+1e-12)).map(c=>c.driverId+' '+c.tierV).join()"),"",
+    "no AI car is faster than the fastest tier's works car");
+  assert.equal(run("Object.values(career.aiParts).filter(b=>b.fitted.tyres==='hypersoft').length"),0);
+  // A save that fitted Hyper Soft before the fix keeps the part; its pace lands on the ceiling.
+  run(`var wl=Teams.LIST.find(t=>t.id==='williams');career.aiParts={williams:{owned:[],fitted:{...Parts.getFactorySetup(wl),tyres:'hypersoft'}}};
+    makeCars();var w=cars.find(c=>c.driverId==='williams:0');`);
+  assert.equal(run("w.tierV"),run("TIER_V[wl.tier]*DriverRatings.ladderPace(1e9,wl.tier,TIER_V)"));
 });

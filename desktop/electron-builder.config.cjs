@@ -3,7 +3,7 @@
  * electron-builder 26 config (not 27 alpha — native ESM / Node >=22.12).
  *
  * Site lives in extraResources `site` (outside asar) so app:// Range streams
- * work. App code is asar. No publish/signing here (later tasks).
+ * work. App code is asar. Unsigned, no publish / update channel (README).
  *
  * Docs (2026-09-29):
  *   https://www.electron.build/docs/
@@ -46,12 +46,20 @@ const config = {
   asar: true,
   compression: "normal",
   electronLanguages: ["en-US"],
-  // Keep the spike's fuse policy (inspect off on release packs).
+  // Fuses (Electron 44 docs/tutorial/fuses.md). None needs a certificate to be
+  // flipped; WITHOUT code signing nothing stops someone who can write the
+  // install dir from flipping them back (desktop/README.md §What is protected).
+  // embeddedAsarIntegrityValidation: macOS + Windows only (Linux ignores it);
+  // electron-builder embeds the asar header hash (Info.plist / an exe resource)
+  // even with signAndEditExecutable: false. With onlyLoadAppFromAsar it stops
+  // loading app code that does not match that hash.
+  // loadBrowserProcessSpecificV8Snapshot stays default: no custom snapshot.
   electronFuses: {
     runAsNode: false,
     enableCookieEncryption: true,
     enableNodeOptionsEnvironmentVariable: false,
     enableNodeCliInspectArguments: false,
+    enableEmbeddedAsarIntegrityValidation: true,
     onlyLoadAppFromAsar: true,
     grantFileProtocolExtraPrivileges: false,
   },
@@ -91,7 +99,7 @@ const config = {
     icon: "build/icons",
     synopsis: "Unofficial fan racing game — desktop shell for Apex 26.",
     description:
-      "Wraps the same static WebGL2 site GitHub Pages publishes. No second gameplay codebase.",
+      "Wraps the static site GitHub Pages publishes (three.js, WebGPU first, WebGL2 fallback). No second gameplay codebase.",
     // Public GitHub noreply already used on ship-branch commits (not invented).
     maintainer: "Apex 26 contributors <37964036+brycejmurrin@users.noreply.github.com>",
     artifactName: "Apex26-${version}-${arch}.${ext}",

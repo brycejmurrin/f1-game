@@ -54,14 +54,40 @@ def outside_js(where):
     return bool(w) and w not in (".", "|", "||", "&&", ";") and not re.match(r"(js|types)(/|$)", w)
 
 
-def symbol_of(pattern):
+def in_js(where):
+    """True when the search names js/ (or below) explicitly: there a camelCase word is code, not prose."""
+    w = re.sub(r"^(\./|/)+", "", (where or "").strip().strip("'\""))
+    root = (os.environ.get("CLAUDE_PROJECT_DIR") or "").strip("/")
+    if root and w.startswith(root):
+        w = re.sub(r"^/+", "", w[len(root):])
+    return bool(re.match(r"js(/|$)", w))
+
+
+# 2026-11-20 (docs/notes/LSP-AND-TOOL-USAGE-2026-11-20.md): 3 of 42 symbol greps in 13 worker transcripts drew the
+# hint. 24 were alternations (`a\|b`), and most targets were lowercase IIFE-local functions in js/.
+CAMEL = re.compile(r"^_?[a-z][a-z0-9]*[A-Z][\w$]*$")
+
+
+def symbol_of(pattern, js_scoped=False):
+    """(symbols, is_decl) for a pattern: each alternative of `a\\|b` / `a|b` is judged on its own."""
+    alts = [a for a in re.split(r"\\\||\|", pattern or "") if a]
+    if len(alts) > 1:
+        found, decl = [], False
+        for a in alts:
+            sym, d = symbol_of(a, js_scoped)
+            if sym and sym not in found:
+                found.append(sym)
+                decl = decl or d
+        return (", ".join(found[:3]) if found else None), decl
     m = SYMBOL.match(pattern or "")
     if not m:
         return None, False
     sym = m.group("sym").replace("\\.", ".")
     head = sym.split(".")[0]
     # A lone lowercase word is as likely text as a symbol; a capitalised global (or G) is a symbol.
-    if not m.group("decl") and (not head[0].isupper() or head in BUILTINS):
+    # Inside an explicit js/ search a camelCase name (`openTrackDetail`, `penaltyWhy`) is code too.
+    camel = js_scoped and "." not in sym and CAMEL.match(sym)
+    if not m.group("decl") and not camel and (not head[0].isupper() or head in BUILTINS):
         return None, False
     if len(sym) < 3:
         return None, False
@@ -74,25 +100,48 @@ def symbol_of(pattern):
 
 
 def from_bash(command):
+    """(pattern, first path operand) of the first grep / rg / git grep in the command that searches FILES.
+
+    A grep that reads a pipe (`ps aux | grep Chrome`, `git log | grep Merge`) filters another command's output: it
+    has no path operand and is not first in its pipeline, so it is no code search and gets nothing."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     try:
-        words = shlex.split(command)
-    except ValueError:
+        from shellparse import commands
+        cmds = commands(command)
+    except Exception:
         return None, None
-    for i, w in enumerate(words):
-        if w not in ("grep", "rg", "egrep"):
+    first = {}
+    for c in cmds:
+        first.setdefault(c.pipe, c)
+    for c in cmds:
+        argv = c.argv
+        if c.prog == "git" and argv[1:2] == ["grep"]:
+            rest = argv[2:]
+        elif c.prog in ("grep", "rg", "egrep"):
+            rest = argv[1:]
+        else:
             continue
-        rest, j, pattern = words[i + 1:], 0, None
-        while j < len(rest) and rest[j] not in ("|", "&&", ";", "||"):
+        j, pattern, operands = 0, None, []
+        while j < len(rest):
             x = rest[j]
-            if x in ("-e", "--regexp") and j + 1 < len(rest):
-                return rest[j + 1], " ".join(rest[j + 2:j + 3])
-            if x.startswith("-"):
+            if pattern is None and x in ("-e", "--regexp") and j + 1 < len(rest):
+                pattern = rest[j + 1]
+                j += 2
+                continue
+            if x.startswith("-") and x != "-":
                 j += 2 if x in ARG_OPTS else 1
                 continue
-            pattern = x
-            break
-        if pattern:
-            return pattern, " ".join(rest[j + 1:j + 2])
+            if pattern is None:
+                pattern = x
+            else:
+                operands.append(x)
+            j += 1
+        if not pattern:
+            continue
+        piped = first.get(c.pipe) is not c
+        if piped and not operands:
+            continue                     # filtering a pipe, not searching the tree
+        return pattern, (operands[0] if operands else "")
     return None, None
 
 
@@ -112,13 +161,14 @@ def main():
         return
     if not pattern or SKIP_PATH.search((where or "").strip()) or (tool == "Bash" and outside_js(where)):
         return
-    sym, is_decl = symbol_of(pattern)
+    sym, is_decl = symbol_of(pattern, in_js(inp.get("path") if tool == "Grep" else where))
     if not sym:
         return
     call = "lsp_definition" if is_decl else "lsp_references"
     cli = "def" if is_decl else "refs"
-    msg = (f"lsp-hint: `{sym}` is a JS symbol; for the next lookup apex-lsp answers this semantically "
-           f"(MCP {call} {{symbol: \"{sym}\"}}, lsp_callers for who calls it; shell: tools/mcp/lsp-mcp.sh {cli} {sym}) — "
+    one = sym.split(", ")[0]
+    msg = (f"lsp-hint: `{sym}` {'are JS symbols' if ', ' in sym else 'is a JS symbol'}; for the next lookup apex-lsp answers this semantically "
+           f"(MCP {call} {{symbol: \"{one}\"}}, lsp_callers for who calls it; shell: node tools/mcp/lsp-mcp.mjs {cli} {one}) — "
            "rows tagged [def|export|alias|use] with the enclosing function, comments and strings excluded. "
            "grep stays right for text, comments, CSS and regexes.")
     event = data.get("hook_event_name") or "PostToolUse"

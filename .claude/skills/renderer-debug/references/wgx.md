@@ -2,7 +2,7 @@
 
 Load from SKILL.md when `env.backend` reads `webgpu` (or you expected it and
 got `webgl2`). Shipped defect classes and the device-loss ladder are in
-[wgx-defects.md](wgx-defects.md).
+wgx-defects.md (linked from SKILL.md).
 
 ## Contents
 - 1. First probe — static, then Dawn
@@ -10,8 +10,8 @@ got `webgl2`). Shipped defect classes and the device-loss ladder are in
 - 3. Unit gates and live poke (the live pokes are BROWSER-ONLY)
 
 WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
-`wgsl-post.js`.
-DEFERRED: no `<script>` tag; `js/game.js` injects it when
+`wgsl-post.js`, `wgx-post.js`, `wgx-shadow.js`, `wgx-chunked.js`, `wgx-roadlut.js`, `wgx-debug-labels.js`.
+DEFERRED: no `<script>` tag; `js/render/renderer-boot.js` injects it when
 `apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
 WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,
 never a dead canvas (deliberate exceptions: blocked storage, hidden-tab loss —
@@ -22,7 +22,7 @@ wgx-defects.md "Trace").
 ```sh
 node tools/gfx/wgx-validate.mjs --static             # ALWAYS this first (no browser)
 # parent session only — these launch Chromium:
-# node tools/gfx/wgx-validate.mjs [trackId]            (default montreal)
+# node tools/gfx/wgx-validate.mjs [trackId]
 # node tools/gfx/wgx-validate.mjs --lite
 # node tools/gfx/wgx-validate.mjs --no-rg11b10
 ```
@@ -32,7 +32,7 @@ full Dawn pass launches Chromium — parent session only. The container adapter 
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 
-**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES
+**The ceiling:** SwiftShader-Dawn EXECUTES
 shader work here. Two narrower limits remain: the **native swapchain** never
 composites (hidden WebGPU canvas stays black), and the FIRST
 `getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX
@@ -59,7 +59,7 @@ Fallback path (read-only trace, no browser): `Gfx.create` (`js/render/gfx.js`)
 awaits `WGX.create()`, which returns null on ANY failure after
 `wgx.js` records `_lastFailure` + `apex26.gfxWgxFail` and logs
 `WGX unavailable (...) — falling back to WebGL2`; `Gfx.create` logs
-`Gfx.bind fallback webgl2` and `js/game.js` binds GLX (so after a WGX fallback `env.backend` reads `webgl2`: continue in the GLX section; a Mac report of see-through cars is instead TLX, see tlx-transparent-cars.md). No `navigator.gpu` or
+`Gfx.bind fallback webgl2` and `js/render/renderer-boot.js` binds GLX (`GLX.init`) (so after a WGX fallback `env.backend` reads `webgl2`: continue in the GLX section; a Mac report of see-through cars is instead TLX, see tlx-transparent-cars.md). No `navigator.gpu` or
 no `WGX` global returns null with NO log line. NaN-white road with
 NO fallback = warning-mode Dawn ran undefined derivatives (wgx-defects.md #2);
 with fallback = strict uniformity error. Static half of that check:
@@ -78,7 +78,7 @@ half (BROWSER-ONLY, parent): bare `wgx-validate.mjs` prepends
 `node tools/shot/apex-eval.mjs monza "a.diag({download:false}).env" --backend webgpu`.
 
 **`garage-frame.mjs` reports `all_dark` on this box.** `garage-interior.mjs` fails a frame with reason `all_dark`
-when more than 98 % of the sampled pixels are black, the shape of a cleared canvas readback. Under software
+when nearly all sampled pixels are black (`darkFrac` in `garage-interior.mjs`), the shape of a cleared canvas readback. Under software
 WebGPU (no GPU, SwiftShader) that is the capture path, not a garage regression: try
 `--backend webgl2`, or judge the garage by `__apex` hooks, and do not "fix" the gate (it exists so a black frame
 cannot pass as ok; `tests/unit/garage-interior-gate.test.mjs`).

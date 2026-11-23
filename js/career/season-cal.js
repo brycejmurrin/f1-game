@@ -27,9 +27,12 @@ const LAP_OPTS = [3, 5, 10, 25, 57];
 // into Tracks.LIST and tools/manifest.cjs carries a standing warning about what
 // that costs when the list is reordered; a saved calendar has to survive the
 // list growing, so it stores what it means.
+// Default REAL_2026; Tracks.SEASON = 24-ROUND (docs/CAREER.md §Calendar).
+function legacyIds() { return Tracks.SEASON.map((t) => t.id); }
+function defaultIds() { const ids = knownIds(REAL_2026.map((r) => r.id)); return ids.length === REAL_2026.length ? ids : legacyIds(); }
 function fresh() {
   return {
-    trackIds: Tracks.SEASON.map((t) => t.id),
+    trackIds: defaultIds(),
     quali: true,
     sprint: false,    // false | true (every round) | "rounds" (only the rounds in sprintIds)
     sprintIds: [],    // circuit ids that hold a sprint when sprint === "rounds"
@@ -64,11 +67,17 @@ function normalize(raw) {
   const def = fresh();
   const c = raw && typeof raw === "object" ? raw : {};
   const ids = knownIds(c.trackIds);
+  const trackIds = ids.length ? ids : def.trackIds;
+  const sprint = c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false;
+  // sprintIds is a SET over the calendar: calendar order, no id that left the
+  // calendar, none outside "rounds" mode — else a no-op SPRINT→GP→SPRINT toggle
+  // (or a ✕ then re-add) reads as a changed setup and arms "SEASON IS LOST".
+  const marked = sprint === "rounds" ? knownIds(c.sprintIds) : [];
   return {
-    trackIds: ids.length ? ids : def.trackIds,
+    trackIds,
     quali: c.quali !== false,
-    sprint: c.sprint === true ? true : c.sprint === "rounds" ? "rounds" : false,
-    sprintIds: knownIds(c.sprintIds),
+    sprint,
+    sprintIds: trackIds.filter((id) => marked.indexOf(id) >= 0),
     laps: LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : def.laps,
     points: c.points === "classic" ? "classic" : "modern",
     flPoint: c.flPoint === true,
@@ -91,6 +100,9 @@ if (store.subscribe) store.subscribe((change) => {
   // here synchronously and nulled the cfg it had just built, so the very next
   // statement threw on `cfg.trackIds` — SEASON SETUP ▸ APPLY died before
   // restart(), before the save, and before the sheet could close.
+  // RETRY SAVE rewrites our own object: keep seasonRevision armed (#4823).
+  if (change.local && !seasonConflict && activeSeason && change.key === SAVE_KEY &&
+      store.get(SAVE_KEY, null) === activeSeason) { seasonRevision = currentRevision(); return; }
   if (!change.foreign) return;
   if (change.clear || change.key === CFG_KEY) { cfg = null; resolved = null; }
   if (change.clear || change.key === SAVE_KEY) {
@@ -119,7 +131,6 @@ function setConfig(next) {
   Log.info("game", `SeasonCal.setConfig rounds=${cfg.trackIds.length}`);
   return cfg;
 }
-function resetConfig() { return setConfig(null); }
 
 function frozenConfig(raw) {
   const out = normalize(raw);
@@ -166,10 +177,10 @@ function track(round) { return list()[round] || null; }
  *  Barcelona-Catalunya GP now that the Spanish GP is Madrid's. Only an unedited
  *  2026 calendar (the preset's ids, in order) takes those names. */
 const REAL_2026_GP = Object.freeze({ sepang: "Bahrain GP", catalunya: "Barcelona-Catalunya GP" });
-function gpName(t) {
+function gpName(t, calIds) {
   if (!t) return "";
-  if (fmtActive() && REAL_2026_GP[t.id]) {
-    const ids = rulesConfig().trackIds || [];
+  if (REAL_2026_GP[t.id] && (calIds || fmtActive() || flow === "career")) {
+    const ids = calIds || (fmtActive() ? rulesConfig().trackIds || [] : list().map((x) => x.id));
     if (ids.length === REAL_2026.length && REAL_2026.every((r, i) => r.id === ids[i])) return REAL_2026_GP[t.id];
   }
   return t.gp || "";
@@ -212,7 +223,11 @@ function applyConfig(next) {
   // even with the same rules. Always pass the revision guard above first.
   if (canRace(activeSeason) && matchesConfig(activeSeason, next)) {
     if (!matchesConfig({ config: config() }, next)) setConfig(next);
-    return Object.assign({}, lastSave, { season: activeSeason, ok: true });
+    // A refused save (invalid / unknown circuit / conflict) wrote nothing, so a
+    // no-op APPLY must not inherit it as "storage is full"; a real storage
+    // failure still carries through (the season is genuinely session-only).
+    const refused = lastSave.reason === "invalid" || lastSave.reason === "unknown circuit" || lastSave.reason === "conflict";
+    return Object.assign({}, refused ? { ok: true, durable: true, reason: null } : lastSave, { season: activeSeason, ok: true });
   }
   const snap = frozenConfig(next);
   const season = { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };
@@ -235,7 +250,8 @@ function scoreMap(raw) {
   const out = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
   Object.entries(raw).forEach(([id, value]) => {
-    const n = Number(value);
+    // Number() on an object can throw at boot: scalars only.
+    const n = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
     if (id && isFinite(n)) out[id] = Math.max(0, n);
   });
   return out;
@@ -262,7 +278,10 @@ function codeMap(raw) {
 // champion UI; blanking it wiped the table the moment the player re-opened SEASON.
 function resume(saved) {
   const s = saved && typeof saved === "object" ? saved : null;
-  activeCfg = frozenConfig(s && s.config ? s.config : config());
+  // A pre-snapshot save with no stored setup was raced on the 24.
+  const legacy = s && !s.config && store.get(CFG_KEY, null) == null
+    ? Object.assign(fresh(), { trackIds: legacyIds() }) : null;
+  activeCfg = frozenConfig(s && s.config ? s.config : legacy || config());
   resolved = null;
   const n = activeCfg.trackIds.length;
   // MAP THE ROUND BY CIRCUIT ID. A stored calendar holding an id this build
@@ -320,11 +339,8 @@ function load() {
   // but NOT for a season this build could not read whole: a circuit id it does
   // not know (a stale cached shell, a renamed circuit) shrank the calendar, and
   // writing that back erased the circuit for good, or blanked a finished season.
-  // LOSSY MEANS AN UNKNOWN CIRCUIT ID, nothing else. `season !== copy` is also
-  // true when resume() fell back to restart() for a round out of range, and that
-  // clean rebuilt season was then refused by every later save ("unknown circuit")
-  // although this build knew every id. A collapsed duplicate only counts when the
-  // save was repaired in place (the restart() config is not the stored one).
+  // A bad round alone restarts cleanly. Protect unknown IDs and a repaired
+  // calendar that collapsed duplicates.
   const lossy = !!raw && rawIds != null && (knownIds(rawIds).length !== rawIds.length
     || (season === copy && season.config.trackIds.length !== rawIds.length));
   lastLossy = lossy;   // boot's migrate-and-save reads it: never write a lossy read back
@@ -335,16 +351,16 @@ function load() {
   if (raw && !lossy) save(season, { migration: true });
   return season;
 }
+function refuseLossyWrite() {
+  Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
+  return (lastSave = { ok: false, durable: false, reason: "unknown circuit" });
+}
 function save(season, options) {
   if (!season || typeof season !== "object") {
     lastSave = { ok: false, durable: false, reason: "invalid" };
     return lastSave;
   }
-  if (lossySeasons.has(season)) {
-    lastSave = { ok: false, durable: false, reason: "unknown circuit" };
-    Log.warn("game", "SeasonCal.save refused: the saved calendar names a circuit this build does not know");
-    return lastSave;
-  }
+  if (lossySeasons.has(season)) return refuseLossyWrite();
   const now = currentRevision();
   if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
     seasonConflict = true;
@@ -362,6 +378,8 @@ function save(season, options) {
   return lastSave;
 }
 function clear() {
+  // The last known circuit may precede another round in the stored calendar.
+  if (lossySeasons.has(activeSeason)) return refuseLossyWrite();
   const now = currentRevision();
   if (seasonConflict || (seasonRevision != null && now !== seasonRevision)) {
     seasonConflict = true;
@@ -449,7 +467,7 @@ function pointsTable() {
 // Under 2 laps nothing; a Grand Prix pays column 1/2/3 below 25/50/75 %, a
 // sprint nothing below 50 %; the CLASSIC (1991–2002) table pays half below 75 %,
 // the rule of its era. The fastest-lap point needs 50 % (Art. 6.4).
-const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 10, 8, 6, 4, 3, 2, 1]];
+const SHORT_POINTS = [[6, 4, 3, 2, 1], [13, 10, 8, 6, 5, 4, 3, 2, 1], [19, 14, 12, 9, 8, 6, 5, 3, 2, 1]];
 function shortFrac(run) { return run ? run.laps / Math.max(1, run.of) : 1; }
 function payTable(table, scoring, run) {
   if (!run) return table;
@@ -555,6 +573,30 @@ function netPts(season, id) {
   return sum;
 }
 
+// #5877: points follow the player. `you` is the seat holding their tally; a new seat moves it
+// there and parks that seat's AI; a save without `you` adopts the current seat (no point lost).
+const PARK = ":parked";
+const SEAT_MAPS = ["pts", "roundPts", "finishes", "driverCodes"];
+function moveId(season, from, to) {
+  for (const k of SEAT_MAPS) {
+    const m = season[k];
+    if (!m || typeof m !== "object") continue;
+    if (from in m) m[to] = m[from];
+    delete m[from];
+  }
+  if (season.lastFl === from) season.lastFl = to;
+}
+function seatPlayer(season, seatId) {
+  if (!season || typeof seatId !== "string" || !seatId) return false;
+  const was = typeof season.you === "string" && season.you ? season.you : null;
+  season.you = seatId;
+  if (!was || was === seatId) return false;
+  moveId(season, seatId, seatId + PARK);
+  moveId(season, was, seatId);
+  moveId(season, was + PARK, was);
+  return true;
+}
+
 function rank(season, a, b) {
   const d = netPts(season, b) - netPts(season, a);
   if (d) return d;
@@ -638,8 +680,8 @@ function drawRound(season) {
 // to the circuits this game has (all 23 do). Weekend dates are Fri–Sun (Baku
 // races on Saturday 26 Sep; Las Vegas on Saturday 21 Nov). Bahrain and Saudi
 // Arabia were cancelled in April over the Middle East conflict; the Bahrain GP
-// runs at SEPANG on 2–4 Oct. Qatar and Abu Dhabi are still scheduled (plan A;
-// Imola is the stated plan B, decision expected mid-October). Barcelona hosts
+// runs at SEPANG on 2–4 Oct. Qatar and Abu Dhabi confirmed 3 Oct, reaffirmed
+// 20 Oct (sources: docs/CAREER.md §Calendar). Barcelona hosts
 // the "Barcelona-Catalunya GP"; the Spanish GP moved to Madrid (Madring).
 // Sprints: China, Miami, Canada, Britain, Netherlands, Singapore.
 //   https://www.formula1.com/en/racing/2026
@@ -659,8 +701,8 @@ const REAL_2026 = Object.freeze([
 ].map(([id, from, to, sprint]) => Object.freeze({ id, from: "2026-" + from, to: "2026-" + to, sprint: !!sprint })));
 
 const PRESETS = [
-  { id: "full", label: "FULL" },
   { id: "real2026", label: "2026 REAL" },
+  { id: "full", label: "24-ROUND" },
   { id: "12", label: "12" },
   { id: "8", label: "8" },
   { id: "5", label: "5" },
@@ -704,14 +746,15 @@ function shuffled(ids, seed) {
   return a;
 }
 
+// SHORT_POINTS / resetWeekend stay module-local (payTable / restart / applyConfig).
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, SHORT_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
-  config, setConfig, resetConfig, applyConfig, matchesConfig, fresh, normalize,
+  SPRINT_POINTS, CLASSIC_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
+  config, setConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
-  resume, blank, restart, resetWeekend, canRace, hasProgress,
+  resume, blank, restart, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
-  award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
-  presetIds, preset, shuffled, gpName,
+  award, scored, rank, rankTeams, netPts, drawRound, luckSeed, seatPlayer,
+  presetIds, preset, shuffled, gpName, legacyIds,
 };
 })();

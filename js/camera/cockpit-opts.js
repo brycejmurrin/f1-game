@@ -22,12 +22,20 @@ const LEAD_MAX = 1;
 //   INTERIOR  the trim car-mesh.js builds inside the tub (getCockpitCabin).
 //   HALO      OFF / SLIM / STANDARD / THICK / FAIRED: the hoop's tube (car3d.js, halo size).
 const CHOICES = {
+  helmetEye: { key: "apex26.helmetEye", url: "helmeteye", values: ["standard", "tucked", "upright", "forward", "back", "high", "low"],
+              labels: { standard: "STANDARD", tucked: "TUCKED", upright: "UPRIGHT", forward: "FORWARD", back: "BACK", high: "HIGH", low: "LOW" } },
+  helmetMount: { key: "apex26.helmetMount", url: "helmetmount", values: ["center", "left", "right"],
+                labels: { center: "CENTER", left: "LEFT EYE", right: "RIGHT EYE" } },
+  helmetShake: { key: "apex26.helmetShake", url: "helmetshake", values: ["normal", "medium", "soft", "off"],
+              labels: { normal: "NORMAL", medium: "MEDIUM", soft: "SOFT", off: "OFF" } },
+  visorShape: { key: "apex26.helmetVisorShape", url: "visorshape", values: ["standard", "panoramic", "slit", "rounded", "square"],
+              labels: { standard: "STANDARD", panoramic: "PANORAMIC", slit: "NARROW", rounded: "ROUNDED", square: "SQUARE" } },
   visor:    { key: "apex26.helmetVisor", url: "helmetvisor", values: ["off", "clear", "smoke"],
               labels: { off: "OFF", clear: "CLEAR", smoke: "TINTED" } },
-  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", values: ["neutral", "amber", "ice", "rose"],
-              labels: { neutral: "NEUTRAL", amber: "AMBER", ice: "ICE BLUE", rose: "ROSE" } },
-  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", values: ["light", "medium", "strong"],
-              labels: { light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
+  visorColor: { key: "apex26.helmetVisorColor", url: "visorcolor", def: "amber", values: ["neutral", "amber", "ice", "rose", "green", "violet", "copper"],
+              labels: { neutral: "NEUTRAL", amber: "AMBER", ice: "ICE BLUE", rose: "ROSE", green: "RACING GREEN", violet: "VIOLET", copper: "COPPER" } },
+  visorIntensity: { key: "apex26.helmetVisorIntensity", url: "visorintensity", def: "medium", values: ["trace", "light", "medium", "strong", "deep"],
+              labels: { trace: "TRACE", light: "LIGHT", medium: "MEDIUM", strong: "STRONG", deep: "DEEP" } },
   visorRefraction: { key: "apex26.helmetVisorRefraction", url: "visorrefraction", values: ["off", "light", "medium", "strong"],
               labels: { off: "OFF", light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
   visorReflections: { key: "apex26.helmetVisorReflections", url: "visorreflections", values: ["light", "off", "medium", "strong"],
@@ -40,11 +48,12 @@ const CHOICES = {
               labels: { f1: "F1 2026", gt: "GT RIM", butterfly: "BUTTERFLY", yoke: "OPEN YOKE", endurance: "ENDURANCE", retro: "2000s", round: "CLASSIC", none: "NONE" } },
   body:     { key: "apex26.cockpitBody", url: "ckbody", values: ["standard", "sculpted", "wide", "tapered", "stepped"],
               labels: { standard: "STANDARD", sculpted: "SCULPTED", wide: "WIDE", tapered: "TAPERED", stepped: "STEPPED" } },
-  seat:     { key: "apex26.cockpitSeat", url: "ckseat", values: ["std", "low", "high", "fwd"],
+  seat:     { key: "apex26.cockpitSeat", url: "ckseat", def: "fwd", values: ["std", "low", "high", "fwd"],
               labels: { std: "STANDARD", low: "LOW", high: "HIGH", fwd: "FORWARD" } },
   interior: { key: "apex26.cockpitInterior", url: "ckint", values: ["carbon", "team", "suede", "ribbed", "classic"],
               labels: { carbon: "CARBON", team: "TEAM", suede: "SUEDE", ribbed: "RIBBED", classic: "CLASSIC" } },
 };
+const SHAKE_SCALE = { normal: 1, medium: 0.7, soft: 0.4, off: 0 };
 const KEY_WHEEL = CHOICES.wheel.key, WHEELS = CHOICES.wheel.values;
 const SCREEN_WHEELS = { f1: true, gt: true, butterfly: true, yoke: true, endurance: true, retro: true };
 // STANDARD's eye is vantage.js COCKPIT_EYE_FWD / COCKPIT_EYE_UP; a seat moves it.
@@ -57,7 +66,7 @@ const HALO_VALUES = ["0", "slim", "1", "thick", "fairing"];
 const HALO_LABELS = { "0": "OFF", slim: "SLIM", "1": "STANDARD", thick: "THICK", fairing: "FAIRED" };
 
 let haloVal = null;
-let lead = null;
+let lead = readLead();
 const picked = {};
 const listeners = [];
 
@@ -69,6 +78,21 @@ const BEAMS_DEFAULT = 1;
 const BEAMS_MAX = 2;
 const BEAMS_LEVELS = { off: 0, light: 0.6, medium: 1, strong: 1.6 };
 let beams = null;
+const DROP_SIZE_KEY = "apex26.helmetVisorDropSize";
+let dropSize = null;
+function clampDropSize(v) {
+  return (typeof v === "number" || (typeof v === "string" && v.trim() !== "")) && Number.isFinite(+v) ? Math.max(0.5, Math.min(2, +v)) : 1;
+}
+function visorDropSize() {
+  if (dropSize === null) { const v = GameStore.store.raw(DROP_SIZE_KEY); dropSize = clampDropSize((typeof v === "number" || (typeof v === "string" && v.trim() !== "")) ? Number(v) / 100 : null); }
+  return dropSize;
+}
+function setVisorDropSize(v) {
+  dropSize = clampDropSize(v);
+  GameStore.store.rawSet(DROP_SIZE_KEY, String(Math.round(dropSize * 100)));
+  for (const fn of listeners) fn("visorDropSize", dropSize);
+  return dropSize;
+}
 
 function clampBeams(raw) {
   if (typeof raw === "string" && BEAMS_LEVELS[raw.toLowerCase()] != null) return BEAMS_LEVELS[raw.toLowerCase()];
@@ -128,14 +152,17 @@ function urlTurnChase() {
 }
 
 function readLead() {
-  const fromUrl = parseLead(null, urlTurnChase());
-  if (fromUrl != null) return fromUrl;
-  const stored = parseLead(GameStore.store.raw(KEY_LEAD), null);
-  if (stored != null) return stored;
-  const legacy = GameStore.store.raw(KEY_TC);
-  if (legacy === "0") return 0;
-  if (legacy === "1") return LEGACY_ON_LEAD;
-  return LEAD_DEFAULT;
+  const store = GameStore.store;
+  let stored = parseLead(store.raw(KEY_LEAD), null);
+  if (stored === null) {
+    const legacy = store.raw(KEY_TC);
+    if (legacy === "0" || legacy === "1") {
+      stored = legacy === "1" ? LEGACY_ON_LEAD : 0;
+      store.rawSet(KEY_LEAD, String(stored));
+    }
+  }
+  // The shot's URL overrides the view, never the preference a backup records.
+  return parseLead(null, urlTurnChase()) ?? stored ?? LEAD_DEFAULT;
 }
 
 function haloSetting() {
@@ -171,14 +198,14 @@ function choice(name) {
       const q = new RegExp("[?&]" + C.url + "=([a-z0-9]+)", "i").exec(location.search);
       if (q) v = q[1].toLowerCase();
     } catch (_) { /* no location in a headless VM: the stored value stands */ }
-    picked[name] = C.values.includes(v) ? v : C.values[0];
+    picked[name] = C.values.includes(v) ? v : (C.def || C.values[0]);
   }
   return picked[name];
 }
 
 function setChoice(name, v) {
   const C = CHOICES[name];
-  picked[name] = C.values.includes(v) ? v : C.values[0];
+  picked[name] = C.values.includes(v) ? v : (C.def || C.values[0]);
   GameStore.store.rawSet(C.key, picked[name]);
   if (name.startsWith("visor")) paintVisor();
   for (const fn of listeners) fn(name, picked[name]);
@@ -195,6 +222,41 @@ function interior() { return choice("interior"); }
 function setInterior(v) { return setChoice("interior", v); }
 function visor() { return choice("visor"); }
 function setVisor(v) { return setChoice("visor", v); }
+function visorShape() { return choice("visorShape"); }
+function setVisorShape(v) { return setChoice("visorShape", v); }
+function helmetMount() { return choice("helmetMount"); }
+function helmetEye() { return choice("helmetEye"); }
+function setHelmetEye(v) { return setChoice("helmetEye", v); }
+function helmetShake() { return choice("helmetShake"); }
+function setHelmetShake(v) {
+  motionCache.helmetShake = SHAKE_SCALE[v] ?? 1;
+  return setChoice("helmetShake", v);
+}
+
+// Percentages are cached as factors for the camera. Legacy shake preset names still load from saves and shot URLs.
+const motionCache = Object.create(null);
+function motionAmount(key) {
+  if (motionCache[key] === undefined) {
+    let raw = GameStore.store.raw("apex26." + key);
+    if (key === "helmetShake" && typeof location !== "undefined") {
+      const query = /[?&]helmetshake=([a-z0-9]+)/i.exec(location.search);
+      if (query) raw = query[1].toLowerCase();
+    }
+    const preset = key === "helmetShake" && Object.hasOwn(SHAKE_SCALE, raw) ? SHAKE_SCALE[raw] : null;
+    motionCache[key] = preset ?? (typeof raw === "string" && /^\d{1,3}$/.test(raw) ? Math.min(+raw, key === "helmetShake" ? 150 : 100) / 100 : 1);
+  }
+  return motionCache[key];
+}
+function setMotionAmount(key, value) {
+  const pct = Math.round(Math.max(0, Math.min(key === "helmetShake" ? 150 : 100, value * 100)));
+  if (!Number.isFinite(pct)) return;
+  motionCache[key] = pct / 100;
+  GameStore.store.rawSet("apex26." + key, String(pct));
+}
+function shakeScale(mode, source) {
+  if (mode !== "helmet") return 1;
+  return motionAmount("helmetShake") * (source ? motionAmount(source) : 1);
+}
 function visorColor() { return choice("visorColor"); }
 function setVisorColor(v) { return setChoice("visorColor", v); }
 function visorIntensity() { return choice("visorIntensity"); }
@@ -239,7 +301,6 @@ function layout(w, s) {
 function onWheel(fn) { listeners.push(fn); }
 
 function turnChaseLead() {
-  if (lead === null) lead = readLead();
   return lead;
 }
 
@@ -303,7 +364,16 @@ function initUI() {
   const tools = document.getElementById("pm-visual-tuners");
   if (tools && tools.parentNode === host && typeof host.insertBefore === "function") host.insertBefore(fold, tools);
   else host.appendChild(fold);
-  const place = (el) => content.appendChild(el);
+  let section = content;
+  const place = (el) => section.appendChild(el);
+  function subgroup(parent, visible) {
+    const group = document.createElement("div");
+    parent.appendChild(group);
+    const refresh = () => { group.hidden = !visible(); };
+    refresh();
+    onWheel(refresh);
+    return group;
+  }
   // The row titles are hover-only, which a phone never shows: each row also
   // gets the same sentence as a visible help line under it.
   const help = (text) => {
@@ -330,16 +400,43 @@ function initUI() {
   const C = CHOICES;
   row("pm-helmet-visor", "HELMET VISOR", C.visor.values, C.visor.labels,
     "Optional see-through shield in HELMET camera only. CLEAR adds a curved rim and faint reflections; TINTED adds your chosen lens color and intensity. OFF removes the visor and its frame: a plain, unframed helmet view.", visor, setVisor);
+  row("pm-helmeteye", "HELMET EYE POSITION", C.helmetEye.values, C.helmetEye.labels,
+    "Tucked moves your eyes down and forward. Upright moves them up and back. Forward keeps your usual eye height. Fine-tune the field of view in Camera Tuner.", helmetEye, setHelmetEye);
+  row("pm-helmetmount", "CAMERA MOUNT", C.helmetMount.values, C.helmetMount.labels,
+    "Center the helmet camera or mount it over either eye. Works with every eye position.", helmetMount, v => setChoice("helmetMount", v));
+  function motionSlider(key, label, helpText, max = 100) {
+    slider("pm-" + key.toLowerCase(), label.toUpperCase(), label, helpText,
+      max, 1, () => motionAmount(key), value => setMotionAmount(key, value));
+  }
+  motionSlider("helmetShake", "Vibration", "Overall strength of impacts, kerb ribs and speed vibration. 100% is standard.", 150);
+  motionSlider("helmetHeadMotion", "Head lean & nod", "How far your head leans in corners and nods under braking, even at zero vibration.");
+  const fine = document.createElement("details");
+  fine.id = "pm-helmet-vibration-details";
+  const fineLabel = document.createElement("summary");
+  fineLabel.textContent = "Fine-tune vibration";
+  fineLabel.className = "adv-more-btn";
+  fine.appendChild(fineLabel);
+  place(fine);
+  section = fine;
+  motionSlider("helmetImpact", "Contact & sustained rumble", "Jolts from contact and the sustained rumble on a kerb.");
+  motionSlider("helmetKerb", "Kerb rib vibration", "Vertical vibration as each kerb rib passes under the car.");
+  motionSlider("helmetBuzz", "Speed vibration", "Continuous vibration as speed builds on dry tarmac.");
+  const optics = subgroup(content, () => visor() !== "off");
+  section = optics;
+  row("pm-visorshape", "VISOR OPENING", C.visorShape.values, C.visorShape.labels,
+    "Choose how much of the road is visible through a clear or tinted visor.", visorShape, setVisorShape);
+  section = subgroup(optics, () => visor() === "smoke");
   row("pm-visor-color", "TINT COLOR", C.visorColor.values, C.visorColor.labels,
-    "Lens color for TINTED visor: neutral, warm amber, ice blue or rose. CLEAR keeps an untinted centre.", visorColor, setVisorColor);
+    "Choose the lens color for a tinted visor.", visorColor, setVisorColor);
   row("pm-visor-intensity", "TINT INTENSITY", C.visorIntensity.values, C.visorIntensity.labels,
-    "Tint strength for TINTED visor. LIGHT is subtle; MEDIUM and STRONG deepen the lens color. CLEAR keeps an untinted centre.", visorIntensity, setVisorIntensity);
+    "Choose how much lens color covers the road, from a trace to a deep tint.", visorIntensity, setVisorIntensity);
+  section = optics;
   row("pm-visor-refraction", "VISOR REFRACTION", C.visorRefraction.values, C.visorRefraction.labels,
     "Distortion through the shield in HELMET camera with CLEAR or TINTED visor. OFF keeps the road undistorted.", visorRefraction, setVisorRefraction);
   row("pm-visor-reflections", "VISOR REFLECTIONS", C.visorReflections.values, C.visorReflections.labels,
     "Shield reflections in HELMET camera with CLEAR or TINTED visor. LIGHT is subtle; OFF removes the highlights.", visorReflections, setVisorReflections);
   // A percent slider (the TURN CHASING pattern): label, live value, then the range; the help line under it.
-  function slider(id, label, aria, title, max, step, read, write) {
+  function slider(id, label, aria, title, max, step, read, write, min = 0) {
     const lab = document.createElement("label");
     lab.className = "tune-row";
     lab.title = title;
@@ -351,12 +448,12 @@ function initUI() {
     span.appendChild(out);
     const inp = document.createElement("input");
     inp.type = "range";
-    inp.min = "0";
+    inp.min = String(min);
     inp.max = String(max);
     inp.step = String(step);
     inp.id = id;
     inp.setAttribute("aria-label", aria);
-    const paint = () => { const pct = Math.round(read() * 100); inp.value = String(pct); out.textContent = `${pct}%`; };
+    const paint = () => { const pct = Math.round(read() * 100); inp.value = String(pct); inp.setAttribute("aria-valuetext", `${pct}%`); out.textContent = `${pct}%`; };
     inp.oninput = () => { write(parseFloat(inp.value) / 100); paint(); };
     lab.appendChild(span);
     lab.appendChild(inp);
@@ -365,13 +462,20 @@ function initUI() {
     paint();
     onWheel(paint);
   }
+  section = subgroup(optics, () => visorReflections() !== "off");
   slider("pm-visor-beams", "VISOR BEAMS", "Visor beams",
     "Light beams on the shield in HELMET camera: the streak each floodlight and street lamp throws along its aim, the rays of a low sun in the frame and the star flares on the brightest lights. 100% is the standard look; 200% doubles their length and brightness; 0% keeps only the glints. Needs VISOR REFLECTIONS on.",
     200, 10, visorBeams, setVisorBeams);
+  section = optics;
   row("pm-visor-rain", "VISOR RAIN", C.visorRain.values, C.visorRain.labels,
     "Water accumulating on the shield in HELMET camera with CLEAR or TINTED visor. Actual rain controls new drops; OFF clears the water. LOW graphics disables droplets.", visorRain, setVisorRain);
+  section = subgroup(optics, () => visorRain() !== "off");
+  slider("pm-visor-drop-size", "DROPLET SIZE", "Visor droplet size",
+    "Size of collected rain on the HELMET visor. 50% is small, 100% is standard and 200% is large. Updates existing drops while paused. Requires CLEAR or TINTED visor with VISOR RAIN on.",
+    200, 1, visorDropSize, setVisorDropSize, 50);
   row("pm-visor-runoff", "WATER RUNOFF", C.visorRunoff.values, C.visorRunoff.labels,
     "How quickly visor water slides away. Airflow moves drops at speed; stopped drops sag downward. REDUCED MOTION keeps drops still.", visorRunoff, setVisorRunoff);
+  section = content;
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
     "The steering wheel. CLASSIC and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
   row("pm-ckbody", "BODY", C.body.values, C.body.labels,
@@ -390,14 +494,20 @@ function initUI() {
 }
 
 if (typeof document !== "undefined") {
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", initUI, { once: true });
+  // #4798 gate (paintVisor stays at DCL)
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", () => {
+    paintVisor();
+    if (typeof SettingsNav !== "undefined" && SettingsNav.lazy) SettingsNav.lazy(initUI); else initUI();
+  }, { once: true });
   else initUI();
 }
 
 return {
   KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, BEAMS_KEY, BEAMS_DEFAULT, BEAMS_MAX, WHEELS, CHOICES, HALO_VALUES,
   PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity,
-  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorRunoff, setVisorRunoff,
+  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorBeams, setVisorBeams, visorRain, setVisorRain, visorDropSize, setVisorDropSize, visorRunoff, setVisorRunoff,
+  helmetMount, helmetEye, setHelmetEye, helmetShake, setHelmetShake, visorShape, setVisorShape,
+  shakeScale, helmetHeadMotion: () => motionAmount("helmetHeadMotion"),
   wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();

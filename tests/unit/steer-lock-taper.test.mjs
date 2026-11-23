@@ -22,10 +22,17 @@ function rawTaper(vs, ref) {
 
 const LOW_PLATEAU = 1.06;
 
-/** Shipped lockTaper: 1.06× plateau ≤15, blend 15–30, raw ≥30. */
+/** The SHIPPED lockTaper: the declaration is lifted out of updateCar's source
+ * and compiled, so the plateau / blend / raw tests below execute the real
+ * expression (vStd is the identity here: vs is already a standard speed). */
+const SHIPPED_DECL = (() => {
+  const m = gameSource().match(/const vs = vStd\(Math\.abs\(c\.speed\)\),[^;]*?lockTaper = [^;]+;/);
+  if (!m) throw new Error("updateCar's `const vs = …, lockTaper = …;` declaration not found");
+  return m[0];
+})();
+const shippedTaper = Function("vStd", "c", "driveTune", SHIPPED_DECL + "\nreturn lockTaper;");
 function lockTaper(vs, ref) {
-  const raw = rawTaper(vs, ref);
-  return vs <= 15 ? LOW_PLATEAU : (vs >= 30 ? raw : LOW_PLATEAU + (raw - LOW_PLATEAU) * (vs - 15) / 15);
+  return shippedTaper((v) => v, { speed: vs }, { STEER_SPEED_REF: ref });
 }
 
 test("game.js ships the vs≤15 1.06 plateau / 15–30 blend / raw≥30 lockTaper", () => {

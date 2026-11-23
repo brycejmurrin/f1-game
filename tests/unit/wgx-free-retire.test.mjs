@@ -293,10 +293,10 @@ function makeGpuHarness(opts = {}) {
                 Object.defineProperty(o, "device", { value: "", enumerable: false });
                 return o;
               })()
+            // Chrome 140+ shape: the fallback flag lives on GPUAdapterInfo (webgpu-lifecycle.test.mjs covers both).
             : (opts.softAdapter
-              ? {}
+              ? { isFallbackAdapter: true }
               : { vendor: "test", architecture: "test", device: "mock-gpu" }),
-          isFallbackAdapter: !!(opts.softAdapter || opts.softAdapterNonEnum),
           requestDevice: async (desc) => {
             deviceRequests.push((desc && desc.requiredFeatures) || []);
             // The DEVICE answer is deliberately separate from the adapter's:
@@ -457,6 +457,22 @@ test("freeMesh retires while only the pending shadow encoder is live", async () 
   assert.equal(gfx.begin({}), true);
   gfx.present({});
   assert.ok(bufs.every((b) => b.destroyed));
+});
+
+test("instance upload interleaves complete matrices and tint without slicing each source row", async () => {
+  const h = makeGpuHarness(), gfx = await h.create();
+  const values = Array.from({ length: 33 }, (_, i) => (i - 7) * 0.125);
+  for (const matrices of [values.slice(), Float32Array.from(values)]) {
+    matrices[Array.isArray(matrices) ? "slice" : "subarray"] = () => assert.fail("transient matrix row");
+    for (const colors of [null, [0, 0.5, 1, 0.75, 0.25, 0]]) {
+      const batch = gfx.createInstancedBatch(TRI, matrices, colors);
+      const expected = [...values.slice(0, 16), ...(colors ? colors.slice(0, 3) : [1, 1, 1]), 0,
+        ...values.slice(16, 32), ...(colors ? colors.slice(3) : [1, 1, 1]), 0];
+      assert.equal(batch.instances, 2);
+      assert.deepEqual(Array.from(batch._instPacked), expected);
+      gfx.freeInstancedBatch(batch);
+    }
+  }
 });
 
 test("freeInstancedBatch retires the instance and shadow buffers in-frame", async () => {

@@ -6,20 +6,7 @@
  * LINE_VS/FS, WGX WGSLFx.LINE, TLX tsl-fx lineMat) uploads and shades it. Nothing here touches a car — the arc reaches the PICTURE only
  * (docs/PHYSICS.md §curvature reads: render-only).
  *
- * WHAT THE OTHER GAMES DO (researched 2026-09-08, sources in
- * docs/notes/DRIVING-LINE-RESEARCH.md):
- *   Forza    Suggested Line: FULL / BRAKING ONLY / OFF. One ribbon; blue where it
- *            is ideal to accelerate, red where the driver should slow down.
- *            BRAKING ONLY draws only the red parts. White when off the track.
- *   F1 (EA)  Dynamic Racing Line: FULL / CORNERS ONLY / OFF, 2D flat or 3D
- *            raised; green (on pace) → amber (lift) → red (brake) against the
- *            PLAYER's speed, so the same corner reads differently at 300 and
- *            at 200 km/h — "dynamic".
- *   GT7      a dotted Driving Line, side-of-road Corner Indicators, and a
- *            separate Braking Area marker; the line itself is NOT colour-coded.
- *   Engines  the geometry is a polystrip laid on the road (a generated mesh
- *            decal, depth-tested, no depth write, biased off the surface) —
- *            the same shape as this game's batched skid marks.
+ * Survey of other games' racing lines: docs/notes/DRIVING-LINE-RESEARCH.md.
  * This is Forza's shape with F1's three-colour dynamic grammar and F1's mode
  * names (which the STEERING assist already uses: OFF / CORNERS / FULL).
  *
@@ -50,6 +37,10 @@ window.DrivingLine = (function () {
   const STEP = 2.5;          // m between samples (a 5 km lap ≈ 2000 samples)
   const LOOK = 60;           // m — the assist's look-ahead at ~70 m/s (25-90)
   const HALF_W = 0.75;       // m — half the ribbon width (one 1.5 m row of chevrons)
+  // build()'s fallbacks when the api omits a budget (m/s², m/s); `brakeMul`
+  // derates the brake budget for a display that reads as early, not late.
+  // Exported so tests/unit/track-line-circuits.test.mjs models the same sweep.
+  const DEFAULTS = Object.freeze({ latMax: 22, brake: 22, brakeMul: 0.85, accel: 7, vTop: 72, grip: 1 });
   const LIFT = 0.03;         // m above the road (the road mesh sits at +0.02)
   const MODES = ["off", "corner", "full"];
   const KMIN = 1 / 400;      // |k| above this is "a corner" (radius under 400 m)
@@ -63,14 +54,51 @@ window.DrivingLine = (function () {
 
   function setMode(m) { mode = MODES.includes(m) ? m : "off"; return mode; }
   function getMode() { return mode; }
-  // LINE COLOUR. The speed cue is only a cue if it can be read: F1's own
-  // green/amber/red puts the two ends of the scale on the pair the common
-  // red-green deficiencies cannot separate. `safe` swaps in the IBM
-  // colour-blind-safe triple; every backend's shader mixes between the two on
-  // this one flag (SETTINGS › LINE COLOUR, and F1 25 offers the same choice).
+  // PHOTO override: photo mode and the Photo Studio show or hide the ribbon for a shot without touching the saved
+  // DRIVING LINE setting. null = follow the setting; false = hidden; true = shown (FULL when the setting is OFF).
+  let photo = null;
+  function setPhoto(v) { photo = v == null ? null : !!v; return photo; }
+  function shown() { return photo === null ? mode !== "off" : photo; }
+  function drawMode() { return photo === true && mode === "off" ? "full" : photo === false ? "off" : mode; }
+  // LINE COLOUR. The palette is DATA: each entry is the three colours the
+  // speed cue runs through — onPace (at or under the line's pace) → lift
+  // (smoothstep 0.98..1.06 of over = playerSpeed / lineSpeed) → brake
+  // (1.06..1.16) — in the 0..1 values every backend's shader takes as three
+  // vec3 uniforms (GLX LINE_FS uOnPace/uLift/uBrake, WGX LineU
+  // colOnPace/colLift/colBrake, TLX lineOnPace/lineLift/lineBrake). draw()
+  // hands them over as `_drawOpts.cols` (Float32Array(9): onPace, lift, brake).
+  // The main-colour variants change ONLY onPace and keep F1's amber and red, so
+  // the warning half of the cue reads the same whichever colour a player picks.
+  // COLOUR-BLIND is the one that swaps all three: F1's own green/amber/red puts
+  // the two ends of the scale on the pair the common red-green deficiencies
+  // (deuteranopia, protanopia) cannot separate, on a cue that only means
+  // anything read at a glance. It is the IBM design library's colour-blind-safe
+  // triple (blue #648FFF, orange #FE6100, magenta #DC267F): blue against orange
+  // is the classic safe pair, and orange against magenta separates on the BLUE
+  // channel, which both deficiencies keep. SETTINGS › LINE COLOUR lists them in
+  // this order; F1 25 ships the same colour-blind choice. The stored id
+  // (drivingLinePalette) is unchanged, so "f1" / "safe" saves keep working and
+  // an unknown id falls back to "f1".
+  const AMBER = [1.00, 0.72, 0.10], RED = [1.00, 0.12, 0.10];
+  const PALETTES = Object.freeze([
+    ["f1", "F1 GREEN", [0.10, 0.95, 0.35], AMBER, RED],
+    ["cyan", "CYAN", [0.10, 0.85, 1.00], AMBER, RED],
+    ["blue", "BLUE", [0.25, 0.45, 1.00], AMBER, RED],
+    ["white", "WHITE", [0.92, 0.95, 1.00], AMBER, RED],
+    ["purple", "PURPLE", [0.62, 0.35, 1.00], AMBER, RED],
+    ["pink", "PINK", [1.00, 0.35, 0.80], AMBER, RED],
+    ["safe", "COLOUR-BLIND", [0.392, 0.561, 1.000], [0.996, 0.380, 0.000], [0.863, 0.149, 0.498]],
+  ].map(([id, label, onPace, lift, brake]) => Object.freeze({ id, label,
+    onPace: Object.freeze(onPace.slice()), lift: Object.freeze(lift.slice()), brake: Object.freeze(brake.slice()) })));
   let palette = "f1";
-  const PALETTES = ["f1", "safe"];
-  function setPalette(p) { palette = PALETTES.includes(p) ? p : "f1"; return palette; }
+  const _cols = new Float32Array(9);   // onPace rgb, lift rgb, brake rgb of `palette`, refilled by setPalette
+  function setPalette(p) {
+    const e = PALETTES.find((r) => r.id === p) || PALETTES[0];
+    palette = e.id;
+    _cols.set(e.onPace, 0); _cols.set(e.lift, 3); _cols.set(e.brake, 6);
+    return palette;
+  }
+  setPalette("f1");
   function getPalette() { return palette; }
   // LINE OPACITY. F1 25 offers an "increased opacity" option; the complaint it
   // answers runs both ways, so this goes both ways — SUBTLE for the players who
@@ -95,13 +123,6 @@ window.DrivingLine = (function () {
      LERPED with Tracks.sample()'s fi maths — the road mesh is piecewise-linear
      between nodes ~4 m apart, so a nearest-node lift let the tarmac rise above
      the ribbon's LIFT where the banking changes fast (7.8 cm at Zandvoort). */
-  function nodeBank(bp, hw, k, o) {
-    const lift = bp.lift[k];
-    if (!(lift > 0)) return 0;
-    const w = hw[k];
-    const frac = clamp((bp.bsign[k] * o + w) / (2 * w), 0, 1);
-    return lift * (frac - 0.5);
-  }
   function bankOffset(track, s, o) {
     const bp = track && track.bankP;
     if (!bp) return 0;
@@ -109,7 +130,7 @@ window.DrivingLine = (function () {
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
-    const a = nodeBank(bp, track.hw, i, o), b = nodeBank(bp, track.hw, j, o);
+    const a = TrackMesh.bankOffsetAt(track, i, o), b = TrackMesh.bankOffsetAt(track, j, o);
     return a + (b - a) * f;
   }
 
@@ -124,12 +145,15 @@ window.DrivingLine = (function () {
   function lateral(api, s, hw) {
     // The baked RACING LINE (js/track/core/line.js) when the
     // circuit has one: outside-inside-outside, the line the AI drives, so
-    // the picture and the field are one truth. `w` eases to 0 on a straight
-    // ("no opinion"), which brings the ribbon back to the centre there.
+    // the picture and the field are one truth. Drawn as `x` everywhere, not
+    // `x·w`: `w` is how much the AI weighs the line against its own lane, and
+    // multiplying by it pulled the ribbon to the centre wherever a corner
+    // window eased out — up to 6.8 m off the line (Monza after the first
+    // chicane, where the line holds the outside edge down the straight) and a
+    // kink at both ends of each 45 m ease (docs/notes/RACING-LINE-RESEARCH.md §12).
     if (api.lineAt) {
       const ln = api.lineAt(s);
-      if (ln && ln.w > 0) return clamp(ln.x * ln.w, -(hw - 0.6), hw - 0.6);
-      return 0;
+      return ln ? clamp(ln.x, -(hw - 0.6), hw - 0.6) : 0;
     }
     const k = api.curvature(s);
     const kA = api.curvature(s + LOOK) - k, kB = api.curvature(s - LOOK * 0.7) - k;
@@ -142,8 +166,9 @@ window.DrivingLine = (function () {
   function build(api) {
     const L = api.total, n = Math.max(8, Math.round(L / STEP));
     const ds = L / n;
-    const latMax = api.latMax || 22, brake = (api.brake || 22) * 0.85, accel = api.accel || 7;
-    const vTop = api.vTop || 72, grip = api.grip || 1;
+    const D = DEFAULTS;
+    const latMax = api.latMax || D.latMax, brake = (api.brake || D.brake) * D.brakeMul, accel = api.accel || D.accel;
+    const vTop = api.vTop || D.vTop, grip = api.grip || D.grip;
     const v = new Float32Array(n), zone = new Float32Array(n), x = new Float32Array(n);
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
     // 1. cornering cap and the line's lateral offset, per sample
@@ -187,6 +212,8 @@ window.DrivingLine = (function () {
     }
     // 5. the strip: two vertices per sample plus the two that close the loop.
     const verts = new Float32Array((n + 1) * 2 * STRIDE);
+    const node = nodeLine(api);
+    const c = [0, 0];
     let o = 0;
     for (let q = 0; q <= n; q++) {
       const i = q % n, s = i * ds;
@@ -194,12 +221,16 @@ window.DrivingLine = (function () {
       const p = smp.p, r = smp.r, t = smp.t;
       // up = r × t, the road mesh's frame (mesh.js buildRoad: p + r·o + u·bank)
       const ux = r[1] * t[2] - r[2] * t[1], uy = r[2] * t[0] - r[0] * t[2], uz = r[0] * t[1] - r[1] * t[0];
+      // the line's ground point: a Catmull-Rom through the nodes' line points
+      // when the track carries them, else the lerped frame (both are p + r·x
+      // AT a node; between nodes only the curve is round)
+      if (node) lineXZ(node, s, c); else { c[0] = p[0] + r[0] * x[i]; c[1] = p[2] + r[2] * x[i]; }
       for (let side = -1; side <= 1; side += 2) {
         const off = x[i] + side * HALF_W;
         const by = bankOffset(api.track, s, off) + LIFT;
-        verts[o++] = p[0] + r[0] * off + ux * by;
+        verts[o++] = c[0] + r[0] * side * HALF_W + ux * by;
         verts[o++] = p[1] + r[1] * off + uy * by;
-        verts[o++] = p[2] + r[2] * off + uz * by;
+        verts[o++] = c[1] + r[2] * side * HALF_W + uz * by;
         verts[o++] = side;
         verts[o++] = v[i];
         verts[o++] = zone[i];
@@ -209,6 +240,38 @@ window.DrivingLine = (function () {
     cache.id = api.id; cache.verts = verts; cache.count = (n + 1) * 2; cache.dirty = true;
     cache.v = v; cache.zone = zone; cache.n = n; cache.step = ds;
     return cache;
+  }
+
+  /* BETWEEN NODES. Tracks.sample() lerps position and frame between nodes
+     ~4 m apart, so a line traced through it is a polyline whose whole turn
+     happens AT each node — 14° a node in a 16 m hairpin — and a 2.5 m ribbon
+     sampled across a 4 m grid shows those facets as an uneven, interpolated
+     wobble. The line's ground point at each node (p + r·x, x from
+     lateral()) is exact; a uniform Catmull-Rom through those points keeps
+     every node and rounds the turn between them (TUMFTM interpolates its
+     raceline with splines after the optimisation for the same reason). XZ
+     only: heights stay the road mesh's own lerp, so the ribbon cannot sink
+     into a crest. Null when the api has no node arrays (the unit stadium). */
+  function nodeLine(api) {
+    const tr = api.track;
+    if (!tr || !tr.px || !tr.pz || !tr.rx || !tr.rz || !tr.hw || !(tr.n >= 4)) return null;
+    const N = tr.n, L = api.total, qx = new Float32Array(N), qz = new Float32Array(N);
+    for (let k = 0; k < N; k++) {
+      const xk = lateral(api, k * L / N, tr.hw[k]);
+      qx[k] = tr.px[k] + tr.rx[k] * xk; qz[k] = tr.pz[k] + tr.rz[k] * xk;
+    }
+    return { N, L, qx, qz };
+  }
+  function lineXZ(node, s, out) {
+    const N = node.N, L = node.L, qx = node.qx, qz = node.qz;
+    s %= L; if (s < 0) s += L;
+    const fi = s / L * N, i = Math.floor(fi) % N, t = fi - Math.floor(fi);
+    const a = (i - 1 + N) % N, b = (i + 1) % N, d = (i + 2) % N;
+    const t2 = t * t, t3 = t2 * t;
+    const w0 = -0.5 * t3 + t2 - 0.5 * t, w1 = 1.5 * t3 - 2.5 * t2 + 1, w2 = -1.5 * t3 + 2 * t2 + 0.5 * t, w3 = 0.5 * t3 - 0.5 * t2;
+    out[0] = w0 * qx[a] + w1 * qx[i] + w2 * qx[b] + w3 * qx[d];
+    out[1] = w0 * qz[a] + w1 * qz[i] + w2 * qz[b] + w3 * qz[d];
+    return out;
   }
 
   /* The line's speed at arc position s (m/s), for a HUD or a test. */
@@ -227,7 +290,7 @@ window.DrivingLine = (function () {
   /* Draw through a backend: `gfx.drawDrivingLine(verts, count, dirty, opts)`.
      Builds lazily when the circuit changed. Returns false when the line is off
      or the backend's pass is not ready. */
-  const _drawOpts = { speed: 0, cornersOnly: false, palette: 0, opacity: 1 };
+  const _drawOpts = { speed: 0, cornersOnly: false, cols: _cols, opacity: 1 };
   // The circuit draw() was last handed, kept so cue() can build the profile with
   // the line hidden: game.js hands the api to draw() every frame and to nothing else.
   let _api = null;
@@ -236,11 +299,12 @@ window.DrivingLine = (function () {
   }
   function draw(gfx, api, playerSpeed) {
     if (api) _api = api;
-    if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
+    const dm = drawMode();
+    if (dm === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
     ensure(api);
     // One scratch opts, refilled per frame: every backend reads it synchronously.
-    _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = mode === "corner";
-    _drawOpts.palette = palette === "safe" ? 1 : 0; _drawOpts.opacity = _opMul;
+    _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = dm === "corner";
+    _drawOpts.opacity = _opMul;   // _drawOpts.cols IS _cols, kept current by setPalette
     const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, _drawOpts);
     if (drew) cache.dirty = false;
     return !!drew;
@@ -281,7 +345,11 @@ window.DrivingLine = (function () {
 
   function reset() { _api = null; cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
-  return { MODES, PALETTES, OPACITIES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
+  // MODES / STEP / HALF_W stay module-local (setters + build/draw); nothing
+  // outside reads them. PALETTES feeds SETTINGS › LINE COLOUR's values;
+  // OPACITIES / STRIDE / opacityMul / bankOffset / DEFAULTS stay exported — unit
+  // tests pin the palette and opacity tables, the bank lerp and the sweep budgets.
+  return { PALETTES, OPACITIES, STRIDE, DEFAULTS, setMode, mode: getMode, setPhoto, shown,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
            build, draw, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };

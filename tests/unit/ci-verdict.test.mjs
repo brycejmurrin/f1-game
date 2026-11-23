@@ -21,6 +21,13 @@ test("success and skipped needed jobs pass", () => {
   assert.ok(v.skipped.includes("node-suites"));
 });
 
+test("a deferred draft may publish a nonempty browser plan without running it", () => {
+  const needs = { select: { result: "success", outputs: { any: "true" } }, selected: { result: "skipped" }, "selected-verdict": { result: "success" } };
+  assert.equal(verdict(needs, { deferDraftBrowser: true }).ok, true);
+  assert.equal(verdict(needs, { fullTier: true, deferDraftBrowser: true }).ok, false);
+  assert.equal(verdict(needs).ok, false);
+});
+
 test("a failed or cancelled needed job fails the aggregator", () => {
   assert.equal(verdict({ guards: { result: "failure" } }).ok, false);
   assert.equal(verdict({ smoke: { result: "cancelled" } }).ok, false);
@@ -131,6 +138,23 @@ test("the CLI reads REQUIRE_SUCCESS: the same needs JSON passes bare and fails s
   assert.equal(run({ REQUIRE_SUCCESS: "guards-a,guards-b,guards-c,guards,select,smoke" }), 1);
 });
 
+test("only an explicit ready browser exemption permits skipped smoke and staged boot", () => {
+  const passed = { result: "success" }, skipped = { result: "skipped" };
+  const base = { select: { ...passed, outputs: { browser_exempt: "true" } }, guards: passed, smoke: skipped, "staged-boot": skipped };
+  const run = (needs) => {
+    const env = { ...process.env, NEEDS: JSON.stringify(needs), REQUIRE_SUCCESS: "select,guards,smoke,staged-boot" };
+    try { execFileSync("node", ["tools/ci/ci-verdict.mjs"], { cwd: ROOT, env, stdio: "pipe" }); return 0; }
+    catch (e) { return e.status; }
+  };
+  assert.equal(run(base), 0);
+  for (const browser_exempt of [undefined, "false", "unknown"])
+    assert.equal(run({ ...base, select: { ...passed, outputs: { browser_exempt } } }), 1);
+  assert.equal(run({ ...base, guards: skipped }), 1);
+  assert.equal(run({ ...base, smoke: undefined }), 1);
+  assert.equal(run({ ...base, "staged-boot": { result: "cancelled" } }), 1);
+  assert.equal(run({ ...base, select: { ...base.select, result: "failure" } }), 1);
+});
+
 test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming jobs ci-verdict needs; the draft fast tier is not named `CI`", async () => {
   const fs = await import("node:fs");
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
@@ -139,6 +163,8 @@ test("ci.yml wiring (#2664): REQUIRE_SUCCESS only on a non-draft PR run, naming 
   assert.ok(m, "REQUIRE_SUCCESS must be set only when the run is a non-draft pull_request");
   const needs = body.split("needs:")[1].split("if:")[0];
   for (const j of m[1].split(",")) assert.match(needs, new RegExp(`- ${j}\\b`), `required job ${j} must be in ci-verdict's needs`);
+  // #5403 part 1: a skipped selected-verdict (the selected gate's own verdict) must red a full-tier run.
+  assert.deepEqual(m[1].split(","), ["guards-a", "guards-b", "guards-c", "guards-d", "guards", "select", "selected-verdict", "smoke", "staged-boot"]);
   assert.match(body, /'CI \(draft fast tier\)' \|\| 'CI' \}\}/, "a draft run's success must not carry the required name");
 });
 
@@ -152,4 +178,56 @@ test("summary lists executed vs skipped jobs and names the required set", () => 
   const red = summary(verdict({ ...needs, smoke: { result: "skipped" } }, { require: ["guards", "smoke"] }), ["guards", "smoke"]);
   assert.ok(/FAIL/.test(red));
   assert.ok(/smoke: required to succeed/.test(red));
+});
+
+// ---- #5241 G5 ----
+import { rerunVerdict } from "../../tools/ci/ci-verdict.mjs";
+test("nightly schedule NEEDS: a successful select with selected-verdict judging the plan passes ci-verdict", () => {
+  const nightly = {
+    guards: { result: "success" },
+    select: { result: "success", outputs: { any: "true", reason: "infra", plan_reason: "all" } },
+    selected: { result: "success" },
+    "selected-verdict": { result: "success" },
+    smoke: { result: "skipped" },
+  };
+  const v = verdict(nightly);
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.bad, []);
+});
+
+test("push and pull_request: skipped selected-verdict after a successful select still fails closed (#5459)", () => {
+  const needs = {
+    guards: { result: "success" },
+    select: { result: "success", outputs: { any: "true", reason: "infra" } },
+    selected: { result: "success" },
+    "selected-verdict": { result: "skipped" },
+  };
+  const v = verdict(needs);
+  assert.equal(v.ok, false);
+  assert.ok(v.bad.some((b) => /selected-verdict: skipped after a successful selection/.test(b)));
+});
+
+test("#5241 G5: a plan that said run and a job that skipped is not green", () => {
+  const ok = { guards: { result: "success" }, select: { result: "success", outputs: { any: "true", any_node: "true" } },
+    selected: { result: "success" }, "selected-verdict": { result: "success" }, "node-suites": { result: "success" } };
+  assert.equal(verdict(ok, { fullTier: true }).ok, true);
+  // the issue's crafted input: all three skipped was {"ok":true}
+  const hollow = { ...ok, selected: { result: "skipped" }, "selected-verdict": { result: "skipped" }, "node-suites": { result: "skipped" } };
+  const v = verdict(hollow, { fullTier: true });
+  assert.equal(v.ok, false);
+  assert.equal(v.bad.length, 3);
+  assert.equal(verdict({ ...ok, "node-suites": { result: "skipped" } }).ok, true, "a draft / the train skips node-suites by design");
+  assert.equal(verdict({ ...ok, "node-suites": { result: "skipped" } }, { fullTier: true }).ok, false);
+  const empty = { ...ok, select: { result: "success", outputs: { any: "false", any_node: "false" } }, selected: { result: "skipped" }, "node-suites": { result: "skipped" } };
+  assert.equal(verdict(empty, { fullTier: true }).ok, true, "an empty plan still skips legitimately; selected-verdict judges it");
+});
+test("#5241 G5: a CI green that needed a re-run is not ok until the PR names it (#5190, run 42730286157 attempt 2)", () => {
+  assert.equal(rerunVerdict({ attempt: 1 }).ok, true);
+  const r = rerunVerdict({ attempt: 2, previous: "failure", body: "## Plan\n- [x] done" });
+  assert.equal(r.ok, false);
+  assert.match(r.evidence, /rule 9/);
+  assert.equal(rerunVerdict({ attempt: 2, previous: "", body: "" }).ok, false, "an unread previous attempt fails closed");
+  assert.equal(rerunVerdict({ attempt: 2, previous: "cancelled" }).ok, true, "the designed dedupe is not a re-run of a red");
+  assert.equal(rerunVerdict({ attempt: 2, previous: "failure", body: "## Verified\n- re-run: perf-hot-bench.test.mjs — runner noise, quarantined" }).ok, true);
+  assert.equal(rerunVerdict({ attempt: 2, previous: "failure", body: "<!-- re-run: hidden -->" }).ok, false, "a comment names nothing");
 });

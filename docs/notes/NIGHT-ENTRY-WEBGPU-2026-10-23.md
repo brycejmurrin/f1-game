@@ -1,5 +1,7 @@
 # First night race on three.js WebGPU: 14.5 s entry — a lamp-bake placeholder forked the lit WGSL (2026-10-23)
 
+Summary: First night race on three.js WebGPU took 14.5 s because a lamp-bake placeholder forked the lit WGSL (A·W14).
+
 A·W14, Fleet A (OrchA 30's lane). On the iPhone 18 Pro Max, the first Monza night race on three.js WebGPU took
 about 14.5 s to enter. On WebGL2 the same race takes about 3.6 s (A·D1, #3612 §9).
 
