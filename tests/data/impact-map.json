@@ -19388,6 +19388,7 @@
       ],
       "*": [
         "tests/unit/appearance-shapes.test.mjs",
+        "tests/unit/player-tools-ui.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },

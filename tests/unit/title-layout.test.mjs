@@ -588,7 +588,7 @@ test("shell: UI SIZE lives in APPEARANCE › READABILITY, before TEXT SIZE, and 
   assert.match(look, /<h5 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">/, "a sub-heading of READABILITY");
   const help = look.match(/<p id="pm-uiscale-help"[^>]*>([^<]*)<\/p>/)[1];
   assert.ok(!/below/.test(help), "no 'HUD fold below': the HUD fold is on another page now");
-  assert.match(help, /DISPLAY › HUD/);
+  assert.match(help, /HUD &amp; CAMERA/);
   assert.match(SHELL, /id="pm-open-appearance"[^>]*>APPEARANCE&hellip;<small>[^<]*UI size/, "the door names it");
 });
 

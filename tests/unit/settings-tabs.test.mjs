@@ -103,7 +103,7 @@ test("MUSIC & SOUND: a bundle that loads reveals the wired page without the offl
   assert.equal(calls.ensure, 1);
   assert.equal(audio.hidden, false);
   assert.deepEqual(sel, ["audio"]);
-  assert.notEqual(dom.byId("audioset-offline").hidden, false);
+  assert.equal(audio.querySelector("#audioset-offline"), null);
 });
 
 test("onLeave(fn) is called with the page id when back() / show() hides a page", () => {

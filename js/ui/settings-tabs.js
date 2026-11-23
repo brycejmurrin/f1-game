@@ -366,11 +366,11 @@ const SettingsNav = (function () {
     // reveals with the stub engine, so say why the sliders are silent.
     function bundleNote(panel, page, failed) {
       const noteId = page === "audio" ? "audioset-offline" : page === "appearance" ? "pm-appearance-offline" : "pm-touch-offline";
-      let n = panel?.querySelector("[data-settings-bundle-status]");
+      let n = panel?.querySelector("#" + noteId);
       if (!failed && !n) return;
       if (!n) {
         if (!panel || typeof document.createElement !== "function") return;
-        n = document.createElement("p"); n.id = noteId; n.dataset.settingsBundleStatus = "";
+        n = document.createElement("p"); n.id = noteId;
         n.className = "adv-help"; n.setAttribute("role", "status");
         panel.insertBefore(n, panel.firstChild);
       }
