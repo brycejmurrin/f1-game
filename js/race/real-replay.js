@@ -289,6 +289,8 @@ const RealReplay = (function () {
       get script() { return run.script; }, get T() { return run.T; }, get speed() { return run.speed; },
       get list() { return run.list; }, get reel() { return !!run.reel; }, get follow() { return run.follow; },
       get followNum() { const f = run.follow && run.cars.get(run.follow); return f ? f.num : null; },
+      nameOf: (car) => run.cars.get(car)?.d?.name,
+      kphOf: (car) => run.cars.get(car)?.traceKph,
       isOut: (num) => { for (const [c, f] of run.cars) if (f.num === num) return !f.tr || !!(f.parked && c.retired); return true; },
       carOf: (num) => { for (const [c, f] of run.cars) if (f.num === num) return c; return null; },
       codeOf: (c) => { const f = run.cars.get(c); return f && f.d ? f.d.code : null; },   // the REAL driver's code (a seat car can wear another)
@@ -340,11 +342,11 @@ const RealReplay = (function () {
       pose(true);
       if (run.onTimeline) run.onTimeline(run.T);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
-      let follow = null;
-      for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
-      if (!follow) for (const [c, f] of cars) if (f.tr && !follow) follow = c;
+      const running = runningOrder();
+      const follow = running.find(c => cars.get(c).d.code === o.follow) || running[0]
+        || [...cars].find(([, f]) => f.tr)?.[0];
       setFollow(follow);
-      if (bc) bc.start({ auto, tower: o.tower !== false });
+      if (bc) { bc.start({ auto, tower: o.tower !== false }); bc.refresh(bcState); }
       if (reel && reel.length) cutTo(reel[0]);
       // THE COMMENTARY (js/race/race-radio.js): the replay's highlights are the
       // news, told with the REAL drivers' names. Real team radio is caption-only
@@ -468,7 +470,7 @@ const RealReplay = (function () {
         if (!(picture && (picture.locked || picture.manual))) liveSubject();
       }
       if (!continuous && G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
-      if (bc) bc.refresh(bcState);
+      if (bc) bc.refresh(bcState, !continuous);
       if (G.refreshHud) G.refreshHud(true);
       if (G.snapGameCam) G.snapGameCam(paint);
       if (transport) transport.paint();
@@ -574,6 +576,7 @@ const RealReplay = (function () {
       for (const [c, f] of run.cars) {
         if (!f.tr) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dns ? "dns" : f.d && f.d.dnf ? "dnf" : null; idle(c); } continue; }
         sampleAt(f.tr, run.T, at, f);
+        f.traceKph = at.before || at.ended ? undefined : at.speed * 3.6;
         if (at.before && !discontinuous) { if (f.posed) { idle(c); } continue; }   // a seek before the trace reposes its first sample
         if (at.ended && !discontinuous) { if (!f.parked) { f.parked = true; c.retired = true; c.dnf = f.d && f.d.dnf ? "dnf" : null; idle(c); c.dnfAt = null; } continue; }
         f.posed = true; f.parked = false; c.dnf = null;

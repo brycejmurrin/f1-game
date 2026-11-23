@@ -112,19 +112,40 @@ function hubWorld() {
   for (const file of ["js/core/mat4.js", "js/race/broadcast.js", "js/race/real-race-boot.js"]) vm.runInContext(read(file), ctx, { filename: absSrc(file) });
   vm.runInContext(read("js/core/script-loader.js") + "\n" + read("js/core/lazy-bundles.js") + "\nthis.LazyBundles = LazyBundles;", ctx, { filename: absSrc("js/core/lazy-bundles.js") });
   const lb = ctx.LazyBundles.create({ els: {}, applyLightTuneIfReady() {}, onAudioReady() {}, getContext: () => null, bindAgent() {},
-    loadBackendScripts: (files) => {
+    loadBackendScripts: (files, _edges, { loaded } = {}) => {
+      files = files.filter(file => !loaded?.has(file));
       loads.push(files.slice());
       if (files.includes("js/race/real-race.js")) {
         return new Promise((r) => { releaseRace = () => {
-          for (const file of files) vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+          for (const file of files) {
+            vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+            loaded?.add(file);
+          }
           r(true);
         }; });
+      }
+      if (files.length === 1 && files[0] === "js/race/replay-broadcast.js") {
+        const [file] = files;
+        vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+        loaded?.add(file);
       }
       if (files.includes("js/data/hub.js")) ctx.DataHub = { init() {} };
       return Promise.resolve(true);
     } });
   return { lb, loads, ctx, release: () => releaseRace() };
 }
+
+test("post-finish TV loads only its presentation and the Data Hub reuses it", async () => {
+  const w = hubWorld();
+  assert.equal(await w.lb.ensureReplayBroadcast(), true);
+  assert.deepEqual(Array.from(w.loads[0]), ["js/race/replay-broadcast.js"]);
+  assert.equal(vm.runInContext("typeof RealRaceBody", w.ctx), "undefined");
+  const presentation = vm.runInContext("ReplayBroadcast", w.ctx);
+  const p = w.lb.ensureRealRace();
+  w.release();
+  assert.equal(await p, true);
+  assert.equal(vm.runInContext("ReplayBroadcast", w.ctx), presentation);
+});
 
 test("the Data Hub opens only once the real-race engine has landed (WATCH & DRIVE never launches into a stub)", async () => {
   const w = hubWorld();

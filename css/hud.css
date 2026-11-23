@@ -2164,18 +2164,19 @@ body.lt-open .touchbtn { display: none !important; }
    broadcast: the tower, the PiP and the replay bar stay. The driving HUD
    does not — timing band, map, gaps, speed, gear, energy, tyres, overtake,
    aero, bias, sectors, flags, mirror, the helmet visor and the touch pads.
-   display:none, not visibility, so a placed chip (data-hl) cannot punch
-   back through. The same list under body.watch-controls-on lives in
-   css/watch-transport.css (that class stays in one file). Pause stays.
-   The race camera chip and the radio card stand down; the replay bar has
-   its own camera control. The timing tower and the PiP stay. */
-body.bc-on :is(.hud-top, .hud-gaps, .hud-bottom, #minimap, #hud-dock) { display: none !important; }
-body.bc-on :is(#hud-gearbox, #hud-speed, #hud-energy, #hud-tyre, #hud-pit, #hud-pit-actions) { display: none !important; }
-body.bc-on :is(#hud-ot, #hud-sectors, #hud-limits) { display: none !important; }
-body.bc-on :is(#hud-damage, #hud-flag, #hud-mirror, #hud-mirror-chip) { display: none !important; }
-body.bc-on :is(.touchbtn, #campicker) { display: none !important; }
-body.bc-on :is(#btn-cam, #announce, #lights) { display: none !important; }
-body.bc-on[data-helmet-cam] #hud::before { content: none; }
+   Display:none keeps placed chips from punching through. Pause, the
+   timing tower and PiP stay. The replay transport owns the camera picker. */
+body:is(.bc-on, .watch-controls-on, [data-spectator]) #hud > :not(#bc-tower, #bc-pip),
+body:is(.bc-on, .watch-controls-on, [data-spectator]) :is(.touchbtn, #announce, #lights) { display: none !important; }
+body:is(.watch-controls-on, [data-spectator="watch"]) :is(#campicker, #btn-cam) { display: none !important; }
+body[data-race-ceremony="cooldown"] #hud > :not(#hud-dock),
+body[data-race-ceremony="cooldown"] :is(#hud .hud-bottom, #announce) { display: none !important; }
+body:is([data-race-ceremony="parcFerme"], [data-race-ceremony="podium"]) :is(#hud, #announce) {
+  display: none !important;
+}
+body:is(.bc-on, .watch-controls-on, [data-spectator],
+  [data-race-ceremony="cooldown"])[data-helmet-cam] #hud::before { content: none; }
+body:is(.bc-on, .watch-controls-on, [data-spectator]) #hud::after { content: none; }
 #bc-tower {
   --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z);
   position: absolute;
@@ -2197,14 +2198,14 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
   color: var(--text); border-bottom: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer;
 }
 #bc-tower .bc-rows { list-style: none; margin: 0; padding: 0; }
-#bc-tower .bc-row button {
+#bc-tower [data-bc-entry] {
   display: grid; grid-template-columns: 18px 3px 34px 1fr 12px; align-items: center; gap: 4px;
   width: 100%; min-height: max(17px, calc(24px / var(--hud-z))); padding: 0 5px 0 4px; border: 0; background: none;
   /* Keep a ten-pixel painted floor when HUD fitting shrinks this band;
      TEXT SIZE raises it with the same micro/1.4 floor as the gap readout. */
   color: inherit; font: inherit; font-size: max(12px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); line-height: max(17px, 1.2em); text-align: left; cursor: pointer;
 }
-#bc-tower .bc-row:nth-child(odd) button { background: rgba(255, 255, 255, 0.04); }
+#bc-tower .bc-row:nth-child(odd) [data-bc-entry] { background: rgba(255, 255, 255, 0.04); }
 #bc-tower .bc-pos { text-align: right; font-weight: 700; color: var(--dim); }
 #bc-tower .bc-team { height: 12px; border-radius: 1px; }
 #bc-tower .bc-code { font-weight: 800; letter-spacing: 0.04em; }
@@ -2213,7 +2214,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-tyre[data-c="S"] { color: var(--tyre-s); } #bc-tower .bc-tyre[data-c="M"] { color: var(--tyre-m); } #bc-tower .bc-tyre[data-c="H"] { color: var(--tyre-h); }
 #bc-tower .bc-tyre[data-c="I"] { color: var(--tyre-i); } #bc-tower .bc-tyre[data-c="W"] { color: var(--tyre-w); }
 /* The car on camera; a fastest lap in purple; a stop; a retirement greyed. */
-#bc-tower .bc-row.on button { background: rgba(255, 255, 255, 0.18); }
+#bc-tower .bc-row.on [data-bc-entry] { background: rgba(255, 255, 255, 0.18); }
 #bc-tower .bc-row.fl .bc-code { color: var(--sec-best); }
 #bc-tower .bc-row.pit .bc-gap { color: var(--text); font-weight: 700; }
 #bc-tower .bc-row.out { opacity: 0.5; }

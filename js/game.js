@@ -95,7 +95,7 @@ const lazyBundles = LazyBundles.create({
     marshalPanels = MarshalPanels.create(G);
     records = SessionRecords.create(G);
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
-    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true) });
+    raceRadio = RaceRadio.create(G); RaceCeremony.create(G, { duelOn, isWatch: () => realRace.isWatch(), resultsCam: () => resultsCam, cooldownControls: show => showTouchControls(show, true), snapCooldown: () => { camSnapNext = true; } });
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.isActive()) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
@@ -2904,6 +2904,7 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   // the pause dialog on top of the results with a RESUME that resolves to
   // nothing, because resuming is only reachable from state "race".
   paused = false; els.pausemenu.hidden = true;
+  if (typeof RetiredCard !== "undefined") RetiredCard.hide();
   Droplets.clear();   // visor glints never linger over the results/menu (audit4 I1 R1)
   setState("results", isQuali() ? "quali-end" : forcedOrder ? "forced-order" : "flag");
   document.body.classList.remove("in-race");
@@ -3004,9 +3005,9 @@ function endRace(forcedOrder) { if (state !== "race" && state !== "count") retur
   }
   // A one-off GP's driven quali order stays persisted (quali-persist contract);
   // quali's qualiTrack + qualiMode stamps refuse it on another circuit or mode.
-  dbgCam = null; resultsCam.onFlag();
+  dbgCam = null;
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
-  RaceCeremony.afterClassify(G, order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // opt-in ceremony; else #results now
+  if (!RaceCeremony.afterClassify(G, order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() })) resultsCam.onFlag();
   setupCam.noteResult(order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // AFTER THE RACE: the next garage visit brings the car home
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
@@ -3486,7 +3487,7 @@ var jumpStartPenalty = JumpStartPenalty.create(G, {
 });   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
-  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
+  director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing(), lazyBundles.ensureReplayBroadcast),
   replayBuf = ReplayBuf.create(G, () => !realRace.isWatch()), // coach + live TV (solo only) + replay ring
   resultsCam = ResultsCam.create(G, () => !realRace.isWatch()); resultsCam.attachReplay(replayBuf);
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -7314,7 +7315,8 @@ function render(dt) {
   // #game by design (tokens.css). Re-drawing an identical frozen world every
   // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
   // last race present and return. Race-settings flyby and live race still draw.
-  if (state === "results" && !resultsCam.live()) return; // ResultsCam owns chequered/orbit/highlights
+  const ceremony = state === "results" ? RaceCeremony.get() : null, ceremonyView = ceremony?.cameraPhase();
+  if (state === "results" && !resultsCam.live() && !ceremony?.needsWorldFrame()) return;
   // HELD GARAGE (studioDone): a world frame that kicks TLX's program warm paints nothing, so the
   // garage's last frame stays up — no hidden canvas, no black card before the flyby.
   const heldWarm = !!(_studio && _studio.held && track && _menuGate.warm > 0); if (heldWarm) _menuGate.warm--;
@@ -7381,8 +7383,8 @@ function render(dt) {
     const bankDy = bankCam ? bankCam.dy : 0;
     // Optional pit-entry/exit auto-cut onto PIT WALL (ExtraRigs) — before we
     // read camMode so this frame's vantage matches the cut.
-    if (typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
-    const mode = CAM_MODES[camMode].id;
+    if (!ceremonyView && typeof ExtraRigs !== "undefined") ExtraRigs.tickPitAuto(G);
+    const mode = ceremonyView === "cooldown" ? "chase" : CAM_MODES[camMode].id;
     roadCamRoll = bankCam ? -bankCam.roll * cameraBankScale(mode) : 0;
     // All per-mode framing lives in camVantage() so the live cam, snapCam() and the
     // previewCam() debug hook stay identical. bankDy keeps the eye riding the bank.
@@ -7450,8 +7452,8 @@ function render(dt) {
   // so we only smooth bumps — no speed lag. Low lambda for the menu flyby.
   // Onboard cams ride ON the car (cockpit/hood/tcam), so they need very high
   // lambda or the eye lags behind/into the bodywork at speed.
-  const racing = state === "race" || state === "count";
-  const camId = CAM_MODES[camMode].id;
+  const racing = state === "race" || state === "count" || ceremonyView === "cooldown";
+  const camId = ceremonyView === "cooldown" ? "chase" : CAM_MODES[camMode].id;
   const onboard = racing && (camId === "cockpit" || camId === "hood" || camId === "visor" || camId === "helmet" || camId === "tcam");
   // Just after a cut, ease the external cams in with a gentler lambda so the angle
   // sweeps to its new vantage instead of snapping. Onboard cams ignore it (must lock).
@@ -7562,7 +7564,7 @@ function render(dt) {
   // fascia out of frame. Only cockpit/hood views have geometry that close, so
   // they keep 0.3 and every other view takes a near plane that buys back a lot
   // of depth resolution for free.
-  const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
+  const _projMode = camId;
   const _nearM = (_projMode === "cockpit" || _projMode === "hood" || _projMode === "visor" || _projMode === "helmet") ? 0.3 : 0.9;
   const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
   M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
@@ -7804,7 +7806,8 @@ function render(dt) {
   // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
   // depth write). Drawn against the PLAYER's speed for the dynamic colour.
   // Never in a flyby frame (`cine`: the editor preview, flybyCam, free-cam's flyby lens).
-  if (state !== "menu" && !cine && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
+  const driverGuide = racing && !ceremonyView && player && !player.finished && !player.retired && !realRace.isWatch();
+  if (state !== "menu" && !cine && track && player && (photoMode || driverGuide)) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
   // (wheel/halo/mirrors) + the car's shadow instead, body mesh skipped. Was two
   // always-equal booleans, so the `hide && !rig` skip they guarded never fired.
@@ -8469,6 +8472,7 @@ function render(dt) {
   if (typeof VisorOptics !== "undefined") VisorOptics.folded(po.visorFolded);
   if (homeTrack && !(gfx.warming && gfx.warming())) uiExperience.didRenderTrack();
   RaceEntryProfile.afterPresent(loadingScreen, gfx, mirrorPass.preparing());
+  if (ceremonyView === "parcFerme" && !(gfx.warming && gfx.warming())) ceremony.worldPresented();
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
   // reverts on the next boot, which is the whole point of it.

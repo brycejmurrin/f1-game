@@ -865,12 +865,14 @@ test("helmet inherits the production onboard SSR range and releases it outside r
     ["helmet", "count", true, 0.82, -1],
     ["helmet", "title", false, 0.62, -2.5],
     ["cockpit", "title", false, 0.62, -2.5],
+    ["helmet", "results", false, 0.62, -2.5, "cooldown"],
     ["helmet", "race", true, 0.82, -1],
   ];
-  for (const [id, state, onboard, top, near] of cases) {
+  for (const [id, state, onboard, top, near, ceremonyView = null] of cases) {
     ctx.camMode = ctx.CAM_MODES.findIndex(mode => mode.id === id);
     assert.ok(ctx.camMode >= 0, "camera exists in production CAM_MODES: " + id);
     ctx.state = state;
+    ctx.ceremonyView = ceremonyView;
     assert.equal(run.runInContext(ctx), onboard, id + " / " + state + " classification");
     assert.equal(ctx.po.ssrTopUV, top, id + " / " + state + " top boundary");
     assert.equal(ctx.po.ssrNear, near, id + " / " + state + " near boundary");

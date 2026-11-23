@@ -337,9 +337,10 @@ const DATA_READY = {
 // race) awaits it before it opens; the agent surface loads it for pages/specs.
 const REAL_RACE_FILES = ApexRoster.LAZY_REAL_RACE || [];
 const REAL_RACE_EDGES = ApexRoster.LAZY_REAL_RACE_EDGES || [];
+const REPLAY_BROADCAST_FILE = "js/race/replay-broadcast.js";
 const REAL_RACE_READY = {
   "js/race/tv-graphics.js": () => typeof TvGraphics !== "undefined",
-  "js/race/replay-broadcast.js": () => typeof ReplayBroadcast !== "undefined",
+  [REPLAY_BROADCAST_FILE]: () => typeof ReplayBroadcast !== "undefined",
   "js/ui/watch-transport.js": () => typeof WatchTransport !== "undefined",
   "js/race/real-replay.js": () => typeof RealReplay !== "undefined",
   "js/race/real-race-pace.js": () => typeof RealRacePace !== "undefined",
@@ -347,6 +348,15 @@ const REAL_RACE_READY = {
 };
 const realRaceLoaded = new Set();
 let realRaceLoad = null;
+// Post-finish TV shares the presentation without opening the rest of Data Hub.
+function ensureReplayBroadcast() {
+  return loadBackendScripts([REPLAY_BROADCAST_FILE], [], {
+    strict: true, loaded: realRaceLoaded, ready: REAL_RACE_READY[REPLAY_BROADCAST_FILE],
+  }).catch((e) => {
+    Log.warn("game", "the spectator display did not load: " + (e && e.message));
+    return false;
+  });
+}
 function ensureRealRace() {
   if (realRaceLoad) return realRaceLoad;
   if (!REAL_RACE_FILES.length) return Promise.resolve(true);   // nothing to load in this build: never holds the hub
@@ -1129,7 +1139,7 @@ watchRouteCss();
 // After every const above (loadBackendScripts reads AUDIO_FILES): a flag-gated inject, never awaited.
 bootDevPanels();
 mountBridgeLinkDoor();
-return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
+return { bootPerfRig, ensurePerfRig, openBridgeLink, ensureGarageExterior, SCENERY_DIR, CIRCUITS_DIR, sceneryResident, circuitResident, raceAssets, ensureCircuit, ensureScenery, ensureTrackBuild, trackBuildResident, ensureDataHub, ensureRealRace, ensureReplayBroadcast, ensureNet, ensureAudio, ensureRaceSession, ensureLightPresets, ensureGarageData, ensureResultsSheet, ensureRouteCss, ensureSavesData, wantAgentSurface, loadAgentSurface, bootAgentSurface, bootDesktopAudio, awaitPackSettled };
 }
   // The instance game.js made, for modules that load outside it (#5555): the global is only this factory.
   let live = null;

@@ -10,6 +10,71 @@ const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 import { ROOT, host, scriptIn, line, loadReplayBroadcast, transportReplay } from "../helpers/real-replay-fixtures.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
+
+test("WATCH opens a late lap on a running car when the selected driver's trace has ended", () => {
+  const { replay, G, cars, drivers, options, snaps } = transportReplay();
+  drivers[0].lapStart[1] = 18;
+  assert.equal(replay.start({ ...options, startLap: 2, follow: "BBB" }), true);
+  assert.equal(replay.status().follow, "AAA");
+  assert.equal(G.player, cars[0]);
+  assert.equal(cars[1].retired, true);
+  assert.equal(snaps.at(-1), 900);
+});
+
+test("WATCH rebuilds TV cards on a paused seek without treating the jump as a pass", () => {
+  const { document } = makeDom();
+  const { replay, G, cars, options, ctx } = transportReplay({ document }, { completeSubject: true });
+  for (const file of ["js/overlay/feed.js", "js/race/tv-graphics.js"]) {
+    vm.runInContext(fs.readFileSync(absSrc(file), "utf8"), ctx, { filename: absSrc(file) });
+  }
+  G.hudProfile = "minimal";
+  options.traces.cars[1] = line(50, 45, 0, 0, 30);
+  options.traces.cars[2] = line(0, 55, 0, 0, 30);
+  options.script.fastest = { t: 2, num: 2 };
+  cars[0].best = 80;
+  G.ranked = cars.slice();
+  replay.start(options);
+  replay.tick(0);
+  const lower = document.getElementById("tvg-lower"), fastest = document.getElementById("tvg-fastest");
+  assert.equal(fastest.hidden, true, "a roster time does not set a replay record");
+  G.ranked = [cars[1], cars[0]];
+  replay.tick(6);
+  assert.equal(lower.hidden, false);
+  assert.equal(fastest.textContent, "FASTEST LAP  ·  BBB");
+
+  replay.setPaused(true);
+  replay.seek(0);
+  assert.equal(lower.hidden, true);
+  assert.equal(fastest.hidden, true);
+  replay.seek(8);
+  assert.equal(lower.hidden, true);
+  assert.equal(fastest.textContent, "FASTEST LAP  ·  BBB");
+  replay.setPaused(false);
+  replay.tick(0.25);
+  assert.equal(lower.hidden, true);
+});
+
+test("WATCH plate follows the recorded driver and keeps trace speed during a paused driver change", () => {
+  const { document } = makeDom();
+  const { replay, G } = transportReplay({ document, HudReadouts: {
+    spdPlate: kph => ({ n: Math.round(kph), unit: "KPH" }),
+  } }, { completeSubject: true });
+  const plate = document.getElementById("bc-viewer");
+  replay.seek(1);
+  assert.equal(document.body.dataset.spectator, "watch");
+  assert.equal(plate.children[1].textContent, "P1  ·  Driver A");
+  assert.equal(plate.children[2].textContent, "180 KPH");
+  replay.setPaused(true);
+  replay.tick(0.25);
+  assert.equal(G.player.speed, 0);
+  replay.follow("BBB");
+  assert.equal(plate.children[1].textContent, "P2  ·  Driver B");
+  assert.equal(plate.children[2].textContent, "162 KPH");
+  replay.stop();
+  assert.equal(document.body.dataset.spectator, undefined);
+  assert.equal(document.querySelector("#bc-viewer"), null);
+});
 
 test("WATCH event cursor preserves equal-time dispatch, caption bounds, rewinds, restart and reel cuts", () => {
   const { replay, G, options } = transportReplay({}, { completeSubject: true });
