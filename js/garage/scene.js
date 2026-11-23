@@ -858,6 +858,25 @@ function mirrorSheen(eye, carMat) {
   const height = 1 / (1 + Math.max(0, ey - 2.5) * 0.25);
   return MIRROR_SHEEN_PEAK * MD.sheen * lateral * height;
 }
+// Project the reflected car's hull onto the floor along the camera rays.
+// Depth testing alone cannot mask rays that pass outside the finite slab.
+function mirrorFloorCoverage(eye, hull, matrix) {
+  if (!eye || eye[1] <= 0.1 || !hull?.length) return 0;
+  let clearance = Infinity;
+  for (let i = 0; i < hull.length; i += 3) {
+    // framingHull includes the preview's X flip. Apply the actual mirror pose.
+    const x = -hull[i], y = hull[i + 1], z = hull[i + 2];
+    const mx = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+    const my = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+    const mz = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
+    const t = eye[1] / (eye[1] + Math.max(0, -my));
+    const floorX = eye[0] + (mx - eye[0]) * t;
+    const floorZ = eye[2] + (mz - eye[2]) * t;
+    clearance = Math.min(clearance, HALF_W - Math.abs(floorX), floorZ - Z_BACK, Z_DOOR - floorZ);
+  }
+  // Leave room for the separately drawn wheels and soften the edge transition.
+  return Math.min(1, Math.max(0, (clearance - 0.4) / 0.6));
+}
 function ensureMirrorFade(liv) {
   if (mirrorFadeMesh || !_gfx) return;
   const out = acc();
@@ -1520,7 +1539,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   if (carMesh) {
     if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
     else arrivalMirror.set(MAT_MIRROR);
-    const sheen = mirrorSheen(eye, carMat);
+    const sheen = mirrorSheen(eye, carMat) * mirrorFloorCoverage(eye, ctx?.reflectionHull, arrivalMirror);
     if (sheen > 0.02) {
       _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
       if (ctx && ctx.departureWheels) ctx.departureWheels(arrivalMirror, MIRROR_RESOLVE);

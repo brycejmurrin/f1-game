@@ -565,21 +565,25 @@ test("garage dress upload retries after a transient failure, and a new team clea
   assert.equal(attempts, before + 1, "a new team clears the previous upload cutoff");
 });
 
-test("arrival moves the reflected car and shutter without rebuilding geometry", () => {
+// Two opposite corners of the car's footprint at floor and wing height.
+const REFLECTION_HULL = [-1, 0, -3, -1, 1.2, -3, 1, 0, 3, 1, 1.2, 3];
+
+test("arrival keeps its reflection inside the slab as the shutter moves", () => {
   const { GarageScene, meshes, draws } = harness();
-  const car = { car: true }, mat = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,9,1]);
-  GarageScene.draw(TEAM, LIV, [-3.8,2,-4.8], null, 0, null, car, { door: 0 }, mat);
+  const car = { car: true }, mat = new Float32Array([-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,1,1]);
+  const room = { reflectionHull: REFLECTION_HULL };
+  GarageScene.draw(TEAM, LIV, [-3.8,2,-4.8], null, 0, room, car, { door: 0 }, mat);
   const count = meshes.length;
-  assert.equal(draws.find(d => d.mesh === car).matrix[14], 9);
+  assert.equal(draws.find(d => d.mesh === car).matrix[14], 1);
   const closed = draws.find(d => d.matrix[5] > 1.5);
   assert.ok(closed, "closed shutter spans the opening");
-  draws.length = 0; mat[14] = 0;
-  GarageScene.draw(TEAM, LIV, [4.1,2.25,-4.9], null, 0, null, car, { door: 1 }, mat);
+  draws.length = 0; mat[14] = 9;
+  GarageScene.draw(TEAM, LIV, [4.1,2.25,-4.9], null, 0, room, car, { door: 1 }, mat);
   assert.equal(meshes.length, count, "animation reuses meshes");
-  assert.equal(draws.find(d => d.mesh === car).matrix[14], 0);
+  assert.equal(draws.some(d => d.mesh === car), false, "the pit lane does not reflect the car beyond the bay");
   assert.ok(draws.find(d => d.mesh === closed.mesh).matrix[5] < 0.03);
   draws.length = 0;
-  GarageScene.draw(TEAM, LIV, [0,2,0], null, 0, null, car);
+  GarageScene.draw(TEAM, LIV, [0,2,0], null, 0, { reflectionHull: REFLECTION_HULL }, car);
   assert.equal(draws.find(d => d.mesh === closed.mesh).matrix[5], 1, "normal garage resets shutter");
 });
 
@@ -605,13 +609,30 @@ test("garage glare and fixture energy stay under the bloom knee at default knobs
 test("floor reflection draws after the room so depth clips the mirror", () => {
   const { GarageScene, draws } = harness();
   const car = { car: true };
-  GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, null, car);
+  GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { reflectionHull: REFLECTION_HULL }, car);
   const carAt = draws.findIndex((d) => d.mesh === car);
   assert.ok(carAt >= 0, "mirrored car is drawn");
   assert.ok(carAt > 1, `reflection at ${carAt} must follow the room (floor is draw 0)`);
   const scene = read("js/garage/scene.js");
   assert.match(scene, /_gfx\.draw\(carMesh, arrivalMirror, MIRROR_RESOLVE\)/,
     "mirror uses MIRROR_RESOLVE (depth bias, no noDepthTest)");
+});
+
+test("wide grazing views do not draw a mirror past the garage slab", () => {
+  const { GarageScene, draws } = harness();
+  const car = { car: true };
+  const context = { reflectionHull: REFLECTION_HULL };
+  for (const [eye, visible] of [
+    [[12, 0.5, 0], false],
+    [[0, 0.5, -12], false],
+    [[0, -0.2, 0], false],
+    [[7, 4, 0], true],
+    [[0, 1.4, 3.2], true],
+  ]) {
+    draws.length = 0;
+    GarageScene.draw(TEAM, LIV, eye, null, 0, context, car);
+    assert.equal(draws.some(draw => draw.mesh === car), visible, String(eye));
+  }
 });
 
 test("TOP hides the roof truss and ceiling LED housings; other presets restore them", () => {
@@ -856,7 +877,7 @@ test("reflection fade preserves each room's authored floor colours and markings"
   const Prims = vm.runInContext('GaragePrims', ctx), car = { car: true };
   for (const look of ['porcelain', 'heritage', 'endurance', 'stock']) {
     Prims.setLook(look); draws.length = 0;
-    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false }, car);
+    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false, reflectionHull: REFLECTION_HULL }, car);
     const floor = meshes[draws[0].mesh.id - 1];
     const fade = meshes[draws[draws.findIndex(d => d.mesh === car) + 1].mesh.id - 1];
     const authored = new Set();
@@ -867,7 +888,7 @@ test("reflection fade preserves each room's authored floor colours and markings"
     for (let i = 0; i < fade.pos.length; i += 3)
       assert.ok(authored.has(key(fade, i, .002)), look + ': every fade vertex matches the authored floor');
     const count = meshes.length;
-    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false }, car);
+    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false, reflectionHull: REFLECTION_HULL }, car);
     assert.equal(meshes.length, count, look + ': stable frames reuse the fade mesh');
   }
 });
