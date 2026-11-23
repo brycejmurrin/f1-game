@@ -69,6 +69,17 @@ test("helmet camera preferences survive reload and only scale helmet vibration",
   assert.equal(saved.shakeScale("cockpit"), 1);
 });
 
+test("helmet motion amounts combine independently and preserve legacy saves", () => {
+  const disk = { "apex26.helmetShake": "125", "apex26.helmetBuzz": "40", "apex26.helmetImpact": "0", "apex26.helmetHeadMotion": "25" };
+  const { opts } = loadOpts(disk);
+  assert.equal(opts.shakeScale("helmet", "helmetBuzz"), 0.5);
+  assert.equal(opts.shakeScale("helmet", "helmetImpact"), 0);
+  assert.equal(opts.shakeScale("helmet", "helmetKerb"), 1.25);
+  assert.equal(opts.shakeScale("cockpit", "helmetImpact"), 1);
+  assert.equal(opts.helmetHeadMotion(), 0.25);
+  assert.equal(loadOpts(disk, "?helmetshake=soft").opts.shakeScale("helmet"), 0.4);
+});
+
 test("helmet visor is opt-in, survives reload and validates stored and shot choices", () => {
   const { opts, store } = loadOpts({});
   assert.equal(opts.visor(), "off");

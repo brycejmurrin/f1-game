@@ -102,7 +102,6 @@ const ReplayBuf = (function () {
       aux = new Uint8Array(cap * nCars * AUXN);
       status = new Uint8Array(cap * nCars);
       brk = new Uint8Array(cap);   // brk[f] = 1: frame f opens a new segment, never blended from the one before
-      head = 0; count = 0; lastSlot = -1; tags = [];
       prevStatus = new Uint8Array(nCars);
     }
     function clear() {
@@ -114,8 +113,15 @@ const ReplayBuf = (function () {
       hideDock();
     }
     function reset(cars) {
-      alloc((cars && cars.length) || (G.cars && G.cars.length) || 1);
+      const n = Math.min(MAX_CARS, (cars && cars.length) || (G.cars && G.cars.length) || 1);
+      if (n !== nCars) alloc(n);
+      else prevStatus.fill(0);
       clear();
+    }
+    function release() {
+      clear();
+      times = data = aux = status = brk = prevStatus = null;
+      nCars = cap = 0;
     }
     function discardTimeline(time) {
       if (!count || !Number.isFinite(time)) return;
@@ -130,18 +136,26 @@ const ReplayBuf = (function () {
     function breakTimeline() {
       if (count) breakPending = true;
     }
-    function writeCar(frame, i, c) {
-      const o = (frame * nCars + i) * FLOATS;
-      // A non-finite field keeps the previous sample's value (0 only with no history): storing 0 would park the car at the origin.
-      const po = count > 0 ? (((head + count - 1) % cap) * nCars + i) * FLOATS : -1;
-      const put = (k, v) => { data[o + k] = Number.isFinite(v) ? v : (v == null || v === false ? 0 : (po >= 0 ? data[po + k] : 0)); };
-      put(0, c.s); put(1, c.x); put(2, c.head); put(3, c.speed);
-      put(4, c.px); put(5, c.py); put(6, c.pz); put(7, c.steer); put(8, c.yawVis);
-      const q = (frame * nCars + i) * AUXN;
+    function poseValue(v, previous, lane) {
+      if (Number.isFinite(v)) return v;
+      return v == null || v === false || previous < 0 ? 0 : data[previous + lane];
+    }
+    function writeCar(slot, previous, c) {
+      const o = slot * FLOATS, po = previous * FLOATS;
+      data[o] = poseValue(c.s, po, 0);
+      data[o + 1] = poseValue(c.x, po, 1);
+      data[o + 2] = poseValue(c.head, po, 2);
+      data[o + 3] = poseValue(c.speed, po, 3);
+      data[o + 4] = poseValue(c.px, po, 4);
+      data[o + 5] = poseValue(c.py, po, 5);
+      data[o + 6] = poseValue(c.pz, po, 6);
+      data[o + 7] = poseValue(c.steer, po, 7);
+      data[o + 8] = poseValue(c.yawVis, po, 8);
+      const q = slot * AUXN;
       for (let k = 0; k < AUX.length; k++) aux[q + k] = Math.round(Math.max(0, Math.min(1, +c[AUX[k]] || 0)) * 255);
       const stop = c.pitState === "box" ? (G.pits && G.pits.stopAnim ? G.pits.stopAnim(c).u : 0) : -1;
       aux[q + BOX] = stop >= 0 ? 1 + Math.round(Math.min(1, stop) * 254) : 0;
-      status[frame * nCars + i] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
+      status[slot] = (c.retired ? 1 : 0) | (c.finished ? 2 : 0);
     }
     function readCar(out, frame, i) {
       const o = (frame * nCars + i) * FLOATS;
@@ -162,9 +176,10 @@ const ReplayBuf = (function () {
       brk[frame] = breakPending ? 1 : 0;
       breakPending = false;
       const n = Math.min(nCars, cars.length);
+      const first = frame * nCars, prevFirst = count ? ((head + count - 1) % cap) * nCars : -1;
       for (let i = 0; i < n; i++) {
-        writeCar(frame, i, cars[i]);
-        const st = status[frame * nCars + i];
+        writeCar(first + i, prevFirst < 0 ? -1 : prevFirst + i, cars[i]);
+        const st = status[first + i];
         const prev = prevStatus[i];
         if ((st & 1) && !(prev & 1)) pushTag("retirement", raceT, i);
         else if ((st & 2) && !(prev & 2)) pushTag("chequered", raceT, i);
@@ -615,7 +630,7 @@ const ReplayBuf = (function () {
       b.hidden = !allowed() || w.frames < HZ * 3;   // need ~3 s before offering
     }
     /** game.js call-site helpers — keep the entry thin. */
-    function onRaceStart(cars) { reset(cars); }
+    function onRaceStart(cars) { if (allowed()) reset(cars); else release(); }
     function onTick(raceT, cars, st) {
       if (st !== "race" && st !== "count") return;
       sample(raceT, cars);
@@ -626,7 +641,7 @@ const ReplayBuf = (function () {
     }
 
     return {
-      sample, clear, breakTimeline, reset, pushTag, window: windowInfo, at,
+      sample, clear, release, breakTimeline, reset, pushTag, window: windowInfo, at,
       beginScrub, apply, endScrub, contactSheet, cancelContactSheet, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
       tickScrub, stepFrame, adjacentFrame, status: statusOf,
       refreshButton, ensureButton,

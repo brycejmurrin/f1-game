@@ -67,6 +67,26 @@ test("row 1: a software adapter or headless run gets the eager shim (unmapped + 
   assert.equal(install(dev, false), "shim", "a second install keeps the device's mode");
 });
 
+test("the upload shim releases its handlers and restores native mapping after the first unmap", () => {
+  const dev = stubDevice();
+  const nativeBytes = new ArrayBuffer(16);
+  let nativeUnmaps = 0;
+  const nativeRange = () => nativeBytes;
+  const nativeUnmap = () => { nativeUnmaps++; };
+  dev.createBuffer = () => ({ getMappedRange: nativeRange, unmap: nativeUnmap });
+  shim()(dev, true);
+  const buf = dev.createBuffer({ size: 16, usage: 0x20, mappedAtCreation: true });
+  new Uint8Array(buf.getMappedRange(8, 4)).fill(17);
+  buf.unmap();
+  assert.deepEqual(Array.from(dev.writes[0].bytes), [0,0,0,0,0,0,0,0,17,17,17,17,0,0,0,0]);
+  assert.equal(buf.getMappedRange, nativeRange);
+  assert.equal(buf.unmap, nativeUnmap);
+  assert.equal(buf.getMappedRange(), nativeBytes);
+  buf.unmap();
+  assert.equal(nativeUnmaps, 1);
+  assert.equal(dev.writes.length, 1);
+});
+
 test("row 1: a native mapped create that throws latches the shim on for the device", () => {
   const install = shim(), dev = stubDevice();
   install(dev, false);

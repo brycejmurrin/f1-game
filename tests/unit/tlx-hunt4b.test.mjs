@@ -253,10 +253,12 @@ async function mirrorRig(t, ls = {}) {
     const resetRecs = () => {}, _kidsBegin = () => {}, _poolShow = () => {}, _hideUndrawnInstanced = () => {}, pinSkyMaterial = () => {}, softOutRT = () => null;
     let _mirDead = false, _mirErr, _mirEye, _mirCull, _mirFog, _mirUsed, _dMatUsed, _fxMatUsed, _gpuLastOperation;
     let _instStamp = 0, _poolBatch = 0, _mirFails = 0, _mirFlip = true, _mirGlass = 0;
+    let mirrorRearView = false;
+    const resetMirrorRoadStats = () => {};
     const _mirRectScratch = [0, 0, 0, 0];
     const _mirCapW = 1024, _mirCapH = 512;   // mirrorBegin's clamp below mirrorHi (ULTRA+ raises it to 2048 x 1024)
     ${tslice("      function prepareMirrorTarget(w, h, forWarm) {", "      // TLX opts out of the live env probe by default")}
-    const backend = { ${tslice("        mirrorBegin(frame, w, h) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
+    const backend = { ${tslice("        mirrorBegin(frame, w, h, rearView) {", "        // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js")} };
     return { backend, prepareMirrorTarget, rt: () => mirRT, cam: () => mirCam, rect(r) { _mirRect = r; }, release: backend.releaseMirror,
       busy(active, warm) { _mirActive = active; _warmPending = warm; }, rendered() { _mirRenders++; }, renders: () => _mirRenders,
       glass(lod = Infinity) { _mirGlassSeen = true; _mirGlassLod = Math.max(_mirGlassLod, lod); } };`);
@@ -905,15 +907,20 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
 
 // Execute the production uniform derivation with its real uniform defaults;
 // this tests CPU illumination inputs, not the shader's per-ray If branches.
-function skyDeriveHarness() {
+function skyUniformHarness() {
   const source = read("js/render/three/tsl-sky.js");
   const uniforms = source.slice(source.indexOf("    const U = {"), source.indexOf("    const C = ctx"));
   const helpers = source.slice(source.indexOf("    const sstep ="), source.indexOf("    function derive()"));
   const context = vm.createContext({ THREE, uniform: (value) => ({ value }), C: null });
   vm.runInContext(uniforms + helpers + fnSource(source, "function derive()") +
-    "\n;globalThis.api = { U, D, derive };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+    fnSource(source, "function updateClock()") + fnSource(source, "function update(sky)") +
+    "\n;globalThis.api = { U, D, derive, update };", context, { filename: absSrc("js/render/three/tsl-sky.js") });
+  return context.api;
+}
+
+function skyDeriveHarness() {
+  const { U, D, derive } = skyUniformHarness();
   return (stars, y) => {
-    const { U, D, derive } = context.api;
     U.stars.value = stars;
     U.sunDir.value.set(Math.sqrt(1 - y * y), y, 0);
     U.cloud.value = 1;
@@ -926,6 +933,60 @@ function skyDeriveHarness() {
       daytime: D.daytime.value };
   };
 }
+
+test("clock-only sky updates advance clouds and dither while reusing lighting", () => {
+  const { U, D, update } = skyUniformHarness();
+  const frame = { time: 1, zenith: [0.2, 0.3, 0.6], cloudDef: 0.5 };
+  let lightingWrites = 0;
+  const zenith = D.zenithO.value;
+  const set = zenith.set.bind(zenith);
+  zenith.set = (...args) => { lightingWrites++; return set(...args); };
+
+  update(frame);
+  const original = zenith.toArray();
+  const drift = D.drift1.value.x;
+  const dither = D.dthOff.value;
+  frame.time = 2;
+  update(frame);
+  assert.equal(lightingWrites, 1);
+  assert.equal(D.drift1.value.x, drift * 2);
+  assert.notEqual(D.dthOff.value, dither);
+  frame.zenith[0] = 0.8;
+  update(frame);
+  assert.equal(lightingWrites, 2);
+  assert.notDeepEqual(zenith.toArray(), original);
+  delete frame.cloudDef;
+  update(frame);
+  assert.equal(U.cloudDef.value, 1);
+  assert.equal(lightingWrites, 3);
+});
+
+test("direct sky controls and storm flashes refresh shader uniforms without rebuilding lighting", () => {
+  const { U, D, update } = skyUniformHarness();
+  const frame = { time: 9, cloud: 0.8 };
+  update(frame);
+  let writes = 0;
+  const zenith = D.zenithO.value, set = zenith.set.bind(zenith);
+  zenith.set = (...args) => { writes++; return set(...args); };
+  for (const field of ["moon", "starBright", "cloudSpeed", "skyGrad", "daySkyBlue", "starSize",
+    "starTwinkle", "moonDiscSize", "moonHalo", "sunCorona", "cityGlowReach", "lightning"]) {
+    const initial = U[field].value;
+    frame[field] = 0.42;
+    update(frame);
+    assert.equal(U[field].value, 0.42);
+    if (field === "cloudSpeed") assert.equal(D.drift1.value.x, frame.time * 0.42 * 0.0028);
+    delete frame[field];
+    update(frame);
+    assert.equal(U[field].value, initial);
+  }
+  frame.cityGlow = [0.6, 0.4, 0.2];
+  update(frame);
+  assert.deepEqual(U.cityGlow.value.toArray(), frame.cityGlow);
+  assert.equal(writes, 0);
+  frame.cloud = 0.1;
+  update(frame);
+  assert.equal(writes, 1);
+});
 
 test("sky derivation suppresses solar scattering for low and high night moon keys", () => {
   const derive = skyDeriveHarness();

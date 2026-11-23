@@ -79,13 +79,6 @@ const WGX = (function () {
   // clipped. Column-major of row-basis diag(1,1,·)+row2=(0,0,.5,.5). Applied to the
   // uploaded viewProj (lit) and lightVP (shadow); NOT to invViewProj (sky rays).
   const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
-  // Inverse of Z01 (column-major): maps a WebGPU clip (z 0..1) back to GL clip
-  // (z -1..1). Needed to build the SSAO invProj: the depth buffer stores
-  // Z01·viewProj z, so reconstructing view pos from it uses
-  // invProjW = invProj_gl · Z01INV (see _writeFrame). Row2 inverse of
-  // z'=0.5z+0.5w is z=2z'-w.
-  const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
-
   // Post shader/FX registries (separate files; may be absent when the
   // backend is loaded standalone — post/FX then stay disabled and the frame
   // falls back to the tonemap blit rather than failing WGX.create()).
@@ -313,6 +306,17 @@ const WGX = (function () {
       out[c*4+3] = a[3]*b0 + a[7]*b1 + a[11]*b2 + a[15]*b3;
     }
     return out;
+  }
+
+  // Right-multiply an inverse GL projection by the inverse depth remap.
+  // WebGPU z reconstructs as GL 2z-w, so only columns 2 and 3 change.
+  function _remapInverseDepth(out, m) {
+    for (let r = 0; r < 4; r++) {
+      out[r] = m[r];
+      out[4 + r] = m[4 + r];
+      out[8 + r] = 2 * m[8 + r];
+      out[12 + r] = m[12 + r] - m[8 + r];
+    }
   }
 
   //    Gribb–Hartmann from a COLUMN-MAJOR view-proj; inside = a*x+b*y+c*z+d >= 0.
@@ -930,7 +934,6 @@ const WGX = (function () {
     const _TONE_IDS = ["acesA", "acesB", "acesC", "acesD", "acesE", "whitePoint"];
     const _TONE_STANDIN = Object.freeze({ acesA: 2.51, acesB: 0.03, acesC: 2.43, acesD: 0.59, acesE: 0.14, whitePoint: 1 });
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
-    const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
     const _projZ01  = new Float32Array(16);   // Z01·P scratch (off-axis garage/setup)
     const _viewScratch = new Float32Array(16); // V = invProj·viewProj scratch
     const _grInvTmp = new Float32Array(16);   // godray invVP mul scratch (was per-frame new)
@@ -967,7 +970,7 @@ const WGX = (function () {
     // view-proj the depth buffer was rasterised with — every FX embeds it so its
     // clip-z matches the scene depth; frameInvProjW is the WebGPU-convention
     // inverse projection for SSAO view-pos reconstruction.
-    const frameVPGpu = new Float32Array(16);
+    const frameVPGpu = frameData.subarray(0, 16);   // FX reads the same matrix uploaded for lit draws
     const frameInvProjW = new Float32Array(16);
     let frameSunDir = null, frameSunColor = null, frameProjRaw = null,
       frameTune = null,
@@ -3170,13 +3173,11 @@ const WGX = (function () {
         if (v) _viewScratch.set(v);
         else _mul4(_viewScratch, ipj, vp);   // V = inv(P)·(P·V)
         _mul4(_projZ01, Z01, pj);       // P′ = Z01·P
-        _mul4(_vpGpu, _projZ01, _viewScratch);
+        _mul4(frameVPGpu, _projZ01, _viewScratch);
       } else {
-        _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+        _mul4(frameVPGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
       }
 
-      d.set(_vpGpu, 0);
-      frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
       // Post/FX frame extras.
       frameSunDir = f.sunDir || null;
@@ -3185,7 +3186,7 @@ const WGX = (function () {
       frameSunVS = f.sunViewDir || null;
       frameUpVS = f.upViewDir || null;
       frameTime = f.time != null ? f.time : 0;
-      if (f.invProj && f.invProj.length >= 16) { _mul4(frameInvProjW, f.invProj, Z01INV); frameHaveProj = true; }
+      if (f.invProj && f.invProj.length >= 16) { _remapInverseDepth(frameInvProjW, f.invProj); frameHaveProj = true; }
       else frameHaveProj = false;
       const T = f.tune || null;
       frameTune = T;
@@ -4591,7 +4592,7 @@ const WGX = (function () {
         const invVP = lastFrame && lastFrame.invViewProj;
         if (invVP && invVP.length >= 16) {
           _grInvTmp.set(invVP.length === 16 ? invVP : (invVP.length > 16 && invVP.subarray ? invVP.subarray(0, 16) : IDENT));
-          _mul4(s.subarray(0, 16), _grInvTmp, Z01INV);
+          _remapInverseDepth(s, _grInvTmp);
         } else s.set(IDENT, 0);
         s.set(SHD.rendered ? SHD.shadowLVPData : IDENT, 16);
         s.set(lampArmed ? SHD.lampShadowLVPData : IDENT, 32);
@@ -5077,7 +5078,9 @@ const WGX = (function () {
       const n = (matrices && matrices.length) ? (matrices.length / 16) | 0 : 0;
       const packed = new Float32Array(n * 20);
       for (let i = 0; i < n; i++) {
-        packed.set(matrices.subarray ? matrices.subarray(i * 16, i * 16 + 16) : matrices.slice(i * 16, i * 16 + 16), i * 20);
+        // Build the GPU instance row directly; a circuit can have thousands of these matrices.
+        const source = i * 16, target = i * 20;
+        for (let k = 0; k < 16; k++) packed[target + k] = matrices[source + k];
         if (colors && colors.length) {
           packed[i * 20 + 16] = colors[i * 3];
           packed[i * 20 + 17] = colors[i * 3 + 1];

@@ -612,12 +612,15 @@ var RaceRadio = (function () {
       m.wasPit = !!f.pitting;
       if (f.pitting) m.pitLap = f.lap;
       if (f.caution > 0) m.cautionLap = f.lap;
+      evalT -= dt;
+      // Facts and driver requests stay current every tick. Between rule evaluations,
+      // an empty queue and no event leave nothing for either channel to schedule.
+      if (!ev.length && evalT > 0 && !queue.eng.size && !queue.tv.size) return;
       const tv = tvLive(f);
       for (const e of ev) {
         if (!watch) engineerEvent(e, f, p);   // a replay has no engineer
         if (tv) tvEvent(e, f);
       }
-      evalT -= dt;
       if (evalT <= 0) {
         evalT = EVAL_S;
         if (!watch) engineerState(f, p);

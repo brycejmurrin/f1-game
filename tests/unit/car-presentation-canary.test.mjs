@@ -54,7 +54,7 @@ test("the player's skid stamp precedes the cockpit-rig continue", () => {
 // `continue`, an off-screen anchor car never refreshed it and at() went null (haze blink).
 test("the heat-haze mark precedes the rival frustum cull", () => {
   const game = read("js/game.js");
-  const mark = game.indexOf("if (haze) haze.mark(c, tmpMat);");
+  const mark = game.indexOf("if (c === hazeAnchor) haze.mark(c, tmpMat);");
   const cull = game.indexOf("if (!c.isPlayer && _carCullPlanes) {");
   assert.ok(mark > 0 && cull > 0, "both sites present");
   assert.ok(mark < cull, `haze.mark at ${mark} must come before the frustum cull at ${cull}`);

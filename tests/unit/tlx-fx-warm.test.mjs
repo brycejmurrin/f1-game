@@ -92,6 +92,17 @@ test("lineIndex: (i, i+1, i+2) at full capacity, built once (no orphaned index b
   assert.equal(geo.index.count, 18);
 });
 
+test("line indices fit 16 bits up to the WebGL2 primitive restart boundary", () => {
+  for (const [cap, IndexArray] of [[4096, Uint16Array], [65535, Uint16Array], [65536, Uint32Array], [65537, Uint32Array]]) {
+    const slot = { geo: new THREE.BufferGeometry(), cap };
+    lineIndex(slot);
+    const index = slot.geo.index.array;
+    assert.ok(index instanceof IndexArray);
+    assert.equal(index.byteLength, (cap - 2) * 3 * IndexArray.BYTES_PER_ELEMENT);
+    assert.deepEqual(Array.from(index.slice(-3)), [cap - 3, cap - 2, cap - 1]);
+  }
+});
+
 test("tlx.js wiring: drawDrivingLine and the fx warm share lineIndex; the per-record blob warms both windings", () => {
   const draw = tslice("        drawDrivingLine(verts, vertCount, dirty, opts) {", "          fx.lineSpeed.value = ");
   assert.ok(draw.includes("lineIndex(lineStream);"), "the race's line index comes from the helper");

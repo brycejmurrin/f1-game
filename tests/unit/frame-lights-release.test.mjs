@@ -54,8 +54,14 @@ test("release() clears every _tlPool car ref and empties _tlSel after a night ap
 
 test("release() drops the flicker hash table grown for a dense night grid", () => {
   const api = load();
-  api.growHsh(5000);
-  assert.ok(api.hshLen() > 5000, "hash table grew with the lamp offset");
+  for (let lamp = 0; lamp < 3000; lamp++) {
+    const offset = lamp * 15;
+    const x = Math.sin((offset + 13) * 91.17) * 43758.5453;
+    const hash = x - Math.floor(x);
+    assert.equal(api.growHsh(offset), hash, "first use retains the source-offset hash");
+    assert.equal(api.growHsh(offset), Math.fround(hash), "reused hashes retain float precision");
+  }
+  assert.equal(api.hshLen(), 4096, "capacity grows by lamp count");
   api.release();
   assert.equal(api.hshLen(), 0, "track switch must not keep the peak hash allocation");
 });

@@ -22,8 +22,9 @@ function boot(options = {}) {
     if (tag === "canvas") {
       el.getContext = () => ({
         createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
-        putImageData: (image) => canvasOps.push(["pixels", image.data[0]]),
-        drawImage: (...args) => canvasOps.push(["draw", ...args.slice(1)]),
+        putImageData: (image) => { el.pixel = image.data[0]; canvasOps.push(["pixels", el.pixel]); },
+        getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(el.pixel) }),
+        drawImage: (src, ...args) => { el.pixel = src.pixel; canvasOps.push(["draw", ...args]); },
         fillRect: (...args) => canvasOps.push(["caption", ...args]), fillText: () => {},
       });
       el.toDataURL = () => "data:image/jpeg;base64,ZmFrZQ==";
@@ -100,7 +101,7 @@ function boot(options = {}) {
   // (light-tune-edit.js). Photo Studio must never reach it (#5040).
   G.setLightTune = (id, v) => { latchWrites.push([id, v]); storage.delete("apex26.perChunkOff"); storage.delete("apex26.envProbeOff"); return ltStore.set(id, v); };
   // The light-store deps exactly as game.js hands them over, so this boot cannot pass while production differs.
-  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
+  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
     ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
   return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
@@ -117,6 +118,68 @@ test("a garage still waits for a fresh capture draw even when a previous photo e
   assert.equal(b.order.filter(action => action === "read").length, 1);
   b.G.gfx.renderCaptureFrame = draw => { draw(); return true; };
   assert.equal(await b.api.capture(), true);
+});
+
+function chooseSamples(b, count) {
+  const row = b.dom.byId("ps-samples");
+  row.value = String(count);
+  b.dom.dispatch(row, { type: "change" });
+}
+
+for (const count of [8, 32]) test(`${count}-sample capture freezes the camera and averages distinct subpixel renders`, async () => {
+  const positions = [], views = [];
+  const b = boot({
+    setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },
+    renderSample(pass) {
+      const proj = new Float32Array(16), view = new Float32Array(16);
+      proj[8] = pass.index + 0.25; view[12] = pass.index + 42;
+      pass.project(proj, view, 4, 2);
+      positions.push([(proj[8] - 0.25) * 2, proj[9]]);
+      views.push(view[12]);
+    },
+  });
+  b.api.open({ source: "garage" });
+  assert.equal(b.api.state().samples, 1);
+  chooseSamples(b, count);
+  b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32).fill(2 * positions.length) });
+  assert.equal(await b.api.capture(), true);
+  assert.equal(positions.length, count);
+  for (const axis of [0, 1]) {
+    const offsets = positions.map(p => p[axis]);
+    assert.equal(new Set(offsets).size, count);
+    assert.ok(offsets.every(v => Math.abs(v) < 0.5));
+    assert.equal(offsets.reduce((a, v) => a + v, 0), 0);
+  }
+  assert.ok(views.every(v => v === 42));
+  assert.equal(b.canvasOps.filter(op => op[0] === "pixels").at(-1)[1], count + 1);
+  assert.equal(b.dom.byId("ps-body").inert, false);
+});
+
+test("closing a sampled capture cancels its pending read, releases controls and keeps online capture instant", async () => {
+  const owners = [], cancelled = [];
+  let currentPass;
+  const b = boot({ renderSample(pass) {
+    currentPass = pass;
+    pass?.project(new Float32Array(16), new Float32Array(16), 4, 2);
+  } });
+  b.api.open();
+  chooseSamples(b, 8);
+  b.G.gfx.capturePixels = owner => { owners.push(owner); return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (_msg, owner) => cancelled.push(owner);
+  const first = b.api.capture();
+  assert.ok(b.dom.byId("ps-body").inert);
+  assert.equal(currentPass.pump, true);
+  b.api.close(false);
+  assert.deepEqual(cancelled, owners);
+  assert.equal(await first, false);
+  assert.equal(b.dom.byId("ps-body").inert, false);
+  b.G.netPlay = { active: () => true };
+  b.api.open();
+  assert.equal(b.dom.byId("ps-samples").disabled, true);
+  assert.equal(b.dom.byId("ps-samples").value, "1");
+  b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32) });
+  assert.equal(await b.api.capture(), true);
+  assert.equal(currentPass, null);
 });
 
 test("the Studio offers the shared stick editor exactly when the real camera sticks are present", () => {
@@ -534,6 +597,31 @@ for (const [resolution, width, height] of [["normal", 1920, 1080], ["4k", 3840, 
   assert.deepEqual([sizes[0].width, sizes[0].height, sizes[1]], [width,height,null]);
   assert.deepEqual([b.api.state().width,b.api.state().height], [width,height]);
   await b.api.exportPhoto(); assert.equal(b.downloads.length,1);
+});
+
+test("multi-sample 4K captures use a fresh draw for each sample and retain the selected resolution", async () => {
+  const sizes = [];
+  let freshDraws = 0;
+  const b = boot({
+    setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },
+    renderSample(pass) { pass.project(new Float32Array(16), new Float32Array(16), 3840, 2); },
+  });
+  Object.assign(b.G.gfx, {
+    width: 1920, height: 1, setPhotoCaptureSize(size) { sizes.push(size); },
+    renderCaptureFrame(draw) { freshDraws++; draw(); return true; },
+    capturePixels() {
+      const size = sizes.at(-1);
+      return { ...size, data: new Uint8ClampedArray(size.width * size.height * 4) };
+    },
+  });
+  b.api.open({ source: "garage" });
+  const select = b.dom.byId("ps-resolution"); select.value = "4k"; b.dom.dispatch(select, { type: "change" });
+  const frame = b.dom.byId("ps-aspect"); frame.value = "scene"; b.dom.dispatch(frame, { type: "change" });
+  chooseSamples(b, 8);
+  assert.equal(await b.api.capture(), true);
+  assert.equal(b.api.state().width, 3840);
+  assert.equal(freshDraws, 8);
+  assert.equal(sizes.at(-1), null);
 });
 
 test("closing an unfinished 4K capture releases its backing size once", async () => {

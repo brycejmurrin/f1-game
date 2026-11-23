@@ -238,25 +238,31 @@ const TLX = (function () {
         label: desc.label,
       });
       let staging = new ArrayBuffer(size);
-      const parts = [];
+      // Keep the staging handlers only for the initial upload. Later mapAsync
+      // calls on this buffer must use the device's own mapping methods.
+      const nativeRange = buf.getMappedRange, nativeUnmap = buf.unmap;
+      let parts;
       buf.getMappedRange = function (offset, mapSize) {
         const o = offset | 0;
         const n = mapSize == null ? (size - o) : (mapSize | 0);
         if (o === 0 && n === size) return staging;
         const part = new ArrayBuffer(n);
+        if (!parts) parts = [];
         parts.push({ o, part });
         return part;
       };
       buf.unmap = function () {
         try {
-          for (let i = 0; i < parts.length; i++) {
+          for (let i = 0; parts && i < parts.length; i++) {
             const p = parts[i];
             new Uint8Array(staging, p.o, p.part.byteLength).set(new Uint8Array(p.part));
           }
           if (staging && size) dev.queue.writeBuffer(buf, 0, staging);
         } catch (_) { /* one failed upload must not take down present() */ }
         staging = null;
-        parts.length = 0;
+        parts = null;
+        buf.getMappedRange = nativeRange;
+        buf.unmap = nativeUnmap;
       };
       return buf;
     }
@@ -1394,6 +1400,7 @@ const TLX = (function () {
       let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _gpuTimerFailLogged = false;
       let _gpuSamples = 0, _gpuSampleAt = -1, _gpuResolvePending = false;
       let _inspectorHold = false;   // dev Inspector owns timestamp resolution (inspectorHost below)
+      const _gpuEndedQueries = [];   // Only the single in-flight WebGL resolution uses this snapshot.
       function resolveGpuTimer() {
         if (!_gpuTimerOn || _deviceLost || _gpuResolvePending) return;
         const epoch = _gpuTimerEpoch, be = renderer.backend;
@@ -1403,27 +1410,32 @@ const TLX = (function () {
         // that batch has exactly the same duration as the preceding one.
         if (!pool || pool.isDisposed || pool.pendingResolve || !pool.currentQueryIndex) return;
         const frames = pool.frames, gl = be.isWebGLBackend && be.gl;
-        const queries = [];
         if (gl) {
-          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") queries.push(pool.queries[i]);
-          if (!queries.length) return;
+          for (const i of pool.queryOffsets.values()) if (pool.queryStates.get(i) === "ended") _gpuEndedQueries.push(pool.queries[i]);
+          if (!_gpuEndedQueries.length) return;
         }
         _gpuResolvePending = true;
+        readGpuTimestamp(epoch, pool, frames, gl);
+      }
+      async function readGpuTimestamp(epoch, pool, frames, gl) {
         try {
-          renderer.resolveTimestampsAsync("render").then(v => {
-            if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
-            // WebGL's pool also returns lastValue for interrupted queries.
-            // Require actual ready query objects and a non-disjoint clock.
-            if (gl && (gl.getParameter(pool.ext.GPU_DISJOINT_EXT) || queries.some(q => !gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)))) {
-              _gpuMs = -1; _gpuSampleAt = -1; return;
-            }
-            if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
-            _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
-          }).catch((e) => {
-            // Per-frame call: note the first rejection only.
-            if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
-          }).finally(() => { _gpuResolvePending = false; });
-        } catch (_) { _gpuResolvePending = false; /* timing is optional */ }
+          const v = await renderer.resolveTimestampsAsync("render");
+          if (!_gpuTimerOn || _deviceLost || epoch !== _gpuTimerEpoch || pool.isDisposed) return;
+          // WebGL's pool also returns lastValue for interrupted queries.
+          if (gl) {
+            let valid = !gl.getParameter(pool.ext.GPU_DISJOINT_EXT);
+            for (let i = 0; valid && i < _gpuEndedQueries.length; i++)
+              valid = gl.getQueryParameter(_gpuEndedQueries[i], gl.QUERY_RESULT_AVAILABLE);
+            if (!valid) { _gpuMs = -1; _gpuSampleAt = -1; return; }
+          }
+          if (pool.frames === frames || !pool.frames.length || v == null || !isFinite(v) || v < 0) return;
+          _gpuMs = v; _gpuSampleAt = _nowMs(); _gpuSamples++;
+        } catch (e) {
+          if (!_gpuTimerFailLogged) { _gpuTimerFailLogged = true; Log.debug("gfx", "TLX: GPU timestamp resolve rejected:", e && e.message); }
+        } finally {
+          _gpuEndedQueries.length = 0;
+          _gpuResolvePending = false;
+        }
       }
       function _gpuSupported() {
         try {
@@ -2181,7 +2193,9 @@ const TLX = (function () {
       // caller's object is never mutated and a dead one is never held. The memo
       // caches the KEY, never the material — matCache's eviction decides what a
       // key resolves to, and a cached material would outlive an eviction.
-      const _matKeyMemo = new WeakMap();
+      // Props submit the same options to instanced batches and then to chunked geometry each frame.
+      // Keep a weak memo per draw mode so those two submissions can both hit.
+      const _matKeyMemo = Array.from({ length: 6 }, () => new WeakMap());
       function buildMatKey(o, chunked, instanced) {
         // emissive and alpha are NOT in the key: they are per-draw uniforms
         // (tsl-lit.js perObject, written by acquireMesh). Only alpha < 1 is,
@@ -2206,7 +2220,8 @@ const TLX = (function () {
       const _instMode = (i) => (i === 2 ? 2 : i ? 1 : 0);
       function matKeyFor(o, chunked, instanced) {
         const db = o.depthBias, db0 = db ? db[0] : 0, db1 = db ? db[1] : 0;
-        let c = _matKeyMemo.get(o);
+        const memo = _matKeyMemo[(chunked ? 3 : 0) + _instMode(instanced)];
+        let c = memo.get(o);
         // A NaN field compares false against itself, so a caller feeding one
         // degrades to rebuilding every frame — the behaviour before this memo,
         // never a stale key.
@@ -2215,14 +2230,12 @@ const TLX = (function () {
           && c.me === o.metalness && c.sp === o.specular && c.de === o.detail
           && c.cc === o.clearcoat && c.cp === o.carPaint && c.sk === o.sparkle
           && c.cf === !!o.carFinish && c.ds === !!o.doubleSided && c.na === !!o.noAlphaWrite && c.nd === !!o.noDepthTest
-          && c.hb === !!db && c.b0 === db0 && c.b1 === db1
-          && c.ch === !!chunked && c.in === _instMode(instanced)) return c.key;
-        if (c === undefined) { c = {}; _matKeyMemo.set(o, c); }
+          && c.hb === !!db && c.b0 === db0 && c.b1 === db1) return c.key;
+        if (c === undefined) { c = {}; memo.set(o, c); }
         c.tr = tr; c.ro = o.roughness; c.me = o.metalness;
         c.sp = o.specular; c.de = o.detail; c.cc = o.clearcoat; c.cp = o.carPaint;
         c.sk = o.sparkle; c.cf = !!o.carFinish; c.ds = !!o.doubleSided; c.na = !!o.noAlphaWrite;
         c.nd = !!o.noDepthTest; c.hb = !!db; c.b0 = db0; c.b1 = db1;
-        c.ch = !!chunked; c.in = _instMode(instanced);
         c.key = buildMatKey(o, chunked, instanced);
         return c.key;
       }
@@ -2308,7 +2321,7 @@ const TLX = (function () {
       // material, each a drawRange) instead of the whole lap. Main pass: frustum only (cd 0), so the picture is
       // the one the full mesh drew. The mirror passes its own radial cap. One use per batch: a second record of the
       // same road in one pass draws whole rather than overwrite the slots' ranges before render().
-      const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
+      const SPLIT_TRIS = 1024, MIRROR_SECTION_TRIS = 128, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
       // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
       let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
       // Visible chunks of one record share attributes and one material. One
@@ -2362,18 +2375,25 @@ const TLX = (function () {
         for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = order;
         return n;
       }
-      function _drawSplit(rec, i, vp, eye, cd, fog) {
+      let mirrorRoadRefine = true, mirrorRearView = false;
+      const mirrorRoadStats = { totalTriangles: 0, submittedTriangles: 0, drawCalls: 0 };
+      function resetMirrorRoadStats() {
+        mirrorRoadStats.totalTriangles = mirrorRoadStats.submittedTriangles = mirrorRoadStats.drawCalls = 0;
+      }
+      function _drawSplit(rec, i, vp, eye, cd, fog, rearView) {
         const sp = rec.split;
         if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
         sp.batch = _poolBatch;
-        const n = chunkedSys.cull(sp, vp, eye, cd, fog);
+        const n = chunkedSys.cull(sp, vp, eye, cd, fog, rearView && mirrorRoadRefine);
         const r = TLXShaders.mergeRuns(chunkedSys.visList, n, SPLIT_SLOTS, sp.runs);
         for (let k = 0; k < r; k++) {
           const g = sp.slots[k];
           g.setDrawRange(sp.runs[2 * k], sp.runs[2 * k + 1]);
+          if (rearView) mirrorRoadStats.submittedTriangles += sp.runs[2 * k + 1] / 3;
           acquireMesh(g, rec.m, rec.mat, rec).renderOrder = i;
         }
-        rec.geo.__tlxDrawnBatch = _poolBatch;   // the shared buffers upload with the slots; releaseGeoMirrors keys on the parent
+        if (rearView) mirrorRoadStats.drawCalls += r;
+        if (r) rec.geo.__tlxDrawnBatch = _poolBatch;   // the shared buffers upload with the slots; releaseGeoMirrors keys on the parent
         return true;
       }
       function makeSplit(geo, data) {
@@ -2386,7 +2406,7 @@ const TLX = (function () {
           g.boundingSphere = geo.boundingSphere.clone(); g.boundingBox = geo.boundingBox.clone();
           slots.push(g);
         }
-        return { chunks: TLXShaders.splitRanges(data.pos, data.idx, SPLIT_TRIS), slots, runs: new Array(SPLIT_SLOTS * 2).fill(0), batch: -1 };
+        return { chunks: TLXShaders.roadRanges(data.pos, data.idx, SPLIT_TRIS, MIRROR_SECTION_TRIS), slots, runs: new Array(SPLIT_SLOTS * 2).fill(0), batch: -1 };
       }
       // Every drawList reset goes through here: drop the records' references, so a
       // pooled slot never pins an evicted material or a freed geometry.
@@ -2960,18 +2980,15 @@ const TLX = (function () {
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
       // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
       // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
-      const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
       const _projGpu = new Float32Array(16);
       const _vpGpuTlx = new Float32Array(16);
-      function _mul4Col(out, a, b) {
-        for (let c = 0; c < 4; c++) {
-          const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
-          out[c * 4]     = a[0] * b0 + a[4] * b1 + a[8] * b2  + a[12] * b3;
-          out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2  + a[13] * b3;
-          out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
-          out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+      function remapClipDepth(out, projection) {
+        for (let i = 0; i < 16; i += 4) {
+          out[i] = projection[i];
+          out[i + 1] = projection[i + 1];
+          out[i + 2] = 0.5 * projection[i + 2] + 0.5 * projection[i + 3];
+          out[i + 3] = projection[i + 3];
         }
-        return out;
       }
 
       // M6 FX plumbing
@@ -3548,7 +3565,9 @@ const TLX = (function () {
       function lineIndex(slot) {
         const capTris = Math.max(0, slot.cap - 2);
         if (slot.geo.index && slot.geo.index.count >= capTris * 3) return;
-        const idx = new Uint32Array(capTris * 3);
+        // Keep 0xffff reserved for WebGL2 fixed-index primitive restart.
+        const IndexArray = slot.cap <= 65535 ? Uint16Array : Uint32Array;
+        const idx = new IndexArray(capTris * 3);
         for (let i = 0; i < capTris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
         slot.geo.setIndex(new THREE.BufferAttribute(idx, 1));
       }
@@ -4541,7 +4560,11 @@ const TLX = (function () {
 
       function disposeGeometry(geo) {
         if (!geo) return;
-        if (geo.__tlxSplit) { for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); } geo.__tlxSplit = null; }
+        if (geo.__tlxSplit) {
+          if (chunkedSys) chunkedSys.visList.length = 0;   // drop any road bounds retained in culling scratch
+          for (const g of geo.__tlxSplit.slots) { releaseGeometry(g); g.dispose(); }
+          geo.__tlxSplit = null;
+        }
         releaseGeometry(geo);
         geo.dispose();
       }
@@ -4570,6 +4593,7 @@ const TLX = (function () {
           m.matrixAutoUpdate = false;
           m.matrixWorldAutoUpdate = false;
           m.frustumCulled = false;
+          m.__tlxIdent = true;   // Three initializes both matrices to identity.
           list[k] = m;
           meshPool.push(m); acquireMesh.n = (acquireMesh.n | 0) + 1;   // memState().churn: a new three RenderObject
         }
@@ -4603,14 +4627,14 @@ const TLX = (function () {
             m.__tlxIdent = true;
           }
         } else {
-          const prev = m.__tlxMat;
-          let same = !m.__tlxIdent && !!prev;
+          // The pool owns the local matrix and disables automatic transforms. Its elements
+          // are already the last submitted model, including on a reused occurrence.
+          const prev = m.matrix.elements;
+          let same = !m.__tlxIdent;
           if (same) {
             for (let i = 0; i < 16; i++) if (prev[i] !== matrixArr[i]) { same = false; break; }
           }
           if (!same) {
-            if (!prev) m.__tlxMat = new Float32Array(16);
-            m.__tlxMat.set(matrixArr);
             m.matrix.fromArray(matrixArr);
             m.matrixWorld.copy(m.matrix);
             m.__tlxIdent = false;
@@ -5545,7 +5569,7 @@ const TLX = (function () {
           _meshMade.mesh++;
           const kind = data._releaseCpuMirror ? "carSh" : "mesh";
           const geo = _regGeo(buildGeometry(data), kind);
-          if (TLXShaders.splitRanges && data.trk && data.trk.length === data.pos.length && data.idx && data.idx.length >= SPLIT_MIN_IDX) geo.__tlxSplit = makeSplit(geo, data);
+          if (TLXShaders.roadRanges && data.trk && data.trk.length === data.pos.length && data.idx && data.idx.length >= SPLIT_MIN_IDX) geo.__tlxSplit = makeSplit(geo, data);
           return { __tlx: true, geo, count: (data.idx && data.idx.length) || 0 };
         },
         createTexMesh(data) {
@@ -5698,9 +5722,16 @@ const TLX = (function () {
           if (!size || !images) return null;
           try {
             const n = layers || 17;
-            let data = new Uint8Array(size * size * 4 * n);
-            data.fill(128);
-            for (let i = 3; i < data.length; i += 4) data[i] = 255;
+            const page = size * size * 4;
+            let data = new Uint8Array(page * n);
+            // Readback overwrites every supplied page. Only absent material IDs need neutral RGBA.
+            let expected = 0;
+            for (let layer = 0; layer < n; layer++) {
+              if (images[layer]) { expected++; continue; }
+              const start = layer * page, end = start + page;
+              data.fill(128, start, end);
+              for (let i = start + 3; i < end; i += 4) data[i] = 255;
+            }
             // Async first (P4): the token comes back at once with `pending` and `ready` (true = filled and
             // uploadable; false = nothing landed, or freed in flight). needsUpdate waits for every layer, and
             // setMaterialMaps holds a pending token back, so no frame samples a half-filled array.
@@ -5737,7 +5768,7 @@ const TLX = (function () {
             const settle = () => {
               t.pending = false;
               if (t._freed) { letGo(); return false; }
-              if (!filled) { t.dispose(); letGo(); return false; }
+              if (!filled || filled !== expected) { t.dispose(); letGo(); return false; }
               t.needsUpdate = true;
               return true;
             };
@@ -5893,9 +5924,10 @@ const TLX = (function () {
           if (!envCubeCam) { _envGaveUp = true; return null; }
           _envActive = true;
           envCubeCam.position.set(eye[0], eye[1], eye[2]);
-          envCubeCam.updateMatrixWorld(true);
           const faceCam = envCubeCam.children[face & 7];
           if (!faceCam) { _envActive = false; return null; }
+          // A probe submits one face. Refresh its parent and view, leaving the other five cameras alone.
+          faceCam.updateWorldMatrix(true, false);
           // invViewProj for THIS face -> the sky node's ray reconstruction.
           _envVP.multiplyMatrices(faceCam.projectionMatrix, faceCam.matrixWorldInverse);
           _envInvVP.copy(_envVP).invert();
@@ -6113,7 +6145,7 @@ const TLX = (function () {
           _restoreEnvFrame();
           return accepted;
         },
-        mirrorBegin(frame, w, h) {
+        mirrorBegin(frame, w, h, rearView) {
           // The second world pass shares the soft-present queue. Submitting it
           // while a read waits defeats present()'s backpressure and starves it.
           if (_softBlit && _softReadPending) return false;
@@ -6130,7 +6162,7 @@ const TLX = (function () {
           // The camera the way begin() builds the main one: P and V kept apart
           // (WebGPU folds Z01 into P only).
           if (renderer.backend && renderer.backend.isWebGPUBackend) {
-            _mul4Col(_mirProjGpu, Z01, frame.proj);
+            remapClipDepth(_mirProjGpu, frame.proj);
             mirCam.projectionMatrix.fromArray(_mirProjGpu);
             if (renderer.coordinateSystem != null) mirCam.coordinateSystem = renderer.coordinateSystem;
           } else mirCam.projectionMatrix.fromArray(frame.proj);
@@ -6149,6 +6181,8 @@ const TLX = (function () {
           // A real pass can claim the target after warm-up clears but before
           // a previous session's queued quit callback runs. Warm draws cannot claim it.
           _mirReleaseWait = null;
+          mirrorRearView = rearView === true;
+          if (mirrorRearView) resetMirrorRoadStats();
           _mirFreeze = !!frame.mirrorFreezeInstanced;
           _mirActive = true;
           _mirUsed = true;
@@ -6164,7 +6198,13 @@ const TLX = (function () {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
               if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
-              if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
+              const road = mirrorRearView && rec.geo && rec.geo.__tlxSplit;
+              if (road) mirrorRoadStats.totalTriangles += rec.geo.index.count / 3;
+              if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, mirrorRearView)) continue;
+              if (road) {
+                mirrorRoadStats.submittedTriangles += rec.geo.index.count / 3;
+                mirrorRoadStats.drawCalls++;
+              }
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
             _poolShow();
@@ -6192,6 +6232,10 @@ const TLX = (function () {
           resetRecs();   // the main pass re-issues its own draws
           _dMatUsed = 0; _fxMatUsed = 0;
           _poolBatch++;
+        },
+        mirrorRoadCull(enabled) {
+          if (typeof enabled === "boolean") mirrorRoadRefine = enabled;
+          return { supported: true, enabled: mirrorRoadRefine, ...mirrorRoadStats };
         },
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
@@ -6225,6 +6269,7 @@ const TLX = (function () {
           try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
           try { mirRT.dispose(); } catch (_) { /* already gone */ }
           mirRT = null; mirCam = null; _mirReady = false; _mirRenders = 0;
+          resetMirrorRoadStats();
           return true;
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
@@ -6491,7 +6536,7 @@ const TLX = (function () {
           const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (eye.proj && eye.view) {
             if (_wgpu) {
-              _mul4Col(_projGpu, Z01, eye.proj);
+              remapClipDepth(_projGpu, eye.proj);
               camera.projectionMatrix.fromArray(_projGpu);
             } else {
               camera.projectionMatrix.fromArray(eye.proj);
@@ -6538,7 +6583,7 @@ const TLX = (function () {
           const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
             if (_wgpu) {
-              _mul4Col(_projGpu, Z01, frame.proj);
+              remapClipDepth(_projGpu, frame.proj);
               camera.projectionMatrix.fromArray(_projGpu);
               if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
             } else {
@@ -6557,7 +6602,7 @@ const TLX = (function () {
           } else if (frame && frame.viewProj) {
             if (_wgpu) {
               // No proj/invProj split — fold VP (OK when P is on-axis, e.g. legacy paths).
-              _mul4Col(_vpGpuTlx, Z01, frame.viewProj);
+              remapClipDepth(_vpGpuTlx, frame.viewProj);
               camera.projectionMatrix.fromArray(_vpGpuTlx);
               if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
             } else {

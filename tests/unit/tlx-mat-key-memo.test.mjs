@@ -33,7 +33,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
  *  else, which is what makes this legitimate rather than a re-implementation —
  *  a re-implementation would test the test. */
 function liftMemo() {
-  const start = SRC.indexOf("const _matKeyMemo = new WeakMap();");
+  const start = SRC.indexOf("const _matKeyMemo = ");
   assert.notEqual(start, -1, "the memo declaration moved — update this test, do not delete it");
   const marker = "\n      function materialFor(opts, chunked, instanced, fx, crowd) {";   // +crowd: the EXTREME crowd-animation program (#6003)
   const end = SRC.indexOf(marker, start);
@@ -143,4 +143,19 @@ test("unchanged input skips the key builder; mutation rebuilds exactly once", ()
   assert.equal(memo.builds(), 2, "mutation rebuilds once");
   memo.matKeyFor(o, false, false);
   assert.equal(memo.builds(), 2);
+});
+
+test("stable prop options shared by instanced and chunked submissions build once per mode", () => {
+  const memo = liftMemo(), props = { roughness: 0.73 };
+  const modes = [[false, true], [false, 2], [true, false]];
+  const draw = () => {
+    for (const [chunked, instanced] of modes) {
+      assert.equal(memo.matKeyFor(props, chunked, instanced), memo.buildMatKey(props, chunked, instanced));
+    }
+  };
+  for (let frame = 0; frame < 60; frame++) draw();
+  assert.equal(memo.builds(), modes.length);
+  props.roughness = 0.57;
+  draw();
+  assert.equal(memo.builds(), modes.length * 2);
 });

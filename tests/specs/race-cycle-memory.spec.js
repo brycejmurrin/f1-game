@@ -42,9 +42,13 @@ const CYCLES = WARM_CYCLES + 1;
 const DRIVE_STEPS = 600;   // 10 s of race: every car through the traffic buckets, the pit model and collisions
 
 async function raceAndDrive(page, id) {
-  await page.evaluate((tid) => { window.__apex.race(tid); }, id);
-  await page.waitForFunction((tid) => { try { const i = window.__apex.info(); return i.track === tid && (i.state === "race" || i.state === "count"); } catch (_) { return false; } },
-    id, { polling: 200, timeout: 240000 });
+  const grid = await page.evaluate(async (tid) => {
+    await window.__apex.race(tid);
+    const { track, state } = window.__apex.info();
+    return { track, state };
+  }, id);
+  expect(grid.track).toBe(id);
+  expect(["count", "race"]).toContain(grid.state);
   await page.evaluate((n) => {
     const A = window.__apex;
     A.go(); A.headless(true); A.setInput({ throttle: true, steer: 0.02 });
@@ -172,7 +176,9 @@ test("racing circuit after circuit keeps at most one world in memory", async ({ 
         await page.waitForFunction(() => { const s = document.getElementById("carsetup"); return s && !s.hidden; }, null, { polling: 200, timeout: 120000 });
         await waitFrames(page, 10);
         await page.evaluate(() => document.getElementById("cs-back").click());
-        await page.waitForFunction(() => { const s = document.getElementById("carsetup"); return s && s.hidden; }, null, { polling: 200, timeout: 60000 });
+        // On software GL, Back hides the garage before the deferred picker rebuild
+        // restores the title and stages its race settings. Wait for that handoff.
+        await page.locator("#mb-race").waitFor({ state: "visible", timeout: 60000 });
       }
     }
   }

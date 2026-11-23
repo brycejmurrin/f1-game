@@ -104,7 +104,7 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
   const frame = { viewProj: mainVP, proj: "P", invProj: "IP", invViewProj: mainInv, eye: [0, 5, 90], cullDist: 0, tune };
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
-  return { mp, G, gfx, calls, profileMarks, stored, classes, props, writes, clock, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
+  return { ctx, mp, G, gfx, calls, profileMarks, stored, classes, props, writes, clock, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
     FL: rankLights ? ctx.FrameLights : null,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }
