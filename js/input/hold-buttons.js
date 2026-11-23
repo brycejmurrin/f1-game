@@ -209,6 +209,12 @@ const InputHoldButtons = (function () {
       function handOff(e) {
         const to = holdById.get(sibId);
         if (!to) return false;
+        // Capture keeps e.target on the current pedal. The visible sibling must
+        // actually be under the finger, especially where custom dock boxes overlap.
+        if (document.elementFromPoint) {
+          const hit = document.elementFromPoint(e.clientX, e.clientY);
+          if (hit !== to.el && !to.el.contains?.(hit)) return false;
+        }
         release(e.pointerId);
         try { el.releasePointerCapture(e.pointerId); } catch (_) { /* capture already gone */ }
         gone.add(e.pointerId); if (!slid.size) look(el, "off");
