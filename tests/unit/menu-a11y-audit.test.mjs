@@ -600,13 +600,19 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
     }
     const tag = openTag(id);
     if (NO_DOOR[id]) { assert.doesNotMatch(tag, /data-esc/, `#${id} refuses no key and names no door`); continue; }
+    if (id === "photo-studio") {
+      const photo = read("js/ui/photo-studio-ui.js");
+      assert.doesNotMatch(tag, /data-esc-close/, "the cold shell has no close button");
+      assert.match(photo, /root\.setAttribute\("data-esc-close", "ps-close"\)/);
+      assert.match(photo, /button\("DONE", \(\) => close\(true\), "ps-close"\)/);
+      continue;
+    }
     const via = tag.match(/data-esc-close="([^"]+)"/);
     if (!via) { assert.match(tag, /data-esc="none"/, `#${id} either names a close control or refuses Escape outright`); continue; }
     const inShell = ids.has(via[1]);
     const built = new RegExp(`\\.id = "${via[1]}"`).test(read("js/data/hub.js"));
-    const photoDoor = id === "photo-studio" && via[1] === "ps-close" && /button\("DONE", \(\) => close\(true\), "ps-close"\)/.test(read("js/ui/photo-studio-ui.js"));
     const titleDoor = id === "tl-editor" && via[1] === "tl-cancel" && /btn\("tl-cancel", "Cancel", "Discard title changes", \(\) => exit\(false\)\)/.test(read("js/ui/title-layout.js"));
-    assert.ok(inShell || built || photoDoor || titleDoor, `#${id} → #${via[1]} exists (shell or declared dynamic owner)`);
+    assert.ok(inShell || built || titleDoor, `#${id} → #${via[1]} exists (shell or declared dynamic owner)`);
   }
   // Both Escape paths press the same control: the dialog `cancel` and the document keydown.
   const tm = code("js/ui/modal.js");
