@@ -36,6 +36,8 @@ window.SpotifyMusic = (function () {
   const K_TOKEN = "apex26.spotify.token";
   const S_VERIFY = "apex26.spotify.verifier";   // sessionStorage: one auth round-trip
   const S_STATE = "apex26.spotify.state";
+  const S_ARRANGE = "apex26.spotify.arrangeState";
+  let arrangeAfterLogin = false;
   const K_CTX = "apex26.spotify.context";       // chosen playlist uri, or "liked"
   const K_MODE = "apex26.spotify.mode";         // "remote" (Connect) | "browser" (SDK)
   const K_DEV = "apex26.spotify.device";        // remote mode: which device to play on
@@ -314,6 +316,10 @@ window.SpotifyMusic = (function () {
     const verifier = randomB64(64), st = randomB64(16);
     ssSet(S_VERIFY, verifier);
     ssSet(S_STATE, st);
+    const intent = { arrange: false };
+    document.dispatchEvent(new CustomEvent("apex:spotify-authorizing", { detail: intent }));
+    if (intent.arrange) ssSet(S_ARRANGE, st);
+    else ssDel(S_ARRANGE);
     setStatus("connecting", "Redirecting to Spotify to sign in…");
     return challengeFor(verifier).then((challenge) => {
       location.assign(AUTH_URL + "?" + new URLSearchParams({
@@ -369,6 +375,8 @@ window.SpotifyMusic = (function () {
     const verifier = ss(S_VERIFY), wantState = ss(S_STATE);
     if (!verifier) return Promise.resolve();          // not our redirect
     if (!code && !err) return Promise.resolve();
+    arrangeAfterLogin = !!code && !err && st === wantState && ss(S_ARRANGE) === st && !!st;
+    ssDel(S_ARRANGE);
     ssDel(S_VERIFY);
     ssDel(S_STATE);
     cleanUrl();
@@ -394,6 +402,7 @@ window.SpotifyMusic = (function () {
     })).then((j) => {
       if (gen !== sessionGen || cid !== clientId()) return;
       if (!j || j.error || !j.access_token) {
+        arrangeAfterLogin = false;
         setStatus("error", "Token exchange failed" + (j && j.error ? " (" + j.error + ")" : "") +
           ". The redirect URI here must match the dashboard exactly.");
         return;
@@ -1187,6 +1196,7 @@ window.SpotifyMusic = (function () {
   // first with a snapshot, without api()'s deferred token lookup/401 refresh:
   // its completion must never act on a replacement session.
   function endSession() {
+    arrangeAfterLogin = false;
     const t = readToken();
     if (mode() === "remote" && inUse() && BACKEND.active() && t) {
       const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -1461,6 +1471,9 @@ window.SpotifyMusic = (function () {
   function init() {
     if (initialized) return;
     initialized = true;
+    if (typeof SettingsNav !== "undefined") SettingsNav.onLeave?.(page => {
+      if (page === "audio") arrangeAfterLogin = false;
+    });
     Log.info("audio", "SpotifyMusic.init");
     // Adopt the stored config FIRST, so the redirect handler and the first
     // render agree about whether the feature exists at all. Note we never
@@ -1494,6 +1507,10 @@ window.SpotifyMusic = (function () {
     play() { return playChosen(); },
     mode, setMode, setDevice, deviceList() { return devices.slice(); },
     openPanel() {
+      if (arrangeAfterLogin && state === "connected") {
+        arrangeAfterLogin = false;
+        document.dispatchEvent(new CustomEvent("apex:spotify-arrange-return"));
+      }
       const settings = el("pmsettings");
       if (settings) settings.hidden = true;
       const p = el("spotifypanel");

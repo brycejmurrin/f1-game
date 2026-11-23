@@ -243,6 +243,71 @@ for (const touch of [false, true]) {
   });
 }
 
+test.describe("Choose a page state before arranging", () => {
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true, reducedMotion: "reduce" });
+
+  async function prepare(page, screen) {
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
+    await page.locator("#mb-settings").tap();
+    await page.locator("#pm-open-appearance").tap();
+    await page.getByLabel("Screen to arrange").selectOption(screen);
+    await page.getByLabel("Choose page state first").check();
+    await page.locator(".arrange-route").tap();
+    await expect(page.getByRole("button", { name: "Start arranging" })).toBeVisible({ timeout: BOOT });
+    await expect(page.locator("#screen-arranger")).toHaveCount(0);
+  }
+
+  async function editThenCancel(page, screen, region) {
+    const before = await page.evaluate(() => localStorage.getItem("apex26.screenPlacement"));
+    await page.getByRole("button", { name: "Start arranging" }).tap();
+    const editor = page.locator(`#screen-arranger[data-editing-screen="${screen}"]`);
+    await expect(editor).toBeVisible();
+    await expect(page.locator("#arrange-prepare")).toHaveCount(0);
+    await editor.getByLabel("Region", { exact: true }).selectOption(region);
+    await editor.getByRole("button", { name: "Controls", exact: true }).tap();
+    await editor.getByRole("button", { name: "Right", exact: true }).tap();
+    await editor.getByRole("button", { name: "Cancel", exact: true }).tap();
+    await expect(page.locator("#screen-arranger, #arrange-prepare, .arrange-selection")).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem("apex26.screenPlacement"))).toBe(before);
+  }
+
+  test("Career lets the player prepare their driver form before editing its layout", async ({ page }) => {
+    await prepare(page, "career");
+    await page.locator("#cr-left .cr-slot.empty .cr-slot-main").first().tap();
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    const name = page.locator(".cr-form").getByLabel("NAME", { exact: true });
+    await name.fill("M Nielsen");
+    await editThenCancel(page, "career", "identity");
+    await expect(name).toHaveValue("M Nielsen");
+    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+  });
+
+  test("Race a Friend keeps the draft invite and drops the preparation toolbar on exit", async ({ page }) => {
+    await prepare(page, "vsfriend");
+    await page.locator("#vs-join").tap();
+    const invite = page.locator("#vs-invite-in");
+    await invite.fill("pending invite");
+    await editThenCancel(page, "vsfriend", "invite-in");
+    await expect(invite).toHaveValue("pending invite");
+    await page.locator("#vs-close").tap();
+    await expect(page.locator("#mb-vs")).toBeVisible();
+    await page.locator("#mb-vs").tap();
+    await expect(page.locator("#vs-join")).toBeVisible();
+    await expect(page.locator("#screen-arranger, #arrange-prepare")).toHaveCount(0);
+  });
+
+  test("Garage opens the editor on the selected livery tab", async ({ page }) => {
+    await prepare(page, "carsetup");
+    const tab = page.locator("#cs-tab-livery");
+    await tab.tap();
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    await editThenCancel(page, "carsetup", "liveryOptions");
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#cs-options")).toHaveAttribute("aria-labelledby", "cs-tab-livery");
+  });
+});
+
 test("Race Settings previews and saves a single button's width, height and text independently", async ({ page, browser }, testInfo) => {
   test.setTimeout(120000);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -308,12 +373,14 @@ test("Race Settings previews and saves a single button's width, height and text 
   expect(await geometry(start)).toEqual(edited);
   expect(await saved()).toEqual(stored);
 
-  // Change a real fold while the race controls are live, then edit that state.
-  await page.locator("#rs-fold-field-sum").click();
-  await page.locator("#race-settings").getByRole("button", { name: "Arrange again" }).click();
+  // Re-enter through Appearance, then open Field without activating game controls.
+  await page.reload();
+  await openFromHome();
+  const browse = editor.getByLabel("Browse section");
+  const field = await browse.locator("option").filter({ hasText: /^Open FIELD/i }).getAttribute("value");
+  await browse.selectOption(field);
   await editor.getByLabel("Region").selectOption("diff-next");
   const difficulty = await page.locator("#rs-diff-sel").inputValue();
-  await adjust("Controls");
   await adjust("Button height +");
   await adjust("Apply");
   expect(await page.locator("#rs-diff-sel").inputValue()).toBe(difficulty);
@@ -328,15 +395,17 @@ test("Garage animation tuner edits its window on first visit at the measured pho
     await page.goto(baseURL || "/");
     await expect(page.locator("html")).toHaveAttribute("data-booted", /.*/, { timeout: BOOT });
     await page.locator("#mb-settings").tap();
-    await page.locator("#pm-open-visual").tap();
-    const advanced = page.locator("#pm-visual-tuners");
-    if (!(await advanced.evaluate(el => el.open))) await advanced.locator("summary").tap();
-    await page.locator("#pm-garrival").tap();
+    const launch = async () => {
+      await page.locator("#pm-open-appearance").tap();
+      await page.getByLabel("Screen to arrange").selectOption("garrival");
+      await page.locator(".arrange-route").tap();
+    };
+    await launch();
     const sheet = page.locator("#garrival-inner");
     const width = () => sheet.evaluate(el => el.getBoundingClientRect().width);
-    const launch = page.locator('#garrival [data-arrange-screen="garrival"]').first();
     const editor = page.locator('#screen-arranger[data-editing-screen="garrival"]');
     const action = name => editor.getByRole("button", { name, exact: true }).tap();
+    await expect(editor).toBeVisible();
     const shipped = await width();
     const build = await page.locator('meta[name="apex-build"]').getAttribute("content");
     const capture = async state => {
@@ -344,7 +413,6 @@ test("Garage animation tuner edits its window on first visit at the measured pho
       await testInfo.attach(name, { body: await page.screenshot(), contentType: "image/png" });
     };
     await capture("shipped");
-    await launch.tap();
     await editor.getByLabel("Region", { exact: true }).selectOption("window");
     await action("Controls");
     await action("Width −");
@@ -355,7 +423,9 @@ test("Garage animation tuner edits its window on first visit at the measured pho
     await capture("preview");
     await action("Apply");
     expect(await width()).toBe(preview);
-    await launch.tap();
+    await page.locator("#ga-close").tap();
+    await page.locator("#pm-settings-close").tap();
+    await launch();
     await editor.getByLabel("Region", { exact: true }).selectOption("window");
     await action("Controls");
     await action("Reset region");

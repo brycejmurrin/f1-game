@@ -445,15 +445,6 @@ function create(G, deps) {
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
   root.appendChild(guide); root.appendChild(panel);
-  // Studio hides the shared camera toolbar to keep Capture and Done clear.
-  // Its track views still render the same Move and Look sticks.
-  let stickDoor;
-  if (typeof EditorWorkspace !== "undefined") {
-    EditorWorkspace.arrangeDoor(root, panel.querySelector(".sheet-head"));
-    const body = E["ps-body"];
-    stickDoor = EditorWorkspace.arrangeDoor(G.$("photo-controls"), body, "photo-controls", "Arrange camera sticks");
-    if (stickDoor) body.insertBefore(stickDoor, subjectGroup);
-  }
   root.setAttribute("aria-label", "Photo Studio");
   root.setAttribute("data-esc-close", "ps-close");
   const say = (s) => { E["ps-message"].textContent = s; };
@@ -469,7 +460,6 @@ function create(G, deps) {
     for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background"]) {
       E[id].disabled = value || closing || (id !== "ps-capture" && !last);
     }
-    if (stickDoor) stickDoor.disabled = value || closing;
     E["ps-close"].disabled = false;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
@@ -551,7 +541,6 @@ function create(G, deps) {
       E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
     }
     placeCar();
-    if (stickDoor) stickDoor.hidden = isGarage();
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();

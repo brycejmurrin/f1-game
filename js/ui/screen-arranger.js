@@ -4,7 +4,84 @@
 window.ScreenArranger = (function () {
   const orientation = () => window.ScreenPlacement.orientation();
   const clone = value => JSON.parse(JSON.stringify(value));
-  let active = null;
+  let active = /** @type {null | (() => void)} */ (null), preparation = null;
+  // A studio subject switch intentionally hides and reopens the same owner.
+  // Only the preparation already visible on that screen may survive the handoff.
+  function suspendPreparation(id) {
+    return preparation?.id === id ? preparation.suspend() : null;
+  }
+
+  function restoreFocus(root, invoker) {
+    const focusable = el => el?.isConnected && !el.disabled && el.getClientRects().length &&
+      !el.closest('[hidden], [inert], dialog:not([open]), [aria-disabled="true"]');
+    const target = focusable(invoker) ? invoker : Array.from(root.querySelectorAll("button,select,input,summary,[tabindex]")).find(focusable);
+    target?.focus({preventScroll:true});
+  }
+
+  // Preparation is explicitly armed from Appearance. Navigation and controls
+  // keep their normal behavior until the player chooses the state to edit.
+  function prepare(id, invoker, onClose) {
+    if (active) active();
+    const screen = window.ScreenRegions[id];
+    const root = screen && document.querySelector(screen.root);
+    if (!root || root.closest("[hidden], dialog:not([open])")) return false;
+    const bar = document.createElement("div");
+    bar.id = "arrange-prepare";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Prepare " + screen.label + " layout");
+    const action = (label, handler) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.onclick = handler;
+      bar.appendChild(button);
+      return button;
+    };
+    let swapping = false;
+    const cancelSwap = event => { if (event.key === "Escape") dismiss(); };
+    function dismiss() {
+      document.removeEventListener("keydown", cancelSwap, true);
+      preparation = null;
+      observer.disconnect();
+      bar.remove();
+      active = null;
+    }
+    const start = action("Start arranging", () => {
+      dismiss();
+      if (!open(id, invoker, onClose)) onClose?.();
+    });
+    action("Move toolbar", () => { bar.dataset.edge = bar.dataset.edge === "bottom" ? "top" : "bottom"; });
+    action("Cancel", () => {
+      dismiss();
+      if (onClose) onClose();
+      else {
+        restoreFocus(root, invoker);
+      }
+    });
+    const visible = () => root.getClientRects().length && !root.closest("[hidden], dialog:not([open])");
+    const observer = new MutationObserver(() => {
+      if (!root.isConnected || !root.matches(screen.root) || (!swapping && !visible())) dismiss();
+      else if (!bar.isConnected) root.appendChild(bar);
+    });
+    root.appendChild(bar);
+    for (let el = root; el; el = el.parentElement) {
+      observer.observe(el, {attributes:true, attributeFilter:["hidden","open","class"], childList:true});
+    }
+    preparation = { id, suspend() {
+      swapping = true;
+      document.addEventListener("keydown", cancelSwap, true);
+      return reopened => {
+        if (active !== dismiss) return;
+        swapping = false;
+        document.removeEventListener("keydown", cancelSwap, true);
+        if (!reopened || !root.isConnected || !root.matches(screen.root) || !visible()) dismiss();
+        else start.focus({preventScroll:true});
+      };
+    }};
+    active = dismiss;
+    start.focus({preventScroll:true});
+    return true;
+  }
 
   function open(id, invoker = document.activeElement, onClose) {
     if (active) active();
@@ -84,7 +161,7 @@ window.ScreenArranger = (function () {
     const originalTabs = new Map(), originalFolds = new Map();
     // Only native disclosures and the owner's semantic tab buttons are
     // forwarded. Capture, Quit, drive controls and arbitrary links stay inert.
-    const tabSelector = 'button[role="tab"][aria-controls]';
+    const tabSelector = 'button[role="tab"][aria-controls]:not([data-arrange-browse="false"])';
     const canBrowse = el => shown(el) && !el.disabled && !el.matches(":disabled") && !el.closest('[aria-disabled="true"]');
     function refreshBrowse() {
       const candidates = Array.from(root.querySelectorAll('summary,' + tabSelector))
@@ -225,7 +302,7 @@ window.ScreenArranger = (function () {
     }
     // Only measure a button when changing a dimension. A drag never needs its size.
     const styleRow = row();
-    const buttonSelector = "button:not(.screen-arrange-entry,[data-arrange-screen]), [role=button], input[type=button], input[type=submit], input[type=reset]";
+    const buttonSelector = "button, [role=button], input[type=button], input[type=submit], input[type=reset]";
     function firstButton() {
       const part = element(key);
       if (!part) return null;
@@ -403,12 +480,13 @@ window.ScreenArranger = (function () {
       if (!e.isPrimary || e.button !== 0 || panel.contains(e.target)) return;
       setExpanded(false);
       e.preventDefault();
-      const hit = keys.map(k => {
+      const hit = keys.slice().reverse().map(k => {
         const el = element(k);
         return {k, rect:el && rectOf(el)};
       }).filter(({rect}) => rect &&
         e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom);
-      hit.sort((a,b) => a.rect.width*a.rect.height - b.rect.width*b.rect.height);
+      // Definitions run broad to specific. Preserve explicit selection on a tie.
+      hit.sort((a,b) => a.rect.width*a.rect.height - b.rect.width*b.rect.height || Number(b.k === key) - Number(a.k === key));
       if (!hit.length) return;
       key = hit[0].k;
       render();
@@ -504,7 +582,7 @@ window.ScreenArranger = (function () {
         window.setTimeout(() => notice.remove(), 8000);
       }
       if (onClose) onClose();
-      else if (invoker?.isConnected && !invoker.closest("[hidden], dialog:not([open])")) invoker.focus({preventScroll:true});
+      else restoreFocus(root, invoker);
     }
     let refreshFrame = 0;
     const observer = new MutationObserver(records => {
@@ -534,5 +612,5 @@ window.ScreenArranger = (function () {
     picker.focus();
     return true;
   }
-  return {open};
+  return {open, prepare, suspendPreparation};
 })();

@@ -364,7 +364,16 @@ function initUI() {
   const tools = document.getElementById("pm-visual-tuners");
   if (tools && tools.parentNode === host && typeof host.insertBefore === "function") host.insertBefore(fold, tools);
   else host.appendChild(fold);
-  const place = (el) => content.appendChild(el);
+  let section = content;
+  const place = (el) => section.appendChild(el);
+  function subgroup(parent, visible) {
+    const group = document.createElement("div");
+    parent.appendChild(group);
+    const refresh = () => { group.hidden = !visible(); };
+    refresh();
+    onWheel(refresh);
+    return group;
+  }
   // The row titles are hover-only, which a phone never shows: each row also
   // gets the same sentence as a visible help line under it.
   const help = (text) => {
@@ -395,22 +404,33 @@ function initUI() {
     "Tucked moves your eyes down and forward. Upright moves them up and back. Forward keeps your usual eye height. Fine-tune the field of view in Camera Tuner.", helmetEye, setHelmetEye);
   row("pm-helmetmount", "CAMERA MOUNT", C.helmetMount.values, C.helmetMount.labels,
     "Center the helmet camera or mount it over either eye. Works with every eye position.", helmetMount, v => setChoice("helmetMount", v));
-  for (const [key, label, helpText] of [
-    ["helmetShake", "Helmet shake", "Overall vibration. 100% is the original strength."],
-    ["helmetImpact", "Impacts and rumble", "Jolts from contact and the sustained rumble on a kerb."],
-    ["helmetKerb", "Kerb rib vibration", "Vertical vibration as each kerb rib passes under the car."],
-    ["helmetBuzz", "Speed vibration", "Continuous vibration as speed builds on dry tarmac."],
-    ["helmetHeadMotion", "Head movement", "How far your head leans in corners and nods under braking."],
-  ]) {
+  function motionSlider(key, label, helpText, max = 100) {
     slider("pm-" + key.toLowerCase(), label.toUpperCase(), label, helpText,
-      key === "helmetShake" ? 150 : 100, 1, () => motionAmount(key), value => setMotionAmount(key, value));
+      max, 1, () => motionAmount(key), value => setMotionAmount(key, value));
   }
+  motionSlider("helmetShake", "Vibration", "Overall strength of impacts, kerb ribs and speed vibration. 100% is standard.", 150);
+  motionSlider("helmetHeadMotion", "Head lean & nod", "How far your head leans in corners and nods under braking, even at zero vibration.");
+  const fine = document.createElement("details");
+  fine.id = "pm-helmet-vibration-details";
+  const fineLabel = document.createElement("summary");
+  fineLabel.textContent = "Fine-tune vibration";
+  fineLabel.className = "adv-more-btn";
+  fine.appendChild(fineLabel);
+  place(fine);
+  section = fine;
+  motionSlider("helmetImpact", "Contact & sustained rumble", "Jolts from contact and the sustained rumble on a kerb.");
+  motionSlider("helmetKerb", "Kerb rib vibration", "Vertical vibration as each kerb rib passes under the car.");
+  motionSlider("helmetBuzz", "Speed vibration", "Continuous vibration as speed builds on dry tarmac.");
+  const optics = subgroup(content, () => visor() !== "off");
+  section = optics;
   row("pm-visorshape", "VISOR OPENING", C.visorShape.values, C.visorShape.labels,
     "Choose how much of the road is visible through a clear or tinted visor.", visorShape, setVisorShape);
+  section = subgroup(optics, () => visor() === "smoke");
   row("pm-visor-color", "TINT COLOR", C.visorColor.values, C.visorColor.labels,
     "Choose the lens color for a tinted visor.", visorColor, setVisorColor);
   row("pm-visor-intensity", "TINT INTENSITY", C.visorIntensity.values, C.visorIntensity.labels,
     "Choose how much lens color covers the road, from a trace to a deep tint.", visorIntensity, setVisorIntensity);
+  section = optics;
   row("pm-visor-refraction", "VISOR REFRACTION", C.visorRefraction.values, C.visorRefraction.labels,
     "Distortion through the shield in HELMET camera with CLEAR or TINTED visor. OFF keeps the road undistorted.", visorRefraction, setVisorRefraction);
   row("pm-visor-reflections", "VISOR REFLECTIONS", C.visorReflections.values, C.visorReflections.labels,
@@ -442,16 +462,20 @@ function initUI() {
     paint();
     onWheel(paint);
   }
+  section = subgroup(optics, () => visorReflections() !== "off");
   slider("pm-visor-beams", "VISOR BEAMS", "Visor beams",
     "Light beams on the shield in HELMET camera: the streak each floodlight and street lamp throws along its aim, the rays of a low sun in the frame and the star flares on the brightest lights. 100% is the standard look; 200% doubles their length and brightness; 0% keeps only the glints. Needs VISOR REFLECTIONS on.",
     200, 10, visorBeams, setVisorBeams);
+  section = optics;
   row("pm-visor-rain", "VISOR RAIN", C.visorRain.values, C.visorRain.labels,
     "Water accumulating on the shield in HELMET camera with CLEAR or TINTED visor. Actual rain controls new drops; OFF clears the water. LOW graphics disables droplets.", visorRain, setVisorRain);
+  section = subgroup(optics, () => visorRain() !== "off");
   slider("pm-visor-drop-size", "DROPLET SIZE", "Visor droplet size",
     "Size of collected rain on the HELMET visor. 50% is small, 100% is standard and 200% is large. Updates existing drops while paused. Requires CLEAR or TINTED visor with VISOR RAIN on.",
     200, 1, visorDropSize, setVisorDropSize, 50);
   row("pm-visor-runoff", "WATER RUNOFF", C.visorRunoff.values, C.visorRunoff.labels,
     "How quickly visor water slides away. Airflow moves drops at speed; stopped drops sag downward. REDUCED MOTION keeps drops still.", visorRunoff, setVisorRunoff);
+  section = content;
   row("pm-ckwheel", "WHEEL", C.wheel.values, C.wheel.labels,
     "The steering wheel. CLASSIC and NONE have no screen, so the HUD shows gear and speed.", wheel, setWheel);
   row("pm-ckbody", "BODY", C.body.values, C.body.labels,

@@ -57,19 +57,13 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
 
 // UI hunt 2026-10-29 rows 2-3: a tap whose pointerup queued behind a long frame
 // (timer first) opened the picker; an open picker outlived its hidden button.
-function camHarness(withEditor = false) {
+function camHarness() {
   const dom = makeDom(), timers = new Map(), observers = [];
   let serial = 0;
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
     setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); },
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe(el, opts) { this.el = el; this.opts = opts; } } };
   ctx.window = ctx; ctx.addEventListener = () => {};
-  if (withEditor) {
-    const create = dom.document.createElement;
-    dom.document.createElement = (tag) => Object.assign(create(tag), {ownerDocument:dom.document});
-    vm.runInNewContext(fs.readFileSync(path.join(root, "js/ui/editor-workspace.js"), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
-    ctx.SettingsNav = {arrangeScreen(id){ctx.edited = id;}};
-  }
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/pedal-travel.js"), "utf8"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInNewContext(fs.readFileSync(path.join(root, "js/input/hold-buttons.js"), "utf8"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
   ctx.InputHoldButtons = vm.runInNewContext("InputHoldButtons", ctx);
@@ -84,19 +78,13 @@ function camHarness(withEditor = false) {
   return { dom, G, cams, button, fire, runTimers, observers, ctx };
 }
 
-test("CAM menu offers a keyboard-reachable arrangement action without changing the selected race camera", () => {
-  const h = camHarness(true);
+test("End focuses the last camera without changing the current view", () => {
+  const h = camHarness();
   h.fire("pointerdown", 0); h.runTimers(); h.fire("pointerup", 500);
   const menu = h.dom.byId("campicker"), before = h.G.camMode;
-  const arrange = menu.querySelector('[role="menuitem"]');
-  assert.ok(arrange);
-  assert.equal(arrange.hasAttribute("aria-checked"),false);
-  h.dom.dispatch(menu,{type:"keydown",key:"End"});
-  assert.equal(h.dom.document.activeElement,arrange);
-  arrange.onclick();
-  assert.equal(h.ctx.edited,"campicker");
-  assert.equal(h.G.camMode,before);
-  assert.equal(menu.hidden,false);
+  h.dom.dispatch(menu, {type:"keydown", key:"End"});
+  assert.equal(h.dom.document.activeElement, menu.querySelectorAll('[role="menuitemradio"]').at(-1));
+  assert.equal(h.G.camMode, before);
 });
 
 test("CAM hold is judged by event times: a late-delivered short tap cycles, a real hold opens", () => {

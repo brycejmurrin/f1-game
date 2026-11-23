@@ -357,6 +357,7 @@ function slotInfo(c, f, i) {
     flavour: f, i, used: true, year: c.year,
     live: f === slotFlavour && i === slotIdx,
     round: c.season.round, rounds: calendarOf(c).length,
+    pendingOffers: !!c.offers?.length,
     team: c.team, teamName: c.myTeamIdentity && c.myTeamIdentity.customTeam ? c.myTeamIdentity.customTeam.name : team ? team.name : (c.team == null ? "" : String(c.team)),
     code: c.driver ? c.driver.code : "", name: c.driver ? c.driver.name : "",
     money: c.money, rep: c.rep,

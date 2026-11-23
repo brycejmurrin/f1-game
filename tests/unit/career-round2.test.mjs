@@ -304,6 +304,18 @@ test("C1: the hub's NEXT RACE card names the circuit Career.trackIndex() will lo
   assert.equal(card.querySelector("img").alt, "monza circuit", "next-race still identifies its circuit to assistive technology");
 });
 
+test("the slot chooser reports contract decisions without switching the current career", () => {
+  const { Career } = started();
+  const current = Career.slot();
+  const first = () => Career.slots("driver")[0];
+  assert.equal(first().pendingOffers, false);
+  Career.data().offers = [{ teamId: "alpine", years: 1, salary: 100, goal: { type: "champPos", value: 5 } }];
+  Career.save();
+  assert.equal(first().pendingOffers, true);
+  assert.deepEqual(Career.slot(), current);
+  assert.equal(Career.slots("driver")[1].used, false);
+});
+
 // ---- C2 ---------------------------------------------------------------------------------------
 test("C2: a beatRival move offer signs the rival it printed, and never names the offered team's own driver", () => {
   let tested = 0;

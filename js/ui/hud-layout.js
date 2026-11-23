@@ -26,6 +26,7 @@ const HudLayout = (function () {
     ["damage", "DAMAGE", "#hud-damage", "top right"],
     ["rel", "RELATIVE", "#hud-rel", "top right"],
     ["strat", "STRATEGY", "#hud-strat", "top left"],
+    ["finish", "FINISH / RETIREMENT CARD", "#retired-card", "center"],
     ["inputs", "INPUTS", "#hud-inputs", "top right"],   // under the sector column (desktop + touch); was bottom left over SPEED & GEAR at 150%
   ].map(Object.freeze));
   const IDS = ELEMENTS.map((e) => e[0]);

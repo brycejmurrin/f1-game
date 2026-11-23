@@ -85,6 +85,28 @@ function harness({ career = false, era = null, unlimited = false, stored = {}, t
   return { dom, ui, G, sb, saved, parts, team };
 }
 
+test("browsing a Garage category in the arrangement editor preserves the saved tab and camera", () => {
+  const h = harness({ tab: "team" });
+  const writes = [];
+  h.G.store.set = (key, value) => writes.push([key, value]);
+  let framed = 0;
+  const query = h.dom.document.querySelector;
+  h.dom.document.querySelector = selector => selector === '#cs-stack [data-cs-view="side"]'
+    ? { click() { framed++; } } : query(selector);
+  h.ui.buildSetup();
+  const editor = h.dom.byId("screen-arranger");
+  editor.open = true;
+  h.dom.byId("cs-tab-brakes").onclick();
+  assert.equal(h.dom.byId("cs-options").getAttribute("aria-labelledby"), "cs-tab-brakes");
+  h.dom.byId("cs-tab-team").onclick();
+  assert.deepEqual(writes, []);
+  assert.equal(framed, 0);
+  editor.open = false;
+  h.dom.byId("cs-tab-brakes").onclick();
+  assert.deepEqual(writes, [["garageTab", "brakes"]]);
+  assert.equal(framed, 1);
+});
+
 function paintFixture() {
   const old = { id: "custom_original", name: "Original", c1: [1, 0, 0], c2: [0, 0, 1] };
   const rows = "apex26.livery.custom.mercedes", fit = "apex26.livery.mercedes";

@@ -71,7 +71,6 @@ const CockpitPreview = (function () {
       b.onclick = () => { angle = id; update(); }; buttons.push(b); toolbar.appendChild(b);
     }
     toggle.onclick = () => iframe ? close(true) : open();
-    if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor(view, toolbar, "cockpit-preview");
     doc.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || !iframe || e.target?.closest?.("#screen-arranger")) return;
       close(true); e.preventDefault(); e.stopImmediatePropagation();

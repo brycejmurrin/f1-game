@@ -243,10 +243,43 @@ test("storage-health UI does no measurements or prompts until opened, and remain
   vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
   const host = dom.byId("test-health-host"), handle = h.c.Health.mount(host, { store: h.store });
   assert.equal(estimates, 0); assert.equal(prompts, 0);
-  const toggle = handle.root.children[0], panel = handle.root.children[1];
-  assert.equal(panel.hidden, true); toggle.onclick(); await tick();
-  assert.equal(panel.hidden, false); assert.equal(estimates, 1); assert.equal(prompts, 0);
-  assert.equal(toggle.getAttribute("aria-expanded"), "true"); toggle.onclick(); assert.equal(panel.hidden, true);
+  const fold = handle.root;
+  assert.equal(fold.tagName, "DETAILS"); assert.equal(fold.children[0].tagName, "SUMMARY");
+  assert.equal(!!fold.open, false);
+  fold.open = true; dom.dispatch(fold, { type: "toggle" }); await tick();
+  assert.equal(estimates, 1); assert.equal(prompts, 0);
+  fold.open = false; dom.dispatch(fold, { type: "toggle" }); await tick();
+  assert.equal(estimates, 1);
+});
+test("cancelling a career restore keeps both rows and returns focus without applying a save", async () => {
+  const h = boot(); await h.store.mirror.ready;
+  const dom = makeDom(); h.c.document = dom.document;
+  vm.runInContext(src("js/ui/save-health.js") + ";globalThis.Health=SaveHealth", h.c, { filename: absSrc("js/ui/save-health.js") });
+  const items = [2, 1].map(round => ({ id: String(round), at: round, reason: "round", summary: { year: 2026, round } }));
+  let lists = 0, restores = 0;
+  const api = {
+    async list() { lists++; return { ok: true, items }; },
+    async preview(f, i, id) { return { ok: true, point: items.find(item => item.id === id).summary }; },
+    async restore() { restores++; return { ok: true, durable: true }; }
+  };
+  const health = h.c.Health.mount(dom.byId("health-cancel"), { store: h.store, restorePoints: api });
+  const history = health.root.children[1].children.at(-1);
+  const [, slot, show, list] = history.children;
+  slot.value = "driver.0";
+  await show.onclick();
+  const rows = Array.from(list.children);
+  assert.equal(rows.length, 2);
+  await rows[1].onclick();
+  const cancel = list.children[0].children.at(-1);
+  assert.equal(cancel.textContent, "CANCEL");
+  assert.equal(dom.document.activeElement, cancel);
+  cancel.onclick();
+  assert.deepEqual(list.children, rows);
+  assert.equal(dom.document.activeElement, rows[1]);
+  assert.equal(restores, 0);
+  assert.equal(lists, 1);
+  await rows[0].onclick();
+  assert.equal(list.children[0].children[1].textContent, "RESTORE THIS POINT");
 });
 test("storage health tolerates denied storage getters and keeps report and cleanup controls usable", async () => {
   const h = boot(); await h.store.mirror.ready;
@@ -356,7 +389,7 @@ test('older capture completion cannot overwrite newer failure health, and UI lab
   const dom = makeDom(); h.c.document = dom.document;
   vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c, { filename: absSrc("js/ui/save-health.js") });
   const handle = h.c.Health.mount(dom.byId('health-history-owner'), { store: h.store, restorePoints: p });
-  handle.root.children[0].onclick(); await tick();
+  handle.root.open = true; dom.dispatch(handle.root, { type: "toggle" }); await tick();
   const text = n => n.textContent + [...(n.children || [])].map(text).join(' ');
   assert.match(text(handle.root), /restore point unavailable \(invalid-or-too-large\)/);
   assert.match(text(handle.root), /Primary save status is separate/);
@@ -606,4 +639,32 @@ test("mirror treats an UnknownError abort as a dead connection: the batch is kep
   assert.equal(JSON.parse(h.idb.dbs.get("apex26-store").get("kv").get("apex26.career.driver.0").v).season.round, 8);
   const next = boot({ idb: h.idb }); await next.store.mirror.ready;
   assert.equal(next.store.get("career.driver.0").season.round, 8, "the save survives the next launch");
+});
+
+test("write failure announces recovery immediately, then augments the still-open warning when Files loads", async () => {
+  const source = src("js/ui/select-screen.js");
+  const start = source.indexOf('const saveWarning = $("save-warning");');
+  const end = source.indexOf("const retrySave =", start);
+  const script = new vm.Script(source.slice(start, end), {filename: absSrc("js/ui/select-screen.js")});
+  for (const recover of [true, false]) {
+    const h = boot(), dom = makeDom();
+    await h.store.mirror.ready;
+    const banner = dom.byId("save-warning");
+    banner.hidden = true;
+    let done, loads = 0, mounts = 0;
+    h.c.$ = id => dom.byId(id);
+    h.c.SettingsExport = { ready() { loads++; return new Promise(resolve => { done = resolve; }); } };
+    script.runInContext(h.c);
+    assert.equal(loads, 0, "a healthy title does not need the Files bundle");
+    h.block(true);
+    h.store.write("testSetting", 1);
+    h.store.write("otherSetting", 2);
+    assert.equal(banner.hidden, false);
+    assert.equal(loads, 1);
+    assert.match(dom.byId("save-warning-detail").textContent, /QuotaExceededError/);
+    if (recover) vm.runInContext("hideSaveWarning()", h.c);
+    h.c.SaveHealth = { mount(node) { assert.equal(node, banner); mounts++; } };
+    done(true); await tick();
+    assert.equal(mounts, recover ? 0 : 1);
+  }
 });

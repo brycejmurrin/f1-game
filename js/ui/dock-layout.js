@@ -508,7 +508,7 @@ const DockLayout = (function () {
     let editor = null, load = null;
     const ready = () => typeof HudArrange !== "undefined" ? Promise.resolve(true)
       : typeof ScriptLoader === "undefined" ? Promise.resolve(false)
-      : ScriptLoader.create().load(["js/ui/hud-arrange.js"], [], { strict: true });
+      : ScriptLoader.create().load(typeof RetiredCard === "undefined" ? ["js/ui/hud-arrange.js", "js/race/retired-card.js"] : ["js/ui/hud-arrange.js"], [], { strict: true });
     btn.onclick = () => {
       if (editor) { editor.setEditing(!editor.isEditing()); return; }
       if (load) return;

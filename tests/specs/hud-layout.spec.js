@@ -1897,14 +1897,16 @@ test.describe("unrestricted manual widgets", () => {
     await page.waitForFunction(() => typeof HudArrange !== "undefined" && document.querySelector("#hud-arrange-element option"),
       null, { polling: 100, timeout: BOOT_MS });
     const ids = await page.locator("#hud-arrange-element option").evaluateAll(es => es.map(e => e.value));
-    // 19 widgets; on touch the three the buttons carry (OVERTAKE / AERO / BRAKE BIAS) have no box and are not offered (#5256).
+    // Includes the event-only finish card. On touch the three the buttons carry (OVERTAKE / AERO / BRAKE BIAS) have no box and are not offered (#5256).
     const offered = await page.evaluate(() => ({ all: HudLayout.ELEMENTS.length,
       want: HudLayout.ELEMENTS.length - (document.body.classList.contains("desktop") ? 0 : HudArrange.TOUCH_CARRIED.length) }));
-    expect(offered.all).toBe(19);
+    expect(offered.all).toBe(20);
+    expect(ids).toContain("finish");
     expect(ids).toHaveLength(offered.want);
     await page.locator("#hud-arrange-move").click();
     for (const id of ids) {
       await page.locator("#hud-arrange-element").selectOption(id);
+      if (id === "finish") await expect(page.locator("#retired-skip")).toBeVisible();
       await page.locator("#hud-arrange-move").focus();
       for (let i = 0; i < 11; i++) await page.keyboard.press("Shift+ArrowRight");
       for (let i = 0; i < 8; i++) await page.locator("#hud-arrange-smaller").click();

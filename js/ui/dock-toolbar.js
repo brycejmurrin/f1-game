@@ -15,7 +15,7 @@ const DockToolbar = (() => {
     const controls = [$("btn-steer-left"), $("btn-steer-right"), $("btn-throttle"), $("btn-brake"),
       $("btn-boost"), $("btn-ot"), $("btn-aero"), $("shift-up"), $("shift-down")];
     const byId = new Map(controls.filter(Boolean).map(node => [node.id, node]));
-    let target = "all", shown = null, preview = null;
+    let target = "all", shown = null, opener = null, preview = null;
     let editBar = null, doneBtn = null, toolsButton = null, expanded = false, visible = false;
     let initial, current;
     const history = [];
@@ -317,7 +317,7 @@ const DockToolbar = (() => {
         }
       }
       visible = on;
-      if (on) { initial = current = snapshot(); history.length = 0; target = "all"; expanded = false; ensureDone(); hideDialogs(); }
+      if (on) { opener = document.activeElement; initial = current = snapshot(); history.length = 0; target = "all"; expanded = false; ensureDone(); hideDialogs(); }
       else if (restore === false) shown = null;
       else restoreDialogs();
       if (editBar) { editBar.hidden = !on; paintBar(); }
@@ -326,7 +326,7 @@ const DockToolbar = (() => {
       if (btn) {
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         btn.textContent = on ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
-        if (!on && restore !== false && btn.focus) btn.focus();
+        if (!on && restore !== false) (opener?.isConnected && opener !== document.body ? opener : btn).focus?.();
       }
       if (!on) clearFitFrame();
     }

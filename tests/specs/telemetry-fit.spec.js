@@ -19,7 +19,7 @@ const VIEWS = [
   { name: "portrait-390x844", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 },
 ];
 
-async function openTrace(page, v, drivers) {
+async function openTrace(page, v, drivers, arrange = false) {
   await page.addInitScript((css) => {
     const add = () => { const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
     document.head ? add() : document.addEventListener("DOMContentLoaded", add, { once: true });
@@ -55,8 +55,16 @@ async function openTrace(page, v, drivers) {
       carData: (sk, n) => Promise.resolve(lap(base[n]).car),
       locationData: (sk, n) => Promise.resolve(lap(base[n]).loc),
     });
-    document.getElementById("dh-tab-telemetry").click();
   });
+  if (arrange) {
+    await page.locator("#dh-close-btn").click();
+    await page.locator("#mb-settings").click();
+    await page.locator("#pm-open-appearance").click();
+    await page.getByLabel("Screen to arrange").selectOption("telemetry-detail");
+    await page.locator(".arrange-route").click();
+  } else {
+    await page.locator("#dh-tab-telemetry").click();
+  }
   const chips = page.locator(".dh-dchip");
   await expect(chips.first()).toBeVisible();
   for (const code of drivers) await chips.filter({ hasText: code }).first().click();
@@ -283,13 +291,12 @@ for (const v of [HEAD_WINDOWS[2], HEAD_WINDOWS[0]]) {
 
 test("arranging the wide telemetry trace resizes the rendered column and Apply keeps the preview width", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await openTrace(page, { sat: 0, sar: 0, sab: 0, sal: 0 }, ["VER", "STR"]);
+  await openTrace(page, { sat: 0, sar: 0, sab: 0, sal: 0 }, ["VER", "STR"], true);
   const detail = page.locator("dialog.dh-tpopup");
   const column = detail.locator(".dh-telem-main");
   await expect(page.locator("body")).toHaveAttribute("data-width", "wide");
   const width = () => column.evaluate(node => node.getBoundingClientRect().width);
   const initial = await width();
-  await detail.getByRole("button", { name: "Arrange", exact: true }).click();
   const editor = page.locator("#screen-arranger[open]");
   await editor.getByLabel("Region", { exact: true }).selectOption("charts");
   await editor.getByRole("button", { name: "Controls", exact: true }).click();

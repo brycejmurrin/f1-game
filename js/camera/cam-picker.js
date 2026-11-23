@@ -29,12 +29,8 @@ const CamPicker = (function () {
           };
           el.appendChild(b);
         }
-        if (typeof EditorWorkspace !== "undefined") {
-          const arrange = EditorWorkspace.arrangeDoor(el, el);
-          if (arrange) { arrange.setAttribute("role", "menuitem"); arrange.tabIndex = -1; }
-        }
         el.addEventListener("keydown", (e) => {
-          const items = [...el.querySelectorAll('[role="menuitemradio"],[role="menuitem"]')];
+          const items = [...el.querySelectorAll('[role="menuitemradio"]')];
           const at = items.indexOf(document.activeElement);
           let next = -1;
           if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (at + 1) % items.length;

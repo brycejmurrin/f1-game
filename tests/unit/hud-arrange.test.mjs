@@ -209,6 +209,7 @@ function editor(pieceId = "piece", options = {}) {
     screenBounds: policy.screenBounds, holdArrangePreview(on) { options.onPreviewHold?.(on, ids); }, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   const ctx = { document: doc, window: viewport,
+    RetiredCard: options.previewFinish && { preview: on => options.previewFinish(on, ids) },
     HudElements: elements,
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
     requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
@@ -844,7 +845,6 @@ test("HUD panel metric selection changes only the chosen dimension and keeps too
   assert.equal(metric.hidden, true);
 });
 
-
 test("selecting an automatic map by tap preserves responsive placement and Undo history", () => {
   const e = editor("map", { manualAnchor: { left: 40, top: 20 } });
   e.api.setEditing(true);
@@ -862,4 +862,17 @@ test("a HUD drag uses the final release position even when no last move was deli
   e.fire("pointermove", { clientX: 130 });
   e.fire("pointerup", { clientX: 150 });
   assert.equal(e.get("piece").x, 5);
+});
+
+test("selecting the finish card shows its sample and Cancel hides it again", () => {
+  const e = editor("finish", { hidden: true, previewFinish(on, ids) { ids.get("finish").hidden = !on; } });
+  e.api.setEditing(true);
+  const selector = e.ids.get("hud-arrange-element");
+  assert.ok(selector.children.some(option => option.value === "finish"));
+  assert.equal(e.ids.get("finish").hidden, true);
+  selector.value = "finish";
+  selector.onchange();
+  assert.equal(e.ids.get("finish").hidden, false);
+  e.api.setEditing(false, true, false);
+  assert.equal(e.ids.get("finish").hidden, true);
 });

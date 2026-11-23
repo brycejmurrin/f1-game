@@ -27,7 +27,7 @@ function ctx2d(calls) {
       calls.draw++;
       if (calls.frameDraws) calls.frameDraws.push({ dest: args.slice(-4), alpha: this.globalAlpha });
     },
-    save() {}, restore() {}, translate() {}, rotate: () => { calls.rotate++; },
+    save() {}, restore() {}, resetTransform() {}, translate() {}, rotate: () => { calls.rotate++; },
     beginPath() {}, arc() {}, fill() {}, moveTo() {}, bezierCurveTo() {}, closePath() {}, stroke() {},
     createRadialGradient: () => grad, createLinearGradient: () => grad,
   };
@@ -353,6 +353,7 @@ test("helmet rain: atlas follows helmet camera changes even paused, and stays ca
   const {D,calls,setHelmet} = makeDroplets({helmet:true,recordAtlas:true});
   D.tick(0.06,true,1,false,0,false);
   const helmetStops = structuredClone(calls.atlasStops), initialBuilds = calls.atlasBuilds;
+  assert.equal(initialBuilds, 1, "entry builds only the helmet atlas");
   const hit = D.stats().first.hitAge;
   for (let i=0;i<3;i++) D.tick(0.01,true,1,false,0,false);
   assert.equal(calls.atlasBuilds,initialBuilds,"ordinary helmet ticks reuse the atlas");
