@@ -566,6 +566,11 @@ async function precacheAssetLists() {
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
     "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
+    // LEARN — Aero Lab iframe and its bare dependencies
+    "learn/aero/index.html",
+    "learn/aero/style.css",
+    "learn/aero/lab.js",
+    "js/physics/consts.js",
     // LOCALES — manifest only until a non-English language ships
     "locales/manifest.json",
     // /@gen-shell:sw-optional
@@ -691,7 +696,9 @@ async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
     if (res && res.ok) {
       // Retried scripts need a stamped generation; every stamped response is
       // verified, including initial optional installs. Bound body/hash work too.
-      if (verifyGeneration && /^js\//.test(url) && !/\?v=([0-9a-f]{12})$/.test(url)) return false;
+      // Aero Lab is an unversioned standalone page and loads this same-origin
+      // dependency as a bare script, like its lab.js sibling under learn/.
+      if (verifyGeneration && /^js\//.test(url) && url !== "js/physics/consts.js" && !/\?v=([0-9a-f]{12})$/.test(url)) return false;
       const checked = await Promise.race([verifyHashedResponse(url, res).then(() => true), expired]);
       if (!checked) return false;
       await cache.put(url, res); return true;

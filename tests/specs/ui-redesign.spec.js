@@ -961,10 +961,10 @@ test("balanced control rows derive their shape from local room", async ({ page }
   expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
-  // Watch and Data Hub share the Explore group.
+  // Watch, Data Hub and Learn share the Explore group.
   const explore = await report("#menu-explore");
   expect(explore.display).toBe("flex");
-  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(2);
+  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(3);
   expect(explore.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full
