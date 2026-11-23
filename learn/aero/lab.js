@@ -259,6 +259,20 @@
     document.querySelector("input[name=section][value=corner]").checked = true;
     update();
   });
+  const flowSpeed = get("flow-speed");
+  function updatePressure() {
+    const speed = Number(flowSpeed.value);
+    const ratio = (speed / 100) ** 2;
+    const speedText = speed + "% of clean air";
+    flowSpeed.setAttribute("aria-valuetext", speedText);
+    get("flow-speed-value").textContent = speedText;
+    get("local-pressure").textContent = Math.round(ratio * 100) + "%";
+    get("local-pressure-meter").value = ratio;
+    get("pressure-ratio").textContent = (speed / 100).toFixed(2) + "² = "
+      + ratio.toFixed(2) + " of the clean-air pressure and force.";
+  }
+  flowSpeed.addEventListener("input", updatePressure);
+  updatePressure();
   motion.addEventListener("click", () => { animate = !animate; updateMotion(); });
   preference.addEventListener("change", syncAppearance);
   scheme.addEventListener("change", syncAppearance);

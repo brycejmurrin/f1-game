@@ -1236,6 +1236,12 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await expect(lab.locator("#gap")).toHaveValue("10");
   await expect(lab.locator("#tow")).toHaveText("0%");
   await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.getByRole("heading", { name: "2026 F1 ACTIVE AERO" })).toBeVisible();
+  await expect(lab.locator("#local-pressure")).toHaveText("64%");
+  await lab.getByRole("slider", { name: "Local flow speed", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#local-pressure")).toHaveText("66%");
+  await expect(lab.locator("#pressure-ratio")).toHaveText("0.81² = 0.66 of the clean-air pressure and force.");
+  await expect(lab.locator("#grip")).toHaveText("88%");
   // Appearance changes must reach the iframe without resetting the lesson.
   await page.evaluate(() => {
     AppearanceOpts.setTheme("light");

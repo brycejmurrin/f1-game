@@ -274,3 +274,11 @@ details {
   background: var(--surf-1);
 }
 .physics-note p { margin-top: calc(var(--gap) / 2); }
+.active-aero p { margin-top: calc(var(--gap) / 2); }
+.pressure-label {
+  display: flex;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: var(--gap);
+}

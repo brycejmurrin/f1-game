@@ -19,7 +19,12 @@
 <div class="limits"><span>5 m</span><span>45 m</span></div>
 <fieldset><legend>Track section</legend><div><label><input type="radio" name="section" value="straight" checked> Straight</label><label><input type="radio" name="section" value="corner"> Fast corner</label></div></fieldset>
 <label class="check"><input id="offset" type="checkbox"> Move follower 4 m off-line</label>
-
+</section>
+<section class="active-aero" data-as="box" aria-labelledby="active-aero-title">
+<h2 id="active-aero-title" data-as="heading">2026 F1 ACTIVE AERO</h2>
+<p><strong>Straight Mode · low drag.</strong> In dry conditions, the front and rear flaps can open in FIA-designated activation zones when enabled.</p>
+<p><strong>Corner Mode · high downforce.</strong> Flaps return to their higher-downforce positions for corners.</p>
+<p><a href="https://www.fia.com/news/f1s-new-era-everything-you-need-know-about-how-fia-making-formula-1-more-competitive-more" target="_blank" rel="noopener">FIA guide to 2026 active aero</a></p>
 </section>
 </div>
 <section data-as="preview-side" aria-label="Live wind tunnel">
@@ -49,7 +54,12 @@
 <section class="physics-note" aria-labelledby="force-title">
 <h2 id="force-title">Why the force changes</h2>
 <p>A wing or floor gets its aerodynamic load from the air moving past it. Dynamic pressure is <strong>q = ½ρv²</strong>, where ρ is air density and v is the local air speed relative to the car. Aero force is dynamic pressure × reference area × a force coefficient.</p>
-<p><strong>Illustrative example.</strong> If local flow speed in the wake is 80% of the clean-air value, dynamic pressure is 0.8² = 0.64 of clean air. With area and coefficient held constant, that gives 36% less force.</p>
+<p><strong>Controlled experiment.</strong> Change the local flow speed while holding air density, area and the force coefficient constant.</p>
+<label class="pressure-label" for="flow-speed">Local flow speed <output id="flow-speed-value" for="flow-speed">80% of clean air</output></label>
+<input id="flow-speed" type="range" min="70" max="100" step="1" value="80" aria-describedby="pressure-ratio">
+<div class="reading"><div>Clean-air reference <strong>100%</strong></div><meter aria-label="Clean-air reference" min="0" max="1" value="1"></meter></div>
+<div class="reading"><div>Local pressure and force <strong id="local-pressure">64%</strong></div><meter aria-label="Local pressure and force relative to clean air" id="local-pressure-meter" min="0" max="1" value="0.64"></meter></div>
+<p id="pressure-ratio">0.80² = 0.64 of the clean-air pressure and force.</p>
 <p>Disturbed flow can also change the effective lift coefficient. Changes in flow angle and turbulence alter the way air follows the wing and floor, including where it separates. A loss of downforce leaves the tyres with less vertical load for cornering.</p>
 </section>
 <details><summary>Model and sources</summary><p>Apex’s classic wake model uses forward gap and lateral offset. Grip is the wake multiplier relative to clean air at the same speed. Both presets hold speed at the game reference of 72 m/s (259 km/h). The lab holds speed, gap and offset constant when you switch track sections. On the straight the tow is eligible. In the corner, the game’s tow condition is treated as unmet. The wake and grip formulas stay the same in both cases.</p><p>Car positions and flow lines are schematic. The lines illustrate the game’s estimated wake. Clean air here means outside car A’s wake. The 34 m centreline cutoff is an Apex setting. Usable tow shows a percentage of the game’s maximum tow strength.</p><p><a href="https://doi.org/10.4271/2017-01-1546" target="_blank" rel="noopener">Wake-flow research</a> · <a href="https://www.fia.com/regulations/category/110" target="_blank" rel="noopener">FIA regulations</a></p></details>
