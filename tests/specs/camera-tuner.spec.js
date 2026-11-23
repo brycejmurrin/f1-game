@@ -306,9 +306,9 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camComfort") || "{}").fovBias)).toBe(-5);
 
   // ALL CAMS scope writes the global baseline, not the live mode.
-  await page.locator('#camtune-inner .ew-tools > summary').click();
-  await expect(page.locator('#camtune-inner .ew-tools')).toHaveAttribute('open', '');
-  await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="global"]').click());
+  const scope = page.locator("#ct-scope");
+  if (!(await scope.isVisible())) await page.getByText("Scope, presets and preview tools", { exact: true }).click();
+  await scope.locator('button[data-scope="global"]').click();
   await expect(page.locator("#ct-profile")).toContainText("ALL CAMERAS");
   await page.evaluate(() => {
     const inp = document.getElementById("ct-in-fov");
@@ -317,7 +317,7 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     inp.dispatchEvent(new Event("change"));
   });
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camTuneGlobal") || "{}").fov)).toBe(3);
-  await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="mode"]').click());
+  await scope.locator('button[data-scope="mode"]').click();
   await expect(page.locator("#ct-profile")).toContainText("HOOD");
 
   // Picking another chip switches the live camera AND what the sliders edit.
