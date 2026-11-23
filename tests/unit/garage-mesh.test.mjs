@@ -612,10 +612,10 @@ test("floor reflection draws after the room so depth clips the mirror", () => {
   GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { reflectionHull: REFLECTION_HULL }, car);
   const carAt = draws.findIndex((d) => d.mesh === car);
   assert.ok(carAt >= 0, "mirrored car is drawn");
-  assert.ok(carAt > 1, `reflection at ${carAt} must follow the room (floor is draw 0)`);
+  assert.ok(carAt > 1, `reflection at ${carAt} must follow the room`);
   const scene = read("js/garage/scene.js");
   assert.match(scene, /_gfx\.draw\(carMesh, arrivalMirror, MIRROR_RESOLVE\)/,
-    "mirror uses MIRROR_RESOLVE (depth bias, no noDepthTest)");
+    "mirror keeps normal depth testing");
 });
 
 test("wide grazing views do not draw a mirror past the garage slab", () => {
@@ -877,8 +877,10 @@ test("reflection fade preserves each room's authored floor colours and markings"
   const Prims = vm.runInContext('GaragePrims', ctx), car = { car: true };
   for (const look of ['porcelain', 'heritage', 'endurance', 'stock']) {
     Prims.setLook(look); draws.length = 0;
-    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false, reflectionHull: REFLECTION_HULL }, car);
+    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false });
     const floor = meshes[draws[0].mesh.id - 1];
+    draws.length = 0;
+    GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, { ambient: false, reflectionHull: REFLECTION_HULL }, car);
     const fade = meshes[draws[draws.findIndex(d => d.mesh === car) + 1].mesh.id - 1];
     const authored = new Set();
     const key = (data, i, lift = 0) => [data.pos[i], +(data.pos[i + 1] - lift).toFixed(6), data.pos[i + 2],

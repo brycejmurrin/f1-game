@@ -842,12 +842,9 @@ function mk(out, tx, ty, tz, ay, az) {
 let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null, mirrorFadeMesh = null;
 const _mFan = new Float32Array(16), _mLamp = new Float32Array(16), _mPass = new Float32Array(16);
 const MAT_MIRROR = new Float32Array([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-// Floor reflection: noDepthTest + alpha drew the mirrored car into empty pixels
-// below the bay slab (side/rear views showed a second car under the floor).
-// Draw the room first, resolve the mirror opaque with depth bias so it depth-tests
-// against floor/props, then composite a bay fade quad for contact sheen.
-const MIRROR_BIAS = [-2, -120];
-const MIRROR_RESOLVE = { alpha: 1, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, carFinish: true, depthBias: MIRROR_BIAS };   // carFinish: the reflected car keeps its finish tints
+// Resolve the opaque mirrored car against the room, then blend the bay floor
+// over it. The floor footprint check keeps the mirrored geometry under the slab.
+const MIRROR_RESOLVE = { alpha: 1, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, carFinish: true };   // carFinish: the reflected car keeps its finish tints
 const MIRROR_SHEEN_PEAK = 0.14;
 const _mirrorFadeOpts = { alpha: 0.86, roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
 function mirrorSheen(eye, carMat) {
@@ -1446,7 +1443,13 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   rebuild(team, liv, boardInfo(team, getParts, driverIdx, ctx), ctx);
   ensureDynamic();
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
-  _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+  let sheen = 0;
+  if (carMesh) {
+    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
+    else arrivalMirror.set(MAT_MIRROR);
+    sheen = mirrorSheen(eye, carMat) * mirrorFloorCoverage(eye, ctx?.reflectionHull, arrivalMirror);
+  }
+  if (sheen <= 0.02) _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   if (!(ctx && ctx.realExterior)) {
     _gfx.draw(exteriorFallbackMesh, MAT_I, FLOOR_OPTS);
     if (ctx && ctx.showLaneBays) {
@@ -1462,8 +1465,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     }
   }
   const studio = !!(ctx && ctx.studio);
-  // Room first so its depth is in the buffer: the reflection then depth-tests
-  // against props/shell (they win) and only needs bias to clear the floor.
+  // The shell and props occlude the reflection with their normal depth.
   const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
   const inside = _inside;
   inside.nx = ex > -HALF_W; inside.px = ex < HALF_W; inside.back = ez > Z_BACK;
@@ -1532,22 +1534,13 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
     }
   }
   }
-  // THE FLOOR REFLECTION: car again through MAT_MIRROR (X as the preview's
-  // MAT_REFLECT_X, Y for the floor; det +1, no cull flip). Opaque resolve with
-  // depthBias so under-floor fragments clear the floor and self-occlude; bay
-  // fade quad restores contact sheen. After the room so props/shell clip it.
-  if (carMesh) {
-    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
-    else arrivalMirror.set(MAT_MIRROR);
-    const sheen = mirrorSheen(eye, carMat) * mirrorFloorCoverage(eye, ctx?.reflectionHull, arrivalMirror);
-    if (sheen > 0.02) {
-      _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
-      if (ctx && ctx.departureWheels) ctx.departureWheels(arrivalMirror, MIRROR_RESOLVE);
-      ensureMirrorFade(liv);
-      if (mirrorFadeMesh) {
-        _mirrorFadeOpts.alpha = 1 - sheen;
-        _gfx.draw(mirrorFadeMesh, MAT_I, _mirrorFadeOpts);
-      }
+  if (sheen > 0.02) {
+    _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
+    if (ctx && ctx.departureWheels) ctx.departureWheels(arrivalMirror, MIRROR_RESOLVE);
+    ensureMirrorFade(liv);
+    if (mirrorFadeMesh) {
+      _mirrorFadeOpts.alpha = 1 - sheen;
+      _gfx.draw(mirrorFadeMesh, MAT_I, _mirrorFadeOpts);
     }
   }
   if (studio) return;   // car studio: floor + resolved reflection, no room dressing
@@ -1735,7 +1728,13 @@ const roomProbe = {
   half: [HALF_W, CEIL_Y / 2, (Z_DOOR - Z_BACK) / 2],
   room: null, mood: "",
   draw() {
-    _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+    let sheen = 0;
+  if (carMesh) {
+    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
+    else arrivalMirror.set(MAT_MIRROR);
+    sheen = mirrorSheen(eye, carMat) * mirrorFloorCoverage(eye, ctx?.reflectionHull, arrivalMirror);
+  }
+  if (sheen <= 0.02) _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
     _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
     if (trussMesh) _gfx.draw(trussMesh, MAT_I, SHELL_OPTS);
     for (const side of SIDES) {
