@@ -1376,10 +1376,8 @@ const Car3D = (function () {
       }
     });
     let cockpitHaloFrom = 0, cockpitHaloTo = 0;
-    out._cockpitHaloOccluder = null;
     if (!exHalo && opts && opts.halo) {
       cockpitHaloFrom = out.pos.length / 3;
-      const haloIndexFrom = out.idx.length;
       const faired = opts.halo === 4;
       const hk = faired || opts.halo === true ? 1 : [0, 0.64, 1, 1.44][Math.max(1, Math.min(3, opts.halo | 0))];
       const path = haloHoopPath(0.30,0.765,-0.80,0.28,0.18,faired?1.10:1.045,0.62,faired?24:10);
@@ -1404,7 +1402,8 @@ const Car3D = (function () {
         for(const p of path) p[1]-=0.055*Math.min(1,Math.max(0,(p[2]+0.80)/0.98))*Math.pow(Math.abs(p[0])/0.28,2);
         const start=out.pos.length/3;
         addTube(out,path,0.029*hk,10,hc,SURFACES.carbon);
-        for(let i=start;i<out.pos.length/3;i++) out.pos[i*3+1]=path[Math.floor((i-start)/10)][1]+(out.pos[i*3+1]-path[Math.floor((i-start)/10)][1])*0.64;
+        const ringSize = (out.pos.length / 3 - start) / path.length;
+        for(let i=start;i<out.pos.length/3;i++) out.pos[i*3+1]=path[Math.floor((i-start)/ringSize)][1]+(out.pos[i*3+1]-path[Math.floor((i-start)/ringSize)][1])*0.64;
         CarMaterials.smoothSkin(out,start);
       }
       // Carbon fairing: a narrow stem blending into a broad Y at the crown.
@@ -1420,8 +1419,6 @@ const Car3D = (function () {
       }
       CarMaterials.smoothSkin(out,stemStart);
       cockpitHaloTo = out.pos.length / 3;
-      // EXTREME later refines this base surface; its tiny PN silhouette bulge is not in the obstruction proxy.
-      if (ckpt) out._cockpitHaloOccluder = CarGeometry.sourceOccluder(out, haloIndexFrom);
     }
     // Shared exterior centreline for the fairing and part("halo") below.
     const haloSty = Math.max(0, Math.min(2, Math.round(cockpitStyle.halo || 0)));
@@ -2875,14 +2872,13 @@ const Car3D = (function () {
   // opts.hero (EXTREME player car, CarGeometry.heroOn): the lazy CarHero's pass (js/car/car-hero.js; absent, the
   // build is ULTRA's). Any throw in the detailed build falls back to today's detail-0 mesh.
   function build(color, color2, opts) {
-    if (opts && opts.hero && typeof CarHero !== "undefined") return CarHero.build(build0, color, color2, opts);
+    const finish = data => { if (opts && opts.cockpit && opts.sourceOcclusion) data._cockpitOccluder = CarGeometry.cockpitOccluder(data); return data; };
+    if (opts && opts.hero && typeof CarHero !== "undefined") return finish(CarHero.build(build0, color, color2, opts));
     const d = CarGeometry.clampDetail(opts && opts.detail);
-    if (!d) return build0(color, color2, opts);
-    try {
-      return CarGeometry.withDetail(d, () => build0(color, color2, opts));
-    } catch (e) {
+    if (!d) return finish(build0(color, color2, opts));
+    try { return finish(CarGeometry.withDetail(d, () => build0(color, color2, opts))); } catch (e) {
       Log.warn("car", "detail " + d + " build failed, detail 0: " + (e && e.message));
-      return build0(color, color2, Object.assign({}, opts, { detail: 0, hero: false }));
+      return finish(build0(color, color2, Object.assign({}, opts, { detail: 0, hero: false })));
     }
   }
   // The garage / CAR STUDIO opts (js/garage/setup-camera.js): {} below ULTRA, every phone, node.

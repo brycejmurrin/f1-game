@@ -40,6 +40,8 @@ const CHOICES = {
               labels: { off: "OFF", light: "LIGHT", medium: "MEDIUM", strong: "STRONG" } },
   visorReflections: { key: "apex26.helmetVisorReflections", url: "visorreflections", values: ["light", "off", "medium", "strong"],
               labels: { light: "LIGHT", off: "OFF", medium: "MEDIUM", strong: "STRONG" } },
+  visorQuality: { key: "apex26.helmetVisorQuality", url: "visorquality", values: ["auto", "low", "high"],
+              labels: { auto: "AUTO", low: "LOW", high: "HIGH" } },
   visorLightStyle: { key: "apex26.helmetVisorLightStyle", url: "visorlightstyle", values: ["classic", "compact", "scratches"],
               labels: { classic: "CLASSIC", compact: "COMPACT", scratches: "SHORT RAYS" } },
   visorRain: { key: "apex26.helmetVisorRain", url: "visorrain", values: ["normal", "off", "light", "heavy"],
@@ -267,6 +269,8 @@ function visorRefraction() { return choice("visorRefraction"); }
 function setVisorRefraction(v) { return setChoice("visorRefraction", v); }
 function visorReflections() { return choice("visorReflections"); }
 function setVisorReflections(v) { return setChoice("visorReflections", v); }
+function visorQuality() { return choice("visorQuality"); }
+function setVisorQuality(v) { return setChoice("visorQuality", v); }
 function visorLightStyle() { return choice("visorLightStyle"); }
 function setVisorLightStyle(v) { return setChoice("visorLightStyle", v); }
 function visorRain() { return choice("visorRain"); }
@@ -281,6 +285,7 @@ function paintVisor() {
   document.body.setAttribute("data-helmet-visor-refraction", visorRefraction());
   document.body.setAttribute("data-helmet-visor-reflections", visorReflections());
   document.body.setAttribute("data-helmet-visor-light-style", visorLightStyle());
+  document.body.setAttribute("data-helmet-visor-quality", visorQuality());
   document.body.setAttribute("data-helmet-visor-beams", String(Math.round(visorBeams() * 100)));
   document.body.setAttribute("data-helmet-visor-rain", visorRain());
   document.body.setAttribute("data-helmet-visor-runoff", visorRunoff());
@@ -428,6 +433,8 @@ function initUI() {
   motionSlider("helmetBuzz", "Speed vibration", "Continuous vibration as speed builds on dry tarmac.");
   const optics = subgroup(content, () => visor() !== "off");
   section = optics;
+  row("pm-visor-quality", "VISOR EFFECTS QUALITY", C.visorQuality.values, C.visorQuality.labels,
+    "AUTO adapts visor effects to the available performance. LOW reduces effect detail. HIGH requests full detail; graphics and performance limits still apply. Your style and strength settings are kept.", visorQuality, setVisorQuality);
   row("pm-visorshape", "VISOR OPENING", C.visorShape.values, C.visorShape.labels,
     "Choose how much of the road is visible through a clear or tinted visor.", visorShape, setVisorShape);
   section = subgroup(optics, () => visor() === "smoke");
@@ -514,7 +521,7 @@ if (typeof document !== "undefined") {
 return {
   KEY, KEY_TC, KEY_LEAD, KEY_WHEEL, LEAD_DEFAULT, BEAMS_KEY, BEAMS_DEFAULT, BEAMS_MAX, WHEELS, CHOICES, HALO_VALUES,
   PRESETS, preset, setPreset, halo, haloSize, setHalo, wheel, setWheel, body, setBody, seat, setSeat, interior, setInterior, visor, setVisor, visorColor, setVisorColor, visorIntensity, setVisorIntensity,
-  visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorLightStyle, setVisorLightStyle, visorBeams, setVisorBeams, visorRain, setVisorRain, visorDropSize, setVisorDropSize, visorRunoff, setVisorRunoff,
+  visorQuality, setVisorQuality, visorRefraction, setVisorRefraction, visorReflections, setVisorReflections, visorLightStyle, setVisorLightStyle, visorBeams, setVisorBeams, visorRain, setVisorRain, visorDropSize, setVisorDropSize, visorRunoff, setVisorRunoff,
   helmetMount, helmetEye, setHelmetEye, helmetShake, setHelmetShake, visorShape, setVisorShape,
   shakeScale, helmetHeadMotion: () => motionAmount("helmetHeadMotion"),
   wheelHasScreen, onWheel, layout, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,

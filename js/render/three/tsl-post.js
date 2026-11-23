@@ -1158,13 +1158,25 @@
       if (ctx.ownTexture) ctx.ownTexture(lensPlaceholder);
       return texture(lensPlaceholder);
     }
-    const bendTex = lensSampler(), lightTex = lensSampler();
+    const bendTex = lensSampler(), lightTex = lensSampler(), waterTex = lensSampler();
+    const water = uniform(new THREE.Vector2());
+    const waterSample = Fn(([input, surfaceUV]) => {
+      const uv = vec2(input).toVar();
+      If(water.x.greaterThan(0), () => {
+        const sample = waterTex.sample(surfaceUV).level(0);
+        // RG8 neutral is exactly 128/255; alpha keeps clean glass pixel-identical.
+        const delta = sample.rg.sub(128 / 255).mul(water).mul(sample.a);
+        uv.assign(clamp(uv.add(delta), vec2(0.0), vec2(1.0)));
+      });
+      return uv;
+    });
+    const waterUV = (input, surfaceUV = input) => waterSample(input, surfaceUV);
     const fxaaU = { lightBlend: uniform(0), bend: uniform(new THREE.Vector2()), texel: uniform(new THREE.Vector2()), mir: uniform(0) };
     const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
     const FXAA_STEP = [1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 12.0];
     const FXAA_SUBPIX = labFxaaSubpix();
     const fxaa = {
-      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex, bendTex, lightTex,
+      tex: fxaaTex, U: fxaaU, V: fxaaV, mirTex: fxaaMirTex, bendTex, lightTex, waterTex, water, waterUV,
       mat: passMaterial(Fn(() => {
         const suv = vec2(VP.uv(fxaaV)).toVar();
         const mf = vec2(screenCoordinate).toVar();
@@ -1173,6 +1185,9 @@
           suv.addAssign(delta);
           mf.addAssign(delta.mul(TSL.screenSize));
         });
+        const wetUV = waterUV(suv, VP.uv(fxaaV)).toVar();
+        mf.addAssign(wetUV.sub(suv).mul(TSL.screenSize));
+        suv.assign(wetUV);
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const t = vec2(fxaaU.texel).toVar();
         const fxL = (p) => fxLuma(fxaaTex.sample(TL(p)).rgb);
@@ -1282,7 +1297,7 @@
       mat: passMaterial(Fn(() => {
         const EdgeThreshold = float(8.0 / 255.0);
         const EdgeSharpness = float(2.0);
-        const suv = vec2(VP.uv(sgsrV)).toVar();
+        const suv = waterUV(VP.uv(sgsrV)).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const vp = vec4(sgsrU.viewport).toVar();
         const t = vec2(vp.x, vp.y).toVar();

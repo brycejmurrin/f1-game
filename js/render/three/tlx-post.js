@@ -541,7 +541,7 @@
     // keeps FXAA: AA stays null and nothing below changes.
     if (ctx.traa && webgpu && window.TLXAA && TLXAA.taa) {
       try {
-        const aaCtx = { runPass: (m, t) => runPass(m, t), ownRT, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
+        const aaCtx = { waterUV: P.fxaa.waterUV, runPass: (m, t) => runPass(m, t), ownRT, trackMaterial, ldrTex: ldrRT.texture, depthTex: sceneDepthTex };
         // Per-object velocity first; a throw keeps the camera-only TRAA, a second throw FXAA.
         if (velTex) { try { AA = TLXAA.taa(THREE, TSL, Object.assign({ velTex }, aaCtx)); } catch (_) { AA = null; } }
         if (!AA) AA = TLXAA.taa(THREE, TSL, aaCtx);
@@ -963,7 +963,25 @@
 
     // Lens textures belong to this post chain. Update each at its source cadence.
     let bendTexture = null, lightTexture = null, lightRevision = -1, lightW = 0, lightH = 0;
+    let waterTexture = null, waterRevision = -1;
+    function bindWater(field) {
+      if (!P.fxaa.waterTex || !P.fxaa.water) return;
+      if (field) {
+        if (!waterTexture) {
+          waterTexture = ownTexture(new THREE.DataTexture(field.data, field.size, field.size));
+          waterTexture.generateMipmaps = waterTexture.flipY = false;
+          waterTexture.minFilter = waterTexture.magFilter = THREE.LinearFilter;
+        }
+        if (waterRevision !== field.revision || waterTexture.image.data !== field.data) {
+          waterTexture.image.data = field.data;
+          waterTexture.needsUpdate = true; waterRevision = field.revision;
+        }
+        P.fxaa.waterTex.value = waterTexture;
+      }
+      P.fxaa.water.value.set(field ? field.x : 0, field ? field.y : 0);
+    }
     function bindLens(lens) {
+      bindWater(lens && lens.water);
       if (!P.fxaa.bendTex) return;
       const field = lens && lens.bend;
       if (lens && lens.light) {
@@ -1018,13 +1036,15 @@
         renderer.setMRT(null);
         const bend = P.fxaa.U.bend && P.fxaa.U.bend.value;
         const x = bend && bend.x, y = bend && bend.y;
+        const water = P.fxaa.water && P.fxaa.water.value, wx = water && water.x, wy = water && water.y;
+        if (water) water.set(0, 0);
         const blend = P.fxaa.U.lightBlend, previousBlend = blend && blend.value;
         if (blend) blend.value = 0;
         if (bend) bend.set(0, 0);   // captures contain the world without helmet optics
         try {
           if (_last.taa) AA.copyLast(fxaaCaptureRT);
           else runPass(_last.sgsr ? P.sgsr.mat : P.fxaa.mat, fxaaCaptureRT);
-        } finally { if (bend) bend.set(x, y); if (blend) blend.value = previousBlend; }
+        } finally { if (bend) bend.set(x, y); if (water) water.set(wx, wy); if (blend) blend.value = previousBlend; }
         if (_last.taa || _last.sgsr || !P.fxaa.mirTex || !P.fxaa.U.mir.value) mirrorPass(fxaaCaptureRT, false);
       } finally {
         quad.material = mat;
@@ -1467,6 +1487,8 @@
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = cinemaPost(ldrRT, F, o).texture;   // CINEMA: motion blur + DoF, else ldrRT itself
         P.fxaa.U.texel.value.set(1 / pW, 1 / pH);
+        // Water is sampled in whichever final resolve actually presents this frame, including soft targets.
+        const presentLens = !compileJobs && !_scissorWarm ? (o.readVisorLens ? o.readVisorLens() : o.visorLens) : null;
         const useUpscale = !!(P.sgsr && aaRT && !!(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()) !== _warmFlipUp);
         const useTaa = !useUpscale && taaLive() && !!(F.invVP && F.viewProj);
         if (AA && !useTaa) AA.skipped();
@@ -1475,6 +1497,7 @@
           // TRAA: history <- resolve(ldr, history), history -> dest, the mirror inset on top (never jittered: its
           // own camera, composited after the resolve). Its retained target may be the pre-AA LDR when drawing to the canvas.
           if (P.fxaa.mirTex) fxaaMirror(false);
+          bindLens(null); bindWater(presentLens && presentLens.water);
           AA.resolve(F, pW, pH, dest, !compileJobs && !_scissorWarm, P.fxaa.tex.value);
           _last.taa = true;
           mirrorPass(dest);
@@ -1491,6 +1514,7 @@
             vset(P.sgsr, ps[0], ps[1]);   // the canvas / soft target: always present-sized
             P.sgsr.U.plain.value = fixed && !(ctx.userSpatialUpscale && ctx.userSpatialUpscale()) ? 1 : 0;
           }
+          bindWater(presentLens && presentLens.water);
           runPass(P.sgsr.mat, dest);
           mirrorPass(dest);
           _lastPresentRT = dest || aaRT;
@@ -1502,8 +1526,9 @@
           if (fixed) { const ps = presentSize(); vset(P.fxaa, ps[0], ps[1]); }
           const mirIn = !!P.fxaa.mirTex && fxaaMirror(true);
           const canFoldLens = P.fxaa.bendTex && !dest && !compileJobs && !_scissorWarm && (!_mirTex || mirIn);
-          const lens = canFoldLens ? (o.readVisorLens ? o.readVisorLens() : o.visorLens) : null;
+          const lens = canFoldLens ? presentLens : null;
           bindLens(lens);
+          bindWater(presentLens && presentLens.water);
           runPass(P.fxaa.mat, dest);
           if (lens && P.fxaa.bendTex) o.visorFolded = lens.light ? 2 : 1;
           if (mirIn) _mirComposites++;

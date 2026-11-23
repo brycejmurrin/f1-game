@@ -1488,10 +1488,10 @@ const CarDraw = (function () {
       const team = _cbTeam, source = deps.resolveLivery(team);
       const view = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(source) : null, liv = view ? view.livery : source;
       const data = Car3D.build(liv.c1, liv.c2,
-        { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
+        { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, sourceOcclusion: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
           parts: _cbParts, detail: carDetail().player, hero: carDetail().hero });
       const mesh = G.gfx.createMesh(data);
-      if (mesh && data._cockpitHaloOccluder) cockpitOccluders.set(mesh, data._cockpitHaloOccluder);
+      if (mesh && data._cockpitOccluder) cockpitOccluders.set(mesh, data._cockpitOccluder);
       return mesh;
     }
     // The first-person SHADOW caster: the WHOLE exterior car (wheels, engine

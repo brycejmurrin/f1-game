@@ -1619,6 +1619,9 @@
       "setVisorIntensity": [
         "tests/unit/cockpit-wheels.test.mjs"
       ],
+      "setVisorQuality": [
+        "tests/unit/camera-defaults.test.mjs"
+      ],
       "setVisorReflections": [
         "tests/unit/camera-defaults.test.mjs"
       ],
@@ -1651,6 +1654,9 @@
         "tests/unit/cockpit-wheels.test.mjs"
       ],
       "visorLightStyle": [
+        "tests/unit/camera-defaults.test.mjs"
+      ],
+      "visorQuality": [
         "tests/unit/camera-defaults.test.mjs"
       ],
       "visorShape": [
@@ -2742,6 +2748,9 @@
       "buildFlapGeom": [
         "tests/unit/car-wing-foil.test.mjs"
       ],
+      "cockpitMirrorGlass": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "coverFlankX": [
         "tests/unit/car-shade.test.mjs"
       ],
@@ -2750,7 +2759,8 @@
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs"
+        "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "haloHoopPath": [
         "tests/unit/livery-stations.test.mjs"
@@ -2995,9 +3005,13 @@
       "addTube": [
         "tests/unit/livery-stations.test.mjs"
       ],
+      "cockpitOccluder": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-wing-foil.test.mjs"
+        "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "decimate": [
         "tests/unit/car-presentation-vm.test.mjs"
@@ -3013,11 +3027,13 @@
     },
     "js/car/car-hero.js": {
       "body": [
-        "tests/unit/car-detail-tiers.test.mjs"
+        "tests/unit/car-detail-tiers.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "build": [
         "tests/unit/car-detail-tiers.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "refine": [
         "tests/unit/car-detail-tiers.test.mjs"
@@ -3032,6 +3048,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/livery-design.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
@@ -3057,6 +3074,7 @@
         "tests/unit/car-wing-foil.test.mjs",
         "tests/unit/cockpit-preview.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-stations.test.mjs",
@@ -3174,7 +3192,8 @@
     },
     "js/car/car-shade.js": {
       "block": [
-        "tests/unit/car-shade.test.mjs"
+        "tests/unit/car-shade.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "cTub": [
         "tests/unit/car-shade.test.mjs"
@@ -3201,7 +3220,8 @@
       ],
       "floor": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-shade.test.mjs"
+        "tests/unit/car-shade.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "headrest": [
         "tests/unit/car-shade.test.mjs"
@@ -3220,7 +3240,8 @@
       ],
       "ring": [
         "tests/unit/car-presentation-vm.test.mjs",
-        "tests/unit/car-shade.test.mjs"
+        "tests/unit/car-shade.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "sink": [
         "tests/unit/car-shade.test.mjs"
@@ -3263,6 +3284,7 @@
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -3276,6 +3298,7 @@
       ],
       "draw": [
         "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-departure-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
@@ -3673,6 +3696,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/helmet-memo.test.mjs",
         "tests/unit/helmets.test.mjs",
         "tests/unit/livery-helmet-style.test.mjs",
@@ -3724,6 +3748,7 @@
       "*": [
         "tests/unit/body-styles.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/data-hardening-4477.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
@@ -3960,6 +3985,7 @@
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-regulations.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/legends-team.test.mjs",
@@ -3980,6 +4006,7 @@
         "tests/unit/car-presentation-vm.test.mjs",
         "tests/unit/car-shade.test.mjs",
         "tests/unit/car-wing-foil.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/livery-sidewall.test.mjs",
         "tests/unit/livery-wheels.test.mjs"
@@ -5691,7 +5718,8 @@
         "tests/unit/real-race-lazy.test.mjs"
       ],
       "loadBackendScripts": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
       ],
       "raceAssets": [
         "tests/unit/boot-idle-prefetch.test.mjs",
@@ -5739,6 +5767,7 @@
         "tests/unit/career-parts-regs.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/coverage-merge.test.mjs",
         "tests/unit/crest-marks.test.mjs",
@@ -6108,6 +6137,9 @@
       ],
       "integrity": [
         "tests/unit/deploy-staging.test.mjs"
+      ],
+      "loadBackendScripts": [
+        "tests/unit/race-session-lazy.test.mjs"
       ],
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
@@ -6664,6 +6696,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/crest-marks.test.mjs",
         "tests/unit/engineer.test.mjs",
@@ -7491,6 +7524,9 @@
         "tests/unit/droplets-spray.test.mjs",
         "tests/unit/visor-optics.test.mjs"
       ],
+      "waterLens": [
+        "tests/unit/droplets-spray.test.mjs"
+      ],
       "*": [
         "tests/unit/viewport-icb-readers.test.mjs"
       ]
@@ -7679,6 +7715,9 @@
       "lampAdapt": [
         "tests/unit/visor-optics.test.mjs"
       ],
+      "lightField": [
+        "tests/unit/visor-optics.test.mjs"
+      ],
       "lightMap": [
         "tests/unit/visor-optics.test.mjs"
       ],
@@ -7713,6 +7752,7 @@
         "tests/unit/visor-optics.test.mjs"
       ],
       "*": [
+        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/viewport-icb-readers.test.mjs"
       ]
     },
@@ -16867,6 +16907,9 @@
       "bindLens": [
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
+      "bindWater": [
+        "tests/unit/tlx-post-fixed-mats.test.mjs"
+      ],
       "captureTarget": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -16990,6 +17033,7 @@
         "tests/unit/tsl-gi.test.mjs"
       ],
       "runPass": [
+        "tests/unit/tlx-mirror-inset.test.mjs",
         "tests/unit/tlx-post-fixed-mats.test.mjs"
       ],
       "setMirror": [
@@ -18735,6 +18779,15 @@
       "emit": [
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/scenery-kits.test.mjs"
+      ],
+      "lightBlocked": [
+        "tests/unit/track-graph.test.mjs"
+      ],
+      "lightBox": [
+        "tests/unit/track-graph.test.mjs"
+      ],
+      "lightIndex": [
+        "tests/unit/track-graph.test.mjs"
       ],
       "roundNormals": [
         "tests/unit/track-graph.test.mjs"

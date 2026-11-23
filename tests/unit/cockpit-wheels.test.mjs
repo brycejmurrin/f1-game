@@ -123,6 +123,7 @@ test("visor optics and water choices keep legacy defaults, validate and survive 
     ["Refraction", "off", ["off", "light", "medium", "strong"]],
     ["Reflections", "light", ["light", "off", "medium", "strong"]],
     ["LightStyle", "classic", ["classic", "compact", "scratches"]],
+    ["Quality", "auto", ["auto", "low", "high"]],
     ["Rain", "normal", ["normal", "off", "light", "heavy"]],
     ["Runoff", "normal", ["normal", "slow", "fast"]],
   ];
@@ -271,33 +272,54 @@ test("the interiors build inside the tub, keyed by livery, and only CLASSIC has 
 // THE RIG, RUN: the real CarDraw.drawCockpitRig (tests/helpers/car-draw-vm.mjs;
 // CarMesh's getters are recorded by name) under the REAL CockpitOpts, so the
 // chosen wheel, seat and interior are read from what it DRAWS, not its text.
-test("cockpit halo blockers retain only the actual generated indexed triangles for every halo shape", () => {
-  const { Car3D } = loadCar3D();
-  const signatures = new Set();
-  for (const halo of [0, 1, 2, 3, 4]) {
+test("cockpit obstruction uses final opaque triangles, bounded BVH leaves and exact EXTREME refinement", () => {
+  const ctx = vm.createContext({ console, Float32Array, Uint32Array });
+  for (const file of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/helmets.js", "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js", "js/car/car-shade.js", "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/car-hero.js"])
+    vm.runInContext(read(file), ctx, { filename: absSrc(file) });
+  const { Car3D, CarGeometry } = vm.runInContext("({Car3D,CarGeometry})", ctx);
+  const sizes = new Set();
+  let standardCount = 0;
+  for (const [halo, hero] of [[0, false], [1, false], [2, false], [3, false], [4, false], [2, true]]) {
     const mesh = Car3D.build([0.8, 0.1, 0.1], [0.2, 0.2, 0.2],
-      { cockpit: true, noWheels: true, noDriver: true, halo });
-    const blocker = mesh._cockpitHaloOccluder;
-    if (!halo) { assert.equal(blocker, null); continue; }
-    assert.ok(blocker.triangles instanceof Float32Array);
-    assert.equal(blocker.triangles.length % 9, 0);
-    assert.ok(blocker.triangles.length > 0);
-    const triangles = new Set();
+      { cockpit: true, noWheels: true, noDriver: true, halo, hero, detail: hero ? 2 : 0, sourceOcclusion: true });
+    const blocker = mesh._cockpitOccluder;
+    assert.ok(blocker.positions instanceof Float32Array);
+    assert.ok(blocker.indices instanceof Uint32Array);
+    assert.deepEqual(Array.from(blocker.positions), Array.from(mesh.pos, Math.fround), "blocker vertices match final rendered mesh, including PN refinement");
+    if (hero) { assert.equal(mesh._hero, true); assert.ok(blocker.indices.length > standardCount); }
+    else if (halo === 2) standardCount = blocker.indices.length;
+    const rendered = new Set();
+    let opaque = 0;
     for (let i = 0; i < mesh.idx.length; i += 3) {
-      const tri = [];
-      for (let j = 0; j < 3; j++) for (let axis = 0; axis < 3; axis++) tri.push(Math.fround(mesh.pos[mesh.idx[i + j] * 3 + axis]));
-      triangles.add(tri.join(","));
+      rendered.add(mesh.idx.slice(i, i + 3).join(","));
+      if (!mesh.idx.slice(i, i + 3).some(v => mesh.mat[v] === 24 || mesh.mat[v] === 32)) opaque++;
     }
-    for (let i = 0; i < blocker.triangles.length; i += 9)
-      assert.ok(triangles.has(Array.from(blocker.triangles.subarray(i, i + 9)).join(",")), `halo ${halo}: blocker uses rendered triangles after welding`);
-    for (let axis = 0; axis < 3; axis++) {
-      const values = Array.from(blocker.triangles).filter((_, i) => i % 3 === axis);
-      assert.ok(Math.abs(Math.min(...values) - blocker.bounds[axis]) < 1e-6);
-      assert.ok(Math.abs(Math.max(...values) - blocker.bounds[axis + 3]) < 1e-6);
+    assert.equal(blocker.indices.length, opaque * 3, "every opaque body triangle participates, even with halo off");
+    for (let i = 0; i < blocker.indices.length; i += 3)
+      assert.ok(rendered.has(Array.from(blocker.indices.subarray(i, i + 3)).join(",")));
+    const coverage = new Uint8Array(opaque), N = blocker.nodes;
+    for (let n = 0; n < N.length; n += 10) {
+      const count = N[n + 9], start = N[n + 8];
+      if (!count) { assert.ok(N[n + 6] * 10 > n && N[n + 7] * 10 > n); continue; }
+      assert.ok(count <= 16, "no per-light whole-mesh leaf");
+      for (let t = start; t < start + count; t++) {
+        coverage[t]++;
+        for (let v = 0; v < 3; v++) for (let axis = 0; axis < 3; axis++) {
+          const p = blocker.positions[blocker.indices[t * 3 + v] * 3 + axis];
+          assert.ok(p >= N[n + axis] && p <= N[n + axis + 3], "node bounds conservatively contain float32 triangle vertices");
+        }
+      }
     }
-    signatures.add(Array.from(blocker.triangles).join(","));
+    assert.ok(coverage.every(n => n === 1), "leaves cover each triangle exactly once");
+    sizes.add(blocker.indices.length);
   }
-  assert.equal(signatures.size, 4, "slim, standard, thick and faired use their own geometry");
+  assert.ok(sizes.size >= 4, "halo choices and refinement produce distinct body geometry");
+  const transparent = { pos: [0,0,0, 1,0,0, 0,1,0], idx: [0,1,2], mat: [24,24,24] };
+  assert.equal(CarGeometry.cockpitOccluder(transparent), null, "glass does not become an opaque blocker");
+  transparent.mat = [32,32,32];
+  assert.equal(CarGeometry.cockpitOccluder(transparent), null, "visor material remains transparent");
+  transparent.mat = [36,36,36];
+  assert.equal(CarGeometry.cockpitOccluder(transparent).indices.length, 3, "tinted body paint is still opaque");
 });
 
 test("the rig draws the chosen wheel at the seat's mount and the interior; NONE and screenless wheels stop early", () => {
@@ -307,9 +329,14 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
   const real = loadOpts({}).opts;
   ctx.CockpitOpts = Object.assign({}, real, { haloSize: () => 2, body: () => "standard" });
   ctx.Car3D.cockpitMirrorGlass = () => [];
-  const blocker = { triangles: new Float32Array(9), bounds: [0, 0, 0, 1, 1, 1] }, received = [];
+  const blockers = new Map(), received = [];
   const build = ctx.Car3D.build;
-  ctx.Car3D.build = (a, b, o) => Object.assign(build(a, b, o), { _cockpitHaloOccluder: o.halo ? blocker : null });
+  ctx.Car3D.build = (a, b, o) => {
+    const blocker = { triangles: new Float32Array(9), bounds: [0, 0, 0, 1, 1, 1] };
+    blockers.set(o.halo, blocker);
+    assert.equal(o.sourceOcclusion, true);
+    return Object.assign(build(a, b, o), { _cockpitOccluder: blocker });
+  };
   ctx.VisorOptics = { setCockpitOccluder: (geometry, matrix) => received.push({ geometry, matrix: Array.from(matrix) }) };
 
   // The roll curve's two numbers (the helper's CarMesh records every getter by name).
@@ -327,7 +354,7 @@ test("the rig draws the chosen wheel at the seat's mount and the interior; NONE 
     ctx.CockpitOpts.layout = (w, s) => layout(w, s || seat);
     drawn.length = 0;
     v.carDraw.drawCockpitRig(c, base, 1 / 60, {}, noWheel);
-    assert.equal(received.at(-1).geometry, ctx.CockpitOpts.haloSize() ? blocker : null);
+    assert.equal(received.at(-1).geometry, blockers.get(ctx.CockpitOpts.haloSize()));
     assert.deepEqual(received.at(-1).matrix, drawn.find(d => d.name === "body").m, "source obstruction receives the exact body draw matrix");
 
     ctx.CockpitOpts.layout = layout;

@@ -352,7 +352,7 @@ test("Cockpit droplet slider has its own minimum and native input persistence; o
   assert.deepEqual([opts.visorDropSize(),disk.get("apex26.helmetVisorDropSize"),doc.getElementById("pm-visor-drop-size-v").textContent],[1.7,"170","170%"]);
 });
 
-test("visor light style uses a native setting row and preserves hidden beam strength", () => {
+test("visor light style and quality use native setting rows and preserve optical preferences", () => {
   const dom = makeDom(), doc = dom.document, get = doc.getElementById;
   doc.body.appendChild(dom.makeElement("div", "pm-panel-display"));
   doc.getElementById = id => dom.has(id) ? get(id) : null;
@@ -394,8 +394,39 @@ test("visor light style uses a native setting row and preserves hidden beam stre
   opts.setVisor("clear");
   assert.equal(hidden(style), false);
   assert.equal(style.value, "scratches");
+  const quality = doc.getElementById("pm-visor-quality-sel");
+  assert.equal(quality.tagName, "SELECT");
+  assert.equal(quality.value, "auto");
+  assert.deepEqual(Array.from(quality.children, option => [option.value, option.textContent]),
+    [["auto", "AUTO"], ["low", "LOW"], ["high", "HIGH"]]);
+  for (const value of ["low", "auto", "high"]) {
+    quality.value = value;
+    dom.dispatch(quality, { type: "change" });
+    assert.equal(opts.visorQuality(), value);
+    assert.equal(disk.get("apex26.helmetVisorQuality"), value);
+    assert.equal(doc.body.getAttribute("data-helmet-visor-quality"), value);
+    assert.deepEqual(seen.at(-1), ["visorQuality", value]);
+    assert.equal(opts.visorLightStyle(), "scratches");
+    assert.equal(opts.visorBeams(), 1.6);
+  }
+  opts.setVisorReflections("off");
+  assert.equal(hidden(quality), false, "quality remains available for wet/refraction effects with reflection light off");
+  opts.setVisor("off");
+  assert.equal(hidden(quality), true);
+  opts.setVisor("clear");
+  assert.equal(hidden(quality), false);
   const restored = loadCockpitOpts(disk);
-  assert.deepEqual([restored.visorLightStyle(), restored.visorBeams()], ["scratches", 1.6]);
+  assert.deepEqual([restored.visorQuality(), restored.visorLightStyle(), restored.visorBeams()], ["high", "scratches", 1.6]);
+});
+
+test("visor quality defaults safely and validates URL, saved and setter choices", () => {
+  assert.equal(loadCockpitOpts().visorQuality(), "auto");
+  assert.equal(loadCockpitOpts({ "apex26.helmetVisorQuality": "extreme" }).visorQuality(), "auto");
+  assert.equal(loadCockpitOpts({}, { location: { search: "?visorquality=high" } }).visorQuality(), "high");
+  assert.equal(loadCockpitOpts({}, { location: { search: "?visorquality=invalid" } }).visorQuality(), "auto");
+  const opts = loadCockpitOpts({ "apex26.helmetVisorQuality": "high" });
+  opts.setVisorQuality("invalid");
+  assert.equal(opts.visorQuality(), "auto");
 });
 
 // Read off the LOADED CAM_MODES and the cut setCamMode() actually starts: a

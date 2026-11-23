@@ -232,8 +232,22 @@ test("visor light styles roundtrip without changing saved beam strength", () => 
   }
 });
 
+test("visor effects quality roundtrips in both backup modes without rewriting optical preferences", () => {
+  for (const quality of ["auto", "low", "high"]) for (const mode of ["all", "changes"]) {
+    const source = boot({ disk: { "apex26.helmetVisorQuality": quality,
+      "apex26.helmetVisorLightStyle": "scratches", "apex26.helmetVisorBeams": "160" } });
+    const saved = source.collect(mode), target = boot();
+    target.loadSettings(saved);
+    const camera = target.collect("all").settings.camera;
+    assert.equal(camera.helmetVisorQuality, quality);
+    assert.equal(camera.helmetVisorLightStyle, "scratches");
+    assert.equal(camera.helmetVisorBeams, "160");
+    assert.equal(saved.settings.camera.helmetVisorQuality, mode === "changes" && quality === "auto" ? undefined : quality);
+  }
+});
+
 test("visor optics and water settings survive both backup modes and reject invalid choices", () => {
-  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorLightStyle: "scratches", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
+  const values = { helmetVisorRefraction: "medium", helmetVisorReflections: "strong", helmetVisorLightStyle: "scratches", helmetVisorQuality: "high", helmetVisorRain: "heavy", helmetVisorRunoff: "fast", helmetVisorDropSize: "175" };
   const disk = Object.fromEntries(Object.entries(values).map(([key, value]) => ["apex26." + key, value]));
   for (const mode of ["all", "changes"]) {
     const saved = boot({ disk }).collect(mode);
@@ -246,7 +260,7 @@ test("visor optics and water settings survive both backup modes and reject inval
   }
   const defaults = boot().collect("all").settings.camera;
   assert.deepEqual(Object.fromEntries(Object.keys(values).map(key => [key, defaults[key]])), {
-    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorLightStyle: "classic", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
+    helmetVisorRefraction: "off", helmetVisorReflections: "light", helmetVisorLightStyle: "classic", helmetVisorQuality: "auto", helmetVisorRain: "normal", helmetVisorRunoff: "normal", helmetVisorDropSize: "100",
   });
   assert.equal(defaults.helmetVisorBeams, "100", "the VISOR BEAMS slider exports as a percent, 100 by default");
   const beams = boot({ disk: { "apex26.helmetVisorBeams": "160" } }).collect("changes");
