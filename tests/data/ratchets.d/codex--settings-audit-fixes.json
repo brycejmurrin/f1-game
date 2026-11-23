@@ -9,6 +9,7 @@
     }
   },
   "tree": {
+    "assertPinsAll": 1,
     "eagerCodeBytes": -3839
   }
 }
