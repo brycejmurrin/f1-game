@@ -343,7 +343,6 @@ function transport() {
     + '<button id="ga-loop" type="button" aria-pressed="false">LOOP</button>'
     + '<button id="ga-edit" type="button" aria-pressed="false">EDIT</button></div>');
   $("ga-transport").appendChild(stop);
-  if (typeof EditorWorkspace !== "undefined") EditorWorkspace.arrangeDoor($("garrival"), $("ga-transport"));
   $("ga-play").onclick = () => previewPause(!(preview && preview.paused));
   $("ga-back").onclick = () => previewSeek(preview ? preview.t - FRAME_S : 0);
   $("ga-fwd").onclick = () => previewSeek(preview ? preview.t + FRAME_S : 0);
@@ -1436,7 +1435,9 @@ $("cs-cam").onclick = () => {
 // now turning.
 document.addEventListener("pointerdown", (e) => {
   if (!G.setupPreviewOn || !setupCamPanelOpen()) return;
-  if (!e.target.closest || !e.target.closest("#cs-stack")) setSetupCamPanel(false);
+  // Layout tools edit this disclosure in place. Preserve it from the first
+  // finger-down on Start arranging through the editor’s final Apply or Cancel.
+  if (!e.target.closest?.("#cs-stack, #arrange-prepare, #screen-arranger")) setSetupCamPanel(false);
 }, true);
 // AN INNER DISCLOSURE CLAIMS ESCAPE BEFORE ITS SCREEN DOES. The generic layer
 // handler in js/ui/modal.js is on document/capture and bails on an event

@@ -267,7 +267,7 @@ test("cross-device links use public HTTPS in wrappers and preserve web deploymen
     const origin = { web: "https://preview.test", desktop: "app://apex", android: "https://localhost", ios: "capacitor://localhost" }[kind];
     const sandbox = {
       location: { origin, pathname: "/custom/index.html" },
-      TextEncoder, TextDecoder, Uint8Array, btoa, atob, URL,
+      TextEncoder, TextDecoder, Uint8Array, btoa, atob, URL, URLSearchParams,
       Teams: { LIST: [{ id: "mercedes" }] }, Tracks: { LIST: [{ id: "monza" }] },
     };
     if (kind === "desktop") sandbox.__APEX_NATIVE__ = { desktop: true };

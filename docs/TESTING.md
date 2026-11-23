@@ -479,7 +479,7 @@ tools directly.)
 | `agent-contract` | freezes the shape of the agent-view API |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
 | `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
-| `state-unit` | season, storage and career state machines, including cross-tab conflicts |
+| `state-unit` | season, storage and career state machines, including cross-tab conflicts. Race arrangement routes cover pause, resume, Back and individual AI pace controls. |
 | `service-worker` | the SW's install/fetch/version behaviour; `pack-content-address.test.mjs` — `assets/pack/` files are requested as `?h=<md5>` and answered cache-first, the manifest stays network-first (L3) |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/track/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/track/float-audit.cjs`) |

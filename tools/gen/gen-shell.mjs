@@ -229,9 +229,11 @@ function controllerBlock() {
 /** Every tagless file sw.js must seed: loadBackendScripts() injects each one as
  *  `<path>?v=<build>`, and the tag parser cannot see any of them. LAZY_AGENT is
  *  deliberately absent (dev/test surface; an install-time put full-compiles). */
+const controllerPageOnly = MANIFEST.CONTROLLER.filter(file => MANIFEST.OVERLAY_PAGE.includes(file));
+
 export function swOptionalFiles() {
   return [
-    ...Object.values(MANIFEST.DEFERRED).flat(),
+    ...Object.values(MANIFEST.DEFERRED).flat(), ...controllerPageOnly,
     ...MANIFEST.LAZY_RACE, ...(MANIFEST.LAZY_RACE_SESSION || []),
     ...(MANIFEST.LAZY_TRACK_BUILD || []), ...(MANIFEST.LAZY_GARAGE_EXTERIOR || []),
     ...MANIFEST.LAZY_CIRCUIT, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
@@ -253,6 +255,7 @@ export const SW_ROOT_PAGES = Object.freeze(["controller.html"]);
 function swOptionalBlock() {
   const groups = [
     ["ROOT PAGES — answered offline under their own URL, never by the game shell", SW_ROOT_PAGES],
+    ["Shared companion scripts outside the game shell", controllerPageOnly],
     ["DEFERRED renderer backends (no <script> tag; injected on opt-in)", Object.values(MANIFEST.DEFERRED).flat()],
     // ORDER IS INSTALL DOWNLOAD PRIORITY (sw.js install walks this Set in order):
     // every race needs the race-entry bundles, a player needs ~2 of the ~100

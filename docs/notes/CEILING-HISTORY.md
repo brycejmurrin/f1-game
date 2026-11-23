@@ -4042,3 +4042,8 @@ Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
 
 `(tree) eagerCodeBytes` 3960549 → **3960800** (+251). Sampling the previous camera shot exits before writing car and crew poses, which removes allocations during camera transitions.
 Fragment: `ratchets.d/codex--tt-pit-end-session.json`.
+
+## 2026-11-22 — PR #6179 helmet visor rendering
+
+`(tree) eagerCodeBytes` 3994421 → **3995081** (+660). Cached visor lighting and bead directions replace repeated paint-time calculations. The visor also skips neutral displacement texels and defers layer lookup until the renderer can use it. Reading the live lighting registry removes the cached developer snapshot.
+Fragment: `ratchets.d/codex--mobile-visor-paint-cost.json`.

@@ -142,14 +142,19 @@ const UiExperience = (function () {
     // and trackReady are read again. The callers come back first so the
     // reopened studio hides and restores them itself on DONE.
     const fromHome = source === "home" || source === "home-track";
-    const subject = fromHome && deps.photoSubject && deps.reopen ? (mode) => {
-      deps.photoStudio.close(false); unhide();
-      const request = deps.photoSubject(mode);
-      return Promise.resolve(request).then((ok) => {
+    const subject = fromHome && deps.photoSubject && deps.reopen ? async (mode) => {
+      const resume = typeof window !== "undefined" && window.ScreenArranger?.suspendPreparation?.("photo-studio");
+      let swapped = false;
+      try {
+        deps.photoStudio.close(false); unhide();
+        const request = deps.photoSubject(mode);
+        const ok = await request;
         if (cancelledPhotoSwaps.has(request) || (G.state && G.state !== "menu")) return false;
         if (!ok) deps.photoSubject(null);
-        return deps.reopen();
-      });
+        const opened = await deps.reopen();
+        swapped = ok && opened;
+        return opened;
+      } finally { if (resume) resume(swapped); }
     } : null;
     const opened = deps.photoStudio.open({ source, metadata: { title, subtitle }, back: restore, subject,
       view: source === "home-track" && deps.photoView ? deps.photoView() : null });

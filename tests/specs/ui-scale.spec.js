@@ -1170,16 +1170,20 @@ test("UI inspector verifies real scale bindings, persistence and CSS provenance"
   await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
   const open = async () => {
     await page.locator("#mb-settings").click(); await page.locator("#pm-open-appearance").click();
+    // The lazy studio moves the shell slider into Menu Customization after the door opens.
+    await expect(page.locator("#ap-menu-customization #pm-uiscale")).toBeVisible();
     await installInspector(page);
   };
   await open();
-  const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#pmsettings" }));
-  const before = await snapshot();
+  const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#ap-menu-customization" }));
   const input = page.locator("#pm-uiscale"); const old = Number(await input.inputValue());
-  await input.focus(); await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
+  await input.focus();
+  const before = await snapshot();
+  expect(before.controls.find(c => c.selector === "#pm-uiscale")?.value).toBe(String(old));
+  await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
   const value = Number(await input.inputValue()); expect(value).not.toBe(old);
   await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#pm-uiscale")?.binding.runtime).toBeCloseTo(value, 5);
-  const after = await inspectPage(page, { root: "#pmsettings", styles: "#pm-uiscale" });
+  const after = await inspectPage(page, { root: "#ap-menu-customization", styles: "#pm-uiscale" });
   const control = after.controls.find(c => c.selector === "#pm-uiscale");
   expect(control.role).toBe("slider"); expect(control.binding.status).toBe("matches");
   expect(control.binding.saved.value).toBe(value);

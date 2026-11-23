@@ -284,6 +284,8 @@ function buildCamTunePanel() {
         b.id = "ct-tab-" + c.id;
         b.textContent = c.label; b.setAttribute("role", "tab");
         b.setAttribute("aria-controls", "ct-rows");
+        // A real mode switch changes the driving camera and its tuning scope.
+        b.dataset.arrangeBrowse = "false";
         b.onclick = () => selectCamMode(i, false);
         b.onkeydown = (e) => camTabKey(i, e);
         modes.appendChild(b);

@@ -3488,6 +3488,13 @@ test("saving a shared copy of a circuit you already have asks first: KEEP MINE /
   assert.equal(dlg.querySelector(".sheet-body").children[0].textContent, "You already have this circuit as MY RING.");
   const keep = dlg.querySelector("#td-label-keep"), theirs = dlg.querySelector("#td-label-theirs");
   assert.equal(keep.textContent, "KEEP MINE"); assert.equal(theirs.textContent, "USE THEIRS");
+  const window = {};
+  vm.runInNewContext(read("js/ui/screen-regions.js"), { window }, { filename: absSrc("js/ui/screen-regions.js") });
+  const target = window.ScreenRegions["td-label-ask"];
+  const modal = ask();
+  assert.equal(target.root, "#" + modal.id);
+  for (const region of Object.values(target.regions)) assert.ok(modal.querySelector(region.selector), region.label);
+
   const floor = "max(var(--tap, 44px), calc(44px / var(--sheet-scale, var(--ui-scale, 1))))";
   for (const d of [keep, theirs]) assert.deepEqual([d.style.minHeight, d.style.minWidth], [floor, floor], "a 44 px painted tap floor");
   assert.equal(b.dom.document.activeElement, keep, "focus lands on the safe answer");
@@ -3561,28 +3568,6 @@ test("CHECKS reads '1 WARNING' and '1 error' in the singular (clean-room 68)", (
 // Tucked, it floats at the foot's end at a fixed width the status line keeps clear.
 // The entry shares the body's cell (no fourth row) at its end. An absolute bottom anchored it to the visible box, so
 // a dialog that scrolls at UI SIZE 150 % put it over SHARE & FILES (CI run 44853962507, 852x344@150).
-test("the tucked designer seats the arrange entry in the body's cell instead of adding a grid row", async () => {
-  const b = bootScreen();
-  b.root.ownerDocument = b.dom.document;
-  vm.runInContext(read("js/ui/editor-workspace.js"), b.ctx, { filename: absSrc("js/ui/editor-workspace.js") });
-  b.D.init(b.G, { custom: b.C, root: b.root });
-  const button = b.root.querySelector(":scope > .screen-arrange-entry");
-  assert.equal(button?.getAttribute("data-arrange-screen"), "trackdesigner", "the live action occupies the designer's reserved cell");
-  const { cssRules, decl } = await import("../helpers/css-rules.mjs");
-  const rules = cssRules(read("css/screen-arranger.css"));
-  const entry = '#trackdesigner[data-foot="in"] > .screen-arrange-entry';
-  const body = cssRules(read("css/editor.css")), cell = '#trackdesigner[data-foot="in"] > .td-body';
-  for (const [r, sel] of [[rules, entry], [body, cell]]) {
-    assert.equal(decl(r, sel, "grid-row"), "2", sel);
-    assert.equal(decl(r, sel, "grid-column"), "1", sel);
-  }
-  assert.notEqual(decl(rules, entry, "position"), "absolute");
-  assert.equal(decl(rules, entry, "align-self"), "end");
-  assert.equal(decl(rules, entry, "justify-self"), "end");
-  assert.equal(decl(rules, entry, "width"), "9rem");
-  assert.equal(decl(cssRules(read("css/editor.css")), '#trackdesigner[data-foot="in"] .td-foot .td-msg', "padding-inline-end"), "calc(9rem + var(--gap) / 2)");
-});
-
 test("closing the designer cancels candidate and thumbnail work before the next visit", async () => {
   const b = bootScreen();
   openGreen(b);

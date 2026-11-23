@@ -603,7 +603,8 @@ const readSettingsCell = (page) => page.evaluate(() => {
   const pcs = getComputedStyle(panel);
   const studio = document.getElementById("appearance-studio");
   const preview = studio.querySelector('[data-as="preview-side"]');
-  const controls = [...studio.children].find((c) => c !== preview);
+  const picker = studio.querySelector("#appearance-arrange").getBoundingClientRect();
+  const controls = studio.querySelector('[data-as="controls"]');
   const pr = preview.getBoundingClientRect(), cr = controls.getBoundingClientRect();
   const list = studio.querySelector('[data-as="preset-list"]');
   const tap = parseFloat(getComputedStyle(list).getPropertyValue("--tap")) || 0;
@@ -622,7 +623,8 @@ const readSettingsCell = (page) => page.evaluate(() => {
     textSize: document.documentElement.dataset.textSize || "normal",
     page: { display: pcs.display, columns: pcs.gridTemplateColumns },
     studio: { columns: getComputedStyle(studio).gridTemplateColumns.split(" ").length,
-      previewOnTop: pr.height > 0 && cr.height > 0 && pr.bottom <= cr.top + 1 && Math.abs(pr.left - cr.left) < 2 },
+      pickerAbovePreview: picker.height > 0 && picker.bottom <= pr.top + 1,
+      previewAboveControls: pr.height > 0 && cr.height > 0 && pr.bottom <= cr.top + 1 && Math.abs(pr.left - cr.left) < 2 },
     presets: { columns: getComputedStyle(list).gridTemplateColumns.split(" ").length, tap, count: tiles.length,
       minW: Math.min(...tiles.map((b) => b.clientWidth)), fsPainted: fsOwn * probe.zoom,
       clipped: tiles.filter((b) => { const s = b.querySelector("strong"); return s && s.scrollWidth > s.clientWidth + 1; })
@@ -657,7 +659,7 @@ for (const v of CONTRACT_WINDOWS) {
   test.describe(`UI contract settings cells (${v.name})`, () => {
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
-    test("text normal/large x UI 100/130 on the export: one reading column, the studio preview on top, --kb reaches the dialog, the sheet never zooms under 100%", async ({ page }) => {
+    test("text normal/large x UI 100/130 on the export: one reading column, the picker above the studio preview and controls, --kb reaches the dialog, the sheet never zooms under 100%", async ({ page }) => {
       await bootOnExport(page, v);
       // The way a player reaches it: SETTINGS on the title, then the APPEARANCE door.
       await page.evaluate(() => document.getElementById("mb-settings").click());
@@ -682,9 +684,10 @@ for (const v of CONTRACT_WINDOWS) {
         if (m.probe.density !== "compact" || m.probe.shape !== "wide") bad.push(`${cell}: settings sheet ${m.probe.density} / ${m.probe.shape}, not compact / wide`);
         // Gap 3: a phone page is ONE reading column — never the 2-column grid of half-width plates.
         if (m.page.display === "grid") bad.push(`${cell}: the APPEARANCE page is a grid (${m.page.columns})`);
-        // Gap 4: one-column studio, preview first; tiles at least three taps wide with whole names at the micro floor.
+        // Gap 4: one-column studio, arrangement picker then preview then controls; tiles at least three taps wide with whole names at the micro floor.
         if (m.studio.columns !== 1) bad.push(`${cell}: the studio has ${m.studio.columns} columns`);
-        if (!m.studio.previewOnTop) bad.push(`${cell}: the preview is not on top of the controls`);
+        if (!m.studio.pickerAbovePreview) bad.push(`${cell}: the arrangement picker is not above the preview`);
+        if (!m.studio.previewAboveControls) bad.push(`${cell}: the preview is not on top of the controls`);
         if (m.presets.columns < 3) bad.push(`${cell}: preset gallery ${m.presets.columns}-up`);
         if (m.presets.minW < m.presets.tap * 3 - 1) bad.push(`${cell}: a preset tile under three taps wide ${JSON.stringify(m.presets)}`);
         if (m.presets.fsPainted < 14 - 1e-6) bad.push(`${cell}: preset names paint at ${m.presets.fsPainted} px, under the 14 px floor`);

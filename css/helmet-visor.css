@@ -16,6 +16,11 @@ body[data-helmet-cam][data-visor-port] #hud::before {
   box-shadow: none;
 }
 
+/* Let the compositor reuse the static frame when touch HUD values repaint underneath or beside it. */
+@media (pointer: coarse) {
+  body[data-helmet-cam][data-visor-port] #hud::before { will-change: transform; }
+}
+
 /* The TINTED lens colour: one of css/tokens.css's --visor-* tokens, picked by the stored choice; VisorOptics reads
    the resolved --visor-lens when it builds the port image. */
 body[data-helmet-cam] { --visor-lens: var(--visor-neutral); }
