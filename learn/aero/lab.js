@@ -31,7 +31,7 @@
   let previousTime = 0;
   let phase = 0;
   let drag = null;
-  let onStraight = true;
+  let followerWake = 0;
 
   function syncAppearance(reduced) {
     // Resolve swatches once per appearance change; Canvas cannot inherit CSS colours.
@@ -56,10 +56,22 @@
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const leader = width * 0.84;
-    const step = width * 0.57 / 40;
-    const follower = leader - width * 0.16 - (Number(gap.value) - 5) * step;
-    return {width, height, leader, step, follower, mid: height * 0.52,
-      lateral: offset.checked ? -height * 0.26 : 0};
+    const gapMin = Number(gap.min);
+    const step = width * 0.57 / (Number(gap.max) - gapMin);
+    const anchor = leader - width * 0.16;
+    const xAt = metres => anchor - (metres - gapMin) * step;
+    return {width, height, leader, xAt, step, follower: xAt(Number(gap.value)),
+      mid: height * 0.52, lateral: offset.checked ? -height * 0.26 : 0};
+  }
+
+  function measure(distance, lateral, straight) {
+    const speed = constants.VMAX;
+    const wake = model.wakeOf(distance, lateral, "classic", tow);
+    return {
+      wake,
+      grip: model.mul(wake, speed, "classic", constants.DOWNFORCE, speed),
+      tow: straight ? wake : 0,
+    };
   }
 
   function car(x, y, scale, colour, letter) {
@@ -71,8 +83,8 @@
       for (const side of [-1, 1]) ctx.fillRect(axle, side * 10 - 3, 8, 6);
     }
     ctx.fillStyle = colour;
-    ctx.fillRect(-20, -12, onStraight ? 2 : 6, 24);
-    ctx.fillRect(17, -11, onStraight ? 2 : 5, 22);
+    ctx.fillRect(-20, -12, 4, 24);
+    ctx.fillRect(17, -11, 4, 22);
     ctx.beginPath();
     const hull = [[-17,-3],[-6,-8],[3,-7],[9,-3],[18,-1],[18,1],[9,3],[3,7],[-6,8],[-17,3]];
     for (const [i, point] of hull.entries()) {
@@ -93,7 +105,8 @@
   }
 
   function draw() {
-    const {width, height, leader, follower, mid, lateral} = scene();
+    const {width, height, leader, follower, mid, lateral, xAt} = scene();
+    if (!width || !height) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.round(width * dpr), h = Math.round(height * dpr);
     if (canvas.width !== w || canvas.height !== h) {
@@ -102,26 +115,40 @@
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
+    const edge = xAt(tow.range);
+    const gapMin = Number(gap.min);
+    const near = xAt(gapMin);
+    const wakeHalf = height * 0.25;
+    const scale = Math.min(1.7, width / 340);
+    ctx.fillStyle = palette.follower;
+    ctx.globalAlpha = 0.13;
+    ctx.fillRect(edge, mid - wakeHalf, leader - edge, wakeHalf * 2);
     for (let row = -8; row <= 8; row++) {
-      const base = mid + row * height / 19;
+      const cross = row * height / 19;
+      const base = mid + cross;
       ctx.strokeStyle = palette.flow;
-      ctx.globalAlpha = Math.abs(row) < 3 ? 0.75 : 0.4;
-      ctx.lineWidth = Math.abs(row) < 3 ? 1.4 : 1;
-      ctx.setLineDash([9, 8]);
-      ctx.lineDashOffset = phase * 20 + row * 0.8;
+      ctx.globalAlpha = Math.abs(cross) < wakeHalf ? 0.82 : 0.45;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([8, 7]);
+      ctx.lineDashOffset = phase * 32;
+      const offsetAtRow = cross / wakeHalf * tow.halfW;
       ctx.beginPath();
       for (let x = 0; x <= width + 4; x += 4) {
-        const behind = Math.max(0, (leader - x) / width);
-        const envelope = Math.min(1, behind * 18) * Math.exp(-behind * 4 - row * row / 8);
-        const y = base + envelope * height * 0.09 * Math.sin(x / width * 26 + phase * 2 + row);
+        const fraction = Math.max(0, Math.min(1, (near - x) / Math.max(1, near - edge)));
+        const gapAtX = gapMin + fraction * (tow.range - gapMin);
+        const wake = x >= edge && x < leader
+          ? model.wakeOf(gapAtX, offsetAtRow, "classic", tow) : 0;
+        const y = base + wake * height * 0.17 * Math.sin(x / width * 31 + phase * 4 + row);
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.strokeStyle = palette.label;
+    ctx.setLineDash(followerWake > 0 ? [3, 3] : []);
+    ctx.strokeRect(follower - 24 * scale, mid + lateral - 17 * scale, 48 * scale, 34 * scale);
     ctx.setLineDash([]);
-    const scale = Math.min(1.7, width / 340);
     car(leader, mid, scale, palette.leader, "A");
     car(follower, mid + lateral, scale, palette.follower, "B");
   }
@@ -143,41 +170,82 @@
 
   function update() {
     const distance = Number(gap.value);
-    const speed = constants.VMAX;
-    const wake = model.wakeOf(distance, offset.checked ? tow.halfW : 0, "classic", tow);
-    const grip = model.mul(wake, speed, "classic", constants.DOWNFORCE, speed);
-    onStraight = document.querySelector("input[name=section]:checked").value === "straight";
-    get("wing").textContent = onStraight ? "Straight Mode · low drag" : "Corner Mode · high downforce";
-    const headway = (distance / speed).toFixed(2);
+    const onStraight = document.querySelector("input[name=section]:checked").value === "straight";
+    const result = measure(distance, offset.checked ? tow.halfW : 0, onStraight);
+    followerWake = result.wake;
+    const headway = (distance / constants.VMAX).toFixed(2);
     get("gapValue").textContent = distance + " m · " + headway + " s";
     gap.setAttribute("aria-valuetext", distance + " metres, " + headway + " seconds");
-    get("grip").textContent = Math.round(grip * 100) + "%";
-    get("wake").textContent = Math.round(wake * 100) + "%";
-    get("wakeMeter").value = wake;
-    get("gripMeter").value = grip;
-    get("state").textContent = wake === 0 ? "Clear air" : onStraight ? "Tow available" : "Cornering in wake";
-    get("effect").textContent = wake === 0
-      ? "Car B is outside the classic wake. Its grip returns to the clean-air baseline."
-      : onStraight ? "Car B can use the straight-line tow. Its available grip is already reduced."
-      : "Steering into the corner ends the usable tow. Car B still feels the grip loss at this gap.";
+    for (const [key, value] of Object.entries(result)) {
+      get(key).textContent = Math.round(value * 100) + "%";
+      get(key + "Meter").value = value;
+    }
+    const state = result.wake === 0 ? "Clear air" : onStraight ? "Tow available" : "Cornering in wake";
+    if (get("state").textContent !== state) get("state").textContent = state;
+    get("effect").textContent = result.wake === 0
+      ? "Car B is outside the shaded wake. It has clean-air grip and no tow."
+      : onStraight ? "The straight-line tow is available. Wake exposure still reduces grip."
+      : "The corner removes the usable tow. At this gap and offset the grip loss is unchanged.";
     draw();
   }
 
+  const pointerX = (event, box) => (event.clientX - box.left) * canvas.clientWidth / box.width;
   canvas.addEventListener("pointerdown", event => {
+    if (drag || event.button !== 0) return;
     const box = canvas.getBoundingClientRect();
     const {follower, mid, lateral} = scene();
-    if (drag || Math.abs(event.clientX - box.left - follower) > 34 ||
-        Math.abs(event.clientY - box.top - mid - lateral) > 30) return;
+    const y = (event.clientY - box.top) * canvas.clientHeight / box.height;
+    const x = pointerX(event, box);
+    if (Math.abs(x - follower) > 34 || Math.abs(y - mid - lateral) > 30) return;
     canvas.setPointerCapture(event.pointerId);
-    drag = {id: event.pointerId, x: event.clientX, gap: Number(gap.value)};
+    drag = {id: event.pointerId, x, gap: Number(gap.value)};
+    canvas.dataset.dragging = "";
   });
   canvas.addEventListener("pointermove", event => {
     if (!drag || event.pointerId !== drag.id) return;
-    gap.value = Math.round(drag.gap - (event.clientX - drag.x) / scene().step);
+    const x = pointerX(event, canvas.getBoundingClientRect());
+    const value = Math.round(drag.gap - (x - drag.x) / scene().step);
+    gap.value = Math.max(Number(gap.min), Math.min(Number(gap.max), value));
     update();
   });
-  canvas.addEventListener("lostpointercapture", () => { drag = null; });
+  canvas.addEventListener("lostpointercapture", () => {
+    drag = null;
+    delete canvas.dataset.dragging;
+  });
   document.querySelector(".settings").addEventListener("input", update);
+  get("prediction").addEventListener("submit", event => {
+    event.preventDefault();
+    const answer = get("prediction").querySelector("input:checked");
+    const feedback = get("feedback");
+    if (!answer) {
+      feedback.textContent = "Choose a prediction to check it.";
+      return;
+    }
+    const straight = measure(10, 0, true);
+    const corner = measure(10, 0, false);
+    const percent = value => Math.round(value * 100) + "%";
+    const lead = answer.value === "tow" ? "Correct. " : "Try it and compare. ";
+    feedback.textContent = lead + "The usable tow drops from " + percent(straight.tow) + " to "
+      + percent(corner.tow) + ". Grip stays at " + percent(corner.grip) + " of clean air.";
+    gap.value = 10;
+    offset.checked = false;
+    document.querySelector("input[name=section][value=corner]").checked = true;
+    update();
+  });
+  const flowSpeed = get("flow-speed");
+  function updatePressure() {
+    const speed = Number(flowSpeed.value);
+    const ratio = (speed / 100) ** 2;
+    const speedText = speed + "% of clean air";
+    flowSpeed.setAttribute("aria-valuetext", speedText);
+    get("flow-speed-value").textContent = speedText;
+    get("local-pressure").textContent = Math.round(ratio * 100) + "%";
+    get("local-pressure-meter").value = ratio;
+    get("pressure-ratio").textContent = (speed / 100).toFixed(2) + "² = "
+      + ratio.toFixed(2) + " of the clean-air pressure and force.";
+  }
+  flowSpeed.addEventListener("input", updatePressure);
+  updatePressure();
   motion.addEventListener("click", () => { animate = !animate; updateMotion(); });
   document.addEventListener("visibilitychange", updateMotion);
   LearnAppearance.mount(syncAppearance);

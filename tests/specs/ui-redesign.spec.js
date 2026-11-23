@@ -1212,6 +1212,36 @@ test("Learn opens the wake lesson and returns keyboard focus to its title door",
   await lesson.click();
   const lab = page.frameLocator("#learn-lab");
   await expect(lab.locator("#wake")).toHaveText("86%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.locator("#tow")).toHaveText("86%");
+  await lab.getByRole("slider", { name: "Following gap", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#gap")).toHaveValue("11");
+  const flow = lab.locator("#flow");
+  await flow.scrollIntoViewIfNeeded();
+  const box = await flow.boundingBox();
+  if (!box) throw new Error("missing airflow diagram");
+  const followerX = box.x + box.width * (0.68 - 0.57 * (11 - 5) / 40);
+  const followerY = box.y + box.height * 0.52;
+  await page.mouse.move(followerX, followerY);
+  await page.mouse.down();
+  await page.mouse.move(followerX - box.width * 0.57, followerY);
+  await page.mouse.up();
+  await expect(lab.locator("#gap")).toHaveValue("45");
+  await expect(lab.locator("#wake")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("100%");
+
+  await lab.getByLabel("The tow goes away. The wake still reduces grip.").check();
+  await lab.getByRole("button", { name: "Check prediction" }).click();
+  await expect(lab.locator("#feedback")).toHaveText("Correct. The usable tow drops from 86% to 0%. Grip stays at 88% of clean air.");
+  await expect(lab.locator("#gap")).toHaveValue("10");
+  await expect(lab.locator("#tow")).toHaveText("0%");
+  await expect(lab.locator("#grip")).toHaveText("88%");
+  await expect(lab.getByRole("heading", { name: "2026 F1 ACTIVE AERO" })).toBeVisible();
+  await expect(lab.locator("#local-pressure")).toHaveText("64%");
+  await lab.getByRole("slider", { name: "Local flow speed", exact: false }).press("ArrowRight");
+  await expect(lab.locator("#local-pressure")).toHaveText("66%");
+  await expect(lab.locator("#pressure-ratio")).toHaveText("0.81² = 0.66 of the clean-air pressure and force.");
+  await expect(lab.locator("#grip")).toHaveText("88%");
   // Appearance changes must reach the iframe without resetting the lesson.
   await page.evaluate(() => {
     AppearanceOpts.setTheme("light");
