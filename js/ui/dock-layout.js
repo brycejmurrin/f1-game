@@ -176,9 +176,28 @@ const DockLayout = (function () {
   function boundedXY(value, side, pad) {
     return withinRange(value, side, pad, pad[side]?.drag, ZERO);
   }
-  function boundedControlXY(value, side, pad, id, group) {
+  function boundedControlXY(value, side, pad, id, group, fromPaint = false) {
+    const b = pad[side]?.controls[id];
+    if (fromPaint && b?.range) {
+      const pos = translations.get(b.el) || ZERO;
+      return { x: pos.x * b.z / (pad.w * inboard(side)), y: -pos.y * b.z / pad.h };
+    }
     const anchor = withinRange(group, side, pad, pad[side]?.base, ZERO);
-    return withinRange(value, side, pad, pad[side]?.controls[id]?.range, anchor);
+    return withinRange(value, side, pad, b?.range, anchor);
+  }
+  // When every visible button has its own offset, keep their requested layout
+  // together on resize. Offsets are relative to the dock, so subtract them
+  // before intersecting the allowed dock translations. Intentional overlaps stay.
+  function placedRange(controls, saved, sx, sy, parent) {
+    const range = fullRange();
+    for (const b of Object.values(controls)) {
+      if (!b.range || (parent && b.el.parentElement !== parent)) continue;
+      const p = saved?.[b.el.id];
+      if (!p?.x && !p?.y) return null;
+      const x = (p.x || 0) * sx, y = (p.y || 0) * sy;
+      intersect(range, { left: b.range.left - x, right: b.range.right - x, top: b.range.top - y, bottom: b.range.bottom - y });
+    }
+    return range.left <= range.right && range.top <= range.bottom ? range : null;
   }
   function translate(el, x, y, individual) {
     const previous = translations.get(el), property = individual ? "translate" : "transform";
@@ -206,14 +225,19 @@ const DockLayout = (function () {
         for (const button of el.querySelectorAll?.(".touchbtn") || []) translate(button, 0, 0, true);
         continue;
       }
-      const g = pad[side], p = withinRange(scheme[side], side, pad, g?.base, ZERO);
-      const sx = inboard(side) * pad.w, sy = -pad.h, z = g?.z || zoomOf(el);
+      const g = pad[side], sx = inboard(side) * pad.w, sy = -pad.h, z = g?.z || zoomOf(el);
+      const whole = g && placedRange(g.controls, scheme.controls, sx, sy);
+      const p = withinRange(scheme[side], side, pad, g?.base, ZERO);
       translate(el, p.x * sx / z, p.y * sy / z, false);
       for (const [id, b] of Object.entries(g?.controls || {})) {
         const value = scheme.controls?.[id];
         // A layout wider than the new viewport cannot fit as one rigid group.
         // Keep each target reachable even when the player only moved its dock.
-        const q = withinRange(value, side, pad, b.range, p);
+        const parent = b.el.parentElement;
+        const range = whole || (value && parent?.classList.contains("dock-grp") && placedRange(g.controls, scheme.controls, sx, sy, parent));
+        const fitted = range && withinRange(scheme[side], side, pad, range, ZERO);
+        const q = fitted ? { x: (value?.x || 0) + fitted.x - p.x, y: (value?.y || 0) + fitted.y - p.y }
+          : withinRange(value, side, pad, b.range, p);
         translate(b.el, q.x * sx / b.z, q.y * sy / b.z, true);
       }
     }
@@ -223,7 +247,7 @@ const DockLayout = (function () {
     if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
   }
 
-  function create(G, uiScale) {
+  function create(G, uiScale, previewControls) {
     Log.info("ui", "DockLayout.create");
     const { $, store } = G;
     let toolbar = null, pending = null;
@@ -264,7 +288,7 @@ const DockLayout = (function () {
     function setEditing(on, restore, accept = restore !== false) {
       if (on && !toolbar) {
         if (typeof DockToolbar !== "undefined") {
-          toolbar = DockToolbar.create(G, { schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
+          toolbar = DockToolbar.create(G, { previewControls, schemeOf, getScheme: () => bag[schemeOf()], commitLayout,
             docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock: paint, getShape: () => shape, setShape, record,
             refreshScale: () => { uiScale?.applyHudScale(); uiScale?.applyBtnScale(); },
             readLayout: () => normalize(bag), restoreLayout: value => { bag = normalize(value); paint(); },
@@ -489,13 +513,14 @@ const DockLayout = (function () {
       if (editor) { editor.setEditing(!editor.isEditing()); return; }
       if (load) return;
       btn.setAttribute("aria-busy", "true");
+      const origin = [$("pmsettings"), $("pausemenu")].find(el => el && !el.hidden);
       const policy = typeof HudLayout !== "undefined" && HudLayout.ensureEditor ? HudLayout.ensureEditor() : true;
       load = Promise.all([ready(), policy]).catch(() => [false]).then(results => {
         const ok = results.every(Boolean);
         load = null;
         btn.removeAttribute("aria-busy");
         editor = ok && typeof HudArrange !== "undefined" ? make() : null;
-        if (editor) editor.setEditing(true);
+        if (editor) { if (!origin?.hidden) editor.setEditing(true); }
         else Log.warn("ui", "the ARRANGE HUD editor did not load — the next tap retries");
       });
     };

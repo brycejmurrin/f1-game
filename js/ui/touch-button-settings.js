@@ -30,7 +30,8 @@ const TouchButtonSettings = (() => {
     const idle = choice("idleColor", "IDLE BORDER COLOR", palette);
     const pressed = choice("pressedColor", "PRESSED COLOR", palette);
     const activation = choice("activation", "ACTIVATION", [["default", "DEFAULT"], ["tap", "TAP ON RELEASE"], ["quick", "QUICK TAP"], ["hold", "HOLD AND RELEASE"], ["long", "LONG HOLD AND RELEASE"], ["double", "DOUBLE TAP"]]);
-    const gestureHelp = node("p", "Quick Tap requires a lift within 0.18 seconds. Hold requires 0.45 seconds, Long Hold requires 0.9 seconds, and Double Tap requires two taps within 0.35 seconds. Default keeps the original gesture for this action.");
+    const gestureHint = "Quick Tap requires a lift within 0.18 seconds. Hold requires 0.45 seconds, Long Hold requires 0.9 seconds, and Double Tap requires two taps within 0.35 seconds. Default keeps the original gesture for this action.";
+    const gestureHelp = node("p", gestureHint);
     gestureHelp.className = "adv-help"; gestureHelp.id = host.id + "-activation-help";
     activation.setAttribute("aria-describedby", gestureHelp.id); host.appendChild(gestureHelp);
     const response = node("div"); host.appendChild(response); section = response;
@@ -103,11 +104,14 @@ const TouchButtonSettings = (() => {
         "Relative Slide uses your first touch and slide distance. Absolute reads your position across the whole pedal.";
       idle.value = profile.idleColor || "default"; pressed.value = profile.pressedColor || "default";
       activation.value = profile.activation || "default";
+      gestureHelp.textContent = gestureHint + (id === "camera" && !standalone
+        ? " Keep holding for the view grid: 0.9 seconds with Hold, 1.35 seconds with Long Hold, or 0.34 seconds otherwise." : "");
       activation.parentElement.parentElement.hidden = gestureHelp.hidden = analog || id === "look";
       press.value = profile.press; travel.value = String(profile.travel); distance(profile.travel);
       slide.parentElement.parentElement.hidden = slideHelp.hidden = !pedal || !!profile.sliderEdge;
       feedbackHelp.textContent = id === "gas" ? "Gas brightens with throttle input. A tread mark warns of wheelspin." : id === "brake" ? "Brake brightens with braking input. Double bars warn of lock-up." : "The arrow brightens as its steering input increases.";
-      if (id !== "gas" && profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
+      if (profile.feedback && profile.indicator === "percent") feedbackHelp.textContent += " The percentage shows your current input.";
+      else if (profile.feedback && !profile.sliderEdge && id !== "gas" && profile.press === "progressive") feedbackHelp.textContent += " Three rising bars mark a progressive button.";
       const overrides = PedalTravel.buttonOverrides(id);
       slide.value = overrides.slide || "inherit";
       sliderEntry.value = overrides.slide ? "enter" : "stay";

@@ -35,6 +35,8 @@ function harness(load) {
   };
   vm.createContext(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/dock-layout.js") });
+  const settings = { hidden: false };
+  ids.set("pmsettings", settings);
   const G = { $: (id) => ids.get(id) || null };
   const btn = ctx.DockLayout.arrangeDoor(G, () => ctx.HudArrange.create(G));
   if (btn) ids.set(btn.id, btn);
@@ -45,7 +47,7 @@ function harness(load) {
       return { setEditing: (v) => { on = !!v; }, isEditing: () => on };
     } };
   };
-  return { ctx, G, btn, host, warns, loads, made, define, settle: () => new Promise((r) => setTimeout(r, 0)) };
+  return { ctx, G, btn, host, settings, warns, loads, made, define, settle: () => new Promise((r) => setTimeout(r, 0)) };
 }
 
 test("the door builds ARRANGE HUD beside the HUD details summary without loading the editor", () => {
@@ -89,4 +91,19 @@ test("a failed load logs, opens nothing and the next tap retries", async () => {
   await h.settle();
   assert.equal(h.loads.length, 2);
   assert.equal(h.made.length, 1);
+});
+
+
+test("leaving Settings before Arrange HUD loads keeps the editor closed until the next tap", async () => {
+  let complete, opens = 0;
+  const h = harness(() => new Promise(resolve => { complete = resolve; }));
+  h.btn.onclick();
+  h.settings.hidden = true;
+  h.ctx.HudArrange = { create: () => ({ isEditing: () => false, setEditing: on => { if (on) opens++; } }) };
+  complete(true);
+  await h.settle();
+  assert.equal(opens, 0);
+  h.settings.hidden = false;
+  h.btn.onclick();
+  assert.equal(opens, 1);
 });

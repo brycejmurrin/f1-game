@@ -82,7 +82,7 @@ test("falls back to the direct draw when no 2d context is available", () => {
 
 // Run the complete module against a recording canvas. Equal sector colours
 // deliberately remove colour as a source of sector identity in these cases.
-function minimap(cues = false, zones = [], sameInk = false) {
+function minimap(cues = false, zones = [], sameInk = false, palette = null) {
   const canvases = [], targetLog = [], dataset = { cbCues: cues ? "on" : "off" };
   function context(log) {
     let dash = [];
@@ -114,7 +114,8 @@ function minimap(cues = false, zones = [], sameInk = false) {
         cv.getContext = () => ctx; canvases.push(cv); return cv;
       },
     },
-    TrackMaps: { sectorColors: () => ["#fff", "#fff", "#fff"], drsZones: () => zones },
+    ...(palette && { CvdPalette: palette }),
+    TrackMaps: { sectorColors: () => palette ? ["sec1", "sec2", "sec3"].map(k => palette.hex(k)) : ["#fff", "#fff", "#fff"], drsZones: () => zones },
     GhostShare: { hasGuest: () => false }, Ghost: { hasGhost: () => true },
   };
   vm.createContext(sb);
@@ -215,4 +216,18 @@ test("wrapped AERO zones label their start and live toggles remove the cached cu
   const restored = h.canvases.at(-1).log;
   assert.equal(restored.some((e) => e[0] === "fillText"), false);
   assert.equal(restored.filter((e) => e[0] === "stroke").length, 4, "OFF restores only the original zone stroke");
+});
+
+test("changing the colour vision palette in a race repaints sectors, zones and ghost", () => {
+  const palette = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/ui/cvd-palette.js"), "utf8") + "\nCvdPalette", {}, { filename: absSrc("js/ui/cvd-palette.js") });
+  const h = minimap(false, [{ a: 0.25, b: 0.5 }], false, palette);
+  h.map.draw();
+  palette.set("deutan");
+  h.map.draw();
+  assert.equal(h.canvases.length, 2);
+  assert.deepEqual(h.canvases[1].log.filter(e => e[0] === "stroke").map(e => e.at(-1).ink),
+    ["sec1", "sec2", "sec3", "zone"].map(k => palette.hex(k)));
+  assert.ok(h.targetLog.some(e => e[0] === "set:fillStyle" && e[1] === palette.hex("ghost")));
+  h.map.draw();
+  assert.equal(h.canvases.length, 2, "unchanged palette reuses the outline");
 });

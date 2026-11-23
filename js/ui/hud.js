@@ -1723,9 +1723,11 @@ function syncAlong() {
 
 // Visibility uses explicit state only: checking it must never flush layout.
 let _paintSuspended = false;
+function hudLayerHidden() {
+  return document.hidden === true || document.visibilityState === "hidden" || !!els.hud?.hidden;
+}
 function hudPaintHidden() {
-  return document.hidden === true || document.visibilityState === "hidden"
-    || !!(els.hud && els.hud.hidden) || document.body.classList.contains("hud-hidden");
+  return hudLayerHidden() || document.body.classList.contains("hud-hidden");
 }
 // Spoken race information is independent of the visual HUD toggle.
 function speakHud(player, cars, timeTrial) {
@@ -1753,6 +1755,108 @@ function speakHud(player, cars, timeTrial) {
   return { cn, caution, blueCar, txt };
 }
 
+function syncDriveControls(player, canService, timeTrial, showReadouts, spokenFlag) {
+  // The touch dock and the pit actions remain operable when HIDE HUD is on.
+  const pit = G.pits;
+  const canWork = canService && pit?.canWork?.(player) && !G.netPlay?.active?.();
+  hHidden(els.workBtn, !canWork);
+  hHidden(els.endSessionBtn, !canWork || !timeTrial);
+  const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
+  if (_ro && (gasFeedback || brakeFeedback)) {
+    const cue = _ro.pedalGrip(player, typeof WheelState !== "undefined" && WheelState.enabled());
+    hData(els.btnThrottle, "gripCue", gasFeedback && (cue === "spin" || cue === "slip") ? cue : null);
+    hData(els.btnBrake, "gripCue", brakeFeedback && cue === "lock" ? cue : null);
+  }
+  hToggle(els.btnBoost, "on", player.boostOn);
+  hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
+  // OVERTAKE (FIA 2026 B7.2.3(c), js/race/overtake-mode.js): EARNED under 1 s at
+  // the detection line, granted at the timing line as a 0.5 MJ allowance for
+  // that lap. The chip reads the allowance in MJ, the rule's own unit.
+  const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
+  const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
+  const pitHeld = G.state === "race" && !(player.otT > 0) && pit?.held?.(player);
+  const otOff = G.state === "race" && !(player.otT > 0) && (pitHeld || (typeof G.otEnabled === "function" && !G.otEnabled()));
+  let otReason = "";
+  if (otOff) {
+    const caution = spokenFlag ? spokenFlag.cn : G.cautionInfo?.();
+    const leader = G.ranked && G.ranked[0];
+    // RaceControl has independent gates. Keep the reason in the HUD so a
+    // player knows whether to wait for green, a dry track or the opening lap
+    // to pass; the input path still checks c.otArmed in game.js. Only the
+    // Safety Car / red flag (B7.2.2c) and LOW GRIP (B7.2.2d) close it; a
+    // yellow or VSC flying on lap 1 must not be named as the reason.
+    otReason = pitHeld ? "pit-lane"
+      : caution && caution.level >= 3 ? "caution"
+      : caution && caution.lowGrip ? "low-grip"
+      : leader && leader.lap > 1 ? "race-control"
+      : leader ? "opening-lap" : "waiting-for-leader";
+  }
+  const otReady = !!player.otArmed;
+  const otPaused = otHeld && !!player.otOn;
+  const otUnavailable = (!(player.otT > 0) && !otReady && !otPaused) || otOff;
+  hToggle(els.btnOT, "on", player.otT > 0 || otPaused);
+  hToggle(els.btnOT, "armed", otReady && !otOff);
+  hAttr(els.btnOT, "aria-disabled", otUnavailable ? "true" : "false");
+  hAttr(els.btnOT, "data-state", otOff ? otReason : player.otT > 0 ? "active"
+    : otReady ? "ready" : otPaused ? "paused" : otHeld ? "held" : player.otEarned ? "earned" : "pending");
+  hToggle(els.btnOT, "dead", otOff);
+  const xOpen = (player.aeroX || 0) > 0.05;
+  const noZones = !(G.aeroZones && G.aeroZones.length);
+  const autoAero = G.raceAeroMode === "auto";
+  hToggle(els.btnAero, "on", xOpen);
+  hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
+  hToggle(els.btnAero, "dead", noZones);
+  hAttr(els.btnAero, "aria-disabled", autoAero || noZones || !player.xArmed ? "true" : "false");
+  hAttr(els.btnAero, "data-state", autoAero ? "automatic" : noZones || !player.xArmed ? "unavailable" : xOpen ? "active" : "armed");
+  if (!showReadouts) return;
+  const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : otReady ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
+  hClass(els.ot, ot);
+  hData(els.ot, "gate", otReason || null);
+  const mjTxt = otMJ.toFixed(2) + " MJ";
+  const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
+                : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
+                  : otReason === "caution" ? "OT · CAUTION"
+                  : otReason === "low-grip" ? "OT · LOW GRIP"
+                  : otReason === "opening-lap" ? "OT · LAP 1"
+                  : otReason === "waiting-for-leader" ? "OT · GRID"
+                  : "NO OVERTAKE")
+                : otReady ? "OT READY " + mjTxt
+                : otPaused ? "OT PAUSED " + mjTxt : otHeld ? "OT HELD " + mjTxt
+                : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
+  hText(els.ot, otText);
+  hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
+    : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
+      : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+      : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
+      : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
+      : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
+      : hT("hud.overtake.unavailable", null, "Overtake unavailable"))
+    : otReady ? hT("hud.overtake.ready", { time: mjTxt }, "Overtake ready, {time} — press to deploy")
+    : otPaused ? hT("hud.overtake.paused", { time: mjTxt }, "Overtake paused, {time} — press to switch off")
+    : otHeld ? hT("hud.overtake.held", { time: mjTxt }, "Overtake allowance held, {time} — unavailable at this speed")
+    : player.otEarned ? hT("hud.overtake.earned", null, "Overtake earned — available from the start line")
+    : hT("hud.overtake.pending", null, "Overtake unavailable — be within one second at the detection line"));
+  const aeroClass = noZones ? "ax-none" : xOpen ? "ax-open"
+    : player.xArmed ? "ax-armed" : "ax-off";
+  hClass(els.aero, aeroClass);
+  // The TEXT answers "where is the zone", so it keys off position, not arming.
+  // Keying it off xArmed showed "AERO 0m" to a car standing INSIDE a zone but
+  // too slow to arm — a distance readout of zero, which reads as "the zone is
+  // right here" rather than "you are in it". Whether the mode is available is
+  // the CLASS's job (ax-armed lights the chip), so the two never contradict.
+  const dz = !autoAero && !noZones && !xOpen && G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
+  const aeroText = autoAero ? (xOpen ? "AUTO STRAIGHT" : "AERO AUTO")
+    : noZones ? "NO AERO ZONE"
+    : xOpen ? "STRAIGHT MODE"
+    : dz === 0 ? "AERO ZONE"
+    : dz < 900 ? "AERO " + Math.round(dz) + "m"
+    : "CORNER MODE";
+  hData(els.aero, "zone", autoAero ? (xOpen ? "straight" : "auto") : (xOpen || noZones) ? null : dz === 0 ? "in" : dz < 900 ? "near" : null);
+  hText(els.aero, aeroText);
+  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
+    : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
+}
+
 function updateHud(force, dtMs) {
   if (!(Number.isFinite(dtMs) && dtMs > 0)) dtMs = 16.7;   // forced refreshes and the first frame: one nominal frame
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
@@ -1764,6 +1868,18 @@ function updateHud(force, dtMs) {
   if (G.frozen && !force) return;
   const paint = !hudPaintHidden();
   if (_trace && G.track) _trace.sample(player, G.track.total);
+  if (paint && _paintSuspended) {
+    invalidateFit(); _minimap.invalidate();
+    _gapWho.fill(null);   // the smoother last saw the old visible gap
+    force = true;
+  }
+  _paintSuspended = !paint;
+  hudT -= dtMs;
+  const tick = force || hudT <= 0;
+  if (tick) {
+    hudT = HUD_TICK_MS;
+    if (!timeTrial && _gapClk && G.track) for (const c of cars) _gapClk.sample(c, c.prog, G.raceT, G.track.total);
+  }
   if (!paint) {
     // Camera/profile classes are intentionally not painted while hidden. Use
     // their source state so an invisible mode change still clears input history.
@@ -1771,15 +1887,18 @@ function updateHud(force, dtMs) {
     const modeId = modes && modes[G.camMode] ? modes[G.camMode].id : "chase";
     if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs, false,
       G.hudProfile === "minimal" || !!BCAM_IDS[modeId] || document.body.classList.contains("bc-on"));
-    _paintSuspended = true;
-    hudT -= dtMs;
-    if (force || hudT <= 0) { hudT = HUD_TICK_MS; speakHud(player, cars, timeTrial); }
+    for (let i = 0; i < 3; i++) {
+      if (_secDeltaT[i] > 0) _secDeltaT[i] -= dtMs;
+      if (_secFlash[i] > 0) _secFlash[i] = Math.max(0, _secFlash[i] - dtMs / 1000);
+    }
+    if (tick) {
+      const spoken = speakHud(player, cars, timeTrial);
+      if (!hudLayerHidden() && !document.body.classList.contains("desktop")) {
+        syncDriveControls(player, timeTrial || G.tyres?.on(), timeTrial, false, spoken);
+      }
+      if (G.sectorBests) for (let i = 0; i < 3; i++) _secPrevBest[i] = G.sectorBests[i];
+    }
     return;
-  }
-  if (_paintSuspended) {
-    _paintSuspended = false;
-    invalidateFit(); _minimap.invalidate();
-    force = true;   // repaint/refit immediately, even inside the 10 Hz throttle
   }
   syncHudCamClasses();
   const skinRev = G.store ? G.store.rev : 0;
@@ -1800,12 +1919,9 @@ function updateHud(force, dtMs) {
   // ON A TICK FRAME THEY PAINT AFTER fitHud's READS, not before: written first,
   // they dirtied the tree and the fit's first rect / viewport read forced a
   // synchronous layout on every tick on a phone. Same writes, same frame.
-  const tick = force || !(hudT - dtMs > 0);   // exactly the throttle test below
   if (!tick) paintInstruments(player);
   if (typeof HudInputs !== "undefined") HudInputs.frame(G, player, dtMs);
-  hudT -= dtMs;
-  if (!force && hudT > 0) return;
-  hudT = HUD_TICK_MS;
+  if (!tick) return;
   syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
   syncAlong();
@@ -1870,6 +1986,7 @@ function updateHud(force, dtMs) {
   // radio: fine, think about a stop, you are past it.
   const tyres = G.tyres, pit = G.pits;
   const tyreOn = !!(tyres && tyres.on());
+  syncDriveControls(player, tyreOn || timeTrial, timeTrial, true, spokenFlag);
   hHidden(els.tyre, !tyreOn);
   let pitReadouts;   // synchronous HUD tick only; never retained on a car
   if (tyreOn) {
@@ -1938,114 +2055,7 @@ function updateHud(force, dtMs) {
         hText(els.pitCueArrow, c.phase === "missed" ? "" : (exitPh ? -_pitSide : _pitSide) === -1 ? "\u25C0" : "\u25B6");
       }
     }
-    // WORK ON CAR: up for exactly as long as the car is stopped on the jacks
-    // (PitLane.canWork), and never a frame longer \u2014 it opens a menu, so a
-    // button that outlived the stop would be a menu you could open while
-    // driving.
-    // Never in a friend race: the garage "pauses" the race, and a networked race
-    // does not stop — the box timer ran out behind it and the work was free.
-    const canWork = pit && pit.canWork && pit.canWork(player) && !G.netPlay?.active?.();
-    hHidden(els.workBtn, !canWork);
-    hHidden(els.endSessionBtn, !canWork || !timeTrial);
-  } else {
-    // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
-    hHidden(els.pitCue, true);
-    hHidden(els.workBtn, true);
-    hHidden(els.endSessionBtn, true);
-  }
-  // toggle-button states
-  const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
-  if (_ro && (gasFeedback || brakeFeedback)) {
-    const cue = _ro.pedalGrip(player, typeof WheelState !== "undefined" && WheelState.enabled());
-    hData(els.btnThrottle, "gripCue", gasFeedback && (cue === "spin" || cue === "slip") ? cue : null);
-    hData(els.btnBrake, "gripCue", brakeFeedback && cue === "lock" ? cue : null);
-  }
-  hToggle(els.btnBoost, "on", player.boostOn);
-  hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
-  hToggle(els.btnOT, "on", player.otT > 0);
-  hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
-  // OVERTAKE (FIA 2026 B7.2.3(c), js/race/overtake-mode.js): EARNED under 1 s at
-  // the detection line, granted at the timing line as a 0.5 MJ allowance for
-  // that lap. The chip reads the allowance in MJ, the rule's own unit.
-  const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
-  const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
-  const pitHeld = G.state === "race" && !(player.otT > 0) && G.pits?.held?.(player);
-  const otOff = G.state === "race" && !(player.otT > 0) && (pitHeld || (typeof G.otEnabled === "function" && !G.otEnabled()));
-  // The class follows the GATE like the text does: a held lap-0 grant (or one
-  // under a safety car) used to pulse the yellow "ready" plate while the text
-  // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
-  const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
-  hClass(els.ot, ot);
-  let otReason = "";
-  if (otOff) {
-    const caution = spokenFlag ? spokenFlag.cn : G.cautionInfo?.();
-    const leader = G.ranked && G.ranked[0];
-    // RaceControl has independent gates. Keep the reason in the HUD so a
-    // player knows whether to wait for green, a dry track or the opening lap
-    // to pass; the input path still checks c.otArmed in game.js. Only the
-    // Safety Car / red flag (B7.2.2c) and LOW GRIP (B7.2.2d) close it; a
-    // yellow or VSC flying on lap 1 must not be named as the reason.
-    otReason = pitHeld ? "pit-lane"
-      : caution && caution.level >= 3 ? "caution"
-      : caution && caution.lowGrip ? "low-grip"
-      : leader && leader.lap > 1 ? "race-control"
-      : leader ? "opening-lap" : "waiting-for-leader";
-  }
-  hData(els.ot, "gate", otReason || null);
-  const mjTxt = otMJ.toFixed(2) + " MJ";
-  const otReady = !!player.otArmed || otHeld;
-  const otUnavailable = (!(player.otT > 0) && !otReady) || otOff;
-  const otText = player.otT > 0 ? "OVERTAKE " + mjTxt
-                : otOff ? (otReason === "pit-lane" ? "OT · PIT LANE"
-                  : otReason === "caution" ? "OT · CAUTION"
-                  : otReason === "low-grip" ? "OT · LOW GRIP"
-                  : otReason === "opening-lap" ? "OT · LAP 1"
-                  : otReason === "waiting-for-leader" ? "OT · GRID"
-                  : "NO OVERTAKE")
-                : otReady ? "OT READY " + mjTxt
-                : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
-  hText(els.ot, otText);
-  hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
-    : otOff ? (otReason === "pit-lane" ? hT("hud.overtake.pitLane", null, "Overtake unavailable in the pit lane")
-      : otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
-      : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
-      : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
-      : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
-      : hT("hud.overtake.unavailable", null, "Overtake unavailable"))
-    : otReady ? hT("hud.overtake.ready", { time: mjTxt }, "Overtake ready, {time} — press to deploy")
-    : player.otEarned ? hT("hud.overtake.earned", null, "Overtake earned — available from the start line")
-    : hT("hud.overtake.pending", null, "Overtake unavailable — be within one second at the detection line"));
-  hAttr(els.btnOT, "aria-disabled", otUnavailable ? "true" : "false");
-  hAttr(els.btnOT, "data-state", otOff ? otReason : player.otT > 0 ? "active"
-    : otReady ? "ready" : player.otEarned ? "earned" : "pending");
-  hToggle(els.btnOT, "dead", otOff);
-  const xOpen = (player.aeroX || 0) > 0.05;
-  const noZones = !(G.aeroZones && G.aeroZones.length);
-  const autoAero = G.raceAeroMode === "auto";
-  const dz = !autoAero && !noZones && !xOpen && G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
-  hToggle(els.btnAero, "on", xOpen);
-  hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
-  hToggle(els.btnAero, "dead", noZones);
-  hAttr(els.btnAero, "aria-disabled", autoAero || noZones ? "true" : "false");
-  hAttr(els.btnAero, "data-state", autoAero ? "automatic" : noZones ? "unavailable" : xOpen ? "active" : player.xArmed ? "armed" : "available");
-  const aeroClass = noZones ? "ax-none" : xOpen ? "ax-open"
-    : player.xArmed ? "ax-armed" : "ax-off";
-  hClass(els.aero, aeroClass);
-  // The TEXT answers "where is the zone", so it keys off position, not arming.
-  // Keying it off xArmed showed "AERO 0m" to a car standing INSIDE a zone but
-  // too slow to arm — a distance readout of zero, which reads as "the zone is
-  // right here" rather than "you are in it". Whether the mode is available is
-  // the CLASS's job (ax-armed lights the chip), so the two never contradict.
-  const aeroText = autoAero ? (xOpen ? "AUTO STRAIGHT" : "AERO AUTO")
-    : noZones ? "NO AERO ZONE"
-    : xOpen ? "STRAIGHT MODE"
-    : dz === 0 ? "AERO ZONE"
-    : dz < 900 ? "AERO " + Math.round(dz) + "m"
-    : "CORNER MODE";
-  hData(els.aero, "zone", autoAero ? (xOpen ? "straight" : "auto") : (xOpen || noZones) ? null : dz === 0 ? "in" : dz < 900 ? "near" : null);
-  hText(els.aero, aeroText);
-  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
-    : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
+  } else hHidden(els.pitCue, true);
   let ghostSign = null;
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
@@ -2085,7 +2095,7 @@ function updateHud(force, dtMs) {
     // literal: PACE scales real speeds, so an absolute floor swallowed most
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
     // 0.26 × vTop ≈ 25 m/s at default pace.
-    const vFloor = Math.max(player.speed, G.vTop() * 0.26); if (_gapClk && G.track) for (const c of cars) _gapClk.sample(c, c.prog, G.raceT, G.track.total);
+    const vFloor = Math.max(player.speed, G.vTop() * 0.26);
     hText(els.gapA, a ? gapText(0, gap, "▲", a, a.prog - player.prog, vFloor) : "");
     hText(els.gapB, b ? gapText(1, gap, "▼", b, player.prog - b.prog, vFloor) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).

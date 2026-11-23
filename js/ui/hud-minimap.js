@@ -37,7 +37,7 @@ function mmWatchDirty() {
 }
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
 let _mmPitP = null, _mmYou = "";   // the "P"'s local px + map node, and the resolved --you; set with the bg
-let minimapBgCues = false;
+let minimapBgCues = false, minimapBgPalette = "off";
 const SECTOR_DASH = [[6, 3], [2, 3], [6, 2, 2, 2]];
 // --you before the bg has resolved it: CvdPalette's row for the current mode (#1595).
 const mmYou = () => _mmYou || (typeof CvdPalette !== "undefined" && CvdPalette.hex("you")) || "#fff";
@@ -99,7 +99,9 @@ function drawMinimap() {
   }
   // pre-render the static track outline once; reuse as a cheap blit every HUD frame
   const bgKey = _mmBgKey;   // no string built per HUD tick
-  if (!minimapBg || minimapBgKey !== bgKey || minimapBgCues !== cbCues) {
+  const palette = typeof CvdPalette !== "undefined" && CvdPalette.mode ? CvdPalette.mode() : "off";
+  if (!minimapBg || minimapBgKey !== bgKey || minimapBgCues !== cbCues || minimapBgPalette !== palette) {
+    minimapBgPalette = palette;
     minimapBgKey = bgKey;
     minimapBgCues = cbCues;
     minimapBg = document.createElement("canvas");
@@ -157,7 +159,8 @@ function drawMinimap() {
     // zone in one colour.
     const zones = TrackMaps.drsZones(track.def);
     if (zones && zones.length) {
-      mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+      const zoneInk = palette === "off" ? "rgba(38,165,245,0.9)" : CvdPalette.hex("zone");
+      mc.strokeStyle = zoneInk; mc.lineWidth = 3;
       for (const z of zones) {
         // z.b > 1 for a zone across the line: walk on past n and wrap.
         const from2 = Math.floor(z.a * n), to2 = Math.floor(z.b * n);
@@ -193,7 +196,7 @@ function drawMinimap() {
           mc.font = "700 9px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
           mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
           mc.strokeText("AERO", x, y); mc.fillText("AERO", x, y);
-          mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+          mc.strokeStyle = zoneInk; mc.lineWidth = 3;
         }
       }
     }
@@ -278,10 +281,11 @@ function drawMinimap() {
       // Skip only the GHOST dot on a bad s — returning here would take the
       // player's own white marker (drawn below) down with it for the session.
       if (gp) {
+        const ghostInk = markerColor("map-ghost", palette === "off" ? "rgba(120, 220, 255, 0.95)" : CvdPalette.hex("ghost"));
         if (cbCues) {
-          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, markerColor("map-ghost", "rgba(120, 220, 255, 0.95)"), "G", true);
+          mmPitMark(mm, 8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 6, ghostInk, "G", true);
         } else {
-          mm.fillStyle = markerColor("map-ghost", "rgba(120, 220, 255, 0.95)");
+          mm.fillStyle = ghostInk;
           mm.beginPath();
           mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
           mm.fill();

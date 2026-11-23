@@ -193,9 +193,7 @@ test("an open menu still takes a key that was already down, and the on-screen pe
   assert.match(src, /function navBlocksTouch\(\) \{ return _navLatch < 0 \? navBlocksTouchLive\(\) : _navLatch === 1; \}/);
   assert.match(src, /navBlocksTouch\(\) \? 0 : buttonSteering\(\)/);
   assert.match(src, /navBlocksTouch\(\) \? 0 : analogShape\(touchSteering\(\), "touch"\)/);
-  assert.match(src, /keyThrottle \|\| \(!navBlocksTouch\(\) && btnThrottle\)/);
-  assert.match(src, /if \(btnThrottle && !navBlocksTouch\(\)\)/);
-  assert.match(src, /if \(btnBrake && !navBlocksTouch\(\)\)/);
+  // Actual zero/nonzero travel with the pause gate is exercised in throttle-latch.test.mjs.
 });
 
 test("a calibrated stick still reaches full lock on BOTH sides, and a pedal on axis 2 is not free-look", () => {

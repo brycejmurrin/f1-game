@@ -61,7 +61,7 @@ const HudInputs = (function () {
   const doc = typeof document !== "undefined" ? document : null;
   const win = typeof window !== "undefined" ? window : null;
   let root = null, cv = null, ctx2 = null, gearEl = null, lastGear = null;
-  const mKey = [0, 0, 0, 0, 0];   // innerWidth, innerHeight, dpr, --hl-s, CSS zoom (HUD SIZE / fit cap) of the last measure
+  const mKey = [0, 0, 0, 0, 0, false];   // innerWidth, innerHeight, dpr, --hl-s, CSS zoom (HUD SIZE / fit cap) of the last measure
   let cssW = 128, cssH = 48, ratio = 1, zAge = 0, zSeen = 1, vw = 0, vh = 0, vDirty = true, fontOn = false;
   const _rmq = win && win.matchMedia ? win.matchMedia("(prefers-reduced-motion: reduce)") : null;
   function reduced() { return typeof TitleFx !== "undefined" && typeof TitleFx.mode === "function" ? TitleFx.mode() === "reduce" : !!(_rmq && _rmq.matches) || !!(doc && doc.documentElement && doc.documentElement.dataset.motion === "reduce"); }
@@ -88,8 +88,10 @@ const HudInputs = (function () {
       vw = win ? win.innerWidth : 0; vh = win ? win.innerHeight : 0; zSeen = cv.currentCSSZoom || 1;
     }
     const iw = vw, ih = vh, z = zSeen;
-    if (iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3] && z === mKey[4]) return;
-    mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl; mKey[4] = z;
+    // The unplaced touch chart uses a smaller CSS box than a placed or desktop chart.
+    const small = !doc.body.classList.contains("desktop") && !root.hasAttribute?.("data-hl-user");
+    if (small === mKey[5] && iw === mKey[0] && ih === mKey[1] && dpr === mKey[2] && hl === mKey[3] && z === mKey[4]) return;
+    mKey[0] = iw; mKey[1] = ih; mKey[2] = dpr; mKey[3] = hl; mKey[4] = z; mKey[5] = small;
     cssW = cv.clientWidth || 128; cssH = cv.clientHeight || 48;
     ratio = Math.max(1, Math.min(4, z * dpr * hl));
     const W = Math.round(cssW * ratio), H = Math.round(cssH * ratio);

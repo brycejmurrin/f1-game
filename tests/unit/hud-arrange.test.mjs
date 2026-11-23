@@ -241,10 +241,12 @@ test('editor: a drag paints every frame but saves once, and reads layout only at
     const e = editor(); e.api.setEditing(true);
     e.fire('pointerdown');
     if (gesture === 'pinch') e.fire('pointerdown', { pointerId: 2, clientX: 200 });
+    assert.equal(e.writes.length, 0, gesture + ': touching a widget only selects it');
+    e.fire('pointermove', { pointerId: gesture === 'pinch' ? 2 : 1, clientX: 210 }); e.tick();
     const painted = e.writes.length, rects = e.stats.rects;
-    assert.equal(e.stats.saves, 0, gesture + ': the press adopts its painted origin without saving it');
-    for (let i = 1; i <= 10; i++) { e.fire('pointermove', { pointerId: gesture === 'pinch' ? 2 : 1, clientX: 200 + i * 10 }); e.tick(); }
-    assert.equal(e.writes.length - painted, 10, gesture + ': one paint per frame');
+    assert.equal(painted, 4, 'first movement adopts the visible origin and paints');
+    for (let i = 2; i <= 10; i++) { e.fire('pointermove', { pointerId: gesture === 'pinch' ? 2 : 1, clientX: 200 + i * 10 }); e.tick(); }
+    assert.equal(e.writes.length - painted, 9, gesture + ': one paint per subsequent frame');
     assert.equal(e.writes.slice(painted).every((w) => w.live), true, gesture + ': every frame is a live paint');
     assert.equal(e.stats.saves, 0, gesture + ': no storage write while the finger is down');
     assert.equal(e.stats.rects, rects, gesture + ': no forced layout read while the finger is down');
@@ -566,7 +568,7 @@ test("a second touch on the race surface resizes a small HUD piece", () => {
   e.fire("pointermove", { pointerId: 2, clientX: 250 });
   e.tick();
   assert.equal(e.get("sectors").s, 150);
-  e.fire("pointerup", { pointerId: 2 });
+  e.fire("pointerup", { pointerId: 2, clientX: 250 });
   e.fire("pointermove", { clientX: 110 });
   e.tick();
   assert.equal(e.get("sectors").s, 150);
@@ -734,7 +736,7 @@ test("arrange shows factory-relative and painted sizes when they differ", () => 
 test('editor: size labels are concise without rounding stored fractional or tiny positive sizes', () => {
   const e = editor('map', { on: true,
     rect: { left: 10, top: 10, width: 100, height: 40 }, manualSize: { width: 150, height: 60 } });
-  e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup');
+  e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointerup', { clientX: 110 });
   const fractional = e.get('map').s;
   assert.ok(Math.abs(fractional - 200 / 3) < 1e-12);
   assert.equal(e.ids.get('hud-arrange-name').textContent, '66.67%');
@@ -841,6 +843,25 @@ test("HUD panel metric selection changes only the chosen dimension and keeps too
   assert.deepEqual(e.get("rel"), {x:0, y:0, s:100, width:21, minHeight:11, textSize:105});
   button("move").onclick();
   assert.equal(metric.hidden, true);
+});
+
+test("selecting an automatic map by tap preserves responsive placement and Undo history", () => {
+  const e = editor("map", { manualAnchor: { left: 40, top: 20 } });
+  e.api.setEditing(true);
+  e.fire("pointerdown"); e.fire("pointermove", { clientX: 101 }); e.fire("pointerup", { clientX: 101 });
+  assert.equal(e.writes.length, 0);
+  assert.equal(e.ids.get("hud-arrange-undo").disabled, true);
+  e.api.setEditing(false);
+  assert.equal(e.stats.saves, 0);
+  assert.equal(e.ids.get("map").hasAttribute("data-hl-user"), false);
+});
+
+test("a HUD drag uses the final release position even when no last move was delivered", () => {
+  const e = editor();
+  e.api.setEditing(true); e.fire("pointerdown");
+  e.fire("pointermove", { clientX: 130 });
+  e.fire("pointerup", { clientX: 150 });
+  assert.equal(e.get("piece").x, 5);
 });
 
 test("selecting the finish card shows its sample and Cancel hides it again", () => {

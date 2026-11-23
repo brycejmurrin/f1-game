@@ -1,7 +1,7 @@
 /* Live touch layout toolbar, loaded on the first edit. */
 const DockToolbar = (() => {
   "use strict";
-  function create(G, { schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
+  function create(G, { previewControls, schemeOf, getScheme, commitLayout, docks, measurePad, inboard, boundedControlXY, boundedXY, repaintDock, getShape, setShape, record, refreshScale, readLayout, restoreLayout, close }) {
     const { $ } = G;
     const { sizeStep, SHAPES } = DockLayout;
     const labels = {
@@ -15,7 +15,7 @@ const DockToolbar = (() => {
     const controls = [$("btn-steer-left"), $("btn-steer-right"), $("btn-throttle"), $("btn-brake"),
       $("btn-boost"), $("btn-ot"), $("btn-aero"), $("shift-up"), $("shift-down")];
     const byId = new Map(controls.filter(Boolean).map(node => [node.id, node]));
-    let target = "all", shown = null, opener = null;
+    let target = "all", shown = null, opener = null, preview = null;
     let editBar = null, doneBtn = null, toolsButton = null, expanded = false, visible = false;
     let initial, current;
     const history = [];
@@ -219,6 +219,13 @@ const DockToolbar = (() => {
       shown = { settings: !!settings && !settings.hidden, pause: !!pause && !pause.hidden };
       if (settings) settings.hidden = true;
       if (pause) pause.hidden = true;
+      const hud = $("hud"), title = $("overlay");
+      if (hud?.hidden) {
+        preview = { hud, title, titleHidden: title?.hidden };
+        if (title) title.hidden = true;
+        hud.hidden = false;
+        previewControls?.(true);
+      }
     }
     function restoreDialogs() {
       const settings = $("pmsettings"), pause = $("pausemenu"), was = shown;
@@ -229,8 +236,12 @@ const DockToolbar = (() => {
     }
     // During a drag: pad cached at pointerdown, fit invalidated once per frame.
     let fitRaf = 0;
-    function fitNow() {
+    function clearFitFrame() {
+      if (fitRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
       fitRaf = 0;
+    }
+    function fitNow() {
+      clearFitFrame();
       if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
     }
     function paintDrag(pad) {
@@ -266,6 +277,8 @@ const DockToolbar = (() => {
     }
     function onPointerMove(e) {
       if (!drag || e.pointerId !== drag.pid) return;
+      if (drag.lastX === e.clientX && drag.lastY === e.clientY) return;
+      drag.lastX = e.clientX; drag.lastY = e.clientY;
       const pad = drag.pad;
       const sx = inboard(drag.side);
       const dx = ((e.clientX - drag.startX) / pad.w) * sx;
@@ -278,6 +291,7 @@ const DockToolbar = (() => {
     }
     function onPointerUp(e) {
       if (!drag || e.pointerId !== drag.pid) return;
+      if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) onPointerMove(e);
       const finished = drag;
       drag = null;
       if (finished.moved) { remember(); paintBar(); }
@@ -289,10 +303,19 @@ const DockToolbar = (() => {
       if (drag.buttons) drag.buttons.cancel();
       else drag.scheme[drag.side] = drag.before;
       drag = null;
+      clearFitFrame();
       repaintDock();
     }
     function show(on, restore) {
-      if (!on) drag = null;
+      if (!on) {
+        drag = null;
+        if (preview) {
+          previewControls?.(false);
+          preview.hud.hidden = true;
+          if (preview.title) preview.title.hidden = preview.titleHidden;
+          preview = null;
+        }
+      }
       visible = on;
       if (on) { opener = document.activeElement; initial = current = snapshot(); history.length = 0; target = "all"; expanded = false; ensureDone(); hideDialogs(); }
       else if (restore === false) shown = null;
@@ -305,13 +328,7 @@ const DockToolbar = (() => {
         btn.textContent = on ? "DONE REPOSITIONING" : "REPOSITION TOUCH CONTROLS";
         if (!on && restore !== false) (opener?.isConnected && opener !== document.body ? opener : btn).focus?.();
       }
-      if (!on) {
-        // A mid-drag fit frame must not fire after DONE/Escape ends editing.
-        if (fitRaf) {
-          if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(fitRaf);
-          fitRaf = 0;
-        }
-      }
+      if (!on) clearFitFrame();
     }
     function pick(id, expand) {
       if (!labels[id]) return;
@@ -331,7 +348,7 @@ const DockToolbar = (() => {
       const scheme = getScheme(), name = schemeOf(), group = scheme[side];
       const members = ids.map(id => {
         const old = scheme.controls?.[id];
-        return { id, old: old && { ...old }, origin: boundedControlXY(old, side, pad, id, group) };
+        return { id, old: old && { ...old }, origin: boundedControlXY(old, side, pad, id, group, true) };
       });
       return {
         move(dx, dy) {
@@ -394,7 +411,7 @@ const DockToolbar = (() => {
         if (!dir) return;
         const d = docks(), side = d.L?.contains(el) ? "L" : "R";
         const pad = measurePad(d), group = getScheme()[side], current = record(el.id);
-        const position = boundedControlXY(current, side, pad, el.id, group), step = e.shiftKey ? 16 : 2;
+        const position = boundedControlXY(current, side, pad, el.id, group, true), step = e.shiftKey ? 16 : 2;
         position.x += dir[0] * inboard(side) * step / pad.w;
         position.y += dir[1] * step / pad.h;
         Object.assign(current, boundedControlXY(position, side, pad, el.id, group));

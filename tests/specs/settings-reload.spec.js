@@ -87,6 +87,7 @@ const TRANSIENT = {
   "ps-grid-select": "Photo Studio framing aid, per shot",
   "ps-postcard": "Photo Studio framing aid, per shot",
   "ps-samples": "Photo Studio capture quality for this session. A fresh session starts with instant capture.",
+  "ps-resolution": "Photo Studio export size for this session. A fresh session starts at Standard.",
 };
 // CLAUDE LINK (#5259) sits in the hub but opens the bridge dialog, not a settings page: it has no rows to visit.
 const DOORS = "#pm-settings-index button[id]:not(#pm-claude-link)";
@@ -153,18 +154,22 @@ test("every live Settings row left off its value comes back after a reload (pers
   expect(nowPersist, "TRANSIENT rows that now persist (drop them from the list)").toEqual([]);
 });
 
-test("Photo Studio capture quality resets on reload", async ({ page }) => {
+test("Photo Studio capture quality and resolution reset on reload", async ({ page }) => {
   async function openStudio() {
     await boot(page);
     await page.locator("#mb-photo").dispatchEvent("click");
     const samples = page.locator("#ps-samples");
+    const resolution = page.locator("#ps-resolution");
     await expect(samples).toHaveValue("1", { timeout: BOOT_MS });
-    return samples;
+    await expect(resolution).toHaveValue("normal");
+    return { samples, resolution };
   }
   await page.goto("/");
-  const samples = await openStudio();
+  const { samples, resolution } = await openStudio();
   await samples.selectOption("8");
   await expect(samples).toHaveValue("8");
+  await resolution.selectOption("4k");
+  await expect(resolution).toHaveValue("4k");
   await page.reload();
   await openStudio();
 });

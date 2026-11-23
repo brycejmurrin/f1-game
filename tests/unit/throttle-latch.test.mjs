@@ -859,3 +859,46 @@ test("absolute gas follows the current tick with independent fingers, brake hand
   brake.fire("pointercancel", { pointerId: 1 });
   assert.equal(btn().brakeVal, 0);
 });
+
+test("zero pedal travel has no driving command, including under a second touch", () => {
+  const { Input, sb, pedal } = boot();
+  let paused = false;
+  sb.UiLayers = { anyOpen: () => paused, inRace: () => true };
+  for (const [id, button, pressed, value] of [
+    ["gas", pedal, Input.throttle, Input.throttleLevel],
+    ["brake", sb.document.getElementById("btn-brake"), Input.braking, Input.brakeLevel],
+  ]) {
+    sb.PedalTravel.setButtonProfile(id, { sliderEdge: "bottom" });
+    button.fire("pointerdown", { pointerId: 1, clientY: 0 });
+    assert.equal(pressed(), false); assert.equal(value(), 0);
+    button.fire("pointerdown", { pointerId: 2, clientY: 150 });
+    assert.equal(pressed(), true); assert.equal(value(), 0.5);
+    paused = true; Input.poll(); assert.equal(pressed(), false); assert.equal(value(), 0);
+    paused = false; Input.poll(); assert.equal(value(), 0.5);
+    button.fire("pointerup", { pointerId: 2 });
+    assert.equal(pressed(), false); assert.equal(value(), 0);
+    button.fire("pointerup", { pointerId: 1 });
+  }
+});
+
+test("focused brake supports held keys, assistive pulses and concurrent touch", () => {
+  const { Input, sb, listeners } = boot(), b = sb.document.getElementById("btn-brake");
+  Object.assign(b, { tagName: "BUTTON", matches: selector => selector.split(", ").includes(".touchbtn") });
+  sb.document.activeElement = b;
+  sb.PedalTravel.setButtonProfile("brake", { sliderEdge: "bottom" });
+  const key = (type, code) => {
+    const e = b.fire(type, { code, target: b });
+    if (!e.cancelBubble) (listeners[type] || []).forEach(f => f(e));
+  };
+  b.fire("pointerdown", { pointerId: 4, clientY: 150 });
+  key("keydown", "Space"); assert.equal(Input.brakeLevel(), 1); assert.equal(Input.consumeBoostToggle(), false);
+  key("keyup", "Space"); assert.equal(Input.brakeLevel(), 0.5);
+  key("keydown", "Enter"); b.fire("blur"); assert.equal(Input.brakeLevel(), 0.5);
+  key("keydown", "Enter"); b.fire("pointerup", { pointerId: 4 });
+  for (const f of listeners.touchend) f({ touches: [] });
+  assert.equal(Input.brakeLevel(), 1, "lifting a thumb cannot release the keyboard");
+  key("keyup", "Enter"); assert.equal(Input.braking(), false);
+  let end;
+  sb.setTimeout = f => { end = f; };
+  b.fire("click", { detail: 0 }); assert.equal(Input.braking(), true); end(); assert.equal(Input.braking(), false);
+});

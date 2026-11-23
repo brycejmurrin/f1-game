@@ -1251,7 +1251,7 @@ test("measured clearance protects instruments and controls without changing save
   const W = 844, H = 390, elements = {};
   const make = (id, x, y, w, h) => {
     const p = {}, attrs = {};
-    const e = { id, style: { setProperty(k, v) { p[k] = v; }, removeProperty(k) { delete p[k]; }, getPropertyValue(k) { return p[k] || ""; } },
+    const e = { id: id.slice(1), style: { setProperty(k, v) { p[k] = v; }, removeProperty(k) { delete p[k]; }, getPropertyValue(k) { return p[k] || ""; } },
       setAttribute(k,v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
       getBoundingClientRect() {
         const left = x + parseFloat(p["--hl-x"] || 0) * W / 100 + parseFloat(p["--hud-clear-x"] || 0);
@@ -1316,6 +1316,21 @@ test("measured clearance protects instruments and controls without changing save
   placedRadio = false;
   ctx.HudLayout.clearReadouts();
   assert.ok(!overlap(radio.getBoundingClientRect(), cam.getBoundingClientRect()), "RESET restores automatic clearance");
+  // The stock helmet layout also has explicit positions. Its tyre and relative
+  // readouts can yield to controls until the driver saves a different position.
+  for (const el of [tyre, rel]) {
+    el.setAttribute("data-hl-user", ""); el.setAttribute("data-hl-seed", "");
+  }
+  ctx.HudLayout.clearReadouts();
+  const clearTyre = tyre.getBoundingClientRect(), clearRel = rel.getBoundingClientRect();
+  assert.ok(steer.every(btn => !overlap(btn.getBoundingClientRect(), clearTyre)));
+  assert.ok(!overlap(clearTyre, clearRel));
+  assert.ok(!overlap(clearRel, strat.getBoundingClientRect()));
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(tyre.getBoundingClientRect(), clearTyre, "factory clearance is stable");
+  tyre.removeAttribute("data-hl-seed");
+  ctx.HudLayout.clearReadouts();
+  assert.equal(tyre.getBoundingClientRect().left, 58, "editing the factory tyre restores its saved spot");
 });
 
 
@@ -1836,6 +1851,19 @@ test("the factory phone seed keeps the screen-fit caps; a player's own placement
   assert.equal(decl(rules, "[data-hl-seed][data-hl-bottom]", "--hl-z-seed"), "var(--hud-z-bot, var(--hud-scale))");
 });
 
+test("saved black tower ink has a backing until the player chooses a LAP plate", () => {
+  const sheet = {};
+  const { H } = load({ hudColors: { "tower-text": "#000000", "pos-fill": "#ffffff" } }, {
+    editor: true, doc: { createElement: () => sheet, head: { appendChild() {} } },
+    ctx: { AppearanceOpts: { needsLightHudPlate: () => true } },
+  });
+  const selector = ':root[data-ui-contrast="high"] #hud-lap';
+  assert.equal(decl(cssRules(sheet.textContent), selector, "background-color"), "white");
+  H.colors.save("lap-fill", "#deedde");
+  assert.equal(sheet.textContent.includes(selector + " {"), false);
+  assert.equal(H.colors.value("tower-text"), "#000000");
+});
+
 test("Arrange HUD event colors persist independently and reset one state at a time", () => {
   const sheet = {};
   const { H, written } = load({}, { editor: true, doc: { createElement: () => sheet, head: { appendChild() {} } } });
@@ -1851,6 +1879,11 @@ test("Arrange HUD event colors persist independently and reset one state at a ti
       assert.equal(decl(cssRules(sheet.textContent), selector, property), color + " !important");
     }
   }
+  H.colors.save("energy-text", "#112233");
+  H.colors.save("energy-deploy-text", "#ff8800");
+  const energyRules = cssRules(sheet.textContent);
+  assert.equal(decl(energyRules, "#hud-energy .hud-energy-label", "color"), "#112233 !important");
+  assert.equal(decl(energyRules, '#hud-energy[data-ers="deploy"] .hud-energy-label', "color"), "#ff8800 !important");
   H.colors.save("flag-yellow-fill", "#abcdef");
   H.colors.save("map-armed", "#123456");
   const restored = load(written, { editor: true }).H.colors;

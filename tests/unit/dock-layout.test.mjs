@@ -208,6 +208,35 @@ test("intentional moves use the side gutters and stop at the reachable part of t
   assert.equal(small.el.getBoundingClientRect().left, 59, "an undersized target stays wholly within the safe inset");
 });
 
+test("a saved pedal pair keeps its spacing when the bottom pedal reaches the viewport edge", () => {
+  const D = loadDock(), viewport = D.__doc.documentElement;
+  viewport.clientWidth = 852; viewport.clientHeight = 393;
+  const { dock, el: gas } = dockWithButton("btn-throttle", 740, 260, 97, 122);
+  const { el: brake } = dockWithButton("btn-brake", 740, 131, 97, 122);
+  const group = { classList: { contains: name => name === "dock-grp" }, children: [brake, gas] };
+  gas.parentElement = brake.parentElement = group;
+  dock.querySelectorAll = () => group.children;
+  const bag = D.normalize({ buttons: { controls: {
+    "btn-throttle": { x: -.03, y: -.1098 }, "btn-brake": { x: -.03, y: -.1102 },
+  } } });
+  D.apply("buttons", bag, { R: dock });
+  assert.equal(gas.getBoundingClientRect().bottom, 393);
+  assert.ok(Math.abs(gas.getBoundingClientRect().top - brake.getBoundingClientRect().bottom - 7) < .5);
+  const { el: boost } = dockWithButton("btn-boost", 654, 131, 76, 76);
+  dock.querySelectorAll = () => [brake, gas, boost];
+  bag.buttons.controls["btn-boost"] = { x: -.037, y: -.097 };
+  D.apply("buttons", bag, { R: dock });
+  const columnGap = brake.getBoundingClientRect().left - boost.getBoundingClientRect().right;
+  assert.ok(columnGap > 3 && columnGap < 5, "separately positioned groups retain the intended gap at the edge");
+  viewport.clientHeight = 600;
+  D.apply("buttons", bag, { R: dock });
+  assert.ok(gas.getBoundingClientRect().bottom < 600);
+  assert.ok(brake.getBoundingClientRect().top > 190, "original offsets return when space permits");
+  bag.buttons.controls["btn-brake"].y = .2;
+  D.apply("buttons", bag, { R: dock });
+  assert.equal(brake.getBoundingClientRect().top, 11, "an individually moved button keeps its own range");
+});
+
 test("individual placement uses the group's current offset, clamps on resize and restores shipped placement on reset", () => {
   const D = loadDock(), doc = D.__doc.documentElement;
   doc.clientWidth = 400; doc.clientHeight = 600;
@@ -281,7 +310,7 @@ function bootCreate(opts = {}) {
   let mode = "buttons";
   const store = { get(k, d) { return k in persisted ? persisted[k] : d; }, set(k, v) { persisted[k] = v; sets.push([k, v]); } };
   if (opts.subscribe) store.subscribe = (fn) => { listeners.push(fn); return () => {}; };
-  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode }, opts.scaleUi);
+  const api = ctx.DockLayout.create({ $: (id) => els[id] || null, store, getSteerMode: () => mode }, opts.scaleUi, opts.previewControls);
   return { ctx, api, winL, docL, observers, settings, pause, els, bodyAttrs, made, sets, listeners, store, setMode: (m) => { mode = m; } };
 }
 
@@ -545,8 +574,8 @@ test("a pointerdown on #dock-right starts a drag while editing, and the move shi
   docL.pointerdown(down);
   assert.ok(down.stopped, "the dock claimed the press");
   docL.pointermove(ev({ clientX: 260, clientY: 700 }));   // 40 px toward the centre
-  docL.pointerup(ev({}));
-  assert.equal(api.bag().buttons.R.x, 40 / 400);
+  docL.pointerup(ev({ clientX: 240, clientY: 700 }));
+  assert.equal(api.bag().buttons.R.x, 60 / 400, "the final movement can arrive with the release");
 });
 
 test("DONE mid-drag persists the dragged offset (hunt 2026-11-02)", () => {
@@ -744,4 +773,22 @@ test("leaving Settings while its toolbar loads does not open an editor over the 
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(api.editing(), false);
   assert.equal(pause.hidden, false);
+});
+
+
+test("the home touch editor previews the race dock and restores the title when it closes", () => {
+  for (const restore of [true, false]) {
+    const calls = [];
+    const { api, els, settings } = bootCreate({ previewControls: show => calls.push(show) });
+    els.hud = { hidden: true }; els.overlay = { hidden: false };
+    api.setEditing(true);
+    assert.equal(els.hud.hidden, false);
+    assert.equal(els.overlay.hidden, true);
+    assert.deepEqual(calls, [true]);
+    api.setEditing(false, restore);
+    assert.equal(els.hud.hidden, true);
+    assert.equal(els.overlay.hidden, false);
+    assert.equal(settings.hidden, !restore);
+    assert.deepEqual(calls, [true, false]);
+  }
 });

@@ -373,6 +373,12 @@ test("HUD TEAM clears inline --accent so data-team owns it", () => {
   assert.equal(style.has("--accent-ink"), false);
 });
 
+test("high-contrast timing digits only need a light backing for dark ink", () => {
+  const { M } = load();
+  assert.equal(M.needsLightHudPlate("#000000"), true);
+  assert.equal(M.needsLightHudPlate("#ffffff"), false);
+});
+
 test("pickInk chooses --bg on a light custom HUD accent (dark theme)", () => {
   const { M, style } = load();
   M.setHudHex("#ffff00");
