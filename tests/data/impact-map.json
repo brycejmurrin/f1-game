@@ -19535,11 +19535,11 @@
     },
     "js/ui/desktop-graphics.js": {
       "mount": [
-        "tests/unit/layout-presets.test.mjs"
+        "tests/unit/layout-presets.test.mjs",
+        "tests/unit/settings-search.test.mjs"
       ],
       "*": [
-        "tests/specs/settings-reload.spec.js",
-        "tests/unit/settings-search.test.mjs"
+        "tests/specs/settings-reload.spec.js"
       ]
     },
     "js/ui/dock-layout.js": {
