@@ -21063,6 +21063,7 @@
         "tests/unit/photo-studio.test.mjs"
       ],
       "*": [
+        "tests/specs/overlay-live.spec.js",
         "tests/unit/css-has-scope.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
