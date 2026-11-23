@@ -31,6 +31,7 @@ export const STAGE_DIRS = Object.freeze([
   "assets",
   "vendor",
   "locales",
+  "learn",
 ]);
 
 /**

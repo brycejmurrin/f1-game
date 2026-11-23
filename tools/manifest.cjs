@@ -449,6 +449,7 @@ const FULL = [
   "js/ui/photo-studio.js",
   "js/ui/experience.js",
   "js/ui/share-code.js", // ShareCode: APXS/APXL/APXD envelopes + #share= (player-a11y slice 4)
+  "js/ui/learn-door.js",
   "js/ui/title-menu.js",
   "js/ui/deep-link.js",  // DeepLink: manifest shortcut ?go= doors, clicked once the title is live
   "js/ui/title-flow.js", // TitleFlow: main-menu race, season, career and ghost entry
@@ -870,6 +871,7 @@ const HARD_EDGES = [
   ["js/share/share-card-layout.js", "js/share/share-card.js"],   // ShareCard.render lays out before painting
   ["js/share/share-card.js", "js/race/daily-challenge.js"],      // Daily shareCard renders and delivers the PNG
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
+  ["js/ui/learn-door.js", "js/ui/title-menu.js"], // TitleMenu.create mounts the Learn door before organizing
   ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/ui/title-flow.js", "js/game.js"],          // game.js calls TitleFlow.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
@@ -1672,12 +1674,16 @@ const MOVED = {
   "js/game/quali.js": "js/race/quali-model.js",
 };
 
+// Learn's iframe is a separate document. It requests these assets without
+// the game shell's ScriptLoader version query, including the shared constants.
+const SW_LEARN = ["learn/aero/index.html", "learn/aero/style.css", "learn/aero/lab.js", "js/physics/consts.js"];
+
 /** Locale manifest only (English players need no locale JSON fetch). */
 const SW_LOCALES = ["locales/manifest.json"];
 
 module.exports = {
   MOVED,
-  SW_LOCALES,
+  SW_LOCALES, SW_LEARN,
   CIRCUITS, CIRCUITS_DIR, CIRCUIT_META, LAZY_CIRCUIT, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, CONTROLLER, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_RACE_SESSION, LAZY_RACE_SESSION_EDGES,

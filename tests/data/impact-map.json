@@ -8797,6 +8797,7 @@
       ],
       "create": [
         "tests/specs/steer-migration.spec.js",
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/steer-presets.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ],
@@ -8827,7 +8828,6 @@
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/low-speed-lock.test.mjs",
-        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
         "tests/unit/store-key-types.test.mjs"
@@ -16091,6 +16091,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
@@ -16197,7 +16198,8 @@
       ],
       "create": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/hud-arrange.test.mjs"
+        "tests/unit/hud-arrange.test.mjs",
+        "tests/unit/menu-a11y-audit.test.mjs"
       ],
       "dragTo": [
         "tests/unit/hud-arrange.test.mjs"
@@ -16210,9 +16212,6 @@
       ],
       "setEditing": [
         "tests/unit/hud-arrange.test.mjs"
-      ],
-      "*": [
-        "tests/unit/menu-a11y-audit.test.mjs"
       ]
     },
     "js/ui/hud-damage.js": {
@@ -16698,6 +16697,14 @@
         "tests/unit/global-registry.test.mjs"
       ]
     },
+    "js/ui/learn-door.js": {
+      "create": [
+        "tests/unit/menu-a11y-audit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/title-menu-even.test.mjs"
+      ]
+    },
     "js/ui/live-region.js": {
       "reset": [
         "tests/unit/hud-feel.test.mjs",
@@ -16948,6 +16955,7 @@
       ],
       "create": [
         "tests/specs/photo-studio.spec.js",
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/photo-studio.test.mjs"
       ],
       "crop": [
@@ -17209,6 +17217,7 @@
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/select-preview-defer.test.mjs",
         "tests/unit/select-screen-fixes.test.mjs",
@@ -17239,7 +17248,6 @@
         "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
-        "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/ui-journey-career.test.mjs"

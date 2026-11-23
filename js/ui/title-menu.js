@@ -6,11 +6,11 @@ const TitleMenu = (function () {
   const DESTINATION_GROUPS = [
     ["menu-primary", "Play", ["mb-race", "mb-tt", "mb-vs", "mb-season", "mb-practice"]],
     ["menu-garage", "Garage", ["mb-garage"]],
-    ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data"]],
+    ["menu-explore", "Watch & Explore", ["mb-watch", "mb-data", "mb-learn"]],
     ["menu-create", "Create", ["mb-photo", "mb-designer"]],
     ["menu-secondary", "Utilities", ["mb-standings", "mb-settings", "mb-phonepad", "mb-help"]],
   ];
-  const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data"];
+  const CORE_PLAY_DOORS = ["mb-race", "mb-tt", "mb-watch", "mb-data", "mb-learn"];
 
   // Move the existing nodes: their handlers, saved-state labels and visibility
   // remain owned by their original modules. The outer title-layout pieces stay put.
@@ -135,6 +135,7 @@ const TitleMenu = (function () {
   function create(G) {
     Log.info("game", "TitleMenu.create");
     const { $ } = G;
+    LearnDoor.create(G);
     organize(typeof document !== "undefined" ? document : null);
 
     function refresh() {

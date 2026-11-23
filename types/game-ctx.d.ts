@@ -905,6 +905,7 @@ declare const FlyingStart: GameModuleFactory;
 declare const JumpStartPenalty: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
+declare const LearnDoor: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
 declare const UiExperience: GameModuleFactory;
 declare const HomeWorld: GameModuleFactory;
