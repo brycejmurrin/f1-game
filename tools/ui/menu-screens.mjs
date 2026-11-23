@@ -591,7 +591,7 @@ export const SCREENS = [
 export const OVERLAY_IDS = [
   "select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
-  "season-setup", "howtoplay", "advanced", "pmsettings", "bench", "pausemenu", "datahub", "trackdesigner", "track-detail", "vsfriend",
+  "season-setup", "howtoplay", "advanced", "pmsettings", "bench", "pausemenu", "datahub", "learn", "trackdesigner", "track-detail", "vsfriend",
   "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
   // Photo Studio is its own full-screen layer (not under photo-controls). Leaving it
   // open after a photostudio cell made every later menu-mock click time out on a
