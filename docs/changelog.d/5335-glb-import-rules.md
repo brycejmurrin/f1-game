@@ -1,1 +1,0 @@
-Fixed: Importing a custom car .glb that needs an extension the game cannot read (for example meshopt compression) now fails with that extension's name instead of loading garbage geometry or a misleading bounds error, and a file whose second buffer has no data of its own is refused instead of reading the first buffer's bytes (#5335).

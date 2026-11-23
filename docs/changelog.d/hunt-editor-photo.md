@@ -1,1 +1,0 @@
-Fixed: Track Designer EXPORT now refuses RED designs like SHARE/CARD; phone DESIGNER SIZE no longer paints toolbar text under 12 px; Photo Studio portrait no longer overlaps the preview by the home-indicator inset, clips the Garage select, or flashes a white strip above the scene.

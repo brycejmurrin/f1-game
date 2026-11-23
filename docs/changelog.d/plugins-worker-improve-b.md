@@ -1,1 +1,0 @@
-Fixed: private rendezvous Worker rate-limits junk/legacy paths before they burn Free-plan request quota; F1 Dev Tools caps asset response bodies, bounds hung scene race() starts, and keeps diagnose page identity when inspect fails mid-boot.

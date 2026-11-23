@@ -1,1 +1,0 @@
-Improved: Keep helmet visor glare local to visible lamps, respect fog and fixture beam settings, preserve reflection-strength differences, and fade sun diffraction smoothly at screen edges. Refresh paused visor controls and disable cached refraction when quality or performance settings turn it off.

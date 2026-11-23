@@ -1,4 +1,0 @@
-Fixed: mobile spatial upscaling now uses the full screen. Photo Studio and replay preserve cinematic effects with temporal antialiasing, and WebGPU captures include the final composition.
-Fixed: nearby rivals stay visible at track crossovers and in wide overhead views. Wheel blur respects front lockups, wheels freeze in paused photos, and pit jacks lift the entire car in mirrors and broadcast views.
-Fixed: Monaco’s tunnel shelters the car from fresh rain. Switching onboard cameras no longer stretches rain streaks or transfers helmet water to another lens.
-Fixed: driving with shadow darkness and god rays both off skips unused sun-shadow draws. Garage preparation spreads geometry work across frames, twilight pit lamps stay consistent during drive-out, and garage signs recover from interrupted uploads.

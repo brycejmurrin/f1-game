@@ -1,1 +1,0 @@
-Fixed: Track designer: START FROM no longer replaces your loop under an in-progress map drag when the circuit finishes loading mid-gesture (or after a Loading / service-worker reflow that used to re-fit the map under a stale aim).

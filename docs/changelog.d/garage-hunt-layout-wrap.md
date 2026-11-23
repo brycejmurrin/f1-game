@@ -1,1 +1,0 @@
-Fixed: Garage no longer mid-splits names like "Schumacher", the portrait sheet fills the space above the camera bar instead of leaving an empty ghosted band, and the tall category strip hides part subtitles so SUSP stays reachable without a long horizontal scroll.
