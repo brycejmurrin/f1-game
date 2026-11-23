@@ -104,11 +104,36 @@
   <p id="answer" role="status">Choose a force to see how the model checks it.</p>
   <button id="show-answer" type="button" hidden>Plot the 6 kN limit</button>
 </section>
+<section data-as="box" class="scenario" aria-labelledby="load-title">
+  <h2 id="load-title">Where does the load go under braking?</h2>
+  <p>Keep the car on level ground. Change deceleration and CG height to see how much normal load shifts between the axles.</p>
+  <label for="deceleration">Deceleration <output id="deceleration-value" for="deceleration"></output></label>
+  <input id="deceleration" type="range" min="0" max="1.5" value="0" step=".1">
+  <label for="cg-height">Centre of gravity height <output id="cg-value" for="cg-height"></output></label>
+  <input id="cg-height" type="range" min=".2" max=".5" value=".3" step=".01">
+  <div class="load-diagram" aria-hidden="true">
+    <span>Rear axle</span><div><i id="rear-load-bar"></i></div>
+    <span>Front axle</span><div><i id="front-load-bar"></i></div>
+  </div>
+  <dl class="load-values">
+    <div><dt>Front normal load</dt><dd id="front-load"></dd></div>
+    <div><dt>Rear normal load</dt><dd id="rear-load"></dd></div>
+    <div><dt>Shift to front</dt><dd id="load-shift"></dd></div>
+  </dl>
+  <p>Example car: 800 kg, 3.40 m wheelbase, 47% static front load. The flat-ground estimate holds aero at zero. Shift = mass × deceleration × CG height ÷ wheelbase.</p>
+  <div class="actions" role="group" aria-label="Load-transfer prediction">
+    <button type="button" data-load-answer="front">Front gains load</button>
+    <button type="button" data-load-answer="rear">Rear gains load</button>
+    <button type="button" data-load-answer="neither">Neither axle changes</button>
+  </div>
+  <p id="load-feedback" role="status">Predict which axle gains load, then check your answer in a 1 g stop.</p>
+</section>
 <details>
   <summary>Model and sources</summary>
   <p>The horizontal axis shows the magnitude of rearward tyre force. The vertical axis shows the magnitude of sideways tyre force. The plot holds both axes at 0–10 kN so a surface change visibly shrinks the force budget. The 10 kN dry and 7 kN damp caps are illustrative values with equal pure-brake and pure-turn limits.</p>
   <p>Required resultant = √(brake² + lateral²). If the resultant exceeds the surface cap, the model shortens the force arrow without changing its direction. To hold 8 kN lateral on dry asphalt, brake force can reach √(10² − 8²) = 6 kN. On the damp preset an 8 kN lateral request exceeds the 7 kN cap even with the brake released.</p>
-  <p>This lab uses an illustrative force envelope at a fixed load. Apex’s driving model estimates combined slip and force separately at the front and rear axles. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
+  <p>The load-transfer experiment shows axle normal loads independently. The main plot uses an illustrative force envelope at a fixed load. Apex’s driving model estimates combined slip and force separately at the front and rear axles. Brake position, steering angle and measured tyre slip are separate quantities. Real combined-slip response depends on slip angle, slip ratio, load and surface. <a href="https://doi.org/10.4271/2011-01-0094" target="_blank" rel="noopener">SAE research on tyre force ellipses</a></p>
+  <p><a href="https://dspace.mit.edu/bitstream/handle/1721.1/139209/gaither-gaither-sb-2-2021-thesis.pdf" target="_blank" rel="noopener">MIT study on race-car load transfer</a></p>
 </details>
 </main>
 </body>

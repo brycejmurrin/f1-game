@@ -351,7 +351,7 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
 
 test("All Learn lesson frames and local dependencies stage with bare offline URLs", () => {
   const assets = new Set();
-  for (const id of ["aero", "braking", "vsc", "telemetry"]) {
+  for (const id of fs.readdirSync(path.join(ROOT, "learn"), { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name)) {
     const dir = "learn/" + id;
     const entry = dir + "/index.html";
     assets.add(entry);
