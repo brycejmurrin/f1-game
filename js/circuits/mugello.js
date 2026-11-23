@@ -6,6 +6,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mugello",
+    revision: 2,
     classic: true,
     // Upstream it-1914 already runs clockwise (San Donato at T1 is a right).
     reverse: false,
@@ -50,17 +51,14 @@
       runoff:        [0.37, 0.39, 0.23],  // dry Tuscan grass-gravel verge, not the default tan (survey defect 4)
       sunDir:        [0.44, 0.64, 0.32],
     },
-    // Elevation UNDER-MODELLED (built ~21 m vs real ~41 m: SRTM 30 m over it-1914, 2026-11-10;
-    // mugellocircuit.it: Poggio Secco highest, Arrabbiata 1 lowest). A 42 m fit buried the
-    // Bucine terrazza tiers and the far vine rows (ground-audit buried 5 -> 64); the scenery
-    // must be re-seated before the fitted profile can land (parent work).
-    elevations: [
-      { s: 0.16, halfM: 340, rise: 10.0 },   // climb after San Donato
-      { s: 0.34, halfM: 380, rise: -11.0 },  // drop to Casanova-Savelli
-      { s: 0.52, halfM: 340, rise: 9.0 },    // up through the Arrabbiate
-      { s: 0.74, halfM: 360, rise: -8.0 },   // down to Bucine
-      { s: 0.92, halfM: 300, rise: 6.0 },    // rise onto the main straight
-    ],
+    // Mugello's technical map supplies the heights of all 15 corners, including
+    // Poggio Secco (285.50 m) and Arrabbiata 1 (247.96 m). The return straight
+    // follows the low terrain after Bucine. Heights use a local vertical datum.
+    elevations: [0.21, 1.28, 1.43, 3.01, 2.58, 7.04, 13.54,
+      10.85, 11.37, 8.81, 8.1, -0.45, -6.26, -8.19,
+      -5.46, 2.23, 5.12, 5.89, 1.37, 4.91, 2.04,
+      -1.51, -0.06, -1.95, -3.55, -6.31, -6.52, -1.67]
+      .map((rise, i) => ({ s: i / 28, halfM: 373.31, rise })),
     hwZones: [
       { s0: 0.290, s1: 0.335, hw: 6.3, ease: 0.012 },  // Materassi-Borgo San Lorenzo (T4-T5; unsourced width)
       { s0: 0.685, s1: 0.728, hw: 6.4, ease: 0.012 },  // Correntaio (T12, apex 0.698; was 0.620-0.660 = Palagio exit)

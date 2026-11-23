@@ -760,8 +760,8 @@
     // on the block's box: one cell inside the mirror's draw-distance cap drew the whole block (monaco, phone tier:
     // 96,079 mirror triangles into 138x39, 24,510 when each cell is culled on its own box). fineCells(mesh) is the
     // same record as its cells: a list cull() and mergeVisible() take in place of mesh.chunks, built on first use.
-    // Each cell's index is a VIEW of its block's index (no copy) on a geometry that is never drawn itself: only
-    // mergeVisible reads it, so it holds no GPU buffer and no RenderObject, and needs no dispose. A record whose
+    // Each cell needs only its block index subarray and count for mergeVisible. The merged draw owns the
+    // THREE geometry and attributes, so the individual cell records can stay plain JS objects. A record whose
     // blocks carry no cells (merge factor 1, a prepared build from before this field) returns null.
     function fineCells(mesh) {
       if (!mesh || !mesh.chunks) return null;
@@ -774,14 +774,14 @@
         if (!cs || !ix || !ix.array || ix.array.length < ch.count) { list.push({ geo: ch.geo, count: ch.count, min: ch.min, max: ch.max }); continue; }
         any = true;
         for (let k = 0; k < cs.length; k++) {
-          const c = cs[k], geo = new THREE.BufferGeometry();
-          geo.setIndex(new THREE.BufferAttribute(ix.array.subarray(c.o, c.o + c.n), 1));
+          const c = cs[k];
+          const geo = { index: { array: ix.array.subarray(c.o, c.o + c.n), count: c.n } };
           list.push({ geo, count: c.n, min: c.min, max: c.max });
         }
       }
       return (mesh._tlxFine = any ? { chunks: list, _tlxMv: null, _tlxIdxTotal: 0, attrs: mesh.chunks[0].geo } : null);
     }
-    function cull(mesh, vp, eye, cullDist, fog) {
+    function cull(mesh, vp, eye, cullDist, fog, refineRoad) {
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
       for (let i = 0; i < 16; i++) {
@@ -799,7 +799,13 @@
         const ch = chunks[i];
         if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) continue;
         if (radial && Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf)) continue;
-        _visList[n++] = ch;
+        if (refineRoad && ch.sections) {
+          for (const section of ch.sections) {
+            if (!Frustum.aabbInFrustum(_fcPlanes, section.min, section.max)) continue;
+            if (radial && Frustum.radialCulled(section.min, section.max, ex, ey, ez, cd, cf)) continue;
+            _visList[n++] = section;
+          }
+        } else _visList[n++] = ch;
       }
       return n;
     }
@@ -972,6 +978,26 @@
     }
     return out;
   }
+  // Build both road resolutions in one vertex scan. The parent bounds exactly match
+  // the original split; only visible parents need any finer rear-view tests.
+  function roadRanges(pos, idx, coarseTris, sectionTris) {
+    const fine = splitRanges(pos, idx, sectionTris);
+    const out = [], per = coarseTris / sectionTris;
+    for (let i = 0; i < fine.length; i += per) {
+      const sections = fine.slice(i, i + per);
+      const min = sections[0].min.slice(), max = sections[0].max.slice();
+      let count = 0;
+      for (const section of sections) {
+        count += section.count;
+        for (let a = 0; a < 3; a++) {
+          min[a] = Math.min(min[a], section.min[a]);
+          max[a] = Math.max(max[a], section.max[a]);
+        }
+      }
+      out.push({ start: sections[0].start, count, min, max, sections });
+    }
+    return out;
+  }
   // vis[0..n): chunks from cull(), each {start, count}. Writes runs as flat [start, count, ...] into
   // `runs`; returns the run count. Sorts vis in place (n is tens).
   function mergeRuns(vis, n, maxRuns, runs) {
@@ -1013,5 +1039,5 @@
     { chunked, idleYield, chunkPrepareConfig, validPrepareConfig, samePrepareConfig, prepareChunks, prepareChunksSteps,
       makeFrustumPlanes: Frustum.makeFrustumPlanes,
       aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2,
-      packAttr, packIndex, packStats, splitRanges, mergeRuns });
+      packAttr, packIndex, packStats, splitRanges, roadRanges, mergeRuns });
 })();

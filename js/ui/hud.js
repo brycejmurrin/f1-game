@@ -1868,7 +1868,7 @@ function updateHud(force, dtMs) {
   // fraction of the compound's life, so the bar reads LIFE REMAINING and the
   // three colour states are the three things the engineer would say on the
   // radio: fine, think about a stop, you are past it.
-  const tyres = G.tyres;
+  const tyres = G.tyres, pit = G.pits;
   const tyreOn = !!(tyres && tyres.on());
   hHidden(els.tyre, !tyreOn);
   let pitReadouts;   // synchronous HUD tick only; never retained on a car
@@ -1887,12 +1887,30 @@ function updateHud(force, dtMs) {
       const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
+    // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
+    // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
+    // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
+    // Practice / TT / quali: hide the race strategy line.
+    const practice = sessionOf(timeTrial) !== "race";
+    const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player, pitReadouts) : null;
+    if (pitReadouts) pitReadouts.plan = pl;
+    if (els.plan) hText(els.plan, pl ? pl.text : "");
+    hData(els.tyre, "plan", pl && pl.state || null);
+    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
+    // when the set is below its window and red above it, with ❄/▲ after it for
+    // anyone the hue does not reach — and the chip's aria-label (role="img")
+    // says compound, heat, laps left and the plan in words.
+    if (typeof HudTyres !== "undefined") {
+      HudTyres.paint(els.tyre, tyres.temperatureInfo?.(player),
+        { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
+    }
+  }
+  if (tyreOn || timeTrial) {
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
     // is called by holding the car on the pit side at the entry, so the dwell
     // has to be visible: without it a driver cannot tell the gesture is
     // registering and will give up on it half a second in. The compound chip
     // fills as the commitment runs, then stays lit through the lane and the box.
-    const pit = G.pits;
     const state = pit ? (player.pitState === "lane" || player.pitState === "box" ? player.pitState
                          : pit.commitFrac(player) > 0 ? "commit" : "") : "";
     hData(els.tyre, "pit", state || null);
@@ -1926,28 +1944,14 @@ function updateHud(force, dtMs) {
     // driving.
     // Never in a friend race: the garage "pauses" the race, and a networked race
     // does not stop — the box timer ran out behind it and the work was free.
-    if (els.workBtn) { hHidden(els.workBtn, !(pit && pit.canWork && pit.canWork(player)) || !!(G.netPlay && G.netPlay.active && G.netPlay.active())); hText(els.workBtn, G.timeTrial ? "END TIME TRIAL" : "WORK ON CAR"); }   // #5789
-    // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
-    // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
-    // lap before, --you on the lap, and CHEAPER STOP under a caution that fits it.
-    // Practice / TT / quali: hide the race strategy line.
-    const practice = sessionOf(timeTrial) !== "race";
-    const pl = (!practice && pit && pit.planInfo) ? pit.planInfo(player, pitReadouts) : null;
-    if (pitReadouts) pitReadouts.plan = pl;
-    if (els.plan) hText(els.plan, pl ? pl.text : "");
-    hData(els.tyre, "plan", pl && pl.state || null);
-    // TYRE TEMPERATURE (js/ui/hud-tyres.js): the compound letter turns blue
-    // when the set is below its window and red above it, with ❄/▲ after it for
-    // anyone the hue does not reach — and the chip's aria-label (role="img")
-    // says compound, heat, laps left and the plan in words.
-    if (typeof HudTyres !== "undefined") {
-      HudTyres.paint(els.tyre, tyres.temperatureInfo?.(player),
-        { code: player.tyre && player.tyre.code, lapsLeft: spent >= 1 ? null : left, spent, plan: pl && pl.text });
-    }
+    const canWork = pit && pit.canWork && pit.canWork(player) && !G.netPlay?.active?.();
+    hHidden(els.workBtn, !canWork);
+    hHidden(els.endSessionBtn, !canWork || !timeTrial);
   } else {
     // Both are written only above: a pit cue or WORK ON CAR up when a wear race was quit stayed up through a no-wear session.
     hHidden(els.pitCue, true);
     hHidden(els.workBtn, true);
+    hHidden(els.endSessionBtn, true);
   }
   // toggle-button states
   const gasFeedback = els.btnThrottle?.dataset?.touchFeedback, brakeFeedback = els.btnBrake?.dataset?.touchFeedback;
@@ -1965,18 +1969,17 @@ function updateHud(force, dtMs) {
   // that lap. The chip reads the allowance in MJ, the rule's own unit.
   const otMJ = typeof OvertakeMode !== "undefined" ? OvertakeMode.mj(player) : 0;
   const otHeld = otMJ > 0 && !player.otArmed && !(player.otT > 0);   // granted, paused (below OT_MIN_SPEED)
-  const caution = G.cautionInfo ? G.cautionInfo() : null;
-  const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
-  const pitHeld = G.pits?.held?.(player);
-  const otOff = G.state === "race" && (!gateOpen || pitHeld) && !(player.otT > 0);
+  const pitHeld = G.state === "race" && !(player.otT > 0) && G.pits?.held?.(player);
+  const otOff = G.state === "race" && !(player.otT > 0) && (pitHeld || (typeof G.otEnabled === "function" && !G.otEnabled()));
   // The class follows the GATE like the text does: a held lap-0 grant (or one
   // under a safety car) used to pulse the yellow "ready" plate while the text
   // read OT · CAUTION and the button was disabled (bug hunt 2026-10-14 N2).
   const ot = player.otT > 0 ? "ot-active" : otOff ? "ot-off" : player.otArmed || otHeld ? "ot-armed" : player.otEarned ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  const leader = G.ranked && G.ranked[0];
   let otReason = "";
   if (otOff) {
+    const caution = spokenFlag ? spokenFlag.cn : G.cautionInfo?.();
+    const leader = G.ranked && G.ranked[0];
     // RaceControl has independent gates. Keep the reason in the HUD so a
     // player knows whether to wait for green, a dry track or the opening lap
     // to pass; the input path still checks c.otArmed in game.js. Only the
@@ -2017,9 +2020,9 @@ function updateHud(force, dtMs) {
     : otReady ? "ready" : player.otEarned ? "earned" : "pending");
   hToggle(els.btnOT, "dead", otOff);
   const xOpen = (player.aeroX || 0) > 0.05;
-  const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
   const noZones = !(G.aeroZones && G.aeroZones.length);
   const autoAero = G.raceAeroMode === "auto";
+  const dz = !autoAero && !noZones && !xOpen && G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
   hToggle(els.btnAero, "dead", noZones);

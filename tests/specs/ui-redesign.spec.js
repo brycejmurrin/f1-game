@@ -397,7 +397,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(endTab.selected).toBe("true");
   expect(endTab.labelled).toBe("cs-tab-livery");
 
-  // Settings: at 200%, landscape still spends one row on its three categories.
+  // Settings: at 200%, the grouped index keeps every door visible in landscape.
   await page.setViewportSize({ width: 852, height: 393 });
   await page.evaluate(() => {
     document.getElementById("cs-back").click();
@@ -416,6 +416,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const doors = [...nav.querySelectorAll("button")];
     return {
       doorIds: doors.map((d) => d.id),
+      categories: [...nav.querySelectorAll("h3")].map((heading) => [heading.textContent, heading.nextElementSibling?.id]),
       allPainted: doors.every((d) => {
         const r = d.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
@@ -423,22 +424,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       overflowX: document.documentElement.scrollWidth - innerWidth,
     };
   });
-  // The SETTINGS doors, NAMED rather than counted. This used to be
-  // `toBe(6)`, and two shipped features walked past it: b8aa0b6 added the
-  // DRIVING door and nothing here moved, so the spec sat red on the deploy
-  // branch until an unrelated change happened to select it. A bare count
-  // fails with "expected 6, received 7", which says a door appeared but not
-  // WHICH — so the next session has to go and find it. This list says it.
-  // FIVE on this branch, not the trunk's seven: LIGHTING TUNER and CAMERA TUNER
-  // moved OUT of the index and under DISPLAY -> ADVANCED VISUALS. They are
-  // relocated, not removed — tests/unit/ui-sheets-audit.test.mjs asserts both
-  // ids still exist nested under #pm-panel-display, and this list is the same
-  // one it pins, so the two files cannot drift apart.
-  // BACKUP & RESTORE (#pm-open-files) became its own door when the settings
-  // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
+  expect(settings.categories).toEqual([
+    ["Controls and driving", "pm-open-controls"],
+    ["Display and sound", "pm-open-display"],
+    ["Player and data", "pm-open-progress"],
+  ]);
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
+    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-graphics", "pm-open-visual", "pm-open-progress", "pm-open-files",
     "pm-open-credits",
     "pm-claude-link", // #5259: the phone-bridge door, built at boot as the LAST hub tile (not a settings page)
   ]);
@@ -950,10 +943,8 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await waitReady(page);
   const report = async (selector) => page.evaluate((sel) => {
     const host = document.querySelector(sel);
-    // FIND A SETTING (SettingsSearch) heads the settings index as its own
-    // full-bleed row; it is not a door, so it never counts toward the balance.
-    const children = [...host.children].filter((el) => !el.hidden && getComputedStyle(el).display !== "none"
-      && !el.matches("[data-settings-search]"));
+    // Measure the buttons. Settings also has full-width headings and a search row.
+    const children = [...host.querySelectorAll(":scope > button")].filter((el) => !el.hidden && getComputedStyle(el).display !== "none");
     const rows = [];
     for (const el of children) {
       const r = el.getBoundingClientRect();
@@ -1025,7 +1016,7 @@ test("settings offers concise throttle help and separate backup actions", async 
   for (const section of ["save", "restore", "share"]) {
     const button = page.locator("#pm-files-show-" + section);
     await button.click();
-    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(button).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#pm-files-" + section)).toBeVisible();
     const layout = await page.evaluate((section) => {
       const nav = document.getElementById("pm-files-nav").getBoundingClientRect();
@@ -1040,6 +1031,19 @@ test("settings offers concise throttle help and separate backup actions", async 
     }
   }
   }
+  const arrange = page.locator("#pmsettings").getByRole("button", { name: "Arrange this screen", exact: true });
+  await arrange.click();
+  const editor = page.locator("#screen-arranger");
+  await editor.getByRole("button", { name: "Controls", exact: true }).click();
+  const region = editor.getByLabel("Region", { exact: true });
+  await region.selectOption("share-code-in");
+  await editor.getByLabel("Browse section").selectOption({ label: "Tab · Restore" });
+  await expect(region.locator('option[value="share-code-in"]')).toHaveCount(0);
+  await region.selectOption("settings-load");
+  await expect(page.locator("#pm-settings-load")).toHaveText("LOAD SETTINGS FILE");
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(arrange).toBeFocused();
+  await expect(page.locator("#pm-files-show-share")).toHaveAttribute("aria-selected", "true");
   await page.locator("#pm-share-code-in").fill("harmless invalid fixture");
   await page.locator("#pm-share-code-import").click();
   await expect(page.locator("#pm-share-code-status")).not.toBeEmpty();

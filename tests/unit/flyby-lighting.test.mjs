@@ -132,7 +132,7 @@ test("one flag decides the whole lens, and the preview carries it", () => {
   // XR Phase 0: camComfort() (motionReduced || immersive-vr; `comfort`, once per frame) shares the level
   // path so the HMD owns roll; dbgCam/cine still force-level for the flyby.
   assert.match(body, /const comfort = camComfort\(\);/, "render() resolves the comfort latch once per frame (perf hunt 2 F5)");
-  assert.match(body, /if \(dbgCam \|\| cine \|\| comfort\) \{\s*\n\s*feel\.camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
+  assert.match(body, /if \(dbgCam \|\| cine \|\| comfort \|\| fixedEye\) \{\s*\n\s*feel\.camRoll = \(dbgCam && dbgCam\.roll\) \|\| 0;/,
     "the live flyby would otherwise inherit the roll the last race left behind, and decay it over the " +
     "first half-second of a shot the editor showed level");
   assert.match(body, /const _near = cine \? FlybySeq\.NEAR/,

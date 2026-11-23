@@ -175,16 +175,27 @@ async function handoverErrDeg(game) {
   const p = game.G.player, Tr = vm.runInContext("Tracks", game.ctx);
   game.step(1);
   assert.equal(p.human, false, "armed: the AI drives the run-up");
-  for (let i = 0; i < 900; i++) {
-    const was = p.human;
-    game.step(1);
-    if (!was && p.human) {
-      const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
-      Tr.sample(game.G.track, p.s, smp);
-      const err = (p.head - Math.atan2(smp.t[0], smp.t[2])) * 180 / Math.PI;
-      return { err: ((err + 540) % 360) - 180, vLat: p.vLat, yawRateCur: p.yawRateCur };
+  // Capture the reset at the hand-over itself. The first human physics step
+  // immediately follows it and can already pick up slip from a banked road.
+  const showCount = game.G.handoverCount;
+  let reset;
+  game.G.handoverCount = (value) => {
+    if (value === "GO") reset = { vLat: p.vLat, yawRateCur: p.yawRateCur };
+    showCount(value);
+  };
+  try {
+    for (let i = 0; i < 900; i++) {
+      const was = p.human;
+      game.step(1);
+      if (!was && p.human) {
+        const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+        Tr.sample(game.G.track, p.s, smp);
+        const err = (p.head - Math.atan2(smp.t[0], smp.t[2])) * 180 / Math.PI;
+        assert.deepEqual(reset, { vLat: 0, yawRateCur: 0 });
+        return { err: ((err + 540) % 360) - 180 };
+      }
     }
-  }
+  } finally { game.G.handoverCount = showCount; }
   assert.fail("the hand-over never happened");
 }
 test("flying-start hand-over: the car takes the wheel pointing along the road (Silverstone bends; Monza control)", async () => {
@@ -194,7 +205,6 @@ test("flying-start hand-over: the car takes the wheel pointing along the road (S
   try {
     const r = await handoverErrDeg(sv);
     assert.ok(Math.abs(r.err) < 2, "silverstone hand-over heading is " + r.err.toFixed(1) + " deg off the tangent");
-    assert.equal(r.vLat, 0); assert.equal(r.yawRateCur, 0);
   } finally { sv.close(); }
 });
 

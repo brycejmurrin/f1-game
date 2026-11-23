@@ -1025,6 +1025,7 @@ export function topicalPool(groups = loadGroups().groups, floor = TOOLING_FAST_F
   return [...out].sort();
 }
 
+const RATCHET_FRAGMENT = /^tests\/data\/ratchets\.d\/[^/]+\.json$/;
 const TESTS_DATA_RE = /^tests\/data\//;
 
 /** tests/helpers/ files whose source names `rel`, as repo-relative paths. */
@@ -1111,6 +1112,13 @@ export function selectToolingFastChanged(changed, opts = {}) {
     if (!TESTS_DATA_RE.test(norm) || circ.dataResolved.includes(f)) continue;
     const idx = opts.pinIndex || pinIndex();
     const hits = new Set(idx.get(norm) || []);
+    // readFragments enumerates these filenames. Include the directory, effective baseline and its loader's consumers.
+    if (RATCHET_FRAGMENT.test(norm)) {
+      for (const key of ["tests/data/ratchets.d", "tests/data/ratchets.json", "tools/check/ratchets.mjs"]) {
+        for (const test of idx.get(key) || []) hits.add(test);
+      }
+      if (![...hits].some((test) => tfSet.has(test) || poolSet.has(test))) return full("tests-data-unpinned", { because: norm });
+    }
     // A helper that names the file (tests/helpers/flaky-policy.mjs) is imported by relative path: its importers read it too.
     for (const h of helpersNaming(norm, opts.root)) for (const t of (idx.get(h) || [])) hits.add(t);
     if (!hits.size) return full("tests-data-unpinned", { because: norm });
@@ -1154,7 +1162,8 @@ export function selectToolingFastChanged(changed, opts = {}) {
   const receiptChanged = changed.filter((f) => !benignNarrow.has(f.replace(/\\/g, "/")));
   if (receiptChanged.length) {
     const receipt = selectionReceipt(receiptChanged, scripts);
-    if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
+    const hasFragment = [...dataPinned.keys()].some((f) => RATCHET_FRAGMENT.test(f));
+    if (receipt.reason === "unmatched" || (hasFragment && receipt.unclaimed.length)) return full("unmatched", { unclaimed: receipt.unclaimed, because: (receipt.unclaimed || [])[0] });
   }
 
   const selected = new Set(narrowSeeds);
@@ -1211,9 +1220,15 @@ export function guardsScope(changed, eventName) {
   if (eventName !== "pull_request") return { mode: "full", reason: `event ${eventName || "local"}` };
   const paths = changed.map((c) => String(c.path || c).replace(/\\/g, "/"));
   if (!paths.length) return { mode: "full", reason: "empty diff" };
-  const hit = paths.find((f) => GUARDS_FULL_PATHS.some((re) => re.test(f)));
+  const infra = paths.filter((f) => GUARDS_FULL_PATHS.some((re) => re.test(f))
+    && !RATCHET_FRAGMENT.test(f) && f !== "tests/data/impact-map.json");
+  // A same-named, listed unit test already selected by an exact game-source pin adds no uncertainty
+  // to that PR's selection. Shared helpers, unlisted tests and CI tooling still widen it.
+  const gameFiles = paths.filter((f) => /^(js|css)\//.test(f));
+  const hit = infra.find((f) => !TOOLING_FAST_FILES.includes(f)
+    || !gameFiles.some((src) => f === "tests/unit/" + path.parse(src).name + ".test.mjs" && pinIndex().get(src)?.has(f)));
   if (hit) return { mode: "full", reason: `${hit} is tooling` };
-  return { mode: "changed", reason: `${paths.length} path(s), none under tools/ tests/ .github/ package.json` };
+  return { mode: "changed", reason: `${paths.length} path(s) covered by changed-file selection` };
 }
 
 /** First output line when --changed falls back to the full suite (#2890). */

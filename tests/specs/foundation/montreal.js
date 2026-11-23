@@ -88,14 +88,15 @@ export default function register() {
         def: {
           flatTerrain: def.flatTerrain,
           terrainOuter: def.terrainOuter,
+          turns: def.turns,
           sceneryCoordinates: def.sceneryCoordinates,
           dressingExclusions: def.dressingExclusions,
         },
         sessions: { day, night },
         walls: window.__apex.wallStats(),
         elevation: {
-          min: Math.min(...profile.map((point) => point.y)),
-          max: Math.max(...profile.map((point) => point.y)),
+          low: profile.reduce((a, b) => b.y < a.y ? b : a),
+          crest: profile.reduce((a, b) => b.y > a.y ? b : a),
         },
         probes,
       };
@@ -206,12 +207,15 @@ export default function register() {
     expect(result.walls.anyNaN).toBe(false);
     expect(result.walls.tightFrac).toBeGreaterThan(0.95);
     expect(result.walls.minOverHw).toBeGreaterThan(-1.5);
-    // js/circuits/montreal.js's own elevations array is three non-overlapping
-    // cosine bumps (+1.25, +2.2, -1.0) — its comment already says "~3 m over the
-    // lap". Measured 3.309 (peak +2.2 to trough -1.0, plus a little spline
-    // overshoot), so 1.3 was stale from before that array was tuned. Bound at
-    // the measured value + headroom, not silently renarrowed to fit.
-    expect(result.elevation.max - result.elevation.min).toBeLessThanOrEqual(3.6);
+    // Formula 1’s Canadian GP topography graphic labels 17.8 m between T2/T3
+    // and 12.6 m between T12/T13. Allow 0.2 m for tracing and road sampling.
+    const { low, crest } = result.elevation;
+    const turns = result.def.turns;
+    expect(Math.abs((crest.y - low.y) - 5.2)).toBeLessThanOrEqual(0.2);
+    expect(crest.frac).toBeGreaterThan(turns[1]);
+    expect(crest.frac).toBeLessThan(turns[2]);
+    expect(low.frac).toBeGreaterThan(turns[11]);
+    expect(low.frac).toBeLessThan(turns[12]);
     // A null gap passes the loop below; all 4 probes read terrain (headless VM, 2026-11-10).
     expect(result.probes.filter((gap) => gap !== null)).toHaveLength(4);
     for (const gap of result.probes)

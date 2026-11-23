@@ -39,12 +39,9 @@
       { frac: 0.7326, angleDeg: 3.0, widthM: 100 },   // built ~0.82: T14 hairpin
       { frac: 0.9985, angleDeg: 4.0, widthM: 280 },   // built ~0.09: T2 (spiral); frac zones are pre-rotation (_sceneryShift)
     ],
-    // Elevations use source-trace fractions. The Jiading site is reclaimed marsh
-    // — flat by F1 standards but engineered with ~6 m of long-wavelength relief
-    // (the spiral climbs, the back straight crests). Built max grade is 2.76 % (measured at the s=0.4525 crest).
-    // The crest keeps the original s=0.4525 anchor and stays at 6.5 m: raising
-    // the s=0.2125 bump instead trips the prop-interpenetration ratchet, and a
-    // taller crest lifts the ground out from under the far skyline towers.
+    // The built approximation peaks at racing fraction 0.389, between T8 and
+    // T9. F1 places the real high point at T2, 7.4 m above the back straight.
+    // Moving the crest to T2 also requires re-grounding scenery (docs/tracks/shanghai.md).
     elevations: [
       { s: 0.2125, halfM: 105, rise: 0.8 },
       { s: 0.4525, halfM: 600, rise: 6.5 },

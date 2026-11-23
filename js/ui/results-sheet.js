@@ -117,9 +117,10 @@ function winnerChip(els, code) {
   chip.textContent = code ? tr("results.winnerChip", { code }, "P1 {code}") : "";
 }
 
-function rankingList(container, label) {
+function rankingList(container, label, kind) {
   const list = document.createElement("div");
   list.setAttribute("data-results-part", "ranking");
+  list.setAttribute("data-ranking", kind);
   list.setAttribute("role", "list"); list.setAttribute("aria-label", label);
   container.appendChild(list); return list;
 }
@@ -463,7 +464,7 @@ function buildResults(order, race) {
     more.onclick = () => { if (G.openCoachDetails) G.openCoachDetails(); };
     card.append(heading, detail, more); els.resultsTable.appendChild(card);
   }
-  const classification = rankingList(els.resultsTable, tr("results.raceClassification", null, "Race classification"));
+  const classification = rankingList(els.resultsTable, tr("results.raceClassification", null, "Race classification"), "race");
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
@@ -606,7 +607,7 @@ function buildResults(order, race) {
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
     // there and the STANDINGS sheet already used it — this list put whoever
     // was earlier in the field order first and the two screens disagreed.
-    const driverRanking = rankingList(els.resultsTable, tr("results.driverStandings", null, "Driver standings"));
+    const driverRanking = rankingList(els.resultsTable, tr("results.driverStandings", null, "Driver standings"), "drivers");
     const all = seasonTable(cars, season).slice(0, 10);
     all.forEach((c, i) => {
       rankRow(driverRanking, i, seatColor(G, c), c.name ? `${c.code}  ${c.name}` : c.code,
@@ -617,7 +618,7 @@ function buildResults(order, race) {
     tmHead.className = "sel-label";
     tmHead.textContent = tr("results.constructors", null, "CONSTRUCTORS");
     els.resultsTable.appendChild(tmHead);
-    const constructorRanking = rankingList(els.resultsTable, tr("results.constructorStandings", null, "Constructor standings"));
+    const constructorRanking = rankingList(els.resultsTable, tr("results.constructorStandings", null, "Constructor standings"), "constructors");
     const tmList = teamOrder(season).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
@@ -723,7 +724,7 @@ function buildTTResults() {
   lbHead.textContent = tr("results.matchingSetup", { track: track.def.name }, "MATCHING SETUP & CONDITIONS — {track}");
   els.resultsTable.appendChild(lbHead);
 
-  const leaderboard = rankingList(els.resultsTable, tr("results.ttLeaderboard", null, "Time trial leaderboard"));
+  const leaderboard = rankingList(els.resultsTable, tr("results.ttLeaderboard", null, "Time trial leaderboard"), "laps");
   const board = G.records.board(track.def.id);
   board.forEach((e, i) => {
     const team = G.teamById(e.teamId);
@@ -909,7 +910,7 @@ function buildStandings() {
   drHead.textContent = tr("results.drivers", null, "DRIVERS");
   body.appendChild(drHead);
 
-  const driverRanking = rankingList(body, tr("results.driverStandings", null, "Driver standings"));
+  const driverRanking = rankingList(body, tr("results.driverStandings", null, "Driver standings"), "drivers");
   const drList = Object.entries(season.pts)
     .sort((a, b) => SeasonCal.rank(season, a[0], b[0]));   // points, then countback
   const cardRows = [];
@@ -930,7 +931,7 @@ function buildStandings() {
   tmHead.textContent = tr("results.constructors", null, "CONSTRUCTORS");
   body.appendChild(tmHead);
 
-  const constructorRanking = rankingList(body, tr("results.constructorStandings", null, "Constructor standings"));
+  const constructorRanking = rankingList(body, tr("results.constructorStandings", null, "Constructor standings"), "constructors");
   const tmList = teamOrder(season);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
@@ -975,7 +976,7 @@ function buildChampion() {
   head.className = "sel-label";
   head.textContent = tr("results.finalStandings", null, "FINAL STANDINGS");
   els.resultsTable.appendChild(head);
-  const driverRanking = rankingList(els.resultsTable, tr("results.finalDriverStandings", null, "Final driver standings"));
+  const driverRanking = rankingList(els.resultsTable, tr("results.finalDriverStandings", null, "Final driver standings"), "drivers");
   sorted.forEach((c, i) => {
     rankRow(driverRanking, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });

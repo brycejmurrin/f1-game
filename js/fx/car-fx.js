@@ -64,10 +64,10 @@ const CarFx = (function () {
         let best = HAZE_RANGE;
         for (let i = 0; i < cars.length; i++) {
           const c = cars[i];
-          if (c === player || !(heat(c) > 0)) continue;
+          if (c === player) continue;
           let ds = c.s - player.s;
           if (ds < 0) ds += total;   // the lap wraps: a car just past the line is still ahead
-          if (ds > 0 && ds <= best) { best = ds; want = c; }
+          if (ds > 0 && ds <= best && heat(c) > 0) { best = ds; want = c; }
         }
       }
       if (want !== anchor && (!anchor || str < HAZE_MIN)) anchor = want;

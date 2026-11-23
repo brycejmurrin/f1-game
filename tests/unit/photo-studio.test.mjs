@@ -22,8 +22,9 @@ function boot(options = {}) {
     if (tag === "canvas") {
       el.getContext = () => ({
         createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
-        putImageData: (image) => canvasOps.push(["pixels", image.data[0]]),
-        drawImage: (...args) => canvasOps.push(["draw", ...args.slice(1)]),
+        putImageData: (image) => { el.pixel = image.data[0]; canvasOps.push(["pixels", el.pixel]); },
+        getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(el.pixel) }),
+        drawImage: (src, ...args) => { el.pixel = src.pixel; canvasOps.push(["draw", ...args]); },
         fillRect: (...args) => canvasOps.push(["caption", ...args]), fillText: () => {},
       });
       el.toDataURL = () => "data:image/jpeg;base64,ZmFrZQ==";
@@ -78,6 +79,11 @@ function boot(options = {}) {
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
+  if (options.arrangeScreen) {
+    for (const id of ["photo-studio", "photo-controls"]) dom.byId(id).ownerDocument = dom.document;
+    vm.runInContext(fs.readFileSync(new URL("../../js/ui/editor-workspace.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/editor-workspace.js") });
+    ctx.SettingsNav = {arrangeScreen:options.arrangeScreen};
+  }
   if (options.withModalFocus) {
     dom.document.readyState = "loading";
     vm.runInContext(fs.readFileSync(new URL("../../js/ui/modal.js", import.meta.url), "utf8"), ctx, { filename: absSrc("js/ui/modal.js") });
@@ -94,12 +100,92 @@ function boot(options = {}) {
   // (light-tune-edit.js). Photo Studio must never reach it (#5040).
   G.setLightTune = (id, v) => { latchWrites.push([id, v]); storage.delete("apex26.perChunkOff"); storage.delete("apex26.envProbeOff"); return ltStore.set(id, v); };
   // The light-store deps exactly as game.js hands them over, so this boot cannot pass while production differs.
-  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
+  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => { order.push("draw"); options.renderSample?.(ctx.PhotoStudioBody.sampling); },
     ltStore: GAME_DEPS.has("ltStore") ? ltStore : undefined, ltSet: GAME_DEPS.has("ltSet") ? ltStore.set : undefined,
     borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
   return { api, PS, dom, order, downloads, canvasOps, G, storage, scene, LT, ltProfiles, ltWrites, latchWrites,
     closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+function chooseSamples(b, count) {
+  const row = b.dom.byId("ps-samples");
+  row.value = String(count);
+  b.dom.dispatch(row, { type: "change" });
+}
+
+for (const count of [8, 32]) test(`${count}-sample capture freezes the camera and averages distinct subpixel renders`, async () => {
+  const positions = [], views = [];
+  const b = boot({
+    setTimeout(fn, ms) { if (!ms) queueMicrotask(fn); return 1; },
+    renderSample(pass) {
+      const proj = new Float32Array(16), view = new Float32Array(16);
+      proj[8] = pass.index + 0.25; view[12] = pass.index + 42;
+      pass.project(proj, view, 4, 2);
+      positions.push([(proj[8] - 0.25) * 2, proj[9]]);
+      views.push(view[12]);
+    },
+  });
+  b.api.open({ source: "garage" });
+  assert.equal(b.api.state().samples, 1);
+  chooseSamples(b, count);
+  b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32).fill(2 * positions.length) });
+  assert.equal(await b.api.capture(), true);
+  assert.equal(positions.length, count);
+  for (const axis of [0, 1]) {
+    const offsets = positions.map(p => p[axis]);
+    assert.equal(new Set(offsets).size, count);
+    assert.ok(offsets.every(v => Math.abs(v) < 0.5));
+    assert.equal(offsets.reduce((a, v) => a + v, 0), 0);
+  }
+  assert.ok(views.every(v => v === 42));
+  assert.equal(b.canvasOps.filter(op => op[0] === "pixels").at(-1)[1], count + 1);
+  assert.equal(b.dom.byId("ps-body").inert, false);
+});
+
+test("closing a sampled capture cancels its pending read, releases controls and keeps online capture instant", async () => {
+  const owners = [], cancelled = [];
+  let currentPass;
+  const b = boot({ renderSample(pass) {
+    currentPass = pass;
+    pass?.project(new Float32Array(16), new Float32Array(16), 4, 2);
+  } });
+  b.api.open();
+  chooseSamples(b, 8);
+  b.G.gfx.capturePixels = owner => { owners.push(owner); return new Promise(() => {}); };
+  b.G.gfx.cancelCapture = (_msg, owner) => cancelled.push(owner);
+  const first = b.api.capture();
+  assert.ok(b.dom.byId("ps-body").inert);
+  assert.equal(currentPass.pump, true);
+  b.api.close(false);
+  assert.deepEqual(cancelled, owners);
+  assert.equal(await first, false);
+  assert.equal(b.dom.byId("ps-body").inert, false);
+  b.G.netPlay = { active: () => true };
+  b.api.open();
+  assert.equal(b.dom.byId("ps-samples").disabled, true);
+  assert.equal(b.dom.byId("ps-samples").value, "1");
+  b.G.gfx.capturePixels = () => ({ width: 4, height: 2, data: new Uint8ClampedArray(32) });
+  assert.equal(await b.api.capture(), true);
+  assert.equal(currentPass, null);
+});
+
+test("the Studio offers the shared stick editor exactly when the real camera sticks are present", () => {
+  const opened = [];
+  const {api, dom} = boot({arrangeScreen:(id, invoker) => opened.push([id, invoker])});
+  for (const source of ["garage", "home", "home-track", "race", "watch"]) {
+    assert.equal(api.open({source}), true);
+    const door = dom.byId("ps-body").querySelector('[data-arrange-screen="photo-controls"]');
+    assert.ok(door);
+    const orbit = source === "garage" || source === "home";
+    assert.equal(door.hidden, orbit, source);
+    if (!orbit) {
+      assert.equal(door.textContent, "Arrange camera sticks");
+      door.onclick();
+      assert.deepEqual(opened.at(-1), ["photo-controls", door]);
+    }
+    api.close(false);
+  }
+});
 
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
   const prior = { px: 88 }, subject = {};
@@ -504,6 +590,15 @@ test("Studio uses canonical sheet regions and enumerated controls with a persist
   assert.equal(b.dom.byId("ps-capture").parentElement, panel.children[2]);
   assert.equal(b.dom.byId("ps-capture").classList.contains("bigbtn"), true);
   assert.equal(body.contains(b.dom.byId("ps-export")), true);
+  // Each saved region must resolve on the real, lazily constructed Studio
+  // DOM, including collapsed panels. The framing guide cannot be displaced.
+  const reg = { window: {} };
+  vm.runInNewContext(fs.readFileSync(new URL("../../js/ui/screen-regions.js", import.meta.url), "utf8"), reg, { filename: absSrc("js/ui/screen-regions.js") });
+  const studio = b.dom.byId("photo-studio"), guide = b.dom.byId("ps-guide");
+  for (const part of Object.values(reg.window.ScreenRegions["photo-studio"].regions)) {
+    const region = studio.querySelector(part.selector);
+    assert.ok(region && !region.contains(guide), part.label);
+  }
   const frame = b.dom.byId("ps-aspect"); frame.value = "portrait"; b.dom.dispatch(frame, { type: "change" });
   assert.equal(b.api.state().aspect, "portrait");
   b.dom.byId("ps-aspect-row-next").click(); assert.equal(b.api.state().aspect, "scene");

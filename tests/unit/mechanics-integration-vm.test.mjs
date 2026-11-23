@@ -83,6 +83,29 @@ test("a race can be armed for practice, which unlocks checkpoints and spoils the
   assert.equal(g.G.coach.mark(),true,"checkpoints follow the practice flag, not the session type");
 });
 
+test("quitting releases practice worlds and leaves the trace available for review", async () => {
+  await g.race("monza");
+  g.apex.go();
+  const { G } = g, coach = G.coach;
+  assert.equal(coach.armPractice(), true);
+  assert.equal(coach.mark(), true);
+  g.step(90);
+  assert.equal(coach.rewindReady(), true);
+  const trace = coach.trace();
+  assert.ok(trace.length > 0);
+  G.quitToMenu();
+  assert.equal(G.state, "menu");
+  assert.deepEqual(coach.trace(), trace);
+  // Reopen just the eligibility gate. A race start would reset the coach and
+  // mask any checkpoint or rewind samples the menu still held.
+  try {
+    G.state = "race"; G.practice = true;
+    assert.equal(coach.canPractice(), true);
+    assert.equal(coach.rewindReady(), false);
+    assert.equal(coach.retry(), false);
+  } finally { G.practice = false; G.state = "menu"; }
+});
+
 test("the START drill can be set where it says to: on the grid, before the lights",async()=>{
   // Not g.race(): that presses go(). startRace() leaves the field on the grid.
   g.G.daily.stop();g.G.timeTrial=false;g.G.practice=false;await g.G.startRace();g.apex.headless(true);
@@ -127,8 +150,13 @@ for (const action of ["retry", "rewind"]) {
     field[0] = before;
     const firstSector = G.track.def.sectors[0];
     const approach = firstSector - 8 / G.track.total;
+    // Start S1 with a forward timing-line crossing. A jump directly from the
+    // grid to a stop in S1 can register an invalid entry on a sloping road.
+    apex.jump(1 - 2 / G.track.total, 60, 0);
+    for (let i = 0; i < 12 && G.player.lap === 0; i++) g.step(1);
+    assert.equal(G.player.lap, 1);
+    assert.equal(G.sectorIdx, 0);
     apex.jump(approach, 0, 0, { keepLap: true });
-    G.player.lap = 1;
     g.step(180);  // more than the field timing minimum and the rewind sampling interval
     const personal = G.sectorBests[0];
     if (action === "retry") assert.equal(G.coach.mark(), true);

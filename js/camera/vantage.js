@@ -158,20 +158,13 @@ function headState() { return { lat: _head[0], up: _head[1], fwd: _head[2], nod:
 // tangent), origin subtracted along those axes so the eye stays at
 // (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space — or at (fwd, up) when a mode
 // seats it elsewhere (VISOR), which keeps the rig on the CAR while the eye
-// moves inside it. Pitch/roll/lean stay off this basis — those shoved the eye
-// into the carbon. The live head offset (_head) comes off too, so the head
+// moves inside it. Apply the road frame before reconstructing the seat origin.
+// The live head offset (_head) comes off too, so the head
 // shift and the HELMET eye move the view and never the tub.
 // Writes into the caller-owned out* slots; nothing is allocated.
-function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up) {
+function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP, fwd, up, bankRoll = 0) {
   const eF = (fwd == null ? COCKPIT_EYE_FWD : fwd) + _head[2], eU = (up == null ? COCKPIT_EYE_UP : up) + _head[1];
-  const cy = Math.cos(yv), sy = Math.sin(yv);
-  for (let i = 0; i < 3; i++) {
-    outF[i] = sF[i] * cy + sR[i] * sy;
-    outR[i] = sR[i] * cy - sF[i] * sy;
-  }
-  outU[0] = outR[1] * outF[2] - outR[2] * outF[1];
-  outU[1] = outR[2] * outF[0] - outR[0] * outF[2];
-  outU[2] = outR[0] * outF[1] - outR[1] * outF[0];
+  M4.roadFrameAxes(sR, sF, yv, bankRoll, outR, outU, outF);
   for (let i = 0; i < 3; i++)
     outP[i] = eye[i] - outR[i] * _head[0] - outU[i] * eU - outF[i] * eF;
 }
@@ -533,10 +526,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 36 + dep * 2;
   } else if (mode === "reverse") {
     eyeS = s + 5.5;
-    eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
+    eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + t[1] * 5.5 + 1.35; eye[2] = p[2] + t[2] * 5.5;
     const revOut = bendHang("revBend", kA, extra.dt, extra.reduceMotion, 3.6 * hangScale("reverse"), 5, extra.snap);
     eye[0] += r[0] * revOut; eye[2] += r[2] * revOut;
-    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] - t[1] * 26 + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(60, 72, spFov);
   } else if (mode === "side") {
     // TV tracking: a few metres behind the car, outside the bend, looking
@@ -607,8 +600,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     tgt[0] = avT[0]; tgt[1] = avT[1]; tgt[2] = avT[2];
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : 46 + dep * 2;
   } else if (mode === "rear") {
-    eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] + 1.38; eye[2] = p[2] - t[2] * 0.95;
-    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.7; tgt[2] = p[2] - t[2] * 26;
+    eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] - t[1] * 0.95 + 1.38; eye[2] = p[2] - t[2] * 0.95;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] - t[1] * 26 + 0.7; tgt[2] = p[2] - t[2] * 26;
     fov = typeof CamFeel !== "undefined" ? CamFeel.modeFov(mode, spFov, dep) : lerp(58, 70, spFov) + dep * 2;
   } else if (mode === "drift") {
     // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
@@ -732,6 +725,11 @@ function vantage(track, mode, s, x, spd, now, extra) {
   const _lb = !_xrComfort && localLook && (typeof CamFeel !== "undefined" ? CamFeel.shouldLookBack(mode, _lbHeld) : _lbHeld);
   if (_lb) {
     const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
+    if (onboard || mode === "tcam") {
+      // Mirror the longitudinal grade with the aim. Preserve lens trim and head pitch.
+      const horizSq = t[0] * t[0] + t[2] * t[2];
+      if (horizSq > 1e-6) tgt[1] -= 2 * t[1] * (dx * t[0] + dz * t[2]) / horizSq;
+    }
     tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
   }
   // Speed / brake / yaw motion. Before the ground clamp so a dip cannot put

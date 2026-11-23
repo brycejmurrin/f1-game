@@ -151,12 +151,17 @@ function _gpuMs() {
     return v > 0 && Number.isFinite(v) ? v : -1;
   } catch (_) { return -1; }
 }
+// A 60 FPS target on a 144 Hz display permits 16.7 ms of draw work.
+function _drawBudgetMs() {
+  const target = typeof RenderRate !== "undefined" && RenderRate.targetBudgetMs ? RenderRate.targetBudgetMs() : 0;
+  return Math.max(_floorMs, target);
+}
 // One upper-ladder move: a shed (GPU-bound: timer >= 0.75 x EMA, or no timer) or a restore (GPU room: <= 0.7 x floor).
 function _xMove(ev, up) {
   const q = _xq();
   if (!q || _tierHold || (up ? _xShed <= 0 : _xFutile)) return false;
   const g = _gpuMs();
-  if (g > 0 && (up ? g > _floorMs * 0.7 : g < ev * 0.75)) return false;
+  if (g > 0 && (up ? g > _drawBudgetMs() * 0.7 : g < ev * 0.75)) return false;
   const n = _xStep(q, up ? -1 : 1);
   if (n < 0) return false;
   _pendingVerify = { kind: "xshed", prev: _xShed, ema: ev, up };
@@ -202,7 +207,7 @@ let _perfTier = 0;
 let _autoShed = 0;
 // Why: docs/GOVERNOR-RATIONALE.md §gov-17.
 let _tierHold = false;
-let _swGarageScaleSaved = null;
+let _swGarageScaleSaved = null, _swGaragePreviewActive = false;
 let _swRaceScale = null;
 // Why: docs/GOVERNOR-RATIONALE.md §gov-18.
 const OPEN_FRAMES = 600;   // ~10 s at 60 fps, ~20 s at 30
@@ -366,7 +371,7 @@ function _ageClocks(stepMs) {
     // §2au: headroom is judged against the SUSTAINED floor (the shadow, which
     // never rewinds) — against the held floor a plateaued EMA would read as
     // "still missing" forever and the ceiling could never age out.
-    if (_frameEMA < Math.max(_floorMs, _floorShadowMs) + RESTORE_WITHIN) {
+    if (_frameEMA < Math.max(_drawBudgetMs(), _floorShadowMs) + RESTORE_WITHIN) {
       if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
     } else _armCapProbe();
   }
@@ -500,7 +505,8 @@ function tick(dtMs, drawn) {
     // above, not this one evaluation, is what restores the backoff.
   }
 
-  const degradeAt = _floorMs + DEGRADE_OVER, restoreAt = _floorMs + RESTORE_WITHIN;
+  const budgetMs = _drawBudgetMs();
+  const degradeAt = budgetMs + DEGRADE_OVER, restoreAt = budgetMs + RESTORE_WITHIN;
   // §2au guard (see _computeBound): a latched degrade step must clear the held
   // threshold by the margin twice.
   const boundOver = _computeBound ? DEGRADE_OVER : 0;
@@ -731,24 +737,22 @@ return {
   // race-settings flyby + #loading entry on tip 775097e). Matches loop-health
   // slowPathCover plus the race-settings sheet (flyby stays live behind it).
   // Garage drive-out preview on SwiftShader: shed fill rate for the intro bay only.
+  get softwareGaragePreviewActive() { return _swGaragePreviewActive; },
   softwareGaragePreviewBegin(gfx) {
     if (!PerfGov.softwareRaster() || !gfx || !gfx.setRenderScale || !gfx.getRenderScale) return;
     // The race scale was chosen once, before the canvas was first sized.
-    if (_swRaceScale != null) {
-      try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
-      return;
-    }
+    _swGaragePreviewActive = true;
+    if (_swRaceScale != null) return;
     if (_swGarageScaleSaved != null) return;
     const cur = gfx.getRenderScale();
     if (cur > 0.55) { _swGarageScaleSaved = cur; gfx.setRenderScale(0.55); }
-    try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
   },
   softwareGaragePreviewEnd(gfx) {
+    _swGaragePreviewActive = false;
     if (_swRaceScale != null) _swGarageScaleSaved = null;
     if (_swGarageScaleSaved == null) return;
     if (gfx && gfx.setRenderScale) gfx.setRenderScale(_swGarageScaleSaved);
     _swGarageScaleSaved = null;
-    try { if (gfx && gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
   },
   // Live software GL presents the race at 0.5 (PostCommon.softwareRaceShed /
   // pinSoftwareRaceShed). Choose that before the first setSize so entry does

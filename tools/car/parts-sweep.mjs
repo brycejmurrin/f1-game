@@ -405,8 +405,16 @@ function nearest(T, grid, px, py, pz, cap) {
         const ex = px - cx[t], ey = py - cy[t], ez = pz - cz[t];
         if (Math.sqrt(ex * ex + ey * ey + ez * ez) - rad[t] >= best) continue;
         const d = distPointTri(px, py, pz, T, t);
+        if (d === 0) return { d, t };  // First exact hit wins the same strict-minimum tie.
         if (d < best) { best = d; bestT = t; }
       }
+    }
+    if (r === 0 && bestT >= 0) {
+      // Every triangle is indexed in every cell touched by its bounds. A closer
+      // triangle outside this cell must be at least as far away as its nearest face.
+      const x = (ci + grid.ix0) * CELL, y = (cj + grid.jy0) * CELL, z = (ck + grid.kz0) * CELL;
+      const face = Math.min(px - x, x + CELL - px, py - y, y + CELL - py, pz - z, z + CELL - pz);
+      if (best + 1e-10 < face) break;
     }
   }
   return { d: best, t: bestT };

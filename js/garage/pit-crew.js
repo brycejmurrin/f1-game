@@ -37,7 +37,11 @@ const PitCrewAnim = (function () {
       rigs.clear();
     }
     // EXTREME (crewHi): GaragePrims.run builds denser crew parts once GarageHiPrims has landed.
-    r = GaragePrims.run("pit", () => ({ body: GarageCrewMotion.create(gfx, c1, c2, GarageCrew.helmet), props: GarageCrewChoreo.createProps(gfx, c2) }));
+    r = GaragePrims.run("pit", () => {
+      const body = GarageCrewMotion.create(gfx, c1, c2, GarageCrew.helmet);
+      try { return { body, props: GarageCrewChoreo.createProps(gfx, c2) }; }
+      catch (error) { GarageCrewMotion.free(body, gfx); throw error; }
+    });
     rigs.set(key, r);
     return r;
   }

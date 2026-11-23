@@ -689,11 +689,13 @@ test("the sun-glint knee and the world env-probe reflection reach every backend"
   // the probe in the world env block, faded over the same 60..150 m on all three
   for (const [name, src, re] of [
     ["GLX", glx, /probeW = clamp\(uEnvStr, 0\.0, 1\.0\) \* clamp\(1\.0 - \(vDist - 60\.0\) \/ 90\.0, 0\.0, 1\.0\)/],
-    ["TLX", tlx, /probeW = clamp\(U\.envStr, 0\.0, 1\.0\)\s*\.mul\(clamp\(vd\.sub\(60\.0\)\.div\(90\.0\)\.oneMinus\(\), 0\.0, 1\.0\)\)/],
+    ["TLX", tlx, /probeW = clamp\(localProbeStrength, 0\.0, 1\.0\)\s*\.mul\(clamp\(vd\.sub\(60\.0\)\.div\(90\.0\)\.oneMinus\(\), 0\.0, 1\.0\)\)/],
     ["WGX", w, /probeW = clamp\(F\.params5\.x, 0\.0, 1\.0\) \* clamp\(1\.0 - \(vDist - 60\.0\) \/ 90\.0, 0\.0, 1\.0\)/],
   ]) assert.match(src, re, `${name}: the world env block weights the live probe by strength x eye-distance fade`);
   assert.match(glx, /envColor = mix\(envColor, textureLod\(uEnvCube, R, rough \* 2\.5\)\.rgb, probeW\)/, "GLX samples the probe at rough*2.5");
-  assert.match(tlx, /cubeTexture\(envCubeNode, R, rough\.mul\(2\.5\)\)\.rgb, probeW\)/, "TLX samples the probe at rough*2.5");
+  assert.match(tlx, /const direction = probeDirection\(R\)/, "the gloss probe starts from the reflected view ray");
+  assert.match(tlx, /if \(!U\.garageBox\) return ray;/, "the ordinary cube keeps the original direction");
+  assert.match(tlx, /cubeTexture\(envCubeNode, direction, rough\.mul\(2\.5\)\)\.rgb, probeW\)/, "TLX samples the probe at rough*2.5");
   assert.match(w, /textureSampleLevel\(envCube, envCubeSamp, vec3<f32>\(Rw\.x, -Rw\.y, Rw\.z\), rough \* 2\.5\)\.rgb, probeW\)/, "WGX samples the probe at rough*2.5, -y like every probe tap");
 });
 

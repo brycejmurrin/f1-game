@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "nurburgring",
+    revision: 2,
     classic: true,
     reverse: false,
     startFrac: 0.02,
@@ -45,7 +46,8 @@
       { s0: 0.910, s1: 0.955, hw: 6.3, ease: 0.012 },  // Veedol exit - Coca-Cola-Kurve T15 (index; built arc 0.793-0.852)
     ],
     bankZones: [
-      { frac: 0.055, angleDeg: 3.5, widthM: 110 },   // T2, Mercedes-Arena entry (built 0.046-0.064); not the pre-2002 Castrol chicane
+      // Nürburgring GmbH, Daten und Fakten, Mercedes-Arena: 2.5% crossfall (atan(0.025) = 1.43°).
+      { turn: 2, angleDeg: 1.43, widthM: 110 },
       { turn: 6, angleDeg: 4.5, widthM: 140 },   // T6 Ford-Kurve (same corner as the old 16-entry turn 7)
       { turn: 10, angleDeg: 3.0, widthM: 120 },   // T10, first corner after the Schumacher-S (Kumho-Kurve); same corner as the old turn 11
       { frac: 0.780, angleDeg: 4.0, widthM: 130 },   // Veedol-Schikane T13-T14 (built 0.770-0.791); the Schumacher-S is T8-T9 (.450/.4805)

@@ -59,10 +59,8 @@ const MirrorPass = (function () {
   // every other frame on top of the forward cull.
   const RERANK_M = 5, RERANK_EVERY = 8, RERANK_AIM_COS = 0.9994;
   const LITE_CULL = 120;
-  // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21: "shorter mirror draw distance"). Monza sweep, 7
-  // positions: the lite mirror drew 75k tris mean / 117k worst at 180 m, 65k / 71k at 120 m, and no less at 100 or 80 m
-  // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
-  // reaches. The low and min rungs never draw further than lite.
+  // A historical seven-position Monza sweep set the lite budget at 120 m. That sweep included
+  // an entire ~51k-triangle road. TLX now submits visible index ranges of the same marked ribbon.
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, ss: 2, cull: 280, reach: 260, every: 1, instEvery: _instEvery },
     { name: "lite", lite: true,  res: 0.6, ss: 2, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
@@ -108,11 +106,14 @@ const MirrorPass = (function () {
     // Canvas fractions [x, y, w, h], top-left origin, of the #hud-mirror frame.
     let _rect = null, _measureAt = -Infinity, _shown = false, _frame = 0, _cars = 0, _drawn = 0;
     let _run = 0;   // consecutive FULL passes drawn since the last interruption: the freeze cadence (b._mirMats is only current inside a run)
+    const _packEye = [0, 0, 0];
+    let _packBx = 0, _packBz = 0, _packW = 0, _packH = 0;
     let _el = null, _canvas = null, _dead = false, _lastW = 0, _lastH = 0;
     // COLLAPSED: tapped away this session. Not persisted — the next page load
     // shows the mirror the setting asks for — and cleared by the MIRROR key.
     let _collapsed = false, _chip = null, _chipShown = false, _wired = false;
     let _bx = 0, _bz = -1;   // the mirror's look direction (the player's back), horizontal unit
+    let _projFov = NaN, _projAspect = NaN;
     let _coneTan = 1;        // tan(horizontal half-FOV) of the pass in flight (pass())
     // FIELD LOD candidate pool (drawCarsLod): a pooled matrix, car and eye
     // distance squared per rival that survives the arc / behind-eye / cone tests.
@@ -411,22 +412,7 @@ const MirrorPass = (function () {
       _P[0] = rp.world ? rp.x : _smp.p[0] + r[0] * cX;
       _P[2] = rp.world ? rp.z : _smp.p[2] + r[2] * cX;
       _P[1] = _smp.p[1] + (bank ? bank.dy : 0);
-      const yv = yawVisInterp(c), cy = Math.cos(yv), sy = Math.sin(yv);
-      for (let i = 0; i < 3; i++) {
-        _F[i] = t[i] * cy + r[i] * sy;
-        _R[i] = r[i] * cy - t[i] * sy;
-      }
-      _U[0] = _R[1] * _F[2] - _R[2] * _F[1];
-      _U[1] = _R[2] * _F[0] - _R[0] * _F[2];
-      _U[2] = _R[0] * _F[1] - _R[1] * _F[0];
-      if (bank && bank.roll) {
-        const cr = Math.cos(bank.roll), sr = Math.sin(bank.roll);
-        for (let i = 0; i < 3; i++) {
-          const rr = _R[i], u = _U[i];
-          _R[i] = rr * cr + u * sr;
-          _U[i] = u * cr - rr * sr;
-        }
-      }
+      M4.roadFrameAxes(r, t, yawVisInterp(c), bank ? bank.roll : 0, _R, _U, _F);
     }
 
     // Rivals within `reach` (QUALITY) of track arc and not ahead of the mirror eye:
@@ -650,14 +636,14 @@ const MirrorPass = (function () {
       }
       const nowT = nowMs();
       if (nowT >= _measureAt) { measure(); _measureAt = nowT + MEASURE_MS; }
-      if (!_rect) { g.mirrorRect(null); return; }
+      if (!_rect) { _run = 0; g.mirrorRect(null); return; }
       g.mirrorRect(_rect);
       // Every frame — a mirror that updates at half rate reads as lag — except
       // at governor tier 2+, where the frame rate itself is the problem.
       _frame++;
       quality(g);
       const sz = targetSize(_cssW, _cssH, _q.res), w = sz[0], h = sz[1];
-      if (w < 16 || h < 8) return;
+      if (w < 16 || h < 8) { _run = 0; return; }
       const same = w === _lastW && h === _lastH;
       _lastW = w; _lastH = h;
       if (_frame % _q.every !== 0 && !G.frozen && same && _drawn > 0) return;
@@ -712,12 +698,16 @@ const MirrorPass = (function () {
     function pass(frame, frameSky, night, wet, floodEmit, w, h, fovY, centre, skip) {
       const g = G.gfx;
       const aspect = w / h;
-      M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
+      // The rear view and broadcast PiP share this lens; only the pose changes on most passes.
+      if (fovY !== _projFov || aspect !== _projAspect) {
+        M4.perspectiveTo(_proj, fovY, aspect, NEAR, FAR);
+        M4.invertTo(_invProj, _proj);
+        _coneTan = Math.tan(fovY / 2) * aspect;
+        _projFov = fovY; _projAspect = aspect;
+      }
       M4.lookAtTo(_view, _eye, _tgt, _up);
       M4.mulTo(_vp, _proj, _view);
-      _coneTan = Math.tan(fovY / 2) * aspect;
       M4.invertTo(_invVP, _vp);
-      M4.invertTo(_invProj, _proj);
 
       // The mirror camera goes ON `frame` (drawWorldMeshes culls the prop
       // batches through frame.viewProj, and every backend's begin reads it)
@@ -738,7 +728,12 @@ const MirrorPass = (function () {
       // leaves b._mirMats from before it, and a global parity could freeze the first full pass onto that old pack.
       // _run is zeroed here and only advanced after a pass that drew, so a throw or a refused begin also resets it.
       const ie = _q.instEvery || 1;
-      const run = _run; _run = 0;
+      // A replay seek, recovery teleport or sudden heading change can put a
+      // different stretch of track in the mirror between consecutive draws.
+      const dx = _eye[0] - _packEye[0], dy = _eye[1] - _packEye[1], dz = _eye[2] - _packEye[2];
+      const sameView = w === _packW && h === _packH && dx * dx + dy * dy + dz * dz <= 8 * 8
+        && _bx * _packBx + _bz * _packBz >= 0.985; // ~10°
+      const run = sameView ? _run : 0; _run = 0;
       const freezeInst = !_q.lite && ie > 1 && run > 0 && (run % ie) !== 0;
       frame.mirrorFreezeInstanced = freezeInst;
       if (freezeInst) _instFreezeSkips++; else if (!_q.lite) _instRefresh++;
@@ -763,12 +758,17 @@ const MirrorPass = (function () {
       frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
       let began = false;
       try {
-        began = g.mirrorBegin(frame, w, h);
+        began = g.mirrorBegin(frame, w, h, skip != null);   // the rear view skips the player; broadcast PiP includes its subject
         if (began) {
           drawWorldMeshes(frame, night, wet, floodEmit, false);
           drawCars(wet, night, _q.reach, centre, skip);
           g.drawSky(frameSky);   // opaque first, then sky (gfx.js)
           _drawn++;
+          if (!_q.lite && !freezeInst) {
+            _packEye[0] = _eye[0]; _packEye[1] = _eye[1]; _packEye[2] = _eye[2];
+            _packBx = _bx; _packBz = _bz;
+            _packW = w; _packH = h;
+          }
           _run = _q.lite ? 0 : run + 1;
         }
       } finally {
@@ -789,10 +789,10 @@ const MirrorPass = (function () {
       return began;
     }
 
-    function setMode(v) {
+    function setMode(v, opts) {
       if (MODES.indexOf(v) < 0) v = "auto";
       mode = v;
-      G.store.set("hudMirror", mode);
+      if (!opts || opts.persist !== false) G.store.set("hudMirror", mode);
       _measureAt = -Infinity;
       if (onModeChange) onModeChange(mode);
     }
@@ -829,6 +829,7 @@ const MirrorPass = (function () {
       // Race teardown: the lamp re-rank cache keys on the track, and a page-lifetime pass kept it alive.
       // quit (quit-to-menu only, #4219): the backend frees its mirror target too; the next mirrorBegin re-allocates.
       releaseTrack(quit) {
+        _run = 0;
         _vlTrack = null; _vlSrc = null; _vlAge = Infinity;
         const g = G.gfx;
         if (quit && g && typeof g.releaseMirror === "function") g.releaseMirror();

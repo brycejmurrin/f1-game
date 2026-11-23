@@ -214,6 +214,28 @@ test("R4: tlx.js reads the env opt-out before allocating, and allocates no cube 
   assert.match(TLX.slice(optAt, allocAt), /if \(!_envOptOut\) try \{/, "the allocation is gated on the opt-out");
   assert.match(TLX.slice(litAt, litAt + 400), /envCube:\s*envRT \? envRT\.texture : null/, "lit gets null with no target");
   assert.equal((TLX.match(/let _envOptOut\b/g) || []).length, 1, "one declaration");
+  // Enabling a garage-only capture may reserve the shared cube. It must not
+  // opt the race into six-face world renders. Exercise the actual boot decision.
+  const declaration = TLX.indexOf("let _envOptOut = true;");
+  const gate = TLX.indexOf("if (!_envOptOut) try {", optAt);
+  const decide = new Function("race", "garage", "isMobile", "webgpu", "softwareGL", `
+    const _ultra = false, GameStore = { store: { raw: () => null } };
+    const _detailOpt = () => race, _gfxx = () => garage, isWebGPU = () => webgpu, softContent = () => softwareGL;
+    ${TLX.slice(declaration, gate)}
+    return [!_envOptOut, raceProbeOff, garageProbeRequested];
+  `);
+  assert.deepEqual(decide(false, false, false, true, false), [false, true, false]);
+  assert.deepEqual(decide(true, false, false, true, false), [true, false, false]);
+  assert.deepEqual(decide(false, true, false, true, false), [true, true, true]);
+  assert.deepEqual(decide(false, true, true, true, false), [false, true, false]);
+  assert.deepEqual(decide(false, true, false, false, false), [false, true, false]);
+  assert.deepEqual(decide(false, true, false, true, true), [false, true, false]);
+  const optOutBody = TLX.match(/get envProbeOptOut\(\) \{([^}]+)\}/)[1];
+  const optedOut = new Function("raceProbeOff", "envRT", "_envGaveUp", optOutBody);
+  assert.equal(optedOut(true, {}, false), true, "garage-only cube leaves racing opted out");
+  assert.equal(optedOut(false, null, false), true, "missing target disables capture");
+  assert.equal(optedOut(false, {}, true), true, "failed backend disables capture");
+  assert.equal(optedOut(false, {}, false), false, "healthy race cube remains available");
   // envFaceBegin stays the producer-side early return (an opted-in session still probes).
   assert.match(TLX, /envFaceBegin\(face, eye, frame\) \{\s*if \(_envOptOut\) return null;/);
 });
@@ -373,7 +395,7 @@ test("R9: drawParticles wraps the producer's Float32Array (no per-frame copy), r
 
 test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once per renderer, not per present()", () => {
   const CH = read("js/render/three/tlx-chunked.js");
-  const cull = fnSource(CH, "function cull(mesh, vp, eye, cullDist, fog) {");
+  const cull = fnSource(CH, "function cull(");
   assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
   assert.match(cull, /_visList\[n\+\+\] = ch;/);
   assert.match(fnSource(CH, "function free(mesh, freedGeos) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
@@ -424,7 +446,7 @@ test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune
     ${TLX.slice(pruneAt, TLX.indexOf("\n", pruneAt))}
     ${fnSource(TLX, "function prunePool(now) {")}
     ${fnSource(TLX, "function acquireMesh(geo, matrixArr, material, rec) {")}
-    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m]) => acquireMesh(g, null, m, null)); },
+    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m, model]) => acquireMesh(g, model, m, null)); },
       acquireMesh, prunePool, dropped };`);
   const P = mk(THREE);
   const geos = [0, 1, 2].map(() => new THREE.BufferGeometry());
@@ -445,6 +467,25 @@ test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune
   assert.equal(P.dropped.length, 3);
   P.frame(LAST + IDLE + 1416, draws);
   assert.equal((P.acquireMesh.n | 0), 8, "drawn again after a prune: re-minted, and counted");
+  const model = new Float32Array(new THREE.Matrix4().makeTranslation(6, 7, 8).elements);
+  const entry = [[geos[0], mats[0], model]];
+  const [moving] = P.frame(LAST + IDLE + 1432, entry);
+  const copyWorld = moving.matrixWorld.copy.bind(moving.matrixWorld);
+  let writes = 0;
+  moving.matrixWorld.copy = (matrix) => { writes++; return copyWorld(matrix); };
+  const checkModel = (time, expectedWrites) => {
+    assert.equal(P.frame(time, entry)[0], moving);
+    assert.deepEqual(moving.matrixWorld.elements, Array.from(entry[0][2] || new THREE.Matrix4().elements));
+    assert.deepEqual(moving.matrix.elements, moving.matrixWorld.elements);
+    assert.equal(writes, expectedWrites);
+  };
+  checkModel(LAST + IDLE + 1448, 0);
+  model[13] = -2;   // caller reuses its input array for a moving car
+  checkModel(LAST + IDLE + 1464, 1);
+  entry[0][2] = null;
+  checkModel(LAST + IDLE + 1480, 1);
+  entry[0][2] = model;
+  checkModel(LAST + IDLE + 1496, 2);
 });
 // R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
 // present() / mirrorEnd() drive them, rendered by three r186 over the fake GL: three draws exactly the
@@ -733,7 +774,7 @@ test("R1: car-draw.js sends only the OPAQUE wheel layers through a coalescing si
   assert.match(body, /const wo = coOpt\(opt\);/);
   assert.match(body, /G\.gfx\.draw\(wd\.rear \? wm\.R : wm\.F, _wheelWorld, wo\);/);
   assert.match(body, /G\.gfx\.draw\(_wqMesh\[i\], _wq\[i\], wo\);/);
-  assert.match(body, /G\.gfx\.draw\(_cqMesh\[i\], _cq\[i\], wo\);/);
+  assert.match(body, /G\.gfx\.draw\(compoundRing, _cq\[i\], wo\);/);
   assert.match(body, /G\.gfx\.draw\(_rqMesh\[i\] \|\| getBrakeRing\(\), _rq\[i\], ro\);/, "rings and discs: the plain blended bag");
 });
 
@@ -1264,4 +1305,26 @@ test("smoothstepDown equals the descending smoothstep formula exactly where that
       const x = lo + (hi - lo) * k / 10;
       assert.ok(Math.abs(down(hi, lo, x) - ss(hi, lo, x)) < 1e-12, `hi=${hi} lo=${lo} x=${x}`);
     }
+});
+
+test("cloud bank misses skip the procedural four-octave noise above the horizon band", async () => {
+  vm.runInThisContext(read("js/render/three/tsl-sky.js"), { filename: absSrc("js/render/three/tsl-sky.js") });
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true });
+  await renderer.init();
+  renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+  try {
+    for (const cache of [false, true]) for (const Builder of [THREE.WGSLNodeBuilder, THREE.GLSLNodeBuilder]) {
+      const sky = globalThis.TLXShaders.sky(THREE, TSL, { cache, cacheSize: 64 });
+      const geo = new THREE.PlaneGeometry(), material = new THREE.MeshBasicNodeMaterial();
+      material.fragmentNode = sky.node;
+      try {
+        const builder = new Builder(new THREE.Mesh(geo, material), renderer);
+        builder.camera = new THREE.PerspectiveCamera(); builder.scene = new THREE.Scene(); builder.build();
+        assertGated("bank coordinate", builder.fragmentShader, /vec2(?:<f32>)?\( 0\.16 \)/, /< 0\.26/, 1);
+        const calls = sitesOf(builder.fragmentShader, /apexSkyFbm\(/);
+        assert.equal(calls.filter((i) => headersAt(builder.fragmentShader, i).some((h) => h.includes("< 0.26"))).length, 1);
+      } finally { geo.dispose(); material.dispose(); sky.dispose(); }
+    }
+  } finally { renderer.dispose(); }
 });

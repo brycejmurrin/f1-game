@@ -371,12 +371,14 @@
       // rake (probe HIT 600 prims, slope ~1.73).
       grandstandEx(0.1500, -1, 28, 40, null, null,
         { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, h: 12 });
-      grandstandEx(0.1800, -1, 23, 130, null, null,
+      // Keep the roofless bay between the neighbouring terraces. At 130 m its
+      // shell shared a horizontal face with a crowd row on the surveyed grade.
+      grandstandEx(0.1800, -1, 23, 76, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
       // 0.2160 is the start/finish line (racing 0.9987): the one covered bay.
       grandstandEx(0.2160, -1, 24, 120, null, null,
         { roof: "flat", roofCol: CONC, fasciaCol: CONC_ALT, h: 12 });
-      terrace(0.1580, 0.1740, -1, 22, TERR);
+      terrace(0.1580, 0.1700, -1, 22, TERR);
       terrace(0.1940, 0.2100, -1, 23, TERR);
       terrace(0.2280, 0.2720, -1, 24, TERR_LO);
       sponsorHoarding(0.1320, 0.2600, -1, 14);

@@ -163,3 +163,9 @@ BIG: tower/map grow in the top band; gaps stay between map and tower (x+7 clears
 Each steering scheme in `apex26.dockLayout` keeps its own left and right dock positions. Offsets are signed fractions of the viewport after subtracting safe insets. Zero means the shipped position, positive X moves toward the centre and positive Y moves up. The editor measures the visible controls when it limits travel and compensates for effective CSS zoom. A legacy pair of offsets still loads. Optional fields store arrow spacing, driving layout and individual control overrides by button ID. An omitted field follows the normal layout or global button size and shape. Settings files and combined Appearance profiles can restore those choices. Reset Dock Layout clears overrides for the current steering scheme.
 
 The landscape phone wheel stores button offsets as viewport percentages in `apex26.padLayout`. Apply commits the wheel draft. Pairing and menu-pad regions use the shared orientation-specific `apex26.screenPlacement` store on the controller device.
+
+## Menu text and button dimensions
+
+In Appearance, select a screen, choose Arrange, pick a region, and open Controls. Text size adjusts the region’s typography relative to the global accessibility setting. Button width uses a percentage of the space available in its container. Button height sets a minimum in CSS pixels so a wrapped label can grow taller. The separate Width, Height and Scale controls apply to the whole region.
+
+Apply saves the current drafts in the existing orientation-specific `screenPlacement` record. Older records inherit the shipped text and button sizes. Reset region restores that region in the current orientation. Reset screen covers both orientations. Home text and buttons shares this storage while Arrange Home owns title geometry.

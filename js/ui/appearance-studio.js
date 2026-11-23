@@ -12,7 +12,7 @@ const AppearanceStudio = (function () {
     uiContrast: ["off", "high"], cvdMode: ["off", "deutan", "protan", "tritan"], speedUnits: ["kmh", "mph"], menuHelp: ["on", "off"], motion: ["auto", "reduce", "off"],
     titleIntro: ["full", "quick", "off"], menuWash: ["full", "medium", "soft", "off"], titleArt: ["on", "medium", "soft", "off"], titleButtonStyle: ["auto", "racing", "flat"],
     pauseLayout: ["grid", "list", "compact", "wide", "sidebar"], pauseSide: ["centre", "left", "right"], pauseDim: ["full", "soft", "off"],
-    hudBtnShape: ["round", "squircle", "square"], hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
+    hudBtnShape: ["round", "squircle", "square", "arch", "shield", "paddle-left", "paddle-right", "leaf"], hudProfile: ["minimal", "standard", "broadcast"], hudMetricsLayout: ["auto", "full", "timing", "driver", "compact"],
     hudMapVis: ["auto", "on", "off"], hudGapsVis: ["auto", "on", "off"], hudMirror: ["auto", "on", "off"],
     homeScene: ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"], backgroundMotion: ["still", "ambient"],
     homeCamera: ["auto", "hero", "front", "side", "rear"],
@@ -41,6 +41,8 @@ const AppearanceStudio = (function () {
     { id: "broadcast", name: "BROADCAST", note: "Timing and race context", values: { menuAccent: "cyan", hudAccent: "cyan", hudProfile: "broadcast", homeScene: "night", backgroundMotion: "still", lookDatahub: { tabs: "underline", stripes: "on" } } },
     { id: "focus", name: "FOCUS", note: "Quiet menus, clear track", values: { homeScene: "static", hudProfile: "minimal", hudMetricsLayout: "compact", hudMapVis: "auto", hudGapsVis: "auto", titleIntro: "off", menuWash: "soft", titleArt: "soft" } },
     { id: "sunlight", name: "SUNLIGHT", note: "Bright, solid and readable", values: { homeScene: "static", uiTheme: "light", lookPopups: { dim: "solid" }, lookRace: { dim: "solid" }, lookCareer: { dim: "solid" } } },
+    { id: "endurance", name: "ENDURANCE", note: "Forest-green surfaces, cream headings and amber controls", paletteOnly: true, values: { uiTheme: "endurance", menuAccent: "amber" } },
+    { id: "drafting", name: "DRAFTING", note: "Blueprint-blue surfaces, ruled borders and cyan controls", paletteOnly: true, values: { uiTheme: "drafting", menuAccent: "cyan" } },
   ]);
   const store = () => GameStore.store;
   const clone = (v) => JSON.parse(JSON.stringify(v));

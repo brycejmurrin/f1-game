@@ -17,8 +17,8 @@ import { withI18n } from "../helpers/i18n-ctx.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-function readouts() {
-  const ctx = { Math, Number, Float64Array, Map };
+function readouts(ArrayType = Float64Array) {
+  const ctx = { Math, Number, Float64Array: ArrayType, Map };
   vm.createContext(ctx);
   vm.runInContext(read("js/ui/hud-readouts.js") + "; this.HudReadouts = HudReadouts;", ctx, { filename: absSrc("js/ui/hud-readouts.js") });
   return ctx.HudReadouts;
@@ -52,6 +52,23 @@ test("gapClock: a stopped car's gap grows with the clock; a re-grid or reset sta
   assert.ok(Number.isNaN(clk.gap(front, back)), "no gap until both cross a line again");
   clk.sample(back, 100, T + 0.2, L); clk.reset();
   assert.ok(Number.isNaN(clk.gap(front, back)), "reset() forgets every car");
+});
+
+test("gapClock reuses both buffers while a car reverses and records fresh crossings afterward", () => {
+  let allocations = 0;
+  const clk = readouts(class extends Float64Array {
+    constructor(n) { super(n); allocations++; }
+  }).gapClock();
+  const front = {}, back = {};
+  for (const car of [front, back]) {
+    const delay = car === front ? 0 : 2;
+    for (const [p, t] of [[0, 0], [100, 10], [90, 11], [80, 12]]) clk.sample(car, p, t + delay, 2560);
+  }
+  assert.equal(allocations, 4);
+  assert.ok(Number.isNaN(clk.gap(front, back)));
+  clk.sample(front, 110, 15, 2560);
+  clk.sample(back, 100, 16, 2560);
+  assert.equal(clk.gap(front, back), 2);
 });
 
 // ONE clock for every gap readout (#5678, 57460a6e redone): REL and STRATEGY read HudReadouts.gaps, the clock

@@ -227,6 +227,28 @@ test("emitFieldSfx is exported and is a no-op without GameAudio.fieldContact", (
   assert.doesNotThrow(() => R.emitFieldSfx(me));
 });
 
+test("field squeals sample pace once per skidding field and pick up the next frame's pace", () => {
+  const emitted = [], me = car({});
+  const sliding = car({ px: 1, pz: 2, speed: 10 }), locking = car({ px: 3, pz: 4, speed: 20 });
+  let top = 100, reads = 0;
+  const audio = load({ GameAudio: { fieldContact: (...args) => emitted.push(args) } }).create({
+    track: { total: LAP }, cars: [me, sliding, locking], vTop() { reads++; return top; },
+  });
+  audio.emitFieldSfx(me);
+  assert.equal(reads, 0);
+  assert.deepEqual(emitted, []);
+  sliding.skidIntensity = 0.6;
+  locking.wheelLock = 0.8;
+  audio.emitFieldSfx(me);
+  assert.equal(reads, 1);
+  assert.deepEqual(emitted, [["squeal", 0.6, 1, 2, 1], ["squeal", 0.8, 3, 4, 2]]);
+  emitted.length = 0;
+  top = 200;
+  audio.emitFieldSfx(me);
+  assert.equal(reads, 2);
+  assert.deepEqual(emitted, [["squeal", 0.8, 3, 4, 2]]);
+});
+
 test("the returned rows are reused, so a caller must read them before the next call", () => {
   // Not a wart to fix — a contract to state. This runs beside setEngine every
   // frame, and allocating a row per car would hand the GC 21 objects a frame to

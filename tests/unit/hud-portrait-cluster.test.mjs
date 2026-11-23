@@ -61,8 +61,8 @@ test("CSS: portrait phone left-aligns the tower so it cannot cover #hud-sectors"
 
 test("CSS: portrait phone floors tower labels and sector times at 10 CSS px", () => {
   assert.match(CSS,
-    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?#hud-sectors[\s\S]*?font-size:\s*max\(\s*var\(--fs-micro\),\s*calc\(var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z,\s*1\)\)\)/,
-    "portrait #hud-sectors / .sec-* use max(--fs-micro, --fs-micro/1.4/--hud-z)");
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?#hud-sectors[\s\S]*?font-size:\s*max\(\s*calc\(var\(--fs-micro\)\s*\*\s*var\(--hl-type,\s*1\)\),\s*calc\(var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z,\s*1\)\)\)/,
+    "portrait sectors use the chosen font size above the unchanged readable floor");
   assert.match(CSS,
     /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?\.hud-top \.hud-label[\s\S]*?var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z/,
     "portrait tower labels share the 10 CSS px floor (--fs-micro/1.4)");

@@ -14,7 +14,9 @@ Hot, hazy, dust-shifted. The light is diffused by haze rather than clean. Grass 
 
 ## 3. Elevation
 
-Engineered rather than natural: a climb into Turn 3 and a long drop to the Turn 10–12 complex. Read as banked earthworks, not hills. Do not flatten or add knife-edge grade spikes.
+McLaren reports a 14 m rise between Turns 1 and 3. The built road rises 14.00 m there, then dips along the back straight before climbing into Turn 4. [McLaren race preview](https://www.pitpass.com/47662/Indian-GP-Preview-McLaren)
+
+The paving report gives circuit-wide maxima of 12% superelevation (6.84°) and 10% downhill grade. The game reaches −3.82% downhill and currently has zero asphalt crossfall around the lap. Renault identifies a cambered Turn 10 and adverse camber at Turns 13–14. The cited sources leave the transverse angle at each corner and the location of the steepest descent unresolved. [Paving report, p. 12](https://vdbum-info.de/wp-content/uploads/INFOS/archiv/3_2012.pdf#page=12) · [Renault Sport](https://media.alpinecars.com/renault-sport-f1-preview-to-the-indian-gp/?lang=eng)
 
 ## 4. Landmarks & surroundings by lap position
 

@@ -576,11 +576,16 @@ const DrivingCoachBody = (function () {
       G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
+    // World snapshots serve live practice controls. The coaching trace and journal
+    // remain available for review from Settings after the driver leaves the track.
+    function releasePracticeWorlds() {
+      checkpoint = null; rewindBuf.length = 0; rewindAcc = 0;
+    }
     function reset() {
       for (const mode of pathwayModes) { const check = $("pm-pathway-check-" + mode); if (check) check.checked = false; }
       if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session reset before attempt completed");
-      checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
-      rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
+      releasePracticeWorlds(); practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
+      reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
     }
@@ -790,7 +795,7 @@ const DrivingCoachBody = (function () {
     // unlocks rewind, but a season or career round is always scored — a rewound
     // P1 took full points and prize money. Practice those in a one-off race.
     function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && onTrack() && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
-    return { update, status, feedback, advice, beginSetupTrial, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
+    return { update, status, feedback, advice, beginSetupTrial, mark, retry, rewind, releasePracticeWorlds, reset, toggle, paint, armPractice, canArm,
       practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice, isEnabled: () => !!enabled, downloadTrace,

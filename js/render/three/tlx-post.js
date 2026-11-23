@@ -275,6 +275,7 @@
     // a SAMPLEABLE depth texture (NO compareFunction — raw reads for SSAO/
     // SSR/godray reconstruction; the shadow maps keep their own compare ones).
     let W = 1, H = 1;
+    let compositeSizeDirty = true;
     // Track depth independently until the RenderTarget adopts it, so a target
     // constructor throw still releases a partially-created depth texture.
     const sceneDepthTex = ownTexture(new THREE.DepthTexture(1, 1));
@@ -524,7 +525,7 @@
     }
     if (!EX) agx = false;
     ownTexture(P.composite && P.composite.giOffTex);
-    let _hiLive = null, _hiAge = 0;
+    let _hiLive = null, _hiAge = 0, _hiLatched = false;
     // feature() reads storage; a 15-present cadence keeps it off the hot path (a shed or the cinema flag lands <0.25 s late).
     function hiLive() {
       if (!HI) return null;
@@ -547,7 +548,7 @@
       } catch (e) { AA = null; try { Log.warn("gfx", "TLX TRAA build failed, FXAA kept —", e); } catch (_) { /* harness */ } }
     }
     // The TAA runs on a frame with nothing else claiming the final pass: no ?viz=, no fixed/cover targets, no SGSR.
-    const taaLive = () => !!(AA && !viz && !phys && !(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()));
+    const taaLive = () => !!(AA && !viz && !phys && !(typeof PhotoStudioBody !== "undefined" && PhotoStudioBody.sampling) && !(ctx.wantSpatialUpscale && ctx.wantSpatialUpscale()));
 
     // Frames a lazy block may stay shut before its targets are disposed.
     // Eight presents is ~130 ms at 60 Hz: long enough that a one-frame gate
@@ -565,6 +566,7 @@
     }
     function releaseAO() {
       if (!ssaoRT && !ssaoBlurRT) return;
+      if (P.gi && P.gi.gtaoH) { unbind(P.gi.gtaoH.tex, whiteTex); unbind(P.gi.gtaoV.tex, whiteTex); }
       if (P.blurAOH) unbind(P.blurAOH.tex, whiteTex);
       if (P.blurAOV) unbind(P.blurAOV.tex, whiteTex);
       if (P.blurAO) unbind(P.blurAO.tex, whiteTex);
@@ -905,6 +907,7 @@
         return;
       }
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
+      compositeSizeDirty = true;
       PW = nPW; PH = nPH;
       pW = nPostW; pH = nPostH;
       // Fixed: LDR physical tracks present. Orient cover: same square as scene.
@@ -922,7 +925,7 @@
       const want = !!(P.sgsr && (fixed || (ctx.wantSpatialUpscale && ctx.wantSpatialUpscale())));
       if (want) {
         if (!aaRT) {
-          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, THREE.UnsignedByteType);
+          aaRT = makeRT(phys ? 1 : pW, phys ? 1 : pH, ldrRT.texture.type);
           aaRT.texture.name = "TLXPostAA";
         }
         const aaPW = fixed ? postSize(PW) : (orientCover ? PW : pW);
@@ -1088,7 +1091,8 @@
       // warm (compileJobs) still queues the standalone pair: AO without god-rays
       // (no sun shadow, GOD-RAY knob 0) keeps the program set it had.
       // Desktop tiers: 2 = GTAO + bilateral denoise, 1 = the 16-tap SSAO, both at full post size and never folded.
-      const HV = hiLive();
+      const HV = _hiLatched ? _hiLive : hiLive();
+      _hiLatched = false;
       const aoHi = !HV || viz ? 0 : HV.gtao && P.gi && P.gi.gtao ? 2 : HV.ssaoHi && P.ssaoHi ? 1 : 0;
       if (wantAO) setAoFull(aoHi > 0);
       const aoFold = _aoFold && wantAO && wantGR && viz !== "ssao" && !aoHi;
@@ -1336,25 +1340,30 @@
       // (COMPOSITE_FS in js/render/glx/shaders/glsl-post.js). When bloom is off we
       // bind blackTex, so the 8 dependent fetches accumulated vec3(0).
       // GLX zeroes the uniform rather than paying the taps; same here.
-      const _shaftMul = _gk(GT, "sunShaftMul");
-      C.sunShaft.value = haveBloom ? sunShaft * _shaftMul : 0;
+      const shaftMul = haveBloom ? _gk(GT, "sunShaftMul") : 0;
+      C.sunShaft.value = haveBloom ? sunShaft * shaftMul : 0;
+      if (C.sunShaft.value > 0 && C.bloomAmt.value > 0.001) {
+        C.shaftDecay.value = _gk(GT, "sunShaftDecay");
+        C.shaftSpread.value = Math.sqrt(Math.max(0.05, shaftMul));
+      }
       const grade = o.grade;
       const gs = (grade && grade.shadow) || null, gh = (grade && grade.hi) || null;
       C.gradeShadow.value.set(gs ? gs[0] : 1, gs ? gs[1] : 1, gs ? gs[2] : 1);
       C.gradeHi.value.set(gh ? gh[0] : 1, gh ? gh[1] : 1, gh ? gh[2] : 1);
       C.gradeStr.value = grade && grade.str !== undefined ? grade.str : 0;
       // IMAGE & COLOUR knobs — every default reproduces the shipped grade.
-      C.tone0.value.set(_gk(GT, "blacks"), _gk(GT, "shadows"), _gk(GT, "midtones"), _gk(GT, "highlights"));
-      C.tone1.value.set(_gk(GT, "whites"), _gk(GT, "toe"), _gk(GT, "shoulder"), 0);
-      C.lift.value.set(_gk(GT, "liftR"), _gk(GT, "liftG"), _gk(GT, "liftB"));
-      C.gamma.value.set(_gk(GT, "gammaR"), _gk(GT, "gammaG"), _gk(GT, "gammaB"));
-      C.gain.value.set(_gk(GT, "gainR"), _gk(GT, "gainG"), _gk(GT, "gainB"));
+      const _hg = PostCommon.hdrGradeOn(GT);
+      C.hdrGradeOn.value = _hg ? 1 : 0;
+      if (_sceneHdr && _hg) {
+        C.tone0.value.set(_gk(GT, "blacks"), _gk(GT, "shadows"), _gk(GT, "midtones"), _gk(GT, "highlights"));
+        C.tone1.value.set(_gk(GT, "whites"), _gk(GT, "toe"), _gk(GT, "shoulder"), 0);
+        C.lift.value.set(_gk(GT, "liftR"), _gk(GT, "liftG"), _gk(GT, "liftB"));
+        C.gamma.value.set(_gk(GT, "gammaR"), _gk(GT, "gammaG"), _gk(GT, "gammaB"));
+        C.gain.value.set(_gk(GT, "gainR"), _gk(GT, "gainG"), _gk(GT, "gainB"));
+      }
       C.contrast.value = _gk(GT, "contrast");
       C.vibrance.value = _gk(GT, "vibrance");
       C.saturation.value = _gk(GT, "saturation");
-      // Skip the whole HDR block when every knob is neutral (js/render/glx/post.js).
-      const _hg = PostCommon.hdrGradeOn(GT);
-      C.hdrGradeOn.value = _hg ? 1 : 0;
       C.tint.value = _gk(GT, "tint");
       C.vignette.value = _gk(GT, "vignette");
       C.vigSoft.value = _gk(GT, "vignetteSoft");
@@ -1379,10 +1388,6 @@
       C.acesD.value = _gk(GT, "acesD");
       C.acesE.value = _gk(GT, "acesE");
       C.speedBlur.value = o.speedBlur != null ? o.speedBlur : 0.0;
-      C.shaftDecay.value = _gk(GT, "sunShaftDecay");
-      // Reach scales with SCREEN SUN-SHAFT, sub-linearly so the shipped
-      // value (1) keeps the shipped radius (js/render/glx/post.js).
-      C.shaftSpread.value = Math.sqrt(Math.max(0.05, _shaftMul));
       C.flareStreak.value = _gk(GT, "flareStreak");
       C.flareStreak2.value = _gk(GT, "flareStreak2");
       // EXHAUST HEAT HAZE plume anchor (opts.haze = {u, v, str} | null).
@@ -1398,20 +1403,23 @@
       C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
       C.ssrQuality.value = o.ssrQuality >= 2 ? 2 : o.ssrQuality >= 1 ? 1 : 0;
       C.lensDirt.value = dirtTex ? _gk(GT, "lensDirt") : 0;
-      // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
-      // SSR samples the full-res scene, so the UV quantum stays 1/W even when
-      // the LDR composite runs at a reduced phone post size pW.
-      C.reflTexel.value.set(1 / W, 1 / H);
-      if (C.vigAspect) {   // tsl-post.js: the vignette's aspect and corner norm, per frame not per pixel
-        const va = W > 0 && H > 0 ? W / H : 1;
-        C.vigAspect.value = va;
-        C.vigNorm.value = 0.70710678 / Math.hypot(va * 0.5, 0.5);
+      // Reflection and vignette sample the full scene size, including under fixed physical targets.
+      if (compositeSizeDirty) {
+        C.reflTexel.value.set(1 / W, 1 / H);
+        if (C.vigAspect) {
+          const va = W / H;
+          C.vigAspect.value = va;
+          C.vigNorm.value = 0.70710678 / Math.hypot(va * 0.5, 0.5);
+        }
+        compositeSizeDirty = false;
       }
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk
       // gates the whole branch on probe-less paths (setup preview).
       const reflStr = o.reflect || 0;
       const haveRefl = !!(F.invProj && F.proj && F.upVS);
-      if (haveRefl) {
+      const drawRefl = haveRefl && (reflStr > 0.001 || C.carReflect.value > 0.001);
+      // Both reflection paths are shed on dry tier-2+ frames. Only their shader branches read this camera state.
+      if (drawRefl) {
         setPersp(C, F.invProj, F.proj);
         C.upVS.value.set(F.upVS[0], F.upVS[1], F.upVS[2]);
         const hi = F.skyHi || [0.05, 0.06, 0.09];
@@ -1449,7 +1457,10 @@
         _vizDest = dest;   // the blit must read what this pass wrote, not ldrRT
         _last.taa = false;
         if (AA) AA.skipped();
-        if (fixed) { const ps = presentSize(); vset(B, ps[0], ps[1]); }
+        if (phys) {
+          const output = dest || renderer.domElement;
+          vset(B, output.width, output.height);
+        }
         runPass(B.mat, dest);
       } else {
         vset(P.composite, pW, pH); vset(P.fxaa, pW, pH);
@@ -1503,13 +1514,14 @@
       _last.ssao = !!(haveAO || (aoFold && haveGR));
       _last.bloom = !!haveBloom;
       _last.shafts = !!haveGR;
-      _last.ssr = !!(haveRefl && (C.reflect.value > 0.001 || C.carReflect.value > 0.001));
+      _last.ssr = drawRefl;
       _last.fxaa = !viz && !_last.taa;
       _last.aoHi = haveAO ? aoHi : 0;
       _last.rays = haveGR && GRP !== P.godray ? 1 : 0;
       _last.gi = !!haveGI;
       _last.ssrHi = !!(compHi && HV.ssrHi);
-      if (F.viewProj && F.viewProj.length >= 16) { _prevVP.set(F.viewProj); _prevOk = !!_last.mblur; }
+      _prevOk = !!(_last.mblur && F.viewProj && F.viewProj.length >= 16);
+      if (_prevOk) _prevVP.set(F.viewProj);
       holdFlush(false);   // before a shed below destroys a target a held command buffer still names
       // After the composite has rebound the 1x1 fallbacks. Releasing on the
       // same frame the block drew would dispose a target runPass just wrote.
@@ -1607,6 +1619,8 @@
     }
     // Before the scene pass (tlx.js present): decide, and tell an MSAA target whether to resolve depth.
     function depthBegin(opts, F) {
+      // Decide which desktop passes will read these attachments before the scene sets its store ops.
+      if (HI) { hiLive(); _hiLatched = true; }
       _depthKeep = !_depthDiscard || needsDepth(opts, F);
       sceneRT.resolveDepthBuffer = _depthKeep;
       _tagKeep = !_tagDiscard || !tagOn || (sceneRT.samples | 0) > 0 || needsTag(opts, F);   // A-P2

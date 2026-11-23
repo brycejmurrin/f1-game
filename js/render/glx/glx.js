@@ -184,6 +184,7 @@ const GLXBackend = (function () {
   let frameLights = null;
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
+  let frameBrakeSpillStart = Infinity;
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
   // PER-CHUNK ROAD: 1 when the road (surfaceId 16) may take per-chunk lamp sets
   // too (game.js frame.roadChunkLamps; GLXChunked reads F.roadChunkLamps).
@@ -570,7 +571,6 @@ const GLXBackend = (function () {
   function init(canvasEl) {
     canvas = canvasEl;
     LightBudget.setSlots(litSlots = MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
-    watchCanvasSize();
     // HeadlessChrome's CDP / Playwright page screenshots race the cleared backbuffer
     // without preserveDrawingBuffer — and even with it, SwiftShader often never
     // composites the WebGL layer (a black gap). GLX keeps the buffer AND blits.
@@ -583,7 +583,6 @@ const GLXBackend = (function () {
         || !!navigator.webdriver);
     let capNative = false;
     try { capNative = (sessionStorage.getItem("apex26.wgxCapture") || localStorage.getItem("apex26.wgxCapture")) === "0"; } catch (_) { /* AUTO */ }
-    Soft.setEnabled(headlessUa && !capNative);
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -598,7 +597,6 @@ const GLXBackend = (function () {
     });
     if (!gl) return false;
     _softwareGl = detectSoftwareGl();
-    if (Soft.isEnabled()) Soft.ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
@@ -778,10 +776,20 @@ const GLXBackend = (function () {
     glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
     if (!litProg && litSlots > LightBudget.LITE) litProg = link(LIT_VS, litFsFor(litSlots = LightBudget.LITE));   // drivers pack differently: one retry
     LightBudget.setSlots(litSlots);
+    if (!litProg || !skyProg || !markProg || !blobBatchProg) {
+      // checkLink has already released failed links. Drop their successful
+      // siblings too: an abandoned backend will never draw with this batch.
+      for (const prog of [litProg, skyProg, markProg, markBatchProg, blobBatchProg, glowProg, lineProg, particleProg, decalProg]) {
+        if (prog) gl.deleteProgram(prog);
+      }
+      litProg = skyProg = markProg = markBatchProg = blobBatchProg = glowProg = lineProg = particleProg = decalProg = null;
+      return false;
+    }
+    watchCanvasSize();
+    Soft.setEnabled(headlessUa && !capNative);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex",
       "uShadowMap", "uLightVP", "uShadowP", "uShadowCtr", "uEye", "uLampBake", "uLampBakeIdx", "uBakeOn", "uBakeA", "uBakeScale", "uBakeGrid", "uBakeAtlas"]);
     _decalVPToken = -1; _lastDecalGlow = NaN;
-    if (!litProg || !skyProg || !markProg || !blobBatchProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules
@@ -1601,7 +1609,7 @@ const GLXBackend = (function () {
     // redirects begin() to the probe FBO; leaving it set because the texture
     // went away mid-cycle is the same brick as above, one frame later.
     _envActive = false;
-    if (!gl || !envTex) return;
+    if (!gl || !envTex) return false;
     envFacesMask |= 1 << face;
     // Unbind the probe FBO FIRST. generateMipmap below must NOT run while envTex
     // is still the COLOR_ATTACHMENT0 of the bound framebuffer — that read/write
@@ -1726,6 +1734,7 @@ const GLXBackend = (function () {
     // per-chunk sets and setting their cap via capFor.
     frameTailStart = frame.tailStart | 0;
     frameTailCount = frame.tailCount | 0;
+    frameBrakeSpillStart = frameLights && frame.brakeSpillCount ? frameLights.length - frame.brakeSpillCount * 15 : Infinity;
     _frameToken++;   // invalidate per-frame uViewProj upload caches
     // Render the scene into the HDR offscreen target when post is enabled, else
     // straight to the default framebuffer. With MSAA the geometry goes into the
@@ -2046,7 +2055,8 @@ const GLXBackend = (function () {
       L4[i4 + 4] = src[o + 3]; L4[i4 + 5] = src[o + 4]; L4[i4 + 6] = src[o + 5]; L4[i4 + 7] = src[o + 12];
       L4[i4 + 8] = src[o + 7]; L4[i4 + 9] = src[o + 8]; L4[i4 + 10] = src[o + 9]; L4[i4 + 11] = src[o + 10];
       L4[i4 + 12] = src[o + 11]; L4[i4 + 14] = 0; L4[i4 + 15] = 0;   // lane 13 = LIVE-ONLY (not in the lamp bake):
-      L4[i4 + 13] = fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
+      L4[i4 + 13] = src === frameLights && o >= frameBrakeSpillStart ? 1 :
+        fromTail || typeof LampBake === "undefined" ? 0 : LampBake.liveOnlyAt(src, o);
     }
     gl.uniform4fv(litU["uLight[0]"], L4, 0, nL * 16);
   }
@@ -2833,6 +2843,7 @@ const GLXBackend = (function () {
     mirrorRect: (r, flip) => { if (PST) PST.mirror.rect(r, flip); },   // flip: false = the broadcast PiP (mirror-pass.js)
     mirrorState: () => (PST ? PST.mirror.state() : { ready: false, dead: true }), releaseMirror: () => !!(PST && PST.mirror.release()),   // release: quit-to-menu frees the target
     drawMirrorGlass: (mesh, model, opts) => !!(PST && !ctxGone() && PST.mirror.glass(mesh, model, opts)),   // the cockpit's live glass (post.js)
+    get envProbeOptOut() { return _envDisabled; },
     envProbeReady() { return envReady; },
     // New track/session: the cube still holds the OLD circuit — hold the
     // analytic fallback until a fresh 6-face cycle has re-rendered the world.

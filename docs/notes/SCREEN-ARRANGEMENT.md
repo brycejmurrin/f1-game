@@ -3,6 +3,8 @@
 Kind: design
 Deployment baseline `f8970a989e91055231703865d6f5596f6d44be74`. This inventory follows the doors in `index.html`, the input gates in `js/ui/layers.js`, and the modules that populate dialogs at runtime. The regions in the first table identify what the player encounters. The editor bindings below identify which parts can be adjusted independently. Both tables describe source inspection. Rendered checks belong in the PR evidence.
 
+For the comparison of the deployment branch with PR #6168, including the remaining per-menu controls and device checks, see the [menu customization survey](MENU-CUSTOMIZATION-SURVEY.md).
+
 ## Screens and routes
 
 Screen IDs refer to the main document unless a filename is given. Settings keys omit the `apex26.` prefix. Standard menus use pointer, touch and keyboard with gamepad menu navigation where active. The native dialogs also participate in the browser focus stack. Dedicated input surfaces are called out separately.

@@ -29,11 +29,11 @@ const Frustum = (function () {
   // AABB vs frustum via the box's most-positive vertex per plane (conservative).
   function aabbInFrustum(planes, mn, mx) {
     for (let i = 0; i < 6; i++) {
-      const p = planes[i];
-      const px = p[0] >= 0 ? mx[0] : mn[0];
-      const py = p[1] >= 0 ? mx[1] : mn[1];
-      const pz = p[2] >= 0 ? mx[2] : mn[2];
-      if (p[0]*px + p[1]*py + p[2]*pz + p[3] < 0) return false;
+      const p = planes[i], a = p[0], b = p[1], c = p[2];
+      const px = a >= 0 ? mx[0] : mn[0];
+      const py = b >= 0 ? mx[1] : mn[1];
+      const pz = c >= 0 ? mx[2] : mn[2];
+      if (a*px + b*py + c*pz + p[3] < 0) return false;
     }
     return true;
   }

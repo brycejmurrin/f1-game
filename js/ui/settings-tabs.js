@@ -100,6 +100,19 @@ const SettingsNav = (function () {
   // a failed load logs and the next call retries. presets() resolves true once LayoutPresets exists.
   let presetsLoad = null;
   const presetsLoaded = new Set();
+  async function arrangeScreen(id, button, stillOpen, label = "Arrange this screen") {
+    button.disabled = true;
+    try {
+      if (!window.ScreenArranger) {
+        await presets();
+        if (typeof ScriptLoader !== "undefined") await ScriptLoader.create().load(["js/ui/screen-arranger.js"], [], { strict: true });
+      }
+      if (stillOpen()) button.textContent = window.ScreenArranger?.open(id, button) ? label : "Retry layout editor";
+    } catch (error) {
+      Log.warn("ui", "Layout editor unavailable: " + error);
+      if (stillOpen()) button.textContent = "Retry layout editor";
+    } finally { button.disabled = false; }
+  }
   function presets() {
     const R = /** @type {any} */ (globalThis).ApexRoster || null;   // js/roster.js: self.ApexRoster
     if (typeof LayoutPresets !== "undefined") return Promise.resolve(true);
@@ -368,6 +381,33 @@ const SettingsNav = (function () {
       if (search) search.cancel();
       enter(id, door);
     };
+    const index = document.getElementById("pm-settings-index");
+    if (index && !index.querySelector("h3")) {
+      for (const first of index.querySelectorAll("[data-settings-category]")) {
+        const heading = document.createElement("h3");
+        heading.className = "pm-group-h";
+        heading.textContent = first.dataset.settingsCategory;
+        index.insertBefore(heading, first);
+      }
+    }
+    const backDoor = document.getElementById("pm-settings-close");
+    if (backDoor?.parentElement) {
+      const footer = backDoor.parentElement;
+      let arrange = footer.querySelector("#pm-arrange-current");
+      if (!arrange) {
+        arrange = document.createElement("button");
+        arrange.type = "button";
+        arrange.id = "pm-arrange-current";
+        arrange.className = "bigbtn alt";
+        arrange.textContent = "Arrange this screen";
+        footer.appendChild(arrange);
+      }
+      arrange.onclick = () => {
+        const request = generation;
+        const screen = current === "home" ? "pmsettings" : "pm-panel-" + current;
+        return arrangeScreen(screen, arrange, () => request === generation && !document.getElementById("pmsettings")?.hidden);
+      };
+    }
     // Every open starts at the door index. Do not steal focus here: the dialog
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;
@@ -408,13 +448,13 @@ const SettingsNav = (function () {
 
   return {
     create, routes, panel, breadcrumb,
-    show: (id, focus) => { if (live) live.show(id, focus); },
+    show: (id, focus, after) => { if (live) live.show(id, focus, after); },
     current: () => live ? live.current() : "home",
     showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
     onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
-    lazy, flushLazy, presets,
+    lazy, flushLazy, presets, arrangeScreen,
   };
 })();
 Object.freeze(SettingsNav);

@@ -29,7 +29,35 @@ const _tlGlowBuf = [];
 function _hb() { return LightBudget.slots() > LightBudget.MAX; }
 function _hiExtra() { return _hb() ? GfxHi.hiExtra(tierShed) : 0; }   // the slots above MAX this frame may use
 function tailLightsEmit() { return +LT.tailLightEmit > 0; }
-function appendCarTailLights(frame, track, cars, player, mobileTier) {
+// Two short-range emitters at the front discs. Sample the interpolated wheel
+// basis only on hot, dark frames that actually have space in the live budget.
+const _brakeMat = new Float32Array(16);
+const _brakeOnly = [];
+function brakeSpillIntensity(frame, player) {
+  // Axle thermals are optional. With them off, follow the same stored heat
+  // and cooldown as the visible brake rings, including replay playback.
+  const thermal = Number.isFinite(player.brakeTF) && typeof WheelState !== "undefined" &&
+    WheelState.enabled() && WheelState.thermalEnabled();
+  const hot = thermal ? (player.brakeTF - 600) / 400 : ((player.brakeHeat || 0) - 0.4) / 0.6;
+  const heat = _clampNum(hot, 0, 1);
+  return 4 * heat * heat * frame.brakeSpillEnabled;
+}
+function appendBrakeSpill(frame, player, groundPose, wheels, intensity) {
+  const m = groundPose(player, _brakeMat);
+  for (const wheel of wheels) {
+    if (!wheel.front) continue;
+    const { x, y, z } = wheel;
+    frame.lights.push(m[12] + x*m[0] + y*m[4] + z*m[8], m[13] + x*m[1] + y*m[5] + z*m[9],
+      m[14] + x*m[2] + y*m[6] + z*m[10], intensity, intensity * 0.19, intensity * 0.025,
+      2.6, 0, -1, 0, -0.75, -1, 1, 0, 0); // wide spill, no volumetrics or lens flare
+  }
+  frame.brakeSpillCount = 2;
+  frame.tailCount += 2; // per-chunk and mirror consumers carry the moving suffix; shadows skip it
+}
+function appendCarTailLights(frame, track, cars, player, mobileTier, groundPose, wheels) {
+  frame.brakeSpillCount = 0;
+  const spill = frame.brakeSpillEnabled && player && groundPose && wheels && !mobileTier ? brakeSpillIntensity(frame, player) : 0;
+  if (!frame.lights && spill) { _brakeOnly.length = 0; frame.lights = _brakeOnly; }
   const L = frame.lights;
   frame.glowLights = L;
   const emit = tailLightsEmit();
@@ -65,7 +93,7 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);
-  if (nT <= 0) return;
+  if (nT <= 0 && !spill) return;
   // Paint mode: no slot is taken, nothing is evicted — the records land in the
   // glow-only copy, after the lamps, exactly where the emit path puts them.
   let T = L;
@@ -108,8 +136,9 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // measuring room against 48 there meant the tail-lights appended below never
   // reached the shader at all.
   const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX + _hiExtra(), LightBudget.slots()));
-  const room = SLOTS - ((L.length / 15) | 0);
-  if (emit && room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
+  const dynamic = (emit ? nT : 0) + (spill ? 2 : 0);
+  if (dynamic) L.length = Math.min(L.length, Math.max(0, SLOTS - dynamic) * 15);
+  frame.tailStart = L.length / 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
   // cutoff so a car doesn't pop in/out abruptly as it drifts past the limit. 0 =
   // hard cutoff (as-shipped), so the fade term is 1 for every selected car.
@@ -134,10 +163,11 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
       4.5 * tlm, 0.14 * tlm, 0.10 * tlm,
       8 * (1 + bAmt * 0.45), dx, dy, dz, 0.5, -0.2, 0.12, 0.25, 0.4);
   }
-  if (!emit) return;   // paint mode: tailStart/tailCount stay the empty range set above
-  // The nT tail-lights are the LAST nT records — after any trim above.
-  frame.tailCount = nT;
-  frame.tailStart = ((L.length / 15) | 0) - nT;
+  if (emit) {
+    frame.tailCount = nT;
+    frame.tailStart = ((L.length / 15) | 0) - nT;
+  }
+  if (spill) appendBrakeSpill(frame, player, groundPose, wheels, spill);
 }
 
 // Cull the track light set to the nearest CAP lamps (shader max 48; traffic uses
@@ -201,9 +231,16 @@ if (typeof document !== "undefined" && document.addEventListener)
 // ~40 % of setFrameLights with flicker on). -1 = not yet computed.
 let _hshC = new Float32Array(0);
 function _hshOf(o) {
-  if (o >= _hshC.length) { const nc = new Float32Array(Math.max(o + 1, _hshC.length * 2, 1024)).fill(-1); nc.set(_hshC); _hshC = nc; }
-  let h = _hshC[o];
-  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[o] = x - Math.floor(x); }
+  // Each source record spans 15 numbers, but only one cached hash.
+  const lamp = o / 15;
+  if (lamp >= _hshC.length) {
+    const next = new Float32Array(Math.max(lamp + 1, _hshC.length * 2, 1024));
+    next.set(_hshC);
+    next.fill(-1, _hshC.length);
+    _hshC = next;
+  }
+  let h = _hshC[lamp];
+  if (h < 0) { const x = Math.sin((o + 13) * 91.17) * 43758.5453; h = _hshC[lamp] = x - Math.floor(x); }
   return h;
 }
 // Per-lamp rgb factor scratch: [0..2] flicker × breathe × warm-up tint (what the

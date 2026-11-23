@@ -19,7 +19,7 @@ const DesignerWorkspace = (function () {
     ui.filesTrigger = trigger;
     files.remove(); menu.append(trigger, files);
     const closeMenu = (e) => {
-      if ((e.key === "Escape" || e.type === "cancel") && menu.open && !root.hidden) {
+      if ((e.key === "Escape" || e.type === "cancel") && menu.open && !root.hidden && !e.target?.closest?.("#screen-arranger")) {
         e.preventDefault(); e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         menu.open = false; trigger.focus();

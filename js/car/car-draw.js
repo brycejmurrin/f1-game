@@ -418,15 +418,28 @@ const CarDraw = (function () {
     }
 
     // ONE procedural body for every rival past FieldLod tier 2 (~120 m, ±10 %
-    // hysteresis on c._lodTier). Team livery stays on the planted wheels; the
-    // mesh is neutral grey so we never pay a Car3D.build per seat at range.
+    // hysteresis on c._lodTier). All palettes use this one procedural build.
+    // With distant livery colours off, every car shares the same neutral GPU mesh.
     // FAR BODY (`far` true, FieldLod.farBody: past ~250 m, 1-3 px tall): the same body clustered down to
     // FAR_BODY_TRIS (CarGeometry.decimate). The clustering costs ~130 ms, so it runs once in an idle
     // callback after the full shared body exists; until it lands a far rival draws the full shared body.
     const FAR_BODY_TRIS = 1500;
     let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
-    let _sharedRivalEpoch = 0;
+    const _farWheels = { F: null, R: null };
+    function getFarWheels() {
+      if (_farWheels.F && _farWheels.R) return _farWheels;
+      // Retain each successful upload if the other axle needs a retry.
+      try {
+        if (!_farWheels.F) _farWheels.F = G.gfx.createMesh(Car3D.buildFarWheel(0.32));
+        if (!_farWheels.R) _farWheels.R = G.gfx.createMesh(Car3D.buildFarWheel(0.38));
+      } catch (e) { Log.warn("gfx", "far wheel upload failed", e); return null; }
+      return _farWheels.F && _farWheels.R ? _farWheels : null;
+    }
+    let _sharedRivalEpoch = 0, _rivalPalettes = null;
     function freeSharedRivalBodies() {
+      if (_rivalPalettes) { _rivalPalettes.clear(); _rivalPalettes = null; }
+      freeWheelPair(_farWheels);
+      _farWheels.F = _farWheels.R = null;
       _sharedRivalEpoch++; // queued idle work belongs to the old cache generation
       const near = _sharedRivalBody, far = _farRivalBody;
       _sharedRivalBody = _farRivalBody = _sharedRivalGeom = null;
@@ -442,7 +455,10 @@ const CarDraw = (function () {
       const geom = _sharedRivalGeom;
       _farRivalKick = true;
       let mesh = null;
-      try { mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS)); }
+      try {
+        const far = CarGeometry.decimate(geom, FAR_BODY_TRIS);
+        mesh = _rivalPalettes ? _rivalPalettes.neutral(far, true) : G.gfx.createMesh(far);
+      }
       catch (e) { Log.warn("gfx", "far rival body failed", e); }
       if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody) {
         if (mesh && G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
@@ -451,26 +467,31 @@ const CarDraw = (function () {
       if (mesh) { _farRivalBody = mesh; if (_sharedRivalGeom === geom) _sharedRivalGeom = null; }
       else _farRivalKick = false; // a failed upload can retry on the next far draw
     }
-    function sharedRivalBodyMesh(far) {
+    function sharedRivalBodyMesh(far, car) {
       if (carModelBuf) return null;
       if (!_sharedRivalBody) {
         const team = Teams.LIST[0];
         const setup = Parts.getFactorySetup(team);
-        const geom = Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], {
+        if (typeof CarHero !== "undefined" && GfxQuality.feature("rivalLiveryLod")) {
+          _rivalPalettes = CarHero.rivalPalettes(G.gfx, putBoundedMesh);
+        }
+        const grey = [0.72, 0.72, 0.72];
+        const geom = Car3D.build(_rivalPalettes ? [1, 0, 0] : grey, _rivalPalettes ? [0, 1, 0] : grey, {
           field: true, silhouette: true, noDriver: true, noWheels: true, livery: {}, smooth: false,
           parts: Parts.getVisualTiers(setup, team),
         });
-        _sharedRivalBody = G.gfx.createMesh(geom);
+        _sharedRivalBody = _rivalPalettes ? _rivalPalettes.neutral(geom, false) : G.gfx.createMesh(geom);
         _sharedRivalGeom = geom;
       }
-      if (far && _farRivalBody) return _farRivalBody;
-      if (far && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
+      if (far && !_farRivalBody && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
         _farRivalKick = true;
         const epoch = _sharedRivalEpoch;
         const make = () => buildFarRivalBody(epoch);
         if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 2000 }); else setTimeout(make, 0);
       }
-      return _sharedRivalBody;
+      const useFar = !!(far && _farRivalBody);
+      if (car && _rivalPalettes) return _rivalPalettes.painted(useFar, livOf(paintTeam(car)));
+      return useFar ? _farRivalBody : _sharedRivalBody;
     }
     function farRivalBodyReady() { return !!_farRivalBody; }
 
@@ -597,10 +618,14 @@ const CarDraw = (function () {
     // fitted id's atlas stays live (#3609). Drop every non-draft atlas for this
     // team whose key is not under the CURRENT fitted id. Skip while a draft is
     // live for the team so CANCEL still restores the saved 2048.
+    let checkedAtlasTeam = null, checkedAtlasLivery = null;
     function dropSupersededFittedAtlases(team) {
       const d = G.livDraftOverride;
       if (d && d.teamId === team.id) return;
-      const keep = team.id + ":" + G.getLiveryId(team.id) + ":";
+      const fitted = G.getLiveryId(team.id);
+      if (checkedAtlasTeam === team.id && checkedAtlasLivery === fitted) return;
+      checkedAtlasTeam = team.id; checkedAtlasLivery = fitted;
+      const keep = team.id + ":" + fitted + ":";
       const teamColon = team.id + ":";
       const draftPrefix = teamColon + DRAFT_TAG;
       const keys = Object.keys(_decalTexCache);
@@ -896,6 +921,8 @@ const CarDraw = (function () {
           if (n === 1) Log.warn("gfx", "decal atlas build failed for " + key, e);
           if (n < 3) return null;
         }
+        // A new key can introduce a superseded atlas. Removals and in-place hi-res upgrades cannot.
+        checkedAtlasTeam = null;
         _decalTexCache[key] = t; _decalTexOrder.push(key); _decalTexUse.set(key, ++_decalTexTick); _decalSeen.set(key, _flushFrame);
         if (wantHi && t) schedulePlayerHiRes(team, num, key);
         // LRU: browsing liveries minted page-lifetime ~7 MB atlases; the least
@@ -1157,6 +1184,7 @@ const CarDraw = (function () {
         // crosses flapsM / farBody after green. Team-less ":sh" in the warm census.
         try {
           sharedRivalBodyMesh(false);
+          if (FieldLod.on && !carModelBuf) getFarWheels();
           if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
             buildFarRivalBody(_sharedRivalEpoch);
           }
@@ -1397,8 +1425,6 @@ const CarDraw = (function () {
     const _wheelLocal = new Float32Array(16);
     const _wheelWorld = new Float32Array(16);
     const _fixedWheelLocal = new Float32Array(16);
-    const _fixedWheelWorld = new Float32Array(16);
-    const _ringWorld = new Float32Array(16);
     // Scratch opts for AI brake rings — mutated in place per frame so the car loop
     // doesn't allocate a fresh literal per ring (up to ~40/frame in a braking pack).
     const _ringOpts = { emissive: 0, roughness: 0.9, specular: 0, alpha: 1, noAlphaWrite: true };
@@ -1516,11 +1542,11 @@ const CarDraw = (function () {
     // player sees. null in every other view: the exterior silhouette casts.
     // Pinned against game.js's branch: tests/unit/car-presentation-canary.test.mjs.
     const _ckR = [0, 0, 0], _ckU = [0, 1, 0], _ckF = [0, 0, 0], _ckP = [0, 0, 0];
-    function cockpitCaster(c, smp, yv, out) {
+    function cockpitCaster(c, smp, yv, out, bankRoll) {
       const id = !G.dbgCam && (G.state === "race" || G.state === "count") ? CamModes.CAM_MODES[G.camMode].id : "";
       if (id !== "cockpit" && id !== "helmet" && id !== "visor") return null;
       const seat = id === "visor" ? "visor" : "cockpit";
-      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat));
+      GameCams.cockpitViewmodelAxes(smp.r, smp.t, yv, G.camEye, _ckR, _ckU, _ckF, _ckP, GameCams.seatFwd(seat), GameCams.seatUp(seat), bankRoll);
       out[0] = _ckR[0]; out[1] = _ckR[1]; out[2] = _ckR[2]; out[3] = 0;
       out[4] = _ckU[0]; out[5] = _ckU[1]; out[6] = _ckU[2]; out[7] = 0;
       out[8] = _ckF[0]; out[9] = _ckF[1]; out[10] = _ckF[2]; out[11] = 0;
@@ -1632,7 +1658,8 @@ const CarDraw = (function () {
           _ringOpts.emissive = 0; _ringOpts.alpha = 0.5;
           for (let k = 0; k < 4; k++) d(getSpinDisc(), _ringOpts);
           if (c.isPlayer) continue;
-          d(_sharedRivalBody, co); d(_farRivalBody, co);
+          if (_sharedRivalBody) d(sharedRivalBodyMesh(false, c), co);
+          if (_farRivalBody) d(sharedRivalBodyMesh(true, c), co);
           d(teamBodyMesh(c.team, c), paint);
           const aSt = teamDecalState(pt, false, c.visualSetup, c.visStamp);
           for (const b of [0, 1, 0.5]) { deps.drawAeroFlaps(pt, aSt.val, b, Z, paint, aSt.aero, null, b !== 0.5); n++; }
@@ -1816,18 +1843,22 @@ const CarDraw = (function () {
         if (m.RFixed) G.gfx.freeMesh(m.RFixed);
       }
     }
-    function getPlayerWheelMeshes(team) {
+    function getPlayerWheelMeshes(car) {
+      const team = car.team;
+      const showWear = typeof GfxQuality !== "undefined" && GfxQuality.feature("tyreWearVisual");
+      const frontWear = showWear ? Number((car.tyreWearF ?? car.tyreWear) >= .5) + (car.flatSpot >= .18 ? 2 : 0) : 0;
+      const rearWear = showWear && (car.tyreWearR ?? car.tyreWear) >= .5 ? 1 : 0;
       // livery wheel tints (rimTint / caliperTint) join the key: "" when unset, so today's key is unchanged
       const wt = CarWheels.tints(team && deps.resolveLivery(team));
-      const pd = carDetail().player, key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key + (pd ? ":d" + pd : "");
+      const pd = carDetail().player, key = playerTyreId + ":" + playerBrakeId + ":" + playerWheelId + wt.key + (pd ? ":d" + pd : "") + (frontWear || rearWear ? ":w" + (frontWear + 4 * rearWear) : "");
       return putBoundedMesh(wheelMeshCache, wheelMeshOrder, key, () => {
         const band = playerTyreVisual && playerTyreVisual.band || Car3D.TYRE_BAND[playerTyreTier];
         const caliper = wt.cal || (playerBrakeVisual ? playerBrakeVisual.cal : Car3D.BRAKE_CALIPER[playerBrakesTier]);
         const rim = wt.rim || (playerBrakeVisual && playerBrakeVisual.rim);
         const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd, frontWear);
         const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false,
-          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd);
+          playerTyreVisual, playerBrakeVisual, playerWheelVisual, wt.ink, wt.surf, pd, rearWear);
         return {
           F: G.gfx.createMesh(front.rotating),
           R: G.gfx.createMesh(rear.rotating),
@@ -1899,7 +1930,7 @@ const CarDraw = (function () {
           RFixed: G.gfx.createMesh(rear.fixed),
         };
     }
-    const _cq = [], _cqMesh = [];
+    const _cq = [];
     let _cqN = 0;
     // THE STOP'S CREW at a car held in its box (CarMesh.getCrewMesh): the two
     // jacks, a wheel gun at each wheel, and the six people who work them, on
@@ -1950,7 +1981,8 @@ const CarDraw = (function () {
     // camera would emit twice). All views read the same frame's private phases;
     // dt controls spin blur only, never the phase.
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale, bare) {
-      const wm = c.isPlayer ? getPlayerWheelMeshes(c.team) : getFieldWheelMeshes(c.team, c);
+      const far = !c.isPlayer && !bare && FieldLod.farWheels(c) ? getFarWheels() : null;
+      const wm = far || (c.isPlayer ? getPlayerWheelMeshes(c) : getFieldWheelMeshes(c.team, c));
       // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
       // the car still moves; the flat spot it leaves bumps them once per rev.
       const phase = _wheelPhases.get(c);
@@ -2049,7 +2081,6 @@ const CarDraw = (function () {
         F[4] = 0; F[5] = 1; F[6] = 0; F[7] = 0;
         F[8] = ss; F[9] = 0; F[10] = cs; F[11] = 0;
         F[12] = L[12]; F[13] = L[13]; F[14] = L[14]; F[15] = 1;
-        M4.mulTo(_fixedWheelWorld, base, F);
         // DEFERRED, not drawn here. Interleaving rotating/fixed per wheel gives the
         // VAO sequence F,FFixed,F,FFixed,R,RFixed,R,RFixed — every consecutive pair
         // differs, so bindVAO's cache collapses NOTHING (the alternating-toggle
@@ -2057,7 +2088,7 @@ const CarDraw = (function () {
         // runs, the wheels are opaque (alpha 1 => depth write on, blend off) and
         // non-coplanar, so any order resolves identically under LEQUAL.
         _wq[_wqN] || (_wq[_wqN] = new Float32Array(16));
-        _wq[_wqN].set(_fixedWheelWorld);
+        M4.mulTo(_wq[_wqN], base, F);
         _wqMesh[_wqN] = wd.rear ? wm.RFixed : wm.FFixed;
         _wqN++;
         // Hot brake discs: an emissive ring floating just off the outer wheel face,
@@ -2073,7 +2104,6 @@ const CarDraw = (function () {
           const Wc = _cq[_cqN];
           Wc.set(_wheelWorld);
           Wc[12] += Wc[0] * tx; Wc[13] += Wc[1] * tx; Wc[14] += Wc[2] * tx;
-          _cqMesh[_cqN] = getCompoundRing(tyreCol);
           _cqN++;
         }
         const blur = wd.front ? frontBlur : rearBlur;
@@ -2090,7 +2120,7 @@ const CarDraw = (function () {
         }
         if (ringOk) {
           const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
-          const W = _ringWorld;
+          const W = _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
           W.set(_wheelWorld);
           W[12] += W[0] * tx; W[13] += W[1] * tx; W[14] += W[2] * tx;
           // Pooled, like the AI ring path: this allocated a literal per hot wheel.
@@ -2102,8 +2132,6 @@ const CarDraw = (function () {
           // after all the opaque wheels, which is both correct and one VAO bind
           // for the whole car instead of one per ring (getBrakeRing is a single
           // shared mesh).
-          _rq[_rqN] || (_rq[_rqN] = new Float32Array(16));
-          _rq[_rqN].set(W);
           _rqEmis[_rqN] = 0.30 + 0.70 * heat;
           _rqAlpha[_rqN] = Math.min(1, 0.25 + heat * 0.9);
           _rqMesh[_rqN] = null;   // the brake ring
@@ -2117,7 +2145,10 @@ const CarDraw = (function () {
       // Run 1: the fixed wheel layers, one bind for up to four draws, then
       // the compound stripes (one shared ring per colour).
       for (let i = 0; i < _wqN; i++) G.gfx.draw(_wqMesh[i], _wq[i], wo);
-      for (let i = 0; i < _cqN; i++) G.gfx.draw(_cqMesh[i], _cq[i], wo);
+      if (_cqN) {
+        const compoundRing = getCompoundRing(tyreCol);
+        for (let i = 0; i < _cqN; i++) G.gfx.draw(compoundRing, _cq[i], wo);
+      }
       _cqN = 0;
       // Run 2: the blended rings, after every opaque wheel of this car.
       const ro = _ringOpts;

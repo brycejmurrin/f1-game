@@ -662,6 +662,7 @@
           seat.box(stage, vadd(a.c, a.u, 4.55), [0.55, 0.3, 13.4], WEATHERED, b);
           // The toll / ticket booth off to one side: a small gabled clapboard hut.
           const booth = vadd(a.c, a.t, 11);
+          booth[1] = terrainYAt(booth[0], booth[2]) ?? booth[1];
           seat.box(stage, booth, [3.2, 2.8, 3.2], [0.58, 0.56, 0.50], b);
           seat.box(stage, vadd(vadd(booth, a.r, -1.7), a.u, 1.4), [0.2, 1.1, 1.2], SIGN, b);  // service window
           stage._mat = MAT.ROOF;
@@ -674,5 +675,7 @@
       // carries its own road guard; ids stay string literals so ensureScenery
       // fetches them. Tents behind the paddock, TV camera pods at the big corners.
       for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
-      for (const s of [0.0645, 0.5255, 0.7335, 0.9255]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
+      // The Boot camera sits on the open verge inside the forest edge.
+      bakedModel("k_camera_exclusive", K(0.5255), 1, 6, { scale: 3 });
+      for (const s of [0.0645, 0.7335, 0.9255]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

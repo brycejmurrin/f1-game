@@ -128,8 +128,10 @@ const InputHoldButtons = (function () {
       // the same aggregation, including window capture before the local event.
       // The last travel reported: a thumb resting in the dead band sends pointermove at the
       // digitizer rate with an unchanged level, so only a CHANGE reaches the callback.
-      if (level && opts?.button !== "gas") PedalTravel.watchButtonProfile(opts?.button || id, profile => {
-        if (profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
+      if (level) PedalTravel.watchButtonProfile(opts?.button || id, profile => {
+        if (profile.brightness) el.style?.setProperty?.("--touch-brightness", profile.brightness + "%");
+        else el.style?.removeProperty?.("--touch-brightness");
+        if (opts?.button !== "gas" && profile.feedback && profile.press === "progressive") el.setAttribute("data-touch-response", "progressive");
         else el.removeAttribute?.("data-touch-response");
       });
       let painted = NaN, paintedCommand = NaN, paintedProfile = null;
@@ -137,7 +139,7 @@ const InputHoldButtons = (function () {
         const command = v && opts?.command ? opts.command(v, profile) : v;
         if (painted === v && paintedCommand === command && paintedProfile === profile) return;
         if (el.style && el.style.setProperty && (profile?.feedback || paintedProfile?.feedback)) {
-          if (v > 0 && profile?.feedback) {
+          if (profile?.feedback) {
             if (command !== paintedCommand || !paintedProfile?.feedback) el.style.setProperty("--touch-level", String(command));
             if (!paintedProfile?.feedback) el.setAttribute("data-touch-feedback", "on");
           } else {
@@ -153,7 +155,7 @@ const InputHoldButtons = (function () {
         if (!level) return;
         let strongest = 0, profile = null;
         for (const [id, value] of levels) {
-          if (value > strongest) { strongest = value; profile = anchors.get(id).profile; }
+          if (!profile || value > strongest) { strongest = value; profile = anchors.get(id).profile; }
         }
         paint(strongest, profile);
       }
@@ -181,14 +183,21 @@ const InputHoldButtons = (function () {
         live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
         if (firstContact) apply(true);
         if (level) {
-          const profile = PedalTravel.buttonProfile(opts?.button || id, slideEase?.() ? "ease" : "instant");
-          const trackTravel = !arrived || (axis === "x" && profile.press === "progressive");
+          const profile = PedalTravel.contactProfile(opts?.button || id, slideEase?.() ? "ease" : "instant", arrived ? null : e, el);
+          const trackTravel = !!profile.sliderEdge || !arrived || (axis === "x" && profile.press === "progressive");
           anchors.set(e.pointerId, { x: e.clientX, y: e.clientY, profile, trackTravel });
-          const ramp = arrived && profile.slide === "ease";
+          const ramp = arrived && !profile.sliderEdge && profile.slide === "ease";
           if (ramp) ramps.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          const initial = trackTravel ? PedalTravel.level(profile, 0) : ramp ? PedalTravel.MIN : 1;
+          const initial = profile.sliderEdge ? PedalTravel.sliderLevel(profile, e) : trackTravel ? PedalTravel.level(profile, 0) : ramp ? PedalTravel.MIN : 1;
           levels.set(e.pointerId, initial);
           paintLevel();
+          if (!arrived && !profile.sliderEdge && profile.buildMs) {
+            const pointer = e.pointerId, contact = anchors.get(pointer);
+            PedalTravel.buildOnHold(contact, () => anchors.get(pointer) === contact, value => {
+              levels.set(pointer, value);
+              paintLevel();
+            });
+          }
         }
         gone.clear();
         if (arrived) slid.add(e.pointerId);
@@ -200,6 +209,12 @@ const InputHoldButtons = (function () {
       function handOff(e) {
         const to = holdById.get(sibId);
         if (!to) return false;
+        // Capture keeps e.target on the current pedal. The visible sibling must
+        // actually be under the finger, especially where custom dock boxes overlap.
+        if (document.elementFromPoint) {
+          const hit = document.elementFromPoint(e.clientX, e.clientY);
+          if (hit !== to.el && !to.el.contains?.(hit)) return false;
+        }
         release(e.pointerId);
         try { el.releasePointerCapture(e.pointerId); } catch (_) { /* capture already gone */ }
         gone.add(e.pointerId); if (!slid.size) look(el, "off");
@@ -235,9 +250,12 @@ const InputHoldButtons = (function () {
         }
         const a = anchors ? anchors.get(e.pointerId) : null;
         if (!a?.trackTravel) return;
-        const dx = e.clientX - a.x, dy = e.clientY - a.y;
-        const advance = a.profile.press === "progressive" ? Math.hypot(dx, dy) : axis === "x" ? -dir * dx : -dy;
-        levels.set(e.pointerId, PedalTravel.level(a.profile, advance));
+        if (a.profile.sliderEdge) levels.set(e.pointerId, PedalTravel.sliderLevel(a.profile, e));
+        else {
+          const dx = e.clientX - a.x, dy = e.clientY - a.y;
+          a.advance = PedalTravel.advance(a.profile, dx, dy, axis === "x" ? -dir * dx : -dy);
+          levels.set(e.pointerId, PedalTravel.level(a.profile, a.advance, a.holdFraction));
+        }
         paintLevel();
       };
       el.addEventListener("pointerup", (e) => release(e.pointerId));

@@ -14,7 +14,7 @@ Northern hardwood and conifer mix. In the autumn light this place is famous for,
 
 ## 3. Elevation
 
-Severe. The lap climbs and drops repeatedly with blind crests at the top of several rises. This is the defining quality. The Hump on the back straight is the famous airborne crest (lowered in the 2000s redevelopment; we keep the character of the historic layout).
+Severe. The lap climbs and drops repeatedly with blind crests at the top of several rises. This is the defining quality. The Hump crests around 59.5% of the built lap. The back-straight profile follows the Canadian 2018 lidar terrain model and restores the approximately 3.6 m removed from its crest during redevelopment. The approach and exit interpolate that restoration into the surveyed road. [Natural Resources Canada lidar](https://datacube.services.geo.ca/api/collections/hrdem-lidar/items/QC-600018-23_DIF_Grand_Mtl_2018-1m) · [Northlander, October 2005, p. 13](https://ncr-pca.org/images/stories/Northlander/2005-10.pdf)
 
 ## 4. Landmarks & surroundings by lap position
 

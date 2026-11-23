@@ -240,3 +240,47 @@ test("Bahrain scenery landmarks track the current arc-length origin", () => {
     }
   }
 });
+
+test("Spa crossfall follows the measured Bruxelles hairpin and both Pouhon apexes", () => {
+  const { track } = circuit("spa");
+  // SPW 2021–22 0.5 m DTM. Projected bacinger vertices, signed angle measured
+  // across ±3 m of the road centre; positive means the right side is higher.
+  // Pin physical locations so adjusting the timing line cannot move the check.
+  for (const [x, z, measured] of [
+    [-301.3, -1031.9, -2.92], [-259.4, -990.5, -1.71], [-283.7, -938.0, -2.98],
+    [-301.3, -373.4, 2.37], [-214.0, -306.7, 1.97], [-83.5, -320.9, 2.74],
+  ]) {
+    let nearest = 0, distance = Infinity;
+    for (let k = 0; k < track.n; k++) {
+      const d = Math.hypot(track.px[k] - x, track.pz[k] - z);
+      if (d < distance) { nearest = k; distance = d; }
+    }
+    assert.ok(distance < 5, `survey station (${x}, ${z}) missed the road by ${distance} m`);
+    const s = nearest * track.total / track.n;
+    const rise = Tracks.banking(track, s, 3).dy - Tracks.banking(track, s, -3).dy;
+    const actual = Math.atan2(rise, 6) * 180 / Math.PI;
+    // Smooth authored bowls approximate an archived raster, including small
+    // direction and registration errors between its trace and the spline.
+    assert.ok(Math.abs(actual - measured) < 1.2, `at (${x}, ${z}): ${actual}° vs ${measured}°`);
+  }
+});
+
+test("Bahrain and Spielberg turn 10 both fall away from the apex", () => {
+  // They turn in opposite directions. The lateral slope must oppose the
+  // corner's curvature for both to be off-camber.
+  for (const id of ["bahrain", "redbull"]) {
+    const { track, corner } = circuit(id);
+    const apex = corner(10);
+    const roll = Tracks.bankAngle(track, apex.fraction * track.total);
+    assert.ok(roll * apex.curvature < 0, id);
+  }
+});
+
+test("Mercedes-Arena crossfall and Suzuka's near-level Gyaku Bank survive the road build", () => {
+  const arena = circuit("nurburgring");
+  const roll = Tracks.bankAngle(arena.track, arena.corner(2).fraction * arena.track.total);
+  assert.ok(Math.abs(Math.abs(Math.tan(roll)) - 0.025) < 0.001);
+  const suzuka = circuit("suzuka");
+  const gyaku = Tracks.bankAngle(suzuka.track, suzuka.corner(6).fraction * suzuka.track.total);
+  assert.ok(Math.abs(gyaku) < Math.PI / 180);
+});

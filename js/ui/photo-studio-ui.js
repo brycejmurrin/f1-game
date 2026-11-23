@@ -8,7 +8,27 @@ const CAPTURE_MS = 8000;   // a frame readback that has not come back by then ne
 // TIME and WEATHER are the engine's own discrete sets (js/race/weather-arc.js VALID, setTimeOfDay): no continuous clock exists.
 const TODS = [["dawn", "Dawn"], ["day", "Day"], ["dusk", "Dusk"], ["night", "Night"], ["default", "Track default"]];
 const WXS = [["dry", "Dry"], ["overcast", "Overcast"], ["fog", "Fog"], ["wet", "Wet"], ["rain", "Rain"], ["storm", "Storm"]];
-let live = null;
+let live = null, samplePass = null;
+// Hammersley points at the centres of equally spaced strata on both axes.
+// Every prefix used here is a power of two, with a zero-mean pixel offset.
+function capturePass(count) {
+  let projection, view, width, height;
+  return {
+    index: 0, draws: 0, pump: false, cancelRead: null, garageTime: null,
+    project(p, v, w, h) {
+      if (!projection) {
+        projection = p.slice(); view = v.slice(); width = w; height = h;
+      }
+      if (!w || !h || w !== width || h !== height) throw new Error("The scene size changed during capture");
+      let reversed = 0;
+      for (let bit = 1; bit < count; bit *= 2) reversed = reversed * 2 + ((this.index & bit) ? 1 : 0);
+      p.set(projection); v.set(view);
+      p[8] += (2 * (this.index + 0.5) / count - 1) / w;
+      p[9] += (2 * (reversed + 0.5) / count - 1) / h;
+      this.draws++;
+    },
+  };
+}
 const text = (v, max) => String(v || "").replace(/[\x00-\x1f\x7f]/g, " ").trim().slice(0, max || 80);
 function filename(label) { return "apex26-" + (text(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "photo") + ".png"; }
 function crop(width, height, aspect) {
@@ -134,7 +154,7 @@ function create(G, deps) {
       }
     }
   }
-  const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
+  const st = { open: false, source: "race", aspect: "wide", samples: 1, grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
   let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0, releaseCar = null, downloading = false;
   const mk = (tag, props, kids) => {
@@ -159,7 +179,7 @@ function create(G, deps) {
   const guide = mk("div", { id: "ps-guide", attrs: { "aria-hidden": "true" } }, [mk("div", { id: "ps-grid" })]);
   const importFile = mk("input", { id: "ps-import", type: "file", accept: "image/png,image/jpeg,image/webp", attrs: { "aria-label": "Import a personal photo" } });
   importFile.addEventListener("change", () => importPhoto(importFile.files && importFile.files[0]));
-  const group = (title, kids) => mk("section", { attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
+  const group = (id, title, kids) => mk("section", { id: "ps-group-" + id, attrs: { "aria-label": title } }, [mk("h3", { className: "adv-sec", textContent: title }), ...kids]);
   const captureButton = button("CAPTURE", capture, "ps-capture"), done = button("DONE", () => close(true), "ps-close");
   captureButton.className = "bigbtn"; done.className = "bigbtn alt";
   // SUBJECT: the Home door opens on whatever the Home scene shows, and the
@@ -170,7 +190,7 @@ function create(G, deps) {
   const subjectValue = () => (isGarage() ? "garage" : "circuit");
   const subjectRow = select("Subject", [["garage", "Garage"], ["circuit", "Circuit"]], subjectValue,
     (v) => { if (st.subject && !st.busy && v !== subjectValue()) st.subject(v); }, "ps-subject");
-  const subjectGroup = group("SUBJECT", [subjectRow,
+  const subjectGroup = group("subject", "SUBJECT", [subjectRow,
     mk("p", { className: "adv-help", textContent: "Your car in the garage or on the circuit. Your Home scene stays as it is." })]);
   // CONDITIONS: the SESSION's time of day and weather through the lighting tuner's own seam (G.setTimeOfDay /
   // G.weather → Atmosphere.applyRaceSettings). A preview only: open() records what the session had, RESET and
@@ -182,12 +202,12 @@ function create(G, deps) {
   const todRow = pick("Time of day", TODS, () => G.setTimeOfDay(), setTod, "ps-tod");
   const wxRow = pick("Weather", WXS, () => G.weather(), setWx, "ps-weather");
   const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
-  const condGroup = group("TIME & WEATHER", [todRow, wxRow, condReset,
+  const condGroup = group("conditions", "TIME & WEATHER", [todRow, wxRow, condReset,
     mk("p", { className: "adv-help", textContent: "Changes the light and weather for this photo only. Your race and results stay as they were." })]);
   // DRIVING LINE: show or hide the suggested-line ribbon for this photo only (DrivingLine.setPhoto), put back on close.
   const lineRow = select("Driving line", [["on", "Shown"], ["off", "Hidden"]], () => (DrivingLine.shown() ? "on" : "off"),
     (v) => { if (st.busy || st.closing || isGarage()) return; DrivingLine.setPhoto(v === "on"); }, "ps-line");
-  const lineGroup = group("DRIVING LINE", [lineRow,
+  const lineGroup = group("line", "DRIVING LINE", [lineRow,
     mk("p", { className: "adv-help", textContent: "Shows or hides the racing line for this photo only. Your DRIVING LINE setting stays as it is." })]);
   function paintCond() {
     for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
@@ -207,7 +227,7 @@ function create(G, deps) {
   // TEAM tab's GARAGE / CREW / LIGHTING pickers (deps.garage.looks = SetupUI's lookRowSpecs, one table) and call the
   // same setters, so a pick here applies live and is saved exactly as there (apex26.garageLook / crewLook /
   // garageMood) — no reset on close. LIGHTING carries the hour: NIGHT, DAYLIGHT, SHOWROOM…
-  const looksGroup = group("GARAGE & LIGHTING", [mk("p", { className: "adv-help", textContent: "Room, crew and lighting for your garage. Saved like the Team tab." })]);
+  const looksGroup = group("garage", "GARAGE & LIGHTING", [mk("p", { className: "adv-help", textContent: "Room, crew and lighting for your garage. Saved like the Team tab." })]);
   const lookRows = {};
   let looksChanged = false;
   const lookSpecs = () => (deps.garage && deps.garage.looks ? deps.garage.looks() || [] : []);
@@ -243,7 +263,7 @@ function create(G, deps) {
   const ltTabs = mk("div", { id: "ps-lt-tabs", attrs: { role: "tablist", "aria-label": "Lighting groups" } });
   const ltRows = mk("div", { id: "ps-lt-rows" });
   const ltReset = button("RESET LIGHTING", () => resetLight(), "ps-lt-reset");
-  const lightGroup = group("PHOTO LIGHTING", [
+  const lightGroup = group("lighting", "PHOTO LIGHTING", [
     mk("p", { className: "adv-help", textContent: "Full lighting knobs for this photo only. Closing restores the race lighting exactly." }),
     ltTabs, ltRows, ltReset,
   ]);
@@ -387,12 +407,14 @@ function create(G, deps) {
     input.addEventListener("input", () => { out.textContent = input.value + unit; placeCar(id !== "ps-car-rotation"); });
     return mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: label }), input, out]);
   };
-  const carGroup = group("PLACE YOUR CAR", [
+  const carGroup = group("car", "PLACE YOUR CAR", [
     placement("Circuit position", "ps-car-position", 0, 100, .1, "%"),
     placement("Sideways", "ps-car-offset", -20, 20, .1, " m"),
     placement("Rotation", "ps-car-rotation", -180, 180, 1, "°"),
     button("FRAME CAR", () => setShot("car"), "ps-car-frame"),
   ]);
+  const sampleRow = select("Capture quality", [["1", "Instant"], ["8", "8 samples"], ["32", "32 samples"]],
+    () => String(st.samples), (v) => { if (!st.busy && !G.netPlay?.active?.()) st.samples = +v; }, "ps-samples");
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
@@ -403,25 +425,35 @@ function create(G, deps) {
       lineGroup,
       lightGroup,
       looksGroup,
-      group("COMPOSITION", [
+      group("composition", "COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
         shots, mk("p", { id: "ps-help", className: "adv-help" }),
         coaching(),
         select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
-      group("YOUR PHOTO", [
+      group("photo", "YOUR PHOTO", [
+        sampleRow, mk("p", { className: "adv-help", textContent: "More samples smooth edges on a frozen scene. Online sessions use Instant." }),
         mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
         mk("div", { className: "balanced-row" }, [button("DOWNLOAD PNG", exportPhoto, "ps-export"), button("SAVE PHOTO", savePhoto, "ps-save")]),
         mk("div", { className: "balanced-row" }, [button("USE AS MENU BACKGROUND", useBackground, "ps-background"), button("CLEAR BACKGROUND", () => say(setBackground("") ? "Menu background cleared." : "Background could not be cleared."))]),
         mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: "Import your photo" }), importFile]),
       ]),
-      mk("details", {}, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
+      mk("details", { id: "ps-album" }, [mk("summary", { textContent: "MY PHOTOS · up to 6" }), mk("div", { id: "ps-library" })]),
       mk("p", { id: "ps-message", attrs: { "aria-live": "polite", role: "status" } }),
     ]),
     mk("footer", { className: "sheet-foot" }, [captureButton, done]),
   ]);
   root.appendChild(guide); root.appendChild(panel);
+  // Studio hides the shared camera toolbar to keep Capture and Done clear.
+  // Its track views still render the same Move and Look sticks.
+  let stickDoor;
+  if (typeof EditorWorkspace !== "undefined") {
+    EditorWorkspace.arrangeDoor(root, panel.querySelector(".sheet-head"));
+    const body = E["ps-body"];
+    stickDoor = EditorWorkspace.arrangeDoor(G.$("photo-controls"), body, "photo-controls", "Arrange camera sticks");
+    if (stickDoor) body.insertBefore(stickDoor, subjectGroup);
+  }
   root.setAttribute("aria-label", "Photo Studio");
   root.setAttribute("data-esc-close", "ps-close");
   const say = (s) => { E["ps-message"].textContent = s; };
@@ -437,6 +469,7 @@ function create(G, deps) {
     for (const id of ["ps-capture", "ps-export", "ps-save", "ps-background"]) {
       E[id].disabled = value || closing || (id !== "ps-capture" && !last);
     }
+    if (stickDoor) stickDoor.disabled = value || closing;
     E["ps-close"].disabled = false;
     E["ps-capture"].textContent = value && !closing ? "CAPTURING…" : "CAPTURE";
     E["ps-close"].textContent = closing ? "CLOSING…" : "DONE";
@@ -510,11 +543,15 @@ function create(G, deps) {
       }
     }
     st.open = true; st.generation++; root.hidden = false;
+    const online = !!G.netPlay?.active?.();
+    SettingRow.paint(sampleRow, online ? "1" : String(st.samples));
+    SettingRow.disable(sampleRow, online);
     carGroup.hidden = !hasCar();
     for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
       E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
     }
     placeCar();
+    if (stickDoor) stickDoor.hidden = isGarage();
     condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
     if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();
@@ -554,6 +591,7 @@ function create(G, deps) {
   let releaseCaptureScale = null;
   function finishClose(back) {
     if (!st.open && !st.closing) return;
+    if (activePass) releasePass(activePass);
     if (releaseCaptureScale) releaseCaptureScale();
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
     if (!isGarage()) DrivingLine.setPhoto(null);
@@ -593,13 +631,23 @@ function create(G, deps) {
       if (!st.open && st.generation === generation && target.isConnected) target.focus();
     }));
   }
-  async function frame() {
+  let activePass = null;
+  function releasePass(pass) {
+    if (activePass !== pass) return;
+    activePass = null;
+    if (samplePass === pass) samplePass = null;
+    pass.cancelRead?.();
+    E["ps-body"].inert = false;
+  }
+  async function frame(pass = null) {
     const gfx = G.gfx;
     if (gfx && gfx.invalidateSoftPresent && gfx.softPresent && gfx.softPresent()) gfx.invalidateSoftPresent();
     // Observe the display blit immediately. Its result matters only if the
     // capture needs to copy the software canvas.
     const pending = gfx && gfx.softPresent && gfx.softPresent() && gfx.awaitSoftPresent ? Promise.allSettled([gfx.awaitSoftPresent(15000)]) : null;
+    const draws = pass ? pass.draws : 0;
     if (deps.renderFrame) deps.renderFrame();
+    if (pass && pass.draws === draws) throw new Error("The scene is not ready to sample");
     // Read WebGL before yielding: its unpreserved backbuffer is cleared after compositing.
     let pixels = null;
     if (gfx && gfx.capturePixels) {
@@ -613,10 +661,23 @@ function create(G, deps) {
         if (gfx.cancelCapture) gfx.cancelCapture("capture timed out", owner);
         reject(Object.assign(new Error("the scene did not draw a frame in time"), { timedOut: true }));
       }, CAPTURE_MS); });
-      read = Promise.race([read, late]).finally(() => clearTimeout(capTimer));
+      let stopRead;
+      const cancelled = pass && new Promise((_, reject) => {
+        stopRead = () => {
+          gfx.cancelCapture?.("capture cancelled", owner);
+          reject(new Error("Capture cancelled"));
+        };
+        pass.cancelRead = stopRead;
+        // WGX submits a queued readback on a subsequent present.
+        pass.pump = !!gfx.cancelCapture;
+      });
+      read = Promise.race(cancelled ? [read, late, cancelled] : [read, late]).finally(() => {
+        clearTimeout(capTimer);
+        if (pass) { pass.pump = false; pass.cancelRead = null; }
+      });
       try { pixels = await read; }
       catch (reason) {
-        if (reason && reason.timedOut) throw reason;
+        if ((pass && activePass !== pass) || (reason && reason.timedOut)) throw reason;
         // Native WebGPU canvases can compose directly even when a backend has
         // no readback render target. Draw and copy in this same task instead.
         Log.warn("ui", "backend readback unavailable; copying the scene canvas", reason);
@@ -627,6 +688,7 @@ function create(G, deps) {
       const [presented] = await pending;
       if (presented.status === "rejected") throw presented.reason;
     }
+    if (pass && activePass !== pass) throw new Error("Capture cancelled");
     if (!pixels && !pending && deps.renderFrame) {
       // Repaint immediately before a native canvas copy; no await may come
       // between this draw and drawImage below.
@@ -703,11 +765,48 @@ function create(G, deps) {
     releaseCaptureScale = release;
     try { return await run(); } finally { release(); }
   }
+  async function sampledFrame(count) {
+    if (count === 1) return frame();
+    const pass = capturePass(count);
+    activePass = samplePass = pass;
+    E["ps-body"].inert = true;
+    let out, ctx, sums, sourceWidth, sourceHeight;
+    try {
+      for (let i = 0; i < count; i++) {
+        if (activePass !== pass || st.closing || G.netPlay?.active?.()) throw new Error("Capture cancelled");
+        pass.index = i;
+        say("Capturing sample " + (i + 1) + " of " + count + "…");
+        const src = await frame(pass);
+        if (activePass !== pass) throw new Error("Capture cancelled");
+        if (!out) {
+          sourceWidth = src.width; sourceHeight = src.height;
+          const scale = Math.min(1, 2048 / src.width, 2048 / src.height);
+          out = mk("canvas"); out.width = Math.max(1, Math.round(src.width * scale)); out.height = Math.max(1, Math.round(src.height * scale));
+          ctx = out.getContext("2d", { willReadFrequently: true });
+          if (!ctx) throw new Error("Image composition is unavailable");
+          sums = new Uint16Array(out.width * out.height * 3);
+        }
+        if (src.width !== sourceWidth || src.height !== sourceHeight) throw new Error("The scene size changed during capture");
+        ctx.drawImage(src, 0, 0, out.width, out.height);
+        src.width = src.height = 0;
+        const image = ctx.getImageData(0, 0, out.width, out.height), rgba = image.data;
+        for (let a = 0, b = 0; a < rgba.length; a += 4) {
+          for (let c = 0; c < 3; c++, b++) {
+            sums[b] += rgba[a + c];
+            if (i === count - 1) rgba[a + c] = sums[b] / count;
+          }
+        }
+        if (i === count - 1) ctx.putImageData(image, 0, 0);
+        else await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      return out;
+    } finally { releasePass(pass); }
+  }
   async function capture() {
     if (!st.open || st.busy) return false;
     const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
-      const source = await fullRes(frame); if (gen !== st.generation) return false;
+      const source = await fullRes(() => sampledFrame(G.netPlay?.active?.() ? 1 : st.samples)); if (gen !== st.generation) return false;
       keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }
@@ -814,7 +913,7 @@ function create(G, deps) {
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
+  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, samples: G.netPlay?.active?.() ? 1 : st.samples, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, width: last ? last.width : 0, height: last ? last.height : 0, background: !!background() }; }
   async function album() {
     let photos;
     try { photos = await library("list", null, session); } catch (e) { if (!session.length) throw e; photos = []; }
@@ -842,6 +941,6 @@ function create(G, deps) {
   live = api; busy(false); return api;
 }
 // ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
-return Object.freeze({ create, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+return Object.freeze({ get sampling() { return samplePass; }, create, shareCancelled, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();
 Object.freeze(PhotoStudioBody);

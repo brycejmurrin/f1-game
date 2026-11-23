@@ -383,7 +383,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
   assert.match(src, /infoBlob\s*=\s*\[[^\]]*\bdev\b[^\]]*\]/, "the adapter sniff joins the info fields into one blob");
-  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
+  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*probeDirection\(Rg\)\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
 test("GLX upscale toggles preserve scene targets at unchanged render resolution", () => {
@@ -2811,8 +2811,22 @@ test("TLX coalesces window resize to one target realloc per frame", () => {
 test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL invProj", () => {
   const tlx = code("js/render/three/tlx.js");
   // Rasterisation: three's WebGPU backend wants z in [0,1], same as WGX.
-  assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
-  assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
+  const remap = new Function("out", "projection", fnBody(tlx, "remapClipDepth"));
+  const z01 = [1,0,0,0, 0,1,0,0, 0,0,.5,0, 0,0,.5,1];
+  for (const projection of [
+    [1.7,0,0,0, 0,2,0,0, .03125,.125,-1.001,-1, 0,0,-.3002,0],
+    Float32Array.from({ length: 16 }, (_, i) => Math.sin(i * 57) * (i + 1)),
+  ]) {
+    const expected = new Float32Array(16), actual = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      let value = 0;
+      for (let k = 0; k < 4; k++) value += z01[k * 4 + r] * projection[c * 4 + k];
+      expected[c * 4 + r] = value;
+    }
+    remap(actual, projection);
+    assert.deepEqual(actual, expected);
+  }
+  assert.match(tlx, /remapClipDepth\(_projGpu, frame\.proj\)/);
   assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
 
   // Post is the OTHER convention, and the split is real, not an oversight.
@@ -2840,7 +2854,7 @@ test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => 
   assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
   assert.match(body, /f\.view\s*&&\s*f\.view\.length\s*>=\s*16/);
   assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
-  assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+  assert.match(body, /_mul4\(frameVPGpu,\s*_projZ01,\s*_viewScratch\)/);
 });
 
 test("setup preview passes explicit view for garage off-axis backends", () => {
@@ -2918,7 +2932,7 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
   assert.ok(testAt >= 0 && armAt > testAt, "the re-test must precede the arm");
   const endFn = fnBody(glx, "envFaceEnd");
   const clearAt = endFn.indexOf("_envActive = false");
-  const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
+  const bailAt = endFn.indexOf("if (!gl || !envTex) return false;");
   assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
     "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
 });
@@ -3670,9 +3684,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   }
   assert.match(src, /renderer\.setRenderTarget\(softOutRT/,
     "env / post restore must rebind the blit RT, not the native swapchain");
-  const envEnd = src.indexOf("envFaceEnd(face)");
-  assert.notEqual(envEnd, -1, "envFaceEnd moved");
-  const envBody = src.slice(envEnd, envEnd + 4200);
+  const envBody = fnBody(src, "envFaceEnd");
   assert.doesNotMatch(envBody, /setRenderTarget\(\s*null\s*\)/,
     "envFaceEnd must not restore the swapchain on the software-WebGPU path");
   // A probe face that throws must NOT be counted: six swallowed throws used to
@@ -3706,8 +3718,11 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "and compare that flag at the latch — a silent rejection has no other tell");
   assert.match(envBody, /_envGaveUp\s*=\s*true\s*;\s*envReady\s*=\s*false\b/,
     "a probe that keeps erroring must stand down instead of binding the cube");
-  assert.match(fnBody(src, "envProbeReady"), /return\s+envReady\s*\|\|\s*_envGaveUp\b/,
-    "standing down must read as ready so the caller stops re-probing forever");
+  const ready = new Function("garageProbeRoom", "envReady", "_envGaveUp", fnBody(src, "envProbeReady"));
+  assert.equal(ready(null, false, true), true, "a failed race probe stops retrying");
+  assert.equal(ready(null, true, false), true, "a complete race cube stays ready");
+  assert.equal(ready(null, false, false), false, "an incomplete race cube keeps capturing");
+  assert.equal(ready({}, true, false), false, "a complete garage cube cannot satisfy the race producer");
   // three's node builder reads attribute.array.constructor to type an attribute
   // whenever it compiles a program for a pass it has not seen before, so a
   // chunk freed before the env probe's first face makes EVERY face throw.
@@ -4936,6 +4951,10 @@ test("GLX still diagnoses and releases a failed shader after linking", () => {
     assert.ok(calls.some(([name]) => name === "getShaderInfoLog"));
     const deleted = calls.filter(([name, args]) => name === "deleteProgram" && args[0].shaders.some((sh) => sh.id === 1));
     assert.equal(deleted.length, 1, "the failed program is released exactly once");
+    const linked = calls.filter(([name]) => name === "linkProgram").map(([, [program]]) => program);
+    const released = calls.filter(([name]) => name === "deleteProgram").map(([, [program]]) => program);
+    assert.equal(released.length, linked.length, "every link has exactly one release");
+    assert.deepEqual(new Set(released), new Set(linked), "failed boot frees successful sibling programs");
   }
 });
 
@@ -5591,9 +5610,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
   // Software faces still latch envReady for M9, but a black cube must not
   // raise uEnvStr (clearcoat absorb toward black).
   const src = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  const beginAt = src.indexOf("envFaceBegin(face, eye, frame)");
-  assert.notEqual(beginAt, -1, "envFaceBegin moved");
-  const beginBody = src.slice(beginAt, beginAt + 1800);
+  const beginBody = fnBody(src, "envFaceBegin");
   assert.match(beginBody, /frame\.viewProj\s*=\s*_envVPArr/,
     "probe must publish the face VP so propBatches cull against the cube face");
   assert.match(beginBody, /frame\.eye\s*=\s*eye/,
@@ -5602,9 +5619,7 @@ test("TLX env probe culls and lights like GLX — not the chase camera", () => {
     "probe must cap draw distance like GLX (150 m when envCull is on)");
   assert.match(beginBody, /lit\.updateFrame\(frame\)/,
     "probe runs before gfx.begin — updateFrame must push this frame's lighting");
-  const endAt = src.indexOf("envFaceEnd(face)");
-  assert.notEqual(endAt, -1, "envFaceEnd moved");
-  const endBody = src.slice(endAt, endAt + 3600);
+  const endBody = fnBody(src, "envFaceEnd");
   assert.match(endBody, /_restoreEnvFrame\(\)/,
     "envFaceEnd must restore the main-camera VP/eye/cullDist");
   assert.match(endBody, /_envBlank\s*=\s*true/,
@@ -5646,8 +5661,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "main HDR render must arm the ssrTag MRT");
   assert.match(window, /renderer\.setMRT\(/,
     "renderer.getMRT() is what NodeMaterial.setup merges into");
-  const envEnd = tlx.indexOf("envFaceEnd(face)");
-  const envBody = tlx.slice(envEnd, envEnd + 3600);
+  const envBody = fnBody(tlx, "envFaceEnd");
   assert.doesNotMatch(envBody, /setSsrMrt\(true\)/,
     "env cube must not arm the 2-attachment program");
   assert.doesNotMatch(envBody, /setMRT\(/,
@@ -6161,6 +6175,39 @@ test("TLX timing enables the bundled backend, not a shadow renderer property", a
   assert.equal(_gpuMs, -1);
 });
 
+test("TLX updates only the sampled cube face and preserves its world projection", async () => {
+  const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
+  const envRT = new THREE.CubeRenderTarget(1);
+  const raceProbeOff = false, leaveGarageProbe = () => {};
+  const _envOptOut = false, _envGaveUp = false, lit = {}, ensureEnvCam = () => {}, ENV_CULL_M = 300;
+  const _envVP = new THREE.Matrix4(), _envInvVP = new THREE.Matrix4();
+  const _envVPArr = new Float32Array(16), _envInvArr = new Float32Array(16);
+  let _envActive, _envFrame, _envSvVP, _envSvEye, _envSvCull, _envBegins = 0, envCubeCam;
+  const begin = eval("(function(face, eye, frame){" + fnBody(code("js/render/three/tlx.js"), "envFaceBegin") + "})");
+  for (const system of [THREE.WebGLCoordinateSystem, THREE.WebGPUCoordinateSystem]) {
+    envCubeCam = new THREE.CubeCamera(0.4, 900, envRT);
+    const reference = new THREE.CubeCamera(0.4, 900, envRT);
+    for (const cube of [envCubeCam, reference]) {
+      cube.coordinateSystem = system;
+      cube.updateCoordinateSystem();
+    }
+    for (const face of [0, 5, 3, 1, 4, 2]) {
+      const eye = [face + 12.5, face - 4, face * 0.75];
+      reference.position.fromArray(eye);
+      reference.updateMatrixWorld(true);
+      const camera = reference.children[face];
+      const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      const before = envCubeCam.children.map(child => child.matrixWorld.clone());
+      const frame = { viewProj: new Float32Array(16) };
+      const inv = begin(face, eye, frame);
+      assert.deepEqual(frame.viewProj, Float32Array.from(vp.elements));
+      assert.deepEqual(inv, Float32Array.from(vp.invert().elements));
+      for (let i = 0; i < 6; i++) if (i !== face) assert.deepEqual(envCubeCam.children[i].matrixWorld, before[i]);
+    }
+  }
+  envRT.dispose();
+});
+
 test("TLX cube readback selects all six faces of attachment zero", async () => {
   const THREE = await import("../../vendor/three-0.187.0/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
@@ -6480,6 +6527,19 @@ test("TLX timer publishes one serial per fresh resolution, including identical d
     assert.equal(h.timer().samples, 2, "equal-valued newly resolved timing still advances");
     assert.equal(h.timer().sampleAt, 140);
   }
+});
+
+test("TLX WebGL timestamp snapshots release unavailable queries before the next batch", async () => {
+  const h = tlxTimerFixture(true);
+  h.timer(true); h.queue();
+  h.pool.queries[0].ready = false;
+  h.resolve();
+  h.queue(); // Three can reuse the index while its previous query object is still resolving.
+  await h.finish(4);
+  assert.equal(h.timer().samples, 0);
+  h.queue(); h.resolve(); await h.finish(5);
+  assert.equal(h.timer().samples, 1);
+  assert.equal(h.ms(), 5);
 });
 
 test("TLX ignores old epochs, inspector/lost-device completions and disjoint results", async () => {

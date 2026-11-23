@@ -68,7 +68,7 @@
   background: rgba(20, 20, 30, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 50%;
-  width: var(--btn); height: var(--btn);
+  --control-base: var(--btn); width: var(--btn); height: var(--btn);
   font-size: max(var(--fs-micro), var(--touch-label-floor));
   display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: 1;
@@ -136,9 +136,9 @@
 /* Containment anchors the face to static dock buttons and keeps its negative
    paint layer behind labels but above the button background. */
 .touchbtn:is([data-touch-feedback="on"], [data-touch-response]) { contain: layout; }
-/* Three ascending bars identify progressive travel before the thumb lands.
+/* Gas uses its full-face feedback. Other progressive controls also show travel bars.
    An active grip warning takes the same slot above the label. */
-.touchbtn[data-touch-response="progressive"]:not([data-grip-cue], [aria-pressed])::before {
+.touchbtn[data-touch-response="progressive"]:not(#btn-throttle, [data-grip-cue], [aria-pressed])::before {
   content: ""; position: absolute; pointer-events: none; top: 10%; left: 50%;
   width: 14px; height: 7px; transform: translateX(-50%); background: var(--hud-ink-light);
   clip-path: polygon(0 100%, 0 65%, 26% 65%, 26% 100%, 37% 100%, 37% 32%, 63% 32%, 63% 100%, 74% 100%, 74% 0, 100% 0, 100% 100%);
@@ -149,10 +149,11 @@
    changes opacity; a light press stays dim and full travel is brightest. */
 :is(#btn-steer-left, #btn-steer-right, #btn-throttle, #btn-brake)[data-touch-feedback="on"]:not([aria-pressed]) {
   background: var(--hud-ink-dark); color: var(--hud-ink-light);
+  opacity: 1; /* A secondary finger can hold a pedal without matching :active. */
 }
 .touchbtn[data-touch-feedback="on"]::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
-  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) 46%, var(--hud-ink-dark));
+  background: color-mix(in srgb, var(--touch-fill, var(--hud-ink-light)) var(--touch-brightness, 46%), var(--hud-ink-dark));
   opacity: var(--touch-level);
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue]::before {
@@ -163,6 +164,17 @@
 }
 .touchbtn[data-touch-feedback="on"][data-grip-cue="lock"]::before {
   background: linear-gradient(to bottom, var(--hud-ink-light) 32%, var(--hud-ink-dark) 32% 68%, var(--hud-ink-light) 68%);
+}
+
+/* Leave the grip cue visible when wheelspin or lock-up needs the same space. */
+.touchbtn[data-touch-indicator="percent"][data-touch-feedback]:not([data-grip-cue], [aria-pressed])::before {
+  counter-reset: pressure calc(100 * var(--touch-level, 0));
+  content: counter(pressure) "%"; position: absolute; inset: auto 0 5%; width: auto; height: auto;
+  transform: none; clip-path: none; background: none; text-align: center;
+  font-size: var(--fs-micro); line-height: 1; pointer-events: none;
+}
+.touchbtn[data-touch-indicator="bar"][data-touch-feedback]::after {
+  opacity: 1; transform-origin: bottom; transform: scaleY(var(--touch-level));
 }
 
 /* Latch uses the persistent illuminated GAS button for its binary command. */
@@ -247,9 +259,9 @@
    An outside ring costs no layout (box-shadow draws outside the border box and
    does not reflow the dock) and reads at a glance in peripheral vision, which
    is all a driver has to spare. */
-.touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+.touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
 @media (prefers-reduced-transparency: reduce) {
-  .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+  .touchbtn[data-touch-feedback="on"]:not([aria-pressed]), .touchbtn[data-slid="on"], .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
 }
 
 /* WHERE THE FINGER LANDED, in TOUCH mode. Drag-to-steer is an invisible
@@ -373,7 +385,7 @@ body[data-dock-edit] .dock:active { cursor: grabbing; }
 /* steer buttons: CONSOLE layout — both arrows in the bottom-LEFT, side by side,
    so the left thumb steers like a d-pad and the right thumb stays free for the
    action buttons (BRAKE/BOOST/OT). */
-.steerbtn { font-size: 22px; --idle: rgba(20, 20, 30, 0.55); background: var(--idle); width: var(--steer); height: var(--steer); }
+.steerbtn { font-size: 22px; --idle: rgba(20, 20, 30, 0.55); background: var(--idle); --control-base: var(--steer); width: var(--steer); height: var(--steer); }
 .steerbtn[data-slid="on"], .steerbtn:active { background: rgba(255, 255, 255, 0.18); }
 .steerbtn[data-slid="off"]:active { background: var(--idle); box-shadow: none; }
 #btn-steer-left  { left: calc(16px + var(--sal));  bottom: calc(16px + var(--sab)); }
@@ -612,13 +624,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      (narrow tier: 48px) tap with no padding. 0.28 of the tap is --fs-micro at
      the default and shrinks only when the token outgrows the button. */
   body:not(.desktop) .dock .touchbtn,
-  body.desktop .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: max(min(var(--fs-micro), calc(var(--tap) * 0.28)), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  body.desktop .dock .touchbtn { --control-base: var(--tap); width: var(--tap); height: var(--tap); font-size: max(min(var(--fs-micro), calc(var(--tap) * 0.28)), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   body:not(.desktop) .dock .pedal,
   body:not(.desktop) .dock .steerbtn,
   body:not(.desktop) .dock .shiftbtn,
   body.desktop .dock .pedal,
   body.desktop .dock .steerbtn,
-  body.desktop .dock .shiftbtn { width: var(--hold); height: var(--hold); font-size: max(var(--fs-micro), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
+  body.desktop .dock .shiftbtn { --control-base: var(--hold); width: var(--hold); height: var(--hold); font-size: max(var(--fs-micro), calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   body:not(.desktop) .dock .shiftbtn,
   body.desktop .dock .shiftbtn { font-size: max(15px, calc(var(--touch-label-floor) / var(--touch-label-z, 1))); }
   /* The steer arrows are the largest buttons and carried the smallest glyph:
@@ -648,7 +660,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* BUTTONS mode: BOOST / OT / AERO are thumb targets every bit as much as GAS,
      BRAKE and the steer arrows — same diameter and the same lift from the edge. */
   body.steer-buttons:not(.desktop) #grp-taps .touchbtn,
-  body.desktop.steer-buttons .dock #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
+  body.desktop.steer-buttons .dock #grp-taps .touchbtn { --control-base: var(--hold); width: var(--hold); height: var(--hold); }
   body.steer-buttons:not(.desktop) #grp-taps,
   body.desktop.steer-buttons .dock #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
   /* OT sits BESIDE BRAKE in this mode (taps column | pedals column). The shared
@@ -1006,8 +1018,8 @@ body.hud-hidden #hud > :not(#hud-dock),
    with the HUD off left the pit crew waiting for a button nobody could see.
    The cluster box itself goes unless that button is showing (menu-survey 42
    measures it hidden), so the only box left under HIDE HUD is a live button. */
-body.hud-hidden #hud-dock > .hud-bottom:not(:has(> #hud-work:not([hidden]))) { display: none !important; }
-body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-work) { display: none !important; }
+body.hud-hidden #hud-dock > .hud-bottom:not(:has(> #hud-pit-actions > button:not([hidden]))) { display: none !important; }
+body.hud-hidden #hud-dock > .hud-bottom > :not(#hud-pit-actions) { display: none !important; }
 body.hud-hidden #lights,
 body.hud-hidden #announce,
 body.hud-hidden #campicker,

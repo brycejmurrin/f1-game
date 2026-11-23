@@ -13,6 +13,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "okayama",
+    revision: 3,
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
@@ -53,6 +54,11 @@
     // fall back to thirds.
     sectors: [0.371, 0.599],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.1172, 0.1658, 0.2107, 0.2928, 0.3048, 0.3372, 0.3992, 0.4552, 0.6322, 0.6937, 0.8678],
+    // GSI 1 m lidar: the right side of Attwood is about 0.4 m lower across
+    // an 8 m transect, easing to 0.1 m on the approach.
+    bankZones: [
+      { frac: 0.895, angleDeg: 3.5, widthM: 570 }, // T11 exit, measured peak 100 m after apex
+    ],
     furniture: { tree: "broad", fol: [0.18, 0.34, 0.20], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["concrete", "steel", "darkSteel"],

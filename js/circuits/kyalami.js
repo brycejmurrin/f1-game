@@ -19,7 +19,7 @@
     // ghost or time-trial board row was recorded with revision 1 (clockwise)
     // in its comparable-class key, so it no longer matches and is never
     // replayed or compared; it stays in storage, untouched (js/track/core/def.js).
-    revision: 2,
+    revision: 4, // Leeukop approach and Mineshaft descent
     reverse: false,
     // The line on control node 0, 201 m (built arc) toward Ingwe from the old
     // node-1 line: the SRO pit-lane drawing puts S/F at the end of the pit
@@ -66,12 +66,16 @@
       sunDir:        [0.30, 0.82, 0.24],
     },
     elevations: [
-      // SOURCE-index fracs (symmetric cosine bumps: direction-independent, so
-      // the flip moved none of them). Racing position in brackets.
-      { s: 0.16, halfM: 300, rise: -10.0 },  // the dip through Jukskei (0.19)
-      { s: 0.36, halfM: 340, rise: 13.0 },   // the long climb to Clubhouse (0.40)
-      { s: 0.58, halfM: 300, rise: 8.0 },    // up to the high point at Leeukop (0.62)
-      { s: 0.80, halfM: 340, rise: -14.0 },  // down through the Crocodiles (0.84)
+      // 2020 Kyalami 9 Hour programme, p. 12: 43 m relief, highest at T10.
+      // The 48-point Copernicus terrain sample on the modern route puts the
+      // low on the run to Crowthorne and the broad crest above Mineshaft.
+      // Smooth those features over their approaches; heights are relative.
+      { s: 0.070, halfM: 480, rise: -14 },  // between The Kink and Crowthorne
+      { s: 0.360, halfM: 340, rise:  10 },  // upper section toward Clubhouse
+      // Paired 30 m SRTM and Copernicus terrain sections resolve the
+      // Leeukop shoulder. The Mineshaft road loses about 29 m by lap 0.729.
+      { s: 0.598, halfM: 460, rise:  29 },  // Leeukop, racing fraction 0.633
+      { s: 0.800, halfM: 340, rise:  -4 },  // lower return through Crocodiles
     ],
     hwZones: [
       { s0: 0.230, s1: 0.275, hw: 6.3, ease: 0.012 },    // source-frame index (unchanged by the flip)

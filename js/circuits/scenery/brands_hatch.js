@@ -198,10 +198,10 @@
       // a grass bank: catering units, a toilet block, a burger van and the
       // programme hut. Small, low and repeated, never a wall of buildings.
       for (const [s, d] of [
-        [0.066, 34], [0.074, 34], [0.082, 35], [0.090, 36],
+        [0.066, 40], [0.074, 34], [0.082, 35], [0.090, 36],
         [0.180, 33], [0.190, 33], [0.200, 34],
         [0.850, 35], [0.858, 35], [0.866, 44], [0.876, 35],
-        [0.900, 34], [0.910, 34], [0.922, 35], [0.934, 36],
+        [0.900, 41], [0.910, 34], [0.922, 35], [0.934, 36],
         [0.310, 44], [0.340, 37], [0.368, 36],
       ]) {
         const k = K(s);
@@ -266,8 +266,8 @@
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
           tree(k, side, dist, 8 + h * 5, h < 0.6 ? OAK : OAK_L);
-          if (h > 0.80 && clear(k, side, dist + 12, 9)) {
-            tree(k, side, dist + 12, 7 + h * 4, OAK_D);
+          if (h > 0.80 && clear(k, side, dist + 10, 9)) {
+            tree(k, side, dist + 10, 7 + h * 4, OAK_D);
           }
         }
       });
@@ -488,7 +488,7 @@
       signBoard(K(sl(0.022)), -1, 30, 10, 6, DKGREY);
       signBoard(K(sl(0.052)), -1, 28, 8, 5, DKGREY);
       // Catering and the bank's own toilet block, behind the standing crowd.
-      for (const [s, d] of [[0.020, 35], [0.032, 32], [0.046, 31], [0.058, 33]]) {
+      for (const [s, d] of [[0.020, 35], [0.032, 32], [0.046, 31], [0.058, 24]]) {
         const k = K(sl(s));
         if (clear(k, -1, d, 10)) house(k, -1, d, 7, 3.2, 6, {});
       }

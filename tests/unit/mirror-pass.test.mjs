@@ -289,6 +289,18 @@ test("full quality freezes instanced packs every other drawn frame (audit #8)", 
   assert.ok(lite.calls.filter((c) => c[0] === "world").every((c) => c[3] === false));
 });
 
+test("a camera cut or resized rear-view target refreshes the prop packs immediately", () => {
+  const h = boot({ mode: "on" });
+  h.render();
+  h.G.player.s += 80;
+  h.render();
+  h.frameEl.getBoundingClientRect = () => ({ left: 400, top: 80, width: 300, height: 100, right: 700, bottom: 180 });
+  h.clock.t += 2000;
+  h.render();
+  h.render();
+  assert.deepEqual(h.calls.filter(c => c[0] === "world").map(c => c[3]), [false, false, false, true]);
+});
+
 // 07-F3: the freeze cadence used the lifetime count of drawn passes, so after a hidden/lite interval a 50 % chance
 // said "freeze" on the first full pass and replayed the pack recorded before it. The cadence counts the current run.
 test("the first full pass after a hidden or lite interval always refreshes the instance pack (07-F3)", () => {
@@ -502,4 +514,13 @@ test("GLX mirror target caps TEXTURE_MAX_LEVEL at the last level generateMipmap 
   assert.equal(h.GLX.mirrorBegin(h.frame(), 90, 40), true);
   h.GLX.mirrorEnd();
   assert.deepEqual(span(90, 40), want(90, 40, 6), "90x40: levels 0..6");
+});
+
+test("a temporary benchmark mirror override leaves the player's preference intact", () => {
+  const h = boot({ mode: "on", cam: "helmet" });
+  h.mp.setMode("on");
+  h.mp.setMode("off", { persist: false });
+  h.render();
+  assert.equal(h.mp.drawing(), false);
+  assert.equal(h.stored.hudMirror, "on");
 });

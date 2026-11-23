@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "bahrain",
+    revision: 3,
     // The pit complex (TrackPit) sits on the start straight, on its RIGHT (east):
     // OSM pit-lane way 187123422 measures 9.5-11.8 m right of the built
     // centreline, the main grandstand (way 187123419) 39 m left.
@@ -38,13 +39,22 @@
     // columns and the terrain beyond them; the far ground plane reads it too.
     terrainMat: "SAND",
     pal: { horizon: [0.20, 0.10, 0.05], zenith: [0.06, 0.05, 0.16], sunColor: [0.80, 0.62, 0.40], ambientSky: [0.30, 0.22, 0.16], ambientGround: [0.28, 0.18, 0.10], fogColor: [0.16, 0.10, 0.06], fogDensity: 0.0028, sunDir: [0.5, 0.14, 0.4], runoff: [0.24, 0.23, 0.22], grass: [0.44, 0.37, 0.26] },
-    elevations: [{ s: 0.645, halfM: 260, rise: -3 }, { s: 0.725, halfM: 180, rise: 2 }],
+    // F1 lists 16.9 m of relief and a ~15 m climb from the main straight to T4.
+    // OpenF1 Bahrain qualifying 9468, Verstappen lap 16, 48 periodic height knots.
+    // The scenery origin shifts source stations forward 0.035949 lap on this trace.
+    elevations: [-0.03, -0.03, -0.06, 0, 0.25, 1.3, 1.73, 0.41, 1.54, 4.14, 5.02, 5.8,
+      7.04, 8.41, 8.09, 6.93, 6.53, 5.95, 3.74, 0.37, -0.44, 1.87, 3.46, 2.02,
+      0.46, 0.86, 1.1, 0.88, 0.97, 0.98, 0.78, 1.23, 2.88, 5.06, 6.95, 7.98,
+      7.81, 6.32, 5.55, 6.17, 5.12, 2.69, 2.15, 2.84, 1.84, 0.24, -0.13, -0.04]
+      .map((rise, i) => ({ s: (i / 48 + 1 - 0.035949) % 1, halfM: 224.46, rise })),
     bankZones: [
       { frac: 0.0475, angleDeg: 3.0, widthM: 120 },   // T1
       { frac: 0.1166, angleDeg: 3.0, widthM: 100 },   // T4
       { frac: 0.3373, angleDeg: 4.0, widthM: 220 },   // T5-T7 sweep
       { frac: 0.4064, angleDeg: 3.5, widthM: 190 },
-      { frac: 0.6077, angleDeg: 3.0, widthM: 130 },   // T10
+      // F1 describes this left-hander as off-camber. Keep the authored
+      // nominal magnitude, anchored to the numbered turn with adverse roll.
+      { turn: 10, angleDeg: -3.0, widthM: 130 },
       { frac: 0.9799, angleDeg: 3.0, widthM: 100 },   // final right
     ],
 

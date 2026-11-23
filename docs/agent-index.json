@@ -1253,6 +1253,7 @@
         "tests/specs/camera-tuner.spec.js",
         "tests/specs/camera.spec.js",
         "tests/specs/gamepad.spec.js",
+        "tests/specs/graphics-controls.spec.js",
         "tests/specs/presets.spec.js",
         "tests/specs/settings-reload.spec.js",
         "tests/specs/sliders.spec.js",
@@ -3744,6 +3745,11 @@
       "path": "js/input/tilt-roll.js",
       "global": "TiltRoll",
       "roster": "tag"
+    },
+    {
+      "path": "js/input/touch-button-actions.js",
+      "global": "TouchButtonActions",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/lighting/atmosphere.js",

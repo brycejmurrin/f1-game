@@ -450,7 +450,7 @@ test("RESTORE IS REACHABLE AT ALL: the predicate is satisfiable for some input",
   const src = SRC;
   const degradeOver = Number(/DEGRADE_OVER\s*=\s*([\d.]+)/.exec(src)[1]);
   const restoreWithin = Number(/RESTORE_WITHIN\s*=\s*([\d.]+)/.exec(src)[1]);
-  assert.ok(/const degradeAt = _floorMs \+ DEGRADE_OVER, restoreAt = _floorMs \+ RESTORE_WITHIN;/.test(src),
+  assert.ok(/const degradeAt = budgetMs \+ DEGRADE_OVER, restoreAt = budgetMs \+ RESTORE_WITHIN;/.test(src),
     "restore must be measured UPWARD from the floor — downward is unreachable");
   assert.ok(restoreWithin > 0, `RESTORE_WITHIN must be above the floor, got ${restoreWithin}`);
   assert.ok(restoreWithin < degradeOver,
@@ -1575,15 +1575,15 @@ test("preset changes expire scale attribution while keeping provisional resoluti
 // returns the next rAF interval from (frame, scale, previousRafDrew), so a
 // drawn frame's cost can decide the interval after it, as on a device.
 const RR_SRC = fs.readFileSync(path.join(ROOT, "js/perf/render-rate.js"), "utf8");
-function replay(rate, rafFn, n, { legacy = false } = {}) {
-  const mem = { "apex26.renderRate": rate };
+function replay(rate, rafFn, n, { legacy = false, mobile = true, desktopTarget = "display" } = {}) {
+  const mem = { "apex26.renderRate": rate, "apex26.desktopFpsTarget": desktopTarget };
   globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
   globalThis.window = { __APEX_BUILD: 1 };
   const PerfGov = eval(SRC + ";PerfGov");
   const RenderRate = eval(RR_SRC + ";RenderRate");
-  RenderRate.init({ isMobile: true });
+  RenderRate.init({ isMobile: mobile });
   let scale = 1, moves = 0, futileSeen = false, wall = 0, slowWall = 0;
-  PerfGov.init({ isMobile: true, getRenderScale: () => scale,
+  PerfGov.init({ isMobile: mobile, getRenderScale: () => scale,
     setRenderScale: (s) => { s = Math.max(0.5, Math.min(1, s)); if (Math.abs(s - scale) < SCALE_EPS) return false; scale = s; moves++; return true; } });
   PerfGov.sentinelArm(true);
   let drew = true;
@@ -1802,16 +1802,17 @@ test("software garage preview sheds render scale on SwiftShader and restores", (
   // Drive the real begin/end pair (no race scale chosen yet, so the garage
   // intro bay is the one place that sheds) and watch the renderer's scale.
   const { governor, gfx, sets, scale } = raceScaleGov({ softwareGL: true, scale0: 1 });
-  gfx.envProbeOptOut = false;
+  gfx.envProbeOptOut = true;
   governor.init(gfx);
   governor.softwareGaragePreviewBegin(gfx);
   assert.equal(scale(), 0.55, "SwiftShader garage preview sheds fill rate to 0.55");
-  assert.equal(gfx.envProbeOptOut, true, "and opts the env probe out while the bay is up");
+  assert.equal(governor.softwareGaragePreviewActive, true, "the bay pauses probe capture");
   governor.softwareGaragePreviewBegin(gfx);
   assert.deepEqual(sets, [0.55], "a second begin does not overwrite the saved scale");
   governor.softwareGaragePreviewEnd(gfx);
   assert.equal(scale(), 1, "end restores the scale the player had before the preview");
-  assert.equal(gfx.envProbeOptOut, false, "and gives the env probe back");
+  assert.equal(governor.softwareGaragePreviewActive, false, "the bay releases its pause");
+  assert.equal(gfx.envProbeOptOut, true, "the backend retains its own opt-out");
   assert.deepEqual(sets, [0.55, 1]);
   for (const s of sets) assert.ok(s >= 0.55 && s <= 1, `every scale written stays in [0.55, 1], got ${s}`);
   governor.softwareGaragePreviewEnd(gfx);
@@ -1923,4 +1924,14 @@ test("the phone slow latch clears at the next race start, and a refused climb se
   assert.equal(hot.phoneSlowLatch(), true, "the refused climb latched again");
   assert.equal(hot.tier(), shedTier, "and the shed tier holds");
   assert.ok(changes <= 2, "one probe up and back, not a cycle: " + changes + " tier changes");
+});
+
+
+test("a desktop with a 60 FPS target keeps scale during a 15 ms rendering workload", () => {
+  // Start at 144 Hz. Once the scene is heavy, drawing takes 15 ms and a skipped callback stays cheap.
+  const raf = (i, _scale, drew) => i < 900 || !drew ? 1000 / 144 : 15;
+  const capped = replay("auto", raf, 1800, { mobile: false, desktopTarget: "60" });
+  const uncapped = replay("auto", raf, 1800, { mobile: false });
+  assert.equal(capped.moves, 0);
+  assert.ok(uncapped.moves > 0);
 });

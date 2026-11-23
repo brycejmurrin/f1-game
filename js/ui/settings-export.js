@@ -117,7 +117,7 @@ const SPEC = [
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = factory size: phone 143.25, tablet 125, fine pointer 100; displayed as 100%)" },
   { k: "hudBotKeep", lane: "json", group: "display", def: null, src: "js/ui/scale.js gear row kept on BUTTON SIZE moves (null = none)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
-  { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square"] },
+  { k: "hudBtnShape", lane: "json", group: "display", def: null, src: "js/ui/dock-layout.js BUTTON SHAPE (null = AUTO)", oneOf: ["round", "squircle", "square", "arch", "shield", "paddle-left", "paddle-right", "leaf"] },
   { k: "hudPanelOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js PANEL OPACITY (null = 100%; HIGH CONTRAST keeps plates solid)" },
   { k: "motion", lane: "json", group: "a11y", def: null, src: "js/ui/title-fx.js REDUCE MOTION (null/auto = follow OS; reduce=ON; off; legacy on → auto)", oneOf: ["auto", "reduce", "off", "on"] },
   { k: "focusRing", lane: "json", group: "a11y", def: "high", src: "js/ui/a11y-opts.js KEYBOARD FOCUS", oneOf: ["standard", "high"] },
@@ -153,6 +153,7 @@ const SPEC = [
   { k: "gfxSsao", lane: "raw", group: "display", def: () => typeof PostFxOpts !== "undefined" && !PostFxOpts.defaultSsao() ? "0" : "1", perDevice: true, src: "js/ui/post-fx-opts.js AMBIENT OCCLUSION (only \"0\" is off; game.js zeroes po.ssao + po.contact)", oneOf: ["0", "1"] },
   { k: "gfxGodrays", lane: "raw", group: "display", def: "1", src: "js/ui/post-fx-opts.js GOD-RAYS (only \"0\" is off; game.js zeroes po.godray + po.lampVol)", oneOf: ["0", "1"] },
   { k: "gfxPhoneFeatureOverrides", lane: "json", group: "display", def: {}, whole: true, perDevice: true, src: "js/ui/desktop-graphics.js phone detail choices" },
+  { k: "desktopFpsTarget", lane: "raw", group: "display", def: "display", oneOf: ["display", "60", "120"], perDevice: true, src: "js/perf/render-rate.js desktop race frame rate" },
   { k: "gfxFeatureOverrides", lane: "json", group: "display", def: {}, whole: true, perDevice: true, src: "js/ui/desktop-graphics.js per-effect choices" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
@@ -170,7 +171,7 @@ const SPEC = [
   { k: "hudMapVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudGapsVis", lane: "json", group: "hud", def: "on", src: "js/game.js" },
   { k: "hudElements", lane: "json", group: "hud", def: () => typeof HudElements !== "undefined" ? HudElements.defaults() : {}, src: "js/ui/hud-elements.js phone and desktop visibility defaults", perDevice: true, whole: true },
-  { k: "hudLayout", lane: "json", group: "hud", def: null, deviceBound: true, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}}; offsets are finite and size positive finite, without visual bounds. Missing elements in saved layouts use automatic placement)" },
+  { k: "hudLayout", lane: "json", group: "hud", def: null, deviceBound: true, src: "js/ui/hud-layout.js MOVE & SIZE (null = shipped; else {v:4, standard?, minimal?, broadcast?}, each {cockpit, helmet, other} of {id: {x, y, s}} with optional width/minHeight in viewport shares and textSize in percent on text panels; offsets are finite and size positive finite, without visual bounds. Missing elements in saved layouts use automatic placement)" },
   { k: "hudColors", lane: "json", group: "hud", def: null, src: "js/ui/hud-layout.js per-element colors" },
   { k: "hudMirror", lane: "json", group: "hud", def: "auto", src: "js/render/shared/mirror-pass.js", oneOf: ["auto", "on", "off"] },
   { k: "garageArrival", lane: "json", group: "camera", def: null, src: "js/garage/arrival.js (null = shipped arrival settings)" },
@@ -180,7 +181,10 @@ const SPEC = [
   { k: "helmetEye", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.helmetEye", oneOf: ["standard", "tucked", "upright", "forward", "back", "high", "low"] },
   { k: "helmetMount", lane: "raw", group: "camera", def: "center", src: "js/camera/cockpit-opts.js CHOICES.helmetMount", oneOf: ["center", "left", "right"] },
   { k: "helmetShake", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js helmet shake (percent or legacy preset)", normalize: v => typeof v === "string" && Object.hasOwn(legacyShakePercent, v) ? legacyShakePercent[v] : motionPercent(v, 150) },
-  ...["helmetImpact", "helmetKerb", "helmetBuzz", "helmetHeadMotion"].map(k => ({ k, lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)", normalize: motionPercent })),
+  { k: "helmetImpact", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)", normalize: motionPercent },
+  { k: "helmetKerb", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)", normalize: motionPercent },
+  { k: "helmetBuzz", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)", normalize: motionPercent },
+  { k: "helmetHeadMotion", lane: "raw", group: "camera", def: "100", src: "js/camera/cockpit-opts.js motionAmount (percent)", normalize: motionPercent },
   { k: "helmetVisorShape", lane: "raw", group: "camera", def: "standard", src: "js/camera/cockpit-opts.js CHOICES.visorShape", oneOf: ["standard", "panoramic", "slit", "rounded", "square"] },
   { k: "helmetVisor", lane: "raw", group: "camera", def: "off", src: "js/camera/cockpit-opts.js CHOICES.visor", oneOf: ["off", "clear", "smoke"] },
   { k: "helmetVisorColor", lane: "raw", group: "camera", def: "amber", src: "js/camera/cockpit-opts.js CHOICES.visorColor", oneOf: ["neutral", "amber", "ice", "rose", "green", "violet", "copper"] },
@@ -230,6 +234,7 @@ const SPEC = [
   // PER-DEVICE STEERING (js/input/steer-tuning.js). Each defaults to the notch
   // that reproduces exactly what shipped, so an absent key is a no-op.
   { k: "tiltCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
+  { k: "touchSteeringGuide", lane: "json", group: "driving", def: "ring", oneOf: ["ring", "wheel"], src: "js/input/touch-button-actions.js (touch steering guide)" },
   { k: "touchCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "padCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "touchRange", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js touchRangeFromSlider (0.12 of the long edge at 5)" },
@@ -393,7 +398,7 @@ function normalizePlacement(raw, registry) {
   if (raw === null) return null;
   if (!raw || raw.v !== 1 || !isObj(raw.screens)) return undefined;
   const screens = {}, validId = id => /^[a-z][a-z0-9-]{0,63}$/i.test(id) && !(id in Object.prototype);
-  const bounds = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], scale: [.5, 2] };
+  const bounds = { x: [-50, 50], y: [-50, 50], width: [5, 100], height: [5, 100], diameter: [5, 100], scale: [.5, 2], textSize: [.8, 1.8], buttonWidth: [10, 100], buttonHeight: [44, 104], formWidth: [10, 100], cornerRadius: [0, 40], rowGap: [0, 48], columnGap: [0, 48] };
   for (const id of Object.keys(raw.screens).slice(0, 128)) {
     if (!validId(id) || !isObj(raw.screens[id]) || (registry && !Object.hasOwn(registry, id))) continue;
     for (const orientation of ["portrait", "landscape"]) {
@@ -407,10 +412,15 @@ function normalizePlacement(raw, registry) {
         for (const [key, [lo, hi]] of Object.entries(bounds)) {
           const value = map[region][key];
           if (!Number.isFinite(value) || definitions?.[region][key] === false) continue;
-          if ((key === "x" || key === "y") && value === 0 || key === "scale" && value === 1) continue;
+          if (key === "diameter" && !(definitions ? definitions[region].diameter :
+            id === "menupad" && region === "pad" || id === "photo-controls" && (region === "move" || region === "look"))) continue;
+          if ((key === "x" || key === "y") && value === 0 || (key === "scale" || key === "textSize") && value === 1) continue;
           const cap = key === "width" ? definitions?.[region].maxWidth : key === "height" ? definitions?.[region].maxHeight : hi;
           fields[key] = Math.round(Math.min(cap || hi, Math.max(lo, value)) * 1000) / 1000;
         }
+        if (fields.diameter) { delete fields.width; delete fields.height; }
+        const align = map[region].textAlign;
+        if (definitions?.[region].textAlign !== false && ["start", "center", "end"].includes(align)) fields.textAlign = align;
         if (Object.keys(fields).length) ((screens[id] ||= {})[orientation] ||= {})[region] = fields;
       }
     }
