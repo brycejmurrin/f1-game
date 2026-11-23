@@ -1283,7 +1283,7 @@ test("Learn Grip & Braking lets the player release brake into the force envelope
   await expect(lab.locator("#achieved")).toHaveText("70.7% / 70.7%");
   await expect(lab.locator("#brakeLimit")).toHaveText("60.0%");
   await brake.fill("60");
-  await expect(lab.getByRole("status")).toHaveText("At the grip limit.");
+  await expect(lab.locator("#status")).toHaveText("At the grip limit.");
   await expect(lab.locator("#achieved")).toHaveText("60.0% / 80.0%");
   await turn.fill("0");
   await brake.fill("100");
