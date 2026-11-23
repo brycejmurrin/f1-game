@@ -112,3 +112,13 @@ The first lesson opens with two cars 10 m apart. At the same gap, switching to t
 | Further sessions | Reconstruct a steward decision and rescore the result. Compare floor designs, hybrid architectures, safety layers or development budgets across eras. | [Race decisions](race-sessions.md) · [Era sessions](era-sessions.md) |
 
 Use the worked values and transfer questions in each brief as acceptance fixtures. Preserve the year and event on every source-backed example; label teaching values in the same view as their outputs.
+
+## After Grip & Braking and VSC Pit Strategy
+
+| Proposed lesson | First playable decision | Why this order |
+|---|---|---|
+| [Where did the time go?](telemetry-ideas.md) | Choose which driver reaches a corner exit first, then align the traces by distance and check the prediction. | Builds directly on Grip & Braking. An offline pair of traces and the existing Data Hub marker calculations give the lesson a reproducible outcome. |
+| [Energy & Overtake](engineering-ideas.md) | Spend charge now or save it for the faster section. Cross the detection line at a different gap and compare what is available. | Introduces a genuinely different resource constraint. Power, energy and eligibility each get a distinct readout and a dated rule reference. |
+| [Read the evidence before the decision](steward-ideas.md) | Select what the evidence establishes about a driver leaving the track, then reveal the official finding and sanction. | Adds a rule-interpretation session with evidence review and an accessible text sequence. Each future case needs its own source and reasoning review. |
+
+All three start with a local worked example. The telemetry lesson can link to the Data Hub after the example; real timing data is optional. The engineering and stewarding briefs also include alternate concepts for later releases.
