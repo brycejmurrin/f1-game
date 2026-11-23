@@ -12,14 +12,14 @@ name: Browser group
 # slots spent re-proving what the PR run had already proved. This workflow is
 # those four shards and their setup, the same composite actions, the same env.
 #
-# SHARDS ARE PACKED BY TIME, NOT COUNT, AND THERE IS NO PLAN JOB (2026-10-14).
+# SHARDS ARE PACKED BY TIME, NOT COUNT (2026-10-14).
 # The CLI computes the plan (tools/ci/remote-group.mjs shardPlan: the group's
 # spec files longest-first onto the least-loaded shard by measured seconds, a
 # fat spec cut into native `--shard=j/k` pieces) and sends it as the `plan`
 # input; the matrix is read straight from it. Count shards drew the mega-sweep
 # plus the 6-minute visual spec onto one runner (gfx 15.3 / 2.7 / 1.8 / 2.7
 # min, run 38478672714; median run 14 min against ~5 min of test work), and the
-# plan job was a second runner-queue wait in series (p90 15.8 min)
+# separate planning job was a second runner-queue wait in series (p90 15.8 min)
 # (docs/notes/ACTIONS-AUDIT-2026-10-14.md). The plan is text from whoever
 # dispatched: the shard step re-validates every path against package.json
 # before anything is spawned, and no input is ever interpolated into a shell
@@ -95,7 +95,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  queue:
+    name: Check browser queue capacity
+    runs-on: ubuntu-latest
+    if: vars.APEX_BROWSER_RUNNER == '' || vars.APEX_BROWSER_RUNNER == 'ubuntu-latest'
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          persist-credentials: false
+      - name: Defer optional browser work when Linux is busy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tools/ci/queue-depth.mjs --admit-optional
   group:
+    needs: queue
+    # A configured runner is outside the shared Linux pool. A failed admission
+    # leaves this dispatch red and every shard skipped, so it cannot count as a test pass.
+    if: ${{ !cancelled() && (needs.queue.result == 'success' || (vars.APEX_BROWSER_RUNNER != '' && vars.APEX_BROWSER_RUNNER != 'ubuntu-latest' && needs.queue.result == 'skipped')) }}
     name: "${{ inputs.group }} (${{ matrix.shard }}/${{ matrix.total }})"
     # THE RUNNER IS A REPO VARIABLE (D-RUNNER, 2026-11-20). Unset or empty, the shard runs on `ubuntu-latest` exactly as
     # before; set `APEX_BROWSER_RUNNER` to a managed provider's single `runs-on` label to trial it, delete it to roll
